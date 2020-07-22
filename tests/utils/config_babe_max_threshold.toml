@@ -5,6 +5,8 @@ log = "crit"
 
 [log]
 babe = "info"
+sync = "debug"
+network = "debug"
 
 [init]
 genesis = "./chain/gssmr/genesis.json"

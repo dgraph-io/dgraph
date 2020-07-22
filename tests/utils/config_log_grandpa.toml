@@ -5,8 +5,9 @@ log = "crit"
 
 [log]
 core = "crit"
-babe = "crit"
-grandpa = "trace"
+babe = "info"
+grandpa = "debug"
+network = "error"
 runtime = "crit"
 
 [init]

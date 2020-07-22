@@ -18,7 +18,6 @@ package stress
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"testing"
@@ -96,10 +95,7 @@ func TestSync_SingleBlockProducer(t *testing.T) {
 	utils.SetLogLevel(log.LvlInfo)
 
 	// only log info from 1 node
-	tmpdir, err := ioutil.TempDir("", "gossamer-stress-sync")
-	require.NoError(t, err)
-	defer os.Remove(tmpdir)
-	node, err := utils.RunGossamer(t, numNodes-1, tmpdir, utils.GenesisSixAuths, utils.ConfigBABEMaxThreshold)
+	node, err := utils.RunGossamer(t, numNodes-1, utils.TestDir(t, "ferdie"), utils.GenesisSixAuths, utils.ConfigBABEMaxThreshold)
 	require.NoError(t, err)
 
 	// wait and start rest of nodes - if they all start at the same time the first round usually doesn't complete since
@@ -128,19 +124,12 @@ func TestSync_SingleSyncingNode(t *testing.T) {
 	utils.SetLogLevel(log.LvlInfo)
 
 	// start block producing node
-	tmpdir, err := ioutil.TempDir("", "gossamer-stress-alice")
+	alice, err := utils.RunGossamer(t, 0, utils.TestDir(t, "alice"), utils.GenesisDefault, utils.ConfigBABEMaxThreshold)
 	require.NoError(t, err)
-	defer os.Remove(tmpdir)
-	alice, err := utils.RunGossamer(t, 0, tmpdir, utils.GenesisDefault, utils.ConfigBABEMaxThreshold)
-	require.NoError(t, err)
-
 	time.Sleep(time.Second * 15)
 
 	// start syncing node
-	tmpdir, err = ioutil.TempDir("", "gossamer-stress-bob")
-	require.NoError(t, err)
-	defer os.Remove(tmpdir)
-	bob, err := utils.RunGossamer(t, 1, tmpdir, utils.GenesisDefault, utils.ConfigNoBABE)
+	bob, err := utils.RunGossamer(t, 1, utils.TestDir(t, "bob"), utils.GenesisDefault, utils.ConfigNoBABE)
 	require.NoError(t, err)
 
 	nodes := []*utils.Node{alice, bob}

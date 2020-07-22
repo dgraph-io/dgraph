@@ -17,6 +17,7 @@
 package utils
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -90,7 +91,7 @@ func InitGossamer(idx int, basePath, genesis, config string) (*Node, error) {
 	//nolint
 	cmdInit := exec.Command(gossamerCMD, "init",
 		"--config", config,
-		"--basepath", basePath+strconv.Itoa(idx),
+		"--basepath", basePath,
 		"--genesis", genesis,
 		"--force",
 	)
@@ -109,7 +110,7 @@ func InitGossamer(idx int, basePath, genesis, config string) (*Node, error) {
 	return &Node{
 		Idx:      idx,
 		RPCPort:  strconv.Itoa(BaseRPCPort + idx),
-		basePath: basePath + strconv.Itoa(idx),
+		basePath: basePath,
 		config:   config,
 	}, nil
 }
@@ -128,7 +129,7 @@ func StartGossamer(t *testing.T, node *Node) error {
 			"--rpcmods", "system,author,chain,state",
 			"--roles", "1", // no key provided, non-authority node
 			"--rpc",
-			"--log", "crit",
+			"--log", "info",
 		)
 	} else {
 		key = keyList[node.Idx]
@@ -143,24 +144,42 @@ func StartGossamer(t *testing.T, node *Node) error {
 			"--rpcmods", "system,author,chain,state",
 			"--roles", "4", // authority node
 			"--rpc",
-			"--log", "crit",
+			"--log", "info",
 		)
 	}
 
 	node.Key = key
 
-	// a new file will be created, it will be used for log the outputs from the node
-	f, err := os.Create(filepath.Join(node.basePath, "gossamer.log"))
+	// create log file
+	outfile, err := os.Create(filepath.Join(node.basePath, "log.out"))
 	if err != nil {
 		logger.Error("Error when trying to set a log file for gossamer output", "error", err)
 		return err
 	}
 
-	//this is required to be able to have multiple inputs into same file
-	multiWriter := io.MultiWriter(f, os.Stdout)
+	// create error log file
+	errfile, err := os.Create(filepath.Join(node.basePath, "error.out"))
+	if err != nil {
+		logger.Error("Error when trying to set a log file for gossamer output", "error", err)
+		return err
+	}
 
-	node.Process.Stdout = multiWriter
-	node.Process.Stderr = multiWriter
+	t.Cleanup(func() {
+		outfile.Close() //nolint
+		errfile.Close() //nolint
+	})
+
+	stdoutPipe, err := node.Process.StdoutPipe()
+	if err != nil {
+		logger.Error("failed to get stdoutPipe from node %d: %s\n", node.Idx, err)
+		return err
+	}
+
+	stderrPipe, err := node.Process.StderrPipe()
+	if err != nil {
+		logger.Error("failed to get stderrPipe from node %d: %s\n", node.Idx, err)
+		return err
+	}
 
 	logger.Info("starting gossamer...", "cmd", node.Process)
 	err = node.Process.Start()
@@ -168,6 +187,11 @@ func StartGossamer(t *testing.T, node *Node) error {
 		logger.Error("Could not execute gossamer cmd", "err", err)
 		return err
 	}
+
+	writer := bufio.NewWriter(outfile)
+	go io.Copy(writer, stdoutPipe) //nolint
+	errWriter := bufio.NewWriter(errfile)
+	go io.Copy(errWriter, stderrPipe) //nolint
 
 	logger.Debug("wait few secs for node to come up", "cmd.Process.Pid", node.Process.Process.Pid)
 	var started bool
@@ -275,17 +299,12 @@ func StartNodes(t *testing.T, nodes []*Node) error {
 func InitializeAndStartNodes(t *testing.T, num int, genesis, config string) ([]*Node, error) {
 	var nodes []*Node
 
-	tempDir, err := ioutil.TempDir("", "gossamer-stress-")
-	if err != nil {
-		return nil, err
-	}
-
 	var wg sync.WaitGroup
 	wg.Add(num)
 
 	for i := 0; i < num; i++ {
 		go func(i int) {
-			node, err := RunGossamer(t, i, tempDir+strconv.Itoa(i), genesis, config)
+			node, err := RunGossamer(t, i, TestDir(t, keyList[i]), genesis, config)
 			if err != nil {
 				logger.Error("failed to run gossamer", "i", i)
 			}
@@ -332,4 +351,9 @@ func TearDown(t *testing.T, nodes []*Node) (errorList []error) {
 	}
 
 	return errorList
+}
+
+// TestDir returns the test directory path <current-directory>/test_data/<test-name>/<name>
+func TestDir(t *testing.T, name string) string {
+	return filepath.Join(currentDir, "../test_data/", t.Name(), name)
 }

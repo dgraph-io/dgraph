@@ -8,8 +8,8 @@ RUN apt-get update && \
     wget
 
 # Install Go
-RUN wget https://dl.google.com/go/go1.13.4.linux-amd64.tar.gz
-RUN tar -C /usr/local -xzf go1.13.4.linux-amd64.tar.gz
+RUN wget https://dl.google.com/go/go1.14.3.linux-amd64.tar.gz
+RUN tar -C /usr/local -xzf go1.14.3.linux-amd64.tar.gz
 
 # Configure go env vars
 ENV GO111MODULE=on

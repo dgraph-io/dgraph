@@ -19,7 +19,7 @@ language: go
 os: linux
 dist: xenial
 go:
-- 1.13.x
+- 1.14.x
 env:
   global:
   - CC_TEST_REPORTER_ID=abdad8b2e2ec0bfdd7af57d955c44e9470f4d174e744b824047f3037800f5b40

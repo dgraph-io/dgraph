@@ -17,7 +17,6 @@
 package stress
 
 import (
-	"io/ioutil"
 	"testing"
 	"time"
 
@@ -71,7 +70,7 @@ func TestStress_Grandpa_SixAuthorities(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		errList := utils.TearDown(t, nodes)
+		errList := utils.StopNodes(t, nodes)
 		require.Len(t, errList, 0)
 	}()
 
@@ -91,19 +90,11 @@ func TestStress_Grandpa_NineAuthorities(t *testing.T) {
 	}
 
 	numNodes = 9
-
-	// only log info from 1 node
-	tmpdir, err := ioutil.TempDir("", "gossamer-stress-8")
+	nodes, err := utils.InitializeAndStartNodes(t, numNodes, utils.GenesisDefault, utils.ConfigLogGrandpa)
 	require.NoError(t, err)
-	node, err := utils.RunGossamer(t, numNodes-1, tmpdir, utils.GenesisDefault, utils.ConfigLogGrandpa)
-	require.NoError(t, err)
-
-	nodes, err := utils.InitializeAndStartNodes(t, numNodes-1, utils.GenesisDefault, utils.ConfigLogNone)
-	require.NoError(t, err)
-	nodes = append(nodes, node)
 
 	defer func() {
-		errList := utils.TearDown(t, nodes)
+		errList := utils.StopNodes(t, nodes)
 		require.Len(t, errList, 0)
 	}()
 
