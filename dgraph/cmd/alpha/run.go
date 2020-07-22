@@ -35,6 +35,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/graphql/admin"
@@ -143,6 +144,8 @@ they form a Raft group and provide synchronous replication.
 		"Comma separated list of Dgraph zero addresses of the form IP_ADDRESS:PORT.")
 	flag.Uint64("idx", 0,
 		"Optional Raft ID that this Dgraph Alpha will use to join RAFT groups.")
+	flag.Int("election_tick", 20,
+		"Election tick determines the number of ticks after which a node will start the election.")
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
@@ -523,6 +526,9 @@ func run() {
 		x.SentryOptOutNote()
 	}
 	bindall = Alpha.Conf.GetBool("bindall")
+
+	// Set election tick. This is a hack, not a permanent solution.
+	conn.ElectionTick = Alpha.Conf.GetInt("election_tick")
 
 	opts := worker.Options{
 		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
