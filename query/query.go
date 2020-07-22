@@ -1973,7 +1973,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, flag int) {
-	fmt.Println("first uids ", sg.SrcUIDs, " ", flag)
 	var suffix string
 	if len(sg.Params.Alias) > 0 {
 		suffix += "." + sg.Params.Alias
@@ -1986,7 +1985,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, fla
 	defer stop()
 
 	if sg.Attr == "uid" {
-		fmt.Println("inside sg.Attr ", sg.Attr, " ", flag)
 		// We dont need to call ProcessGraph for uid, as we already have uids
 		// populated from parent and there is nothing to process but uidMatrix
 		// and values need to have the right sizes so that preTraverse works.
@@ -1994,18 +1992,21 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, fla
 		rch <- nil
 		return
 	}
-	fmt.Println("outside sg.Attr ", sg.Attr, " ", flag)
+
 	var err error
 	switch {
 	case parent == nil && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid":
+		fmt.Println("case 1 ", sg.Params.AfterUID)
 		// I'm root and I'm using some variable that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.
 		if sg.SrcUIDs != nil && len(sg.SrcUIDs.Uids) != 0 {
+			fmt.Println("inside if")
 			// I am root. I don't have any function to execute, and my
 			// result has been prepared for me already by list passed by the user.
 			// uidmatrix retains the order. SrcUids are sorted (in newGraph).
 			sg.DestUIDs = sg.SrcUIDs
 		} else {
+			fmt.Println("inside else")
 			// Populated variable.
 			o := append(sg.DestUIDs.Uids[:0:0], sg.DestUIDs.Uids...)
 			sg.uidMatrix = []*pb.List{{Uids: o}}
@@ -2019,6 +2020,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, fla
 		}
 
 	case sg.Attr == "":
+		fmt.Println("case 2 ", sg.Params.AfterUID)
 		// This is when we have uid function in children.
 		if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid" {
 			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
@@ -2044,6 +2046,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, fla
 		// when multiple filters replace their sg.DestUIDs
 		sg.DestUIDs = &pb.List{Uids: sg.SrcUIDs.Uids}
 	default:
+		fmt.Println("case 3 ", sg.Params.AfterUID)
 		fmt.Println("srcUIDs\n", sg.SrcUIDs)
 		isInequalityFn := sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name)
 		switch {
