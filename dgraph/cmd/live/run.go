@@ -289,7 +289,7 @@ func (l *loader) addUpsert(req *request) {
 	}
 
 	query := ""
-	for i, _ := range ids {
+	for i := range ids {
 		query += fmt.Sprintf(`%s as var(func: eq(%s, "%s"))`, i, opt.upsert, i)
 		query += "\n"
 		req.Mutation.Set = append(req.Mutation.Set, &api.NQuad{
@@ -299,6 +299,22 @@ func (l *loader) addUpsert(req *request) {
 		})
 	}
 
+	// We form upsert query for each of the ids we saw in the request, along with adding
+	// the corresponding xid to that uid. The mutation we added is only useful if the
+	// uid doesn't exists.
+	//
+	// Example upsert mutation:
+	//
+	// query {
+	//     m.1234 as var(func: eq(xid, "m.1234"))
+	// }
+	//
+	// mutation {
+	//     set {
+	//          uid(m.1234) <predicate> value .    --> original request
+	//          uid(m.1234) xid m.1234             --> gets added here
+	//     }
+	// }
 	req.query = "query {\n" + query + "}"
 }
 
