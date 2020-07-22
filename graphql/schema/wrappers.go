@@ -1846,10 +1846,6 @@ func getVar(key string, variables map[string]interface{}) (interface{}, error, b
 		return nil, errors.Errorf("expected a variable to start with $. Found: %s", key), true
 	}
 	val, ok := variables[key[1:]]
-	if !ok {
-		return nil, nil, ok
-	}
-
 	return val, nil, ok
 }
 
@@ -1874,9 +1870,7 @@ func substituteVarInMapInBody(object, variables map[string]interface{}) error {
 			}
 			if ok {
 				object[k] = vval
-
 			}
-
 		case map[string]interface{}:
 			if err := substituteVarInMapInBody(val, variables); err != nil {
 				return err
