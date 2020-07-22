@@ -248,10 +248,6 @@ func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
 	return id
 }
 
-func parseUid(uid string) (uint64, error) {
-	return strconv.ParseUint(uid, 0, 64)
-}
-
 func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	pred, found := l.schema.preds[nq.Predicate]
 
@@ -265,7 +261,6 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	// Calculates the conflict keys, inspired by the logic in
 	// addMutationInteration in posting/list.go.
 	sid, err := strconv.ParseUint(nq.Subject, 0, 64)
-
 	if err != nil {
 		return nil, err
 	}

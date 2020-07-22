@@ -224,12 +224,7 @@ func (l *loader) uid(val string) string {
 
 	sb := strings.Builder{}
 	x.Check2(sb.WriteString(val))
-	uid, check := l.alloc.AssignUid(sb.String())
-
-	if opt.upsert != "" && check {
-		fmt.Println(val, uid)
-		panic(errors.New("Should not have allocated locally"))
-	}
+	uid, _ := l.alloc.AssignUid(sb.String())
 
 	return fmt.Sprintf("%#x", uint64(uid))
 }
@@ -287,7 +282,7 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 	query = "query {\n" + query + "}"
 
 	// allocate all the new xids
-	resp, err := l.dc.NewTxn().Do(context.TODO(), &api.Request{
+	resp, err := l.dc.NewTxn().Do(l.opts.Ctx, &api.Request{
 		CommitNow: true,
 		Query:     query,
 		Mutations: []*api.Mutation{{Set: mutations}},
@@ -305,8 +300,9 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 	err = json.Unmarshal(resp.GetJson(), &result)
 
 	for xid, idx := range ids {
+		// xid already exist in dgraph
 		if val, ok := result[idx]; ok && len(val) > 0 {
-			uid, err := strconv.ParseUint(val[0].Uid[2:], 16, 64)
+			uid, err := strconv.ParseUint(val[0].Uid, 0, 64)
 			if err != nil {
 				panic(err)
 			}
@@ -315,8 +311,9 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 			continue
 		}
 
+		// new uid created in draph
 		if val, ok := resp.GetUids()["uid("+idx+")"]; ok {
-			uid, err := strconv.ParseUint(val[2:], 16, 64)
+			uid, err := strconv.ParseUint(val, 0, 64)
 			if err != nil {
 				panic(err)
 			}
@@ -412,9 +409,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				if len(buffer) < opt.batchSize {
 					sz = len(buffer)
 				}
-
 				mu := &request{Mutation: &api.Mutation{Set: buffer[:sz]}}
-
 				l.reqs <- mu
 				buffer = buffer[sz:]
 			}
