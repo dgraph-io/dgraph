@@ -41,7 +41,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 	start.Children = start.Children[:0]
 
 	// Process the root first.
-	go ProcessGraph(ctx, start, nil, rrch, -1)
+	go ProcessGraph(ctx, start, nil, rrch)
 	select {
 	case err = <-rrch:
 		if err != nil {
@@ -80,7 +80,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 
 		rrch := make(chan error, len(exec))
 		for _, sg := range exec {
-			go ProcessGraph(ctx, sg, dummy, rrch, -1)
+			go ProcessGraph(ctx, sg, dummy, rrch)
 		}
 
 		var recurseErr error

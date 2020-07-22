@@ -1972,7 +1972,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
-func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, flag int) {
+func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var suffix string
 	if len(sg.Params.Alias) > 0 {
 		suffix += "." + sg.Params.Alias
@@ -1992,21 +1992,17 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, fla
 		rch <- nil
 		return
 	}
-
 	var err error
 	switch {
 	case parent == nil && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid":
-		fmt.Println("case 1 ", sg.Params.AfterUID)
 		// I'm root and I'm using some variable that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.
 		if sg.SrcUIDs != nil && len(sg.SrcUIDs.Uids) != 0 {
-			fmt.Println("inside if")
 			// I am root. I don't have any function to execute, and my
 			// result has been prepared for me already by list passed by the user.
 			// uidmatrix retains the order. SrcUids are sorted (in newGraph).
 			sg.DestUIDs = sg.SrcUIDs
 		} else {
-			fmt.Println("inside else")
 			// Populated variable.
 			o := append(sg.DestUIDs.Uids[:0:0], sg.DestUIDs.Uids...)
 			sg.uidMatrix = []*pb.List{{Uids: o}}
@@ -2014,8 +2010,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, fla
 				return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
 			})
 		}
+		i := 0
+		for sg.DestUIDs.Uids[i] < sg.Params.AfterUID && i < len(sg.SrcUIDs.Uids) {
+			i++
+		}
+		sg.DestUIDs.Uids = sg.DestUIDs.Uids[i:]
 	case sg.Attr == "":
-		fmt.Println("case 2 ", sg.Params.AfterUID)
 		// This is when we have uid function in children.
 		if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid" {
 			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
@@ -2041,12 +2041,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, fla
 		// when multiple filters replace their sg.DestUIDs
 		sg.DestUIDs = &pb.List{Uids: sg.SrcUIDs.Uids}
 	default:
-		fmt.Println("case 3 ", sg.Params.AfterUID)
-		fmt.Println("srcUIDs\n", sg.SrcUIDs)
 		isInequalityFn := sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name)
 		switch {
 		case isInequalityFn && sg.SrcFunc.IsValueVar:
-
 			// This is a ineq function which uses a value variable.
 			err = sg.applyIneqFunc()
 			if parent != nil {
@@ -2134,8 +2131,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, fla
 
 			filter.SrcUIDs = sg.DestUIDs
 			// Passing the pointer is okay since the filter only reads.
-			// filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
-			go ProcessGraph(ctx, filter, sg, filterChan, flag+10000)
+			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
+			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
 		var filterErr error
@@ -2258,8 +2255,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, fla
 			// We dont have to execute these nodes.
 			continue
 		}
-		fmt.Println("++++ ", sg.Params.AfterUID, " +++++")
-		go ProcessGraph(ctx, child, sg, childChan, flag+i+10000)
+		go ProcessGraph(ctx, child, sg, childChan)
 	}
 
 	var childErr error
@@ -2289,7 +2285,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, fla
 		rch <- nil
 		return
 	}
-	fmt.Println("last uids ", sg.SrcUIDs, " ", flag)
+
 	rch <- childErr
 }
 
@@ -2705,14 +2701,12 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	for i := 0; i < len(req.Subgraphs) && numQueriesDone < len(req.Subgraphs); i++ {
 		errChan := make(chan error, len(req.Subgraphs))
 		var idxList []int
-		fmt.Println("i ", i)
 		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
 		// to be executed.
 		for idx := 0; idx < len(req.Subgraphs); idx++ {
 			if hasExecuted[idx] {
 				continue
 			}
-			fmt.Println("idx ", idx)
 			sg := req.Subgraphs[idx]
 			// Check the list for the requires variables.
 			if !canExecute(idx) {
@@ -2747,10 +2741,8 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 					errChan <- recurse(ctx, sg)
 				}()
 			default:
-				fmt.Println("++++ ", sg.Params.AfterUID, " +++++")
-				go ProcessGraph(ctx, sg, nil, errChan, 300+idx*10+i)
+				go ProcessGraph(ctx, sg, nil, errChan)
 			}
-			fmt.Println("uids ", sg.DestUIDs)
 		}
 
 		var ferr error
