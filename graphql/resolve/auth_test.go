@@ -46,6 +46,9 @@ type AuthQueryRewritingCase struct {
 	User string
 	Role string
 
+	// JWT variables
+	JWTVar map[string]interface{}
+
 	// GQL query and variables
 	GQLQuery  string
 	Variables string
@@ -318,8 +321,14 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
 
-			authMeta.AuthVars = map[string]interface{}{
-				"ROLE": tcase.Role,
+			// Clear the map and initialize it.
+			authMeta.AuthVars = make(map[string]interface{})
+			if tcase.JWTVar != nil {
+				for k, v := range tcase.JWTVar {
+					authMeta.AuthVars[k] = v
+				}
+			} else {
+				authMeta.AuthVars["ROLE"] = tcase.Role
 			}
 
 			// Skipping $USER for specific rules.

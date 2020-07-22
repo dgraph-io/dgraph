@@ -735,11 +735,19 @@ func addSelectionSetFrom(
 			q.Children = append(q.Children, child)
 		}
 
-		if rbac != schema.Uncertain {
+		// If RBAC rules are evaluated to `Negative` then we don't write queries for deeper level.
+		// Hence we don't need to do any further processing for this field.
+		if rbac == schema.Negative {
 			continue
 		}
 
-		fieldAuth, authFilter := auth.rewriteAuthQueries(f.Type())
+		var fieldAuth []*gql.GraphQuery
+		var authFilter *gql.FilterTree
+		// If RBAC rules are evaluated to `Uncertain` then we add the Auth rules.
+		if rbac == schema.Uncertain {
+			fieldAuth, authFilter = auth.rewriteAuthQueries(f.Type())
+		}
+
 		if authFilter != nil {
 			if child.Filter == nil {
 				child.Filter = authFilter

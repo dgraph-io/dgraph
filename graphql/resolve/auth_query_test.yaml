@@ -1,3 +1,190 @@
+- name: "Deep RBAC rule - All level true"
+  gqlquery: |
+    query {
+      queryContact {
+        id
+        nickName
+        adminTasks {
+          id
+          name
+          occurrances {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: ADMINISTRATOR
+    TaskRole: ADMINISTRATOR
+    TaskOccuranceRole: ADMINISTRATOR
+  dgquery: |-
+    query {
+      queryContact(func: uid(ContactRoot)) {
+        id : uid
+        nickName : Contact.nickName
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask4)) {
+          id : uid
+          name : AdminTask.name
+          occurrances : AdminTask.occurrances @filter(uid(TaskOccurance3)) {
+            due : TaskOccurance.due
+            comp : TaskOccurance.comp
+            dgraph.uid : uid
+          }
+        }
+      }
+      ContactRoot as var(func: uid(Contact5))
+      Contact5 as var(func: type(Contact))
+      var(func: uid(ContactRoot)) {
+        AdminTask1 as Contact.adminTasks
+      }
+      AdminTask4 as var(func: uid(AdminTask1))
+      var(func: uid(AdminTask1)) {
+        TaskOccurance2 as AdminTask.occurrances
+      }
+      TaskOccurance3 as var(func: uid(TaskOccurance2))
+    }
+
+- name: "Deep RBAC rule - Level 0 false"
+  gqlquery: |
+    query {
+      queryContact {
+        id
+        nickName
+        adminTasks {
+          id
+          name
+          occurrances {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: User
+    TaskRole: ADMINISTRATOR
+    TaskOccuranceRole: ADMINISTRATOR
+  dgquery: |-
+    query {
+      queryContact()
+    }
+
+- name: "Deep RBAC rule - Level 1 false"
+  gqlquery: |
+    query {
+      queryContact {
+        id
+        nickName
+        adminTasks {
+          id
+          name
+          occurrances {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: ADMINISTRATOR
+    TaskRole: User
+    TaskOccuranceRole: ADMINISTRATOR
+  dgquery: |-
+    query {
+      queryContact(func: uid(ContactRoot)) {
+        id : uid
+        nickName : Contact.nickName
+      }
+      ContactRoot as var(func: uid(Contact4))
+      Contact4 as var(func: type(Contact))
+    }
+
+- name: "Deep RBAC rule - Level 2 false"
+  gqlquery: |
+    query {
+      queryContact {
+        id
+        nickName
+        adminTasks {
+          id
+          name
+          occurrances {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: ADMINISTRATOR
+    TaskRole: ADMINISTRATOR
+    TaskOccuranceRole: User
+  dgquery: |-
+    query {
+      queryContact(func: uid(ContactRoot)) {
+        id : uid
+        nickName : Contact.nickName
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask3)) {
+          id : uid
+          name : AdminTask.name
+        }
+      }
+      ContactRoot as var(func: uid(Contact4))
+      Contact4 as var(func: type(Contact))
+      var(func: uid(ContactRoot)) {
+        AdminTask1 as Contact.adminTasks
+      }
+      AdminTask3 as var(func: uid(AdminTask1))
+    }
+
+- name: "Deep RBAC rule - Level 1 type without auth."
+  gqlquery: |
+    query {
+      queryContact {
+        id
+        nickName
+        tasks {
+          id
+          name
+          occurrances {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: ADMINISTRATOR
+    TaskRole: ADMINISTRATOR
+    TaskOccuranceRole: ADMINISTRATOR
+  dgquery: |-
+    query {
+      queryContact(func: uid(ContactRoot)) {
+        id : uid
+        nickName : Contact.nickName
+        tasks : Contact.tasks @filter(uid(Task4)) {
+          id : uid
+          name : Task.name
+          occurrances : Task.occurrances @filter(uid(TaskOccurance3)) {
+            due : TaskOccurance.due
+            comp : TaskOccurance.comp
+            dgraph.uid : uid
+          }
+        }
+      }
+      ContactRoot as var(func: uid(Contact5))
+      Contact5 as var(func: type(Contact))
+      var(func: uid(ContactRoot)) {
+        Task1 as Contact.tasks
+      }
+      Task4 as var(func: uid(Task1))
+      var(func: uid(Task1)) {
+        TaskOccurance2 as Task.occurrances
+      }
+      TaskOccurance3 as var(func: uid(TaskOccurance2))
+    }
+
 - name: "Auth query with @dgraph pred."
   gqlquery: |
     query {
@@ -143,24 +330,24 @@
     }
   role: "ADMIN"
   dgquery: |-
-      query {
-        queryUser(func: uid(UserRoot)) {
-          issues : User.issues @filter(uid(Issue3)) {
-            id : uid
-          }
-          dgraph.uid : uid
+    query {
+      queryUser(func: uid(UserRoot)) {
+        issues : User.issues @filter(uid(Issue3)) {
+          id : uid
         }
-        UserRoot as var(func: uid(User4))
-        User4 as var(func: type(User))
-        var(func: uid(UserRoot)) {
-          Issue1 as User.issues
-        }
-        Issue3 as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
-        IssueAuth2 as var(func: uid(Issue1)) @cascade {
-          owner : Issue.owner @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
-        }
+        dgraph.uid : uid
       }
+      UserRoot as var(func: uid(User4))
+      User4 as var(func: type(User))
+      var(func: uid(UserRoot)) {
+        Issue1 as User.issues
+      }
+      Issue3 as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
+      IssueAuth2 as var(func: uid(Issue1)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+    }
 
 - name: "Deep RBAC rules false"
   gqlquery: |
