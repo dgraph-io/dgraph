@@ -154,7 +154,8 @@ func init() {
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
 	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
 		"only be done when alpha is under ludicrous mode)")
-	flag.StringP("upsert", "U", "", "run in upsert mode")
+	flag.StringP("upsert", "U", "", "run in upsert mode. the value would be used to "+
+		"store blank nodes as an xid")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
