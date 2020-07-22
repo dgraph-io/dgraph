@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -41,10 +42,6 @@ import (
 
 type AuthQueryRewritingCase struct {
 	Name string
-
-	// Values to come in the JWT
-	User string
-	Role string
 
 	// JWT variables
 	JWTVar map[string]interface{}
@@ -323,17 +320,8 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 
 			// Clear the map and initialize it.
 			authMeta.AuthVars = make(map[string]interface{})
-			if tcase.JWTVar != nil {
-				for k, v := range tcase.JWTVar {
-					authMeta.AuthVars[k] = v
-				}
-			} else {
-				authMeta.AuthVars["ROLE"] = tcase.Role
-			}
-
-			// Skipping $USER for specific rules.
-			if !strings.HasPrefix(tcase.Name, "Query with missing variable") {
-				authMeta.AuthVars["USER"] = "user1"
+			for k, v := range tcase.JWTVar {
+				authMeta.AuthVars[k] = v
 			}
 
 			ctx := context.Background()
@@ -345,6 +333,10 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 			require.Nil(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
+
+			// Check for unused variables.
+			_, err = gql.Parse(gql.Request{Str: dgraph.AsString(dgQuery)})
+			require.NoError(t, err)
 		})
 	}
 }
@@ -497,6 +489,10 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 			// -- Assert --
 			require.Nil(t, err)
 			require.Equal(t, tt.dgQuery, dgraph.AsString(dgQuery))
+
+			// Check for unused variables.
+			_, err = gql.Parse(gql.Request{Str: dgraph.AsString(dgQuery)})
+			require.NoError(t, err)
 		})
 
 	}
@@ -547,13 +543,12 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta)
 			mut := test.GetMutation(t, op)
 			rewriterToTest := NewDeleteRewriter()
 
-			authMeta.AuthVars = map[string]interface{}{
-				"USER": "user1",
+			// Clear the map and initialize it.
+			authMeta.AuthVars = make(map[string]interface{})
+			for k, v := range tcase.JWTVar {
+				authMeta.AuthVars[k] = v
 			}
 
-			if tcase.Role != "" {
-				authMeta.AuthVars["ROLE"] = tcase.Role
-			}
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
 
@@ -659,10 +654,12 @@ func checkAddUpdateCase(
 	require.NoError(t, err)
 	mut := test.GetMutation(t, op)
 
-	authMeta.AuthVars = map[string]interface{}{
-		"USER": "user1",
-		"ROLE": tcase.Role,
+	// Clear the map and initialize it.
+	authMeta.AuthVars = make(map[string]interface{})
+	for k, v := range tcase.JWTVar {
+		authMeta.AuthVars[k] = v
 	}
+
 	ctx, err := authMeta.AddClaimsToContext(context.Background())
 	require.NoError(t, err)
 

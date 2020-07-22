@@ -192,7 +192,9 @@
         email
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
       queryStudent(func: uid(StudentRoot)) {
@@ -211,7 +213,9 @@
         email
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
       queryStudent()
@@ -228,6 +232,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       getProject(func: uid(ProjectRoot)) @filter(type(Project)) {
@@ -270,6 +276,8 @@
         ownedBy
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryUserSecret(func: uid(UserSecretRoot)) {
@@ -289,6 +297,8 @@
         ownedBy
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       getUserSecret(func: uid(UserSecretRoot)) @filter(type(UserSecret)) {
@@ -308,6 +318,8 @@
         ownedBy
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryUserSecret(func: uid(UserSecretRoot)) {
@@ -328,7 +340,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -359,7 +373,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
       query {
         queryUser(func: uid(UserRoot)) {
@@ -378,7 +394,9 @@
         msg
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
       queryIssue(func: uid(IssueRoot)) {
@@ -400,7 +418,9 @@
         logs
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
       queryComplexLog(func: uid(ComplexLogRoot)) {
@@ -418,7 +438,9 @@
         logs
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
       queryComplexLog()
@@ -431,7 +453,9 @@
         logs
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
       queryLog(func: uid(LogRoot)) {
@@ -449,7 +473,9 @@
         logs
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
      query {
        queryLog()
@@ -462,7 +488,9 @@
         msg
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
      query {
        queryIssue()
@@ -476,7 +504,9 @@
         name
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
      query {
        queryProject(func: uid(ProjectRoot)) {
@@ -494,6 +524,8 @@
         id
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryGroup(func: uid(GroupRoot)) {
@@ -518,7 +550,9 @@
         name
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
       queryProject(func: uid(ProjectRoot)) {
@@ -544,6 +578,8 @@
         ownedBy
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryUserSecret(func: uid(UserSecretRoot), orderasc: UserSecret.aSecret) {
@@ -563,6 +599,8 @@
         title
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryTicket(func: uid(TicketRoot)) {
@@ -597,6 +635,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -639,6 +679,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -677,6 +719,8 @@
         content
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
@@ -710,6 +754,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content) @cascade {
@@ -761,6 +807,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
@@ -819,6 +867,8 @@
         content
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot)) {
@@ -860,6 +910,8 @@
         id
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       getLog()
@@ -893,7 +945,8 @@
         name
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
   dgquery: |-
     query {
       queryProject(func: uid(ProjectRoot)) {
