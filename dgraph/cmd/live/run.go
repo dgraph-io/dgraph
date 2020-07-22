@@ -95,7 +95,6 @@ type schema struct {
 type request struct {
 	*api.Mutation
 	conflicts []uint64
-	query     string
 }
 
 func (l *schema) init() {
@@ -560,12 +559,6 @@ func run() error {
 
 	l := setup(bmOpts, dg)
 	defer l.zeroconn.Close()
-
-	if opt.upsert == "" {
-		l.conflictGenerator = parseUid
-	} else {
-		l.conflictGenerator = fingerPrintUid
-	}
 
 	if len(opt.schemaFile) > 0 {
 		err := processSchemaFile(ctx, opt.schemaFile, opt.key, dg)

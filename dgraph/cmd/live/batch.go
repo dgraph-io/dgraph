@@ -89,9 +89,6 @@ type loader struct {
 	reqs     chan *request
 	zeroconn *grpc.ClientConn
 	schema   *schema
-
-	// to get integer out of an uid which is used for conflict generation
-	conflictGenerator func(string) (uint64, error)
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -167,7 +164,6 @@ func (l *loader) mutate(req *request) error {
 	txn := l.dc.NewTxn()
 	req.CommitNow = true
 	request := &api.Request{
-		Query:     req.query,
 		CommitNow: true,
 		Mutations: []*api.Mutation{req.Mutation},
 	}
@@ -252,10 +248,6 @@ func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
 	return id
 }
 
-func fingerPrintUid(uid string) (uint64, error) {
-	return farm.Fingerprint64([]byte(uid)), nil
-}
-
 func parseUid(uid string) (uint64, error) {
 	return strconv.ParseUint(uid, 0, 64)
 }
@@ -272,7 +264,8 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 
 	// Calculates the conflict keys, inspired by the logic in
 	// addMutationInteration in posting/list.go.
-	sid, err := l.conflictGenerator(nq.Subject)
+	sid, err := strconv.ParseUint(nq.Subject, 0, 64)
+
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +274,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	var de *pb.DirectedEdge
 
 	if nq.ObjectValue == nil {
-		oid, _ = l.conflictGenerator(nq.ObjectId)
+		oid, _ = strconv.ParseUint(nq.ObjectId, 0, 64)
 		de = createUidEdge(nq, sid, oid)
 	} else {
 		var err error
@@ -302,7 +295,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	}
 
 	if pred.Reverse {
-		oi, err := l.conflictGenerator(nq.ObjectId)
+		oi, err := strconv.ParseUint(nq.ObjectId, 0, 64)
 		if err != nil {
 			return keys, err
 		}
