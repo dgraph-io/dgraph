@@ -90,6 +90,23 @@ func checkUpsertLoadedData(t *testing.T) {
 	testutil.CompareJSONMaps(t, wantMap, gotMap)
 }
 
+func TestLiveLoadUpsertAtOnce(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	file := testDataDir + "/xid_a.rdf, " + testDataDir + "/xid_b.rdf"
+
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--schema", testDataDir + "/xid.schema", "--files", file, "--alpha",
+			alphaService, "--zero", zeroService, "-u", "groot", "-p", "password",
+			"-U", "xid"},
+	}
+	_, err := testutil.Pipeline(pipeline)
+	require.NoError(t, err, "live loading JSON file exited with error")
+
+	checkUpsertLoadedData(t)
+}
+
 func TestLiveLoadUpsert(t *testing.T) {
 	testutil.DropAll(t, dg)
 

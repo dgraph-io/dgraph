@@ -89,6 +89,8 @@ type loader struct {
 	reqs     chan *request
 	zeroconn *grpc.ClientConn
 	schema   *schema
+
+	upsertLock sync.RWMutex
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed

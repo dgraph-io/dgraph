@@ -55,22 +55,22 @@ import (
 )
 
 type options struct {
-	dataFiles      string
-	dataFormat     string
-	schemaFile     string
-	zero           string
-	concurrent     int
-	batchSize      int
-	clientDir      string
-	authToken      string
-	useCompression bool
-	newUids        bool
-	verbose        bool
-	httpAddr       string
-	bufferSize     int
-	ludicrousMode  bool
-	upsert         string
-	key            x.SensitiveByteSlice
+	dataFiles       string
+	dataFormat      string
+	schemaFile      string
+	zero            string
+	concurrent      int
+	batchSize       int
+	clientDir       string
+	authToken       string
+	useCompression  bool
+	newUids         bool
+	verbose         bool
+	httpAddr        string
+	bufferSize      int
+	ludicrousMode   bool
+	upsertPredicate string
+	key             x.SensitiveByteSlice
 }
 
 type predicate struct {
@@ -153,7 +153,7 @@ func init() {
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
 	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
 		"only be done when alpha is under ludicrous mode)")
-	flag.StringP("upsert", "U", "", "run in upsert mode. the value would be used to "+
+	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would be used to "+
 		"store blank nodes as an xid")
 
 	// Encryption and Vault options
@@ -230,11 +230,11 @@ func (l *loader) uid(val string) string {
 }
 
 func (l *loader) upsertUids(nqs []*api.NQuad) {
-	// We form upsert query for each of the ids we saw in the request, along with adding
+	// We form upsertPredicate query for each of the ids we saw in the request, along with adding
 	// the corresponding xid to that uid. The mutation we added is only useful if the
 	// uid doesn't exists.
 	//
-	// Example upsert mutation:
+	// Example upsertPredicate mutation:
 	//
 	// query {
 	//     u_1 as var(func: eq(xid, "m.1234"))
@@ -245,6 +245,8 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 	//          uid(u_1) xid m.1234 .
 	//     }
 	// }
+	l.upsertLock.Lock()
+	defer l.upsertLock.Unlock()
 
 	ids := make(map[string]string)
 
@@ -266,11 +268,11 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 			continue
 		}
 
-		query += fmt.Sprintf(`%s as %s(func: eq(%s, "%s")) {uid}`, idx, idx, opt.upsert, xid)
+		query += fmt.Sprintf(`%s as %s(func: eq(%s, "%s")) {uid}`, idx, idx, opt.upsertPredicate, xid)
 		query += "\n"
 		mutations = append(mutations, &api.NQuad{
 			Subject:     fmt.Sprintf("uid(%s)", idx),
-			Predicate:   opt.upsert,
+			Predicate:   opt.upsertPredicate,
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: xid}},
 		})
 	}
@@ -420,7 +422,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				continue
 			}
 
-			if opt.upsert == "" {
+			if opt.upsertPredicate == "" {
 				l.allocateUids(nqs)
 			} else {
 				l.upsertUids(nqs)
@@ -514,21 +516,21 @@ func run() error {
 	var err error
 	x.PrintVersion()
 	opt = options{
-		dataFiles:      Live.Conf.GetString("files"),
-		dataFormat:     Live.Conf.GetString("format"),
-		schemaFile:     Live.Conf.GetString("schema"),
-		zero:           Live.Conf.GetString("zero"),
-		concurrent:     Live.Conf.GetInt("conc"),
-		batchSize:      Live.Conf.GetInt("batch"),
-		clientDir:      Live.Conf.GetString("xidmap"),
-		authToken:      Live.Conf.GetString("auth_token"),
-		useCompression: Live.Conf.GetBool("use_compression"),
-		newUids:        Live.Conf.GetBool("new_uids"),
-		verbose:        Live.Conf.GetBool("verbose"),
-		httpAddr:       Live.Conf.GetString("http"),
-		bufferSize:     Live.Conf.GetInt("bufferSize"),
-		ludicrousMode:  Live.Conf.GetBool("ludicrous_mode"),
-		upsert:         Live.Conf.GetString("upsert"),
+		dataFiles:       Live.Conf.GetString("files"),
+		dataFormat:      Live.Conf.GetString("format"),
+		schemaFile:      Live.Conf.GetString("schema"),
+		zero:            Live.Conf.GetString("zero"),
+		concurrent:      Live.Conf.GetInt("conc"),
+		batchSize:       Live.Conf.GetInt("batch"),
+		clientDir:       Live.Conf.GetString("xidmap"),
+		authToken:       Live.Conf.GetString("auth_token"),
+		useCompression:  Live.Conf.GetBool("use_compression"),
+		newUids:         Live.Conf.GetBool("new_uids"),
+		verbose:         Live.Conf.GetBool("verbose"),
+		httpAddr:        Live.Conf.GetString("http"),
+		bufferSize:      Live.Conf.GetInt("bufferSize"),
+		ludicrousMode:   Live.Conf.GetBool("ludicrous_mode"),
+		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
 	}
 	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
 		fmt.Printf("unable to read key %v", err)
