@@ -41,6 +41,7 @@ import (
 	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -277,20 +278,38 @@ func (l *loader) processFile(ctx context.Context, filename string, key x.Sensiti
 }
 
 func (l *loader) addUpsert(req *request) {
+	// We form upsert query for each of the ids we saw in the request, along with adding
+	// the corresponding xid to that uid. The mutation we added is only useful if the
+	// uid doesn't exists.
+	//
+	// Example upsert mutation:
+	//
+	// query {
+	//     u_1 as var(func: eq(xid, "m.1234"))
+	// }
+	//
+	// mutation {
+	//     set {
+	//          uid(u_1) <predicate> value .    --> original request
+	//          uid(u_1) xid m.1234 .           --> gets added here
+	//     }
+	// }
+
 	ids := make(map[string]string)
-	idx := 0
 
 	for _, i := range req.Mutation.Set {
-		idx += 1
-		ids[i.Subject] = fmt.Sprintf("u_%d", idx)
+		// taking hash as the value might contain invalid symbols
+		ids[i.Subject] = fmt.Sprintf("u_%d", farm.Fingerprint64([]byte(i.Subject)))
 		i.Subject = fmt.Sprintf("uid(%s)", ids[i.Subject])
+
 		if len(i.ObjectId) > 0 {
-			idx += 1
-			ids[i.ObjectId] = fmt.Sprintf("u_%d", idx)
+			// taking hash as the value might contain invalid symbols
+			ids[i.ObjectId] = fmt.Sprintf("u_%d", farm.Fingerprint64([]byte(i.ObjectId)))
 			i.ObjectId = fmt.Sprintf("uid(%s)", ids[i.ObjectId])
 		}
 	}
 
+	// copy the slice into a new slice to avoid overwriting nquads
 	if len(ids) > 0 {
 		s := make([]*api.NQuad, 0, len(req.Mutation.Set)+len(ids))
 		copy(req.Mutation.Set, s[:])
@@ -308,22 +327,6 @@ func (l *loader) addUpsert(req *request) {
 		})
 	}
 
-	// We form upsert query for each of the ids we saw in the request, along with adding
-	// the corresponding xid to that uid. The mutation we added is only useful if the
-	// uid doesn't exists.
-	//
-	// Example upsert mutation:
-	//
-	// query {
-	//     m.1234 as var(func: eq(xid, "m.1234"))
-	// }
-	//
-	// mutation {
-	//     set {
-	//          uid(m.1234) <predicate> value .    --> original request
-	//          uid(m.1234) xid m.1234 .           --> gets added here
-	//     }
-	// }
 	req.query = "query {\n" + query + "}"
 }
 
