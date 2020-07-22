@@ -134,11 +134,11 @@ func TestSync_SingleSyncingNode(t *testing.T) {
 
 	nodes := []*utils.Node{alice, bob}
 	defer func() {
-		errList := utils.TearDown(t, nodes)
+		errList := utils.StopNodes(t, nodes)
 		require.Len(t, errList, 0)
 	}()
 
-	numCmps := 30
+	numCmps := 100
 	for i := 0; i < numCmps; i++ {
 		t.Log("comparing...", i)
 		err = compareBlocksByNumberWithRetry(t, nodes, strconv.Itoa(i))

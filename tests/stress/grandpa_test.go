@@ -57,7 +57,6 @@ func TestStress_Grandpa_ThreeAuthorities(t *testing.T) {
 
 	numRounds := 10
 	for i := 1; i < numRounds+1; i++ {
-		time.Sleep(time.Second * 5)
 		fin, err := compareFinalizedHeadsWithRetry(t, nodes, uint64(i))
 		require.NoError(t, err)
 		t.Logf("finalized hash in round %d: %s", i, fin)
@@ -76,7 +75,6 @@ func TestStress_Grandpa_SixAuthorities(t *testing.T) {
 
 	numRounds := 10
 	for i := 1; i < numRounds+1; i++ {
-		time.Sleep(time.Second * 5)
 		fin, err := compareFinalizedHeadsWithRetry(t, nodes, uint64(i))
 		require.NoError(t, err)
 		t.Logf("finalized hash in round %d: %s", i, fin)
@@ -84,7 +82,6 @@ func TestStress_Grandpa_SixAuthorities(t *testing.T) {
 }
 
 func TestStress_Grandpa_NineAuthorities(t *testing.T) {
-	// short for now, remove when syncing is more stable
 	if testing.Short() {
 		t.Skip("skipping TestStress_Grandpa_NineAuthorities")
 	}
@@ -98,11 +95,8 @@ func TestStress_Grandpa_NineAuthorities(t *testing.T) {
 		require.Len(t, errList, 0)
 	}()
 
-	numRounds := 2
+	numRounds := 3
 	for i := 1; i < numRounds+1; i++ {
-		// TODO: this is a long time for a round to complete; this is because syncing is inefficient
-		// need to improve syncing protocol
-		time.Sleep(time.Second * 10)
 		fin, err := compareFinalizedHeadsWithRetry(t, nodes, uint64(i))
 		require.NoError(t, err)
 		t.Logf("finalized hash in round %d: %s", i, fin)

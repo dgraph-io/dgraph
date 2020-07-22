@@ -67,6 +67,11 @@ func (*ConnManager) Unprotect(peer.ID, string) bool { return false }
 // Close peer
 func (*ConnManager) Close() error { return nil }
 
+// IsProtected ...
+func (*ConnManager) IsProtected(id peer.ID, tag string) (protected bool) {
+	return false
+}
+
 // Listen is called when network starts listening on an address
 func (cm *ConnManager) Listen(n network.Network, addr ma.Multiaddr) {
 	logger.Trace(

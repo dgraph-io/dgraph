@@ -4,7 +4,8 @@ id = "gssmr"
 log = "info"
 
 [log]
-sync = "info"
+sync = "debug"
+network = "debug"
 
 [init]
 genesis = "./chain/gssmr/genesis.json"

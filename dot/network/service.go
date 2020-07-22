@@ -29,7 +29,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/services"
 
 	log "github.com/ChainSafe/log15"
-	"github.com/libp2p/go-libp2p-core/network"
 	libp2pnetwork "github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
@@ -242,7 +241,7 @@ func (s *Service) safeMsgSend(msg Message) error {
 }
 
 // handleConn starts processes that manage the connection
-func (s *Service) handleConn(conn network.Conn) {
+func (s *Service) handleConn(conn libp2pnetwork.Conn) {
 	// check if status is enabled
 	if !s.noStatus {
 
@@ -282,11 +281,7 @@ func (s *Service) handleStream(stream libp2pnetwork.Stream) {
 	}
 
 	peer := conn.RemotePeer()
-
-	// create buffer stream for non-blocking read
-	r := bufio.NewReader(stream)
-
-	go s.readStream(r, peer, s.handleMessage)
+	s.readStream(stream, peer, s.handleMessage)
 	// the stream stays open until closed or reset
 }
 
@@ -299,19 +294,19 @@ func (s *Service) handleSyncStream(stream libp2pnetwork.Stream) {
 	}
 
 	peer := conn.RemotePeer()
-
-	// create buffer stream for non-blocking read
-	r := bufio.NewReader(stream)
-
-	go s.readStream(r, peer, s.handleSyncMessage)
+	s.readStream(stream, peer, s.handleSyncMessage)
 	// the stream stays open until closed or reset
 }
 
-func (s *Service) readStream(r *bufio.Reader, peer peer.ID, handler func(peer peer.ID, msg Message)) {
+func (s *Service) readStream(stream libp2pnetwork.Stream, peer peer.ID, handler func(peer peer.ID, msg Message)) {
+	// create buffer stream for non-blocking read
+	r := bufio.NewReader(stream)
+
 	for {
 		length, err := readLEB128ToUint64(r)
 		if err != nil {
 			s.logger.Error("Failed to read LEB128 encoding", "error", err)
+			_ = stream.Close()
 			return
 		}
 
@@ -319,19 +314,20 @@ func (s *Service) readStream(r *bufio.Reader, peer peer.ID, handler func(peer pe
 		n, err := r.Read(msgBytes)
 		if err != nil {
 			s.logger.Error("Failed to read message from stream", "error", err)
+			_ = stream.Close()
 			return
 		}
 
 		if uint64(n) != length {
 			s.logger.Error("Failed to read entire message", "length", length, "read", n)
-			return
+			continue
 		}
 
 		// decode message based on message type
 		msg, err := decodeMessageBytes(msgBytes)
 		if err != nil {
 			s.logger.Error("Failed to decode message from peer", "peer", peer, "err", err)
-			return // exit
+			continue
 		}
 
 		// handle message based on peer status and message type

@@ -82,7 +82,7 @@ func newTestSyncer(t *testing.T, cfg *Config) *Service {
 	}
 
 	if cfg.LogLvl == 0 {
-		cfg.LogLvl = log.LvlInfo
+		cfg.LogLvl = log.LvlDebug
 	}
 
 	syncer, err := NewService(cfg)
@@ -96,7 +96,6 @@ func TestHandleSeenBlocks(t *testing.T) {
 	req := syncer.HandleSeenBlocks(number)
 	require.NotNil(t, req)
 	require.Equal(t, uint64(1), req.StartingBlock.Value().(uint64))
-	require.Equal(t, int64(1), syncer.requestStart)
 	require.Equal(t, number, syncer.highestSeenBlock)
 }
 
@@ -183,13 +182,12 @@ func TestHandleBlockResponse(t *testing.T) {
 func TestHandleBlockResponse_MissingBlocks(t *testing.T) {
 	syncer := newTestSyncer(t, nil)
 	syncer.highestSeenBlock = big.NewInt(20)
+	addTestBlocksToState(t, 4, syncer.blockState)
 
 	responder := newTestSyncer(t, nil)
 	addTestBlocksToState(t, 16, responder.blockState)
 
 	startNum := 16
-	syncer.requestStart = int64(startNum)
-
 	start, err := variadic.NewUint64OrHash(startNum)
 	require.NoError(t, err)
 
@@ -199,13 +197,15 @@ func TestHandleBlockResponse_MissingBlocks(t *testing.T) {
 		StartingBlock: start,
 	}
 
+	// resp contains blocks 16 + (16 + maxResponseSize)
 	resp, err := responder.CreateBlockResponse(req)
 	require.NoError(t, err)
-	syncer.synced = false
 
+	// request should start from block 5 (best block number + 1)
+	syncer.synced = false
 	req2 := syncer.HandleBlockResponse(resp)
 	require.NotNil(t, req2)
-	require.Equal(t, uint64(startNum-int(maxResponseSize)), req2.StartingBlock.Value().(uint64))
+	require.Equal(t, uint64(5), req2.StartingBlock.Value().(uint64))
 }
 
 func TestRemoveIncludedExtrinsics(t *testing.T) {
@@ -231,7 +231,7 @@ func TestRemoveIncludedExtrinsics(t *testing.T) {
 		BlockData: []*types.BlockData{bd},
 	}
 
-	_, err = syncer.processBlockResponseData(msg)
+	_, _, err = syncer.processBlockResponseData(msg)
 	require.NoError(t, err)
 
 	inQueue := syncer.transactionQueue.Pop()
@@ -290,9 +290,10 @@ func TestHandleBlockResponse_NoBlockData(t *testing.T) {
 		ID:        0,
 		BlockData: nil,
 	}
-	_, err := syncer.processBlockResponseData(msg)
+	low, high, err := syncer.processBlockResponseData(msg)
 	require.Nil(t, err)
-
+	require.Equal(t, int64(0), high)
+	require.Equal(t, maxInt64, low)
 }
 
 func TestHandleBlockResponse_BlockData(t *testing.T) {
@@ -318,10 +319,10 @@ func TestHandleBlockResponse_BlockData(t *testing.T) {
 		ID:        0,
 		BlockData: bd,
 	}
-	res, err := syncer.processBlockResponseData(msg)
+	low, high, err := syncer.processBlockResponseData(msg)
 	require.Nil(t, err)
-
-	require.Equal(t, int64(0), res)
+	require.Equal(t, int64(0), low)
+	require.Equal(t, int64(0), high)
 }
 
 func newBlockBuilder(t *testing.T, cfg *babe.ServiceConfig) *babe.Service { //nolint

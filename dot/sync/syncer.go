@@ -31,9 +31,12 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common/variadic"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 
+	"github.com/ChainSafe/chaindb"
 	log "github.com/ChainSafe/log15"
 	"golang.org/x/exp/rand"
 )
+
+var maxInt64 = int64(2 ^ 63 - 1)
 
 // Service deals with chain syncing by sending block request messages and watching for responses.
 type Service struct {
@@ -46,7 +49,6 @@ type Service struct {
 
 	// Synchronization variables
 	synced           bool
-	requestStart     int64    // block number from which to begin block requests
 	highestSeenBlock *big.Int // highest block number we have seen
 	runtime          *runtime.Runtime
 
@@ -98,7 +100,6 @@ func NewService(cfg *Config) (*Service, error) {
 		blockState:       cfg.BlockState,
 		blockProducer:    cfg.BlockProducer,
 		synced:           true,
-		requestStart:     1,
 		highestSeenBlock: big.NewInt(0),
 		transactionQueue: cfg.TransactionQueue,
 		runtime:          cfg.Runtime,
@@ -115,8 +116,9 @@ func (s *Service) HandleSeenBlocks(blockNum *big.Int) *network.BlockRequestMessa
 	}
 
 	// need to sync
+	var start int64
 	if s.synced {
-		s.requestStart = s.highestSeenBlock.Add(s.highestSeenBlock, big.NewInt(1)).Int64()
+		start = s.highestSeenBlock.Add(s.highestSeenBlock, big.NewInt(1)).Int64()
 		s.synced = false
 
 		err := s.blockProducer.Pause()
@@ -124,12 +126,11 @@ func (s *Service) HandleSeenBlocks(blockNum *big.Int) *network.BlockRequestMessa
 			s.logger.Warn("failed to pause block production")
 		}
 	} else {
-		s.requestStart = s.highestSeenBlock.Int64()
+		start = s.highestSeenBlock.Int64()
 	}
 
 	s.highestSeenBlock = blockNum
-	s.benchmarker.begin(uint64(s.requestStart))
-	return s.createBlockRequest()
+	return s.createBlockRequest(start)
 }
 
 // HandleBlockAnnounce creates a block request message from the block
@@ -172,15 +173,25 @@ func (s *Service) HandleBlockAnnounce(msg *network.BlockAnnounceMessage) *networ
 
 	// check if block body is stored in block state (ie. if we have the full block already)
 	_, err = s.blockState.GetBlockBody(header.Hash())
-	if err != nil && err.Error() == "Key not found" {
-		s.logger.Debug(
-			"sending block number to syncer",
-			"number", msg.Number,
-		)
+	if err != nil && err == chaindb.ErrKeyNotFound {
+		s.synced = false
 
 		// create block request to send
-		s.requestStart = header.Number.Int64()
-		return s.createBlockRequest()
+		bestNum, err := s.blockState.BestBlockNumber() //nolint
+		if err != nil {
+			s.logger.Error("failed to get best block number", "error", err)
+			bestNum = big.NewInt(0)
+		}
+
+		// if we already have blocks up to the BlockAnnounce number, only request the block in the BlockAnnounce
+		var start int64
+		if bestNum.Cmp(header.Number) > 0 {
+			start = header.Number.Int64()
+		} else {
+			start = bestNum.Int64() + 1
+		}
+
+		return s.createBlockRequest(start)
 	} else if err != nil {
 		s.logger.Error("failed to handle BlockAnnounce", "error", err)
 	}
@@ -193,18 +204,24 @@ func (s *Service) HandleBlockAnnounce(msg *network.BlockAnnounceMessage) *networ
 func (s *Service) HandleBlockResponse(msg *network.BlockResponseMessage) *network.BlockRequestMessage {
 	// highestInResp will be the highest block in the response
 	// it's set to 0 if err != nil
-	highestInResp, err := s.processBlockResponseData(msg)
+	var start int64
+	low, high, err := s.processBlockResponseData(msg)
+	s.logger.Debug("received BlockResponse", "start", low, "end", high)
 
 	// if we cannot find the parent block in our blocktree, we are missing some blocks, and need to request
 	// blocks from farther back in the chain
 	if err == blocktree.ErrParentNotFound {
-		// set request start
-		s.requestStart = s.requestStart - maxResponseSize
-		if s.requestStart <= 0 {
-			s.requestStart = 1
+		s.logger.Debug("got ErrParentNotFound; need to request earlier blocks")
+		bestNum, err := s.blockState.BestBlockNumber() //nolint
+		if err != nil {
+			s.logger.Error("failed to get best block number", "error", err)
+			start = low - maxResponseSize
+		} else {
+			start = bestNum.Int64() + 1
 		}
-		s.logger.Trace("Retrying block request", "start", s.requestStart)
-		return s.createBlockRequest()
+
+		s.logger.Debug("retrying block request", "start", start)
+		return s.createBlockRequest(start)
 	} else if err != nil {
 		s.logger.Error("failed to process block response", "error", err)
 		return nil
@@ -233,23 +250,23 @@ func (s *Service) HandleBlockResponse(msg *network.BlockResponseMessage) *networ
 	}
 
 	// not yet synced, send another block request for the following blocks
-	s.requestStart = highestInResp + 1
-	return s.createBlockRequest()
+	start = high + 1
+	return s.createBlockRequest(start)
 }
 
-func (s *Service) createBlockRequest() *network.BlockRequestMessage {
+func (s *Service) createBlockRequest(startInt int64) *network.BlockRequestMessage {
 	// generate random ID
 	s1 := rand.NewSource(uint64(time.Now().UnixNano()))
 	seed := rand.New(s1).Uint64()
 	randomID := mrand.New(mrand.NewSource(int64(seed))).Uint64()
 
-	start, err := variadic.NewUint64OrHash(uint64(s.requestStart))
+	start, err := variadic.NewUint64OrHash(uint64(startInt))
 	if err != nil {
 		s.logger.Error("failed to create block request start block", "error", err)
 		return nil
 	}
 
-	s.logger.Trace("sending block request", "start", start)
+	s.logger.Debug("sending block request", "start", start)
 
 	blockRequest := &network.BlockRequestMessage{
 		ID:            randomID, // random
@@ -260,47 +277,58 @@ func (s *Service) createBlockRequest() *network.BlockRequestMessage {
 		Max:           optional.NewUint32(false, 0),
 	}
 
+	s.benchmarker.begin(uint64(startInt))
 	return blockRequest
 }
 
-func (s *Service) processBlockResponseData(msg *network.BlockResponseMessage) (int64, error) {
+// processBlockResponseData processes the BlockResponse and returns the start and end blocks in the response
+func (s *Service) processBlockResponseData(msg *network.BlockResponseMessage) (int64, int64, error) {
 	blockData := msg.BlockData
-	highestInResp := int64(0)
+	start := maxInt64
+	end := int64(0)
 
 	for _, bd := range blockData {
 		if bd.Header.Exists() {
 			header, err := types.NewHeaderFromOptional(bd.Header)
 			if err != nil {
-				return 0, err
+				return 0, 0, err
 			}
 
-			highestInResp, err = s.handleHeader(header)
+			err = s.handleHeader(header)
 			if err != nil {
-				return 0, err
+				return start, end, err
+			}
+
+			if header.Number.Int64() < start {
+				start = header.Number.Int64()
+			}
+
+			if header.Number.Int64() > end {
+				end = header.Number.Int64()
 			}
 		}
 
 		if bd.Body.Exists {
 			body, err := types.NewBodyFromOptional(bd.Body)
 			if err != nil {
-				return 0, err
+				return start, end, err
 			}
 
 			err = s.handleBody(body)
 			if err != nil {
-				return 0, err
+				return start, end, err
 			}
 		}
 
 		if bd.Header.Exists() && bd.Body.Exists {
 			header, err := types.NewHeaderFromOptional(bd.Header)
 			if err != nil {
-				return 0, err
+				return 0, 0, err
 			}
 
 			body, err := types.NewBodyFromOptional(bd.Body)
 			if err != nil {
-				return 0, err
+				return 0, 0, err
 			}
 
 			block := &types.Block{
@@ -310,33 +338,31 @@ func (s *Service) processBlockResponseData(msg *network.BlockResponseMessage) (i
 
 			err = s.handleBlock(block)
 			if err != nil {
-				return 0, err
+				return start, end, err
 			}
 		}
 
 		err := s.blockState.CompareAndSetBlockData(bd)
 		if err != nil {
-			return highestInResp, err
+			return start, end, err
 		}
 	}
 
-	return highestInResp, nil
+	return start, end, nil
 }
 
 // handleHeader handles headers included in BlockResponses
-func (s *Service) handleHeader(header *types.Header) (int64, error) {
-	highestInResp := int64(0)
-
+func (s *Service) handleHeader(header *types.Header) error {
 	// get block header; if exists, return
 	has, err := s.blockState.HasHeader(header.Hash())
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	if !has {
 		err = s.blockState.SetHeader(header)
 		if err != nil {
-			return 0, err
+			return err
 		}
 
 		s.logger.Info("saved block header", "hash", header.Hash(), "number", header.Number)
@@ -344,18 +370,14 @@ func (s *Service) handleHeader(header *types.Header) (int64, error) {
 
 	ok, err := s.verifier.VerifyBlock(header)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	if !ok {
-		return 0, ErrInvalidBlock
+		return ErrInvalidBlock
 	}
 
-	if header.Number.Int64() > highestInResp {
-		highestInResp = header.Number.Int64()
-	}
-
-	return highestInResp, nil
+	return nil
 }
 
 // handleHeader handles block bodies included in BlockResponses

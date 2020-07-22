@@ -7,7 +7,7 @@ log = "crit"
 core = "crit"
 babe = "info"
 grandpa = "debug"
-network = "error"
+network = "debug"
 runtime = "crit"
 
 [init]
