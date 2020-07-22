@@ -23,26 +23,27 @@
       queryContact(func: uid(ContactRoot)) {
         id : uid
         nickName : Contact.nickName
-        adminTasks : Contact.adminTasks @filter(uid(AdminTask4)) {
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask5)) {
           id : uid
           name : AdminTask.name
-          occurrances : AdminTask.occurrances @filter(uid(TaskOccurance3)) {
+          occurrances : AdminTask.occurrances @filter(uid(TaskOccurance4)) {
             due : TaskOccurance.due
             comp : TaskOccurance.comp
             dgraph.uid : uid
           }
         }
       }
-      ContactRoot as var(func: uid(Contact5))
-      Contact5 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact6))
+      Contact6 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
         AdminTask1 as Contact.adminTasks
       }
-      AdminTask4 as var(func: uid(AdminTask1))
+      AdminTask5 as var(func: uid(AdminTask1))
       var(func: uid(AdminTask1)) {
         TaskOccurance2 as AdminTask.occurrances
       }
-      TaskOccurance3 as var(func: uid(TaskOccurance2))
+      TaskOccurance4 as var(func: uid(TaskOccurance2)) @filter(uid(TaskOccuranceAuth3))
+      TaskOccuranceAuth3 as var(func: uid(TaskOccurance2)) @filter(eq(TaskOccurance.role, "ADMINISTRATOR")) @cascade
     }
 
 - name: "Deep RBAC rule - Level 0 false"
@@ -96,8 +97,8 @@
         id : uid
         nickName : Contact.nickName
       }
-      ContactRoot as var(func: uid(Contact4))
-      Contact4 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact5))
+      Contact5 as var(func: type(Contact))
     }
 
 - name: "Deep RBAC rule - Level 2 false"
@@ -163,26 +164,27 @@
       queryContact(func: uid(ContactRoot)) {
         id : uid
         nickName : Contact.nickName
-        tasks : Contact.tasks @filter(uid(Task4)) {
+        tasks : Contact.tasks @filter(uid(Task5)) {
           id : uid
           name : Task.name
-          occurrances : Task.occurrances @filter(uid(TaskOccurance3)) {
+          occurrances : Task.occurrances @filter(uid(TaskOccurance4)) {
             due : TaskOccurance.due
             comp : TaskOccurance.comp
             dgraph.uid : uid
           }
         }
       }
-      ContactRoot as var(func: uid(Contact5))
-      Contact5 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact6))
+      Contact6 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
         Task1 as Contact.tasks
       }
-      Task4 as var(func: uid(Task1))
+      Task5 as var(func: uid(Task1))
       var(func: uid(Task1)) {
         TaskOccurance2 as Task.occurrances
       }
-      TaskOccurance3 as var(func: uid(TaskOccurance2))
+      TaskOccurance4 as var(func: uid(TaskOccurance2)) @filter(uid(TaskOccuranceAuth3))
+      TaskOccuranceAuth3 as var(func: uid(TaskOccurance2)) @filter(eq(TaskOccurance.role, "ADMINISTRATOR")) @cascade
     }
 
 - name: "Auth query with @dgraph pred."

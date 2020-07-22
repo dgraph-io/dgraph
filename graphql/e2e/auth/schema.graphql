@@ -549,7 +549,16 @@ type Task {
 }
 
 type TaskOccurance @auth(
-    query: { rule: "{$TaskOccuranceRole: { eq: \"ADMINISTRATOR\"}}" }
+    query: { and : [
+        {rule: "{$TaskOccuranceRole: { eq: \"ADMINISTRATOR\"}}"},
+        {rule: """
+        query($TaskOccuranceRole: String!) {
+            queryTaskOccurance(filter: {role: { eq: $TaskOccuranceRole}}) {
+                __typename
+            }
+        }
+        """}
+] }
 ) {
     id: ID!
     due: DateTime @search
@@ -557,5 +566,6 @@ type TaskOccurance @auth(
     task: Task @hasInverse(field: occurrances)
     adminTask: AdminTask @hasInverse(field: occurrances)
     isPublic: Boolean @search
+    role: String @search(by: [exact, term, fulltext, regexp])
 }
 
