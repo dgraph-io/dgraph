@@ -171,7 +171,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 		}
 		rrch := make(chan error, len(exec))
 		for _, subgraph := range exec {
-			go ProcessGraph(ctx, subgraph, dummy, rrch)
+			go ProcessGraph(ctx, subgraph, dummy, rrch, -1)
 		}
 
 		for range exec {
