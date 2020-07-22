@@ -224,8 +224,107 @@ func (l *loader) uid(val string) string {
 
 	sb := strings.Builder{}
 	x.Check2(sb.WriteString(val))
-	uid, _ := l.alloc.AssignUid(sb.String())
+	uid, check := l.alloc.AssignUid(sb.String())
+
+	if opt.upsert != "" && check {
+		fmt.Println(val, uid)
+		panic(errors.New("Should not have allocated locally"))
+	}
+
 	return fmt.Sprintf("%#x", uint64(uid))
+}
+
+func (l *loader) upsertUids(nqs []*api.NQuad) {
+	// We form upsert query for each of the ids we saw in the request, along with adding
+	// the corresponding xid to that uid. The mutation we added is only useful if the
+	// uid doesn't exists.
+	//
+	// Example upsert mutation:
+	//
+	// query {
+	//     u_1 as var(func: eq(xid, "m.1234"))
+	// }
+	//
+	// mutation {
+	//     set {
+	//          uid(u_1) xid m.1234 .
+	//     }
+	// }
+
+	ids := make(map[string]string)
+
+	for _, i := range nqs {
+		// taking hash as the value might contain invalid symbols
+		ids[i.Subject] = fmt.Sprintf("u_%d", farm.Fingerprint64([]byte(i.Subject)))
+
+		if len(i.ObjectId) > 0 {
+			// taking hash as the value might contain invalid symbols
+			ids[i.ObjectId] = fmt.Sprintf("u_%d", farm.Fingerprint64([]byte(i.ObjectId)))
+		}
+	}
+
+	mutations := make([]*api.NQuad, 0, len(ids))
+	query := ""
+
+	for xid, idx := range ids {
+		if l.alloc.CheckUid(xid) {
+			continue
+		}
+
+		query += fmt.Sprintf(`%s as %s(func: eq(%s, "%s")) {uid}`, idx, idx, opt.upsert, xid)
+		query += "\n"
+		mutations = append(mutations, &api.NQuad{
+			Subject:     fmt.Sprintf("uid(%s)", idx),
+			Predicate:   opt.upsert,
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: xid}},
+		})
+	}
+
+	if query == "" {
+		return
+	}
+
+	query = "query {\n" + query + "}"
+
+	// allocate all the new xids
+	resp, err := l.dc.NewTxn().Do(context.TODO(), &api.Request{
+		CommitNow: true,
+		Query:     query,
+		Mutations: []*api.Mutation{{Set: mutations}},
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	type dResult struct {
+		Uid string
+	}
+
+	var result map[string][]dResult
+	err = json.Unmarshal(resp.GetJson(), &result)
+
+	for xid, idx := range ids {
+		if val, ok := result[idx]; ok && len(val) > 0 {
+			uid, err := strconv.ParseUint(val[0].Uid[2:], 16, 64)
+			if err != nil {
+				panic(err)
+			}
+
+			l.alloc.SetUid(xid, uid)
+			continue
+		}
+
+		if val, ok := resp.GetUids()["uid("+idx+")"]; ok {
+			uid, err := strconv.ParseUint(val[2:], 16, 64)
+			if err != nil {
+				panic(err)
+			}
+
+			l.alloc.SetUid(xid, uid)
+			continue
+		}
+	}
 }
 
 // allocateUids looks for the maximum uid value in the given NQuads and bumps the
@@ -277,59 +376,6 @@ func (l *loader) processFile(ctx context.Context, filename string, key x.Sensiti
 	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType, opt.batchSize))
 }
 
-func (l *loader) addUpsert(req *request) {
-	// We form upsert query for each of the ids we saw in the request, along with adding
-	// the corresponding xid to that uid. The mutation we added is only useful if the
-	// uid doesn't exists.
-	//
-	// Example upsert mutation:
-	//
-	// query {
-	//     u_1 as var(func: eq(xid, "m.1234"))
-	// }
-	//
-	// mutation {
-	//     set {
-	//          uid(u_1) <predicate> value .    --> original request
-	//          uid(u_1) xid m.1234 .           --> gets added here
-	//     }
-	// }
-
-	ids := make(map[string]string)
-
-	for _, i := range req.Mutation.Set {
-		// taking hash as the value might contain invalid symbols
-		ids[i.Subject] = fmt.Sprintf("u_%d", farm.Fingerprint64([]byte(i.Subject)))
-		i.Subject = fmt.Sprintf("uid(%s)", ids[i.Subject])
-
-		if len(i.ObjectId) > 0 {
-			// taking hash as the value might contain invalid symbols
-			ids[i.ObjectId] = fmt.Sprintf("u_%d", farm.Fingerprint64([]byte(i.ObjectId)))
-			i.ObjectId = fmt.Sprintf("uid(%s)", ids[i.ObjectId])
-		}
-	}
-
-	// copy the slice into a new slice to avoid overwriting nquads
-	if len(ids) > 0 {
-		s := make([]*api.NQuad, 0, len(req.Mutation.Set)+len(ids))
-		copy(req.Mutation.Set, s[:])
-		req.Mutation.Set = s
-	}
-
-	query := ""
-	for i, idx := range ids {
-		query += fmt.Sprintf(`%s as var(func: eq(%s, "%s"))`, idx, opt.upsert, i)
-		query += "\n"
-		req.Mutation.Set = append(req.Mutation.Set, &api.NQuad{
-			Subject:     fmt.Sprintf("uid(%s)", idx),
-			Predicate:   opt.upsert,
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: i}},
-		})
-	}
-
-	req.query = "query {\n" + query + "}"
-}
-
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -368,9 +414,6 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				}
 
 				mu := &request{Mutation: &api.Mutation{Set: buffer[:sz]}}
-				if opt.upsert != "" {
-					l.addUpsert(mu)
-				}
 
 				l.reqs <- mu
 				buffer = buffer[sz:]
@@ -384,11 +427,14 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 
 			if opt.upsert == "" {
 				l.allocateUids(nqs)
-				for _, nq := range nqs {
-					nq.Subject = l.uid(nq.Subject)
-					if len(nq.ObjectId) > 0 {
-						nq.ObjectId = l.uid(nq.ObjectId)
-					}
+			} else {
+				l.upsertUids(nqs)
+			}
+
+			for _, nq := range nqs {
+				nq.Subject = l.uid(nq.Subject)
+				if len(nq.ObjectId) > 0 {
+					nq.ObjectId = l.uid(nq.ObjectId)
 				}
 			}
 
