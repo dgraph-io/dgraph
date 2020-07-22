@@ -1985,6 +1985,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	defer stop()
 
 	if sg.Attr == "uid" {
+		fmt.Println("inside sg.Attr")
 		// We dont need to call ProcessGraph for uid, as we already have uids
 		// populated from parent and there is nothing to process but uidMatrix
 		// and values need to have the right sizes so that preTraverse works.
@@ -1992,6 +1993,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		rch <- nil
 		return
 	}
+	fmt.Println("outside sg.Attr")
 	var err error
 	switch {
 	case parent == nil && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid":
@@ -2701,12 +2703,14 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	for i := 0; i < len(req.Subgraphs) && numQueriesDone < len(req.Subgraphs); i++ {
 		errChan := make(chan error, len(req.Subgraphs))
 		var idxList []int
+		fmt.Println("i ", i)
 		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
 		// to be executed.
 		for idx := 0; idx < len(req.Subgraphs); idx++ {
 			if hasExecuted[idx] {
 				continue
 			}
+			fmt.Println("idx ", idx)
 			sg := req.Subgraphs[idx]
 			// Check the list for the requires variables.
 			if !canExecute(idx) {
@@ -2743,6 +2747,8 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			default:
 				go ProcessGraph(ctx, sg, nil, errChan)
 			}
+			time.Sleep(time.Second)
+			fmt.Println("uids ", sg.DestUIDs)
 		}
 
 		var ferr error
