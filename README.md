@@ -27,17 +27,17 @@
 
 ## A Go Implementation of the Polkadot Host
 
-Gossamer is an implementation of the [Polkadot Host](https://github.com/w3f/polkadot-spec) - a blockchain framework used to build and run nodes for different blockchain protocols within the Polkadot ecosystem.
+Gossamer is an implementation of the [Polkadot Host](https://github.com/w3f/polkadot-spec): a framework used to build and run nodes for different blockchain protocols that are compatible with the Polkadot ecosystem.  The core of the Polkadot Host is the wasm runtime which handles the logic of the chain.
 
-Gossamer includes node implementations for major blockchains within the Polkadot ecosystem and makes building node implementations for other blockchains trivial; blockchains built with [Substrate](https://github.com/paritytech/substrate) can plug their compiled runtime into Gossamer to create a node implementation in Go.
+Gossamer includes node implementations for major blockchains within the Polkadot ecosystem and simplifies building node implementations for other blockchains. Runtimes built with [Substrate](https://github.com/paritytech/substrate) can plug their runtime into Gossamer to create a node implementation in Go.
 
-For more information about Gossamer, the Polkadot ecosystem, and how to use Gossamer to build and run nodes for different blockchain protocols within the Polkadot ecosystem, check out [Gossamer Docs](https://ChainSafe.github.io/gossamer).
+For more information about Gossamer, the Polkadot ecosystem, and how to use Gossamer to build and run nodes for various blockchain protocols within the Polkadot ecosystem, check out the [Gossamer Docs](https://ChainSafe.github.io/gossamer).
 
 ## Get Started
 
 ### Prerequisites
 
-install go version `>=1.13`
+install go version `>=1.14`
 
 ### Installation
 
@@ -45,6 +45,8 @@ get the [ChainSafe/gossamer](https://github.com/ChainSafe/gossamer) repository:
 ```
 go get -u github.com/ChainSafe/gossamer
 ```
+
+You may encounter a `package github.com/ChainSafe/gossamer: no Go files in ...` message. This is not an error, since there are no go files in the project root. 
 
 build gossamer command:
 ```
@@ -55,7 +57,7 @@ make gossamer
 
 initialize default node:
 ```
-./bin/gossamer --key alice init
+./bin/gossamer init
 ```
 
 start default node:
@@ -63,11 +65,13 @@ start default node:
 ./bin/gossamer --key alice
 ```
 
+The built-in keys available for the node are `alice`, `bob`, `charlie`, `dave`, `eve`, `ferdie`, `george`, and `ian`.
+
 ### Run Gossamer Node
 
 initialize gossamer node:
 ```
-./bin/gossamer --chain gssmr --key alice init
+./bin/gossamer --chain gssmr init
 ```
 
 start gossamer node:
