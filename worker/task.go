@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -979,6 +980,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 
 	if srcFn.fnType == hasFn && srcFn.isFuncAtRoot {
 		span.Annotate(nil, "handleHasFunction")
+		fmt.Println("inside handleHasFunction if ", q.AfterUid)
 		if err := qs.handleHasFunction(ctx, q, out, srcFn); err != nil {
 			return nil, err
 		}
