@@ -82,6 +82,8 @@ type Node struct {
 	heartbeatsIn  int64
 }
 
+var ElectionTick int
+
 // NewNode returns a new Node instance.
 func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	snap, err := store.Snapshot()
@@ -94,8 +96,8 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		Store:     store,
 		Cfg: &raft.Config{
 			ID:                       rc.Id,
-			ElectionTick:             20, // 2s if we call Tick() every 100 ms.
-			HeartbeatTick:            1,  // 100ms if we call Tick() every 100 ms.
+			ElectionTick:             ElectionTick, // 2s if we call Tick() every 100 ms.
+			HeartbeatTick:            1,            // 100ms if we call Tick() every 100 ms.
 			Storage:                  store,
 			MaxInflightMsgs:          256,
 			MaxSizePerMsg:            256 << 10, // 256 KB should allow more batching.

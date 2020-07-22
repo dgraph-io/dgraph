@@ -79,6 +79,8 @@ instances to achieve high-availability.
 	Zero.EnvPrefix = "DGRAPH_ZERO"
 
 	flag := Zero.Cmd.Flags()
+	flag.Int("election_tick", 20,
+		"Election tick determines the number of ticks after which a node will start the election.")
 	flag.String("my", "",
 		"addr:port of this server, so other Dgraph alphas can talk to this.")
 	flag.IntP("port_offset", "o", 0,
@@ -184,6 +186,8 @@ func run() {
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 	}
+	// Set election tick. This is a hack, not a permanent solution.
+	conn.ElectionTick = Zero.Conf.GetInt("election_tick")
 
 	x.WorkerConfig = x.WorkerOptions{
 		LudicrousMode: Zero.Conf.GetBool("ludicrous_mode"),
