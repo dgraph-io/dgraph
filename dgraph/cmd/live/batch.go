@@ -90,6 +90,7 @@ type loader struct {
 	zeroconn *grpc.ClientConn
 	schema   *schema
 
+	// to get integer out of an uid which is used for conflict generation
 	conflictGenerator func(string) (uint64, error)
 }
 

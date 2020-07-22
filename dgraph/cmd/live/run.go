@@ -154,7 +154,8 @@ func init() {
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
 	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
 		"only be done when alpha is under ludicrous mode)")
-	flag.StringP("upsert", "U", "", "run in upsert mode")
+	flag.StringP("upsert", "U", "", "run in upsert mode. the value would be used to "+
+		"store blank nodes as an xid")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -312,18 +313,20 @@ func (l *loader) addUpsert(req *request) {
 	// copy the slice into a new slice to avoid overwriting nquads
 	if len(ids) > 0 {
 		s := make([]*api.NQuad, 0, len(req.Mutation.Set)+len(ids))
-		copy(req.Mutation.Set, s[:])
+		for _, i := range req.Mutation.Set {
+			s = append(s, i)
+		}
 		req.Mutation.Set = s
 	}
 
 	query := ""
-	for i, idx := range ids {
-		query += fmt.Sprintf(`%s as var(func: eq(%s, "%s"))`, idx, opt.upsert, i)
+	for xid, idx := range ids {
+		query += fmt.Sprintf(`%s as var(func: eq(%s, "%s"))`, idx, opt.upsert, xid)
 		query += "\n"
 		req.Mutation.Set = append(req.Mutation.Set, &api.NQuad{
 			Subject:     fmt.Sprintf("uid(%s)", idx),
 			Predicate:   opt.upsert,
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: i}},
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: xid}},
 		})
 	}
 
