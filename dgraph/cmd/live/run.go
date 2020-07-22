@@ -277,23 +277,32 @@ func (l *loader) processFile(ctx context.Context, filename string, key x.Sensiti
 }
 
 func (l *loader) addUpsert(req *request) {
-	ids := make(map[string]struct{})
+	ids := make(map[string]string)
+	idx := 0
 
 	for _, i := range req.Mutation.Set {
-		ids[i.Subject] = struct{}{}
-		i.Subject = fmt.Sprintf("uid(%s)", i.Subject)
+		idx += 1
+		ids[i.Subject] = fmt.Sprintf("u_%d", idx)
+		i.Subject = fmt.Sprintf("uid(%s)", ids[i.Subject])
 		if len(i.ObjectId) > 0 {
-			ids[i.ObjectId] = struct{}{}
-			i.ObjectId = fmt.Sprintf("uid(%s)", i.ObjectId)
+			idx += 1
+			ids[i.ObjectId] = fmt.Sprintf("u_%d", idx)
+			i.ObjectId = fmt.Sprintf("uid(%s)", ids[i.ObjectId])
 		}
 	}
 
+	if len(ids) > 0 {
+		s := make([]*api.NQuad, 0, len(req.Mutation.Set)+len(ids))
+		copy(req.Mutation.Set, s[:])
+		req.Mutation.Set = s
+	}
+
 	query := ""
-	for i := range ids {
-		query += fmt.Sprintf(`%s as var(func: eq(%s, "%s"))`, i, opt.upsert, i)
+	for i, idx := range ids {
+		query += fmt.Sprintf(`%s as var(func: eq(%s, "%s"))`, idx, opt.upsert, i)
 		query += "\n"
 		req.Mutation.Set = append(req.Mutation.Set, &api.NQuad{
-			Subject:     fmt.Sprintf("uid(%s)", i),
+			Subject:     fmt.Sprintf("uid(%s)", idx),
 			Predicate:   opt.upsert,
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: i}},
 		})
@@ -312,7 +321,7 @@ func (l *loader) addUpsert(req *request) {
 	// mutation {
 	//     set {
 	//          uid(m.1234) <predicate> value .    --> original request
-	//          uid(m.1234) xid m.1234             --> gets added here
+	//          uid(m.1234) xid m.1234 .           --> gets added here
 	//     }
 	// }
 	req.query = "query {\n" + query + "}"
