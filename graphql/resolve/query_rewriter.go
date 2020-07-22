@@ -735,7 +735,7 @@ func addSelectionSetFrom(
 			q.Children = append(q.Children, child)
 		}
 
-		// If RBAC rules are evaluated to `Negative` then we don't write queries for deeper level.
+		// If RBAC rules are evaluated to Negative, we don't write queries for deeper levels.
 		// Hence we don't need to do any further processing for this field.
 		if rbac == schema.Negative {
 			continue
