@@ -1841,22 +1841,22 @@ func parseBodyTemplate(body string) (*interface{}, map[string]bool, error) {
 	return &m, requiredFields, nil
 }
 
-func getVar(key string, variables map[string]interface{}) (interface{}, error) {
+func getVar(key string, variables map[string]interface{}) (interface{}, error, bool) {
 	if !strings.HasPrefix(key, "$") {
-		return nil, errors.Errorf("expected a variable to start with $. Found: %s", key)
+		return nil, errors.Errorf("expected a variable to start with $. Found: %s", key), true
 	}
 	val, ok := variables[key[1:]]
 	if !ok {
-		return nil, nil
+		return nil, nil, ok
 	}
 
-	return val, nil
+	return val, nil, ok
 }
 
 func substituteSingleVarInBody(key string, valPtr *interface{},
 	variables map[string]interface{}) error {
 	// Look it up in the map and replace.
-	val, err := getVar(key, variables)
+	val, err, _ := getVar(key, variables)
 	if err != nil {
 		return err
 	}
@@ -1868,14 +1868,15 @@ func substituteVarInMapInBody(object, variables map[string]interface{}) error {
 	for k, v := range object {
 		switch val := v.(type) {
 		case string:
-			vval, err := getVar(val, variables)
+			vval, err, ok := getVar(val, variables)
 			if err != nil {
 				return err
 			}
-			if err == nil && vval == nil {
-				return nil
+			if ok {
+				object[k] = vval
+
 			}
-			object[k] = vval
+
 		case map[string]interface{}:
 			if err := substituteVarInMapInBody(val, variables); err != nil {
 				return err
@@ -1895,7 +1896,7 @@ func substituteVarInSliceInBody(slice []interface{}, variables map[string]interf
 	for k, v := range slice {
 		switch val := v.(type) {
 		case string:
-			vval, err := getVar(val, variables)
+			vval, err, _ := getVar(val, variables)
 			if err != nil {
 				return err
 			}
