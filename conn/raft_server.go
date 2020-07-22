@@ -227,7 +227,6 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 				switch msg.Type {
 				case raftpb.MsgHeartbeat, raftpb.MsgHeartbeatResp:
 					atomic.AddInt64(&node.heartbeatsIn, 1)
-				case raftpb.MsgReadIndex, raftpb.MsgReadIndexResp:
 				case raftpb.MsgApp, raftpb.MsgAppResp:
 				case raftpb.MsgProp:
 				default:

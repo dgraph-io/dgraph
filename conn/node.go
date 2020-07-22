@@ -249,7 +249,6 @@ func (n *Node) Send(msg *raftpb.Message) {
 		switch msg.Type {
 		case raftpb.MsgHeartbeat, raftpb.MsgHeartbeatResp:
 			atomic.AddInt64(&n.heartbeatsOut, 1)
-		case raftpb.MsgReadIndex, raftpb.MsgReadIndexResp:
 		case raftpb.MsgApp, raftpb.MsgAppResp:
 		case raftpb.MsgProp:
 		default:
