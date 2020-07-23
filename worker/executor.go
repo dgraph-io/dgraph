@@ -20,6 +20,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -105,7 +106,7 @@ func newGraph() *graph {
 func (e *executor) worker(ch chan *mutation, temp chan struct{}, pred string) {
 	writer := posting.NewTxnWriter(pstore)
 	for mut := range ch {
-		<-temp
+		fmt.Println("starting", mut.m.startTs, pred)
 		payload := mut.m
 
 		var esize int64
@@ -122,55 +123,63 @@ func (e *executor) worker(ch chan *mutation, temp chan struct{}, pred string) {
 				}
 			}
 		}
+
+		fmt.Println("ranMutation", mut.m.startTs, pred)
 		ptxn.Update()
 		if err := ptxn.CommitToDisk(writer, payload.startTs); err != nil {
 			glog.Errorf("Error while commiting to disk: %v", err)
 		}
+		fmt.Println("ptxn update", mut.m.startTs, pred)
 
 		if err := writer.Wait(); err != nil {
 			glog.Errorf("Error while waiting for writes: %v", err)
 		}
+		fmt.Println("writer wait", mut.m.startTs, pred)
 
 		e.applied.Done(payload.index)
 		atomic.AddInt64(&e.pendingSize, -esize)
 		atomic.AddInt64(&e.smCount, -1)
 
-		func(mutC *mutation) {
-			mutC.graph.Lock()
-			//fmt.Println(pred, "done with work", mutC.m.startTs, len(mutC.outEdges))
-			for _, c := range mutC.keys {
-				i := 0
-				arr := mutC.graph.conflicts[c]
+		toRun := make([]*mutation, 0)
 
-				for _, x := range arr {
-					if x.m.startTs != mutC.m.startTs {
-						arr[i] = x
-						i++
-					}
-				}
+		mut.graph.Lock()
+		fmt.Println(pred, "done with work", mut.m.startTs, len(mut.outEdges))
 
-				if i == 0 {
-					delete(mutC.graph.conflicts, c)
-				} else {
-					mutC.graph.conflicts[c] = arr[:i]
+		for _, dependent := range mut.outEdges {
+			dependent.inDeg -= 1
+			if dependent.inDeg == 0 {
+				fmt.Println("running", mut.m.startTs, dependent.m.startTs)
+				toRun = append(toRun, dependent)
+			} else {
+				fmt.Println("waiting", dependent.m.startTs, dependent.inDeg)
+			}
+		}
+
+		for _, c := range mut.keys {
+			i := 0
+			arr := mut.graph.conflicts[c]
+
+			for _, x := range arr {
+				if x.m.startTs != mut.m.startTs {
+					arr[i] = x
+					i++
 				}
 			}
 
-			if len(mutC.outEdges) > 0 {
-				//fmt.Println(len(mutC.outEdges))
+			if i == 0 {
+				delete(mut.graph.conflicts, c)
+			} else {
+				mut.graph.conflicts[c] = arr[:i]
 			}
+		}
 
-			for _, dependent := range mutC.outEdges {
-				dependent.inDeg -= 1
-				if dependent.inDeg == 0 {
-					//fmt.Println("starting", dependent.m.startTs)
-					ch <- dependent
-				}
-				//fmt.Println(dependent.inDeg)
-			}
+		mut.graph.Unlock()
 
-			mutC.graph.Unlock()
-		}(mut)
+		for _, i := range toRun {
+			fmt.Println("sending to channel", i.m.startTs, len(ch))
+			ch <- i
+			fmt.Println("unblocked sending to channel", i.m.startTs, len(ch))
+		}
 	}
 }
 
@@ -180,10 +189,9 @@ func (e *executor) processMutationCh(ch chan *subMutation, workerCh chan *mutati
 	g := newGraph()
 
 	for payload := range ch {
-		temp <- struct{}{}
 		conflicts := generateConflictKeys(payload)
 		m := &mutation{m: payload, keys: conflicts, outEdges: make(map[uint64]*mutation), graph: g, inDeg: 0}
-		//fmt.Println("Got", m.m.startTs)
+		fmt.Println("Got", m.m.startTs, pred)
 
 		g.Lock()
 		for _, c := range conflicts {
@@ -200,20 +208,19 @@ func (e *executor) processMutationCh(ch chan *subMutation, workerCh chan *mutati
 					dependent.outEdges[m.m.startTs] = m
 				}
 
-				//fmt.Println(pred, "dependent", dependent.m.startTs)
+				fmt.Println("dependent", m.m.startTs, dependent.m.startTs)
 			}
 
 			l = append(l, m)
 			g.conflicts[c] = l
 		}
+		g.Unlock()
 
 		if m.inDeg == 0 {
 			workerCh <- m
-			//fmt.Println("starting", m.m.startTs)
 		} else {
-			//fmt.Println("Waiting", m.inDeg)
+			fmt.Println("Waiting", m.m.startTs, m.inDeg)
 		}
-		g.Unlock()
 	}
 }
 
@@ -237,7 +244,7 @@ func (e *executor) getChannel(pred string) (ch chan *subMutation) {
 	workerCh := make(chan *mutation, 100)
 	e.predChan[pred] = ch
 	e.closer.AddRunning(1)
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 1; i++ {
 		go e.worker(workerCh, temp, pred)
 	}
 	go e.processMutationCh(ch, workerCh, temp, pred)
