@@ -59,8 +59,8 @@ test-state-race:
 	@echo "  >  \033[32mRunning race tests...\033[0m "
 	go test ./dot/state/... -race -timeout=5m
 
-## install: Install missing dependencies. Runs `go mod download` internally.
-install:
+## deps: Install missing dependencies. Runs `go mod download` internally.
+deps:
 	@echo "  >  \033[32mInstalling dependencies...\033[0m "
 	go mod download
 
@@ -69,14 +69,14 @@ build:
 	@echo "  >  \033[32mBuilding binary...\033[0m "
 	GOBIN=$(PWD)/bin go run scripts/ci.go install
 
-# init: Initialize gossamer using the default genesis and toml configuration files
+## init: Initialize gossamer using the default genesis and toml configuration files
 init:
-	./bin/gossamer init --log debug
+	./bin/gossamer --key alice init --genesis chain/gssmr/genesis.json
 
-## start: Starts application from binary executable in `./bin/gossamer`
+## start: Starts application from binary executable in `./bin/gossamer` with built-in key alice
 start:
-	@echo "  >  \033[32mStarting server...\033[0m "
-	./bin/gossamer
+	@echo "  >  \033[32mStarting node...\033[0m "
+	./bin/gossamer --key alice
 
 $(ADDLICENSE):
 	go get -u github.com/google/addlicense
@@ -101,3 +101,7 @@ docker-build:
 
 gossamer: clean
 	GOBIN=$(PWD)/bin go run scripts/ci.go install
+
+## install: install the gossamer binary in /usr/local/bin; requires sudo
+install:
+	GOBIN=/usr/local/bin go run scripts/ci.go install
