@@ -17,6 +17,7 @@
 package bench
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -69,35 +70,35 @@ func getAuthMeta(schema string) *testutil.AuthMeta {
 
 // Auth Extension (BenchmarkNestedQuery)
 //"extensions": {
-//    "touched_uids": 8410962,
-//    "tracing": {
-//      "version": 1,
-//      "startTime": "2020-07-16T23:45:27.798693638+05:30",
-//      "endTime": "2020-07-16T23:45:28.844749169+05:30",
-//      "duration": 1046055551,
-//      "execution": {
-//        "resolvers": [
-//          {
-//            "path": [
-//              "queryCuisine"
-//            ],
-//            "parentType": "Query",
-//            "fieldName": "queryCuisine",
-//            "returnType": "[Cuisine]",
-//            "startOffset": 144549,
-//            "duration": 1045026189,
-//            "dgraph": [
-//              {
-//                "label": "query",
-//                "startOffset": 262828,
-//                "duration": 1044381745
-//              }
-//            ]
-//          }
-//        ]
-//      }
-//    }
-//  }
+//   "touched_uids": 8410962,
+//   "tracing": {
+//     "version": 1,
+//     "startTime": "2020-07-16T23:45:27.798693638+05:30",
+//     "endTime": "2020-07-16T23:45:28.844749169+05:30",
+//     "duration": 1046055551,
+//     "execution": {
+//       "resolvers": [
+//         {
+//           "path": [
+//             "queryCuisine"
+//           ],
+//           "parentType": "Query",
+//           "fieldName": "queryCuisine",
+//           "returnType": "[Cuisine]",
+//           "startOffset": 144549,
+//           "duration": 1045026189,
+//           "dgraph": [
+//             {
+//               "label": "query",
+//               "startOffset": 262828,
+//               "duration": 1044381745
+//             }
+//           ]
+//         }
+//       ]
+//     }
+//   }
+// }
 
 // Non Auth Extension (BenchmarkNestedQuery)
 //"extensions": {
@@ -199,4 +200,109 @@ func BenchmarkOneLevelQuery(b *testing.B) {
 		gqlResponse := getUserParams.ExecuteAsPost(b, graphqlURL)
 		require.Nilf(b, gqlResponse.Errors, "%+v", gqlResponse.Errors)
 	}
+}
+
+type Cuisine struct {
+	Id     string `json:"id,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Public bool   `json:"public,omitempty"`
+}
+
+type Cuisines []Cuisine
+
+func (c Cuisines) delete(b *testing.B, metaInfo *testutil.AuthMeta) {
+	var allNames []string
+	for _, cuisine := range c {
+		allNames = append(allNames, cuisine.Name)
+	}
+
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(b, metaInfo),
+		Query: `
+			mutation deleteCuisine($names: [name!]) {
+				deleteUserCuisine(filter:{name:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": allIds},
+	}
+	gqlResponse := getParams.ExecuteAsPost(b, graphqlURL)
+	require.Nil(b, gqlResponse.Errors)
+}
+
+func (c Cuisines) add(b *testing.B, metaInfo *testutil.AuthMeta) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(b, metaInfo),
+		Query: `
+			mutation addCuisine($cuisines: [AddCuisineInput!]!) {
+		  		addCuisine(input: $cuisines) {
+					numUids
+		  		}
+			}
+		`,
+		Variables: map[string]interface{}{"cuisines": c},
+	}
+	gqlResponse := getParams.ExecuteAsPost(b, graphqlURL)
+	require.Nil(b, gqlResponse.Errors)
+}
+
+func BenchmarkOneLevelMutation(b *testing.B) {
+	schemaFile := "schema.graphql"
+	schema, err := ioutil.ReadFile(schemaFile)
+	require.NoError(b, err)
+
+	metaInfo := getAuthMeta(string(schema))
+	metaInfo.AuthVars = map[string]interface{}{
+		"Role":  "ADMIN",
+		"Dish":  "Dish",
+		"RName": "Restaurant",
+		"RCurr": "$",
+	}
+
+	items := 1000
+	var cusines Cuisines
+	for i := 0; i < items/2; i++ {
+		r := Cuisine{
+			Name:   fmt.Sprintf("Test_Cuisine_%d", i),
+			Public: true,
+		}
+		cusines = append(cusines, r)
+	}
+
+	for i := items / 2; i < items; i++ {
+		r := Cuisine{
+			Name:   fmt.Sprintf("Test_Cuisine_%d", i),
+			Public: false,
+		}
+		cusines = append(cusines, r)
+	}
+
+	mutations := []struct {
+		name      string
+		operation func(b *testing.B)
+	}{
+		{"add", func(b *testing.B) {
+			cusines.add(b, metaInfo)
+			b.StopTimer()
+			cusines.delete(b, metaInfo)
+		}},
+		{"delete", func(b *testing.B) {
+			b.StopTimer()
+			cusines.add(b, metaInfo)
+			b.StartTimer()
+			cusines.delete(b, metaInfo)
+		}},
+	}
+
+	for _, mutation := range mutations {
+		b.Run(mutation.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				mutation.operation(b)
+			}
+		})
+	}
+
+	// Cleanup
+	cusines.delete(b, metaInfo)
 }

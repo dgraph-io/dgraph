@@ -89,6 +89,7 @@ type Cuisine @auth(
     name: String! @id
     restaurants: [Restaurant] @hasInverse(field: cuisines)
     dishes: [Dish] @hasInverse(field: cuisine)
+    public: Boolean
 }
 
 type Dish @auth(
