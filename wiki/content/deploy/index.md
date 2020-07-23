@@ -1599,6 +1599,8 @@ $ dgraph cert -n localhost -c dgraphuser
 $ dgraph cert ls
 ```
 
+Node certificates by default are valid for 365 days. To adjust the validity duration, you can use the `--duration` option.
+
 #### File naming conventions
 
 To enable TLS you must specify the directory path to find certificates and keys. The default location where the _cert_ command stores certificates (and keys) is `tls` under the Dgraph working directory; where the data files are found. The default dir path can be overridden using the `--dir` option.
@@ -1641,33 +1643,36 @@ Example of command output:
 ```sh
 -rw-r--r-- ca.crt - Dgraph Root CA certificate
         Issuer: Dgraph Labs, Inc.
-           S/N: 043c4d8fdd347f06
-    Expiration: 02 Apr 29 16:56 UTC
-SHA-256 Digest: 4A2B0F0F 716BF5B6 C603E01A 6229D681 0B2AFDC5 CADF5A0D 17D59299 116119E5
+           S/N: 0b618b0771411b
+    Expiration: 13 Jul 30 20:12 UTC
+SHA-256 Digest: 92248D16 FC3368EA 9C2C2B57 CC1657BC F41CB095 AB808700 80ED1A9B 38C7E5F8
 
 -r-------- ca.key - Dgraph Root CA key
-SHA-256 Digest: 4A2B0F0F 716BF5B6 C603E01A 6229D681 0B2AFDC5 CADF5A0D 17D59299 116119E5
+     Algorithm: RSA 2048 bits (PKCS#1)
+SHA-256 Digest: 92248D16 FC3368EA 9C2C2B57 CC1657BC F41CB095 AB808700 80ED1A9B 38C7E5F8
 
--rw-r--r-- client.admin.crt - Dgraph client certificate: admin
+-rw-r--r-- client.dgraphuser.crt - Dgraph client certificate: dgraphuser
         Issuer: Dgraph Labs, Inc.
      CA Verify: PASSED
-           S/N: 297e4cb4f97c71f9
-    Expiration: 03 Apr 24 17:29 UTC
-SHA-256 Digest: D23EFB61 DE03C735 EB07B318 DB70D471 D3FE8556 B15D084C 62675857 788DF26C
+           S/N: 23012b9183fdf9f5
+    Expiration: 14 Jul 21 20:14 UTC
+SHA-256 Digest: 800798FA 2938CAB4 7AA1A655 A7EB3053 81CE6031 3147C12A 50DBA682 83FF85DA
 
--rw------- client.admin.key - Dgraph Client key
-SHA-256 Digest: D23EFB61 DE03C735 EB07B318 DB70D471 D3FE8556 B15D084C 62675857 788DF26C
+-rw------- client.dgraphuser.key - Dgraph Client key
+     Algorithm: RSA 2048 bits (PKCS#1)
+SHA-256 Digest: 800798FA 2938CAB4 7AA1A655 A7EB3053 81CE6031 3147C12A 50DBA682 83FF85DA
 
 -rw-r--r-- node.crt - Dgraph Node certificate
         Issuer: Dgraph Labs, Inc.
      CA Verify: PASSED
-           S/N: 795ff0e0146fdb2d
-    Expiration: 03 Apr 24 17:00 UTC
-         Hosts: 104.25.165.23, 2400:cb00:2048:1::6819:a417, localhost, dgraph.io
-SHA-256 Digest: 7E243ED5 3286AE71 B9B4E26C 5B2293DA D3E7F336 1B1AFFA7 885E8767 B1A84D28
+           S/N: 4241d25148e478bd
+    Expiration: 14 Jul 21 20:12 UTC
+         Hosts: localhost
+SHA-256 Digest: 23302165 DE675EFA 11ABAD0C 3B11CC6E BD5B33F1 7B4DB140 80224D21 F834853B
 
 -rw------- node.key - Dgraph Node key
-SHA-256 Digest: 7E243ED5 3286AE71 B9B4E26C 5B2293DA D3E7F336 1B1AFFA7 885E8767 B1A84D28
+     Algorithm: RSA 2048 bits (PKCS#1)
+SHA-256 Digest: 23302165 DE675EFA 11ABAD0C 3B11CC6E BD5B33F1 7B4DB140 80224D21 F834853B
 ```
 
 Important points:

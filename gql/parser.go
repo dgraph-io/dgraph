@@ -36,6 +36,7 @@ const (
 	typFunc   = "type"
 	lenFunc   = "len"
 	countFunc = "count"
+	uidInFunc = "uid_in"
 )
 
 var (
@@ -74,6 +75,9 @@ type GraphQuery struct {
 	GroupbyAttrs     []GroupByAttr
 	FacetVar         map[string]string
 	FacetsOrder      []*FacetOrder
+
+	// Used for ACL enabled queries to curtail results to only accessible params
+	AllowedPreds []string
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -1727,8 +1731,22 @@ L:
 				case countFunc:
 					function.Attr = nestedFunc.Attr
 					function.IsCount = true
+				case uidFunc:
+					// TODO (Anurag): See if is is possible to support uid(1,2,3) when
+					// uid is nested inside a function like @filter(uid_in(predicate, uid()))
+					if len(nestedFunc.NeedsVar) != 1 {
+						return nil,
+							itemInFunc.Errorf("Nested uid fn expects 1 uid variable, got %v", len(nestedFunc.NeedsVar))
+					}
+					if len(nestedFunc.UID) != 0 {
+						return nil,
+							itemInFunc.Errorf("Nested uid fn expects only uid variable, got UID")
+					}
+					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
+					function.NeedsVar[0].Typ = UidVar
+					function.Args = append(function.Args, Arg{Value: nestedFunc.NeedsVar[0].Name})
 				default:
-					return nil, itemInFunc.Errorf("Only val/count/len allowed as function "+
+					return nil, itemInFunc.Errorf("Only val/count/len/uid allowed as function "+
 						"within another. Got: %s", nestedFunc.Name)
 				}
 				expectArg = false
@@ -1841,6 +1859,9 @@ L:
 				if strings.ContainsRune(itemInFunc.Val, '"') {
 					return nil, itemInFunc.Errorf("Attribute in function"+
 						" must not be quoted with \": %s", itemInFunc.Val)
+				}
+				if function.Name == uidInFunc && item.Typ == itemRightRound {
+					return nil, itemInFunc.Errorf("uid_in function expects an argument, got none")
 				}
 				function.Attr = val
 				attrItemsAgo = 0

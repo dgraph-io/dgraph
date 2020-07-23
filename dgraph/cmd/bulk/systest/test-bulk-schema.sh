@@ -49,7 +49,7 @@ function ErrorExit
 function StartZero
 {
   INFO "starting zero container"
-  DockerCompose -f $DOCKER_CONF up --force-recreate -d zero1
+  DockerCompose -f $DOCKER_CONF up --force-recreate --remove-orphans -d zero1
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
     if docker logs zero1 2>&1 | grep -q 'CID set'; then
@@ -67,7 +67,7 @@ function StartAlpha
   local p_dir=$1
 
   INFO "starting alpha container"
-  DockerCompose -f $DOCKER_CONF up --force-recreate --no-start alpha1
+  DockerCompose -f $DOCKER_CONF up --force-recreate --remove-orphans --no-start alpha1
   if [[ $p_dir ]]; then
     docker cp $p_dir alpha1:/data/alpha1/
   fi

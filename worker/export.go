@@ -24,6 +24,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -31,6 +33,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/minio/minio-go/v6"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger/v2"
@@ -349,9 +352,10 @@ func fieldToString(update *pb.SchemaUpdate) string {
 }
 
 type fileWriter struct {
-	fd *os.File
-	bw *bufio.Writer
-	gw *gzip.Writer
+	fd           *os.File
+	bw           *bufio.Writer
+	gw           *gzip.Writer
+	relativePath string
 }
 
 func (writer *fileWriter) open(fpath string) error {
@@ -385,65 +389,182 @@ func (writer *fileWriter) Close() error {
 	return writer.fd.Close()
 }
 
+// ExportedFiles has the relative path of files that were written during export
+type ExportedFiles []string
+
+type exportStorage interface {
+	openFile(relativePath string) (*fileWriter, error)
+	finishWriting(fs ...*fileWriter) (ExportedFiles, error)
+}
+
+type localExportStorage struct {
+	destination  string
+	relativePath string
+}
+
+// remoteExportStorage uses localExportStorage to write files, then uploads to minio
+type remoteExportStorage struct {
+	mc     *minio.Client
+	bucket string
+	prefix string // stores the path within the bucket.
+	les    *localExportStorage
+}
+
+func newLocalExportStorage(destination, backupName string) (*localExportStorage, error) {
+	bdir, err := filepath.Abs(path.Join(destination, backupName))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = os.MkdirAll(bdir, 0700); err != nil {
+		return nil, err
+	}
+
+	return &localExportStorage{destination, backupName}, nil
+}
+
+func (l *localExportStorage) openFile(fileName string) (*fileWriter, error) {
+	fw := &fileWriter{relativePath: path.Join(l.relativePath, fileName)}
+
+	filePath, err := filepath.Abs(path.Join(l.destination, fw.relativePath))
+	if err != nil {
+		return nil, err
+	}
+
+	glog.Infof("Exporting to file at %s\n", filePath)
+
+	if err := fw.open(filePath); err != nil {
+		return nil, err
+	}
+
+	return fw, nil
+}
+
+func (l *localExportStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, error) {
+	var files ExportedFiles
+
+	for _, file := range fs {
+		err := file.Close()
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, file.relativePath)
+	}
+
+	return files, nil
+}
+
+func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExportStorage, error) {
+	tmpDir, err := ioutil.TempDir("", "export")
+	if err != nil {
+		return nil, err
+	}
+	localStorage, err := newLocalExportStorage(tmpDir, backupName)
+	if err != nil {
+		return nil, err
+	}
+
+	uri, err := url.Parse(in.Destination)
+	if err != nil {
+		return nil, err
+	}
+
+	mc, err := newMinioClient(uri, &Credentials{
+		AccessKey:    in.AccessKey,
+		SecretKey:    in.SecretKey,
+		SessionToken: in.SessionToken,
+		Anonymous:    in.Anonymous,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	bucket, prefix, err := validateBucket(mc, uri)
+	if err != nil {
+		return nil, err
+	}
+
+	return &remoteExportStorage{mc, bucket, prefix, localStorage}, nil
+}
+
+func (r *remoteExportStorage) openFile(fileName string) (*fileWriter, error) {
+	return r.les.openFile(fileName)
+}
+
+func (r *remoteExportStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, error) {
+	files, err := r.les.finishWriting(fs...)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, f := range files {
+		var d string
+		if r.prefix == "" {
+			d = f
+		} else {
+			d = r.prefix + "/" + f
+		}
+		filePath := path.Join(r.les.destination, f)
+		// FIXME: tejas [06/2020] - We could probably stream these results, but it's easier to copy for now
+		glog.Infof("Uploading from %s to %s\n", filePath, d)
+		_, err := r.mc.FPutObject(r.bucket, d, filePath, minio.PutObjectOptions{
+			ContentType: "application/gzip",
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return files, nil
+}
+
+func newExportStorage(in *pb.ExportRequest, backupName string) (exportStorage, error) {
+	switch {
+	case strings.HasPrefix(in.Destination, "/"):
+		return newLocalExportStorage(in.Destination, backupName)
+	case strings.HasPrefix(in.Destination, "minio://") || strings.HasPrefix(in.Destination, "s3://"):
+		return newRemoteExportStorage(in, backupName)
+	default:
+		return newLocalExportStorage(x.WorkerConfig.ExportPath, backupName)
+	}
+}
+
 // export creates a export of data by exporting it as an RDF gzip.
-func export(ctx context.Context, in *pb.ExportRequest) error {
+func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
+
 	if in.GroupId != groups().groupId() {
-		return errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
+		return nil, errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
 			groups().groupId(), in.GroupId)
 	}
 	glog.Infof("Export requested at %d.", in.ReadTs)
 
 	// Let's wait for this server to catch up to all the updates until this ts.
 	if err := posting.Oracle().WaitForTs(ctx, in.ReadTs); err != nil {
-		return err
+		return nil, err
 	}
 	glog.Infof("Running export for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 
 	uts := time.Unix(in.UnixTs, 0)
-	bdir := path.Join(x.WorkerConfig.ExportPath, fmt.Sprintf(
-		"dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
-
-	if err := os.MkdirAll(bdir, 0700); err != nil {
-		return err
+	exportStorage, err := newExportStorage(in, fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
+	if err != nil {
+		return nil, err
 	}
 
 	xfmt := exportFormats[in.Format]
-	fpath := func(suffix string) (string, error) {
-		return filepath.Abs(path.Join(bdir, fmt.Sprintf("g%02d%s", in.GroupId, suffix)))
-	}
 
-	// Open data file now.
-	dataPath, err := fpath(xfmt.ext + ".gz")
+	dataWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, xfmt.ext+".gz"))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	glog.Infof("Exporting data for group: %d at %s\n", in.GroupId, dataPath)
-	dataWriter := &fileWriter{}
-	if err := dataWriter.open(dataPath); err != nil {
-		return err
-	}
-
-	// Open schema file now.
-	schemaPath, err := fpath(".schema.gz")
+	schemaWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".schema.gz"))
 	if err != nil {
-		return err
-	}
-	glog.Infof("Exporting schema for group: %d at %s\n", in.GroupId, schemaPath)
-	schemaWriter := &fileWriter{}
-	if err := schemaWriter.open(schemaPath); err != nil {
-		return err
+		return nil, err
 	}
 
-	// Open graphql schema.
-	gqlSchemaPath, err := fpath(".gql_schema.gz")
+	gqlSchemaWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".gql_schema.gz"))
 	if err != nil {
-		return errors.Wrapf(err, "cannot get path for the GraphQL schema file")
-	}
-	glog.Infof("Exporting GraphQL schema at %s", gqlSchemaPath)
-	gqlSchemaWriter := &fileWriter{}
-	if err := gqlSchemaWriter.open(gqlSchemaPath); err != nil {
-		return errors.Wrapf(err, "cannot open export GraphQL schema file at %s", gqlSchemaPath)
+		return nil, err
 	}
 
 	stream := pstore.NewStreamAt(in.ReadTs)
@@ -642,31 +763,22 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 
 	// All prepwork done. Time to roll.
 	if _, err = dataWriter.gw.Write([]byte(xfmt.pre)); err != nil {
-		return err
+		return nil, err
 	}
 	if err := stream.Orchestrate(ctx); err != nil {
-		return err
+		return nil, err
 	}
 	if _, err = dataWriter.gw.Write([]byte(xfmt.post)); err != nil {
-		return err
-	}
-	if err := dataWriter.Close(); err != nil {
-		return err
-	}
-	if err := schemaWriter.Close(); err != nil {
-		return err
-	}
-	if err := gqlSchemaWriter.Close(); err != nil {
-		return err
+		return nil, err
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
-	return nil
+	return exportStorage.finishWriting(dataWriter, schemaWriter, gqlSchemaWriter)
 }
 
 // Export request is used to trigger exports for the request list of groups.
 // If a server receives request to export a group that it doesn't handle, it would
 // automatically relay that request to the server that it thinks should handle the request.
-func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportRequest) (*pb.Status, error) {
+func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportRequest) (*pb.ExportResponse, error) {
 	glog.Infof("Received export request via Grpc: %+v\n", req)
 	if ctx.Err() != nil {
 		glog.Errorf("Context error during export: %v\n", ctx.Err())
@@ -674,22 +786,23 @@ func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportRequest) (*pb.Sta
 	}
 
 	glog.Infof("Issuing export request...")
-	if err := export(ctx, req); err != nil {
+	files, err := export(ctx, req)
+	if err != nil {
 		glog.Errorf("While running export. Request: %+v. Error=%v\n", req, err)
 		return nil, err
 	}
 	glog.Infof("Export request: %+v OK.\n", req)
-	return &pb.Status{Msg: "SUCCESS"}, nil
+	return &pb.ExportResponse{Msg: "SUCCESS", Files: files}, nil
 }
 
-func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {
+func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	if in.GroupId == groups().groupId() {
 		return export(ctx, in)
 	}
 
 	pl := groups().Leader(in.GroupId)
 	if pl == nil {
-		return errors.Errorf("Unable to find leader of group: %d\n", in.GroupId)
+		return nil, errors.Errorf("Unable to find leader of group: %d\n", in.GroupId)
 	}
 
 	glog.Infof("Sending export request to group: %d, addr: %s\n", in.GroupId, pl.Addr)
@@ -698,21 +811,21 @@ func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {
 	if err != nil {
 		glog.Errorf("Export error received from group: %d. Error: %v\n", in.GroupId, err)
 	}
-	return err
+	return nil, err
 }
 
 // ExportOverNetwork sends export requests to all the known groups.
-func ExportOverNetwork(ctx context.Context, format string) error {
+func ExportOverNetwork(ctx context.Context, input *pb.ExportRequest) (ExportedFiles, error) {
 	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Rejecting export request due to health check error: %v\n", err)
-		return err
+		return nil, err
 	}
 	// Get ReadTs from zero and wait for stream to catch up.
 	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {
 		glog.Errorf("Unable to retrieve readonly ts for export: %v\n", err)
-		return err
+		return nil, err
 	}
 	readTs := ts.ReadOnly
 	glog.Infof("Got readonly ts from Zero: %d\n", readTs)
@@ -721,30 +834,43 @@ func ExportOverNetwork(ctx context.Context, format string) error {
 	gids := groups().KnownGroups()
 	glog.Infof("Requesting export for groups: %v\n", gids)
 
-	ch := make(chan error, len(gids))
+	type filesAndError struct {
+		ExportedFiles
+		error
+	}
+	ch := make(chan filesAndError, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
 			req := &pb.ExportRequest{
 				GroupId: group,
 				ReadTs:  readTs,
 				UnixTs:  time.Now().Unix(),
-				Format:  format,
+				Format:  input.Format,
+
+				Destination:  input.Destination,
+				AccessKey:    input.AccessKey,
+				SecretKey:    input.SecretKey,
+				SessionToken: input.SessionToken,
+				Anonymous:    input.Anonymous,
 			}
-			ch <- handleExportOverNetwork(ctx, req)
+			files, err := handleExportOverNetwork(ctx, req)
+			ch <- filesAndError{files, err}
 		}(gid)
 	}
 
+	var allFiles ExportedFiles
 	for i := 0; i < len(gids); i++ {
-		err := <-ch
-		if err != nil {
-			rerr := errors.Wrapf(err, "Export failed at readTs %d", readTs)
+		pair := <-ch
+		if pair.error != nil {
+			rerr := errors.Wrapf(pair.error, "Export failed at readTs %d", readTs)
 			glog.Errorln(rerr)
-			return rerr
+			return nil, rerr
 		}
+		allFiles = append(allFiles, pair.ExportedFiles...)
 	}
 
 	glog.Infof("Export at readTs %d DONE", readTs)
-	return nil
+	return allFiles, nil
 }
 
 // NormalizeExportFormat returns the normalized string for the export format if it is valid, an

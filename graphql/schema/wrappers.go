@@ -568,12 +568,6 @@ func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
-
-	// vektah/gqlparser library doesn't validate subscriptions properly if s.Subscription == nil.
-	//s.Subscription is nil when there is no type with @withSubscription true, so we are handling that case.
-	if s.Subscription == nil {
-		s.Subscription = &ast.Definition{Name: "Subscription"}
-	}
 	// Auth rules can't be effectively validated as part of the normal rules -
 	// because they need the fully generated schema to be checked against.
 	authRules, err := authRules(s)
@@ -635,6 +629,13 @@ func (f *field) ArgValue(name string) interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
 		f.arguments = f.field.ArgumentMap(f.op.vars)
+		// use a deep-copy only if the request uses variables, as a variable could be shared by
+		// multiple queries in a single request and internally in our code we may overwrite field
+		// arguments which may result in the shared value being overwritten for all queries in a
+		// request.
+		if f.op.vars != nil {
+			f.arguments = x.DeepCopyJsonMap(f.arguments)
+		}
 	}
 	return f.arguments[name]
 }

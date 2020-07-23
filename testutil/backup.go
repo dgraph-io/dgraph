@@ -41,7 +41,9 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	config := viper.New()
 	flags := &pflag.FlagSet{}
 	enc.RegisterFlags(flags)
-	config.BindPFlags(flags)
+	if err := config.BindPFlags(flags); err != nil {
+		return nil, err
+	}
 	config.Set("encryption_key_file", KeyFile)
 	k, err := enc.ReadKey(config)
 	if err != nil {
