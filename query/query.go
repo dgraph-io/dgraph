@@ -2011,7 +2011,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			})
 			if sg.Params.AfterUID > 0 {
 				i := 0
-				for i < len(sg.SrcUIDs.Uids) && sg.DestUIDs.Uids[i] <= sg.Params.AfterUID {
+				for i < len(sg.DestUIDs.Uids) && sg.DestUIDs.Uids[i] <= sg.Params.AfterUID {
 					i++
 				}
 				sg.DestUIDs.Uids = sg.DestUIDs.Uids[i:]
