@@ -107,7 +107,7 @@ func (sd *Decoder) DecodePtr(t interface{}) (err error) {
 		_, err = sd.Reader.Read(b)
 		*t = common.NewHash(b)
 	case [][32]byte, [][]byte:
-		_, err = sd.DecodeArray(t)
+		_, err = sd.DecodeSlice(t)
 	case interface{}:
 		_, err = sd.DecodeInterface(t)
 	default:

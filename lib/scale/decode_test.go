@@ -353,7 +353,7 @@ func TestReverseBytes(t *testing.T) {
 
 func TestReadByte(t *testing.T) {
 	buf := bytes.Buffer{}
-	sd := Decoder{&buf}
+	sd := Decoder{Reader: &buf}
 	buf.Write([]byte{0xff})
 	output, err := sd.ReadByte()
 	if err != nil {

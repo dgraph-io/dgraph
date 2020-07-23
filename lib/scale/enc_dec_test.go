@@ -168,3 +168,24 @@ func TestEncodeDecodeCustom_InsideStruct(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, tt, dec)
 }
+
+type myBytes [64]byte
+
+func TestEncodeDecodeCustom_Array(t *testing.T) {
+	b := myBytes([64]byte{1, 2, 3, 4})
+	enc, err := Encode(b)
+	require.NoError(t, err)
+
+	_, _ = Decode(enc, new(myBytes))
+}
+
+func TestEncodeDecode_Array(t *testing.T) {
+	withCustom = false
+	b := [64]byte{1, 2, 3, 4}
+	enc, err := Encode(b)
+	require.NoError(t, err)
+
+	dec, err := Decode(enc, [64]byte{})
+	require.NoError(t, err)
+	require.Equal(t, b, dec)
+}
