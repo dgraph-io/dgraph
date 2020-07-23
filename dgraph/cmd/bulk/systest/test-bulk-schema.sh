@@ -71,7 +71,7 @@ function StartAlpha
   if [[ $p_dir ]]; then
     docker cp $p_dir alpha1:/data/alpha1/
   fi
-  DockerCompose -f $DOCKER_CONF up -d alpha1
+  DockerCompose -f $DOCKER_CONF up -d --remove-orphans alpha1
 
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
