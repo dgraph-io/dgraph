@@ -304,10 +304,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	r := reducer{
-		state:     ld.state,
-		streamIds: make(map[string]uint32),
-	}
+	r := reducer{state: ld.state}
 	x.Check(r.run())
 }
 
