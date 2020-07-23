@@ -2700,3 +2700,20 @@ valid_schemas:
       type Mutation {
         addAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
       }
+
+  - name: "UpdateAuthorInput is allowed if Author is of remote type"
+    input: |
+      type Author @remote {
+        id: ID!
+        name: String
+      }
+
+      type User {
+        id: ID!
+        name: String
+      }
+
+      input UpdateAuthorInput {
+        id: ID!
+        name: String
+      }
