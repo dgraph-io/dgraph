@@ -425,9 +425,9 @@ func TestSubstituteVarsInBody(t *testing.T) {
 		},
 		{
 			"Skip missing variable in the HTTP body",
-			map[string]interface{}{"postID": "0x9"},
+			map[string]interface{}{},
 			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
-			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "0x9"}},
+			map[string]interface{}{},
 			nil,
 		},
 	}

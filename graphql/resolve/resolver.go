@@ -1793,6 +1793,7 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		}
 		body = string(b)
 	}
+
 	b, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
 	if err != nil {
 		return emptyResult(externalRequestError(err, field))
