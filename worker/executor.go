@@ -20,7 +20,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -45,7 +44,7 @@ type executor struct {
 
 	sync.RWMutex
 	predChan   map[string]chan *subMutation
-	workerChan map[string]chan *mutation
+	workerChan chan *mutation
 	closer     *y.Closer
 	applied    *y.WaterMark
 }
@@ -56,7 +55,11 @@ func newExecutor(applied *y.WaterMark) *executor {
 		predChan:   make(map[string]chan *subMutation),
 		closer:     y.NewCloser(0),
 		applied:    applied,
-		workerChan: make(map[string]chan *mutation),
+		workerChan: make(chan *mutation, 1000),
+	}
+
+	for i := 0; i < 200; i++ {
+		go ex.worker()
 	}
 
 	go ex.shutdown()
@@ -103,10 +106,9 @@ func newGraph() *graph {
 	return &graph{conflicts: make(map[uint64][]*mutation)}
 }
 
-func (e *executor) worker(ch chan *mutation, temp chan struct{}, pred string) {
+func (e *executor) worker() {
 	writer := posting.NewTxnWriter(pstore)
-	for mut := range ch {
-		fmt.Println("starting", mut.m.startTs, pred)
+	for mut := range e.workerChan {
 		payload := mut.m
 
 		var esize int64
@@ -124,34 +126,27 @@ func (e *executor) worker(ch chan *mutation, temp chan struct{}, pred string) {
 			}
 		}
 
-		fmt.Println("ranMutation", mut.m.startTs, pred)
 		ptxn.Update()
 		if err := ptxn.CommitToDisk(writer, payload.startTs); err != nil {
 			glog.Errorf("Error while commiting to disk: %v", err)
 		}
-		fmt.Println("ptxn update", mut.m.startTs, pred)
 
 		if err := writer.Wait(); err != nil {
 			glog.Errorf("Error while waiting for writes: %v", err)
 		}
-		fmt.Println("writer wait", mut.m.startTs, pred)
 
 		e.applied.Done(payload.index)
 		atomic.AddInt64(&e.pendingSize, -esize)
 		atomic.AddInt64(&e.smCount, -1)
 
-		toRun := make([]*mutation, 0)
-
 		mut.graph.Lock()
-		fmt.Println(pred, "done with work", mut.m.startTs, len(mut.outEdges))
+
+		toRun := make([]*mutation, 0)
 
 		for _, dependent := range mut.outEdges {
 			dependent.inDeg -= 1
 			if dependent.inDeg == 0 {
-				fmt.Println("running", mut.m.startTs, dependent.m.startTs)
 				toRun = append(toRun, dependent)
-			} else {
-				fmt.Println("waiting", dependent.m.startTs, dependent.inDeg)
 			}
 		}
 
@@ -176,14 +171,14 @@ func (e *executor) worker(ch chan *mutation, temp chan struct{}, pred string) {
 		mut.graph.Unlock()
 
 		for _, i := range toRun {
-			fmt.Println("sending to channel", i.m.startTs, len(ch))
-			ch <- i
-			fmt.Println("unblocked sending to channel", i.m.startTs, len(ch))
+			go func(j *mutation) {
+				e.workerChan <- j
+			}(i)
 		}
 	}
 }
 
-func (e *executor) processMutationCh(ch chan *subMutation, workerCh chan *mutation, temp chan struct{}, pred string) {
+func (e *executor) processMutationCh(ch chan *subMutation) {
 	defer e.closer.Done()
 
 	g := newGraph()
@@ -191,7 +186,6 @@ func (e *executor) processMutationCh(ch chan *subMutation, workerCh chan *mutati
 	for payload := range ch {
 		conflicts := generateConflictKeys(payload)
 		m := &mutation{m: payload, keys: conflicts, outEdges: make(map[uint64]*mutation), graph: g, inDeg: 0}
-		fmt.Println("Got", m.m.startTs, pred)
 
 		g.Lock()
 		for _, c := range conflicts {
@@ -207,8 +201,6 @@ func (e *executor) processMutationCh(ch chan *subMutation, workerCh chan *mutati
 					m.inDeg += 1
 					dependent.outEdges[m.m.startTs] = m
 				}
-
-				fmt.Println("dependent", m.m.startTs, dependent.m.startTs)
 			}
 
 			l = append(l, m)
@@ -217,9 +209,7 @@ func (e *executor) processMutationCh(ch chan *subMutation, workerCh chan *mutati
 		g.Unlock()
 
 		if m.inDeg == 0 {
-			workerCh <- m
-		} else {
-			fmt.Println("Waiting", m.m.startTs, m.inDeg)
+			e.workerChan <- m
 		}
 	}
 }
@@ -240,14 +230,9 @@ func (e *executor) getChannel(pred string) (ch chan *subMutation) {
 		return ch
 	}
 	ch = make(chan *subMutation, 1000)
-	temp := make(chan struct{}, 1000)
-	workerCh := make(chan *mutation, 100)
 	e.predChan[pred] = ch
 	e.closer.AddRunning(1)
-	for i := 0; i < 1; i++ {
-		go e.worker(workerCh, temp, pred)
-	}
-	go e.processMutationCh(ch, workerCh, temp, pred)
+	go e.processMutationCh(ch)
 	return ch
 }
 
