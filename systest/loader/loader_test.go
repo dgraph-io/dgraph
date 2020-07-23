@@ -34,6 +34,7 @@ import (
 )
 
 func TestLoaderXidmap(t *testing.T) {
+	fmt.Println("Checking here for flakyness")
 	tmpDir, err := ioutil.TempDir("", "loader_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
