@@ -221,7 +221,8 @@ func Test21MillionDataSetSize(t *testing.T) {
 func filterUnit(line string) (string, error) {
 	words := strings.Split(line, " ")
 	for _, word := range words {
-		if strings.Contains(word, "MB") || strings.Contains(word, "GB") {
+		if strings.Contains(word, "MB") || strings.Contains(word, "GB") ||
+			strings.Contains(word, "kB") {
 			return strings.TrimSpace(word), nil
 		}
 	}
@@ -230,6 +231,13 @@ func filterUnit(line string) (string, error) {
 
 // convertToBytes converts the unit into bytes.
 func convertToBytes(unit string) (uint32, error) {
+	if strings.Contains(unit, "kB") {
+		kb, err := strconv.ParseFloat(unit[0:len(unit)-2], 64)
+		if err != nil {
+			return 0, err
+		}
+		return uint32(kb * 1024.0), nil
+	}
 	if strings.Contains(unit, "MB") {
 		mb, err := strconv.ParseFloat(unit[0:len(unit)-2], 64)
 		if err != nil {

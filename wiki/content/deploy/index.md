@@ -721,44 +721,59 @@ docker stack rm dgraph
 
 ## Using Kubernetes
 
-The following section covers running Dgraph with Kubernetes v1.8.4.
+The following section covers running Dgraph with Kubernetes.  We have tested Dgraph with Kubernetes 1.14 to 1.15 on [GKE](https://cloud.google.com/kubernetes-engine) and [EKS](https://aws.amazon.com/eks/).
 
-{{% notice "note" %}}These instructions are for running Dgraph Alpha without TLS config.
+{{% notice "note" %}}These instructions are for running Dgraph Alpha without TLS configuration.
 Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
 
 * Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) which is used to deploy
   and manage applications on kubernetes.
-* Get the kubernetes cluster up and running on a cloud provider of your choice. You can use [kops](https://github.com/kubernetes/kops/blob/master/docs/aws.md) to set it up on AWS. Kops does auto-scaling by default on AWS and creates the volumes and instances for you.
+* Get the Kubernetes cluster up and running on a cloud provider of your choice.
+  * For Amazon [EKS](https://aws.amazon.com/eks/), you can use [eksctl](https://eksctl.io/) to quickly provision a new cluster. If you are new to this, Amazon has an article [Getting started with eksctl](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html).
+  * For Google Cloud [GKE](https://cloud.google.com/kubernetes-engine), you can use [Google Cloud SDK](https://cloud.google.com/sdk/install) and the `gcloud container clusters create` command to quickly provision a new cluster.
 
-Verify that you have your cluster up and running using `kubectl get nodes`. If you used `kops` with
-the default options, you should have a master and two worker nodes ready.
+Verify that you have your cluster up and running using `kubectl get nodes`. If you used `eksctl` or `gcloud container clusters create` with the default options, you should have 2-3 worker nodes ready.
+
+On Amazon [EKS](https://aws.amazon.com/eks/), you would see something like this:
 
 ```sh
 ➜  kubernetes git:(master) ✗ kubectl get nodes
-NAME                                          STATUS    ROLES     AGE       VERSION
-ip-172-20-42-118.us-west-2.compute.internal   Ready     node      1h        v1.8.4
-ip-172-20-61-179.us-west-2.compute.internal   Ready     master    2h        v1.8.4
-ip-172-20-61-73.us-west-2.compute.internal    Ready     node      2h        v1.8.4
+NAME                                          STATUS   ROLES    AGE   VERSION
+<aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
+<aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
+```
+
+On Google Cloud [GKE](https://cloud.google.com/kubernetes-engine), you would see something like this:
+
+```sh
+➜  kubernetes git:(master) ✗ kubectl get nodes
+NAME                                       STATUS   ROLES    AGE   VERSION
+gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.36
+gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   40s   v1.14.10-gke.36
+gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.36
 ```
 
 ### Single Server
 
-Once your Kubernetes cluster is up, you can use [dgraph-single.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml) to start a Zero and Alpha.
+Once your Kubernetes cluster is up, you can use [dgraph-single.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml) to start a Zero, Alpha, and Ratel UI services.
 
-* From your machine, run the following command to start a StatefulSet that
-  creates a Pod with Zero and Alpha running in it.
+#### Deploy Single Server
+
+From your machine, run the following command to start a StatefulSet that creates a single Pod with Zero, Alpha, and Ratel UI running in it.
 
 ```sh
-kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
+kubectl create --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
 ```
 
 Output:
 ```
-service "dgraph-public" created
-statefulset "dgraph" created
+service/dgraph-public created
+statefulset.apps/dgraph created
 ```
 
-* Confirm that the pod was created successfully.
+#### Verify Single Server
+
+Confirm that the pod was created successfully.
 
 ```sh
 kubectl get pods
@@ -772,36 +787,28 @@ dgraph-0   3/3       Running   0          1m
 
 {{% notice "tip" %}}
 You can check the logs for the containers in the pod using
-`kubectl logs -f dgraph-0 <container_name>`. For example, try
-`kubectl logs -f dgraph-0 alpha` for server logs.
+`kubectl logs --follow dgraph-0 <container_name>`. For example, try
+`kubectl logs --follow dgraph-0 alpha` for server logs.
 {{% /notice %}}
 
-* Test the setup
+#### Test Single Server Setup
 
 Port forward from your local machine to the pod
 
 ```sh
-kubectl port-forward dgraph-0 8080
-kubectl port-forward dgraph-0 8000
+kubectl port-forward pod/dgraph-0 8080:8080
+kubectl port-forward pod/dgraph-0 8000:8000
 ```
 
 Go to `http://localhost:8000` and verify Dgraph is working as expected.
 
-{{% notice "note" %}} You can also access the service on its External IP address.{{% /notice %}}
-
-
-* Stop the cluster
+#### Remove Single Server Resources
 
 Delete all the resources
 
 ```sh
-kubectl delete pods,statefulsets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph
-```
-
-Stop the cluster. If you used `kops` you can run the following command.
-
-```sh
-kops delete cluster ${NAME} --yes
+kubectl delete --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
+kubectl delete persistentvolumeclaims --selector app=dgraph
 ```
 
 ### HA Cluster Setup Using Kubernetes
@@ -810,45 +817,61 @@ This setup allows you to run 3 Dgraph Alphas and 3 Dgraph Zeros. We start Zero w
 3` flag, so all data would be replicated on 3 Alphas and form 1 alpha group.
 
 {{% notice "note" %}} Ideally you should have at least three worker nodes as part of your Kubernetes
-cluster so that each Dgraph Alpha runs on a separate node.{{% /notice %}}
+cluster so that each Dgraph Alpha runs on a separate worker node.{{% /notice %}}
 
-* Check the nodes that are part of the Kubernetes cluster.
+#### Validate Kubernetes Cluster for HA
+
+Check the nodes that are part of the Kubernetes cluster.
 
 ```sh
 kubectl get nodes
 ```
 
-Output:
+Output for Amazon [EKS](https://aws.amazon.com/eks/):
+
 ```sh
-NAME                                          STATUS    ROLES     AGE       VERSION
-ip-172-20-34-90.us-west-2.compute.internal    Ready     master    6m        v1.8.4
-ip-172-20-51-1.us-west-2.compute.internal     Ready     node      4m        v1.8.4
-ip-172-20-59-116.us-west-2.compute.internal   Ready     node      4m        v1.8.4
-ip-172-20-61-88.us-west-2.compute.internal    Ready     node      5m        v1.8.4
+NAME                                          STATUS   ROLES    AGE   VERSION
+<aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
+<aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
+<aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
+```
+
+Output for Google Cloud [GKE](https://cloud.google.com/kubernetes-engine)
+
+```sh
+NAME                                       STATUS   ROLES    AGE   VERSION
+gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.36
+gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   40s   v1.14.10-gke.36
+gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.36
 ```
 
 Once your Kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml) to start the cluster.
 
-* From your machine, run the following command to start the cluster.
+#### Deploy Dgraph HA Cluster
+
+From your machine, run the following command to start the cluster.
 
 ```sh
-kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml
+kubectl create --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml
 ```
 
 Output:
 ```sh
-service "dgraph-zero-public" created
-service "dgraph-alpha-public" created
-service "dgraph-alpha-0-http-public" created
-service "dgraph-ratel-public" created
-service "dgraph-zero" created
-service "dgraph-alpha" created
-statefulset "dgraph-zero" created
-statefulset "dgraph-alpha" created
-deployment "dgraph-ratel" created
+service/dgraph-zero-public created
+service/dgraph-alpha-public created
+service/dgraph-ratel-public created
+service/dgraph-zero created
+service/dgraph-alpha created
+statefulset.apps/dgraph-zero created
+statefulset.apps/dgraph-alpha created
+deployment.apps/dgraph-ratel created
 ```
 
-* Confirm that the pods were created successfully.
+#### Verify Dgraph HA Cluster
+
+Confirm that the pods were created successfully.
+
+It may take a few minutes for the pods to come up.
 
 ```sh
 kubectl get pods
@@ -856,47 +879,40 @@ kubectl get pods
 
 Output:
 ```sh
-NAME                   READY     STATUS    RESTARTS   AGE
-dgraph-ratel-<pod-id>  1/1       Running   0          9s
-dgraph-alpha-0         1/1       Running   0          2m
-dgraph-alpha-1         1/1       Running   0          2m
-dgraph-alpha-2         1/1       Running   0          2m
-dgraph-zero-0          1/1       Running   0          2m
-dgraph-zero-1          1/1       Running   0          2m
-dgraph-zero-2          1/1       Running   0          2m
-
+NAME                  READY   STATUS    RESTARTS   AGE
+dgraph-alpha-0        1/1     Running   0          6m24s
+dgraph-alpha-1        1/1     Running   0          5m42s
+dgraph-alpha-2        1/1     Running   0          5m2s
+dgraph-ratel-<pod-id> 1/1     Running   0          6m23s
+dgraph-zero-0         1/1     Running   0          6m24s
+dgraph-zero-1         1/1     Running   0          5m41s
+dgraph-zero-2         1/1     Running   0          5m6s
 ```
 
-{{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs -f dgraph-alpha-0` and `kubectl logs -f dgraph-zero-0`.{{% /notice %}}
 
-* Test the setup
+{{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs --follow dgraph-alpha-0` and `kubectl logs --follow dgraph-zero-0`.{{% /notice %}}
+
+#### Test Dgraph HA Cluster Setup
 
 Port forward from your local machine to the pod
 
 ```sh
-kubectl port-forward dgraph-alpha-0 8080
-kubectl port-forward dgraph-ratel-<pod-id> 8000
+kubectl port-forward service/dgraph-alpha-public 8080:8080
+kubectl port-forward service/dgraph-ratel-public 8000:8000
 ```
 
 Go to `http://localhost:8000` and verify Dgraph is working as expected.
 
 {{% notice "note" %}} You can also access the service on its External IP address.{{% /notice %}}
 
-
-* Stop the cluster
+#### Delete Dgraph HA Cluster Resources
 
 Delete all the resources
 
 ```sh
-kubectl delete pods,statefulsets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph-zero
-kubectl delete pods,statefulsets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph-alpha
-kubectl delete pods,replicasets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph-ratel
-```
-
-Stop the cluster. If you used `kops` you can run the following command.
-
-```sh
-kops delete cluster ${NAME} --yes
+kubectl delete --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml
+kubectl delete persistentvolumeclaims --selector app=dgraph-zero
+kubectl delete persistentvolumeclaims --selector app=dgraph-alpha
 ```
 
 ### Using Helm Chart
@@ -924,12 +940,12 @@ helm install my-release dgraph/dgraph
 The above command will install the latest available dgraph docker image. In order to install the older versions:
 
 ```sh
-helm install my-release dgraph/dgraph --set image.tag="v1.1.0"
+helm install my-release dgraph/dgraph --set image.tag="latest"
 ```
 
 By default zero and alpha services are exposed only within the kubernetes cluster as
-kubernetes service type "ClusterIP". In order to expose the alpha service publicly
-you can use kubernetes service type "LoadBalancer":
+kubernetes service type `ClusterIP`. In order to expose the alpha service publicly
+you can use kubernetes service type `LoadBalancer`:
 
 ```sh
 helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer"
@@ -941,7 +957,38 @@ Similarly, you can expose alpha and ratel service to the internet as follows:
 helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer" --set ratel.service.type="LoadBalancer"
 ```
 
-#### Deleting the Charts
+#### Upgrading the Chart
+
+You can update your cluster configuration by updating the configuration of the
+Helm chart. Dgraph is a stateful database that requires some attention on
+upgrading the configuration carefully in order to update your cluster to your
+desired configuration.
+
+In general, you can use [`helm upgrade`][helm-upgrade] to update the
+configuration values of the cluster. Depending on your change, you may need to
+upgrade the configuration in multiple steps following the steps below.
+
+[helm-upgrade]: https://helm.sh/docs/helm/helm_upgrade/
+
+**Upgrade to HA cluster setup**
+
+To upgrade to an [HA cluster setup]({{< relref "#ha-cluster-setup" >}}), ensure
+that the shard replication setting is more than 1. When `zero.shardReplicaCount`
+is not set to an HA configuration (3 or 5), follow the steps below:
+
+1. Set the shard replica flag on the Zero node group. For example: `zero.shardReplicaCount=3`.
+2. Next, run the Helm upgrade command to restart the Zero node group:
+   ```sh
+   helm upgrade my-release dgraph/dgraph [options]
+   ```
+3. Now set the Alpha replica count flag. For example: `alpha.replicaCount=3`.
+4. Finally, run the Helm upgrade command again:
+   ```sh
+   helm upgrade my-release dgraph/dgraph [options]
+   ```
+
+
+#### Deleting the Chart
 
 Delete the Helm deployment as normal
 
@@ -1516,9 +1563,9 @@ Connections between client and server can be secured with TLS. Password protecte
 
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
 
-### Self-signed certificates
+### Dgraph Certificate Management Tool
 
-The `dgraph cert` program creates and manages self-signed certificates using a generated Dgraph Root CA. The _cert_ command simplifies certificate management for you.
+The `dgraph cert` program creates and manages CA-signed certificates and private keys using a generated Dgraph Root CA. The `dgraph cert` command simplifies certificate management for you.
 
 ```sh
 # To see the available flags.
@@ -1527,20 +1574,20 @@ $ dgraph cert --help
 # Create Dgraph Root CA, used to sign all other certificates.
 $ dgraph cert
 
-# Create node certificate (needed for Dgraph Live Loader using TLS)
-$ dgraph cert -n live
+# Create node certificate and private key
+$ dgraph cert -n localhost
 
-# Create client certificate
+# Create client certificate and private key for mTLS (mutual TLS)
 $ dgraph cert -c dgraphuser
 
 # Combine all in one command
-$ dgraph cert -n live -c dgraphuser
+$ dgraph cert -n localhost -c dgraphuser
 
 # List all your certificates and keys
 $ dgraph cert ls
 ```
 
-### File naming conventions
+#### File naming conventions
 
 To enable TLS you must specify the directory path to find certificates and keys. The default location where the _cert_ command stores certificates (and keys) is `tls` under the Dgraph working directory; where the data files are found. The default dir path can be overridden using the `--dir` option.
 
@@ -1573,7 +1620,7 @@ $ dgraph cert -n localhost,104.25.165.23,dgraph.io,2400:cb00:2048:1::6819:a417
 
 {{% notice "note" %}}When using host names for node certificates, including _localhost_, your clients must connect to the matching host name -- such as _localhost_ not 127.0.0.1. If you need to use IP addresses, then add them to the node certificate.{{% /notice %}}
 
-### Certificate inspection
+#### Certificate inspection
 
 The command `dgraph cert ls` lists all certificates and keys in the `--dir` directory (default 'tls'), along with details to inspect and validate cert/key pairs.
 
@@ -1622,43 +1669,75 @@ Important points:
 * Node certificates are only valid for the hosts listed.
 * Client certificates are only valid for the named client/user.
 
-### TLS options
+### TLS Options
 
 The following configuration options are available for Alpha:
 
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client authentication](#client-authentication) for details.
+* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client Authentication Options](#client-authentication-options) for details.
+
+Dgraph Live Loader can be configured with the following options:
+
+* `--tls_cacert string` - Dgraph Root CA, such as `./tls/ca.crt`
+* `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
+* `--tls_cert` - User cert file provided by the client to Alpha
+* `--tls_key` - User private key file provided by the client to Alpha
+* `--tls_server_name string` - Server name, used for validating the server's TLS host name.
+
+
+#### Using TLS without Client Authentication
+
+For TLS without client authentication, you can configure certificates and run Alpha server using the following:
 
 ```sh
-# Default use for enabling TLS server (after generating certificates)
+# First, create rootca and node certificates and private keys
+$ dgraph cert -n localhost
+# Default use for enabling TLS server (after generating certificates and private keys)
 $ dgraph alpha --tls_dir tls
 ```
 
-Dgraph Live Loader can be configured with following options:
-
-* `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
-* `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_server_name string` - Server name, used for validating the server's TLS host name.
+You can then run Dgraph live loader using the following:
 
 ```sh
-# First, create a client certificate for live loader. This will create 'tls/client.live.crt'
-$ dgraph cert -c live
-
 # Now, connect to server using TLS
-$ dgraph live --tls_dir tls -s 21million.schema -f 21million.rdf.gz
+$ dgraph live --tls_cacert ./tls/ca.crt --tls_server_name "localhost" -s 21million.schema -f 21million.rdf.gz
 ```
 
-### Client authentication
+#### Using TLS with Client Authentication
 
-The server option `--tls_client_auth` accepts different values that change the security policty of client certificate verification.
+If you do require Client Authentication (Mutual TLS), you can configure certificates and run Alpha server using the following:
 
-| Value | Description |
-|-------|-------------|
-| REQUEST | Server accepts any certificate, invalid and unverified (least secure) |
-| REQUIREANY | Server expects any certificate, valid and unverified |
-| VERIFYIFGIVEN | Client certificate is verified if provided (default) |
-| REQUIREANDVERIFY | Always require a valid certificate (most secure) |
+```sh
+# First, create a rootca, node, and client certificates and private keys
+$ dgraph cert -n localhost -c dgraphuser
+# Default use for enabling TLS server with client authentication (after generating certificates and private keys)
+$ dgraph alpha --tls_dir tls --tls_client_auth="REQUIREANDVERIFY"
+```
+
+You can then run Dgraph live loader using the following:
+
+```sh
+# Now, connect to server using mTLS (mutual TLS)
+$ dgraph live \
+   --tls_cacert ./tls/ca.crt \
+   --tls_cert ./tls/client.dgraphuser.crt \
+   --tls_key ./tls/client.dgraphuser.key \
+   --tls_server_name "localhost" \
+   -s 21million.schema \
+   -f 21million.rdf.gz
+```
+
+#### Client Authentication Options
+
+The server will always **request** Client Authentication.  There are four different values for the `--tls_client_auth` option that change the security policy of the client certificate.
+
+| Value              | Client Cert/Key | Client Certificate Verified |
+|--------------------|-----------------|--------------------|
+| `REQUEST`          | optional        | Client certificate is not VERIFIED if provided. (least secure) |
+| `REQUIREANY`       | required        | Client certificate is never VERIFIED |
+| `VERIFYIFGIVEN`    | optional        | Client certificate is VERIFIED if provided (default) |
+| `REQUIREANDVERIFY` | required        | Client certificate is always VERIFIED (most secure) |
 
 {{% notice "note" %}}REQUIREANDVERIFY is the most secure but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
 
@@ -1690,21 +1769,16 @@ succeed.
 
 ### Using Curl with Client authentication
 
-When TLS is enabled, `curl` requests to Dgraph will need some specific options to work.
-
-If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default),
-use the option `--cacert`. For instance (for an export request):
+When TLS is enabled, `curl` requests to Dgraph will need some specific options to work.  For instance (for an export request):
 
 ```
-curl --cacert ./tls/ca.crt https://localhost:8080/admin/export
+curl --silent --cacert ./tls/ca.crt https://localhost:8080/admin/export
 ```
 
-If the `--tls_client_auth` option is set to  `REQUIREANY` or  `REQUIREANDVERIFY`,
-in addition to the `--cacert` option, also use the `--cert` and `--key` options.
-For instance (for an export request):
+If you are using `curl` with [Client Authentication](#client-authentication-options) set to `REQUIREANY` or `REQUIREANDVERIFY`, you will need to provide the client certificate and private key.  For instance (for an export request):
 
 ```
-curl --cacert ./tls/ca.crt --cert ./tls/node.crt --key ./tls/node.key https://localhost:8080/admin/export
+curl --silent --cacert ./tls/ca.crt --cert ./tls/client.dgraphuser.crt --key ./tls/client.dgraphuser.key https://localhost:8080/admin/export
 ```
 
 Refer to the `curl` documentation for further information on its TLS options.
@@ -1786,10 +1860,10 @@ $ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -a 
 
 #### Encrypted imports via Live Loader
 
-A new flag keyfile is added to the Live Loader. This option is required to decrypt the encrypted export data and schema files. Once the export files are decrypted, the Live Loader streams the data to a live Alpha instance. 
+A new flag keyfile is added to the Live Loader. This option is required to decrypt the encrypted export data and schema files. Once the export files are decrypted, the Live Loader streams the data to a live Alpha instance.
 
 {{% notice "note" %}}
-If the live Alpha instance has encryption turned on, the `p` directory will be encrypted. Otherwise, the `p` directory is unencrypted. 
+If the live Alpha instance has encryption turned on, the `p` directory will be encrypted. Otherwise, the `p` directory is unencrypted.
 {{% /notice %}}
 
 #### Encrypted RDF/JSON file and schema via Live Loader
@@ -1966,7 +2040,7 @@ dgraph bulk --encryption_key_file ./enc_key_file -f data.json.gz -s data.schema 
 
 #### Encrypting imports via Bulk Loader
 
-The Bulk Loader’s `encryption_key_file` option was previously used to encrypt the output `p ` directory. This same option will also be used to decrypt the encrypted export data and schema files. 
+The Bulk Loader’s `encryption_key_file` option was previously used to encrypt the output `p ` directory. This same option will also be used to decrypt the encrypted export data and schema files.
 
 Another option, `--encrypted`, indicates whether the input `rdf`/`json` data and schema files are encrypted or not. With this switch, we support the use case of migrating data from unencrypted exports to encrypted import.
 

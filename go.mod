@@ -16,9 +16,9 @@ require (
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200617052219-dd332b04e6e7
+	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200718033852-37ee16d8ad1c
 	github.com/dgraph-io/dgo/v2 v2.2.1-0.20200319183917-53c7d5bc32a7
-	github.com/dgraph-io/ristretto v0.0.2-0.20200115201040-8f368f2f2ab3
+	github.com/dgraph-io/ristretto v0.0.3-0.20200630154024-f66de99634de
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1

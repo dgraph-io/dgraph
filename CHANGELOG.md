@@ -4,13 +4,88 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
-## Unreleased
+## [20.03.4] - Unreleased
+[20.03.4]: https://github.com/dgraph-io/dgraph/compare/v20.03.3...v20.03.4
 
 ### Changed
+- Update Badger 07/13/2020. ([#5941][],[#5616][])
 
 ### Added
+- Sentry opt out banner. ([#5729][]) 
+- Tag sentry events with additional version details. ([#5728][])
 
 ### Fixed
+- GraphQL
+  - Minor delete mutation msg fix. ([#5564][])
+  - Make updateGQLSchema always return the new schema. ([#5582][])
+  - Fix mutation on predicate with special characters in the `@dgraph` directive. ([#5577][])
+  - Updated mutation rewriting to fix OOM issue. ([#5536][])
+  - Fix case where Dgraph type was not generated for GraphQL interface. Fixes [#5311][]. ([#5844][])
+  - Fix interface conversion panic in v20.03 ([#5857][]) .
+- Dont set n.ops map entries to nil. Instead just delete them. ([#5557][])
+- Alpha: Enable bloom filter caching. ([#5555][])
+- Alpha: Gracefully shutdown ludicrous mode. ([#5584][])
+- Alpha Close: Wait for indexing to complete. Fixes [#3873][]. ([#5597][])
+- K shortest paths queries fix. ([#5548][])
+- Add check on rebalance interval. ([#5594][])
+- Remove noisy logs in tablet move. ([#5591][])
+- Avoid assigning duplicate RAFT IDs to new nodes. Fixes [#4536][]. ([#5604][])
+- Send CID for sentry events. ([#5633][])
+- Use rampMeter for Executor. ([#5503][])
+- Fix snapshot calculation in ludicrous mode. ([#5636][])
+- Update badger: Avoid panic in fillTables(). Fix assert in background compression and encryption. ([#5680][])
+- Avoid panic in handleValuePostings. ([#5678][])
+- Fix facets response with normalize. Fixes [#5241][]. ([#5691][])
+- Badger iterator key copy in count index query. ([#5916][])
+- Ludicrous mode mutation error. ([#5914][]) 
+- Return error instead of panic. ([#5907][])
+- Fix segmentation fault in draft.go. ([#5860][])
+- Optimize count index. ([#5971][])
+- Handle schema updates correctly in ludicrous mode. ([#5969][])
+- Fix Panic because of nil map in groups.go. ([#6007][])
+- Return error if server is not ready. ([#6021][])
+- Enterprise features
+  - Backup: Change groupId from int to uint32. ([#5614][])
+  - Backup: Use a sync.Pool to allocate KVs. ([#5579][])
+
+[#5241]: https://github.com/dgraph-io/dgraph/issues/5241
+[#5691]: https://github.com/dgraph-io/dgraph/issues/5691
+[#5916]: https://github.com/dgraph-io/dgraph/issues/5916
+[#5914]: https://github.com/dgraph-io/dgraph/issues/5914
+[#5907]: https://github.com/dgraph-io/dgraph/issues/5907
+[#5860]: https://github.com/dgraph-io/dgraph/issues/5860
+[#5971]: https://github.com/dgraph-io/dgraph/issues/5971
+[#5311]: https://github.com/dgraph-io/dgraph/issues/5311
+[#5844]: https://github.com/dgraph-io/dgraph/issues/5844
+[#5857]: https://github.com/dgraph-io/dgraph/issues/5857
+[#5941]: https://github.com/dgraph-io/dgraph/issues/5941
+[#5729]: https://github.com/dgraph-io/dgraph/issues/5729
+[#5728]: https://github.com/dgraph-io/dgraph/issues/5728
+[#5616]: https://github.com/dgraph-io/dgraph/issues/5616
+[#5564]: https://github.com/dgraph-io/dgraph/issues/5564
+[#5582]: https://github.com/dgraph-io/dgraph/issues/5582
+[#5577]: https://github.com/dgraph-io/dgraph/issues/5577
+[#5536]: https://github.com/dgraph-io/dgraph/issues/5536
+[#5557]: https://github.com/dgraph-io/dgraph/issues/5557
+[#5555]: https://github.com/dgraph-io/dgraph/issues/5555
+[#5584]: https://github.com/dgraph-io/dgraph/issues/5584
+[#3873]: https://github.com/dgraph-io/dgraph/issues/3873
+[#5597]: https://github.com/dgraph-io/dgraph/issues/5597
+[#5548]: https://github.com/dgraph-io/dgraph/issues/5548
+[#5594]: https://github.com/dgraph-io/dgraph/issues/5594
+[#5591]: https://github.com/dgraph-io/dgraph/issues/5591
+[#4536]: https://github.com/dgraph-io/dgraph/issues/4536
+[#5604]: https://github.com/dgraph-io/dgraph/issues/5604
+[#5633]: https://github.com/dgraph-io/dgraph/issues/5633
+[#5503]: https://github.com/dgraph-io/dgraph/issues/5503
+[#5636]: https://github.com/dgraph-io/dgraph/issues/5636
+[#5680]: https://github.com/dgraph-io/dgraph/issues/5680
+[#5614]: https://github.com/dgraph-io/dgraph/issues/5614
+[#5579]: https://github.com/dgraph-io/dgraph/issues/5579
+[#5678]: https://github.com/dgraph-io/dgraph/issues/5678
+[#5969]: https://github.com/dgraph-io/dgraph/issues/5969
+[#6007]: https://github.com/dgraph-io/dgraph/issues/6007
+[#6021]: https://github.com/dgraph-io/dgraph/issues/6021
 
 ## [20.03.3] - 2020-06-02
 [20.03.3]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.3
