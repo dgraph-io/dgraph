@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -68,7 +69,7 @@ func newExecutor(applied *y.WaterMark) *executor {
 
 func generateConflictKeys(p *subMutation) []uint64 {
 	keys := make([]uint64, 0)
-	uniq_map := make(map[uint64]struct{})
+	uniq := make(map[uint64]struct{})
 
 	for _, edge := range p.edges {
 		key := x.DataKey(edge.Attr, edge.Entity)
@@ -77,10 +78,14 @@ func generateConflictKeys(p *subMutation) []uint64 {
 			continue
 		}
 
-		uniq_map[posting.GetConflictKeys(pk, key, edge)] = struct{}{}
+		if schema.State().IsList(edge.Attr) {
+			uniq[1] = struct{}{}
+		}
+
+		uniq[posting.GetConflictKeys(pk, key, edge)] = struct{}{}
 	}
 
-	for key, _ := range uniq_map {
+	for key := range uniq {
 		keys = append(keys, key)
 	}
 
