@@ -88,7 +88,7 @@ function StartAlpha
 function ResetCluster
 {
     INFO "restarting cluster with only one zero and alpha"
-    DockerCompose -f $DOCKER_CONF down
+    DockerCompose -f $DOCKER_CONF down --remove-orphans
     StartZero
     StartAlpha
 }
@@ -218,7 +218,7 @@ EOF
 function StopServers
 {
   INFO "stopping containers"
-  DockerCompose -f $DOCKER_CONF down
+  DockerCompose -f $DOCKER_CONF down --remove-orphans
 }
 
 function Cleanup
