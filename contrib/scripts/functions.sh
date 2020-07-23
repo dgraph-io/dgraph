@@ -54,6 +54,6 @@ function stopCluster {
 
 function loginWithGroot() {
   curl -s -XPOST localhost:8180/login -d '{"userid": "groot","password": "password"}' \
-   | python3 -c \
+   | python -c \
    "import json; resp = raw_input(); data = json.loads(resp); print data['data']['accessJWT']"
 }
