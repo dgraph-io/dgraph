@@ -305,7 +305,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6034]: https://github.com/dgraph-io/dgraph/issues/6034
 [#6043]: https://github.com/dgraph-io/dgraph/issues/6043
 
-## [20.03.4] - Unreleased
+## [20.03.4] - 2020-07-23
 [20.03.4]: https://github.com/dgraph-io/dgraph/compare/v20.03.3...v20.03.4
 
 ### Changed
