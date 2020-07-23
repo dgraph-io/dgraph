@@ -637,6 +637,7 @@ func (n *node) Run() {
 		glog.Infof("Zero Node.Run finished.")
 	}()
 
+	go n.ReportRaftComms()
 	go n.snapshotPeriodically(closer)
 	go n.updateEnterpriseState(closer)
 	go n.updateZeroMembershipPeriodically(closer)
