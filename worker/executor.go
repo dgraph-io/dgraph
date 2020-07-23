@@ -204,6 +204,7 @@ func (e *executor) processMutationCh(ch chan *subMutation, workerCh chan *mutati
 			}
 
 			l = append(l, m)
+			g.conflicts[c] = l
 		}
 
 		if m.inDeg == 0 {
@@ -236,10 +237,10 @@ func (e *executor) getChannel(pred string) (ch chan *subMutation) {
 	workerCh := make(chan *mutation, 100)
 	e.predChan[pred] = ch
 	e.closer.AddRunning(1)
-	go e.processMutationCh(ch, workerCh, temp, pred)
 	for i := 0; i < 2; i++ {
 		go e.worker(workerCh, temp, pred)
 	}
+	go e.processMutationCh(ch, workerCh, temp, pred)
 	return ch
 }
 
