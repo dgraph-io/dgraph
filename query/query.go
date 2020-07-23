@@ -2009,6 +2009,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool {
 				return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
 			})
+			if sg.Params.AfterUID > 0 {
+				i := 0
+				for i < len(sg.SrcUIDs.Uids) && sg.DestUIDs.Uids[i] <= sg.Params.AfterUID {
+					i++
+				}
+				sg.DestUIDs.Uids = sg.DestUIDs.Uids[i:]
+			}
 		}
 		if sg.Params.AfterUID > 0 {
 			i := sort.Search(len(sg.DestUIDs.Uids), func(i int) bool { return sg.DestUIDs.Uids[i] > sg.Params.AfterUID })
