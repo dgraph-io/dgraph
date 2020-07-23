@@ -11,6 +11,10 @@ INFO()  { echo "$ME: $@";     }
 ERROR() { echo >&2 "$ME: $@"; }
 FATAL() { ERROR "$@"; exit 1; }
 
+function DockerCompose {
+    docker-compose -p dgraph "$@"
+}
+
 set -e
 
 INFO "rebuilding dgraph"
@@ -45,7 +49,7 @@ function ErrorExit
 function StartZero
 {
   INFO "starting zero container"
-  docker-compose -f $DOCKER_CONF up --force-recreate --detach zero1
+  DockerCompose -f $DOCKER_CONF up --force-recreate --detach zero1
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
     if docker logs zero1 2>&1 | grep -q 'CID set'; then
@@ -63,11 +67,11 @@ function StartAlpha
   local p_dir=$1
 
   INFO "starting alpha container"
-  docker-compose -f $DOCKER_CONF up --force-recreate --no-start alpha1
+  DockerCompose -f $DOCKER_CONF up --force-recreate --no-start alpha1
   if [[ $p_dir ]]; then
     docker cp $p_dir alpha1:/data/alpha1/
   fi
-  docker-compose -f $DOCKER_CONF up --detach alpha1
+  DockerCompose -f $DOCKER_CONF up -d --remove-orphans alpha1
 
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
@@ -84,7 +88,7 @@ function StartAlpha
 function ResetCluster
 {
     INFO "restarting cluster with only one zero and alpha"
-    docker-compose -f $DOCKER_CONF down
+    DockerCompose -f $DOCKER_CONF down --remove-orphans
     StartZero
     StartAlpha
 }
@@ -111,7 +115,7 @@ function QuerySchema
 {
   INFO "running schema query"
   local out_file="schema.out"
-  curl -sS -H "Content-Type: application/graphql+-" localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
+  curl -sS -H "Content-Type: application/graphql+-" localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python3 -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
   echo >> $out_file
 }
 
@@ -205,8 +209,8 @@ EOF
 
 function StopServers
 {
-  INFO "stoping containers"
-  docker-compose -f $DOCKER_CONF down
+  INFO "stopping containers"
+  DockerCompose -f $DOCKER_CONF down --remove-orphans
 }
 
 function Cleanup
@@ -223,7 +227,6 @@ UpdateDatabase
 QuerySchema
 DoExport
 StopServers
-
 popd >/dev/null
 mkdir dir2
 pushd dir2 >/dev/null
