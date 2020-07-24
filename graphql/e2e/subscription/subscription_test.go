@@ -516,10 +516,8 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-
 	err = json.Unmarshal(res, &resp)
 	require.NoError(t, err)
-
 	require.Nil(t, resp.Errors)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
@@ -553,6 +551,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	require.NoError(t, err)
 	err = json.Unmarshal(res, &resp)
 	require.NoError(t, err)
+	require.Nil(t, resp.Errors)
 	// 2nd one still running and should get the  update
 	require.JSONEq(t, `{"queryTodo": [
 	 {
@@ -566,7 +565,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 
 	// add extra delay for 2nd subscription to timeout
 	time.Sleep(10 * time.Second)
-	// Add another TODO for jatin for which 2nd subscription shouldn't get updates.
+	// Add another TODO for jatin for which 2nd subscription shouldn't get update.
 	add = &common.GraphQLParams{
 		Query: `mutation{
 	         addTodo(input: [
@@ -581,6 +580,8 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	      }
 	    }`,
 	}
+	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	require.Nil(t, addResult.Errors)
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
@@ -697,10 +698,8 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-
 	err = json.Unmarshal(res, &resp)
 	require.NoError(t, err)
-
 	require.Nil(t, resp.Errors)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"pawan","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
@@ -725,7 +724,6 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-	require.NoError(t, err)
 	// 1st subscription should get the empty response as subscription has expired
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -753,6 +751,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	require.NoError(t, err)
 	err = json.Unmarshal(res, &resp)
 	require.NoError(t, err)
+	require.Nil(t, resp.Errors)
 	// 2nd one still running and should get the  update
 	require.JSONEq(t, `{"queryTodo": [
 	 {
@@ -783,7 +782,9 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	    }`,
 	}
 
-	// 2nd subscription should get the empty response as subscriptio has expired
+	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	require.Nil(t, addResult.Errors)
+	// 2nd subscription should get the empty response as subscription has expired
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res)
