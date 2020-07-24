@@ -25,6 +25,10 @@ import (
 
 // test gossip messages to connected peers
 func TestGossip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping TestGossip")
+	}
+
 	basePathA := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
