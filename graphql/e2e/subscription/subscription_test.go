@@ -107,9 +107,11 @@ func TestSubscription(t *testing.T) {
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
+
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription{
-			getProduct(productID: "0x2"){
+			queryProduct{
 			  name
 			}
 		  }`,
@@ -125,7 +127,7 @@ func TestSubscription(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, subscriptionResp.Errors)
 
-	require.JSONEq(t, `{"getProduct":{"name":"sanitizer"}}`, string(subscriptionResp.Data))
+	require.JSONEq(t, `{"queryProduct":[{"name":"sanitizer"}]}`, string(subscriptionResp.Data))
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
 
@@ -146,6 +148,7 @@ func TestSubscription(t *testing.T) {
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
+
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
@@ -157,7 +160,7 @@ func TestSubscription(t *testing.T) {
 	require.Nil(t, subscriptionResp.Errors)
 
 	// Check the latest update.
-	require.JSONEq(t, `{"getProduct":{"name":"mask"}}`, string(subscriptionResp.Data))
+	require.JSONEq(t, `{"queryProduct":[{"name":"mask"}]}`, string(subscriptionResp.Data))
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
 
@@ -229,6 +232,7 @@ func TestSubscriptionAuth(t *testing.T) {
 
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
 
 	jwtToken, err := metaInfo.GetSignedToken("secret", subExp)
 	require.NoError(t, err)
@@ -293,6 +297,7 @@ func TestSubscriptionAuth(t *testing.T) {
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
+
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
@@ -376,6 +381,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
 
 	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
 	require.NoError(t, err)
@@ -478,6 +484,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
 
 	jwtToken, err := metaInfo.GetSignedToken("secret", subExp)
 	require.NoError(t, err)
@@ -552,6 +559,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	require.NoError(t, err)
 	require.Nil(t, res) // 1st subscription should get the empty response as subscription has expired.
 
+	time.Sleep(time.Second)
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	err = json.Unmarshal(res, &resp)
@@ -640,6 +648,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
 
 	jwtToken, err := metaInfo.GetSignedToken("secret", subExp)
 	require.NoError(t, err)
@@ -686,6 +695,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
+
 	// 2nd subscription
 	metaInfo.AuthVars["USER"] = "pawan"
 	jwtToken, err = metaInfo.GetSignedToken("secret", 2*subExp)
@@ -730,6 +740,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
+
 	// 1st subscription should get the empty response as subscription has expired
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -792,6 +803,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
+
 	// 2nd subscription should get the empty response as subscription has expired
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
