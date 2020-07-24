@@ -1012,6 +1012,49 @@ func TestCustomFieldsShouldForwardHeaders(t *testing.T) {
 	require.Nilf(t, result.Errors, "%+v", result.Errors)
 }
 
+func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
+	schema := `
+    type User {
+		id: ID!
+        address:String
+		name: String
+			@custom(
+				http: {
+					url: "http://mock:8888/userName"
+					method: "GET"
+					body: "{uid: $id,address:$address}"
+					mode: SINGLE,
+					secretHeaders: ["GITHUB-API-TOKEN"]
+				}
+			)
+		age: Int! @search
+  	}
+
+# Dgraph.Secret GITHUB-API-TOKEN "some-api-token"
+  `
+
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	users := addUsers(t)
+
+	queryUser := `
+	query ($id: [ID!]){
+		queryUser(filter: {id: $id}, order: {asc: age}) {
+			name
+			age
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: queryUser,
+		Variables: map[string]interface{}{"id": []interface{}{
+			users[0].ID, users[1].ID, users[2].ID}},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nilf(t, result.Errors, "%+v", result.Errors)
+}
+
 func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	// This test adds data, modifies the schema multiple times and fetches the data.
 	// It has the following modes.
