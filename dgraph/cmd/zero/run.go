@@ -184,6 +184,7 @@ func run() {
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 	}
+	glog.Infof("Setting Config to: %+v", opts)
 
 	x.WorkerConfig = x.WorkerOptions{
 		LudicrousMode: Zero.Conf.GetBool("ludicrous_mode"),
