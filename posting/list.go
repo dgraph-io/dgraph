@@ -1342,6 +1342,9 @@ func shouldSplit(plist *pb.PostingList) bool {
 }
 
 func (out *rollupOutput) updateSplits() {
+	if out.plist == nil {
+		out.plist = &pb.PostingList{}
+	}
 	out.plist.Splits = out.splits()
 }
 
