@@ -271,7 +271,7 @@ func TestAddOrRBACFilter(t *testing.T) {
 					Username: "user7",
 				}},
 			}},
-		}},
+		}},2
 	}}
 
 	query := `

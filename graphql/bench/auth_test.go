@@ -206,26 +206,22 @@ type Cuisine struct {
 	Id     string `json:"id,omitempty"`
 	Name   string `json:"name,omitempty"`
 	Public bool   `json:"public,omitempty"`
+	Type   string `json:"type,omitempty"`
 }
 
 type Cuisines []Cuisine
 
 func (c Cuisines) delete(b *testing.B, metaInfo *testutil.AuthMeta) {
-	var allNames []string
-	for _, cuisine := range c {
-		allNames = append(allNames, cuisine.Name)
-	}
-
 	getParams := &common.GraphQLParams{
 		Headers: getJWT(b, metaInfo),
 		Query: `
-			mutation deleteCuisine($names: [name!]) {
-				deleteUserCuisine(filter:{name:$ids}) {
-					msg
-				}
-			}
+		mutation deleteCuisine($type: String) {
+  			deleteCuisine(filter: {type: { eq: $type}}) {
+    			msg
+  			}
+		}
 		`,
-		Variables: map[string]interface{}{"ids": allIds},
+		Variables: map[string]interface{}{"type": "TypeCuisineAuth"},
 	}
 	gqlResponse := getParams.ExecuteAsPost(b, graphqlURL)
 	require.Nil(b, gqlResponse.Errors)
@@ -265,6 +261,7 @@ func BenchmarkOneLevelMutation(b *testing.B) {
 	for i := 0; i < items/2; i++ {
 		r := Cuisine{
 			Name:   fmt.Sprintf("Test_Cuisine_%d", i),
+			Type:   "TypeCuisineAuth",
 			Public: true,
 		}
 		cusines = append(cusines, r)
@@ -273,6 +270,7 @@ func BenchmarkOneLevelMutation(b *testing.B) {
 	for i := items / 2; i < items; i++ {
 		r := Cuisine{
 			Name:   fmt.Sprintf("Test_Cuisine_%d", i),
+			Type:   "TypeCuisineAuth",
 			Public: false,
 		}
 		cusines = append(cusines, r)
