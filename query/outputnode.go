@@ -331,9 +331,8 @@ func (enc *encoder) IsEmpty(fj fastJsonNode) bool {
 }
 
 var (
-	boolTrue    = []byte("true")
-	boolFalse   = []byte("false")
-	emptyString = []byte(`""`)
+	boolTrue  = []byte("true")
+	boolFalse = []byte("false")
 
 	// Below variables are used in stringJsonMarshal function.
 	bufferPool = sync.Pool{
