@@ -258,7 +258,7 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	}
 
 	// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we
-	// disable the `aud` claim verification at the library end using `WithoutClaimsValidation` and
+	// disable the `aud` claim verification at the library end using `WithoutAudienceValidation` and
 	// use our custom validation function `validateAudience`.
 	token, err :=
 		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
@@ -277,7 +277,7 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 				}
 			}
 			return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
-		}, jwt.WithoutClaimsValidation())
+		}, jwt.WithoutAudienceValidation())
 
 	if err != nil {
 		return nil, errors.Errorf("unable to parse jwt token:%v", err)
