@@ -748,6 +748,7 @@ On Google Cloud [GKE](https://cloud.google.com/kubernetes-engine), you would see
 ```sh
 ➜  kubernetes git:(master) ✗ kubectl get nodes
 On Amazon [EKS](https://aws.amazon.com/eks/), you would see something like this:
+```
 
 ```sh
 ➜  kubernetes git:(master) ✗ kubectl get nodes
