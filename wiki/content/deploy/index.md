@@ -733,7 +733,6 @@ Instructions for running with TLS refer [TLS instructions](#tls-configuration).{
   * For Google Cloud [GKE](https://cloud.google.com/kubernetes-engine), you can use [Google Cloud SDK](https://cloud.google.com/sdk/install) and the `gcloud container clusters create` command to quickly provision a new cluster.
 
 Verify that you have your cluster up and running using `kubectl get nodes`. If you used `eksctl` or `gcloud container clusters create` with the default options, you should have 2-3 worker nodes ready.
-<<<<<<< HEAD
 
 On Amazon [EKS](https://aws.amazon.com/eks/), you would see something like this:
 
@@ -748,8 +747,6 @@ On Google Cloud [GKE](https://cloud.google.com/kubernetes-engine), you would see
 
 ```sh
 ➜  kubernetes git:(master) ✗ kubectl get nodes
-=======
-
 On Amazon [EKS](https://aws.amazon.com/eks/), you would see something like this:
 
 ```sh
@@ -757,17 +754,6 @@ On Amazon [EKS](https://aws.amazon.com/eks/), you would see something like this:
 NAME                                          STATUS   ROLES    AGE   VERSION
 <aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
 <aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
-```
-
-On Google Cloud [GKE](https://cloud.google.com/kubernetes-engine), you would see something like this:
-
-```sh
-➜  kubernetes git:(master) ✗ kubectl get nodes
->>>>>>> ddab2a3cb... doc: wiki deploy update for k8s and corrects to helm chart instructions (#5865)
-NAME                                       STATUS   ROLES    AGE   VERSION
-gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.36
-gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   40s   v1.14.10-gke.36
-gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.36
 ```
 
 ### Single Server
