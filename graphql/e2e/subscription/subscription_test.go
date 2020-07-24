@@ -71,6 +71,8 @@ const (
 `
 )
 
+var subExp = 10 * time.Second
+
 func TestSubscription(t *testing.T) {
 
 	dg, err := testutil.DgraphClient(groupOnegRPC)
@@ -89,6 +91,7 @@ func TestSubscription(t *testing.T) {
 	}
 	addResult := add.ExecuteAsPost(t, adminEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second * 2)
 
 	add = &common.GraphQLParams{
 		Query: `mutation {
@@ -104,7 +107,6 @@ func TestSubscription(t *testing.T) {
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription{
 			getProduct(productID: "0x2"){
@@ -143,7 +145,7 @@ func TestSubscription(t *testing.T) {
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-
+	time.Sleep(time.Second)
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
@@ -173,7 +175,7 @@ func TestSubscription(t *testing.T) {
 	}
 	addResult = add.ExecuteAsPost(t, adminEndpoint)
 	require.Nil(t, addResult.Errors)
-
+	time.Sleep(time.Second)
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
@@ -228,7 +230,7 @@ func TestSubscriptionAuth(t *testing.T) {
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", 100*time.Second)
+	jwtToken, err := metaInfo.GetSignedToken("secret", subExp)
 	require.NoError(t, err)
 
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
@@ -290,6 +292,7 @@ func TestSubscriptionAuth(t *testing.T) {
 
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
@@ -319,6 +322,7 @@ func TestSubscriptionAuth(t *testing.T) {
 	}
 	addResult = add.ExecuteAsPost(t, adminEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
 
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -400,7 +404,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 		string(resp.Data))
 
 	// Wait for JWT to expire.
-	time.Sleep(10 * time.Second)
+	time.Sleep(subExp)
 
 	// Add another TODO for bob but this should not be visible as the subscription should have
 	// ended.
@@ -421,6 +425,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
 
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -456,7 +461,6 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 		"USER": "jatin",
 		"ROLE": "USER",
 	}
-
 	add = &common.GraphQLParams{
 		Query: `mutation{
               addTodo(input: [
@@ -475,7 +479,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
+	jwtToken, err := metaInfo.GetSignedToken("secret", subExp)
 	require.NoError(t, err)
 
 	// first subscription
@@ -501,7 +505,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 		string(resp.Data))
 
 	// 2nd subscription
-	jwtToken, err = metaInfo.GetSignedToken("secret", 20*time.Second)
+	jwtToken, err = metaInfo.GetSignedToken("secret", 2*subExp)
 	require.NoError(t, err)
 	payload = fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
 	subscriptionClient1, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
@@ -523,7 +527,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 		string(resp.Data))
 
 	// Wait for JWT to expire for first subscription.
-	time.Sleep(10 * time.Second)
+	time.Sleep(subExp)
 
 	// Add another TODO for jatin for which 1st subscription shouldn't get updates.
 	add = &common.GraphQLParams{
@@ -542,6 +546,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
 
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -564,7 +569,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	}]}`, string(resp.Data))
 
 	// add extra delay for 2nd subscription to timeout
-	time.Sleep(10 * time.Second)
+	time.Sleep(subExp)
 	// Add another TODO for jatin for which 2nd subscription shouldn't get update.
 	add = &common.GraphQLParams{
 		Query: `mutation{
@@ -582,7 +587,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-
+	time.Sleep(time.Second)
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res) // 2nd subscription should get the empty response as subscription has expired.
@@ -636,7 +641,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
+	jwtToken, err := metaInfo.GetSignedToken("secret", subExp)
 	require.NoError(t, err)
 
 	// first subscription
@@ -680,10 +685,10 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-
+	time.Sleep(time.Second)
 	// 2nd subscription
 	metaInfo.AuthVars["USER"] = "pawan"
-	jwtToken, err = metaInfo.GetSignedToken("secret", 30*time.Second)
+	jwtToken, err = metaInfo.GetSignedToken("secret", 2*subExp)
 	require.NoError(t, err)
 	payload = fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
 	subscriptionClient1, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
@@ -705,7 +710,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 		string(resp.Data))
 
 	// Wait for JWT to expire for 1st subscription.
-	time.Sleep(10 * time.Second)
+	time.Sleep(subExp)
 
 	// Add another TODO for jatin for which 1st subscription shouldn't get updates.
 	add = &common.GraphQLParams{
@@ -724,6 +729,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
 	// 1st subscription should get the empty response as subscription has expired
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -746,6 +752,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
@@ -765,7 +772,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 
 	// add delay for 2nd subscription  to timeout
 	// Wait for JWT to expire.
-	time.Sleep(20 * time.Second)
+	time.Sleep(subExp)
 	// Add another TODO for pawan for which 2nd subscription shouldn't get updates.
 	add = &common.GraphQLParams{
 		Query: `mutation{
@@ -784,6 +791,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second)
 	// 2nd subscription should get the empty response as subscription has expired
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
