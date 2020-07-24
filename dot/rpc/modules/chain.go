@@ -108,7 +108,7 @@ func (cm *ChainModule) GetBlock(r *http.Request, req *ChainHashRequest, res *Cha
 func (cm *ChainModule) GetBlockHash(r *http.Request, req *ChainBlockNumberRequest, res *ChainHashResponse) error {
 	// if request is empty, return highest hash
 	if *req == nil || reflect.ValueOf(*req).Len() == 0 {
-		*res = cm.blockAPI.HighestBlockHash().String()
+		*res = cm.blockAPI.BestBlockHash().String()
 		return nil
 	}
 
@@ -185,7 +185,7 @@ func (cm *ChainModule) SubscribeNewHeads(r *http.Request, req *EmptyRequest, res
 
 func (cm *ChainModule) hashLookup(req *ChainHashRequest) (common.Hash, error) {
 	if len(*req) == 0 {
-		hash := cm.blockAPI.HighestBlockHash()
+		hash := cm.blockAPI.BestBlockHash()
 		return hash, nil
 	}
 	return common.HexToHash(string(*req))

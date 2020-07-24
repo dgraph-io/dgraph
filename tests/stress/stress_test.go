@@ -18,6 +18,8 @@ package stress
 
 import (
 	"fmt"
+	"math/big"
+	"math/rand"
 	"os"
 	"strconv"
 	"testing"
@@ -94,7 +96,7 @@ func TestSync_SingleBlockProducer(t *testing.T) {
 	numNodes = 6 // TODO: increase this when syncing improves
 	utils.SetLogLevel(log.LvlInfo)
 
-	// only log info from 1 node
+	// start block producing node first
 	node, err := utils.RunGossamer(t, numNodes-1, utils.TestDir(t, "ferdie"), utils.GenesisSixAuths, utils.ConfigBABEMaxThreshold)
 	require.NoError(t, err)
 
@@ -145,4 +147,130 @@ func TestSync_SingleSyncingNode(t *testing.T) {
 		require.NoError(t, err, i)
 		time.Sleep(time.Second)
 	}
+}
+
+func TestSync_ManyProducers(t *testing.T) {
+	// TODO: this fails with runtime: out of memory
+	// this means when each node is connected to 8 other nodes, too much memory is being used.
+	t.Skip()
+
+	numNodes = 9 // 9 block producers
+	utils.SetLogLevel(log.LvlInfo)
+	nodes, err := utils.InitializeAndStartNodes(t, numNodes, utils.GenesisDefault, utils.ConfigDefault)
+	require.NoError(t, err)
+
+	defer func() {
+		errList := utils.TearDown(t, nodes)
+		require.Len(t, errList, 0)
+	}()
+
+	numCmps := 100
+	for i := 0; i < numCmps; i++ {
+		t.Log("comparing...", i)
+		err = compareBlocksByNumberWithRetry(t, nodes, strconv.Itoa(i))
+		require.NoError(t, err, i)
+		time.Sleep(time.Second)
+	}
+}
+
+func TestSync_Restart(t *testing.T) {
+	numNodes = 6
+	utils.SetLogLevel(log.LvlInfo)
+
+	// start block producing node first
+	node, err := utils.RunGossamer(t, numNodes-1, utils.TestDir(t, "ferdie"), utils.GenesisSixAuths, utils.ConfigBABEMaxThreshold)
+	require.NoError(t, err)
+
+	// wait and start rest of nodes
+	time.Sleep(time.Second * 5)
+	nodes, err := utils.InitializeAndStartNodes(t, numNodes-1, utils.GenesisSixAuths, utils.ConfigNoBABE)
+	require.NoError(t, err)
+	nodes = append(nodes, node)
+
+	defer func() {
+		errList := utils.TearDown(t, nodes)
+		require.Len(t, errList, 0)
+	}()
+
+	done := make(chan struct{})
+
+	// randomly turn off and on nodes
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Second * 3):
+				idx := rand.Intn(numNodes)
+
+				errList := utils.StopNodes(t, nodes[idx:idx+1])
+				require.Len(t, errList, 0)
+
+				err = utils.StartNodes(t, nodes[idx:idx+1])
+				require.NoError(t, err)
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	numCmps := 12
+	for i := 0; i < numCmps; i++ {
+		t.Log("comparing...", i)
+		err = compareBlocksByNumberWithRetry(t, nodes, strconv.Itoa(i))
+		require.NoError(t, err, i)
+		time.Sleep(time.Second)
+	}
+	close(done)
+}
+
+func TestSync_Bench(t *testing.T) {
+	numNodes = 2
+	utils.SetLogLevel(log.LvlInfo)
+	numBlocks := 256
+
+	// start block producing node
+	// node produces 10 blocks / second
+	alice, err := utils.RunGossamer(t, 0, utils.TestDir(t, "alice"), utils.GenesisDefault, utils.ConfigBABEMaxThresholdBench)
+	require.NoError(t, err)
+	time.Sleep(time.Second*time.Duration(numBlocks/10) + time.Second)
+
+	err = utils.PauseBABE(t, alice)
+	require.NoError(t, err)
+	t.Log("BABE paused")
+
+	// start syncing node
+	bob, err := utils.RunGossamer(t, 1, utils.TestDir(t, "bob"), utils.GenesisDefault, utils.ConfigNoBABE)
+	require.NoError(t, err)
+	start := time.Now()
+
+	nodes := []*utils.Node{alice, bob}
+	defer func() {
+		errList := utils.StopNodes(t, nodes)
+		require.Len(t, errList, 0)
+	}()
+
+	// see how long it takes to sync to block 256
+	last := big.NewInt(int64(numBlocks))
+	var end time.Time
+
+	for {
+		head := utils.GetChainHead(t, bob)
+		if head.Number.Cmp(last) >= 0 {
+			end = time.Now()
+			break
+		}
+	}
+
+	maxTime := time.Second * 8
+	minBPS := float64(34)
+	totalTime := end.Sub(start)
+	bps := float64(numBlocks) / end.Sub(start).Seconds()
+	t.Log("total sync time:", totalTime)
+	t.Log("blocks per second:", bps)
+	require.LessOrEqual(t, int64(totalTime), int64(maxTime))
+	require.GreaterOrEqual(t, bps, minBPS)
+
+	// assert block is correct
+	t.Log("comparing block...", numBlocks)
+	err = compareBlocksByNumberWithRetry(t, nodes, strconv.Itoa(numBlocks))
+	require.NoError(t, err, numBlocks)
 }

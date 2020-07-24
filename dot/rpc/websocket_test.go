@@ -80,7 +80,7 @@ type MockBlockAPI struct {
 func (m *MockBlockAPI) GetHeader(hash common.Hash) (*types.Header, error) {
 	return nil, nil
 }
-func (m *MockBlockAPI) HighestBlockHash() common.Hash {
+func (m *MockBlockAPI) BestBlockHash() common.Hash {
 	return common.Hash{}
 }
 func (m *MockBlockAPI) GetBlockByHash(hash common.Hash) (*types.Block, error) {
