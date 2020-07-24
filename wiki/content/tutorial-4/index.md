@@ -359,10 +359,10 @@ Here is the table with the syntax for various ways of making use of language tag
 | comment@. | Look for an untagged string, if not found, then return review in any language. But, this returns only a single value. |
 | comment@jp | Look for comment tagged `@jp`. If not found, the query returns nothing.|
 | comment@ru | Look for comment tagged `@ru`. If not found, the query returns nothing. |
-| name@jp:. | Look for comment tagged `@jp` first. If not found, then find the untagged comment. If that's not found too, return anyone comment in other languages. |
-| name@jp:ru | Look for comment tagged `@jp`, then `@ru`. If neither is found, it returns nothing. |
-| name@jp:ru:. | Look for comment tagged `@jp`, then `@ru`. If both not found, then find the untagged comment. If that's not found too, return any other comment if it exists. |
-| name@* | Return all the language tags, including the untagged. |
+| comment@jp:. | Look for comment tagged `@jp` first. If not found, then find the untagged comment. If that's not found too, return anyone comment in other languages. |
+| comment@jp:ru | Look for comment tagged `@jp`, then `@ru`. If neither is found, it returns nothing. |
+| comment@jp:ru:. | Look for comment tagged `@jp`, then `@ru`. If both not found, then find the untagged comment. If that's not found too, return any other comment if it exists. |
+| comment@* | Return all the language tags, including the untagged. |
 
 If you remember, we had initially added a Russian dish `Borscht` with its review in `Russian`.
 
