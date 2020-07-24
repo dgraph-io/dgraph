@@ -683,7 +683,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 
 	// 2nd subscription
 	metaInfo.AuthVars["USER"] = "pawan"
-	jwtToken, err = metaInfo.GetSignedToken("secret", 20*time.Second)
+	jwtToken, err = metaInfo.GetSignedToken("secret", 30*time.Second)
 	require.NoError(t, err)
 	payload = fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
 	subscriptionClient1, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
@@ -765,7 +765,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 
 	// add delay for 2nd subscription  to timeout
 	// Wait for JWT to expire.
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 	// Add another TODO for pawan for which 2nd subscription shouldn't get updates.
 	add = &common.GraphQLParams{
 		Query: `mutation{
