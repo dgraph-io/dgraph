@@ -48,6 +48,7 @@ type Headerkey string
 
 const (
 	touchedUidsHeader = "Graphql-TouchedUids"
+	graphqlTimeHeader = "Graphql-Time"
 )
 
 // An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
@@ -189,6 +190,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		return
 	}
+	startTime := time.Now()
 
 	ctx, span := trace.StartSpan(r.Context(), "handler")
 	defer span.End()
@@ -212,6 +214,9 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		gqlReq.Header = r.Header
 		res = gh.resolver.Resolve(ctx, gqlReq)
 	}
+
+	w.Header().Set(graphqlTimeHeader, strconv.FormatInt(time.Now().Sub(startTime).
+		Nanoseconds(), 10))
 
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 }
