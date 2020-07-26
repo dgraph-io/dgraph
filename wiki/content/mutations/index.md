@@ -429,10 +429,10 @@ have custom serialisation code, since most languages already have a JSON
 marshalling library.
 
 When Dgraph receives a mutation as a JSON object, it first converts it into an 
-internal edge format that is then processed into BadgerDB.
+internal edge format that is then processed into Dgraph.
 
-> JSON  -> Edges -> Badger \
-> RDF   -> Edges -> Badger
+> JSON  -> Edges -> Posting list \
+> RDF   -> Edges -> Posting list
 
 Each JSON object represents a single node in the graph.
 
