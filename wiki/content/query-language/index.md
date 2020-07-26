@@ -638,7 +638,7 @@ Syntax Examples:
 * `predicate @filter(uid(<uid1>, ..., <uidn>))`
 * `predicate @filter(uid(a))` for variable `a`
 * `q(func: uid(a,b))` for variables `a` and `b`
-* `q(func: uid($uids))` for multiple uids in Dgraph's GraphQL Variables `$uids` you have to set a string `"[0x1, 0x2, 0x3]"` in queryWithVars.
+* `q(func: uid($uids))` for multiple uids in Dgraph's GraphQL Variables. You have to set the value of this variable as a string (e.g`"[0x1, 0x2, 0x3]"`) in queryWithVars.
 
 Filters nodes at the current query level to only nodes in the given set of UIDs.
 
@@ -3360,7 +3360,7 @@ Syntax Examples (using default values):
 * `query title($name: string = "Bauman") { ... }`
 * `query title($age: int = "95") { ... }`
 * `query title($uids: string = "0x1") { ... }`
-* `query title($uids: string = "[0x1, 0x2, 0x3]") { ... }` pseudo-array.
+* `query title($uids: string = "[0x1, 0x2, 0x3]") { ... }`. The value of the variable is a pseudo-array using a string representation.
 
 `Variables` can be defined and used in queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a `$` symbol.
 For **HTTP requests** with GraphQL Variables, we must use `Content-Type: application/json` header and pass data with a JSON object containing `query` and `variables`.
