@@ -1503,11 +1503,11 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
 
 ## Reverse Edges
 
-Any outgoing edge in Dgraph can be reversed using the `@reverse` directive in Schema. And be queried using tilde as the prefix of the reverse edge. e.g. `<~myEdge>`.
+Any outgoing edge in Dgraph can be reversed using the `@reverse` directive in Schema and be queried using tilde as the prefix of the reverse edge. e.g. `<~myEdge>`.
 
-Dgraph serializes directed graphs. This means that all properties point from a entity to another entity or value is always in a single direction. `S P -> O`.
+Dgraph serializes directed graphs. This means that all properties always point from an entity to another entity or value in a single direction. `S P -> O`.
 
-However, in some cases, users want to create an entity in the reverse direction. But there is no specific syntax for reverse edges in Dgraph mutations. Because Reverse edges are just a kind of edge indexing. It is not literally an edge, but a kind of "pointer". And it will always be represented as `S P -> O` in query responses. But the "tilde" sets what is the direction for the user.
+However, in some cases, users want to create an entity in the reverse direction. But there is no specific syntax for reverse edges in Dgraph mutations. Because Reverse edges are just a kind of edge indexing. It is not literally an edge, but a kind of "pointer" and it will always be represented as `S P -> O` in query responses. But the "tilde" sets what is the direction for the user.
 
 There are some confusions about syntax related to reverse e.g.
 
@@ -1534,7 +1534,7 @@ or
 }
 ```
 
-### The Right way to do Reverse Edges
+<font size="5"> The Right Way to Do Reverse Edges</font>
 
 Fixing the previous RDF mutation:
 
@@ -1566,7 +1566,7 @@ Since "MyObject" is above the "Person" entity. So "MyObject" must come before wh
 }
 ```
 
-Another way to do this is to separate into small chunks/batches and use blank nodes as referrers. This facilitates the organization and reuse of references.
+Another way to do this is to separate into small chunks/batches and use blank nodes as references. This facilitates the organization and reuse of references.
 
 ```JSON
 {
@@ -1584,7 +1584,7 @@ Another way to do this is to separate into small chunks/batches and use blank no
 }
 ```
 
-#### More reverse examples
+<font size="4"> More reverse examples:</font>
 
 In RDF the correct way to apply reverse edges is very straightforward.
 
@@ -1624,7 +1624,7 @@ parent: [uid] @reverse .
 }
 ```
 
-#### The directions are like:
+The directions are like:
 
 ```
 Exchanged hierarchy:
@@ -1641,7 +1641,7 @@ Normal hierarchy:
  Parent <~ Object; #Reverse
 
  This hierarchy is not part of the example, but is generally used in all graph models.
- To make this hierarchy we need to bring the hierarchical relationship starting from the parents and not from the children. And instead of using the edges "wife" and "husband" we switch to single edge called "married" to simplify the model.
+ To make this hierarchy we need to bring the hierarchical relationship starting from the parents and not from the children. Instead of using the edges "wife" and "husband" we switch to single edge called "married" to simplify the model.
 
     _:Megalosaurus <name> "Earl Sneed Sinclair" .
     _:Megalosaurus <dgraph.type> "Dinosaur" .
@@ -1659,7 +1659,7 @@ Normal hierarchy:
 
 ```
 
-#### Queries
+<font size="4"> Queries:</font>
 
 1. "wife_husband" is the wife edge reversed.
 2. "husband" is an actual edge.
@@ -1697,9 +1697,9 @@ Normal hierarchy:
 }
 ```
 
-#### Reverse Edges and Facets
+## Reverse Edges and Facets
 
-Facets on reverse edges have their direction preserved. That is, if you create a facet from child to parent and another facet from parent to child. Both will coexist independently.
+Facets on reverse edges have their direction preserved. That is, if you create a facet from child to parent and another facet from parent to child, both will coexist independently.
 
 ```
 {
@@ -1716,7 +1716,7 @@ Facets on reverse edges have their direction preserved. That is, if you create a
 }
 ```
 
-Using a similar query from previous example:
+Using a similar query from the previous example:
 
 ```
 {
