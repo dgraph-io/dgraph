@@ -220,6 +220,7 @@ createSum () {
 
 createSum darwin
 createSum linux
+createSum windows
 
 # Create Docker image.
 cp $basedir/dgraph/contrib/Dockerfile $TMP
