@@ -65,6 +65,14 @@ func NewBlockTreeFromGenesis(genesis *types.Header, db database.Database) *Block
 	}
 }
 
+func newBlockTreeFromNode(head *node, db database.Database) *BlockTree {
+	return &BlockTree{
+		head:   head,
+		leaves: newLeafMap(head),
+		db:     db,
+	}
+}
+
 // GenesisHash returns the hash of the genesis block
 func (bt *BlockTree) GenesisHash() Hash {
 	return bt.head.hash
@@ -132,6 +140,28 @@ func (bt *BlockTree) getNode(h Hash) *node {
 	}
 
 	return nil
+}
+
+// Prune sets the given hash as the new blocktree root, removing all nodes that are not the new root node or its descendant
+// It returns an array of hashes that have been pruned
+func (bt *BlockTree) Prune(newRoot Hash) (pruned []Hash) {
+	if newRoot == bt.head.hash {
+		return pruned
+	}
+
+	n := bt.getNode(newRoot)
+	if n == nil {
+		return pruned
+	}
+
+	// get pruned nodes
+	pruned = bt.head.getAllDescendantsExcluding(nil, newRoot)
+
+	// set blocktree with new root node
+	next := newBlockTreeFromNode(n, bt.db)
+	*bt = *next
+
+	return pruned
 }
 
 // String utilizes github.com/disiqueira/gotree to create a printable tree
@@ -254,4 +284,9 @@ func (bt *BlockTree) HighestCommonAncestor(a, b Hash) (Hash, error) {
 	}
 
 	return an.highestCommonAncestor(bn).hash, nil
+}
+
+// GetAllBlocks returns all the blocks in the tree
+func (bt *BlockTree) GetAllBlocks() []Hash {
+	return bt.head.getAllDescendants(nil)
 }

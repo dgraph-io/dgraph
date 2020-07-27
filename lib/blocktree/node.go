@@ -144,3 +144,61 @@ func (n *node) highestCommonAncestor(other *node) *node {
 
 	return nil
 }
+
+// getLeaves returns all nodes that are leaf nodes with the current node as its ancestor
+func (n *node) getLeaves(leaves []*node) []*node {
+	if n == nil {
+		return leaves
+	}
+
+	if leaves == nil {
+		leaves = []*node{}
+	}
+
+	if n.children == nil || len(n.children) == 0 {
+		leaves = append(leaves, n)
+	}
+
+	for _, child := range n.children {
+		leaves = child.getLeaves(leaves)
+	}
+
+	return leaves
+}
+
+// getAllDescendantsExcluding returns an array of the node's hash and all its descendants's hashes
+// except for the excluded node and its subtree
+func (n *node) getAllDescendantsExcluding(desc []Hash, excl Hash) []Hash {
+	if n == nil || n.hash == excl {
+		return desc
+	}
+
+	if desc == nil {
+		desc = []Hash{}
+	}
+
+	desc = append(desc, n.hash)
+	for _, child := range n.children {
+		desc = child.getAllDescendantsExcluding(desc, excl)
+	}
+
+	return desc
+}
+
+// getAllDescendants returns an array of the node's hash and all its descendants's hashes
+func (n *node) getAllDescendants(desc []Hash) []Hash {
+	if n == nil {
+		return desc
+	}
+
+	if desc == nil {
+		desc = []Hash{}
+	}
+
+	desc = append(desc, n.hash)
+	for _, child := range n.children {
+		desc = child.getAllDescendants(desc)
+	}
+
+	return desc
+}

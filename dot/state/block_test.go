@@ -295,3 +295,46 @@ func TestLatestFinalizedRound(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(99), r)
 }
+
+func TestFinalization_DeleteBlock(t *testing.T) {
+	bs := newTestBlockState(t, testGenesisHeader)
+	all := bs.bt.GetAllBlocks()
+	AddBlocksToState(t, bs, 5)
+	leaves := bs.Leaves()
+
+	// pick block to finalize
+	fin := leaves[len(leaves)-1]
+	err := bs.SetFinalizedHash(fin, 1)
+	require.NoError(t, err)
+
+	// assert that every block except finalized has been deleted
+	for _, b := range all {
+		if b == fin {
+			continue
+		}
+
+		has, err := bs.HasHeader(b)
+		require.NoError(t, err)
+		require.False(t, has)
+
+		has, err = bs.HasBlockBody(b)
+		require.NoError(t, err)
+		require.False(t, has)
+
+		has, err = bs.HasArrivalTime(b)
+		require.NoError(t, err)
+		require.False(t, has)
+
+		has, err = bs.HasReceipt(b)
+		require.NoError(t, err)
+		require.False(t, has)
+
+		has, err = bs.HasMessageQueue(b)
+		require.NoError(t, err)
+		require.False(t, has)
+
+		has, err = bs.HasJustification(b)
+		require.NoError(t, err)
+		require.False(t, has)
+	}
+}

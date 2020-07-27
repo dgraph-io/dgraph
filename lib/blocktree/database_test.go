@@ -8,7 +8,6 @@ import (
 
 	database "github.com/ChainSafe/chaindb"
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/common"
 )
 
 type testBranch struct {
@@ -72,25 +71,14 @@ func createTestBlockTree(header *types.Header, depth int, db database.Database) 
 
 func TestStoreBlockTree(t *testing.T) {
 	db := database.NewMemDatabase()
+	bt, _ := createTestBlockTree(testHeader, 10, db)
 
-	zeroHash, err := common.HexToHash("0x00")
+	err := bt.Store()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	header := &types.Header{
-		ParentHash: zeroHash,
-		Number:     big.NewInt(0),
-	}
-
-	bt, _ := createTestBlockTree(header, 10, db)
-
-	err = bt.Store()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resBt := NewBlockTreeFromGenesis(header, db)
+	resBt := NewBlockTreeFromGenesis(testHeader, db)
 	err = resBt.Load()
 	if err != nil {
 		t.Fatal(err)

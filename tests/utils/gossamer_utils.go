@@ -102,7 +102,7 @@ func InitGossamer(idx int, basePath, genesis, config string) (*Node, error) {
 	logger.Info("initializing gossamer...", "cmd", cmdInit)
 	stdOutInit, err := cmdInit.CombinedOutput()
 	if err != nil {
-		fmt.Println(stdOutInit)
+		fmt.Printf("%s", stdOutInit)
 		return nil, err
 	}
 

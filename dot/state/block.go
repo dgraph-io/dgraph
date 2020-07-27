@@ -51,6 +51,12 @@ func (blockDB *BlockDB) Get(key []byte) ([]byte, error) {
 	return blockDB.db.Get(key)
 }
 
+// Delete deletes a key from the db
+func (blockDB *BlockDB) Delete(key []byte) error {
+	key = append(blockPrefix, key...)
+	return blockDB.db.Del(key)
+}
+
 // Has appends `block` to the key and checks for existence in the db
 func (blockDB *BlockDB) Has(key []byte) (bool, error) {
 	key = append(blockPrefix, key...)
@@ -200,6 +206,53 @@ func (bs *BlockState) GenesisHash() common.Hash {
 	return bs.genesisHash
 }
 
+// DeleteBlock deletes all instances of the block and its related data in the database
+func (bs *BlockState) DeleteBlock(hash common.Hash) error {
+	if has, _ := bs.HasHeader(hash); has {
+		err := bs.db.Delete(headerKey(hash))
+		if err != nil {
+			return err
+		}
+	}
+
+	if has, _ := bs.HasBlockBody(hash); has {
+		err := bs.db.Delete(blockBodyKey(hash))
+		if err != nil {
+			return err
+		}
+	}
+
+	if has, _ := bs.HasArrivalTime(hash); has {
+		err := bs.db.Delete(arrivalTimeKey(hash))
+		if err != nil {
+			return err
+		}
+	}
+
+	if has, _ := bs.HasReceipt(hash); has {
+		err := bs.db.Delete(prefixKey(hash, receiptPrefix))
+		if err != nil {
+			return err
+		}
+	}
+
+	if has, _ := bs.HasMessageQueue(hash); has {
+		err := bs.db.Delete(prefixKey(hash, messageQueuePrefix))
+		if err != nil {
+			return err
+		}
+	}
+
+	if has, _ := bs.HasJustification(hash); has {
+		err := bs.db.Delete(prefixKey(hash, justificationPrefix))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // HasHeader returns if the db contains a header with the given hash
 func (bs *BlockState) HasHeader(hash common.Hash) (bool, error) {
 	return bs.db.Has(headerKey(hash))
@@ -319,6 +372,11 @@ func (bs *BlockState) SetHeader(header *types.Header) error {
 	return nil
 }
 
+// HasBlockBody returns true if the db contains the block body
+func (bs *BlockState) HasBlockBody(hash common.Hash) (bool, error) {
+	return bs.db.Has(blockBodyKey(hash))
+}
+
 // GetBlockBody will return Body for a given hash
 func (bs *BlockState) GetBlockBody(hash common.Hash) (*types.Body, error) {
 	data, err := bs.db.Get(blockBodyKey(hash))
@@ -327,6 +385,15 @@ func (bs *BlockState) GetBlockBody(hash common.Hash) (*types.Body, error) {
 	}
 
 	return types.NewBody(data), nil
+}
+
+// SetBlockBody will add a block body to the db
+func (bs *BlockState) SetBlockBody(hash common.Hash, body *types.Body) error {
+	bs.lock.Lock()
+	defer bs.lock.Unlock()
+
+	err := bs.db.Put(blockBodyKey(hash), body.AsOptional().Value)
+	return err
 }
 
 // GetFinalizedHeader returns the latest finalized block header
@@ -374,6 +441,14 @@ func (bs *BlockState) SetFinalizedHash(hash common.Hash, round uint64) error {
 		}
 	}
 
+	pruned := bs.bt.Prune(hash)
+	for _, rem := range pruned {
+		err := bs.DeleteBlock(rem)
+		if err != nil {
+			return err
+		}
+	}
+
 	return bs.db.Put(finalizedHashKey(round), hash[:])
 }
 
@@ -394,15 +469,6 @@ func (bs *BlockState) GetRound() (uint64, error) {
 
 	round := binary.LittleEndian.Uint64(r)
 	return round, nil
-}
-
-// SetBlockBody will add a block body to the db
-func (bs *BlockState) SetBlockBody(hash common.Hash, body *types.Body) error {
-	bs.lock.Lock()
-	defer bs.lock.Unlock()
-
-	err := bs.db.Put(blockBodyKey(hash), body.AsOptional().Value)
-	return err
 }
 
 // CompareAndSetBlockData will compare empty fields and set all elements in a block data to db
@@ -645,6 +711,11 @@ func (bs *BlockState) BlocktreeAsString() string {
 
 func (bs *BlockState) setBestBlockHashKey(hash common.Hash) error {
 	return StoreBestBlockHash(bs.db.db, hash)
+}
+
+// HasArrivalTime returns true if the db contains the block's arrival time
+func (bs *BlockState) HasArrivalTime(hash common.Hash) (bool, error) {
+	return bs.db.Has(arrivalTimeKey(hash))
 }
 
 // GetArrivalTime returns the arrival time of a block given its hash

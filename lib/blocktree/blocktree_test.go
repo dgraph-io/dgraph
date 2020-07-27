@@ -29,14 +29,13 @@ import (
 )
 
 var zeroHash, _ = common.HexToHash("0x00")
+var testHeader = &types.Header{
+	ParentHash: zeroHash,
+	Number:     big.NewInt(0),
+}
 
 func createFlatTree(t *testing.T, depth int) (*BlockTree, []common.Hash) {
-	header := &types.Header{
-		ParentHash: zeroHash,
-		Number:     big.NewInt(0),
-	}
-
-	bt := NewBlockTreeFromGenesis(header, nil)
+	bt := NewBlockTreeFromGenesis(testHeader, nil)
 	require.NotNil(t, bt)
 
 	previousHash := bt.head.hash
@@ -60,6 +59,24 @@ func createFlatTree(t *testing.T, depth int) (*BlockTree, []common.Hash) {
 	}
 
 	return bt, hashes
+}
+
+func TestNewBlockTreeFromNode(t *testing.T) {
+	var bt *BlockTree
+	var branches []testBranch
+
+	for {
+		bt, branches = createTestBlockTree(testHeader, 5, nil)
+		if len(branches) > 0 && len(bt.getNode(branches[0].hash).children) > 0 {
+			break
+		}
+	}
+
+	testNode := bt.getNode(branches[0].hash).children[0]
+	leaves := testNode.getLeaves(nil)
+
+	newBt := newBlockTreeFromNode(testNode, nil)
+	require.ElementsMatch(t, leaves, newBt.leaves.nodes())
 }
 
 func TestBlockTree_GetBlock(t *testing.T) {
@@ -175,30 +192,23 @@ func TestBlockTree_Subchain(t *testing.T) {
 }
 
 func TestBlockTree_DeepestLeaf(t *testing.T) {
-	header := &types.Header{
-		ParentHash: zeroHash,
-		Number:     big.NewInt(0),
-	}
-
 	arrivalTime := uint64(256)
 	var expected Hash
 
-	bt, _ := createTestBlockTree(header, 8, nil)
+	bt, _ := createTestBlockTree(testHeader, 8, nil)
 
 	deepest := big.NewInt(0)
 
-	bt.leaves.smap.Range(func(h, n interface{}) bool {
-		leaf := h.(Hash)
-		node := n.(*node)
+	for leaf, node := range bt.leaves.toMap() {
 		node.arrivalTime = arrivalTime
 		arrivalTime--
 		if node.depth.Cmp(deepest) >= 0 {
+			deepest = node.depth
 			expected = leaf
 		}
 
 		t.Logf("leaf=%s depth=%d arrivalTime=%d", leaf, node.depth, node.arrivalTime)
-		return true
-	})
+	}
 
 	deepestLeaf := bt.deepestLeaf()
 	if deepestLeaf.hash != expected {
@@ -207,12 +217,7 @@ func TestBlockTree_DeepestLeaf(t *testing.T) {
 }
 
 func TestBlockTree_GetNode(t *testing.T) {
-	header := &types.Header{
-		ParentHash: zeroHash,
-		Number:     big.NewInt(0),
-	}
-
-	bt, branches := createTestBlockTree(header, 16, nil)
+	bt, branches := createTestBlockTree(testHeader, 16, nil)
 
 	for _, branch := range branches {
 		block := &types.Block{
@@ -230,12 +235,7 @@ func TestBlockTree_GetNode(t *testing.T) {
 }
 
 func TestBlockTree_GetAllBlocksAtDepth(t *testing.T) {
-	header := &types.Header{
-		ParentHash: zeroHash,
-		Number:     big.NewInt(0),
-	}
-
-	bt, _ := createTestBlockTree(header, 8, nil)
+	bt, _ := createTestBlockTree(testHeader, 8, nil)
 	hashes := bt.head.getNodesWithDepth(big.NewInt(10), []common.Hash{})
 
 	expected := []common.Hash{}
@@ -316,17 +316,12 @@ func TestBlockTree_IsDecendantOf(t *testing.T) {
 }
 
 func TestBlockTree_HighestCommonAncestor(t *testing.T) {
-	header := &types.Header{
-		ParentHash: zeroHash,
-		Number:     big.NewInt(0),
-	}
-
 	var bt *BlockTree
 	var leaves []common.Hash
 	var branches []testBranch
 
 	for {
-		bt, branches = createTestBlockTree(header, 8, nil)
+		bt, branches = createTestBlockTree(testHeader, 8, nil)
 		leaves = bt.Leaves()
 		if len(leaves) == 2 {
 			break
@@ -344,12 +339,7 @@ func TestBlockTree_HighestCommonAncestor(t *testing.T) {
 }
 
 func TestBlockTree_HighestCommonAncestor_SameNode(t *testing.T) {
-	header := &types.Header{
-		ParentHash: zeroHash,
-		Number:     big.NewInt(0),
-	}
-
-	bt, _ := createTestBlockTree(header, 8, nil)
+	bt, _ := createTestBlockTree(testHeader, 8, nil)
 	leaves := bt.Leaves()
 
 	a := leaves[0]
@@ -360,12 +350,7 @@ func TestBlockTree_HighestCommonAncestor_SameNode(t *testing.T) {
 }
 
 func TestBlockTree_HighestCommonAncestor_SameChain(t *testing.T) {
-	header := &types.Header{
-		ParentHash: zeroHash,
-		Number:     big.NewInt(0),
-	}
-
-	bt, _ := createTestBlockTree(header, 8, nil)
+	bt, _ := createTestBlockTree(testHeader, 8, nil)
 	leaves := bt.Leaves()
 
 	a := leaves[0]
@@ -375,4 +360,22 @@ func TestBlockTree_HighestCommonAncestor_SameChain(t *testing.T) {
 	p, err := bt.HighestCommonAncestor(a, b)
 	require.NoError(t, err)
 	require.Equal(t, b, p)
+}
+
+func TestBlockTree_Prune(t *testing.T) {
+	var bt *BlockTree
+	var branches []testBranch
+
+	for {
+		bt, branches = createTestBlockTree(testHeader, 5, nil)
+		if len(branches) > 0 && len(bt.getNode(branches[0].hash).children) > 0 {
+			break
+		}
+	}
+
+	testNode := bt.getNode(branches[0].hash).children[0]
+	expected := bt.head.getAllDescendantsExcluding(nil, testNode.hash)
+	pruned := bt.Prune(testNode.hash)
+	require.ElementsMatch(t, expected, pruned)
+	require.Equal(t, bt.head, testNode)
 }

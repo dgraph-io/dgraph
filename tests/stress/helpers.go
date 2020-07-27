@@ -37,9 +37,10 @@ import (
 )
 
 var (
-	numNodes   = 3
-	maxRetries = 32
-	logger     = log.New("pkg", "tests/stress")
+	numNodes    = 3
+	maxRetries  = 32
+	testTimeout = time.Minute
+	logger      = log.New("pkg", "tests/stress")
 )
 
 // compareChainHeads calls getChainHead for each node in the array
