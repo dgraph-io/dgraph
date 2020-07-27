@@ -522,3 +522,50 @@ query($USER: String!) {
     id: ID!
     email: String! @dgraph(pred: "IOw80vnV") @search(by: [hash])
 }
+
+type Contact @auth(
+    query: { rule: "{$ContactRole: { eq: \"ADMINISTRATOR\"}}" }
+) {
+    id: ID!
+    nickName: String @search(by: [exact, term, fulltext, regexp])
+    adminTasks: [AdminTask] @hasInverse(field: forContact)
+    tasks: [Task] @hasInverse(field: forContact)
+}
+
+type AdminTask @auth(
+    query: { rule: "{$TaskRole: { eq: \"ADMINISTRATOR\"}}" }
+) {
+    id: ID!
+    name: String @search(by: [exact, term, fulltext, regexp])
+    occurrances: [TaskOccurance] @hasInverse(field: adminTask)
+    forContact: Contact @hasInverse(field: adminTasks)
+}
+
+type Task {
+    id: ID!
+    name: String @search(by: [exact, term, fulltext, regexp])
+    occurrances: [TaskOccurance] @hasInverse(field: task)
+    forContact: Contact @hasInverse(field: tasks)
+}
+
+type TaskOccurance @auth(
+    query: { and : [
+        {rule: "{$TaskOccuranceRole: { eq: \"ADMINISTRATOR\"}}"},
+        {rule: """
+        query($TaskOccuranceRole: String!) {
+            queryTaskOccurance(filter: {role: { eq: $TaskOccuranceRole}}) {
+                __typename
+            }
+        }
+        """}
+] }
+) {
+    id: ID!
+    due: DateTime @search
+    comp: DateTime @search
+    task: Task @hasInverse(field: occurrances)
+    adminTask: AdminTask @hasInverse(field: occurrances)
+    isPublic: Boolean @search
+    role: String @search(by: [exact, term, fulltext, regexp])
+}
+
