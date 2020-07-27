@@ -74,6 +74,7 @@ func TestValidateAddress(t *testing.T) {
 			// the following test returns true because 12.0.0 is considered as valid
 			// hostname
 			{"Invalid with port", "12.0.0:3333", true},
+			{"Invalid port", "190.0.0.1:222222", false},
 		}
 		for _, subtest := range testData {
 			st := subtest
@@ -93,6 +94,7 @@ func TestValidateAddress(t *testing.T) {
 			{"Valid with port", "[2001:db8::1]:8888", true},
 			{"Invalid without port", "[2001:db8]", false},
 			{"Invalid with port", "[2001:db8]:2222", false},
+			{"Invalid port", "[2001:db8]:222222", false},
 		}
 		for _, subtest := range testData {
 			st := subtest

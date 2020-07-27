@@ -575,23 +575,23 @@ func PageRange(count, offset, n int) (int, int) {
 func ValidateAddress(addr string) error {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
+		fmt.Println(err)
 		return err
 	}
 	if p, err := strconv.Atoi(port); err != nil || p <= 0 || p >= 65536 {
-		return fmt.Errorf("port: %d is not valid", p)
+		return fmt.Errorf("Invalid port")
 	}
 	if ip := net.ParseIP(host); ip != nil {
 		return nil
 	}
 	// try to parse as hostname as per hostname RFC
 	if len(strings.Replace(host, ".", "", -1)) > 255 {
-		return fmt.Errorf("hostname: %s should be less than or equal to 255 characters", host)
+		return fmt.Errorf("Hostname should be less than or equal to 255 characters")
 	}
-	if regExpHostName.MatchString(host) {
-		return nil
-	} else {
-		return fmt.Errorf("hostname: %s is not valid", host)
+	if !regExpHostName.MatchString(host) {
+		return fmt.Errorf("Invalid hostname")
 	}
+	return nil
 }
 
 // RemoveDuplicates sorts the slice of strings and removes duplicates. changes the input slice.

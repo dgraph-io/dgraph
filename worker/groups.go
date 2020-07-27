@@ -80,8 +80,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
 		// check if address is valid or not
-		err := x.ValidateAddress(x.WorkerConfig.MyAddr)
-		if err != nil {
+		if err := x.ValidateAddress(x.WorkerConfig.MyAddr); err != nil {
 			log.Fatalf("%v", err)
 		}
 		if !bindall {
