@@ -2391,7 +2391,7 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 
 	result = params.ExecuteAsPost(t, alphaURL)
 	common.RequireNoGQLErrors(t, result)
-	require.JSONEq(t, string(result.Data), `
+	testutil.CompareJSON(t, `
 	{
 		"querySearchTweets": [
 			{
@@ -2412,5 +2412,5 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 				}
 			}
 		]
-	}`)
+	}`, string(result.Data))
 }
