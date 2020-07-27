@@ -2322,9 +2322,12 @@ func OverwriteUidPredicatesReverse(t *testing.T, c *dgo.Dgraph) {
 		string(resp.GetJson()))
 
 	// Delete the triples and verify the reverse edge is gone.
+	upsertQuery = `query {
+		alice as var(func: eq(name, Alice))
+		carol as var(func: eq(name, Carol)) }`
 	upsertMutation = &api.Mutation{
 		DelNquads: []byte(`
-		uid(alice) <best_friend> * .`),
+		uid(alice) <best_friend> uid(carol) .`),
 	}
 	req = &api.Request{
 		Query:     upsertQuery,
@@ -2339,6 +2342,10 @@ func OverwriteUidPredicatesReverse(t *testing.T, c *dgo.Dgraph) {
 	testutil.CompareJSON(t, `{"reverse":[]}`,
 		string(resp.GetJson()))
 
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice"}]}`,
+		string(resp.GetJson()))
 }
 
 func DeleteAndQuerySameTxn(t *testing.T, c *dgo.Dgraph) {
