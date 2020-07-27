@@ -78,7 +78,7 @@ DOCKER_TAG=${2:-$(echo "$TAG" | tr '/' '-')}
 
 (
     cd "$repodir"
-    git rev-parse -q --verify "$TAG" > /dev/null
+    git cat-file -e "$TAG"
 ) || exit_error "Ref $TAG does not exist"
 
 # DO NOT change the /tmp/build directory, because Dockerfile also picks up binaries from there.
