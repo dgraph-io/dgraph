@@ -35,7 +35,8 @@ import (
 )
 
 type expectedRequest struct {
-	method    string
+	method string
+	// Send urlSuffix as empty string to ignore comparison
 	urlSuffix string
 	body      string
 	// Send headers as nil to ignore comparing headers.
@@ -172,7 +173,8 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 		return getError("Invalid HTTP method", r.Method)
 	}
 
-	if !strings.HasSuffix(r.URL.String(), expectedRequest.urlSuffix) {
+	if expectedRequest.urlSuffix != "" && !strings.HasSuffix(r.URL.String(),
+		expectedRequest.urlSuffix) {
 		return getError("Invalid URL", r.URL.String())
 	}
 
@@ -317,15 +319,18 @@ func verifyCustomNameHeadersHandler(w http.ResponseWriter, r *http.Request) {
 
 func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
-		method:    http.MethodGet,
-		urlSuffix: "/twitterfollowers?screen_name=manishrjain",
-		body:      "",
+		method: http.MethodGet,
+		body:   "",
 	})
 	if err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write([]byte(`
+
+	var resp string
+	switch r.URL.Query().Get("screen_name") {
+	case "manishrjain":
+		resp = `
 	{
 		"users": [{
 			"id": 1231723732206411776,
@@ -337,7 +342,16 @@ func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
 			"friends_count": 117,
 			"statuses_count": 0
 		}]
-	}`)))
+	}`
+	case "amazingPanda":
+		resp = `
+	{
+		"users": [{
+			"name": "twitter_bot"
+		}]
+	}`
+	}
+	check2(w.Write([]byte(resp)))
 }
 
 func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {

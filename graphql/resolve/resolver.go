@@ -948,10 +948,11 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				return
 			}
 
+			url := fconf.URL
 			if !graphql {
 				// For REST requests, we'll have to substitute the variables used in the URL.
 				mu.RLock()
-				fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL,
+				url, err = schema.SubstituteVarsInURL(url,
 					vals[idx].(map[string]interface{}))
 				if err != nil {
 					mu.RUnlock()
@@ -965,7 +966,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				mu.RUnlock()
 			}
 
-			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+			b, err = makeRequest(nil, fconf.Method, url, string(b), fconf.ForwardHeaders)
 			if err != nil {
 				errChan <- x.GqlErrorList{externalRequestError(err, f)}
 				return
