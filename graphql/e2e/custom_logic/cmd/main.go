@@ -595,19 +595,6 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 	check2(fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["getPosts"].Schema)))
 }
 
-func getPostswithLike(w http.ResponseWriter, r *http.Request) {
-	_, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
-		urlSuffix: "/getPostswithLike",
-		body:      ``,
-	})
-	if err != nil {
-		check2(w.Write([]byte(err.Error())))
-		return
-	}
-
-	check2(fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["getPostswithLike"].Schema)))
-}
-
 type input struct {
 	ID string `json:"uid"`
 }
@@ -1229,7 +1216,6 @@ func main() {
 	bsch := graphql.MustParseSchema(graphqlResponses["batchOperationSchema"].Schema, &query{})
 	bh := &relay.Handler{Schema: bsch}
 	http.HandleFunc("/getPosts", getPosts)
-	http.HandleFunc("/getPostswithLike", getPostswithLike)
 	http.Handle("/gqlUserNames", bh)
 	http.Handle("/gqlCars", bh)
 	http.HandleFunc("/gqlCarsWithErrors", gqlCarsWithErrorHandler)

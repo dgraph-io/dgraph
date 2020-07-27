@@ -2001,51 +2001,6 @@ func TestCustomGraphqlMissingTypeForBatchedFieldInput(t *testing.T) {
 			"PostFilterInput.\n")
 }
 
-func TestCustomGraphqlInvalidArgForBatchedField(t *testing.T) {
-	t.Skip()
-	schema := `
-	type Post {
-		id: ID!
-		text: String
-		comments: Post! @custom(http: {
-							url: "http://mock:8888/getPosts",
-							method: "POST",
-							mode: BATCH
-							graphql: "query { getPosts(input: [{name: $id}]) }"
-						})
-	}
-	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Equal(t, "resolving updateGQLSchema failed because input:9: Type Post"+
-		"; Field comments: inside graphql in @custom directive, argument `name` is not present "+
-		"in remote query `getPosts`.\n", res.Errors[0].Error())
-}
-
-func TestCustomGraphqlArgTypeMismatchForBatchedField(t *testing.T) {
-	t.Skip()
-	schema := `
-	type Post {
-		id: ID!
-		likes: Int
-		text: String
-		comments: Post! @custom(http: {
-							url: "http://mock:8888/getPostswithLike",
-							method: "POST",
-							mode: BATCH
-							graphql: "query { getPosts(input: [{id: $id, text: $likes}]) }"
-						})
-	}
-	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Equal(t, "resolving updateGQLSchema failed because input:10: Type Post"+
-		"; Field comments: inside graphql in @custom directive, found type mismatch for variable"+
-		" `$likes` in query `getPosts`, expected `Int`, got `String!`.\n", res.Errors[0].Error())
-}
-
 func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
 	schema := `
 	type Country @remote {
@@ -2084,28 +2039,6 @@ func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
 	require.Len(t, res.Errors, 1)
 	require.Contains(t, res.Errors[0].Error(), "argument `country` in mutation"+
 		" `setCountry` is missing, it is required by remote mutation.")
-}
-
-func TestCustomGraphqlMissingRequiredArgumentForBatchedField(t *testing.T) {
-	t.Skip()
-	schema := `
-	type Post {
-		id: ID!
-		text: String
-		comments: Post! @custom(http: {
-							url: "http://mock:8888/getPosts",
-							method: "POST",
-							mode: BATCH
-							graphql: "query { getPosts(input: [{id: $id}]) }"
-						})
-	}
-	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Equal(t, "resolving updateGQLSchema failed because input:9: Type Post"+
-		"; Field comments: inside graphql in @custom directive, argument `text` in query "+
-		"`getPosts` is missing, it is required by remote query.\n", res.Errors[0].Error())
 }
 
 // this one accepts an object and returns an object
@@ -2458,7 +2391,7 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 
 	result = params.ExecuteAsPost(t, alphaURL)
 	common.RequireNoGQLErrors(t, result)
-	require.JSONEq(t, string(result.Data), `
+	testutil.CompareJSON(t, `
 	{
 		"querySearchTweets": [
 			{
@@ -2479,5 +2412,5 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 				}
 			}
 		]
-	}`)
+	}`, string(result.Data))
 }
