@@ -99,7 +99,7 @@ func rdfForSubgraph(output *string, sg *SubGraph) error {
 			if err != nil {
 				return err
 			}
-			*output += fmt.Sprintf("<%#x> <%s> %s\n", uid, sg.aggWithVarFieldName(),
+			*output += fmt.Sprintf("<%#x> <%s> %s .\n", uid, sg.aggWithVarFieldName(),
 				string(outputval))
 			continue
 		}
@@ -125,7 +125,7 @@ func rdfForCount(output *string, subject uint64, count uint32, sg *SubGraph) {
 	if fieldName == "" {
 		fieldName = fmt.Sprintf("count(%s)", sg.Attr)
 	}
-	*output += fmt.Sprintf("<%#x> <%s> %d \n", subject, fieldName, count)
+	*output += fmt.Sprintf("<%#x> <%s> %d .\n", subject, fieldName, count)
 }
 
 // rdfForUIDList returns rdf for uid list.
@@ -136,14 +136,14 @@ func rdfForUIDList(output *string, subject uint64, list *pb.List, sg *SubGraph) 
 			continue
 		}
 		// TODO: do the right RDF format.
-		*output += fmt.Sprintf("<%#x> <%s> <%#x> \n", subject, sg.fieldName(), destUID)
+		*output += fmt.Sprintf("<%#x> <%s> <%#x> .\n", subject, sg.fieldName(), destUID)
 	}
 }
 
 // rdfForValueList returns rdf for the value list.
 func rdfForValueList(output *string, subject uint64, valueList *pb.ValueList, attr string) error {
 	if attr == "uid" {
-		*output += fmt.Sprintf("<%#x> <%s> <%#x> \n", subject, attr, subject)
+		*output += fmt.Sprintf("<%#x> <%s> <%#x> .\n", subject, attr, subject)
 		return nil
 	}
 	for _, destValue := range valueList.Values {
@@ -157,9 +157,9 @@ func rdfForValueList(output *string, subject uint64, valueList *pb.ValueList, at
 		}
 		switch val.Tid {
 		case types.UidID:
-			*output += fmt.Sprintf("<%#x> <%s> <%s> \n", subject, attr, string(outputval))
+			*output += fmt.Sprintf("<%#x> <%s> <%s> .\n", subject, attr, string(outputval))
 		default:
-			*output += fmt.Sprintf("<%#x> <%s> %s \n", subject, attr, string(outputval))
+			*output += fmt.Sprintf("<%#x> <%s> %s .\n", subject, attr, string(outputval))
 		}
 	}
 	return nil
