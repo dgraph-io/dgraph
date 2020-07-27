@@ -17,6 +17,7 @@
 package x
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math"
 	"sort"
@@ -265,4 +266,20 @@ func TestBadKeys(t *testing.T) {
 	key = DataKey("bad uid", uint64(uid))
 	_, err = Parse(key)
 	require.Error(t, err)
+}
+
+func TestBulkKeys(t *testing.T) {
+	printKey := func(s string) {
+		key, err := hex.DecodeString(s)
+		require.NoError(t, err)
+		pk, err := Parse(key)
+		require.NoError(t, err)
+		t.Logf("%+v", pk)
+	}
+	oldKey := "04000b6467726170682e74797065020245786368616e67654c697374696e672e4f7074696f6e7ff803ae4c8e51d2fffffffffffffffe"
+	newKey := "04000b6467726170682e74797065020245786368616e67654c697374696e672e4f7074696f6e2e436f6d706f736974650000000000000001fffffffffffffffe"
+
+
+	printKey(oldKey)
+	printKey(newKey)
 }
