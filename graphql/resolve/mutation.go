@@ -245,6 +245,18 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
 			resolverFailed
 	}
+	if len(upserts) == 0 {
+		return &Resolved{
+			Data: map[string]interface{}{
+				mutation.Name(): map[string]interface{}{
+					schema.NumUid:                0,
+					mutation.QueryField().Name(): nil,
+				}},
+			Field:      mutation,
+			Err:        nil,
+			Extensions: ext,
+		}, resolverSucceeded
+	}
 
 	result := make(map[string]interface{})
 	req := &dgoapi.Request{}
