@@ -25,22 +25,22 @@ import (
 )
 
 const GssmrConfigPath = "../chain/gssmr/config.toml"
-const GssmrGenesisPath = "../chain/gssmr/genesis.json"
+const GssmrGenesisPath = "../chain/gssmr/genesis-raw.json"
 
 const KsmccConfigPath = "../chain/ksmcc/config.toml"
-const KsmccGenesisPath = "../chain/ksmcc/genesis.json"
+const KsmccGenesisPath = "../chain/ksmcc/genesis-raw.json"
 
 // TestLoadConfig tests loading a toml configuration file
 func TestLoadConfig(t *testing.T) {
 	cfg, cfgFile := NewTestConfigWithFile(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -57,12 +57,12 @@ func TestExportConfig(t *testing.T) {
 	cfg, cfgFile := NewTestConfigWithFile(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -81,7 +81,7 @@ func TestLoadConfigGssmr(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	cfg.Global.BasePath = utils.NewTestDir(t)
-	cfg.Init.Genesis = GssmrGenesisPath
+	cfg.Init.GenesisRaw = GssmrGenesisPath
 
 	defer utils.RemoveTestDir(t)
 
@@ -103,7 +103,7 @@ func TestLoadConfigKsmcc(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	cfg.Global.BasePath = utils.NewTestDir(t)
-	cfg.Init.Genesis = KsmccGenesisPath
+	cfg.Init.GenesisRaw = KsmccGenesisPath
 
 	defer utils.RemoveTestDir(t)
 

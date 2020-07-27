@@ -33,8 +33,8 @@ var (
 
 	// InitConfig
 
-	// DefaultGenesis Default genesis configuration path
-	DefaultGenesis = string("./chain/ksmcc/genesis.json")
+	// DefaultGenesisRaw Default genesis configuration path
+	DefaultGenesisRaw = string("./chain/ksmcc/genesis-raw.json")
 
 	// AccountConfig
 

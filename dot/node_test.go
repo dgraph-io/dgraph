@@ -45,12 +45,12 @@ func TestInitNode(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -61,12 +61,12 @@ func TestNodeInitialized(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	expected := NodeInitialized(cfg.Global.BasePath, false)
 	require.Equal(t, expected, false)
@@ -83,12 +83,12 @@ func TestNewNode(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -116,12 +116,12 @@ func TestNewNode_Authority(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -148,12 +148,12 @@ func TestStartNode(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -194,7 +194,7 @@ func TestInitNode_LoadGenesisData(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Init.Genesis = genPath
+	cfg.Init.GenesisRaw = genPath
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -207,7 +207,7 @@ func TestInitNode_LoadGenesisData(t *testing.T) {
 		ExtrinsicsRoot: trie.EmptyHash,
 	}
 
-	gen, err := genesis.NewGenesisFromJSON(genPath)
+	gen, err := genesis.NewGenesisFromJSONRaw(genPath)
 	require.Nil(t, err)
 
 	err = stateSrvc.Initialize(gen.GenesisData(), header, trie.NewEmptyTrie())
@@ -267,9 +267,9 @@ func TestInitNode_LoadStorageRoot(t *testing.T) {
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
 	cfg.Core.BabeThreshold = nil
-	cfg.Init.Genesis = genPath
+	cfg.Init.GenesisRaw = genPath
 
-	gen, err := genesis.NewGenesisFromJSON(genPath)
+	gen, err := genesis.NewGenesisFromJSONRaw(genPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +328,7 @@ func TestInitNode_LoadBalances(t *testing.T) {
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
 	cfg.Core.BabeThreshold = nil
-	cfg.Init.Genesis = genPath
+	cfg.Init.GenesisRaw = genPath
 
 	err := InitNode(cfg)
 	require.Nil(t, err)

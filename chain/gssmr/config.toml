@@ -14,7 +14,7 @@ babe = ""
 grandpa = ""
 
 [init]
-genesis = "./chain/gssmr/genesis.json"
+genesis-raw = "./chain/gssmr/genesis-raw.json"
 
 [account]
 key = ""

@@ -231,7 +231,7 @@ func TestGossamerCommand(t *testing.T) {
 	t.Skip() // TODO: not sure how relevant this is anymore, it also slows down the tests a lot
 
 	basePort := 7000
-	genesisPath := utils.GetGssmrGenesisPath()
+	genesisPath := utils.GetGssmrGenesisRawPath()
 
 	tempDir, err := ioutil.TempDir("", "gossamer-maintest-")
 	require.Nil(t, err)

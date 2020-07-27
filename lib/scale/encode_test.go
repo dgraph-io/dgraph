@@ -136,7 +136,6 @@ var encodeTests = []encodeTest{
 
 // Test strings for various values of n & mode. Also test strings with special characters
 func setUpStringTests() {
-
 	testString1 := "We love you! We believe in open source as wonderful form of giving."                           // n = 67
 	testString2 := strings.Repeat("We need a longer string to test with. Let's multiple this several times.", 230) // n = 72 * 230 = 16560
 	testString3 := "Let's test some special ASCII characters: ~  · © ÿ"                                           // n = 55 (UTF-8 encoding versus n = 51 with ASCII encoding)

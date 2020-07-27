@@ -101,9 +101,9 @@ func NewTestConfigWithFile(t *testing.T) (*Config, *os.File) {
 
 // NewTestGenesis returns a test genesis instance using "gssmr" raw data
 func NewTestGenesis(t *testing.T) *genesis.Genesis {
-	fp := utils.GetGssmrGenesisPath()
+	fp := utils.GetGssmrGenesisRawPath()
 
-	gssmrGen, err := genesis.NewGenesisFromJSON(fp)
+	gssmrGen, err := genesis.NewGenesisFromJSONRaw(fp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,36 @@ func NewTestGenesis(t *testing.T) *genesis.Genesis {
 	}
 }
 
-// NewTestGenesisFile returns a test genesis file using "gssmr" raw data
+// NewTestGenesisRawFile returns a test genesis-raw file using "gssmr" raw data
+func NewTestGenesisRawFile(t *testing.T, cfg *Config) *os.File {
+	dir := utils.NewTestDir(t)
+
+	file, err := ioutil.TempFile(dir, "genesis-")
+	require.Nil(t, err)
+
+	fp := utils.GetGssmrGenesisRawPath()
+
+	gssmrGen, err := genesis.NewGenesisFromJSONRaw(fp)
+	require.Nil(t, err)
+
+	gen := &genesis.Genesis{
+		Name:       cfg.Global.Name,
+		ID:         cfg.Global.ID,
+		Bootnodes:  cfg.Network.Bootnodes,
+		ProtocolID: cfg.Network.ProtocolID,
+		Genesis:    gssmrGen.GenesisFields(),
+	}
+
+	b, err := json.Marshal(gen)
+	require.Nil(t, err)
+
+	_, err = file.Write(b)
+	require.Nil(t, err)
+
+	return file
+}
+
+// NewTestGenesisFile returns a human-readable test genesis file using "gssmr" human readable data
 func NewTestGenesisFile(t *testing.T, cfg *Config) *os.File {
 	dir := utils.NewTestDir(t)
 

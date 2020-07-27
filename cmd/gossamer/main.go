@@ -52,8 +52,8 @@ var (
 		ArgsUsage: "",
 		Flags:     InitFlags,
 		Category:  "INIT",
-		Description: "The init command initializes the node databases and loads the genesis data from the genesis configuration file to state.\n" +
-			"\tUsage: gossamer init --genesis genesis.json",
+		Description: "The init command initializes the node databases and loads the genesis data from the raw genesis configuration file to state.\n" +
+			"\tUsage: gossamer init --genesis-raw genesis.json",
 	}
 	// accountCommand defines the "account" subcommand (ie, `gossamer account`)
 	accountCommand = cli.Command{
@@ -69,6 +69,18 @@ var (
 			"\tTo import a keystore file: gossamer account --import=path/to/file\n" +
 			"\tTo list keys: gossamer account --list",
 	}
+	// initCommand defines the "init" subcommand (ie, `gossamer init`)
+	buildSpecCommand = cli.Command{
+		Action:    FixFlagOrder(buildSpecAction),
+		Name:      "build-spec",
+		Usage:     "Generates genesis JSON data, and can convert to raw genesis data",
+		ArgsUsage: "",
+		Flags:     BuildSpecFlags,
+		Category:  "BUILD-SPEC",
+		Description: "The build-spec command outputs current genesis JSON data.\n" +
+			"\tUsage: gossamer build-spec\n" +
+			"\tTo generate raw genesis file: gossamer build-spec --raw",
+	}
 )
 
 // init initializes the cli application
@@ -83,6 +95,7 @@ func init() {
 		exportCommand,
 		initCommand,
 		accountCommand,
+		buildSpecCommand,
 	}
 	app.Flags = RootFlags
 }
@@ -221,6 +234,60 @@ func initAction(ctx *cli.Context) error {
 		logger.Error("failed to initialize node", "error", err)
 		return err
 	}
+
+	return nil
+}
+
+func buildSpecAction(ctx *cli.Context) error {
+	// set logger to critical, so output only contains genesis data
+	err := ctx.Set("log", "crit")
+	if err != nil {
+		return err
+	}
+	_, err = setupLogger(ctx)
+	if err != nil {
+		return err
+	}
+
+	var bs *dot.BuildSpec
+	if genesis := ctx.String(GenesisFlag.Name); genesis != "" {
+		bspec, e := dot.BuildFromGenesis(genesis)
+		if e != nil {
+			return e
+		}
+		bs = bspec
+	} else {
+		cfg, e := createBuildSpecConfig(ctx)
+		if e != nil {
+			return e
+		}
+		// expand data directory and update node configuration (performed separately
+		// from createDotConfig because dot config should not include expanded path)
+		cfg.Global.BasePath = utils.ExpandDir(cfg.Global.BasePath)
+
+		bspec, e := dot.BuildFromDB(cfg.Global.BasePath)
+		if e != nil {
+			return fmt.Errorf("error building spec from database, init must be run before build-spec or run build-spec with --genesis flag Error %s", e)
+		}
+		bs = bspec
+	}
+
+	if bs == nil {
+		return fmt.Errorf("error building genesis")
+	}
+
+	res := []byte{}  //nolint
+	if ctx.Bool(RawFlag.Name) {
+		res, err = bs.ToJSONRaw()
+	} else {
+		res, err = bs.ToJSON()
+	}
+	if err != nil {
+		return err
+	}
+	// TODO implement --output flag so that user can specify redirecting output a file.
+	//   then this can be removed (See issue #1029)
+	fmt.Printf("%s", res)
 
 	return nil
 }

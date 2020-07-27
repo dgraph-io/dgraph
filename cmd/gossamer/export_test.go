@@ -33,7 +33,7 @@ func TestExportCommand(t *testing.T) {
 	testDir := utils.NewTestDir(t)
 	testCfg := dot.NewTestConfig(t)
 
-	genFile := dot.NewTestGenesisFile(t, testCfg)
+	genFile := dot.NewTestGenesisRawFile(t, testCfg)
 
 	defer utils.RemoveTestDir(t)
 
@@ -52,8 +52,8 @@ func TestExportCommand(t *testing.T) {
 		expected    *dot.Config
 	}{
 		{
-			"Test gossamer export --config --genesis --basepath --name --log",
-			[]string{"config", "genesis", "basepath", "name", "log"},
+			"Test gossamer export --config --genesis-raw --basepath --name --log",
+			[]string{"config", "genesis-raw", "basepath", "name", "log"},
 			[]interface{}{testConfig, genFile.Name(), testDir, testName, "info"},
 			&dot.Config{
 				Global: dot.GlobalConfig{
@@ -73,7 +73,7 @@ func TestExportCommand(t *testing.T) {
 					FinalityGadgetLvl: "info",
 				},
 				Init: dot.InitConfig{
-					Genesis: genFile.Name(),
+					GenesisRaw: genFile.Name(),
 				},
 				Account: testCfg.Account,
 				Core:    testCfg.Core,
@@ -88,13 +88,13 @@ func TestExportCommand(t *testing.T) {
 			},
 		},
 		{
-			"Test gossamer export --config --genesis --bootnodes --log --force",
-			[]string{"config", "genesis", "bootnodes", "log", "force"},
+			"Test gossamer export --config --genesis-raw --bootnodes --log --force",
+			[]string{"config", "genesis-raw", "bootnodes", "log", "force"},
 			[]interface{}{testConfig, genFile.Name(), testBootnode, "info", "true"},
 			&dot.Config{
 				Global: testCfg.Global,
 				Init: dot.InitConfig{
-					Genesis: genFile.Name(),
+					GenesisRaw: genFile.Name(),
 				},
 				Log: dot.LogConfig{
 					CoreLvl:           "info",
@@ -119,13 +119,13 @@ func TestExportCommand(t *testing.T) {
 			},
 		},
 		{
-			"Test gossamer export --config --genesis --protocol --log --force",
-			[]string{"config", "genesis", "protocol", "log", "force"},
+			"Test gossamer export --config --genesis-raw --protocol --log --force",
+			[]string{"config", "genesis-raw", "protocol", "log", "force"},
 			[]interface{}{testConfig, genFile.Name(), testProtocol, "info", "true"},
 			&dot.Config{
 				Global: testCfg.Global,
 				Init: dot.InitConfig{
-					Genesis: genFile.Name(),
+					GenesisRaw: genFile.Name(),
 				},
 				Log: dot.LogConfig{
 					CoreLvl:           "info",

@@ -59,7 +59,7 @@ var (
 	// GenesisSixAuths is the genesis file that has 6 authorities
 	GenesisSixAuths string = filepath.Join(currentDir, "../utils/genesis_sixauths.json")
 	// GenesisDefault is the default gssmr genesis file
-	GenesisDefault string = filepath.Join(currentDir, "../..", "chain/gssmr/genesis.json")
+	GenesisDefault string = filepath.Join(currentDir, "../..", "chain/gssmr/genesis-raw.json")
 
 	// ConfigDefault is the default config file
 	ConfigDefault string = filepath.Join(currentDir, "../..", "chain/gssmr/config.toml")
@@ -94,7 +94,7 @@ func InitGossamer(idx int, basePath, genesis, config string) (*Node, error) {
 	cmdInit := exec.Command(gossamerCMD, "init",
 		"--config", config,
 		"--basepath", basePath,
-		"--genesis", genesis,
+		"--genesis-raw", genesis,
 		"--force",
 	)
 

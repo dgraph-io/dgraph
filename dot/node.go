@@ -58,11 +58,11 @@ func InitNode(cfg *Config) error {
 		"name", cfg.Global.Name,
 		"id", cfg.Global.ID,
 		"basepath", cfg.Global.BasePath,
-		"genesis", cfg.Init.Genesis,
+		"genesis-raw", cfg.Init.GenesisRaw,
 	)
 
 	// create genesis from configuration file
-	gen, err := genesis.NewGenesisFromJSON(cfg.Init.Genesis)
+	gen, err := genesis.NewGenesisFromJSONRaw(cfg.Init.GenesisRaw)
 	if err != nil {
 		return fmt.Errorf("failed to load genesis from file: %s", err)
 	}
@@ -105,7 +105,7 @@ func InitNode(cfg *Config) error {
 		"name", cfg.Global.Name,
 		"id", cfg.Global.ID,
 		"basepath", cfg.Global.BasePath,
-		"genesis", cfg.Init.Genesis,
+		"genesis-raw", cfg.Init.GenesisRaw,
 		"block", header.Number,
 	)
 

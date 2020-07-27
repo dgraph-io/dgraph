@@ -17,8 +17,11 @@
 package dot
 
 import (
+	"fmt"
+	"os"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/utils"
 	"github.com/stretchr/testify/require"
 )
@@ -42,4 +45,39 @@ func TestNewConfigAndFile(t *testing.T) {
 	// TODO: improve dot tests #687
 	require.NotNil(t, testCfg)
 	require.NotNil(t, testCfgFile)
+}
+
+// TestInitNode
+func TestNewTestGenesis(t *testing.T) {
+	cfg := NewTestConfig(t)
+	require.NotNil(t, cfg)
+
+	genFile := NewTestGenesisRawFile(t, cfg)
+	require.NotNil(t, genFile)
+
+	defer utils.RemoveTestDir(t)
+
+	cfg.Init.GenesisRaw = genFile.Name()
+	fmt.Printf("FileName %v\n", genFile.Name())
+}
+
+func TestNewTestGenesisFile(t *testing.T) {
+	cfg := NewTestConfig(t)
+	require.NotNil(t, cfg)
+
+	genHRFile := NewTestGenesisFile(t, cfg)
+	require.NotNil(t, genHRFile)
+	defer os.Remove(genHRFile.Name())
+
+	genRawFile := NewTestGenesisRawFile(t, cfg)
+	require.NotNil(t, genRawFile)
+	defer os.Remove(genRawFile.Name())
+
+	genHR, err := genesis.NewGenesisFromJSON(genHRFile.Name())
+	require.NoError(t, err)
+	genRaw, err := genesis.NewGenesisFromJSONRaw(genRawFile.Name())
+	require.NoError(t, err)
+
+	// values from raw genesis file should equal values generated from human readable genesis file
+	require.Equal(t, genRaw.Genesis.Raw[0], genHR.Genesis.Raw[0])
 }

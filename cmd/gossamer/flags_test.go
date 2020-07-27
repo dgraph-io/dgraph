@@ -30,7 +30,7 @@ import (
 // TestFixFlagOrder tests the FixFlagOrder method
 func TestFixFlagOrder(t *testing.T) {
 	testCfg, testConfig := dot.NewTestConfigWithFile(t)
-	genFile := dot.NewTestGenesisFile(t, testCfg)
+	genFile := dot.NewTestGenesisRawFile(t, testCfg)
 
 	defer utils.RemoveTestDir(t)
 
@@ -43,23 +43,23 @@ func TestFixFlagOrder(t *testing.T) {
 		values      []interface{}
 	}{
 		{
-			"Test gossamer --config --genesis --log --force",
-			[]string{"config", "genesis", "log", "force"},
+			"Test gossamer --config --genesis-raw --log --force",
+			[]string{"config", "genesis-raw", "log", "force"},
 			[]interface{}{testConfig.Name(), genFile.Name(), "trace", true},
 		},
 		{
-			"Test gossamer --config --genesis --force --log",
-			[]string{"config", "genesis", "force", "log"},
+			"Test gossamer --config --genesis-raw --force --log",
+			[]string{"config", "genesis-raw", "force", "log"},
 			[]interface{}{testConfig.Name(), genFile.Name(), true, "trace"},
 		},
 		{
-			"Test gossamer --config --force --genesis --log",
-			[]string{"config", "force", "genesis", "log"},
+			"Test gossamer --config --force --genesis-raw --log",
+			[]string{"config", "force", "genesis-raw", "log"},
 			[]interface{}{testConfig.Name(), true, genFile.Name(), "trace"},
 		},
 		{
-			"Test gossamer --force --config --genesis --log",
-			[]string{"force", "config", "genesis", "log"},
+			"Test gossamer --force --config --genesis-raw --log",
+			[]string{"force", "config", "genesis-raw", "log"},
 			[]interface{}{true, testConfig.Name(), genFile.Name(), "trace"},
 		},
 	}

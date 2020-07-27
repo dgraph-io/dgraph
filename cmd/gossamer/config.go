@@ -136,8 +136,20 @@ func createInitConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	setSystemInfoConfig(ctx, cfg)
 
 	// ensure configuration values match genesis and overwrite with genesis
-	updateDotConfigFromGenesisJSON(ctx, cfg)
+	updateDotConfigFromGenesisJSONRaw(ctx, cfg)
 
+	return cfg, nil
+}
+
+func createBuildSpecConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
+	cfg, err = loadConfigFile(ctx)
+	if err != nil {
+		logger.Error("failed to load toml configuration", "error", err)
+		return nil, err
+	}
+
+	// set global configuration values
+	setDotGlobalConfig(ctx, &cfg.Global)
 	return cfg, nil
 }
 
@@ -159,7 +171,7 @@ func createExportConfig(ctx *cli.Context) (*dot.Config, error) {
 	setDotInitConfig(ctx, &cfg.Init)
 
 	// ensure configuration values match genesis and overwrite with genesis
-	updateDotConfigFromGenesisJSON(ctx, cfg)
+	updateDotConfigFromGenesisJSONRaw(ctx, cfg)
 
 	// set cli configuration values
 	setDotAccountConfig(ctx, &cfg.Account)
@@ -233,14 +245,14 @@ func setLogConfig(ctx *cli.Context, globalCfg *dot.GlobalConfig, logCfg *dot.Log
 
 // setDotInitConfig sets dot.InitConfig using flag values from the cli context
 func setDotInitConfig(ctx *cli.Context, cfg *dot.InitConfig) {
-	// check --genesis flag and update init configuration
-	if genesis := ctx.String(GenesisFlag.Name); genesis != "" {
-		cfg.Genesis = genesis
+	// check --genesis-raw flag and update init configuration
+	if genesis := ctx.String(GenesisRawFlag.Name); genesis != "" {
+		cfg.GenesisRaw = genesis
 	}
 
 	logger.Debug(
 		"init configuration",
-		"genesis", cfg.Genesis,
+		"genesis-raw", cfg.GenesisRaw,
 	)
 }
 
@@ -473,18 +485,18 @@ func setSystemInfoConfig(ctx *cli.Context, cfg *dot.Config) {
 	cfg.System.SystemProperties = props
 }
 
-// updateDotConfigFromGenesisJSON updates the configuration based on the genesis file values
-func updateDotConfigFromGenesisJSON(ctx *cli.Context, cfg *dot.Config) {
+// updateDotConfigFromGenesisJSONRaw updates the configuration based on the raw genesis file values
+func updateDotConfigFromGenesisJSONRaw(ctx *cli.Context, cfg *dot.Config) {
 
-	// use default genesis file if genesis configuration not provided, for example,
-	// if we load a toml configuration file without a defined genesis init value or
-	// if we pass an empty string as the genesis init value using the --geneis flag
-	if cfg.Init.Genesis == "" {
-		cfg.Init.Genesis = DefaultCfg.Init.Genesis
+	// use default genesis-raw file if genesis configuration not provided, for example,
+	// if we load a toml configuration file without a defined genesis-raw init value or
+	// if we pass an empty string as the genesis init value using the --geneis-raw flag
+	if cfg.Init.GenesisRaw == "" {
+		cfg.Init.GenesisRaw = DefaultCfg.Init.GenesisRaw
 	}
 
 	// load Genesis from genesis configuration file
-	gen, err := genesis.NewGenesisFromJSON(cfg.Init.Genesis)
+	gen, err := genesis.NewGenesisFromJSONRaw(cfg.Init.GenesisRaw)
 	if err != nil {
 		logger.Error("failed to load genesis from file", "error", err)
 		return // exit

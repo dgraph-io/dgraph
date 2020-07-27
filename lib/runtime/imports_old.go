@@ -472,31 +472,12 @@ func ext_twox_128(context unsafe.Pointer, data, len, out int32) {
 
 	logger.Trace("[ext_twox_128] hashing...", "value", fmt.Sprintf("%s", memory[data:data+len]))
 
-	// compute xxHash64 twice with seeds 0 and 1 applied on given byte array
-	h0 := xxhash.NewS64(0) // create xxHash with 0 seed
-	_, err := h0.Write(memory[data : data+len])
+	res, err := common.Twox128Hash(memory[data : data+len])
 	if err != nil {
-		logger.Error("[ext_twox_128]", "error", err)
-		return
+		logger.Trace("error hashing in ext_twox_128", "error", err)
 	}
-	res0 := h0.Sum64()
-	hash0 := make([]byte, 8)
-	binary.LittleEndian.PutUint64(hash0, res0)
 
-	h1 := xxhash.NewS64(1) // create xxHash with 1 seed
-	_, err = h1.Write(memory[data : data+len])
-	if err != nil {
-		logger.Error("[ext_twox_128]", "error", err)
-		return
-	}
-	res1 := h1.Sum64()
-	hash1 := make([]byte, 8)
-	binary.LittleEndian.PutUint64(hash1, res1)
-
-	//concatenated result
-	both := append(hash0, hash1...)
-
-	copy(memory[out:out+16], both)
+	copy(memory[out:out+16], res)
 }
 
 //export ext_sr25519_generate

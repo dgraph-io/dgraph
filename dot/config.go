@@ -27,7 +27,6 @@ import (
 	"github.com/ChainSafe/gossamer/chain/gssmr"
 	"github.com/ChainSafe/gossamer/chain/ksmcc"
 	"github.com/ChainSafe/gossamer/dot/types"
-
 	log "github.com/ChainSafe/log15"
 	"github.com/naoina/toml"
 )
@@ -67,7 +66,7 @@ type LogConfig struct {
 
 // InitConfig is the configuration for the node initialization
 type InitConfig struct {
-	Genesis string `toml:"genesis"`
+	GenesisRaw string `toml:"genesis-raw"`
 }
 
 // AccountConfig is to marshal/unmarshal account config vars
@@ -131,7 +130,7 @@ func GssmrConfig() *Config {
 			LogLevel: gssmr.DefaultLvl,
 		},
 		Init: InitConfig{
-			Genesis: gssmr.DefaultGenesis,
+			GenesisRaw: gssmr.DefaultGenesisRaw,
 		},
 		Account: AccountConfig{
 			Key:    gssmr.DefaultKey,
@@ -172,7 +171,7 @@ func KsmccConfig() *Config {
 			BasePath: ksmcc.DefaultBasePath,
 		},
 		Init: InitConfig{
-			Genesis: ksmcc.DefaultGenesis,
+			GenesisRaw: ksmcc.DefaultGenesisRaw,
 		},
 		Account: AccountConfig{
 			Key:    ksmcc.DefaultKey,

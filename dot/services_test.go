@@ -34,12 +34,12 @@ func TestCreateStateService(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -56,7 +56,7 @@ func TestCreateCoreService(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
@@ -65,7 +65,7 @@ func TestCreateCoreService(t *testing.T) {
 	cfg.Core.Authority = false
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestCreateSyncService(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -120,12 +120,12 @@ func TestCreateNetworkService(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -148,7 +148,7 @@ func TestCreateRPCService(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
@@ -157,7 +157,7 @@ func TestCreateRPCService(t *testing.T) {
 	cfg.Core.Authority = false
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -190,14 +190,14 @@ func TestCreateBABEService(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
 
 	// TODO: improve dot tests #687
 	cfg.Core.Authority = true
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -222,14 +222,14 @@ func TestCreateGrandpaService(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
 
 	// TODO: improve dot tests #687
 	cfg.Core.Authority = true
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -266,7 +266,7 @@ func TestNewWebSocketServer(t *testing.T) {
 	cfg := NewTestConfig(t)
 	require.NotNil(t, cfg)
 
-	genFile := NewTestGenesisFile(t, cfg)
+	genFile := NewTestGenesisRawFile(t, cfg)
 	require.NotNil(t, genFile)
 
 	defer utils.RemoveTestDir(t)
@@ -274,7 +274,7 @@ func TestNewWebSocketServer(t *testing.T) {
 	cfg.Core.Authority = false
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
-	cfg.Init.Genesis = genFile.Name()
+	cfg.Init.GenesisRaw = genFile.Name()
 	cfg.RPC.WSEnabled = true
 	cfg.System.SystemName = "gossamer"
 
