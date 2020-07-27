@@ -55,6 +55,47 @@ func getAuthMeta(schema string) *testutil.AuthMeta {
 	}
 }
 
+func clearAll(b *testing.B, metaInfo *testutil.AuthMeta) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(b, metaInfo),
+		Query: `
+		mutation {
+  			deleteCuisine(filter: {}) {
+    			msg
+  			}
+		}
+		`,
+	}
+	gqlResponse := getParams.ExecuteAsPost(b, graphqlURL)
+	require.Nil(b, gqlResponse.Errors)
+
+	getParams = &common.GraphQLParams{
+		Headers: getJWT(b, metaInfo),
+		Query: `
+		mutation {
+  			deleteRestaurant(filter: {}) {
+    			msg
+  			}
+		}
+		`,
+	}
+	gqlResponse = getParams.ExecuteAsPost(b, graphqlURL)
+	require.Nil(b, gqlResponse.Errors)
+
+	getParams = &common.GraphQLParams{
+		Headers: getJWT(b, metaInfo),
+		Query: `
+		mutation {
+  			deleteDish(filter: {}) {
+    			msg
+  			}
+		}
+		`,
+	}
+	gqlResponse = getParams.ExecuteAsPost(b, graphqlURL)
+	require.Nil(b, gqlResponse.Errors)
+}
+
 // Running the Benchmark:
 // Command:  go test -bench=. -benchtime=60s
 //	go test -bench=. -benchtime=60s
@@ -207,6 +248,21 @@ type Cuisine struct {
 	Name   string `json:"name,omitempty"`
 	Public bool   `json:"public,omitempty"`
 	Type   string `json:"type,omitempty"`
+	Dishes []Dish `json:"dishes,omitempty"`
+}
+
+type Restaurant struct {
+	Xid      string    `json:"xid,omitempty"`
+	Name     string    `json:"name,omitempty"`
+	Currency string    `json:"currency,omitempty"`
+	Cuisines []Cuisine `json:"cuisines,omitempty"`
+}
+
+type Dish struct {
+	Id       string    `json:"id,omitempty"`
+	Name     string    `json:"name,omitempty"`
+	Type     string    `json:"type,omitempty"`
+	Cuisines []Cuisine `json:"cuisines,omitempty"`
 }
 
 type Cuisines []Cuisine
@@ -238,6 +294,24 @@ func (c Cuisines) add(b *testing.B, metaInfo *testutil.AuthMeta) {
 			}
 		`,
 		Variables: map[string]interface{}{"cuisines": c},
+	}
+	gqlResponse := getParams.ExecuteAsPost(b, graphqlURL)
+	require.Nil(b, gqlResponse.Errors)
+}
+
+type Restaurants []Restaurant
+
+func (r Restaurants) add(b *testing.B, metaInfo *testutil.AuthMeta) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(b, metaInfo),
+		Query: `
+			mutation AddR($restaurants: [AddRestaurantInput!]! ) {
+				addRestaurant(input: $restaurants) {
+    				numUids
+  				}
+			}
+		`,
+		Variables: map[string]interface{}{"restaurants": r},
 	}
 	gqlResponse := getParams.ExecuteAsPost(b, graphqlURL)
 	require.Nil(b, gqlResponse.Errors)
@@ -300,7 +374,72 @@ func BenchmarkOneLevelMutation(b *testing.B) {
 			}
 		})
 	}
+}
 
-	// Cleanup
-	cusines.delete(b, metaInfo)
+func BenchmarkMultiLevelMutation(b *testing.B) {
+	schemaFile := "schema.graphql"
+	schema, err := ioutil.ReadFile(schemaFile)
+	require.NoError(b, err)
+
+	metaInfo := getAuthMeta(string(schema))
+	metaInfo.AuthVars = map[string]interface{}{
+		"Role":  "ADMIN",
+		"Dish":  "Dish",
+		"RName": "Restaurant",
+		"RCurr": "$",
+	}
+
+	var restaurants Restaurants
+	items := 5
+	ci := 1
+	di := 1
+	for ri := 1; ri <= items; ri++ {
+		r := Restaurant{
+			Xid:      fmt.Sprintf("Test_Restaurant_%d", ri),
+			Name:     "TypeRestaurantAuth",
+			Currency: "$",
+		}
+		var cuisines Cuisines
+		for ; ci%items != 0; ci++ {
+			c := Cuisine{
+				Name:   fmt.Sprintf("Test_Cuisine_%d", ci),
+				Type:   "TypeCuisineAuth",
+				Public: true,
+			}
+			ci++
+			var dishes []Dish
+			for ; di%items != 0; di++ {
+				d := Dish{
+					Name: fmt.Sprintf("Test_Dish_%d", di),
+					Type: "TypeDishAuth",
+				}
+				dishes = append(dishes, d)
+			}
+			di++
+			c.Dishes = dishes
+			cuisines = append(cuisines, c)
+		}
+		r.Cuisines = cuisines
+		restaurants = append(restaurants, r)
+	}
+
+	mutations := []struct {
+		name      string
+		operation func(b *testing.B)
+	}{
+		{"add", func(b *testing.B) {
+			restaurants.add(b, metaInfo)
+			b.StopTimer()
+			clearAll(b, metaInfo)
+		}},
+	}
+
+	for _, mutation := range mutations {
+		b.Run(mutation.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				mutation.operation(b)
+			}
+		})
+	}
+	clearAll(b, metaInfo)
 }
