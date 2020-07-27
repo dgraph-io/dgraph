@@ -1,3 +1,3 @@
 #!/bin/bash
 # Used for Makefile or Docker Hub builds
-docker build -t ${DOCKER_IMAGE}:${DGRAPH_VERSION} --build-arg DGRAPH_VERSION=${DGRAPH_VERSION} .
+docker build -t dgraph/standalone:${DGRAPH_VERSION} --build-arg DGRAPH_VERSION=${DGRAPH_VERSION} .
