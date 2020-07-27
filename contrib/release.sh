@@ -30,7 +30,7 @@ check_command_exists() {
 }
 
 if [ "$#" -lt 1 ]; then
-    exit_error "Usage: $0 git_ref [docker_tag]
+    exit_error "Usage: $0 commitish [docker_tag]
 
 Examples:
 Build v1.2.3 release binaries
