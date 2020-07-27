@@ -673,8 +673,7 @@ func completeDgraphResult(
 		glog.Errorf("Could not process Dgraph result : \n%s", string(dgResult))
 		return nullResponse(
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
-				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
-				"Please let us know : https://github.com/dgraph-io/dgraph/issues.").
+				"This probably indicates a bug in Dgraph. Please let us know by filing an issue.").
 				WithLocations(field.Location()))
 	}
 
