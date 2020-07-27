@@ -34,6 +34,7 @@ import (
 // TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
 func TestLoaderXidmap(t *testing.T) {
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
 	ctx := context.Background()
 	testutil.DropAll(t, dg)
 	tmpDir, err := ioutil.TempDir("", "loader_test")
