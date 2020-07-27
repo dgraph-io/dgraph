@@ -1877,15 +1877,9 @@ func substituteVarInMapInBody(object, variables map[string]interface{}) error {
 			if err := substituteVarInMapInBody(val, variables); err != nil {
 				return err
 			}
-			if len(val) == 0 {
-				delete(object, k)
-			}
 		case []interface{}:
 			if err := substituteVarInSliceInBody(val, variables); err != nil {
 				return err
-			}
-			if len(val) == 0 {
-				delete(object, k)
 			}
 		default:
 			return errors.Errorf("got unexpected type value in map: %+v", v)
