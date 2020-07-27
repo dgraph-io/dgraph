@@ -575,21 +575,20 @@ func PageRange(count, offset, n int) (int, int) {
 func ValidateAddress(addr string) error {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 	if p, err := strconv.Atoi(port); err != nil || p <= 0 || p >= 65536 {
-		return fmt.Errorf("Invalid port")
+		return errors.Errorf("Invalid port")
 	}
 	if ip := net.ParseIP(host); ip != nil {
 		return nil
 	}
 	// try to parse as hostname as per hostname RFC
 	if len(strings.Replace(host, ".", "", -1)) > 255 {
-		return fmt.Errorf("Hostname should be less than or equal to 255 characters")
+		return errors.Errorf("Hostname should be less than or equal to 255 characters")
 	}
 	if !regExpHostName.MatchString(host) {
-		return fmt.Errorf("Invalid hostname")
+		return errors.Errorf("Invalid hostname")
 	}
 	return nil
 }
