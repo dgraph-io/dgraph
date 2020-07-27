@@ -484,11 +484,11 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 			x.Check(err)
 			list.Kv = append(list.Kv, kvs...)
 		} else {
-			val, err := pl.Marshal()
+			// val, err := pl.Marshal()
 			x.Check(err)
 			kv := &bpb.KV{
 				Key:      y.Copy(currentKey),
-				Value:    val,
+				Value:    []byte{1, 1},
 				UserMeta: userMeta,
 				Version:  writeVersionTs,
 			}
