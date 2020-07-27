@@ -81,7 +81,7 @@ func TestValidateAddress(t *testing.T) {
 				if len(st.err) != 0 {
 					require.EqualError(t, ValidateAddress(st.address), st.err)
 				} else {
-					require.Nil(t, ValidateAddress(st.address))
+					require.NoError(t, ValidateAddress(st.address))
 				}
 			})
 		}
@@ -105,7 +105,7 @@ func TestValidateAddress(t *testing.T) {
 				if len(st.err) != 0 {
 					require.EqualError(t, ValidateAddress(st.address), st.err)
 				} else {
-					require.Nil(t, ValidateAddress(st.address))
+					require.NoError(t, ValidateAddress(st.address))
 				}
 			})
 		}
