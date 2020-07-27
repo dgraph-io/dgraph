@@ -272,6 +272,7 @@ func inputTypeNameValidation(schema *ast.SchemaDocument) gqlerror.List {
 		"StringFullTextFilter": true,
 		"StringExactFilter":    true,
 		"StringHashFilter":     true,
+		"Subscription":         true,
 	}
 	definedInputTypes := make([]*ast.Definition, 0)
 
