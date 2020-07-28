@@ -371,7 +371,7 @@ func BenchmarkOneLevelMutation(b *testing.B) {
 		{"add", func(b *testing.B) {
 			before := time.Now()
 			cusines.add(b, metaInfo)
-			fmt.Println("Add Time: ", time.Now().Sub(before))
+			fmt.Println("Add Time: ", time.Since(before))
 			b.StopTimer()
 			cusines.delete(b, metaInfo)
 		}},
@@ -381,7 +381,7 @@ func BenchmarkOneLevelMutation(b *testing.B) {
 			b.StartTimer()
 			before := time.Now()
 			cusines.delete(b, metaInfo)
-			fmt.Println("Delete Time: ", time.Now().Sub(before))
+			fmt.Println("Delete Time: ", time.Since(before))
 		}},
 	}
 
@@ -449,7 +449,7 @@ func BenchmarkMultiLevelMutation(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		before := time.Now()
 		restaurants.add(b, metaInfo)
-		reqTime := time.Now().Sub(before)
+		reqTime := time.Since(before)
 		totalTime += reqTime
 		if i%10 == 0 {
 			avgTime := int64(totalTime) / int64(i+1)
@@ -539,7 +539,7 @@ func BenchmarkMutation(b *testing.B) {
 		before := time.Now()
 		gqlResponse := getUserParams.ExecuteAsPost(b, graphqlURL)
 		require.Nilf(b, gqlResponse.Errors, "%+v", gqlResponse.Errors)
-		reqTime := time.Now().Sub(before)
+		reqTime := time.Since(before)
 		totalTime += reqTime
 		if i%10 == 0 {
 			avgTime := int64(totalTime) / (int64(i + 1))
