@@ -29,7 +29,7 @@ export GO111MODULE := on
 
 # Build-time Go variables
 dgraphVersion	= github.com/dgraph-io/dgraph/x.dgraphVersion
-dgraphCodename  = github.com/dgraph-io/dgraph/x.dgraphCodename
+dgraphCodename	= github.com/dgraph-io/dgraph/x.dgraphCodename
 gitBranch	= github.com/dgraph-io/dgraph/x.gitBranch
 lastCommitSHA	= github.com/dgraph-io/dgraph/x.lastCommitSHA
 lastCommitTime	= github.com/dgraph-io/dgraph/x.lastCommitTime
