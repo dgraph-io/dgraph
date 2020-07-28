@@ -1896,11 +1896,6 @@ func substituteVarInSliceInBody(slice []interface{}, variables map[string]interf
 			if err != nil {
 				return err
 			}
-			//if ok {
-			//	slice[k] = vval
-			//} else {
-			//	delete(object, k)
-			//}
 			slice[k] = vval
 		case map[string]interface{}:
 			if err := substituteVarInMapInBody(val, variables); err != nil {
