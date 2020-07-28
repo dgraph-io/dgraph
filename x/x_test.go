@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,22 +67,24 @@ func TestValidateAddress(t *testing.T) {
 		testData := []struct {
 			name    string
 			address string
-			err     string
+			err     error
 		}{
-			{"Valid without port", "190.0.0.1", "address 190.0.0.1: missing port in address"},
-			{"Valid with port", "192.5.32.1:333", ""},
-			{"Invalid without port", "12.0.0", "address 12.0.0: missing port in address"},
+			{"Valid without port", "190.0.0.1",
+				errors.Errorf("address 190.0.0.1: missing port in address")},
+			{"Valid with port", "192.5.32.1:333", nil},
+			{"Invalid without port", "12.0.0",
+				errors.Errorf("address 12.0.0: missing port in address")},
 			// the following test returns true because 12.0.0 is considered as valid
 			// hostname
-			{"Invalid with port", "12.0.0:3333", ""},
-			{"Invalid port", "190.0.0.1:222222", "Invalid port"},
+			{"Invalid with port", "12.0.0:3333", nil},
+			{"Invalid port", "190.0.0.1:222222", errors.Errorf("Invalid port")},
 		}
 		for _, st := range testData {
 			t.Run(st.name, func(t *testing.T) {
-				if len(st.err) != 0 {
-					require.EqualError(t, ValidateAddress(st.address), st.err)
+				if st.err != nil {
+					require.Equal(t, st.err.Error(), ValidateAddress(st.address).Error())
 				} else {
-					require.NoError(t, ValidateAddress(st.address))
+					require.Nil(t, ValidateAddress(st.address))
 				}
 			})
 		}
@@ -91,21 +94,22 @@ func TestValidateAddress(t *testing.T) {
 		testData := []struct {
 			name    string
 			address string
-			err     string
+			err     error
 		}{
 			{"Valid without port", "[2001:db8::1]",
-				"address [2001:db8::1]: missing port in address"},
-			{"Valid with port", "[2001:db8::1]:8888", ""},
-			{"Invalid without port", "[2001:db8]", "address [2001:db8]: missing port in address"},
-			{"Invalid with port", "[2001:db8]:2222", "Invalid hostname"},
-			{"Invalid port", "[2001:db8]:222222", "Invalid port"},
+				errors.Errorf("address [2001:db8::1]: missing port in address")},
+			{"Valid with port", "[2001:db8::1]:8888", nil},
+			{"Invalid without port", "[2001:db8]",
+				errors.Errorf("address [2001:db8]: missing port in address")},
+			{"Invalid with port", "[2001:db8]:2222", errors.Errorf("Invalid hostname")},
+			{"Invalid port", "[2001:db8::1]:222222", errors.Errorf("Invalid port")},
 		}
 		for _, st := range testData {
 			t.Run(st.name, func(t *testing.T) {
-				if len(st.err) != 0 {
-					require.EqualError(t, ValidateAddress(st.address), st.err)
+				if st.err != nil {
+					require.Equal(t, st.err.Error(), ValidateAddress(st.address).Error())
 				} else {
-					require.NoError(t, ValidateAddress(st.address))
+					require.Nil(t, ValidateAddress(st.address))
 				}
 			})
 		}
