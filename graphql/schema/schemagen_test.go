@@ -17,8 +17,6 @@
 package schema
 
 import (
-	"fmt"
-	"github.com/golang/glog"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -128,7 +126,6 @@ func TestSchemas(t *testing.T) {
 		for _, sch := range tests["invalid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
 				_, errlist := NewHandler(sch.Input)
-				fmt.Printf("%v", errlist)
 				if diff := cmp.Diff(sch.Errlist, errlist); diff != "" {
 					t.Errorf("error mismatch (-want +got):\n%s", diff)
 				}
@@ -170,7 +167,6 @@ func TestAuthSchemas(t *testing.T) {
 				require.NoError(t, errlist, sch.Name)
 
 				_, authError := FromString(schHandler.GQLSchema())
-				glog.Infof("%v", authError)
 				if diff := cmp.Diff(authError, sch.Errlist); diff != "" {
 					t.Errorf("error mismatch (-want +got):\n%s", diff)
 				}
