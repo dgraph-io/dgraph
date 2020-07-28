@@ -1,5 +1,3 @@
-# Auto-generated with: [./compose -a 1 -z 1 --ratel -w]
-#
 version: "3.5"
 services:
   alpha1:
@@ -23,10 +21,145 @@ services:
     - type: bind
       source: ./backup
       target: /data/backup
-      read_only: true
+      read_only: false
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=2 --idx=1 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --encryption_key_file /data/keys/enc_key
+      --logtostderr -v=2 --idx=1 --encryption_key_file /data/keys/enc_key
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha2:
+    image: dgraph/dgraph:latest
+    container_name: alpha2
+    working_dir: /data/alpha2
+    depends_on:
+    - alpha1
+    labels:
+      cluster: test
+    ports:
+    - 8182:8182
+    - 9182:9182
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - type: bind
+      source: ./keys
+      target: /data/keys
+      read_only: true
+    - type: bind
+      source: ./backup
+      target: /data/backup
+      read_only: false
+    command: /gobin/dgraph alpha -o 102 --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180
+      --logtostderr -v=2 --idx=2 --encryption_key_file /data/keys/enc_key
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha3:
+    image: dgraph/dgraph:latest
+    container_name: alpha3
+    working_dir: /data/alpha3
+    depends_on:
+    - alpha2
+    labels:
+      cluster: test
+    ports:
+    - 8183:8183
+    - 9183:9183
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - type: bind
+      source: ./keys
+      target: /data/keys
+      read_only: true
+    - type: bind
+      source: ./backup
+      target: /data/backup
+      read_only: false
+    command: /gobin/dgraph alpha -o 103 --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180
+      --logtostderr -v=2 --idx=3 --encryption_key_file /data/keys/enc_key
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha4:
+    image: dgraph/dgraph:latest
+    container_name: alpha4
+    working_dir: /data/alpha4
+    depends_on:
+    - alpha3
+    labels:
+      cluster: test
+    ports:
+    - 8184:8184
+    - 9184:9184
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - type: bind
+      source: ./keys
+      target: /data/keys
+      read_only: true
+    - type: bind
+      source: ./backup
+      target: /data/backup
+      read_only: false
+    command: /gobin/dgraph alpha -o 104 --my=alpha4:7184 --lru_mb=1024 --zero=zero1:5180
+      --logtostderr -v=2 --idx=4 --encryption_key_file /data/keys/enc_key
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha5:
+    image: dgraph/dgraph:latest
+    container_name: alpha5
+    working_dir: /data/alpha5
+    depends_on:
+    - alpha4
+    labels:
+      cluster: test
+    ports:
+    - 8185:8185
+    - 9185:9185
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - type: bind
+      source: ./keys
+      target: /data/keys
+      read_only: true
+    - type: bind
+      source: ./backup
+      target: /data/backup
+      read_only: false
+    command: /gobin/dgraph alpha -o 105 --my=alpha5:7185 --lru_mb=1024 --zero=zero1:5180
+      --logtostderr -v=2 --idx=5 --encryption_key_file /data/keys/enc_key
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha6:
+    image: dgraph/dgraph:latest
+    container_name: alpha6
+    working_dir: /data/alpha6
+    depends_on:
+    - alpha5
+    labels:
+      cluster: test
+    ports:
+    - 8186:8186
+    - 9186:9186
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - type: bind
+      source: ./keys
+      target: /data/keys
+      read_only: true
+    - type: bind
+      source: ./backup
+      target: /data/backup
+      read_only: false
+    command: /gobin/dgraph alpha -o 106 --my=alpha6:7186 --lru_mb=1024 --zero=zero1:5180
+      --logtostderr -v=2 --idx=6 --encryption_key_file /data/keys/enc_key
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   ratel:
     image: dgraph/dgraph:latest
     container_name: ratel
@@ -47,6 +180,6 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --logtostderr -v=2
-      --bindall
+    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --logtostderr
+      -v=2 --bindall
 volumes: {}

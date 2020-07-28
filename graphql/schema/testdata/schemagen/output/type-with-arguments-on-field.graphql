@@ -1,0 +1,273 @@
+#######################
+# Input Schema
+#######################
+
+interface Abstract {
+	id: ID!
+	name(random: Int!, size: String): String!
+}
+
+type Message implements Abstract {
+	id: ID!
+	name(random: Int!, size: String): String!
+	content(pick: Int!, name: String): String!
+	author: String
+	datePosted: DateTime
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+enum Mode {
+	BATCH
+	SINGLE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete:AuthRule) on OBJECT
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE
+directive @cascade on FIELD
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddMessagePayload {
+	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	numUids: Int
+}
+
+type DeleteAbstractPayload {
+	abstract(filter: AbstractFilter, order: AbstractOrder, first: Int, offset: Int): [Abstract]
+	msg: String
+	numUids: Int
+}
+
+type DeleteMessagePayload {
+	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	msg: String
+	numUids: Int
+}
+
+type UpdateAbstractPayload {
+	abstract(filter: AbstractFilter, order: AbstractOrder, first: Int, offset: Int): [Abstract]
+	numUids: Int
+}
+
+type UpdateMessagePayload {
+	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	numUids: Int
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum AbstractOrderable {
+	name
+}
+
+enum MessageOrderable {
+	name
+	content
+	author
+	datePosted
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AbstractFilter {
+	id: [ID!]
+	not: AbstractFilter
+}
+
+input AbstractOrder {
+	asc: AbstractOrderable
+	desc: AbstractOrderable
+	then: AbstractOrder
+}
+
+input AbstractPatch {
+	name: String
+}
+
+input AbstractRef {
+	id: ID!
+}
+
+input AddMessageInput {
+	name: String!
+	content: String!
+	author: String
+	datePosted: DateTime
+}
+
+input MessageFilter {
+	id: [ID!]
+	not: MessageFilter
+}
+
+input MessageOrder {
+	asc: MessageOrderable
+	desc: MessageOrderable
+	then: MessageOrder
+}
+
+input MessagePatch {
+	name: String
+	content: String
+	author: String
+	datePosted: DateTime
+}
+
+input MessageRef {
+	id: ID
+	name: String
+	content: String
+	author: String
+	datePosted: DateTime
+}
+
+input UpdateAbstractInput {
+	filter: AbstractFilter!
+	set: AbstractPatch
+	remove: AbstractPatch
+}
+
+input UpdateMessageInput {
+	filter: MessageFilter!
+	set: MessagePatch
+	remove: MessagePatch
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getAbstract(id: ID!): Abstract
+	queryAbstract(filter: AbstractFilter, order: AbstractOrder, first: Int, offset: Int): [Abstract]
+	getMessage(id: ID!): Message
+	queryMessage(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	updateAbstract(input: UpdateAbstractInput!): UpdateAbstractPayload
+	deleteAbstract(filter: AbstractFilter!): DeleteAbstractPayload
+	addMessage(input: [AddMessageInput!]!): AddMessagePayload
+	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
+	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
+}
+

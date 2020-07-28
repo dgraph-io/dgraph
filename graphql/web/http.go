@@ -20,6 +20,11 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"strconv"
+	"time"
+
+	"github.com/dgrijalva/jwt-go/v4"
+	"google.golang.org/grpc/metadata"
 
 	"io"
 	"io/ioutil"
@@ -33,10 +38,16 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
 	"github.com/golang/glog"
-	"github.com/graph-gophers/graphql-transport-ws/graphqlws"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
+)
+
+type Headerkey string
+
+const (
+	touchedUidsHeader = "Graphql-TouchedUids"
 )
 
 // An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
@@ -86,6 +97,9 @@ func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *
 func write(w http.ResponseWriter, rr *schema.Response, acceptGzip bool) {
 	var out io.Writer = w
 
+	// set TouchedUids header
+	w.Header().Set(touchedUidsHeader, strconv.FormatUint(rr.GetExtensions().GetTouchedUids(), 10))
+
 	// If the receiver accepts gzip, then we would update the writer
 	// and send gzipped content instead.
 	if acceptGzip {
@@ -110,12 +124,45 @@ func (gs *graphqlSubscription) Subscribe(
 	operationName string,
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
+
+	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us in the context.
+	// And we are extracting the Auth JWT from those and passing them along.
+
+	header, _ := ctx.Value("Header").(json.RawMessage)
+	customClaims := &authorization.CustomClaims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: jwt.At(time.Time{}),
+		},
+	}
+	if len(header) > 0 {
+		payload := make(map[string]interface{})
+		if err := json.Unmarshal(header, &payload); err != nil {
+			return nil, err
+		}
+
+		name := authorization.GetHeader()
+		val, ok := payload[name].(string)
+		if ok {
+
+			md := metadata.New(map[string]string{
+				"authorizationJwt": val,
+			})
+			ctx = metadata.NewIncomingContext(ctx, md)
+
+			customClaims, err = authorization.ExtractCustomClaims(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	req := &schema.Request{
 		OperationName: operationName,
 		Query:         document,
 		Variables:     variableValues,
 	}
-	res, err := gs.graphqlHandler.poller.AddSubscriber(req)
+
+	res, err := gs.graphqlHandler.poller.AddSubscriber(req, customClaims)
 	if err != nil {
 		return nil, err
 	}

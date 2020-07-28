@@ -156,8 +156,10 @@ type params struct {
 	Recurse bool
 	// RecurseArgs stores the arguments passed to the @recurse directive.
 	RecurseArgs gql.RecurseArgs
-	// Cascade is true if the @cascade directive is specified.
-	Cascade bool
+	// Cascade is the list of predicates to apply @cascade to.
+	// __all__ is special to mean @cascade i.e. all the children of this subgraph are mandatory
+	// and should have values otherwise the node will be excluded.
+	Cascade []string
 	// IgnoreReflex is true if the @ignorereflex directive is specified.
 	IgnoreReflex bool
 
@@ -199,6 +201,9 @@ type params struct {
 	ExpandAll bool
 	// Shortest is true when the subgraph holds the results of a shortest paths query.
 	Shortest bool
+	// AllowedPreds is a list of predicates accessible to query in context of ACL.
+	// For OSS this should remain nil.
+	AllowedPreds []string
 }
 
 type pathMetadata struct {
@@ -532,7 +537,6 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		args := params{
 			Alias:        gchild.Alias,
-			Cascade:      gchild.Cascade || sg.Params.Cascade,
 			Expand:       gchild.Expand,
 			Facet:        gchild.Facets,
 			FacetsOrder:  gchild.FacetsOrder,
@@ -547,6 +551,15 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			GroupbyAttrs: gchild.GroupbyAttrs,
 			IsGroupBy:    gchild.IsGroupby,
 			IsInternal:   gchild.IsInternal,
+		}
+
+		// If parent has @cascade (with or without params), inherit @cascade (with no params)
+		if len(sg.Params.Cascade) > 0 {
+			args.Cascade = append(args.Cascade, "__all__")
+		}
+		// Allow over-riding at this level.
+		if len(gchild.Cascade) > 0 {
+			args.Cascade = gchild.Cascade
 		}
 
 		if gchild.IsCount {
@@ -771,6 +784,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Var:              gq.Var,
 		GroupbyAttrs:     gq.GroupbyAttrs,
 		IsGroupBy:        gq.IsGroupby,
+		AllowedPreds:     gq.AllowedPreds,
 	}
 
 	for argk := range gq.Args {
@@ -1296,6 +1310,13 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return nil
 	}
+
+	cascadeArgMap := make(map[string]bool)
+	for _, pred := range sg.Params.Cascade {
+		cascadeArgMap[pred] = true
+	}
+	cascadeAllPreds := cascadeArgMap["__all__"]
+
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
@@ -1311,7 +1332,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 			return err
 		}
 		sgPath = sgPath[:len(sgPath)-1] // Backtrack
-		if !child.Params.Cascade {
+		if len(child.Params.Cascade) == 0 {
 			continue
 		}
 
@@ -1320,7 +1341,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		child.updateUidMatrix()
 	}
 
-	if !sg.Params.Cascade {
+	if len(sg.Params.Cascade) == 0 {
 		goto AssignStep
 	}
 
@@ -1336,7 +1357,8 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 
 			// If the length of child UID list is zero and it has no valid value, then the
 			// current UID should be removed from this level.
-			if !child.IsInternal() &&
+			if (cascadeAllPreds || cascadeArgMap[child.Attr]) &&
+				!child.IsInternal() &&
 				// Check len before accessing index.
 				(len(child.valueMatrix) <= i || len(child.valueMatrix[i].Values) == 0) &&
 				(len(child.counts) <= i) &&
@@ -1653,6 +1675,16 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			// TODO: If we support value vars for list type then this needn't be true
 			sg.ExpandPreds = l.strList
 
+		case (v.Typ == gql.UidVar && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in"):
+			srcFuncArgs := sg.SrcFunc.Args[:0]
+
+			for _, uid := range l.Uids.GetUids() {
+				// We use base 10 here because the uid parser expects the uid to be in base 10.
+				arg := gql.Arg{Value: strconv.FormatUint(uid, 10)}
+				srcFuncArgs = append(srcFuncArgs, arg)
+			}
+			sg.SrcFunc.Args = srcFuncArgs
+
 		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
 			lists = append(lists, l.Uids)
 
@@ -1862,6 +1894,23 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			preds = getPredicatesFromTypes(typeNames)
+			// We check if enterprise is enabled and only
+			// restrict preds to allowed preds if ACL is turned on.
+			if worker.EnterpriseEnabled() && sg.Params.AllowedPreds != nil {
+				// Take intersection of both the predicate lists
+				intersectPreds := make([]string, 0)
+				hashMap := make(map[string]bool)
+				for _, allowedPred := range sg.Params.AllowedPreds {
+					hashMap[allowedPred] = true
+				}
+				for _, pred := range preds {
+					if _, found := hashMap[pred]; found {
+						intersectPreds = append(intersectPreds, pred)
+					}
+				}
+				preds = intersectPreds
+			}
+
 		default:
 			if len(child.ExpandPreds) > 0 {
 				span.Annotate(nil, "expand default")
@@ -2559,9 +2608,13 @@ func filterUidPredicates(ctx context.Context, preds []string) ([]string, error) 
 func UidsToHex(m map[string]uint64) map[string]string {
 	res := make(map[string]string)
 	for k, v := range m {
-		res[k] = fmt.Sprintf("%#x", v)
+		res[k] = UidToHex(v)
 	}
 	return res
+}
+
+func UidToHex(uid uint64) string {
+	return fmt.Sprintf("%#x", uid)
 }
 
 // Request wraps the state that is used when executing query.

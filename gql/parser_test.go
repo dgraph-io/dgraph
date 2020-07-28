@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -4346,19 +4347,6 @@ func TestFilterVarErr(t *testing.T) {
 	require.Contains(t, err.Error(), "Unexpected var()")
 }
 
-func TestEqUidFunctionErr(t *testing.T) {
-	query := `
-		{
-			me(func: eq(path_id, uid(x))) {
-				name
-			}
-		}
-	`
-	_, err := Parse(Request{Str: query})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Only val/count/len allowed as function within another. Got: uid")
-}
-
 func TestAggRoot1(t *testing.T) {
 	query := `
 		{
@@ -4906,6 +4894,103 @@ func TestParseGraphQLVarArrayUID_IN(t *testing.T) {
 	}
 }
 
+func TestUidInWithNoParseErrors(t *testing.T) {
+	query := `{
+		schoolVar as q(func: uid(5000))
+		me(func: uid(1, 23, 24 )) {
+			friend @filter(uid_in(school, uid(schoolVar))) {
+				name
+			}
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestUidInWithParseErrors(t *testing.T) {
+	tcases := []struct {
+		description string
+		query       string
+		expectedErr error
+	}{
+		{
+			description: "uid_in query with without argument",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, )) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("Empty Argument"),
+		},
+		{
+			description: "uid_in query with without argument (2)",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school )) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("uid_in function expects an argument, got none"),
+		},
+		{
+			description: "query with nested uid without variable",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, uid(5000))) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("Nested uid fn expects 1 uid variable, got 0"),
+		},
+		{
+			description: "query with nested uid with variable and constant",
+			query: `{
+				uidVar as q(func: uid( 5000))
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, uid(uidVar, 5001))) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("Nested uid fn expects only uid variable, got UID"),
+		},
+		{
+			description: "query with nested uid with two variables",
+			query: `{
+				uidVar1 as q(func: uid( 5000))
+				uidVar2 as q(func: uid( 5000))
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, uid(uidVar1, uidVar2))) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("Nested uid fn expects 1 uid variable, got 2"),
+		},
+		{
+			description: "query with nested uid with gql variable",
+			query: `query queryWithGQL($schoolUID: string = "5001"){
+				me(func: uid(1, 23, 24 )){
+					friend @filter(uid_in(school, uid( $schoolUID))) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("Nested uid fn expects 1 uid variable, got 0"),
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.description, func(t *testing.T) {
+			_, err := Parse(Request{Str: test.query})
+			require.Contains(t, err.Error(), test.expectedErr.Error())
+		})
+	}
+}
+
 func TestParseGraphQLValueArray(t *testing.T) {
 	q := `
 	{
@@ -5274,4 +5359,87 @@ func TestFilterWithEmpty(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "")
+}
+
+func TestCascade(t *testing.T) {
+	query := `{
+		names(func: has(name)) @cascade {
+		  name
+		}
+	  }`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Cascade[0], "__all__")
+}
+
+func TestCascadeParameterized(t *testing.T) {
+	query := `{
+		names(func: has(name)) @cascade(name, age) {
+		  name
+		  age
+		  dob
+		}
+	  }`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Cascade[0], "name")
+	require.Equal(t, gq.Query[0].Cascade[1], "age")
+}
+
+func TestBadCascadeParameterized(t *testing.T) {
+	badQueries := []string{
+		`{
+			names(func: has(name)) @cascade( {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade) {
+			  name
+			  age
+			  dob
+			}
+		 }`,
+		`{
+			names(func: has(name)) @cascade() {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade(,) {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade(name,) {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade(,name) {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+	}
+
+	for _, query := range badQueries {
+		_, err := Parse(Request{
+			Str: query,
+		})
+		require.Error(t, err)
+	}
 }

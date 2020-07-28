@@ -136,6 +136,10 @@ type Teacher implements People {
 }
 
 type Student implements People {
-	taughtBy: [Teacher]
+        taughtBy: [Teacher] @hasInverse(field: teaches)
 }
 
+type Person @withSubscription{
+    id: ID!
+    name: String!
+}

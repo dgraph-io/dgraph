@@ -17,6 +17,8 @@ import (
 	"context"
 	"io"
 	"net/url"
+	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -24,20 +26,25 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
+const (
+	errRestoreProposal = "cannot propose restore request"
+)
+
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, error) {
 	if req == nil {
-		return errors.Errorf("restore request cannot be nil")
+		return 0, errors.Errorf("restore request cannot be nil")
 	}
 
 	if err := UpdateMembershipState(ctx); err != nil {
-		return errors.Wrapf(err, "cannot update membership state before restore")
+		return 0, errors.Wrapf(err, "cannot update membership state before restore")
 	}
 	memState := GetMembershipState()
 
@@ -53,11 +60,11 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		Anonymous:    req.Anonymous,
 	}
 	if err := VerifyBackup(req.Location, req.BackupId, &creds, currentGroups); err != nil {
-		return errors.Wrapf(err, "failed to verify backup")
+		return 0, errors.Wrapf(err, "failed to verify backup")
 	}
 
 	if err := FillRestoreCredentials(req.Location, req); err != nil {
-		return errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
+		return 0, errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
 	}
 	req.RestoreTs = State.GetTimestamp(false)
 
@@ -69,21 +76,32 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		reqCopy.GroupId = gid
 
 		go func() {
-			errCh <- proposeRestoreOrSend(ctx, reqCopy)
+			errCh <- tryRestoreProposal(ctx, reqCopy)
 		}()
 	}
 
-	for range currentGroups {
-		if err := <-errCh; err != nil {
-			return errors.Wrapf(err, "cannot complete restore proposal")
-		}
+	restoreId, err := rt.Add()
+	if err != nil {
+		return 0, errors.Wrapf(err, "cannot assign ID to restore operation")
 	}
+	go func(restoreId int) {
+		errs := make([]error, 0)
+		for range currentGroups {
+			if err := <-errCh; err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if err := rt.Done(restoreId, errs); err != nil {
+			glog.Warningf("Could not mark restore operation with ID %d as done. Error: %s",
+				restoreId, err)
+		}
+	}(restoreId)
 
-	return nil
+	return restoreId, nil
 }
 
 func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
-	if groups().ServesGroup(req.GetGroupId()) {
+	if groups().ServesGroup(req.GetGroupId()) && groups().Node.AmLeader() {
 		_, err := (&grpcWorker{}).Restore(ctx, req)
 		return err
 	}
@@ -96,6 +114,40 @@ func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
 	c := pb.NewWorkerClient(con)
 
 	_, err := c.Restore(ctx, req)
+	return err
+}
+
+func retriableRestoreError(err error) bool {
+	switch {
+	case err == conn.ErrNoConnection:
+		// Try to recover from temporary connection issues.
+		return true
+	case strings.Contains(err.Error(), "Raft isn't initialized yet"):
+		// Try to recover if raft has not been initialized.
+		return true
+	case strings.Contains(err.Error(), errRestoreProposal):
+		// Do not try to recover from other errors when sending the proposal.
+		return false
+	default:
+		// Try to recover from other errors (e.g wrong group, waiting for timestamp, etc).
+		return true
+	}
+}
+
+func tryRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
+	var err error
+	for i := 0; i < 10; i++ {
+		err = proposeRestoreOrSend(ctx, req)
+		if err == nil {
+			return nil
+		}
+
+		if retriableRestoreError(err) {
+			time.Sleep(time.Second)
+			continue
+		}
+		return err
+	}
 	return err
 }
 
@@ -114,7 +166,7 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 
 	err := groups().Node.proposeAndWait(ctx, &pb.Proposal{Restore: req})
 	if err != nil {
-		return &emptyRes, errors.Wrapf(err, "cannot propose restore request")
+		return &emptyRes, errors.Wrapf(err, errRestoreProposal)
 	}
 
 	return &emptyRes, nil
@@ -171,7 +223,9 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 			req.GroupId)
 	}
 	for _, pred := range preds {
-		if tablet, err := groups().Tablet(pred); err != nil {
+		// Force the tablet to be moved to this group, even if it's currently being served
+		// by another group.
+		if tablet, err := groups().ForceTablet(pred); err != nil {
 			return errors.Wrapf(err, "cannot create tablet for restored predicate %s", pred)
 		} else if tablet.GetGroupId() != req.GroupId {
 			return errors.Errorf("cannot assign tablet for pred %s to group %d", pred, req.GroupId)
@@ -225,12 +279,21 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	if req.VaultField != "" {
 		config.Set("vault_field", req.VaultField)
 	}
+	if req.VaultFormat != "" {
+		config.Set("vault_format", req.VaultField)
+	}
 	return config, nil
 }
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId,
-		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
+		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+			if groupId != req.GroupId {
+				// LoadBackup will try to call the backup function for every group.
+				// Exit here if the group is not the one indicated by the request.
+				return 0, nil
+			}
+
 			cfg, err := getEncConfig(req)
 			if err != nil {
 				return 0, errors.Wrapf(err, "unable to get encryption config")
@@ -277,4 +340,8 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(res.Err, "cannot write backup")
 	}
 	return nil
+}
+
+func ProcessRestoreStatus(ctx context.Context, restoreId int) (*RestoreStatus, error) {
+	return rt.Status(restoreId), nil
 }

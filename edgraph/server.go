@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,7 +38,6 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -96,6 +96,16 @@ var (
 // Server implements protos.DgraphServer
 type Server struct{}
 
+// graphQLSchemaNode represents the node which contains GraphQL schema
+type graphQLSchemaNode struct {
+	Uid    string `json:"uid"`
+	Schema string `json:"dgraph.graphql.schema"`
+}
+
+type existingGQLSchemaQryResp struct {
+	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
+}
+
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
@@ -127,6 +137,156 @@ func PeriodicallyPostTelemetry() {
 	}
 }
 
+// GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
+// If multiple schema nodes were found, it returns an error.
+func GetGQLSchema() (uid, graphQLSchema string, err error) {
+	resp, err := (&Server{}).Query(context.WithValue(context.Background(), Authorize, false),
+		&api.Request{
+			Query: `
+			query {
+			  ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
+				uid
+				dgraph.graphql.schema
+			  }
+			}`})
+	if err != nil {
+		return "", "", err
+	}
+
+	var result existingGQLSchemaQryResp
+	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
+		return "", "", errors.Wrap(err, "Couldn't unmarshal response from Dgraph query")
+	}
+
+	if len(result.ExistingGQLSchema) == 0 {
+		// no schema has been stored yet in Dgraph
+		return "", "", nil
+	} else if len(result.ExistingGQLSchema) == 1 {
+		// we found an existing GraphQL schema
+		gqlSchemaNode := result.ExistingGQLSchema[0]
+		return gqlSchemaNode.Uid, gqlSchemaNode.Schema, nil
+	}
+
+	// found multiple GraphQL schema nodes, this should never happen
+	return "", "", worker.ErrMultipleGraphQLSchemaNodes
+}
+
+// UpdateGQLSchema updates the GraphQL and Dgraph schemas using the given inputs.
+// It first validates and parses the dgraphSchema given in input. If that fails,
+// it returns an error. All this is done on the alpha on which the update request is received.
+// Then it sends an update request to the worker, which is executed only on Group-1 leader.
+func UpdateGQLSchema(ctx context.Context, gqlSchema,
+	dgraphSchema string) (*pb.UpdateGraphQLSchemaResponse, error) {
+	var err error
+	parsedDgraphSchema := &schema.ParsedSchema{}
+
+	// The schema could be empty if it only has custom types/queries/mutations.
+	if dgraphSchema != "" {
+		op := &api.Operation{Schema: dgraphSchema}
+		if err = validateAlterOperation(ctx, op); err != nil {
+			return nil, err
+		}
+		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(op); err != nil {
+			return nil, err
+		}
+	}
+
+	return worker.UpdateGQLSchemaOverNetwork(ctx, &pb.UpdateGraphQLSchemaRequest{
+		StartTs:       worker.State.GetTimestamp(false),
+		GraphqlSchema: gqlSchema,
+		DgraphPreds:   parsedDgraphSchema.Preds,
+		DgraphTypes:   parsedDgraphSchema.Types,
+	})
+}
+
+// validateAlterOperation validates the given operation for alter.
+func validateAlterOperation(ctx context.Context, op *api.Operation) error {
+	// The following code block checks if the operation should run or not.
+	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.DropOp == api.Operation_NONE {
+		// Must have at least one field set. This helps users if they attempt
+		// to set a field but use the wrong name (could be decoded from JSON).
+		return errors.Errorf("Operation must have at least one field set")
+	}
+	if err := x.HealthCheck(); err != nil {
+		return err
+	}
+
+	if isDropAll(op) && op.DropOp == api.Operation_DATA {
+		return errors.Errorf("Only one of DropAll and DropData can be true")
+	}
+
+	if !isMutationAllowed(ctx) {
+		return errors.Errorf("No mutations allowed by server.")
+	}
+	if _, err := hasAdminAuth(ctx, "Alter"); err != nil {
+		glog.Warningf("Alter denied with error: %v\n", err)
+		return err
+	}
+
+	if err := authorizeAlter(ctx, op); err != nil {
+		glog.Warningf("Alter denied with error: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+// parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
+// struct, and performs some checks to make sure that the schema is valid.
+func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, error) {
+	// If a background task is already running, we should reject all the new alter requests.
+	if schema.State().IndexingInProgress() {
+		return nil, errIndexingInProgress
+	}
+
+	result, err := schema.Parse(op.Schema)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, update := range result.Preds {
+		// Pre-defined predicates cannot be altered but let the update go through
+		// if the update is equal to the existing one.
+		if schema.IsPreDefPredChanged(update) {
+			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
+				" modified", update.Predicate)
+		}
+
+		if err := validatePredName(update.Predicate); err != nil {
+			return nil, err
+		}
+		// Users are not allowed to create a predicate under the reserved `dgraph.` namespace. But,
+		// there are pre-defined predicates (subset of reserved predicates), and for them we allow
+		// the schema update to go through if the update is equal to the existing one.
+		// So, here we check if the predicate is reserved but not pre-defined to block users from
+		// creating predicates in reserved namespace.
+		if x.IsReservedPredicate(update.Predicate) && !x.IsPreDefinedPredicate(update.Predicate) {
+			return nil, errors.Errorf("Can't alter predicate `%s` as it is prefixed with `dgraph.`"+
+				" which is reserved as the namespace for dgraph's internal types/predicates.",
+				update.Predicate)
+		}
+	}
+
+	for _, typ := range result.Types {
+		// Pre-defined types cannot be altered but let the update go through
+		// if the update is equal to the existing one.
+		if schema.IsPreDefTypeChanged(typ) {
+			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
+				typ.TypeName)
+		}
+
+		// Users are not allowed to create types in reserved namespace. But, there are pre-defined
+		// types for which the update should go through if the update is equal to the existing one.
+		if x.IsReservedType(typ.TypeName) && !x.IsPreDefinedType(typ.TypeName) {
+			return nil, errors.Errorf("Can't alter type `%s` as it is prefixed with `dgraph.` "+
+				"which is reserved as the namespace for dgraph's internal types/predicates.",
+				typ.TypeName)
+		}
+	}
+
+	return result, nil
+}
+
 // Alter handles requests to change the schema or remove parts or all of the data.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
@@ -136,35 +296,14 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// Always print out Alter operations because they are important and rare.
 	glog.Infof("Received ALTER op: %+v", op)
 
-	// The following code block checks if the operation should run or not.
-	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.DropOp == api.Operation_NONE {
-		// Must have at least one field set. This helps users if they attempt
-		// to set a field but use the wrong name (could be decoded from JSON).
-		return nil, errors.Errorf("Operation must have at least one field set")
-	}
-	empty := &api.Payload{}
-	if err := x.HealthCheck(); err != nil {
-		return empty, err
-	}
-
-	if isDropAll(op) && op.DropOp == api.Operation_DATA {
-		return nil, errors.Errorf("Only one of DropAll and DropData can be true")
-	}
-
-	if !isMutationAllowed(ctx) {
-		return nil, errors.Errorf("No mutations allowed by server.")
-	}
-	if err := isAlterAllowed(ctx); err != nil {
-		glog.Warningf("Alter denied with error: %v\n", err)
-		return nil, err
-	}
-
-	if err := authorizeAlter(ctx, op); err != nil {
-		glog.Warningf("Alter denied with error: %v\n", err)
+	// check if the operation is valid
+	if err := validateAlterOperation(ctx, op); err != nil {
 		return nil, err
 	}
 
 	defer glog.Infof("ALTER op: %+v done", op)
+
+	empty := &api.Payload{}
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
@@ -176,7 +315,13 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		m.DropOp = pb.Mutations_ALL
 		_, err := query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
 
+		// insert empty GraphQL schema, so all alphas get notified to
+		// reset their in-memory GraphQL schema
+		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
 		ResetAcl()
 		return empty, err
@@ -187,9 +332,20 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
 
-		m.DropOp = pb.Mutations_DATA
-		_, err := query.ApplyMutations(ctx, m)
+		// query the GraphQL schema and keep it in memory, so it can be inserted again
+		_, graphQLSchema, err := GetGQLSchema()
+		if err != nil {
+			return empty, err
+		}
 
+		m.DropOp = pb.Mutations_DATA
+		_, err = query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
+		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
 		// recreate the admin account after a drop data operation
 		ResetAcl()
 		return empty, err
@@ -207,11 +363,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			attr = op.DropValue
 		}
 
-		// Reserved predicates cannot be dropped.
-		if x.IsReservedPredicate(attr) {
-			err := errors.Errorf("predicate %s is reserved and is not allowed to be dropped",
-				attr)
-			return empty, err
+		// Pre-defined predicates cannot be dropped.
+		if x.IsPreDefinedPredicate(attr) {
+			return empty, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
+				" dropped", attr)
 		}
 
 		nq := &api.NQuad{
@@ -235,34 +390,21 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
 		}
 
+		// Pre-defined types cannot be dropped.
+		if x.IsPreDefinedType(op.DropValue) {
+			return empty, errors.Errorf("type %s is pre-defined and is not allowed to be dropped",
+				op.DropValue)
+		}
+
 		m.DropOp = pb.Mutations_TYPE
 		m.DropValue = op.DropValue
 		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
 
-	// If a background task is already running, we should reject all the new alter requests.
-	if schema.State().IndexingInProgress() {
-		return nil, errIndexingInProgress
-	}
-
-	result, err := schema.Parse(op.Schema)
+	result, err := parseSchemaFromAlterOperation(op)
 	if err != nil {
-		return empty, err
-	}
-
-	for _, update := range result.Preds {
-		// Reserved predicates cannot be altered but let the update go through
-		// if the update is equal to the existing one.
-		if schema.IsReservedPredicateChanged(update.Predicate, update) {
-			err := errors.Errorf("predicate %s is reserved and is not allowed to be modified",
-				update.Predicate)
-			return nil, err
-		}
-
-		if err := validatePredName(update.Predicate); err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	glog.Infof("Got schema: %+v\n", result)
@@ -275,15 +417,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	// wait for indexing to complete or context to be canceled.
-	for !op.RunInBackground {
-		if ctx.Err() != nil {
-			return empty, ctx.Err()
-		}
-		if !schema.State().IndexingInProgress() {
-			break
-		}
-		time.Sleep(time.Second * 2)
+	if err = worker.WaitForIndexingOrCtxError(ctx, !op.RunInBackground); err != nil {
+		return empty, err
 	}
+
 	return empty, nil
 }
 
@@ -297,9 +434,6 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
-	}
-	if x.WorkerConfig.LudicrousMode {
-		qc.req.StartTs = worker.State.GetTimestamp(false)
 	}
 
 	start := time.Now()
@@ -747,7 +881,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, errors.Errorf("No membership state found")
 	}
 
-	m := jsonpb.Marshaler{}
+	m := jsonpb.Marshaler{EmitDefaults: true}
 	var jsonState bytes.Buffer
 	if err := m.Marshal(&jsonState, ms); err != nil {
 		return nil, errors.Errorf("Error marshalling state information to JSON")
@@ -922,6 +1056,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
+		if err = authorizeSchemaQuery(ctx, &er); err != nil {
+			return resp, err
+		}
 		sort.Slice(er.SchemaNode, func(i, j int) bool {
 			return er.SchemaNode[i].Predicate < er.SchemaNode[j].Predicate
 		})
@@ -1124,11 +1261,19 @@ func isMutationAllowed(ctx context.Context) bool {
 
 var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Alter operations.")
 
-func isAlterAllowed(ctx context.Context) error {
-	p, ok := peer.FromContext(ctx)
-	if ok {
-		glog.Infof("Got Alter request from %q\n", p.Addr)
+func hasAdminAuth(ctx context.Context, tag string) (net.Addr, error) {
+	ipAddr, err := x.HasWhitelistedIP(ctx)
+	if err != nil {
+		return nil, err
 	}
+	glog.Infof("Got %s request from: %q\n", tag, ipAddr)
+	if err = hasPoormansAuth(ctx); err != nil {
+		return nil, err
+	}
+	return ipAddr, nil
+}
+
+func hasPoormansAuth(ctx context.Context) error {
 	if len(worker.Config.AuthToken) == 0 {
 		return nil
 	}

@@ -118,6 +118,7 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Live.Conf).Stop()
 			if err := run(); err != nil {
+				x.Check2(fmt.Fprintf(os.Stderr, "%s", err.Error()))
 				os.Exit(1)
 			}
 		},
@@ -482,7 +483,7 @@ func run() error {
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {
-			errCh <- l.processFile(ctx, file, opt.key)
+			errCh <- errors.Wrapf(l.processFile(ctx, file, opt.key), file)
 		}(file)
 	}
 
@@ -493,7 +494,7 @@ func run() error {
 
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			fmt.Printf("Error while processing data file %q: %s\n", filesList[i], err)
+			fmt.Printf("Error while processing data file %s\n", err)
 			return err
 		}
 	}

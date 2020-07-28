@@ -56,6 +56,7 @@ type Server struct {
 
 	NumReplicas int
 	state       *pb.MembershipState
+	nextRaftId  uint64
 
 	nextLeaseId uint64
 	nextTxnTs   uint64
@@ -83,6 +84,7 @@ func (s *Server) Init() {
 		Groups: make(map[uint32]*pb.Group),
 		Zeros:  make(map[uint64]*pb.Member),
 	}
+	s.nextRaftId = 1
 	s.nextLeaseId = 1
 	s.nextTxnTs = 1
 	s.nextGroup = 1
@@ -217,7 +219,10 @@ func (s *Server) hasLeader(gid uint32) bool {
 func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	s.Lock()
 	defer s.Unlock()
+
 	s.state = state
+	s.nextRaftId = x.Max(s.nextRaftId, s.state.MaxRaftId+1)
+
 	if state.Zeros == nil {
 		state.Zeros = make(map[uint64]*pb.Member)
 	}
@@ -491,7 +496,11 @@ func (s *Server) Connect(ctx context.Context,
 			}
 		}
 		if m.Id == 0 {
-			m.Id = s.state.MaxRaftId + 1
+			// In certain situations, the proposal can be sent and return with an error.
+			// However,  Dgraph will keep retrying the proposal. To avoid assigning duplicating
+			// IDs, the couter is incremented every time a proposal is created.
+			m.Id = s.nextRaftId
+			s.nextRaftId += 1
 			proposal.MaxRaftId = m.Id
 		}
 
@@ -578,7 +587,7 @@ func (s *Server) ShouldServe(
 	// Check who is serving this tablet.
 	tab := s.ServingTablet(tablet.Predicate)
 	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
-	if tab != nil {
+	if tab != nil && !tablet.Force {
 		// Someone is serving this tablet. Could be the caller as well.
 		// The caller should compare the returned group against the group it holds to check who's
 		// serving.
@@ -593,8 +602,7 @@ func (s *Server) ShouldServe(
 
 	// Set the tablet to be served by this server's group.
 	var proposal pb.ZeroProposal
-	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
-	tablet.Force = false
+
 	if x.IsReservedPredicate(tablet.Predicate) {
 		// Force all the reserved predicates to be allocated to group 1.
 		// This is to make it easier to stream ACL updates to all alpha servers

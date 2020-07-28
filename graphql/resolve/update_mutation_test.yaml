@@ -27,7 +27,7 @@
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
+      x as updatePost(func: uid(0x123, 0x124)) @filter(type(Post)) {
         uid
       }
     }
@@ -61,7 +61,7 @@
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
+      x as updatePost(func: uid(0x123, 0x124)) @filter(type(Post)) {
         uid
       }
     }
@@ -95,7 +95,7 @@
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updatePost(func: type(Post)) @filter(uid(0x123, 0x124)) {
+      x as updatePost(func: uid(0x123, 0x124)) @filter(type(Post)) {
         uid
       }
     }
@@ -137,7 +137,7 @@
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateHuman(func: type(Human)) @filter(uid(0x123)) {
+      x as updateHuman(func: uid(0x123)) @filter(type(Human)) {
         uid
       }
     }
@@ -162,7 +162,7 @@
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateCharacter(func: type(Character)) @filter(uid(0x123)) {
+      x as updateCharacter(func: uid(0x123)) @filter(type(Character)) {
         uid
       }
     }
@@ -289,7 +289,7 @@
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateEditor(func: type(Editor)) @filter((eq(Editor.code, "editor") AND uid(0x1, 0x2))) {
+      x as updateEditor(func: uid(0x1, 0x2)) @filter((eq(Editor.code, "editor") AND type(Editor))) {
         uid
       }
     }
@@ -334,7 +334,7 @@
       cond: "@if(eq(len(Post3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
         uid
       }
       Post3 as Post3(func: uid(0x456)) @filter(type(Post)) {
@@ -452,7 +452,7 @@
       cond: "@if(eq(len(Post3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
         uid
       }
       Post3 as Post3(func: uid(0x124)) @filter(type(Post)) {
@@ -494,7 +494,7 @@
       cond: "@if(eq(len(Post3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
         uid
       }
       Post3 as Post3(func: uid(0x456)) @filter(type(Post)) {
@@ -555,7 +555,7 @@
       cond: "@if(eq(len(Post6), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
         uid
       }
       Post3 as Post3(func: uid(0x456)) @filter(type(Post)) {
@@ -614,7 +614,7 @@
       cond: "@if(eq(len(Post3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
         uid
       }
       Post3 as Post3(func: uid(0x456)) @filter(type(Post)) {
@@ -660,7 +660,7 @@
       cond: "@if(gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
         uid
       }
     }
@@ -694,23 +694,16 @@
   explanation: "The update has a choice of linking to new or existing state"
   dgmutations:
     - setjson: |
-        { "uid" : "uid(x)",
-          "Author.country": {
-            "uid": "_:Country3",
-            "dgraph.type": ["Country"],
-            "Country.name": "New Country",
-            "Country.states": [ {
-              "uid": "_:State5",
-              "dgraph.type": ["State"],
-              "State.code": "dg",
-              "State.name": "Dgraph",
-              "State.country": {
-                "uid": "_:Country3"
-              }
-            } ]
-          }
+        {
+          "State.code": "dg",
+          "State.name": "Dgraph",
+          "dgraph.type": [
+            "State"
+          ],
+          "uid": "_:State5"
         }
       cond: "@if(eq(len(State5), 0) AND gt(len(x), 0))"
+  dgmutationssec:
     - setjson: |
         { "uid" : "uid(x)",
           "Author.country": {
@@ -735,7 +728,16 @@
       cond: "@if(eq(len(State5), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
+        uid
+      }
+      State5 as State5(func: eq(State.code, "dg")) @filter(type(State)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
         uid
       }
       State5 as State5(func: eq(State.code, "dg")) @filter(type(State)) {
@@ -797,7 +799,7 @@
       cond: "@if(eq(len(State5), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
         uid
       }
       State5 as State5(func: eq(State.code, "dg")) @filter(type(State)) {
@@ -853,7 +855,7 @@
       cond: "@if(eq(len(House3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateOwner(func: type(Owner)) @filter(uid(0x123)) {
+      x as updateOwner(func: uid(0x123)) @filter(type(Owner)) {
         uid
       }
       House3 as House3(func: uid(0x456)) @filter(type(House)) {
@@ -872,7 +874,7 @@
   gqlmutation: |
     mutation updateMovieDirector($patch: UpdateMovieDirectorInput!) {
       updateMovieDirector(input: $patch) {
-        moviedirector {
+        movieDirector {
           id
         }
       }
@@ -899,7 +901,7 @@
       cond: "@if(eq(len(Movie3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateMovieDirector(func: type(MovieDirector)) @filter(uid(0x123)) {
+      x as updateMovieDirector(func: uid(0x123)) @filter(type(MovieDirector)) {
         uid
       }
       Movie3 as Movie3(func: uid(0x456)) @filter(type(Movie)) {
@@ -912,7 +914,7 @@
   gqlmutation: |
     mutation updateMovieDirector($patch: UpdateMovieDirectorInput!) {
       updateMovieDirector(input: $patch) {
-        moviedirector {
+        movieDirector {
           id
         }
       }
@@ -939,7 +941,7 @@
       cond: "@if(eq(len(Movie3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateMovieDirector(func: type(MovieDirector)) @filter(uid(0x123)) {
+      x as updateMovieDirector(func: uid(0x123)) @filter(type(MovieDirector)) {
         uid
       }
       Movie3 as Movie3(func: uid(0x456)) @filter(type(Movie)) {
@@ -980,7 +982,16 @@
   is same, it should not return error."
   dgquery: |-
     query {
-      x as updateStudent(func: type(Student)) @filter(uid(0x123)) {
+      x as updateStudent(func: uid(0x123)) @filter(type(Student)) {
+        uid
+      }
+      Teacher4 as Teacher4(func: eq(People.xid, "T1")) @filter(type(Teacher)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateStudent(func: uid(0x123)) @filter(type(Student)) {
         uid
       }
       Teacher4 as Teacher4(func: eq(People.xid, "T1")) @filter(type(Teacher)) {
@@ -990,61 +1001,25 @@
   dgmutations:
     - setjson: |
         {
-          "Student.taughtBy": [
-            {
-              "People.name": "Teacher1",
-              "People.xid": "T1",
-              "dgraph.type": [ "Teacher", "People" ],
-              "uid": "_:Teacher4"
-            },
-            {
-              "dgraph.type": [ "Teacher", "People" ],
-              "uid": "_:Teacher4"
-            }
+          "People.name": "Teacher1",
+          "People.xid": "T1",
+          "dgraph.type": [
+            "Teacher",
+            "People"
           ],
-          "uid": "uid(x)"
+          "uid": "_:Teacher4"
         }
-      cond: "@if(eq(len(Teacher4), 0) AND eq(len(Teacher4), 0) AND gt(len(x), 0))"
+      cond: "@if(eq(len(Teacher4), 0) AND gt(len(x), 0))"
+  dgmutationssec:
     - setjson: |
         {
-          "Student.taughtBy": [
-            {
-              "People.name": "Teacher1",
-              "People.xid": "T1",
-              "dgraph.type": [ "Teacher", "People" ],
-              "uid": "_:Teacher4"
-            },
-            {
-              "uid": "uid(Teacher4)"
-            }
-          ],
-          "uid": "uid(x)"
-        }
-      cond: "@if(eq(len(Teacher4), 0) AND eq(len(Teacher4), 1) AND gt(len(x), 0))"
-    - setjson: |
-        {
-          "Student.taughtBy": [
-            {
-              "uid": "uid(Teacher4)"
-            },
-            {
-              "dgraph.type": [ "Teacher", "People" ],
-              "uid": "_:Teacher4"
-            }
-          ],
-          "uid": "uid(x)"
-        }
-      cond: "@if(eq(len(Teacher4), 1) AND eq(len(Teacher4), 0) AND gt(len(x), 0))"
-    - setjson: |
-        {
-          "Student.taughtBy": [
-            {
-              "uid": "uid(Teacher4)"
-            },
-            {
-              "uid": "uid(Teacher4)"
-            }
-          ],
+          "Student.taughtBy":[{
+                  "Teacher.teaches":[{"uid":"uid(x)"}],
+                  "uid":"uid(Teacher4)"
+          },{
+                  "Teacher.teaches":[{"uid":"uid(x)"}],
+                  "uid":"uid(Teacher4)"
+          }],
           "uid": "uid(x)"
         }
       cond: "@if(eq(len(Teacher4), 1) AND eq(len(Teacher4), 1) AND gt(len(x), 0))"
@@ -1084,7 +1059,6 @@
   error:
     message: |-
       failed to rewrite mutation payload because duplicate XID found: S1
-      failed to rewrite mutation payload because duplicate XID found: S1
 
 - name: "Deep Mutation Duplicate XIDs with different object Test"
   gqlmutation: |
@@ -1119,7 +1093,6 @@
   is different, it should return error."
   error:
     message: |-
-      failed to rewrite mutation payload because duplicate XID found: T1
       failed to rewrite mutation payload because duplicate XID found: T1
 
 - name: "Duplicate XIDs in single mutation for Interface"
@@ -1244,7 +1217,7 @@
       cond: "@if(eq(len(Post3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
         uid
       }
       Post3 as Post3(func: uid(0x456)) @filter(type(Post)) {
@@ -1294,7 +1267,7 @@
       cond: "@if(eq(len(Author3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updatePost(func: type(Post)) @filter(uid(0x123)) {
+      x as updatePost(func: uid(0x123)) @filter(type(Post)) {
         uid
       }
       Author3 as Author3(func: uid(0x456)) @filter(type(Author)) {
@@ -1327,19 +1300,14 @@
     }
   dgmutations:
     - setjson: |
-        { 
-          "uid" : "uid(x)",
-          "Country.states": [
-            {
-              "uid": "_:State4",
-              "dgraph.type": ["State"],
-              "State.code": "abc",
-              "State.name": "Alphabet",
-              "State.country": { "uid": "uid(x)" }
-            }
-          ]
+        {
+          "uid": "_:State4",
+          "dgraph.type": ["State"],
+          "State.code": "abc",
+          "State.name": "Alphabet"
         }
       cond: "@if(eq(len(State4), 0) AND gt(len(x), 0))"
+  dgmutationssec:
     - setjson: |
         { 
           "uid" : "uid(x)",
@@ -1360,7 +1328,16 @@
       cond: "@if(eq(len(State4), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
-      x as updateCountry(func: type(Country)) @filter(uid(0x123)) {
+      x as updateCountry(func: uid(0x123)) @filter(type(Country)) {
+        uid
+      }
+      State4 as State4(func: eq(State.code, "abc")) @filter(type(State)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as updateCountry(func: uid(0x123)) @filter(type(Country)) {
         uid
       }
       State4 as State4(func: eq(State.code, "abc")) @filter(type(State)) {
@@ -1375,7 +1352,7 @@
   gqlmutation: |
     mutation updateComputerOwner($patch: UpdateComputerOwnerInput!) {
       updateComputerOwner(input: $patch) {
-        computerowner {
+        computerOwner {
           name
         }
       }
@@ -1390,15 +1367,13 @@
     }
   dgmutations:
     - setjson: |
-        { "uid" : "uid(x)",
-          "ComputerOwner.computers": { 
-            "uid": "_:Computer4",
-            "dgraph.type": ["Computer"],
-            "Computer.name": "Comp",
-            "Computer.owners": [ { "uid": "uid(x)" } ]
-          }
+        { 
+          "uid": "_:Computer4",
+          "dgraph.type": ["Computer"],
+          "Computer.name": "Comp"
         }
       cond: "@if(eq(len(Computer4), 0) AND gt(len(x), 0))"
+  dgmutationssec:
     - setjson: |
         { "uid" : "uid(x)",
           "ComputerOwner.computers": { 
@@ -1415,6 +1390,15 @@
         ]
       cond: "@if(eq(len(Computer4), 1) AND gt(len(x), 0))"
   dgquery: |-
+    query {
+      x as updateComputerOwner(func: type(ComputerOwner)) @filter(eq(ComputerOwner.name, "A.N. Owner")) {
+        uid
+      }
+      Computer4 as Computer4(func: eq(Computer.name, "Comp")) @filter(type(Computer)) {
+        uid
+      }
+    }
+  dgquerysec: |-
     query {
       x as updateComputerOwner(func: type(ComputerOwner)) @filter(eq(ComputerOwner.name, "A.N. Owner")) {
         uid

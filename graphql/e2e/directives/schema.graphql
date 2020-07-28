@@ -24,7 +24,7 @@ type State {
 GraphQL descriptions look like this.  They should work in the input
 schema and should make their way into the generated schema.
 """
-type Author @dgraph(type: "dgraph.author") {
+type Author @dgraph(type: "test.dgraph.author") {
         id: ID!
 
         """
@@ -44,7 +44,7 @@ type Post @dgraph(type: "myPost") {
         title: String! @search(by: [term, fulltext])
         text: String @search(by: [fulltext]) @dgraph(pred: "text")
         tags: [String] @search(by: [exact])
-        topic: String @search(by: [exact]) @dgraph(pred: "dgraph.topic")
+        topic: String @search(by: [exact]) @dgraph(pred: "test.dgraph.topic")
         numLikes: Int @search
         isPublished: Boolean @search @dgraph(pred: "is_published")
         postType: PostType @search(by: [hash, trigram])
@@ -81,7 +81,7 @@ enum PostType {
 GraphQL descriptions can be on interfaces.  They should work in the input
 schema and should make their way into the generated schema.
 """
-interface Employee @dgraph(type: "dgraph.employee.en") {
+interface Employee @dgraph(type: "test.dgraph.employee.en") {
         ename: String!
 }
 
@@ -136,10 +136,10 @@ type Teacher implements People {
 }
 
 type Student implements People {
-	taughtBy: [Teacher]
+        taughtBy: [Teacher] @hasInverse(field: "teaches")
 }
 
-type Message {
+type Message @withSubscription {
     content: String! @dgraph(pred: "post")
     author: String @dgraph(pred: "<职业>")
 }

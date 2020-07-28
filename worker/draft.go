@@ -229,7 +229,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		ops:     make(map[op]*y.Closer),
 	}
 	if x.WorkerConfig.LudicrousMode {
-		n.ex = newExecutor()
+		n.ex = newExecutor(&m.Applied)
 	}
 	return n
 }
@@ -351,6 +351,17 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				return err
 			}
 		}
+
+		// If Dgraph is running in ludicrous mode and we get some schema we should wait for all
+		// active mutations to finish. Previously we were thinking of only waiting for active
+		// mutations related to predicates present in schema mutation. But this might cause issues
+		// as we call DropPrefix() on Badger while running schema mutations. DropPrefix() blocks
+		// writes on Badger and returns error if writes are tried. To avoid this we should wait for
+		// all active mutations to finish irrespective of predicates present in schema mutation.
+		if x.WorkerConfig.LudicrousMode && len(proposal.Mutations.Schema) > 0 {
+			n.ex.waitForActiveMutations()
+		}
+
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
 			return err
 		}
@@ -408,7 +419,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
 			hint := pb.Metadata_DEFAULT
-			if mutHint, ok := proposal.Mutations.Metadata.PredHints[attr]; ok {
+			if mutHint, ok := proposal.GetMutations().GetMetadata().GetPredHints()[attr]; ok {
 				hint = mutHint
 			}
 			if err := createSchema(attr, storageType, hint); err != nil {
@@ -434,7 +445,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	})
 
 	if x.WorkerConfig.LudicrousMode {
-		n.ex.addEdges(ctx, m.StartTs, m.Edges)
+		n.ex.addEdges(ctx, proposal)
 		return nil
 	}
 
@@ -503,14 +514,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			span.Annotatef(nil, "While applying mutations: %v", err)
 			return err
 		}
-		if x.WorkerConfig.LudicrousMode {
-			ts := proposal.Mutations.StartTs
-			return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
-				Txns: []*pb.TxnStatus{
-					{StartTs: ts, CommitTs: ts},
-				},
-			})
-		}
+
 		span.Annotate(nil, "Done")
 		return nil
 	}
@@ -642,6 +646,10 @@ func (n *node) processApplyCh() {
 			// working with the same proposal as before.
 			psz := proposal.Size()
 			totalSize += int64(psz)
+
+			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil && proposal.Mutations.StartTs == 0 {
+				proposal.Mutations.StartTs = State.GetTimestamp(false)
+			}
 
 			var perr error
 			p, ok := previous[proposal.Key]
@@ -851,14 +859,14 @@ func (n *node) proposeSnapshot(discardN int) error {
 
 const (
 	maxPendingSize int64 = 64 << 20 // in bytes.
-	nodeApplyChan        = "raft node applyCh"
+	nodeApplyChan        = "pushing to raft node applyCh"
 )
 
 func rampMeter(address *int64, maxSize int64, component string) {
 	start := time.Now()
 	defer func() {
 		if dur := time.Since(start); dur > time.Second {
-			glog.Infof("Blocked pushing to %s for %v", component, dur.Round(time.Millisecond))
+			glog.Infof("Blocked %s for %v", component, dur.Round(time.Millisecond))
 		}
 	}()
 	for {
@@ -946,10 +954,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				time.Sleep(time.Second) // Let transfer happen.
 			}
 			n.Raft().Stop()
-			close(done)
 			if x.WorkerConfig.LudicrousMode {
 				n.ex.closer.SignalAndWait()
 			}
+			close(done)
 			return
 		}
 	}
@@ -1157,8 +1165,9 @@ func (n *node) Run() {
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
-						if x.WorkerConfig.LudicrousMode {
-							// Assuming that there will be no error while proposing.
+						if x.WorkerConfig.LudicrousMode && len(proposal.Mutations.GetEdges()) > 0 {
+							// Assuming that there will be no error while applying. But this
+							// assumption is only made for data mutations and not schema mutations.
 							n.Proposals.Done(proposal.Key, nil)
 						}
 					}
@@ -1240,8 +1249,26 @@ func (n *node) calculateTabletSizes() {
 	}
 	var total int64
 	tablets := make(map[string]*pb.Tablet)
+	updateSize := func(pred string, size int64) {
+		if pred == "" {
+			return
+		}
+
+		if tablet, ok := tablets[pred]; ok {
+			tablet.Space += size
+		} else {
+			tablets[pred] = &pb.Tablet{
+				GroupId:   n.gid,
+				Predicate: pred,
+				Space:     size,
+			}
+		}
+		total += size
+	}
 
 	tableInfos := pstore.Tables(false)
+	previousLeft := ""
+	var previousSize int64
 	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
 	for _, tinfo := range tableInfos {
 		left, err := x.Parse(tinfo.Left)
@@ -1249,29 +1276,23 @@ func (n *node) calculateTabletSizes() {
 			glog.V(3).Infof("Unable to parse key: %v", err)
 			continue
 		}
-		right, err := x.Parse(tinfo.Right)
-		if err != nil {
-			glog.V(3).Infof("Unable to parse key: %v", err)
-			continue
-		}
-		if left.Attr != right.Attr {
-			// Skip all tables not fully owned by one predicate.
+
+		if left.Attr == previousLeft {
+			// Dgraph cannot depend on the right end of the table to know if the table belongs
+			// to a single predicate because there might be Badger-specific keys.
+			// Instead, Dgraph only counts the previous table if the current one belongs to the
+			// same predicate.
 			// We could later specifically iterate over these tables to get their estimated sizes.
-			glog.V(3).Info("Skipping table not owned by one predicate")
-			continue
-		}
-		pred := left.Attr
-		if tablet, ok := tablets[pred]; ok {
-			tablet.Space += int64(tinfo.EstimatedSz)
+			updateSize(previousLeft, previousSize)
 		} else {
-			tablets[pred] = &pb.Tablet{
-				GroupId:   n.gid,
-				Predicate: pred,
-				Space:     int64(tinfo.EstimatedSz),
-			}
+			glog.V(3).Info("Skipping table not owned by one predicate")
 		}
-		total += int64(tinfo.EstimatedSz)
+		previousLeft = left.Attr
+		previousSize = int64(tinfo.EstimatedSz)
 	}
+	// The last table has not been counted. Assign it to the predicate at the left of the table.
+	updateSize(previousLeft, previousSize)
+
 	if len(tablets) == 0 {
 		glog.V(2).Infof("No tablets found.")
 		return
@@ -1470,13 +1491,18 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 				span.Annotatef(nil, "Error: %v", err)
 				return nil, err
 			}
+
+			var start uint64
 			if proposal.Mutations != nil {
-				start := proposal.Mutations.StartTs
+				start = proposal.Mutations.StartTs
 				if start >= minPendingStart && snapshotIdx == 0 {
 					snapshotIdx = entry.Index - 1
 				}
 			}
-			if proposal.Delta != nil {
+			// In ludicrous mode commitTs for any transaction is same as startTs.
+			if x.WorkerConfig.LudicrousMode {
+				maxCommitTs = x.Max(maxCommitTs, start)
+			} else if proposal.Delta != nil {
 				for _, txn := range proposal.Delta.GetTxns() {
 					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 				}

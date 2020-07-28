@@ -45,8 +45,12 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
+type resolveCtxKey string
+
 const (
 	methodResolve = "RequestResolver.Resolve"
+
+	resolveStartTime resolveCtxKey = "resolveStartTime"
 
 	resolverFailed    = false
 	resolverSucceeded = true
@@ -68,6 +72,8 @@ const (
 		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
 		"The value was resolved as null (which may trigger GraphQL error propagation) " +
 		"and as much other data as possible returned."
+
+	errInternal = "Internal error"
 )
 
 // A ResolverFactory finds the right resolver for a query/mutation.
@@ -231,6 +237,10 @@ func (rf *resolverFactory) WithSchemaIntrospection() ResolverFactory {
 		WithQueryResolver("__type",
 			func(q schema.Query) QueryResolver {
 				return QueryResolverFunc(resolveIntrospection)
+			}).
+		WithQueryResolver("__typename",
+			func(q schema.Query) QueryResolver {
+				return QueryResolverFunc(resolveIntrospection)
 			})
 }
 
@@ -371,20 +381,34 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 	if r == nil {
 		glog.Errorf("Call to Resolve with nil RequestResolver")
-		return schema.ErrorResponse(errors.New("Internal error"))
+		return schema.ErrorResponse(errors.New(errInternal))
 	}
 
 	if r.schema == nil {
 		glog.Errorf("Call to Resolve with no schema")
-		return schema.ErrorResponse(errors.New("Internal error"))
+		return schema.ErrorResponse(errors.New(errInternal))
 	}
+
+	startTime := time.Now()
+	resp := &schema.Response{
+		Extensions: &schema.Extensions{
+			Tracing: &schema.Trace{
+				Version:   1,
+				StartTime: startTime.Format(time.RFC3339Nano),
+			},
+		},
+	}
+	defer func() {
+		endTime := time.Now()
+		resp.Extensions.Tracing.EndTime = endTime.Format(time.RFC3339Nano)
+		resp.Extensions.Tracing.Duration = endTime.Sub(startTime).Nanoseconds()
+	}()
+	ctx = context.WithValue(ctx, resolveStartTime, startTime)
 
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
 		return schema.ErrorResponse(err)
 	}
-
-	resp := &schema.Response{}
 
 	if glog.V(3) {
 		// don't log the introspection queries they are sent too frequently
@@ -418,7 +442,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 						allResolved[storeAt] = &Resolved{
 							Data:  nil,
 							Field: q,
-							Err:   err}
+							Err:   err,
+						}
 					})
 
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
@@ -432,6 +457,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
 			addResult(resp, res)
+
 		}
 	}
 	// A single request can contain either queries or mutations - not both.
@@ -480,7 +506,11 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 // ValidateSubscription will check the given subscription query is valid or not.
 func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
-	return errors.New("Subscriptions are not supported")
+	if r.schema == nil {
+		glog.Errorf("Call to ValidateSubscription with no schema")
+		return errors.New(errInternal)
+	}
+
 	op, err := r.schema.Operation(req)
 	if err != nil {
 		return err
@@ -637,8 +667,7 @@ func completeDgraphResult(
 		glog.Errorf("Could not process Dgraph result : \n%s", string(dgResult))
 		return nullResponse(
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
-				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
-				"Please let us know : https://github.com/dgraph-io/dgraph/issues.").
+				"This probably indicates a bug in Dgraph. Please let us know by filing an issue.").
 				WithLocations(field.Location()))
 	}
 
@@ -919,10 +948,11 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				return
 			}
 
+			url := fconf.URL
 			if !graphql {
 				// For REST requests, we'll have to substitute the variables used in the URL.
 				mu.RLock()
-				fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL,
+				url, err = schema.SubstituteVarsInURL(url,
 					vals[idx].(map[string]interface{}))
 				if err != nil {
 					mu.RUnlock()
@@ -936,7 +966,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				mu.RUnlock()
 			}
 
-			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+			b, err = makeRequest(nil, fconf.Method, url, string(b), fconf.ForwardHeaders)
 			if err != nil {
 				errChan <- x.GqlErrorList{externalRequestError(err, f)}
 				return
@@ -1819,4 +1849,10 @@ func EmptyResult(f schema.Field, err error) *Resolved {
 		Field: f,
 		Err:   schema.GQLWrapLocationf(err, f.Location(), "resolving %s failed", f.Name()),
 	}
+}
+
+func newtimer(ctx context.Context, Duration *schema.OffsetDuration) schema.OffsetTimer {
+	resolveStartTime, _ := ctx.Value(resolveStartTime).(time.Time)
+	tf := schema.NewOffsetTimerFactory(resolveStartTime)
+	return tf.NewOffsetTimer(Duration)
 }

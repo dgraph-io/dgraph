@@ -122,7 +122,7 @@ type Field interface {
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
-	Cascade() bool
+	Cascade() []string
 	HasCustomDirective() (bool, map[string]bool)
 	Type() Type
 	SelectionSet() []Field
@@ -568,7 +568,6 @@ func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
-
 	// Auth rules can't be effectively validated as part of the normal rules -
 	// because they need the fully generated schema to be checked against.
 	authRules, err := authRules(s)
@@ -630,6 +629,13 @@ func (f *field) ArgValue(name string) interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
 		f.arguments = f.field.ArgumentMap(f.op.vars)
+		// use a deep-copy only if the request uses variables, as a variable could be shared by
+		// multiple queries in a single request and internally in our code we may overwrite field
+		// arguments which may result in the shared value being overwritten for all queries in a
+		// request.
+		if f.op.vars != nil {
+			f.arguments = x.DeepCopyJsonMap(f.arguments)
+		}
 	}
 	return f.arguments[name]
 }
@@ -659,8 +665,12 @@ func (f *field) Include() bool {
 	return dir.ArgumentMap(f.op.vars)["if"].(bool)
 }
 
-func (f *field) Cascade() bool {
-	return f.field.Directives.ForName(cascadeDirective) != nil
+func (f *field) Cascade() []string {
+
+	if f.field.Directives.ForName(cascadeDirective) == nil {
+		return nil
+	}
+	return []string{"__all__"}
 }
 
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
@@ -847,8 +857,12 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	if secretHeaders != nil {
 		hc.RLock()
 		for _, h := range secretHeaders.Children {
-			val := string(hc.secrets[h.Value.Raw])
-			fconf.ForwardHeaders.Set(h.Value.Raw, val)
+			key := strings.Split(h.Value.Raw, ":")
+			if len(key) == 1 {
+				key = []string{h.Value.Raw, h.Value.Raw}
+			}
+			val := string(hc.secrets[key[1]])
+			fconf.ForwardHeaders.Set(key[0], val)
 		}
 		hc.RUnlock()
 	}
@@ -856,9 +870,12 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
 	if forwardHeaders != nil {
 		for _, h := range forwardHeaders.Children {
-			// We would override the header if it was also specified as part of secretHeaders.
-			reqHeaderVal := f.op.header.Get(h.Value.Raw)
-			fconf.ForwardHeaders.Set(h.Value.Raw, reqHeaderVal)
+			key := strings.Split(h.Value.Raw, ":")
+			if len(key) == 1 {
+				key = []string{h.Value.Raw, h.Value.Raw}
+			}
+			reqHeaderVal := f.op.header.Get(key[1])
+			fconf.ForwardHeaders.Set(key[0], reqHeaderVal)
 		}
 	}
 
@@ -1041,7 +1058,7 @@ func (q *query) Include() bool {
 	return true
 }
 
-func (q *query) Cascade() bool {
+func (q *query) Cascade() []string {
 	return (*field)(q).Cascade()
 }
 
@@ -1095,7 +1112,7 @@ func queryType(name string, custom *ast.Directive) QueryType {
 		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
-	case name == "__schema" || name == "__type":
+	case name == "__schema" || name == "__type" || name == "__typename":
 		return SchemaQuery
 	case strings.HasPrefix(name, "query"):
 		return FilterQuery
@@ -1154,7 +1171,7 @@ func (m *mutation) Include() bool {
 	return true
 }
 
-func (m *mutation) Cascade() bool {
+func (m *mutation) Cascade() []string {
 	return (*field)(m).Cascade()
 }
 
@@ -1184,12 +1201,12 @@ func (m *mutation) SelectionSet() []Field {
 
 func (m *mutation) QueryField() Field {
 	for _, f := range m.SelectionSet() {
-		if f.Name() == NumUid || f.Name() == Typename {
+		if f.Name() == NumUid || f.Name() == Typename || f.Name() == Msg {
 			continue
 		}
 		// if @cascade was given on mutation itself, then it should get applied for the query which
 		// gets executed to fetch the results of that mutation, so propagating it to the QueryField.
-		if m.Cascade() && !f.Cascade() {
+		if len(m.Cascade()) != 0 && len(f.Cascade()) == 0 {
 			field := f.(*field).field
 			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective})
 		}
@@ -1277,7 +1294,7 @@ func (m *mutation) IsAuthQuery() bool {
 }
 
 func (t *astType) AuthRules() *TypeAuth {
-	return t.inSchema.authRules[t.Name()]
+	return t.inSchema.authRules[t.DgraphName()]
 }
 
 func (t *astType) Field(name string) FieldDefinition {
@@ -1958,6 +1975,19 @@ func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 	for i := 0; i < len(field.SelectionSet); i++ {
 		castedField := field.SelectionSet[i].(*ast.Field)
 		writer.WriteString(castedField.Name)
+
+		if len(castedField.Arguments) > 0 {
+			writer.WriteString("(")
+			for idx, arg := range castedField.Arguments {
+				if idx != 0 {
+					writer.WriteString(", ")
+				}
+				writer.WriteString(arg.Name)
+				writer.WriteString(": ")
+				writer.WriteString(arg.Value.String())
+			}
+			writer.WriteString(")")
+		}
 
 		if len(castedField.SelectionSet) > 0 {
 			// recursively add fields.

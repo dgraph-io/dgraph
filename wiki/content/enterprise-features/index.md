@@ -7,17 +7,11 @@ Dgraph enterprise features are proprietary licensed under the [Dgraph Community
 License][dcl]. All Dgraph releases contain proprietary code for enterprise features.
 Enabling these features requires an enterprise contract from
 [contact@dgraph.io](mailto:contact@dgraph.io) or the [discuss
-forum](https://discuss.dgraph.io).
+community](https://discuss.dgraph.io).
 
 **Dgraph enterprise features are enabled by default for 30 days in a new cluster**.
 After the trial period of thirty (30) days, the cluster must obtain a license from Dgraph to
-continue enjoying the enterprise features released in the proprietary code.
-
-The license can be applied to the cluster by including it as the body of a POST
-request and calling `/enterpriseLicense` HTTP endpoint on any Zero server. It
-can also be applied by passing the path to the enterprise license file (using
-the flag `--enterprise_license`) to the `dgraph zero` command used to start the
-server. The second option is useful when the process needs to be automated.
+continue using the enterprise features released in the proprietary code.
 
 {{% notice "note" %}}
 At the conclusion of your 30-day trial period if a license has not been applied to the cluster,
@@ -25,6 +19,20 @@ access to the enterprise features will be suspended. The cluster will continue t
 enterprise features.
 {{% /notice %}}
 
+When you have an enterprise license key, the license can be applied to the cluster by including it
+as the body of a POST request and calling `/enterpriseLicense` HTTP endpoint on the leader Zero server.
+
+```sh
+curl -X POST localhost:6080/enterpriseLicense --upload-file ./licensekey.txt
+```
+
+It can also be applied by passing the path to the enterprise license file (using the flag
+`--enterprise_license`) to the `dgraph zero` command used to start the server. The second option is
+useful when the process needs to be automated.
+
+```sh
+dgraph zero --enterprise_license ./licensekey.txt
+```
 
 [dcl]: https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
 
@@ -232,13 +240,13 @@ For a series of full and incremental backups, per the current design, we don't a
 
 ### AES And Chaining with Gzip
 
-If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data. 
+If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data.
 
 During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
 
 ### Backup
 
-Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”. 
+Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”.
 
 {{% notice "note" %}}
 encryption_key_file was used for encryption-at-rest and will now also be used for encrypted backups.
@@ -272,6 +280,10 @@ restore. A backup series consists of a full backup and all the incremental
 backups built on top of it. Each time a new full backup is created, a new backup
 series with a different ID is started. The backup series ID is stored in each
 `manifest.json` file stored in every backup folder.
+
+The `--encryption_key_file` flag is required if you took the backup in an
+encrypted cluster and should point to the location of the same key used to
+run the cluster.
 
 The restore feature will create a cluster with as many groups as the original
 cluster had at the time of the last backup. For each group, `dgraph restore`
@@ -311,6 +323,99 @@ Specify the Zero address and port for the new cluster with `--zero`/`-z` to upda
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
+
+### Online Restore
+
+Starting in version 20.07, restoring to a live cluster is supported. Instead of
+running the command line tool and copying the `p` directories around, users can
+now point the cluster to the backup location and the cluster will read the backup,
+write the data, and set the cluster so that it can read the data.
+
+Some things to note about online restores are:
+
+- Existing data is dropped. This is the equivalent of sending a DropAll
+  operation to the cluster.
+- Draining mode is enabled during the duration of the restore. This means
+  queries and mutations are disabled. Draining mode is turned off when the
+  restore completes.
+- The operation is asynchronous and the request responds immediately after
+  scheduling the restore. The response includes a unique restore ID that can be
+  used to query the status of the operation.
+- This operation should only be done when the cluster is new or when an existing
+  cluster has been taken offline for maintenance.
+- The cluster needs to have the same number of groups as the cluster where the
+  backup was created.
+- The predicates will be forcibly moved around groups to ensure the state of the
+  cluster after restore matches what is indicated by the backup manifest. The
+  process does not require existing data to be moved around since it will be
+  deleted anyways.
+
+### Basic operation
+
+A restore can be started via the GraphQL admin endpoint (i.e. `/admin`) of any
+alpha in the cluster. This is the same endpoint to which backup requests are
+sent. The basic call looks like this.
+
+```graphql
+mutation restore() {
+	restore(input: {location: "your-backup-location", backupId: "your-backup-id") {
+		code
+		message
+		restoreId
+	}
+}
+```
+
+If the restore was successfully scheduled, the response will include the restore ID that
+can be used to query for the status of the restore via the admin endpoint. Below is an
+example.
+
+```graphql
+query status() {
+	restoreStatus(restoreId: 1) {
+		status
+		errors
+	}
+}
+```
+
+The status can be one of "OK", "ERR", "UNKNOWN", or "IN_PROGRESS". The errors
+field contains the errors if the operation failed and it will be empty
+otherwise. Also note that the information used to track a restore operation is
+local to each alpha. In practical terms, this means that you should send this
+request to the same alpha to which the original restore request was sent.
+
+### Online Restore Options
+
+The input parameter can include the fields shown below. Of those, only
+`location` is required. Like backups, the authentication info (e.g access key)
+is only required if you need to override the defaults that are set via
+environment variables (see section on backups for reference).
+The fields related to Vault are also only needed if you need to override the
+defaults.
+
+- location: Destination for the backup: e.g. Minio or S3 bucket.
+- backupId: Backup ID of the backup series to restore. This ID is included in
+  the manifest.json file. If missing, it defaults to the latest series.
+- encryptionKeyFile: Path to the key file needed to decrypt the backup. This
+  file should be accessible by all alphas in the group. The backup will be
+  written using the encryption key with which the cluster was started, which
+  might be different than this key.
+- accessKey: Access key credential for the S3 or minio destination.
+- secretKey: Secret key credential for the S3 or minio destination .
+- sessionToken: AWS session token, if required.
+- anonymous: Set to true to allow backing up to S3 or Minio bucket that requires
+  no credentials.
+- vaultAddr: Vault server address where the key is stored. This server must be
+  accessible by all alphas in the group. Default "http://localhost:8200".
+- vaultRoleIDFile: Path to the Vault RoleID file.
+- vaultSecretIDFile: Path to the Vault SecretID file.
+- vaultPath: Vault kv store path where the key lives. Default
+  "secret/data/dgraph".
+- vaultField: Vault kv store field whose value is the key. Default "enc_key".
+- vaultFormat: Vault kv store field's format. Must be "base64" or "raw". Default
+  "base64".
+
 ## Access Control Lists
 
 {{% notice "note" %}}
@@ -334,7 +439,7 @@ The ACL Feature can be turned on by following these steps
 1. Since ACL is an enterprise feature, make sure your use case is covered under
 a contract with Dgraph Labs Inc. You can contact us by sending an email to
 [contact@dgraph.io](mailto:contact@dgraph.io) or post your request at [our discuss
-forum](https://discuss.dgraph.io) to get an enterprise license.
+community](https://discuss.dgraph.io) to get an enterprise license.
 
 2. Create a plain text file, and store a randomly generated secret key in it. The secret
 key is used by Alpha servers to sign JSON Web Tokens (JWT). As you’ve probably guessed,
@@ -479,6 +584,24 @@ mutation {
   }
 }
 ```
+Here we assigned a permission rule for the friend predicate to the group. In case you have [reverse edges]({{< relref "query-language/index.md#reverse-edges" >}}), they have to be given the permission to the group as well
+```graphql
+mutation {
+  updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "~friend", permission: 7}]}}) {
+    group {
+      name
+      rules {
+        permission
+        predicate
+      }
+    }
+  }
+}
+```
+You can also resolve this by using the `dgraph acl` tool
+```
+dgraph acl -a <ALPHA_ADDRESS:PORT> -w <GROOT_USER> -x <GROOT_PASSWORD>  mod --group dev --pred ~friend --perm 7
+```
 
 The command above grants the `dev` group the `READ`+`WRITE`+`MODIFY` permission on the
 `friend` predicate. Permissions are represented by a number following the UNIX file
@@ -504,7 +627,7 @@ mutation {
 }
 ```
 
-### Retrieve Users and Groups Information 
+### Retrieve Users and Groups Information
 {{% notice "note" %}}
 All these queries require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
 {{% /notice %}}
@@ -736,6 +859,33 @@ mutation {
 }
 ```
 
+### Reset Groot Password
+
+If you've forgotten the password to your groot user, then you may reset the groot password (or
+the password for any user) by following these steps.
+
+1. Stop Dgraph Alpha.
+2. Turn off ACLs by removing the `--acl_hmac_secret` config flag in the Alpha config. This leaves
+   the Alpha open with no ACL rules, so be sure to restrict access, including stopping request
+   traffic to this Alpha.
+3. Start Dgraph Alpha.
+4. Connect to Dgraph Alpha using Ratel and run the following upsert mutation to update the groot password
+   to `newpassword` (choose your own secure password):
+   ```text
+   upsert {
+     query {
+       groot as var(func: eq(dgraph.xid, "groot"))
+     }
+     mutation {
+       set {
+         uid(groot) <dgraph.password> "newpassword" .
+       }
+     }
+   }
+   ```
+5. Restart Dgraph Alpha with ACLs turned on by setting the `--acl_hmac_secret` config flag.
+6. Login as groot with your new password.
+
 ## Encryption at Rest
 
 {{% notice "note" %}}
@@ -808,5 +958,3 @@ badger rotate --dir w --old-key-path enc_key_file --new-key-path new_enc_key_fil
 ```
 
 Then, you can start Alpha with the `new_enc_key_file` key file to use the new key.
-
-

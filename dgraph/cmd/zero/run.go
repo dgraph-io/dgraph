@@ -169,6 +169,7 @@ func run() {
 		defer x.FlushSentry()
 		x.ConfigureSentryScope("zero")
 		x.WrapPanics()
+		x.SentryOptOutNote()
 	}
 
 	x.PrintVersion()
@@ -183,6 +184,7 @@ func run() {
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 	}
+	glog.Infof("Setting Config to: %+v", opts)
 
 	x.WorkerConfig = x.WorkerOptions{
 		LudicrousMode: Zero.Conf.GetBool("ludicrous_mode"),
@@ -303,6 +305,8 @@ func run() {
 		store.Closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
+
+		x.RemoveCidFile()
 	}()
 
 	glog.Infoln("Running Dgraph Zero...")

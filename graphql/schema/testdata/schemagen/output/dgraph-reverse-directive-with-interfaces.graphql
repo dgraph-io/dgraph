@@ -71,6 +71,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -78,6 +79,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	query: AuthRule,
@@ -148,21 +150,24 @@ type AddDirectorPayload {
 }
 
 type AddOscarMoviePayload {
-	oscarmovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
+	oscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
 	numUids: Int
 }
 
 type DeleteDirectorPayload {
+	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
 	msg: String
 	numUids: Int
 }
 
 type DeleteMoviePayload {
+	movie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
 	msg: String
 	numUids: Int
 }
 
 type DeleteOscarMoviePayload {
+	oscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
 	msg: String
 	numUids: Int
 }
@@ -178,7 +183,7 @@ type UpdateMoviePayload {
 }
 
 type UpdateOscarMoviePayload {
-	oscarmovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
+	oscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
 	numUids: Int
 }
 
@@ -210,7 +215,6 @@ input AddDirectorInput {
 
 input AddOscarMovieInput {
 	name: String!
-	director: [DirectorRef]
 	year: Int!
 }
 
@@ -274,7 +278,6 @@ input OscarMoviePatch {
 input OscarMovieRef {
 	id: ID
 	name: String
-	director: [DirectorRef]
 	year: Int
 }
 
@@ -324,15 +327,3 @@ type Mutation {
 	deleteDirector(filter: DirectorFilter!): DeleteDirectorPayload
 }
 
-#######################
-# Generated Subscriptions
-#######################
-
-type Subscription {
-	getMovie(id: ID!): Movie
-	queryMovie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
-	getOscarMovie(id: ID!): OscarMovie
-	queryOscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
-	getDirector(id: ID!): Director
-	queryDirector(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
-}

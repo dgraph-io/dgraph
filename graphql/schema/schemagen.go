@@ -37,7 +37,6 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
-	DisableSubscription()
 }
 
 type handler struct {
@@ -73,10 +72,6 @@ func (s *handler) DGSchema() string {
 	return s.dgraphSchema
 }
 
-func (s *handler) DisableSubscription() {
-	s.completeSchema.Subscription = nil
-}
-
 func parseSecrets(sch string) (map[string]string, error) {
 	m := make(map[string]string)
 	scanner := bufio.NewScanner(strings.NewReader(sch))
@@ -96,12 +91,19 @@ func parseSecrets(sch string) (map[string]string, error) {
 			continue
 		}
 		parts := strings.Fields(text)
-		if len(parts) != 4 {
+		const doubleQuotesCode = 34
+
+		if len(parts) < 4 {
+			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
+		}
+		val := strings.Join(parts[3:], " ")
+		if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
 			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
 				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
 		}
 
-		val := strings.Trim(parts[3], `"`)
+		val = strings.Trim(val, `"`)
 		key := strings.Trim(parts[2], `"`)
 		m[key] = val
 	}
@@ -252,7 +254,11 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 			return
 		}
 		for _, h := range forwardHeaders.Children {
-			headers[h.Value.Raw] = struct{}{}
+			key := strings.Split(h.Value.Raw, ":")
+			if len(key) == 1 {
+				key = []string{h.Value.Raw, h.Value.Raw}
+			}
+			headers[key[1]] = struct{}{}
 		}
 	}
 
@@ -410,7 +416,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
-				case ast.Object:
+				case ast.Object, ast.Interface:
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
 					if parentInt == nil {

@@ -69,7 +69,7 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 				return nil, err
 			}
 			preds = append(preds, getPredicatesFromTypes(types)...)
-			preds = append(preds, x.ReservedPredicates()...)
+			preds = append(preds, x.StarAllPredicates()...)
 		}
 
 		for _, pred := range preds {

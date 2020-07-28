@@ -223,14 +223,22 @@ func resetUser(t *testing.T) {
 	glog.Infof("created user")
 }
 
-func TestReservedPredicates(t *testing.T) {
-	// This test uses the groot account to ensure that reserved predicates
+func TestPreDefinedPredicates(t *testing.T) {
+	// This test uses the groot account to ensure that pre-defined predicates
 	// cannot be altered even if the permissions allow it.
 	dg1, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-	alterReservedPredicates(t, dg1)
+	require.NoError(t, err, "Error while getting a dgraph client")
+
+	alterPreDefinedPredicates(t, dg1)
+}
+
+func TestPreDefinedTypes(t *testing.T) {
+	// This test uses the groot account to ensure that pre-defined types
+	// cannot be altered even if the permissions allow it.
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err, "Error while getting a dgraph client")
+
+	alterPreDefinedTypes(t, dg)
 }
 
 func TestAuthorization(t *testing.T) {
@@ -301,6 +309,7 @@ var queryAttr = "name"
 var predicateToWrite = "predicate_to_write"
 var predicateToAlter = "predicate_to_alter"
 var devGroup = "dev"
+var sreGroup = "sre"
 var unusedGroup = "unusedGroup"
 var query = fmt.Sprintf(`
 	{
@@ -310,11 +319,11 @@ var query = fmt.Sprintf(`
 	}`, predicateToRead, queryAttr)
 var schemaQuery = "schema {}"
 
-func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
+func alterPreDefinedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
 	// Test that alter requests are allowed if the new update is the same as
-	// the initial update for a reserved predicate.
+	// the initial update for a pre-defined predicate.
 	err := dg.Alter(ctx, &api.Operation{
 		Schema: "dgraph.xid: string @index(exact) @upsert .",
 	})
@@ -325,22 +334,57 @@ func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
-		"predicate dgraph.xid is reserved and is not allowed to be modified")
+		"predicate dgraph.xid is pre-defined and is not allowed to be modified")
 
 	err = dg.Alter(ctx, &api.Operation{
 		DropAttr: "dgraph.xid",
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
-		"predicate dgraph.xid is reserved and is not allowed to be dropped")
+		"predicate dgraph.xid is pre-defined and is not allowed to be dropped")
 
-	// Test that reserved predicates act as case-insensitive.
+	// Test that pre-defined predicates act as case-insensitive.
 	err = dg.Alter(ctx, &api.Operation{
 		Schema: "dgraph.XID: int .",
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
-		"predicate dgraph.XID is reserved and is not allowed to be modified")
+		"predicate dgraph.XID is pre-defined and is not allowed to be modified")
+}
+
+func alterPreDefinedTypes(t *testing.T, dg *dgo.Dgraph) {
+	ctx := context.Background()
+
+	// Test that alter requests are allowed if the new update is the same as
+	// the initial update for a pre-defined type.
+	err := dg.Alter(ctx, &api.Operation{
+		Schema: `
+			type dgraph.type.Group {
+				dgraph.xid
+				dgraph.acl.rule
+			}
+		`,
+	})
+	require.NoError(t, err)
+
+	err = dg.Alter(ctx, &api.Operation{
+		Schema: `
+			type dgraph.type.Group {
+				dgraph.xid
+			}
+		`,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"type dgraph.type.Group is pre-defined and is not allowed to be modified")
+
+	err = dg.Alter(ctx, &api.Operation{
+		DropOp:    api.Operation_TYPE,
+		DropValue: "dgraph.type.Group",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"type dgraph.type.Group is pre-defined and is not allowed to be dropped")
 }
 
 func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
@@ -954,6 +998,10 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		name	 : string @index(exact) .
 		nickname : string @index(exact) .
 		age 	 : int .
+		type TypeName {
+			name: string
+			age: int
+		}
 	`}
 	require.NoError(t, dg.Alter(ctx, &op))
 
@@ -973,9 +1021,11 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			_:a <name> "RandomGuy" .
 			_:a <age> "23" .
 			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
 			_:b <name> "RandomGuy2" .
 			_:b <age> "25" .
 			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
 		`),
 		CommitNow: true,
 	}
@@ -1058,6 +1108,17 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
 			`filter won't work because <nickname> is unauthorized`,
 		},
+		{
+			`
+			{
+				me(func: has(name)) {
+					expand(_all_)
+				}
+			}
+			`,
+			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			`expand(_all_) expands to only <name> because other predicates are unauthorized`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1070,6 +1131,333 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	}
 }
 
+func TestExpandQueryWithACLPermissions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+		age 	 : int .
+		type TypeName {
+			name: string
+			nickname: string
+			age: int
+		}
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	createGroup(t, accessJwt, devGroup)
+	createGroup(t, accessJwt, sreGroup)
+
+	addRulesToGroup(t, accessJwt, sreGroup, []rule{{"age", Read.Code}, {"name", Write.Code}})
+	addToGroup(t, accessJwt, userid, devGroup)
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
+		`),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	query := "{me(func: has(name)){expand(_all_)}}"
+
+	// Test that groot has access to all the predicates
+	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
+		string(resp.GetJson()))
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	// Query via user when user has no permissions
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	testutil.CompareJSON(t, `{}`, string(resp.GetJson()))
+
+	// Login to groot to modify accesses (1)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// Give read access of <name>, write access of <age> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}})
+	time.Sleep(6 * time.Second)
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+		string(resp.GetJson()))
+
+	// Login to groot to modify accesses (2)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+	// Add alice to sre group which has read access to <age> and write access to <name>
+	addToGroup(t, accessJwt, userid, sreGroup)
+	time.Sleep(6 * time.Second)
+
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.Nil(t, err)
+
+	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}]}`,
+		string(resp.GetJson()))
+
+	// Login to groot to modify accesses (3)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// Give read access of <name> and <nickname>, write access of <age> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}, {"nickname", Read.Code}})
+	time.Sleep(6 * time.Second)
+
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.Nil(t, err)
+
+	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
+		string(resp.GetJson()))
+
+}
+
+func TestValQueryWithACLPermissions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+		age 	 : int .
+		type TypeName {
+			name: string
+			nickname: string
+			age: int
+		}
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	createGroup(t, accessJwt, devGroup)
+	// createGroup(t, accessJwt, sreGroup)
+
+	// addRulesToGroup(t, accessJwt, sreGroup, []rule{{"age", Read.Code}, {"name", Write.Code}})
+	addToGroup(t, accessJwt, userid, devGroup)
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
+		`),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	query := `{q1(func: has(name)){
+		v as name
+		a as age
+    }
+    q2(func: eq(val(v), "RandomGuy")) {
+		val(v)
+		val(a)
+	}}`
+
+	// Test that groot has access to all the predicates
+	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`,
+		string(resp.GetJson()))
+
+	// All test cases
+	tests := []struct {
+		input                  string
+		descriptionNoPerm      string
+		outputNoPerm           string
+		descriptionNamePerm    string
+		outputNamePerm         string
+		descriptionNameAgePerm string
+		outputNameAgePerm      string
+	}{
+		{
+			`
+			{
+				q1(func: has(name), orderasc: name) {
+					n as name
+					a as age
+				}
+				q2(func: eq(val(n), "RandomGuy")) {
+					val(n)
+					val(a)
+				}
+			}
+			`,
+			"alice doesn't have access to name or age",
+			`{}`,
+
+			`alice has access to name`,
+			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"q2":[{"val(n)":"RandomGuy"}]}`,
+
+			"alice has access to name and age",
+			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(n)":"RandomGuy","val(a)":23}]}`,
+		},
+		{
+			`{
+				q1(func: has(name), orderasc: age) {
+					a as age
+				}
+				q2(func: has(name)) {
+					val(a)
+				}
+			}`,
+			"alice doesn't have access to name or age",
+			`{}`,
+
+			`alice has access to name`,
+			`{"q1":[],"q2":[]}`,
+
+			"alice has access to name and age",
+			`{"q1":[{"age":23},{"age":25}],"q2":[{"val(a)":23},{"val(a)":25}]}`,
+		},
+		{
+			`{
+				f as q1(func: has(name), orderasc: name) {
+					n as name
+					a as age
+				}
+				q2(func: uid(f), orderdesc: val(a), orderasc: name) {
+					name
+					val(n)
+					val(a)
+				}
+			}`,
+			"alice doesn't have access to name or age",
+			`{"q2":[]}`,
+
+			`alice has access to name`,
+			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],
+			"q2":[{"name":"RandomGuy","val(n)":"RandomGuy"},{"name":"RandomGuy2","val(n)":"RandomGuy2"}]}`,
+
+			"alice has access to name and age",
+			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],
+			"q2":[{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25},{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23}]}`,
+		},
+	}
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	// Query via user when user has no permissions
+	for _, tc := range tests {
+		desc := tc.descriptionNoPerm
+		t.Run(desc, func(t *testing.T) {
+			resp, err := userClient.NewTxn().Query(ctx, tc.input)
+			require.NoError(t, err)
+			testutil.CompareJSON(t, tc.outputNoPerm, string(resp.Json))
+		})
+	}
+
+	// Login to groot to modify accesses (1)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// Give read access of <name> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
+	time.Sleep(6 * time.Second)
+
+	for _, tc := range tests {
+		desc := tc.descriptionNamePerm
+		t.Run(desc, func(t *testing.T) {
+			resp, err := userClient.NewTxn().Query(ctx, tc.input)
+			require.NoError(t, err)
+			testutil.CompareJSON(t, tc.outputNamePerm, string(resp.Json))
+		})
+	}
+
+	// Login to groot to modify accesses (1)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// Give read access of <name> and <age> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}, {"age", Read.Code}})
+	time.Sleep(6 * time.Second)
+
+	for _, tc := range tests {
+		desc := tc.descriptionNameAgePerm
+		t.Run(desc, func(t *testing.T) {
+			resp, err := userClient.NewTxn().Query(ctx, tc.input)
+			require.NoError(t, err)
+			testutil.CompareJSON(t, tc.outputNameAgePerm, string(resp.Json))
+		})
+	}
+
+}
 func TestNewACLPredicates(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
@@ -1237,17 +1625,17 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	// We create three groups here, dev, dev-a and dev-b and add alice to two of them.
 	devGroupMut := `
 		_:g  <dgraph.xid>        "dev" .
-		_:g  <dgraph.type>       "Group" .
+		_:g  <dgraph.type>       "dgraph.type.Group" .
 		_:g1  <dgraph.xid>       "dev-a" .
-		_:g1  <dgraph.type>      "Group" .
+		_:g1  <dgraph.type>      "dgraph.type.Group" .
 		_:g2  <dgraph.xid>       "dev-b" .
-		_:g2  <dgraph.type>      "Group" .
+		_:g2  <dgraph.type>      "dgraph.type.Group" .
 		_:g  <dgraph.acl.rule>   _:r1 .
-		_:r1 <dgraph.type> "Rule" .
+		_:r1 <dgraph.type> "dgraph.type.Rule" .
 		_:r1 <dgraph.rule.predicate>  "name" .
 		_:r1 <dgraph.rule.permission> "4" .
 		_:g  <dgraph.acl.rule>   _:r2 .
-		_:r2 <dgraph.type> "Rule" .
+		_:r2 <dgraph.type> "dgraph.type.Rule" .
 		_:r2 <dgraph.rule.predicate>  "nickname" .
 		_:r2 <dgraph.rule.permission> "2" .
 	`
@@ -1260,7 +1648,7 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	idQuery := fmt.Sprintf(`
 	{
 		userid as var(func: eq(dgraph.xid, "%s"))
-		gid as var(func: eq(dgraph.type, "Group")) @filter(eq(dgraph.xid, "dev") OR
+		gid as var(func: eq(dgraph.type, "dgraph.type.Group")) @filter(eq(dgraph.xid, "dev") OR
 			eq(dgraph.xid, "dev-a"))
 	}`, userid)
 	addAliceToGroups := &api.NQuad{
@@ -1390,7 +1778,7 @@ func TestQueryUserInfo(t *testing.T) {
 
 	query := `
 	{
-		me(func: type(User)) {
+		me(func: type(dgraph.type.User)) {
 			dgraph.xid
 			dgraph.user.group {
 				dgraph.xid
@@ -1537,6 +1925,174 @@ func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
 	resp = makeRequest(t, accessJwt, params)
 	resp.RequireNoGraphQLErrors(t)
 	testutil.CompareJSON(t, `{"queryUser": [{ "groups": [], "name": "alice"}]}`, string(resp.Data))
+}
+
+func TestSchemaQueryWithACL(t *testing.T) {
+	schemaQuery := "schema{}"
+	grootSchema := `{
+  "schema": [
+    {
+      "predicate": "dgraph.acl.rule",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "dgraph.graphql.schema",
+      "type": "string"
+    },
+    {
+      "predicate": "dgraph.graphql.xid",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "dgraph.password",
+      "type": "password"
+    },
+    {
+      "predicate": "dgraph.rule.permission",
+      "type": "int"
+    },
+    {
+      "predicate": "dgraph.rule.predicate",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "dgraph.type",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "list": true
+    },
+    {
+      "predicate": "dgraph.user.group",
+      "type": "uid",
+      "reverse": true,
+      "list": true
+    },
+    {
+      "predicate": "dgraph.xid",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    }
+  ],
+  "types": [
+    {
+      "fields": [
+        {
+          "name": "dgraph.graphql.schema"
+        },
+        {
+          "name": "dgraph.graphql.xid"
+        }
+      ],
+      "name": "dgraph.graphql"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.xid"
+        },
+        {
+          "name": "dgraph.acl.rule"
+        }
+      ],
+      "name": "dgraph.type.Group"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.rule.predicate"
+        },
+        {
+          "name": "dgraph.rule.permission"
+        }
+      ],
+      "name": "dgraph.type.Rule"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.xid"
+        },
+        {
+          "name": "dgraph.password"
+        },
+        {
+          "name": "dgraph.user.group"
+        }
+      ],
+      "name": "dgraph.type.User"
+    }
+  ]
+}`
+	aliceSchema := `{
+  "schema": [
+    {
+      "predicate": "name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ]
+    }
+  ],
+  "types": [
+    {
+      "fields": [],
+      "name": "dgraph.graphql"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.Group"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.Rule"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.User"
+    }
+  ]
+}`
+
+	// guardian user should be able to view full schema
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	resp, err := dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
+	require.NoError(t, err)
+	require.JSONEq(t, grootSchema, string(resp.GetJson()))
+
+	// add another user and some data for that user with permissions on predicates
+	resetUser(t)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	addDataAndRules(ctx, t, dg)
+	time.Sleep(6 * time.Second) // wait for ACL cache to refresh, otherwise it will be flaky test
+
+	// the other user should be able to view only the part of schema for which it has read access
+	dg, err = testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	require.NoError(t, dg.Login(context.Background(), userid, userpassword))
+	resp, err = dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
+	require.NoError(t, err)
+	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
 }
 
 func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
@@ -1693,7 +2249,7 @@ func TestWrongPermission(t *testing.T) {
 	require.NoError(t, err)
 
 	ruleMutation := `
-		_:dev <dgraph.type> "Group" .
+		_:dev <dgraph.type> "dgraph.type.Group" .
 		_:dev <dgraph.xid> "dev" .
 		_:dev <dgraph.acl.rule> _:rule1 .
 		_:rule1 <dgraph.rule.predicate> "name" .
@@ -1709,7 +2265,7 @@ func TestWrongPermission(t *testing.T) {
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 
 	ruleMutation = `
-		_:dev <dgraph.type> "Group" .
+		_:dev <dgraph.type> "dgraph.type.Group" .
 		_:dev <dgraph.xid> "dev" .
 		_:dev <dgraph.acl.rule> _:rule1 .
 		_:rule1 <dgraph.rule.predicate> "name" .
@@ -1930,10 +2486,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			query: `
 					mutation {
 					  restore(input: {location: "", backupId: "", encryptionKeyFile: ""}) {
-						response {
-						  code
-						  message
-						}
+						code
 					  }
 					}`,
 			queryName:          "restore",
@@ -1943,7 +2496,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					" manifests: The path \"\" does not exist or it is inaccessible.",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
-			guardianData: `{"restore": null}`,
+			guardianData: `{"restore": {"code": "Failure"}}`,
 		},
 		{
 			name: "getGQLSchema has guardian auth",

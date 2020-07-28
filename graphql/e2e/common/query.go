@@ -19,8 +19,11 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -59,6 +62,33 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 	if diff := cmp.Diff(expected, result); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func touchedUidsHeader(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+			queryCountry {
+				name
+			}
+		}`,
+	}
+	req, err := query.createGQLPost(graphqlURL)
+	require.NoError(t, err)
+
+	client := http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	// confirm that the header value is a non-negative integer
+	touchedUidsInHeader, err := strconv.ParseUint(resp.Header.Get("Graphql-TouchedUids"), 10, 64)
+	require.NoError(t, err)
+
+	// confirm that the value in header is same as the value in body
+	var gqlResp GraphQLResponse
+	b, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(b, &gqlResp))
+	require.Equal(t, touchedUidsInHeader, uint64(gqlResp.Extensions["touched_uids"].(float64)))
 }
 
 // This test checks that all the different combinations of
@@ -1176,6 +1206,130 @@ func typenameForInterface(t *testing.T) {
 			"name": "R2-D2",
 			"__typename": "Droid",
 			"primaryFunction": "Robot"
+		  }
+		]
+	  }`
+
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	cleanupStarwars(t, newStarship.ID, humanID, droidID)
+}
+
+func queryOnlyTypename(t *testing.T) {
+
+	newCountry1 := addCountry(t, postExecutor)
+	newCountry2 := addCountry(t, postExecutor)
+	newCountry3 := addCountry(t, postExecutor)
+
+	getCountryParams := &GraphQLParams{
+		Query: `query {
+			queryCountry(filter: { name: {eq: "Testland"}}) {
+				__typename
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+	"queryCountry": [
+         {
+               "__typename": "Country"
+         },
+         {
+               "__typename": "Country"
+         },
+         {
+               "__typename": "Country"
+         }
+
+       ]
+}`
+
+	require.JSONEq(t, expected, string(gqlResponse.Data))
+	cleanUp(t, []*country{newCountry1, newCountry2, newCountry3}, []*author{}, []*post{})
+}
+
+func querynestedOnlyTypename(t *testing.T) {
+
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+	newPost1 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+	newPost2 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+	newPost3 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+
+	getCountryParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Test Author" } }) {
+				posts {
+					__typename
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+	"queryAuthor": [
+	  {
+		"posts": [
+		  {
+			"__typename": "Post"
+		  },
+                  {
+			"__typename": "Post"
+		  },
+		  {
+
+			"__typename": "Post"
+		  }
+		]
+	  }
+	]
+}`
+	require.JSONEq(t, expected, string(gqlResponse.Data))
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost1, newPost2, newPost3})
+}
+
+func onlytypenameForInterface(t *testing.T) {
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	droidID := addDroid(t)
+	updateCharacter(t, humanID)
+
+	t.Run("test __typename for interface types", func(t *testing.T) {
+		queryCharacterParams := &GraphQLParams{
+			Query: `query {
+				queryCharacter (filter: {
+					appearsIn: {
+						eq: [EMPIRE]
+					}
+				}) {
+
+
+					... on Human {
+						__typename
+			                }
+					... on Droid {
+						__typename
+			                }
+				}
+			}`,
+		}
+
+		expected := `{
+		"queryCharacter": [
+		  {
+                      "__typename": "Human"
+		  },
+		  {
+	             "__typename": "Droid"
 		  }
 		]
 	  }`

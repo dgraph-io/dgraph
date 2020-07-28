@@ -72,6 +72,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -79,6 +80,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	query: AuthRule,
@@ -149,11 +151,13 @@ type AddHumanPayload {
 }
 
 type DeleteCharacterPayload {
+	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	msg: String
 	numUids: Int
 }
 
 type DeleteHumanPayload {
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	msg: String
 	numUids: Int
 }
@@ -296,14 +300,3 @@ type Mutation {
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
 }
 
-#######################
-# Generated Subscriptions
-#######################
-
-type Subscription {
-	getCharacter(id: ID!): Character
-	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	queryEmployee(order: EmployeeOrder, first: Int, offset: Int): [Employee]
-	getHuman(id: ID!): Human
-	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-}

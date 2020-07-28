@@ -144,7 +144,7 @@ func NewUriHandler(uri *url.URL, creds *Credentials) (UriHandler, error) {
 // loadFn is a function that will receive the current file being read.
 // A reader, the backup groupId, and a map whose keys are the predicates to restore
 // are passed as arguments.
-type loadFn func(reader io.Reader, groupId int, preds predicateSet) (uint64, error)
+type loadFn func(reader io.Reader, groupId uint32, preds predicateSet) (uint64, error)
 
 // LoadBackup will scan location l for backup files in the given backup series and load them
 // sequentially. Returns the maximum Since value on success, otherwise an error.

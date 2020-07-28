@@ -32,8 +32,7 @@ import (
 
 // ServerState holds the state of the Dgraph server.
 type ServerState struct {
-	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
-	ShutdownCh chan struct{} // channel to signal shutdown.
+	FinishCh chan struct{} // channel to wait for all pending reqs to finish.
 
 	Pstore   *badger.DB
 	WALstore *badger.DB
@@ -50,7 +49,6 @@ func InitServerState() {
 	Config.validate()
 
 	State.FinishCh = make(chan struct{})
-	State.ShutdownCh = make(chan struct{})
 	State.needTs = make(chan tsReq, 100)
 
 	State.initStorage()
@@ -65,11 +63,19 @@ func InitServerState() {
 }
 
 func setBadgerOptions(opt badger.Options) badger.Options {
-	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).
+	opt = opt.WithSyncWrites(false).
+		WithTruncate(true).
+		WithLogger(&x.ToGlog{}).
 		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
 
 	// Do not load bloom filters on DB open.
 	opt.LoadBloomsOnOpen = false
+
+	// Disable conflict detection in badger. Alpha runs in managed mode and
+	// perform its own conflict detection so we don't need badger's conflict
+	// detection. Using badger's conflict detection uses memory which can be
+	// saved by disabling it.
+	opt.DetectConflicts = false
 
 	glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
 	// Default value of badgerCompressionLevel is 3 so compression will always

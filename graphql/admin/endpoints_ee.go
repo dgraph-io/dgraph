@@ -65,8 +65,9 @@ const adminTypes = `
 
 		"""
 		Backup ID of the backup series to restore. This ID is included in the manifest.json file.
+		If missing, it defaults to the latest series.
 		"""
-		backupId: String!
+		backupId: String
 
 		"""
 		Path to the key file needed to decrypt the backup. This file should be accessible
@@ -77,7 +78,7 @@ const adminTypes = `
 
 		"""
 		Vault server address where the key is stored. This server must be accessible
-		by all alphas in the group.
+		by all alphas in the group. Default "http://localhost:8200".
 		"""
 		vaultAddr: String
 
@@ -92,14 +93,19 @@ const adminTypes = `
 		vaultSecretIDFile: String
 
 		"""
-		Vault kv store path where the key lives.
+		Vault kv store path where the key lives. Default "secret/data/dgraph".
 		"""
 		vaultPath: String
 
 		"""
-		Vault kv store field whose value is the key.
+		Vault kv store field whose value is the key. Default "enc_key".
 		"""
 		vaultField: String
+
+		"""
+		Vault kv store field's format. Must be "base64" or "raw". Default "base64".
+		"""
+		vaultFormat: String
 
 		"""
 		Access key credential for the destination.
@@ -123,7 +129,21 @@ const adminTypes = `
 	}
 
 	type RestorePayload {
-		response: Response
+		"""
+		A short string indicating whether the restore operation was successfully scheduled.
+		The status of the operation can be queried using the restoreStatus endpoint.
+		"""
+		code: String
+
+		"""
+		Includes the error message if the operation failed.
+		"""
+		message: String
+
+		"""
+		The unique ID that can be used to query the status of the restore operation.
+		"""
+		restoreId: Int
 	}
 
 	input ListBackupsInput {
@@ -203,6 +223,18 @@ const adminTypes = `
 		"""
 		type: String
 	}
+
+	type RestoreStatus {
+		"""
+		The status of the restore operation. One of UNKNOWN, IN_PROGRESS, OK, or ERR.
+		"""
+		status: String!
+
+		"""
+		A list of error messages if the restore operation failed.
+		"""
+		errors: [String]
+	}
 	
 	type LoginResponse {
 
@@ -221,7 +253,7 @@ const adminTypes = `
 		response: LoginResponse
 	}
 
-	type User @secret(field: "password", pred: "dgraph.password") {
+	type User @dgraph(type: "dgraph.type.User") @secret(field: "password", pred: "dgraph.password") {
 
 		"""
 		Username for the user.  Dgraph ensures that usernames are unique.
@@ -231,7 +263,7 @@ const adminTypes = `
 		groups: [Group] @dgraph(pred: "dgraph.user.group")
 	}
 
-	type Group {
+	type Group @dgraph(type: "dgraph.type.Group") {
 
 		"""
 		Name of the group.  Dgraph ensures uniqueness of group names.
@@ -241,7 +273,7 @@ const adminTypes = `
 		rules: [Rule] @dgraph(pred: "dgraph.acl.rule")
 	}
 
-	type Rule {
+	type Rule @dgraph(type: "dgraph.type.Rule") {
 
 		"""
 		Predicate to which the rule applies.
@@ -459,4 +491,9 @@ const adminQueries = `
 	"""
 	Get the information about the backups at a given location.
 	"""
-	listBackups(input: ListBackupsInput!) : [Manifest]`
+	listBackups(input: ListBackupsInput!) : [Manifest]
+
+	"""
+	Get information about a restore operation.
+	"""
+	restoreStatus(restoreId: Int!) : RestoreStatus`

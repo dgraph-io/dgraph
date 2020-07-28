@@ -190,7 +190,7 @@ func CreateUserNQuads(userId, password string) []*api.NQuad {
 		{
 			Subject:     "_:newuser",
 			Predicate:   "dgraph.type",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "User"}},
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "dgraph.type.User"}},
 		},
 	}
 }
@@ -206,7 +206,7 @@ func CreateGroupNQuads(groupId string) []*api.NQuad {
 		{
 			Subject:     "_:newgroup",
 			Predicate:   "dgraph.type",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "Group"}},
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "dgraph.type.Group"}},
 		},
 	}
 }

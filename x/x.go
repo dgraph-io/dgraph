@@ -123,12 +123,19 @@ const (
 `
 
 	InitialTypes = `
-"types": [
-{"fields":[{"name":"dgraph.graphql.schema"},{"name":"dgraph.graphql.xid"}],"name":"dgraph.graphql"},
-{"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],"name": "User"},
-{"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],"name": "Group"},
-{"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],"name": "Rule"}
-]`
+"types": [{
+	"fields": [{"name": "dgraph.graphql.schema"},{"name": "dgraph.graphql.xid"}],
+	"name": "dgraph.graphql"
+},{
+	"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],
+	"name": "dgraph.type.User"
+},{
+	"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],
+	"name": "dgraph.type.Group"
+},{
+	"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],
+	"name": "dgraph.type.Rule"
+}]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper
@@ -386,8 +393,8 @@ func AttachRemoteIP(ctx context.Context, r *http.Request) context.Context {
 	return ctx
 }
 
-// IsIpWhitelisted checks if the given ipString is within the whitelisted ip range
-func IsIpWhitelisted(ipString string) bool {
+// isIpWhitelisted checks if the given ipString is within the whitelisted ip range
+func isIpWhitelisted(ipString string) bool {
 	ip := net.ParseIP(ipString)
 
 	if ip == nil {
@@ -404,6 +411,23 @@ func IsIpWhitelisted(ipString string) bool {
 		}
 	}
 	return false
+}
+
+// HasWhitelistedIP checks whether the source IP in ctx is whitelisted or not.
+// It returns the IP address if the IP is whitelisted, otherwise an error is returned.
+func HasWhitelistedIP(ctx context.Context) (net.Addr, error) {
+	peerInfo, ok := peer.FromContext(ctx)
+	if !ok {
+		return nil, errors.New("unable to find source ip")
+	}
+	ip, _, err := net.SplitHostPort(peerInfo.Addr.String())
+	if err != nil {
+		return nil, err
+	}
+	if !isIpWhitelisted(ip) {
+		return nil, errors.Errorf("unauthorized ip address: %s", ip)
+	}
+	return peerInfo.Addr, nil
 }
 
 // Write response body, transparently compressing if necessary.
@@ -973,4 +997,48 @@ func StoreSync(db DB, closer *y.Closer) {
 			return
 		}
 	}
+}
+
+// DeepCopyJsonMap returns a deep copy of the input map `m`.
+// `m` is supposed to be a map similar to the ones produced as a result of json unmarshalling. i.e.,
+// any value in `m` at any nested level should be of an inbuilt go type.
+func DeepCopyJsonMap(m map[string]interface{}) map[string]interface{} {
+	if m == nil {
+		return nil
+	}
+
+	mCopy := make(map[string]interface{})
+	for k, v := range m {
+		switch val := v.(type) {
+		case map[string]interface{}:
+			mCopy[k] = DeepCopyJsonMap(val)
+		case []interface{}:
+			mCopy[k] = DeepCopyJsonArray(val)
+		default:
+			mCopy[k] = val
+		}
+	}
+	return mCopy
+}
+
+// DeepCopyJsonArray returns a deep copy of the input array `a`.
+// `a` is supposed to be an array similar to the ones produced as a result of json unmarshalling.
+// i.e., any value in `a` at any nested level should be of an inbuilt go type.
+func DeepCopyJsonArray(a []interface{}) []interface{} {
+	if a == nil {
+		return nil
+	}
+
+	aCopy := make([]interface{}, 0, len(a))
+	for _, v := range a {
+		switch val := v.(type) {
+		case map[string]interface{}:
+			aCopy = append(aCopy, DeepCopyJsonMap(val))
+		case []interface{}:
+			aCopy = append(aCopy, DeepCopyJsonArray(val))
+		default:
+			aCopy = append(aCopy, val)
+		}
+	}
+	return aCopy
 }

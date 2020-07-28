@@ -179,11 +179,11 @@ func TestAddDeepFilter(t *testing.T) {
 		mutation addColumn($column: AddColumnInput!) {
 			addColumn(input: [$column]) {
 				column {
-			             name
-				     inProject {
-				           projID
-				           name
-				     }
+					name
+					 inProject {
+						   projID
+						   name
+					 }
 				}
 			}
 		}
@@ -662,7 +662,7 @@ func TestAddGQLOnly(t *testing.T) {
 	query := `
 		mutation addUser($user: AddUserSecretInput!) {
 			addUserSecret(input: [$user]) {
-				usersecret {
+				userSecret {
 					aSecret
 				}
 			}

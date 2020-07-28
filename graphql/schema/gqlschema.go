@@ -34,15 +34,16 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
-	dgraphDirective  = "dgraph"
-	dgraphTypeArg    = "type"
-	dgraphPredArg    = "pred"
-	idDirective      = "id"
-	secretDirective  = "secret"
-	authDirective    = "auth"
-	customDirective  = "custom"
-	remoteDirective  = "remote" // types with this directive are not stored in Dgraph.
-	cascadeDirective = "cascade"
+	dgraphDirective       = "dgraph"
+	dgraphTypeArg         = "type"
+	dgraphPredArg         = "pred"
+	idDirective           = "id"
+	secretDirective       = "secret"
+	authDirective         = "auth"
+	customDirective       = "custom"
+	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
+	cascadeDirective      = "cascade"
+	SubscriptionDirective = "withSubscription"
 
 	// custom directive args and fields
 	mode   = "mode"
@@ -51,6 +52,7 @@ const (
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
+	Msg                 = "msg"
 
 	Typename = "__typename"
 
@@ -104,6 +106,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -111,6 +114,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	query: AuthRule,
@@ -190,7 +194,7 @@ type directiveValidator func(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) *gqlerror.Error
+	secrets map[string]x.SensitiveByteSlice) gqlerror.List
 
 type searchTypeIndex struct {
 	gqlType string
@@ -289,49 +293,45 @@ var scalarToDgraph = map[string]string{
 	"Password": "password",
 }
 
+func ValidatorNoOp(
+	sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	return nil
+}
+
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective: hasInverseValidation,
-	searchDirective:  searchValidation,
-	dgraphDirective:  dgraphDirectiveValidation,
-	idDirective:      idValidation,
-	secretDirective:  passwordValidation,
-	customDirective:  customDirectiveValidation,
-	remoteDirective:  remoteDirectiveValidation,
-	deprecatedDirective: func(
-		sch *ast.Schema,
-		typ *ast.Definition,
-		field *ast.FieldDefinition,
-		dir *ast.Directive,
-		secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
-		return nil
-	},
+	inverseDirective:      hasInverseValidation,
+	searchDirective:       searchValidation,
+	dgraphDirective:       dgraphDirectiveValidation,
+	idDirective:           idValidation,
+	secretDirective:       passwordValidation,
+	customDirective:       customDirectiveValidation,
+	remoteDirective:       ValidatorNoOp,
+	deprecatedDirective:   ValidatorNoOp,
+	SubscriptionDirective: ValidatorNoOp,
 	// Just go get it printed into generated schema
-	authDirective: func(
-		sch *ast.Schema,
-		typ *ast.Definition,
-		field *ast.FieldDefinition,
-		dir *ast.Directive,
-		secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
-		return nil
-	},
+	authDirective: ValidatorNoOp,
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
 var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.List
-var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
-var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
+var defnValidations, typeValidations []func(schema *ast.Schema, defn *ast.Definition) gqlerror.List
+var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.List
 
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	var dirs ast.DirectiveList
 	dirs = append(dirs, src.Directives...)
 
-	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
-	// them. We add arguments for filters and order statements later.
+	// We add arguments for filters and order statements later.
 	dst := &ast.FieldDefinition{
 		Name:         src.Name,
 		DefaultValue: src.DefaultValue,
 		Type:         src.Type,
 		Directives:   dirs,
+		Arguments:    src.Arguments,
 		Position:     src.Position,
 	}
 	return dst
@@ -396,7 +396,7 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 			// prelude definitions are built in and we don't want to validate them.
 			continue
 		}
-		errs = append(errs, applyDefnValidations(defn, defnValidations)...)
+		errs = append(errs, applyDefnValidations(defn, nil, defnValidations)...)
 	}
 
 	errs = append(errs, applySchemaDocValidations(schema)...)
@@ -415,7 +415,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string,
 	for _, defn := range definitions {
 		typ := schema.Types[defn]
 
-		errs = append(errs, applyDefnValidations(typ, typeValidations)...)
+		errs = append(errs, applyDefnValidations(typ, schema, typeValidations)...)
 
 		for _, field := range typ.Fields {
 			errs = append(errs, applyFieldValidations(typ, field)...)
@@ -424,8 +424,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string,
 				if directiveValidators[dir.Name] == nil {
 					continue
 				}
-				errs = appendIfNotNull(errs,
-					directiveValidators[dir.Name](schema, typ, field, dir, secrets))
+				errs = append(errs, directiveValidators[dir.Name](schema, typ, field, dir, secrets)...)
 			}
 		}
 	}
@@ -461,14 +460,12 @@ func applySchemaValidations(schema *ast.Schema, definitions []string) gqlerror.L
 	return errs
 }
 
-func applyDefnValidations(defn *ast.Definition,
-	rules []func(defn *ast.Definition) *gqlerror.Error) gqlerror.List {
+func applyDefnValidations(defn *ast.Definition, schema *ast.Schema,
+	rules []func(schema *ast.Schema, defn *ast.Definition) gqlerror.List) gqlerror.List {
 	var errs []*gqlerror.Error
-
 	for _, rule := range rules {
-		errs = appendIfNotNull(errs, rule(defn))
+		errs = append(errs, rule(schema, defn)...)
 	}
-
 	return errs
 }
 
@@ -476,7 +473,7 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 	var errs []*gqlerror.Error
 
 	for _, rule := range fieldValidations {
-		errs = appendIfNotNull(errs, rule(typ, field))
+		errs = append(errs, rule(typ, field)...)
 	}
 
 	return errs
@@ -841,13 +838,11 @@ func hasOrderables(defn *ast.Definition) bool {
 }
 
 func hasID(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return isID(fld) })
+	return fieldAny(defn.Fields, isID)
 }
 
 func hasXID(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return hasIDDirective(fld) })
+	return fieldAny(defn.Fields, hasIDDirective)
 }
 
 // fieldAny returns true if any field in fields satisfies pred
@@ -971,7 +966,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 
 func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	qry := &ast.FieldDefinition{
-		Name: strings.ToLower(defn.Name),
+		Name: camelCase(defn.Name),
 		Type: ast.ListType(&ast.Type{
 			NamedType: defn.Name,
 		}, nil),
@@ -1001,7 +996,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	qry := &ast.FieldDefinition{
-		Name: strings.ToLower(defn.Name),
+		Name: camelCase(defn.Name),
 		Type: &ast.Type{
 			Elem: &ast.Type{
 				NamedType: defn.Name,
@@ -1027,18 +1022,26 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
+	qry := &ast.FieldDefinition{
+		Name: camelCase(defn.Name),
+		Type: ast.ListType(&ast.Type{
+			NamedType: defn.Name,
+		}, nil),
+	}
+
+	addFilterArgument(schema, qry)
+	addOrderArgument(schema, qry)
+	addPaginationArguments(qry)
+
+	msg := &ast.FieldDefinition{
+		Name: "msg",
+		Type: &ast.Type{NamedType: "String"},
+	}
+
 	schema.Types["Delete"+defn.Name+"Payload"] = &ast.Definition{
-		Kind: ast.Object,
-		Name: "Delete" + defn.Name + "Payload",
-		Fields: []*ast.FieldDefinition{
-			{
-				Name: "msg",
-				Type: &ast.Type{
-					NamedType: "String",
-				},
-			},
-			numUids,
-		},
+		Kind:   ast.Object,
+		Name:   "Delete" + defn.Name + "Payload",
+		Fields: []*ast.FieldDefinition{qry, msg, numUids},
 	}
 }
 
@@ -1079,7 +1082,10 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 		})
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	subs := defn.Directives.ForName(SubscriptionDirective)
+	if subs != nil {
+		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	}
 }
 
 func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -1096,7 +1102,11 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	addPaginationArguments(qry)
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	subs := defn.Directives.ForName(SubscriptionDirective)
+	if subs != nil {
+		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	}
+
 }
 
 func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -1135,7 +1145,6 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
@@ -1241,6 +1250,7 @@ func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinit
 	newFldType := *fld.Type
 	newFld.Type = &newFldType
 	newFld.Directives = nil
+	newFld.Arguments = nil
 	return &newFld
 }
 
@@ -1295,6 +1305,13 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 		custom := fld.Directives.ForName(customDirective)
 		// Fields with @custom directive should not be part of mutation input, hence we skip them.
 		if custom != nil {
+			continue
+		}
+
+		// Remove edges which have a reverse predicate as they should only be updated through their
+		// forward edge.
+		fname := fieldName(fld, defn.Name)
+		if strings.HasPrefix(fname, "~") || strings.HasPrefix(fname, "<~") {
 			continue
 		}
 
@@ -1639,4 +1656,12 @@ func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List 
 func isGraphqlSpecScalar(typ string) bool {
 	_, ok := graphqlSpecScalars[typ]
 	return ok
+}
+
+func camelCase(x string) string {
+	if x == "" {
+		return ""
+	}
+
+	return strings.ToLower(x[:1]) + x[1:]
 }

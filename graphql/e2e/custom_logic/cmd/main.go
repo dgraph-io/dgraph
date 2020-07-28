@@ -35,7 +35,8 @@ import (
 )
 
 type expectedRequest struct {
-	method    string
+	method string
+	// Send urlSuffix as empty string to ignore comparison
 	urlSuffix string
 	body      string
 	// Send headers as nil to ignore comparing headers.
@@ -172,7 +173,8 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 		return getError("Invalid HTTP method", r.Method)
 	}
 
-	if !strings.HasSuffix(r.URL.String(), expectedRequest.urlSuffix) {
+	if expectedRequest.urlSuffix != "" && !strings.HasSuffix(r.URL.String(),
+		expectedRequest.urlSuffix) {
 		return getError("Invalid URL", r.URL.String())
 	}
 
@@ -295,17 +297,40 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	check2(w.Write([]byte(`[{"id":"0x3","name":"Star Wars"}]`)))
 }
 
-func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
+func verifyCustomNameHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodGet,
-		urlSuffix: "/twitterfollowers?screen_name=manishrjain",
+		urlSuffix: "/verifyCustomNameHeaders",
 		body:      "",
+		headers: map[string][]string{
+			"X-App-Token":     {"app-token"},
+			"X-User-Id":       {"123"},
+			"Authorization":   {"random-fake-token"},
+			"Accept-Encoding": nil,
+			"User-Agent":      nil,
+		},
 	})
 	if err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write([]byte(`
+	check2(w.Write([]byte(`[{"id":"0x3","name":"Star Wars"}]`)))
+}
+
+func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method: http.MethodGet,
+		body:   "",
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	var resp string
+	switch r.URL.Query().Get("screen_name") {
+	case "manishrjain":
+		resp = `
 	{
 		"users": [{
 			"id": 1231723732206411776,
@@ -317,7 +342,16 @@ func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
 			"friends_count": 117,
 			"statuses_count": 0
 		}]
-	}`)))
+	}`
+	case "amazingPanda":
+		resp = `
+	{
+		"users": [{
+			"name": "twitter_bot"
+		}]
+	}`
+	}
+	check2(w.Write([]byte(resp)))
 }
 
 func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
@@ -559,19 +593,6 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	check2(fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["getPosts"].Schema)))
-}
-
-func getPostswithLike(w http.ResponseWriter, r *http.Request) {
-	_, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
-		urlSuffix: "/getPostswithLike",
-		body:      ``,
-	})
-	if err != nil {
-		check2(w.Write([]byte(err.Error())))
-		return
-	}
-
-	check2(fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["getPostswithLike"].Schema)))
 }
 
 type input struct {
@@ -1114,6 +1135,7 @@ func main() {
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
+	http.HandleFunc("/verifyCustomNameHeaders", verifyCustomNameHeadersHandler)
 	http.HandleFunc("/twitterfollowers", twitterFollwerHandler)
 
 	// for mutations
@@ -1154,6 +1176,7 @@ func main() {
 	// for queries
 	vsch := graphql.MustParseSchema(graphqlResponses["validcountry"].Schema, &query{})
 	http.Handle("/validcountry", &relay.Handler{Schema: vsch})
+	http.HandleFunc("/argsonfields", commonGraphqlHandler("argsonfields"))
 	http.HandleFunc("/validcountrywitherror", commonGraphqlHandler("validcountrywitherror"))
 	http.HandleFunc("/graphqlerr", commonGraphqlHandler("graphqlerr"))
 	http.Handle("/validcountries", &relay.Handler{
@@ -1193,7 +1216,6 @@ func main() {
 	bsch := graphql.MustParseSchema(graphqlResponses["batchOperationSchema"].Schema, &query{})
 	bh := &relay.Handler{Schema: bsch}
 	http.HandleFunc("/getPosts", getPosts)
-	http.HandleFunc("/getPostswithLike", getPostswithLike)
 	http.Handle("/gqlUserNames", bh)
 	http.Handle("/gqlCars", bh)
 	http.HandleFunc("/gqlCarsWithErrors", gqlCarsWithErrorHandler)

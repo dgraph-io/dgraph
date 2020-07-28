@@ -68,7 +68,7 @@ type Region @auth(
     """}
 ){
   id: ID!
-  name: String
+  name: String @search(by: [hash])
   global: Boolean @search
   users: [User]
 }
@@ -192,7 +192,7 @@ type Movie @auth(
     ]}
 ) {
   id: ID!
-  content: String
+  content: String @search(by: [hash])
   hidden: Boolean @search
   regionsAvailable: [Region]
   reviews: [Review]
@@ -509,5 +509,63 @@ type Ticket @auth(
 type Review @auth() {
     id: ID!
     comment: String!
+}
+
+type Student @dgraph(type: "is7sowSm")
+@auth(query:  { and : [ {rule: """
+query($USER: String!) {
+    queryStudent(filter: {email: { eq: $USER}}) {
+        __typename
+    }
+}
+"""},{ rule: "{$ROLE: { eq: \"ADMIN\" }}"}]}) {
+    id: ID!
+    email: String! @dgraph(pred: "IOw80vnV") @search(by: [hash])
+}
+
+type Contact @auth(
+    query: { rule: "{$ContactRole: { eq: \"ADMINISTRATOR\"}}" }
+) {
+    id: ID!
+    nickName: String @search(by: [exact, term, fulltext, regexp])
+    adminTasks: [AdminTask] @hasInverse(field: forContact)
+    tasks: [Task] @hasInverse(field: forContact)
+}
+
+type AdminTask @auth(
+    query: { rule: "{$TaskRole: { eq: \"ADMINISTRATOR\"}}" }
+) {
+    id: ID!
+    name: String @search(by: [exact, term, fulltext, regexp])
+    occurrances: [TaskOccurance] @hasInverse(field: adminTask)
+    forContact: Contact @hasInverse(field: adminTasks)
+}
+
+type Task {
+    id: ID!
+    name: String @search(by: [exact, term, fulltext, regexp])
+    occurrances: [TaskOccurance] @hasInverse(field: task)
+    forContact: Contact @hasInverse(field: tasks)
+}
+
+type TaskOccurance @auth(
+    query: { and : [
+        {rule: "{$TaskOccuranceRole: { eq: \"ADMINISTRATOR\"}}"},
+        {rule: """
+        query($TaskOccuranceRole: String!) {
+            queryTaskOccurance(filter: {role: { eq: $TaskOccuranceRole}}) {
+                __typename
+            }
+        }
+        """}
+] }
+) {
+    id: ID!
+    due: DateTime @search
+    comp: DateTime @search
+    task: Task @hasInverse(field: occurrances)
+    adminTask: AdminTask @hasInverse(field: occurrances)
+    isPublic: Boolean @search
+    role: String @search(by: [exact, term, fulltext, regexp])
 }
 

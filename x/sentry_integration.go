@@ -18,6 +18,8 @@ package x
 
 import (
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -28,8 +30,9 @@ import (
 )
 
 var (
-	env string
-	dsn string // API KEY to use
+	env     string
+	dsn     string // API KEY to use
+	cidPath string
 )
 
 // Sentry API KEYs to use.
@@ -39,6 +42,14 @@ const (
 	// dgraph-devtest-playground project (dev builds).
 	dsnDevtest = "https://84c2ad450005436fa27d97ef72b52425@o318308.ingest.sentry.io/5208688"
 )
+
+// SentryOptOutNote - This is an opt out banner.
+func SentryOptOutNote() {
+	glog.Infof("This instance of Dgraph will send anonymous reports of panics back " +
+		"to Dgraph Labs via Sentry. No confidential information is sent. These reports " +
+		"help improve Dgraph. To opt-out, restart your instance with the --enable_sentry=false " +
+		"flag. For more info, see https://dgraph.io/docs/howto/#data-handling.")
+}
 
 // InitSentry initializes the sentry machinery.
 func InitSentry(ee bool) {
@@ -97,8 +108,47 @@ func FlushSentry() {
 func ConfigureSentryScope(subcmd string) {
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetTag("dgraph", subcmd)
+		scope.SetTag("checksum", fmt.Sprintf("%x", ExecutableChecksum()))
+		scope.SetTag("commit", lastCommitSHA)
+		scope.SetTag("commit_ts", lastCommitTime)
+		scope.SetTag("branch", gitBranch)
 		scope.SetLevel(sentry.LevelFatal)
 	})
+
+	// e.g. /tmp/dgraph-alpha-cid-sentry
+	cidPath = os.TempDir() + "/" + "dgraph-" + subcmd + "-cid-sentry"
+}
+
+// WriteCidFile writes the CID to a well-known location so it can be read and
+// sent to Sentry on panic.
+func WriteCidFile(cid string) {
+	if cid == "" {
+		return
+	}
+	if err := ioutil.WriteFile(cidPath, []byte(cid), 0644); err != nil {
+		glog.Warningf("unable to write CID to file %v %v", cidPath, err)
+		return
+	}
+}
+
+// readAndRemoveCidFile reads the file from a well-known location so
+// it can be read and sent to Sentry on panic.
+func readAndRemoveCidFile() string {
+	cid, err := ioutil.ReadFile(cidPath)
+	if err != nil {
+		glog.Warningf("unable to read CID from file %v %v. Skip", cidPath, err)
+		return ""
+	}
+	RemoveCidFile()
+	return string(cid)
+}
+
+// RemoveCidFile removes the file.
+func RemoveCidFile() {
+	if err := os.RemoveAll(cidPath); err != nil {
+		glog.Warningf("unable to remove the CID file at %v %v. Skip", cidPath, err)
+		return
+	}
 }
 
 // CaptureSentryException sends the error report to Sentry.
@@ -111,6 +161,12 @@ func CaptureSentryException(err error) {
 // PanicHandler is the callback function when a panic happens. It does not recover and is
 // only used to log panics (in our case send an event to sentry).
 func PanicHandler(out string) {
+	if cid := readAndRemoveCidFile(); cid != "" {
+		// re-configure sentry scope to include cid if found.
+		sentry.ConfigureScope(func(scope *sentry.Scope) {
+			scope.SetTag("CID", cid)
+		})
+	}
 	// Output contains the full output (including stack traces) of the panic.
 	sentry.CaptureException(errors.New(out))
 	FlushSentry() // Need to flush asap. Don't defer here.
@@ -119,7 +175,6 @@ func PanicHandler(out string) {
 }
 
 // WrapPanics is a wrapper on panics. We use it to send sentry events about panics
-// and crash right after.
 func WrapPanics() {
 	exitStatus, err := panicwrap.BasicWrap(PanicHandler)
 	if err != nil {

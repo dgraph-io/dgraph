@@ -20,6 +20,14 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/pkg/errors"
+)
+
+const (
+	unknownStatus    = "UNKNOWN"
+	inProgressStatus = "IN_PROGRESS"
+	okStatus         = "OK"
+	errStatus        = "ERR"
 )
 
 // predicateSet is a map whose keys are predicates. It is meant to be used as a set.
@@ -67,22 +75,6 @@ func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
 	return predSet
 }
 
-// Credentials holds the credentials needed to perform a backup operation.
-// If these credentials are missing the default credentials will be used.
-type Credentials struct {
-	AccessKey    string
-	SecretKey    string
-	SessionToken string
-	Anonymous    bool
-}
-
-func (creds *Credentials) isAnonymous() bool {
-	if creds == nil {
-		return false
-	}
-	return creds.Anonymous
-}
-
 // GetCredentialsFromRequest extracts the credentials from a backup request.
 func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
 	return &Credentials{
@@ -91,4 +83,113 @@ func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
 		SessionToken: req.GetSessionToken(),
 		Anonymous:    req.GetAnonymous(),
 	}
+}
+
+type RestoreStatus struct {
+	// Status is a string representing the Status, one of "UNKNOWN", "IN_PROGRESS", "OK",
+	// or "ERR".
+	Status string
+	Errors []error
+}
+
+type restoreTracker struct {
+	sync.RWMutex
+	// Status is a map of restore task ID to the Status of said task.
+	status  map[int]*RestoreStatus
+	counter int
+}
+
+func newRestoreTracker() *restoreTracker {
+	return &restoreTracker{status: make(map[int]*RestoreStatus)}
+}
+
+func (rt *restoreTracker) Status(restoreId int) *RestoreStatus {
+	if rt == nil {
+		return &RestoreStatus{Status: unknownStatus}
+	}
+
+	rt.RLock()
+	defer rt.RUnlock()
+
+	status, ok := rt.status[restoreId]
+	if ok {
+		return status
+	}
+	return &RestoreStatus{Status: unknownStatus}
+}
+
+func (rt *restoreTracker) Add() (int, error) {
+	if rt == nil {
+		return 0, errors.Errorf("uninitialized restore operation tracker")
+	}
+
+	rt.Lock()
+	defer rt.Unlock()
+
+	for otherId, otherStatus := range rt.status {
+		if otherStatus.Status == inProgressStatus {
+			return 0, errors.Errorf("another restore operation with id %d is in progress", otherId)
+		}
+	}
+
+	rt.counter += 1
+	if _, ok := rt.status[rt.counter]; ok {
+		return 0, errors.Errorf("another restore operation with ID %d already exists", rt.counter)
+	}
+
+	// Cleanup the restore operation with ID equal to this ID - 50. This is a simple
+	// way to prevent the map from growing without bound.
+	oldId := rt.counter - 50
+	delete(rt.status, oldId)
+
+	rt.status[rt.counter] = &RestoreStatus{Status: inProgressStatus, Errors: make([]error, 0)}
+	return rt.counter, nil
+}
+
+func (rt *restoreTracker) Done(restoreId int, errs []error) error {
+	if rt == nil {
+		return errors.Errorf("uninitialized restore operation tracker")
+	}
+
+	rt.Lock()
+	defer rt.Unlock()
+
+	if _, ok := rt.status[restoreId]; !ok {
+		return errors.Errorf("unknown restore operation with ID %d", restoreId)
+	}
+
+	validErrs := make([]error, 0)
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		validErrs = append(validErrs, err)
+	}
+
+	var status string
+	if len(validErrs) > 0 {
+		status = errStatus
+	} else {
+		status = okStatus
+	}
+
+	rt.status[restoreId] = &RestoreStatus{Status: status, Errors: validErrs}
+	return nil
+}
+
+func (rt *restoreTracker) Delete(restoreId int) {
+	if rt == nil {
+		return
+	}
+	// Ignore values less than zero because they are not valid.
+	if restoreId <= 0 {
+		return
+	}
+	rt.Lock()
+	defer rt.Unlock()
+	delete(rt.status, restoreId)
+}
+
+func DeleteRestoreId(restoreId int) {
+	rt.Delete(restoreId)
 }
