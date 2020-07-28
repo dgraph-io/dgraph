@@ -1781,7 +1781,13 @@ func isReservedArgument(name string) bool {
 }
 
 func isReservedKeyWord(name string) bool {
-	if isScalar(name) || isQueryOrMutation(name) || name == "uid" {
+	reservedTypeNames := map[string]bool{
+		// Reserved Type names
+		"uid":          true,
+		"Subscription": true,
+	}
+
+	if isScalar(name) || isQueryOrMutation(name) || reservedTypeNames[name] {
 		return true
 	}
 
