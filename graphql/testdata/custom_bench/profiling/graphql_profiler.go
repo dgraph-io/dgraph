@@ -580,7 +580,7 @@ func saveTracing(resp *Response, outputDir string, iteration int) (error, int64,
 	}
 
 	f, err := os.OpenFile(filepath.Join(outputDir, fmt.Sprintf("%02d", iteration)+"_tracing.txt"),
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		log.Println(err)
 		return err, 0, 0
