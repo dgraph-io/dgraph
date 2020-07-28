@@ -19,8 +19,14 @@ BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME  = unnamed
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
-# Set latest tag as BUILD_VERSION
-BUILD_VERSION ?= $(shell git for-each-ref refs/tags --sort=-taggerdate --format='%(refname:short)' --count=1)
+
+# use a large version number v99 on master branch
+ifeq ($(BUILD_BRANCH),master)
+BUILD_VERSION ?= 'v20.11.0-'$(BUILD)
+else
+BUILD_VERSION ?= $(shell git describe --always --tags)
+endif
+
 BUILD_TAGS    ?=
 GOPATH        ?= $(shell go env GOPATH)
 
