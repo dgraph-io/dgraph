@@ -11,7 +11,7 @@ set -e
 
 GREEN='\033[32;1m'
 RESET='\033[0m'
-HOST="${HOST:-http://0.0.0.0:8000}"
+HOST="${HOST:-https://dgraph.io/docs}"
 # Name of output public directory
 PUBLIC="${PUBLIC:-public}"
 # LOOP true makes this script run in a loop to check for updates
@@ -32,7 +32,6 @@ NEW_THEME="master"
 
 # these versions use new theme
 NEW_VERSIONS=(
-	'namandocs'
 	'master'
 )
 
@@ -128,8 +127,6 @@ checkAndUpdate()
 
 	if [[ $version == "master" ]]; then
 		branch="master"
-	elif [[ $version == "namandocs" ]]; then
-		branch="namandocs"
 	else
 		branch="release/$version"
 	fi
