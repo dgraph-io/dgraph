@@ -37,6 +37,7 @@ const (
 	alphaURL             = "http://localhost:8180/graphql"
 	alphaAdminURL        = "http://localhost:8180/admin"
 	subscriptionEndpoint = "ws://localhost:8180/graphql"
+	groupOnegRPC         = "localhost:9180"
 	customTypes          = `type MovieDirector @remote {
 		 id: ID!
 		 name: String!
@@ -1090,6 +1091,9 @@ func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
 }
 
 func TestCustomFieldsShouldPassBody(t *testing.T) {
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
 	schema := `
     type User {
 		id: String! @id @search(by: [hash, regexp])

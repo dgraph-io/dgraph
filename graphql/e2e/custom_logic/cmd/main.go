@@ -384,10 +384,10 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
     ]`)))
 }
 
-func favMoviesCreateWithNullBody(w http.ResponseWriter, r *http.Request) {
+func favMoviesCreateWithNullBodyHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodPost,
-		urlSuffix: "/favMoviesCreateNull",
+		urlSuffix: "/favMoviesCreateWithNullBody",
 		body:      `{"movies":[{"director":[{"name":"Dir1"}],"name":"Mov1"},{"name":null}]}`,
 		headers:   nil,
 	})
@@ -1219,7 +1219,7 @@ func main() {
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
 	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)
 	http.HandleFunc("/favMoviesDelete/", favMoviesDeleteHandler)
-	http.HandleFunc("/favMoviesCreateWithNullBody", favMoviesCreateWithNullBody)
+	http.HandleFunc("/favMoviesCreateWithNullBody", favMoviesCreateWithNullBodyHandler)
 	// The endpoints below are for testing custom resolution of fields within type definitions.
 	// for testing batch mode
 	http.HandleFunc("/userNames", userNamesHandler)
