@@ -313,6 +313,7 @@ func RunAll(t *testing.T) {
 	t.Run("mutations have extensions", mutationsHaveExtensions)
 	t.Run("alias works for mutations", mutationsWithAlias)
 	t.Run("three level deep", threeLevelDeepMutation)
+	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -552,7 +553,7 @@ func (params *GraphQLParams) createApplicationGQLPost(url string) (*http.Request
 
 // runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
 func runGQLRequest(req *http.Request) ([]byte, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

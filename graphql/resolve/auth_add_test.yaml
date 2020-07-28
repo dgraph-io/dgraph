@@ -7,6 +7,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "secret":
       { "aSecret": "it is",
@@ -35,6 +37,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "secrets": 
       [
@@ -64,6 +68,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "secret":
       { "aSecret": "it is",
@@ -94,6 +100,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "secrets": 
       [
@@ -125,6 +133,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col":
       { "inProject": { "projID": "0x123" },
@@ -191,6 +201,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col":
       {
@@ -257,6 +269,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col1":
       { "inProject": { "projID": "0x123" },
@@ -334,6 +348,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col1":
       { "inProject": { "projID": "0x123" },
@@ -418,6 +434,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col":
       { "inProject": { "projID": "0x123" },
@@ -493,6 +511,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col":
       { "inProject": { "projID": "0x123" },
@@ -569,6 +589,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { 
       "proj": {
@@ -658,6 +680,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { 
       "proj": {
@@ -748,6 +772,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "log":
       { "logs": "log123",
@@ -769,7 +795,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "log":
       { "logs": "log123",
@@ -789,7 +817,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     {
       "proj": {
@@ -811,7 +841,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     {
       "proj": {
@@ -850,7 +882,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "issue":
       { "msg": "log123",
@@ -900,7 +934,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "issue":
       { "msg": "log123",
@@ -950,7 +986,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "log":
       { "logs": "log123",
@@ -971,7 +1009,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "log":
       { "logs": "log123",

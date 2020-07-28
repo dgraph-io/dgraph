@@ -27,88 +27,46 @@ type RestaurantAddress implements Location {
     restaurant: Restaurant! @hasInverse(field: addr)
 }
 
-type Restaurant @auth(
-    query: { or: [
-        { rule: """
-        query($RName: String!) {
-            queryRestaurant(filter: { name: { anyofterms: $RName } }) {
-                __typename
-            }
-        }
-        """ },
-        { rule: """
-        query($RCurr: String!) {
-            queryRestaurant(filter: { currency: { eq: $RCurr } }) {
-                __typename
-            }
-        }
-        """ }]
-    }
-) {
+type Restaurant {
     id: ID!
     xid: String! @id
     name: String!  @search(by: [term])
     pic: String
-    addr: RestaurantAddress!
+    addr: RestaurantAddress
     rating: Float
     costFor2: Float
     currency: String @search(by: [hash])
     cuisines: [Cuisine]
     dishes: [Dish] @hasInverse(field: servedBy)
-    createdAt: DateTime!
+    createdAt: DateTime
+    owner: Owner
 }
 
-type Cuisine @auth(
-    query: { and: [
-        { rule: "{$Role: { eq: \"ADMIN\" }}" },
-        { or: [
-            { rule: """
-            query($RCurr: String!) {
-                queryCuisine {
-                    restaurants(filter: { currency: { eq: $RCurr } }) {
-                        __typename
-                    }
-                }
-            }
-            """
-            },
-            { rule: """
-            query($RName: String!) {
-                queryCuisine {
-                    restaurants(filter: { currency: { eq: $RName } }) {
-                        __typename
-                    }
-                }
-            }
-            """
-            }
-        ]}
-    ]},
-) {
+type Cuisine {
     id: ID!
     name: String! @id
     restaurants: [Restaurant] @hasInverse(field: cuisines)
     dishes: [Dish] @hasInverse(field: cuisine)
+    type: String! @search(by: [hash])
+    public: Boolean @search
 }
 
-type Dish @auth(
-    query:
-    { rule: """
-    query($Dish: String!) {
-        queryDish(filter: { name: { anyofterms: $Dish } }) {
-            __typename
-        }
-    }
-    """ },
-){
+type Dish {
     id: ID!
     name: String! @search(by: [term])
+    type: String! @search(by: [hash])
     pic: String
-    price: Float!
+    price: Float
     description: String
-    isVeg: Boolean!
+    isVeg: Boolean
     cuisine: Cuisine
-    servedBy: Restaurant!
+    servedBy: Restaurant
+}
+
+type Owner {
+    username: String! @id
+    name: String! @search(by: [hash])
+    hasRestaurants: [Restaurant] @hasInverse(field: owner)
 }
 
 # Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
