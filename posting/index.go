@@ -211,8 +211,37 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	if err != nil {
 		return err
 	}
+	if plist == nil {
+		return errors.Errorf("nil posting list for reverse key %s", hex.Dump(key))
+	}
 
-	x.AssertTrue(plist != nil)
+	// For single uid predicates, updating the reverse index requires that the existing
+	// entries for this key in the index are removed.
+	pred, ok := schema.State().Get(ctx, t.Attr)
+	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
+		t.Op == pb.DirectedEdge_SET && t.ValueId != 0
+	if isSingleUidUpdate {
+		dataKey := x.DataKey(t.Attr, t.Entity)
+		dataList, err := getFn(dataKey)
+		if err != nil {
+			return errors.Wrapf(err, "cannot find single uid list to update with key %s",
+				hex.Dump(dataKey))
+		}
+		err = dataList.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+			delEdge := &pb.DirectedEdge{
+				Entity:  t.Entity,
+				ValueId: p.Uid,
+				Attr:    t.Attr,
+				Op:      pb.DirectedEdge_DEL,
+			}
+			return txn.addReverseAndCountMutation(ctx, delEdge)
+		})
+		if err != nil {
+			return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
+				hex.Dump(dataKey))
+		}
+	}
+
 	// We must create a copy here.
 	edge := &pb.DirectedEdge{
 		Entity:  t.ValueId,
@@ -233,6 +262,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -437,6 +467,15 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 
 	doUpdateIndex := pstore != nil && schema.State().IsIndexed(ctx, edge.Attr)
 	hasCountIndex := schema.State().HasCount(ctx, edge.Attr)
+
+	// Add reverse mutation irrespective of hasMutated, server crash can happen after
+	// mutation is synced and before reverse edge is synced
+	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(ctx, edge.Attr) {
+		if err := txn.addReverseAndCountMutation(ctx, edge); err != nil {
+			return err
+		}
+	}
+
 	val, found, cp, err := txn.addMutationHelper(ctx, l, doUpdateIndex, hasCountIndex, edge)
 	if err != nil {
 		return err
@@ -472,13 +511,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 			}); err != nil {
 				return err
 			}
-		}
-	}
-	// Add reverse mutation irrespective of hasMutated, server crash can happen after
-	// mutation is synced and before reverse edge is synced
-	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(ctx, edge.Attr) {
-		if err := txn.addReverseAndCountMutation(ctx, edge); err != nil {
-			return err
 		}
 	}
 	return nil

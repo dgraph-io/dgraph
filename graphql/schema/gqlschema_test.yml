@@ -657,6 +657,56 @@ invalid_schemas:
     ]
 
   -
+    name: "Dgraph directive with reverse pred argument matching with wrong type implementing an interface produces an error"
+    input: |
+      type Z {
+        f1: String!
+      }
+      type X {
+        f1: [Z] @dgraph(pred: "f1")
+      }
+
+      interface Person {
+        id: ID!
+      }
+
+      type Y implements Person {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: should be any of types Y or Person to be compatible with @dgraph reverse
+      directive but is of type Z.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument matching with wrong type implementing multiple interfaces produces an error"
+    input: |
+      type Z {
+        f1: String!
+      }
+      type X {
+        f1: [Z] @dgraph(pred: "f1")
+      }
+
+      interface Person {
+        id: ID!
+      }
+
+      interface Student {
+        ids: String! @id
+      }
+
+      type Y implements Person & Student {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: should be any of types Y, Person or Student to be compatible with @dgraph reverse
+      directive but is of type Z.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
     name: "Field with a dgraph directive with reverse pred argument should be a list"
     input: |
       type X {
@@ -2451,9 +2501,13 @@ valid_schemas:
     name: "dgraph directive with correct reverse field works"
     input: |
       type X {
+        id: ID!
+        name: String
         f1: [Y] @dgraph(pred: "~f1")
       }
       type Y {
+        id: ID!
+        name: String
         f1: [X] @dgraph(pred: "f1")
       }
 
@@ -2604,4 +2658,23 @@ valid_schemas:
           method: "POST",
           body: "{sid: $id}"
           })
+      }
+
+  -
+    name: "dgraph directive with reverse edges should work with interfaces"
+    input: |
+      type Object {
+        id: ID!
+        name: String
+        ownedBy: Person @dgraph(pred: "Object.owner")
+      }
+
+      type BusinessMan implements Person {
+        companyName: String
+      }
+
+      interface Person {
+        id: ID!
+        name: String
+        owns: [Object] @dgraph(pred: "~Object.owner")
       }

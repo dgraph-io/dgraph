@@ -1085,12 +1085,30 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 				continue
 			}
 			if predArg.Value.Raw == forwardEdgePred {
-				if fld.Type.Name() != typ.Name {
-					errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: should be of"+
-						" type %s to be compatible with @dgraph reverse directive but is of"+
-						" type %s.", invTypeName, fld.Name, typ.Name, fld.Type.Name()))
+				possibleTypes := append([]string{typ.Name}, typ.Interfaces...)
+				allowedType := false
+				for _, pt := range possibleTypes {
+					if fld.Type.Name() == pt {
+						allowedType = true
+						break
+					}
+				}
+				if !allowedType {
+					typeMsg := ""
+					if len(possibleTypes) == 1 {
+						typeMsg = fmt.Sprintf("of type %s", possibleTypes[0])
+					} else {
+						l := len(possibleTypes)
+						typeMsg = fmt.Sprintf("any of types %s or %s",
+							strings.Join(possibleTypes[:l-1], ", "), possibleTypes[l-1])
+					}
+					errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: "+
+						"should be %s to be compatible with @dgraph"+
+						" reverse directive but is of type %s.",
+						invTypeName, fld.Name, typeMsg, fld.Type.Name()))
 					return errs
 				}
+
 				invDirective := fld.Directives.ForName(inverseDirective)
 				if invDirective != nil {
 					errs = append(errs, gqlerror.ErrorPosf(
@@ -1183,7 +1201,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	if httpArg.Value.Kind != ast.ObjectValue {
 		errs = append(errs, gqlerror.ErrorPosf(
 			httpArg.Position,
-			"Type %s; Field %s: http argument for @custom directive should be of type Object.",
+			"Type %s; Field %s: http argument for @custom directive ff type Object.",
 			typ.Name, field.Name))
 	}
 
