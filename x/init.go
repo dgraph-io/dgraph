@@ -76,14 +76,9 @@ func BuildDetails() string {
 			"Community License"
 	}
 
-	var versionCodename string
-	versionCodename = fmt.Sprintf("%v", dgraphVersion)
-	if dgraphCodename != "" {
-		versionCodename = fmt.Sprintf("%v (%v)", dgraphVersion, dgraphCodename)
-	}
-
 	return fmt.Sprintf(`
 Dgraph version   : %v
+Dgraph codename  : %v
 Dgraph SHA-256   : %x
 Commit SHA-1     : %v
 Commit timestamp : %v
@@ -97,7 +92,7 @@ For discussions about Dgraph     , visit https://discuss.dgraph.io.
 Copyright 2015-2020 Dgraph Labs, Inc.
 
 `,
-		versionCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
+		dgraphVersion, dgraphCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
 		runtime.Version(), licenseInfo)
 }
 
