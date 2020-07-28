@@ -669,6 +669,23 @@ func TestHasFuncAtRootWithAfter(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":1}],"name":"Rick Grimes","uid":"0x17"},{"friend":[{"count":1}],"name":"Andrea","uid":"0x1f"}]}}`, js)
 }
 
+func TestHasFuncAtRootWithAfterOnUIDs(t *testing.T) {
+
+	query := `
+	{
+		var(func: has(name)) {
+			uids as uid
+		}
+		me(func: uid(uids), first: 2, after: 0x5) {
+			uid
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"uid":"0x6"},{"uid":"0x7"}]}}`, js)
+}
+
 func TestHasFuncAtRootFilter(t *testing.T) {
 
 	query := `
