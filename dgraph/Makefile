@@ -20,7 +20,8 @@ BUILD_CODENAME  = unnamed
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-# use a large version number v99 on master branch
+# Use the next build version on master branch
+# NOTE: this needs to be updated with each new release
 ifeq ($(BUILD_BRANCH),master)
 BUILD_VERSION ?= 'v20.11.0-'$(BUILD)
 else
