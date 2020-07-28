@@ -16,12 +16,14 @@
 
 BIN             = dgraph
 BUILD          ?= $(shell git rev-parse --short HEAD)
-BUILD_CODENAME ?=
+BUILD_CODENAME  = unnamed
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 BUILD_VERSION  ?= $(shell git describe --always --tags)
 BUILD_TAGS     ?=
 GOPATH         ?= $(shell go env GOPATH)
+
+MODIFIED = $(shell git diff-index --quiet HEAD || (echo "-mod"))
 
 export GO111MODULE := on
 
@@ -32,7 +34,7 @@ gitBranch	= github.com/dgraph-io/dgraph/x.gitBranch
 lastCommitSHA	= github.com/dgraph-io/dgraph/x.lastCommitSHA
 lastCommitTime	= github.com/dgraph-io/dgraph/x.lastCommitTime
 
-BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}" -X ${gitBranch}=${BUILD_BRANCH}'
+BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}${MODIFIED}" -X ${gitBranch}=${BUILD_BRANCH}'
 
 # Insert build tags if specified
 ifneq ($(strip $(BUILD_TAGS)),)
