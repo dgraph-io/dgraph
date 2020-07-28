@@ -165,7 +165,7 @@ while true; do
 		checkAndUpdate "$version"
 	done
 
-	# Lets check if the theme was updated.
+	Lets check if the theme was updated.
 	pushd themes/hugo-docs > /dev/null
 	themeUpdated=1
 	if branchUpdated "${NEW_THEME}" ; then
