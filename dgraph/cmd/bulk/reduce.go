@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -51,6 +52,7 @@ type reducer struct {
 }
 
 const batchSize = 10000
+const maxSplitBatchSize = 1000
 const batchAlloc = batchSize * 11 / 10
 
 func (r *reducer) run() error {
@@ -281,6 +283,7 @@ type encodeRequest struct {
 	countKeys []*countIndexEntry
 	wg        *sync.WaitGroup
 	list      *bpb.KVList
+	splitList *bpb.KVList
 }
 
 func (r *reducer) streamIdFor(pred string) uint32 {
@@ -305,18 +308,13 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	for req := range entryCh {
 
 		req.list = &bpb.KVList{}
-		countKeys := r.toList(req.entries, req.list)
+		req.splitList = &bpb.KVList{}
+		countKeys := r.toList(req.entries, req.list, req.splitList)
 		for _, kv := range req.list.Kv {
 			pk, err := x.Parse(kv.Key)
 			x.Check(err)
 			x.AssertTrue(len(pk.Attr) > 0)
 			kv.StreamId = r.streamIdFor(pk.Attr)
-			if pk.HasStartUid {
-				// If the key is for a split key, it cannot go into the same stream
-				// due to ordering issues. Instead, the stream ID for this keys is
-				// derived by flipping the MSB of the original stream ID.
-				kv.StreamId |= 0x80000000
-			}
 		}
 		req.countKeys = countKeys
 		req.wg.Done()
@@ -324,8 +322,26 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	}
 }
 
+func (r *reducer) writeSplitBatch(writer *badger.StreamWriter, batch *bpb.KVList) {
+	if len(batch.Kv) == 0 {
+		return
+	}
+
+	streamId := atomic.AddUint32(&r.streamId, 1)
+	for _, kv := range batch.Kv {
+		kv.StreamId = streamId
+	}
+	sort.Slice(batch.Kv, func(i, j int) bool {
+		return bytes.Compare(batch.Kv[i].Key, batch.Kv[j].Key) < 0
+	})
+	x.Check(writer.Write(batch))
+	batch.Kv = batch.Kv[:0]
+}
+
 func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
+
+	splitBatch := &bpb.KVList{}
 	for req := range writerCh {
 		req.wg.Wait()
 
@@ -336,11 +352,19 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		start := time.Now()
 
 		x.Check(ci.writer.Write(req.list))
+		splitBatch.Kv = append(splitBatch.Kv, req.splitList.Kv...)
+		if len(splitBatch.Kv) > maxSplitBatchSize {
+			r.writeSplitBatch(ci.writer, splitBatch)
+		}
+
 		if dur := time.Since(start).Round(time.Millisecond); dur > time.Second {
 			fmt.Printf("writeCh: Time taken to write req: %v\n",
 				time.Since(start).Round(time.Millisecond))
 		}
 	}
+
+	// Write the leftover split posting lists.
+	r.writeSplitBatch(ci.writer, splitBatch)
 }
 
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
@@ -397,7 +421,8 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser.SignalAndWait()
 }
 
-func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEntry {
+func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList,
+	splitList *bpb.KVList) []*countIndexEntry {
 	sort.Slice(bufEntries, func(i, j int) bool {
 		lh, err := GetKeyForMapEntry(bufEntries[i])
 		x.Check(err)
@@ -480,8 +505,12 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 		if shouldSplit {
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup()
+			for _, kv := range kvs {
+				fmt.Printf("keys for rolled up list %v\n", hex.EncodeToString(kv.Key))
+			}
 			x.Check(err)
-			list.Kv = append(list.Kv, kvs...)
+			list.Kv = append(list.Kv, kvs[0])
+			splitList.Kv = append(list.Kv, kvs[1:]...)
 		} else {
 			val, err := pl.Marshal()
 			x.Check(err)

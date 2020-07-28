@@ -822,7 +822,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	// Sort the KVs by their key so that the main part of the list is at the
 	// start of the list and all other parts appear in the order of their start UID.
 	sort.Slice(kvs, func(i, j int) bool {
-		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
+		return bytes.Compare(kvs[i].Key, kvs[j].Key) < 0
 	})
 
 	return kvs, nil
