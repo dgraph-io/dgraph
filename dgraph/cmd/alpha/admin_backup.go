@@ -159,6 +159,6 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		m.BackupNum = latestManifest.BackupNum + 1
 	}
 
-	bp := &backup.Processor{Request: &req}
+	bp := backup.NewBackupProcessor(nil, &req)
 	return bp.CompleteBackup(ctx, &m)
 }
