@@ -1067,12 +1067,10 @@ func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
 
 # Dgraph.Secret GITHUB-API-TOKEN "some-api-token"
   `
-
 	updateSchemaRequireNoGQLErrors(t, schema)
 	time.Sleep(2 * time.Second)
 
 	users := addUsers(t)
-
 	queryUser := `
 	query ($id: [ID!]){
 		queryUser(filter: {id: $id}, order: {asc: age}) {
@@ -1091,10 +1089,6 @@ func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
 }
 
 func TestCustomFieldsShouldPassBody(t *testing.T) {
-	dg, err := testutil.DgraphClient(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-
 	schema := `
     type User {
 		id: String! @id @search(by: [hash, regexp])
@@ -1104,7 +1098,7 @@ func TestCustomFieldsShouldPassBody(t *testing.T) {
 				http: {
 					url: "http://mock:8888/userNameWithoutAddress"
 					method: "GET"
-                    body: "{id: $id,address:$address}"
+                    body: "{uid: $id,address:$address}"
                     mode: SINGLE,
 					secretHeaders: ["GITHUB-API-TOKEN"]
 				}
@@ -1113,7 +1107,6 @@ func TestCustomFieldsShouldPassBody(t *testing.T) {
   	}
 # Dgraph.Secret GITHUB-API-TOKEN "some-api-token"
   `
-
 	updateSchemaRequireNoGQLErrors(t, schema)
 	time.Sleep(2 * time.Second)
 
@@ -1138,6 +1131,7 @@ func TestCustomFieldsShouldPassBody(t *testing.T) {
            age
 		}
      }`
+
 	params = &common.GraphQLParams{
 		Query:     queryUser,
 		Variables: map[string]interface{}{"id": "0x5"},
@@ -1867,7 +1861,7 @@ func TestCustomPostMutation(t *testing.T) {
 	require.JSONEq(t, expected, string(result.Data))
 }
 
-func TestCustomPostMutationNullBody(t *testing.T) {
+func TestCustomPostMutationNullInBody(t *testing.T) {
 	schema := `type MovieDirector @remote {
 		 id: ID!
 		 name: String!
@@ -1890,7 +1884,7 @@ func TestCustomPostMutationNullBody(t *testing.T) {
 	}
 	type Mutation {
         createMyFavouriteMovies(input: [MovieInput!]): [Movie] @custom(http: {
-			url: "http://mock:8888/favMoviesCreateNull",
+			url: "http://mock:8888/favMoviesCreateWithNullBody",
 			method: "POST",
 			body: "{ movies: $input}"
         })

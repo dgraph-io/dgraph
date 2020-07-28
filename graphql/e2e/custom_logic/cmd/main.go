@@ -275,7 +275,7 @@ func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 	check2(w.Write(getDefaultResponse()))
 }
 
-func postFavMoviesHandlerWithBody(w http.ResponseWriter, r *http.Request) {
+func PostFavMoviesWithBodyHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodPost,
 		urlSuffix: "/0x123?name=Author",
@@ -384,7 +384,7 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
     ]`)))
 }
 
-func favMoviesCreateHandlerNullBody(w http.ResponseWriter, r *http.Request) {
+func favMoviesCreateWithNullBody(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodPost,
 		urlSuffix: "/favMoviesCreateNull",
@@ -835,20 +835,17 @@ func userNameHandler(w http.ResponseWriter, r *http.Request) {
 	nameHandler(w, r, &inputBody)
 }
 
-func userNameHandlerCheckBody(w http.ResponseWriter, r *http.Request) {
-	body := r.Body
-	var inputBody input
-	nameHandler(w, r, &inputBody)
+func userNameWithoutAddressHandler(w http.ResponseWriter, r *http.Request) {
 
 	expectedRequest := expectedRequest{
-		body: `{"id":"0x5"}`,
+		body: `{"uid":"0x5"}`,
 	}
 
-	b, err := ioutil.ReadAll(body)
-
+	b, err := ioutil.ReadAll(r.Body)
+	fmt.Println(b, err)
 	if err != nil {
-		err1 := getError("Unable to read request body", err.Error())
-		check2(w.Write([]byte(err1.Error())))
+		err = getError("Unable to read request body", err.Error())
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
 
@@ -859,6 +856,16 @@ func userNameHandlerCheckBody(w http.ResponseWriter, r *http.Request) {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
+
+	var inputBody input
+	if err := json.Unmarshal(b, &inputBody); err != nil {
+		fmt.Println("while doing JSON unmarshal: ", err)
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	n := fmt.Sprintf(`"%s"`, inputBody.Name())
+	check2(fmt.Fprint(w, n))
 
 }
 
@@ -1204,7 +1211,7 @@ func main() {
 	// for queries
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
-	http.HandleFunc("/favMoviesPostWithBody/", postFavMoviesHandlerWithBody)
+	http.HandleFunc("/favMoviesPostWithBody/", PostFavMoviesWithBodyHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
 	http.HandleFunc("/verifyCustomNameHeaders", verifyCustomNameHeadersHandler)
 	http.HandleFunc("/twitterfollowers", twitterFollwerHandler)
@@ -1213,7 +1220,7 @@ func main() {
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
 	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)
 	http.HandleFunc("/favMoviesDelete/", favMoviesDeleteHandler)
-	http.HandleFunc("/favMoviesCreateNull", favMoviesCreateHandlerNullBody)
+	http.HandleFunc("/favMoviesCreateWithNullBody", favMoviesCreateWithNullBody)
 	// The endpoints below are for testing custom resolution of fields within type definitions.
 	// for testing batch mode
 	http.HandleFunc("/userNames", userNamesHandler)
@@ -1225,7 +1232,7 @@ func main() {
 
 	// for testing single mode
 	http.HandleFunc("/userName", userNameHandler)
-	http.HandleFunc("/userNameWithoutAddress", userNameHandlerCheckBody)
+	http.HandleFunc("/userNameWithoutAddress", userNameWithoutAddressHandler)
 	http.HandleFunc("/checkHeadersForUserName", userNameHandlerWithHeaders)
 	http.HandleFunc("/car", carHandler)
 	http.HandleFunc("/class", classHandler)
