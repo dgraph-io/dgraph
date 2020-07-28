@@ -505,12 +505,9 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList,
 		if shouldSplit {
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup()
-			for _, kv := range kvs {
-				fmt.Printf("keys for rolled up list %v\n", hex.EncodeToString(kv.Key))
-			}
 			x.Check(err)
 			list.Kv = append(list.Kv, kvs[0])
-			splitList.Kv = append(list.Kv, kvs[1:]...)
+			splitList.Kv = append(splitList.Kv, kvs[1:]...)
 		} else {
 			val, err := pl.Marshal()
 			x.Check(err)
