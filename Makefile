@@ -20,7 +20,7 @@ BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 BUILD_VERSION  ?= $(shell git describe --always --tags)
 
-MODIFIED = $(shell git diff-index --quiet HEAD || (echo "-mod"))
+MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
 SUBDIRS = dgraph
 

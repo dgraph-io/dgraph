@@ -23,7 +23,7 @@ BUILD_VERSION  ?= $(shell git describe --always --tags)
 BUILD_TAGS     ?=
 GOPATH         ?= $(shell go env GOPATH)
 
-MODIFIED = $(shell git diff-index --quiet HEAD || (echo "-mod"))
+MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
 export GO111MODULE := on
 
