@@ -720,7 +720,6 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 		filterNames[i] = builtInFilters[search]
 
 		if (search == "hash" || search == "exact") && schema.Types[fld.Type.Name()].Kind == ast.Enum {
-			stringFilterName := fmt.Sprintf("String%sFilter", strings.Title(search))
 			var l ast.FieldList
 
 			for _, i := range schema.Types[stringFilterName].Fields {
