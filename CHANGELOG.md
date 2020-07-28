@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
-## [20.07.0] - 07/28/2020
+## [20.07.0] - 2020/07/28
 [20.07.0]: https://github.com/dgraph-io/dgraph/compare/v20.03.4...v20.07.0
 
 ### Changed
@@ -305,7 +305,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6034]: https://github.com/dgraph-io/dgraph/issues/6034
 [#6043]: https://github.com/dgraph-io/dgraph/issues/6043
 
-## [20.03.4] - 07/23/2020
+## [20.03.4] - 2020/07/23
 [20.03.4]: https://github.com/dgraph-io/dgraph/compare/v20.03.3...v20.03.4
 
 ### Changed
