@@ -836,24 +836,29 @@ func userNameHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func userNameHandlerCheckBody(w http.ResponseWriter, r *http.Request) {
-	expectedBody := "{\"id\":\"0x5\"}"
-	b, err := ioutil.ReadAll(r.Body)
+	body := r.Body
+	var inputBody input
+	nameHandler(w, r, &inputBody)
+
+	expectedRequest := expectedRequest{
+		body: `{"id":"0x5"}`,
+	}
+
+	b, err := ioutil.ReadAll(body)
+
 	if err != nil {
 		err1 := getError("Unable to read request body", err.Error())
 		check2(w.Write([]byte(err1.Error())))
 		return
 	}
-	if string(b) != expectedBody {
-		err1 := getError("Unexpected value for request body", string(b))
-		if err1 != nil {
-			check2(w.Write([]byte(err.Error())))
-			return
-		}
 
+	if string(b) != expectedRequest.body {
+		err = getError("Unexpected value for request body", string(b))
 	}
-
-	var inputBody input
-	nameHandler(w, r, &inputBody)
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
 
 }
 

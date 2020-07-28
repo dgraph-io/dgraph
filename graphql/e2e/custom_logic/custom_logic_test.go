@@ -1104,14 +1104,14 @@ func TestCustomFieldsShouldPassBody(t *testing.T) {
 				http: {
 					url: "http://mock:8888/userNameWithoutAddress"
 					method: "GET"
-                    body: "{uid: $id,address:$address}"
-					mode: SINGLE,
+                    body: "{id: $id,address:$address}"
+                    mode: SINGLE,
 					secretHeaders: ["GITHUB-API-TOKEN"]
 				}
 			)
 		age: Int! @search
   	}
-  # Dgraph.Secret GITHUB-API-TOKEN "some-api-token"
+# Dgraph.Secret GITHUB-API-TOKEN "some-api-token"
   `
 
 	updateSchemaRequireNoGQLErrors(t, schema)
