@@ -14,23 +14,25 @@
 # limitations under the License.
 #
 
-BIN            = dgraph
-BUILD         ?= $(shell git rev-parse --short HEAD)
-BUILD_DATE    ?= $(shell git log -1 --format=%ci)
-BUILD_BRANCH  ?= $(shell git rev-parse --abbrev-ref HEAD)
-BUILD_VERSION ?= $(shell git describe --always --tags)
-BUILD_TAGS    ?=
-GOPATH        ?= $(shell go env GOPATH)
+BIN             = dgraph
+BUILD          ?= $(shell git rev-parse --short HEAD)
+BUILD_CODENAME ?=
+BUILD_DATE     ?= $(shell git log -1 --format=%ci)
+BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
+BUILD_VERSION  ?= $(shell git describe --always --tags)
+BUILD_TAGS     ?=
+GOPATH         ?= $(shell go env GOPATH)
 
 export GO111MODULE := on
 
 # Build-time Go variables
-dgraphVersion  = github.com/dgraph-io/dgraph/x.dgraphVersion
-gitBranch      = github.com/dgraph-io/dgraph/x.gitBranch
-lastCommitSHA  = github.com/dgraph-io/dgraph/x.lastCommitSHA
-lastCommitTime = github.com/dgraph-io/dgraph/x.lastCommitTime
+dgraphVersion	= github.com/dgraph-io/dgraph/x.dgraphVersion
+dgraphCodename  = github.com/dgraph-io/dgraph/x.dgraphCodename
+gitBranch	= github.com/dgraph-io/dgraph/x.gitBranch
+lastCommitSHA	= github.com/dgraph-io/dgraph/x.lastCommitSHA
+lastCommitTime	= github.com/dgraph-io/dgraph/x.lastCommitTime
 
-BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X ${gitBranch}=${BUILD_BRANCH}'
+BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}" -X ${gitBranch}=${BUILD_BRANCH}'
 
 # Insert build tags if specified
 ifneq ($(strip $(BUILD_TAGS)),)
@@ -54,7 +56,7 @@ endif
 all: $(BIN)
 
 $(BIN): clean
-	@go build $(BUILD_FLAGS) -o $(BIN)
+	go build $(BUILD_FLAGS) -o $(BIN)
 
 clean:
 	@rm -f $(BIN)

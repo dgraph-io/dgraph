@@ -14,10 +14,11 @@
 # limitations under the License.
 #
 
-BUILD         ?= $(shell git rev-parse --short HEAD)
-BUILD_DATE    ?= $(shell git log -1 --format=%ci)
-BUILD_BRANCH  ?= $(shell git rev-parse --abbrev-ref HEAD)
-BUILD_VERSION ?= $(shell git describe --always --tags)
+BUILD          ?= $(shell git rev-parse --short HEAD)
+BUILD_CODENAME ?=
+BUILD_DATE     ?= $(shell git log -1 --format=%ci)
+BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
+BUILD_VERSION  ?= $(shell git describe --always --tags)
 
 SUBDIRS = dgraph
 
@@ -35,6 +36,7 @@ oss:
 version:
 	@echo Dgraph ${BUILD_VERSION}
 	@echo Build: ${BUILD}
+	@echo Codename: ${BUILD_CODENAME}
 	@echo Build date: ${BUILD_DATE}
 	@echo Branch: ${BUILD_BRANCH}
 	@echo Go version: $(shell go version)
