@@ -168,7 +168,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 				 secretHeaders: ["Github-Api-Token"]
 		 })
 	 }
-	 
+
 		 # Dgraph.Secret Github-Api-Token "random-fake-token"
 		 # Dgraph.Secret app "should-be-overriden"
 	 `
@@ -247,7 +247,7 @@ func TestSchemaIntrospectionForCustomQueryShouldForwardHeaders(t *testing.T) {
 			code: String!
 			name: String!
 		}
-		
+
 		type Query {
 			myCustom(yo: CountryInput!): [Country!]!
 			  @custom(
@@ -331,7 +331,7 @@ func TestCustomFieldsInSubscription(t *testing.T) {
 			  name
 			}
 		  }`,
-	})
+	}, `{}`)
 	require.NoError(t, err)
 	_, err = client.RecvMsg()
 	require.Contains(t, err.Error(), "Custom field `name` is not supported in graphql subscription")
@@ -370,7 +370,7 @@ func TestSubscriptionInNestedCustomField(t *testing.T) {
 				}
 			 }
 		  }`,
-	})
+	}, `{}`)
 	require.NoError(t, err)
 	_, err = client.RecvMsg()
 	require.Contains(t, err.Error(), "Custom field `anotherName` is not supported in graphql subscription")
@@ -1257,7 +1257,7 @@ func TestCustomLogicGraphql(t *testing.T) {
       code: String
       name: String
 	}
-	
+
 	type Query {
 		getCountry1(id: ID!): Country!
 		  @custom(
@@ -1292,7 +1292,7 @@ func TestCustomLogicGraphqlWithArgumentsOnFields(t *testing.T) {
       code(size: Int!): String
       name: String
 	}
-	
+
 	type Query {
 		getCountry2(id: ID!): Country!
 		  @custom(
@@ -1378,7 +1378,7 @@ func TestCustomLogicGraphQLValidArrayResponse(t *testing.T) {
       code: String
       name: String
 	}
-	
+
 	type Query {
 		getCountries(id: ID!): [Country]
 		  @custom(
@@ -2001,51 +2001,6 @@ func TestCustomGraphqlMissingTypeForBatchedFieldInput(t *testing.T) {
 			"PostFilterInput.\n")
 }
 
-func TestCustomGraphqlInvalidArgForBatchedField(t *testing.T) {
-	t.Skip()
-	schema := `
-	type Post {
-		id: ID!
-		text: String
-		comments: Post! @custom(http: {
-							url: "http://mock:8888/getPosts",
-							method: "POST",
-							mode: BATCH
-							graphql: "query { getPosts(input: [{name: $id}]) }"
-						})
-	}
-	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Equal(t, "resolving updateGQLSchema failed because input:9: Type Post"+
-		"; Field comments: inside graphql in @custom directive, argument `name` is not present "+
-		"in remote query `getPosts`.\n", res.Errors[0].Error())
-}
-
-func TestCustomGraphqlArgTypeMismatchForBatchedField(t *testing.T) {
-	t.Skip()
-	schema := `
-	type Post {
-		id: ID!
-		likes: Int
-		text: String
-		comments: Post! @custom(http: {
-							url: "http://mock:8888/getPostswithLike",
-							method: "POST",
-							mode: BATCH
-							graphql: "query { getPosts(input: [{id: $id, text: $likes}]) }"
-						})
-	}
-	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Equal(t, "resolving updateGQLSchema failed because input:10: Type Post"+
-		"; Field comments: inside graphql in @custom directive, found type mismatch for variable"+
-		" `$likes` in query `getPosts`, expected `Int`, got `String!`.\n", res.Errors[0].Error())
-}
-
 func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
 	schema := `
 	type Country @remote {
@@ -2071,7 +2026,7 @@ func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
       code: String!
       name: String!
 	}
-	
+
 	type Mutation {
 		addCountry1(input: CountryInput!): Country! @custom(http: {
 										url: "http://mock:8888/setCountry",
@@ -2084,28 +2039,6 @@ func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
 	require.Len(t, res.Errors, 1)
 	require.Contains(t, res.Errors[0].Error(), "argument `country` in mutation"+
 		" `setCountry` is missing, it is required by remote mutation.")
-}
-
-func TestCustomGraphqlMissingRequiredArgumentForBatchedField(t *testing.T) {
-	t.Skip()
-	schema := `
-	type Post {
-		id: ID!
-		text: String
-		comments: Post! @custom(http: {
-							url: "http://mock:8888/getPosts",
-							method: "POST",
-							mode: BATCH
-							graphql: "query { getPosts(input: [{id: $id}]) }"
-						})
-	}
-	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Equal(t, "resolving updateGQLSchema failed because input:9: Type Post"+
-		"; Field comments: inside graphql in @custom directive, argument `text` in query "+
-		"`getPosts` is missing, it is required by remote query.\n", res.Errors[0].Error())
 }
 
 // this one accepts an object and returns an object
@@ -2134,7 +2067,7 @@ func TestCustomGraphqlMutation1(t *testing.T) {
       code: String!
       name: String!
 	}
-	
+
 	type Mutation {
 		addCountry1(input: CountryInput!): Country! @custom(http: {
 					url: "http://mock:8888/setCountry"
@@ -2224,7 +2157,7 @@ func TestCustomGraphqlMutation2(t *testing.T) {
         code: String!
         name: String!
 	  }
-	  
+
 	type Mutation {
 		updateCountries(name: String, std: Int): [Country!]! @custom(http: {
 								url: "http://mock:8888/updateCountries",
@@ -2279,7 +2212,7 @@ func TestForValidInputArgument(t *testing.T) {
       code: String!
       name: String!
 	}
-	
+
 	type Query {
 		myCustom(yo: CountryInput!): [Country!]!
 		  @custom(
@@ -2421,12 +2354,16 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 	params := &common.GraphQLParams{
 		Query: `
 		mutation{
-			addUser(input:[{
-			  screen_name:"manishrjain",
-			  tweets:[{
-				text:"hello twitter"
-			  }]
-			}]){
+			addUser(input:[
+			  {
+				  screen_name:"manishrjain",
+				  tweets:[{text:"hello twitter"}]
+			  }
+			  {
+				  screen_name:"amazingPanda",
+				  tweets:[{text:"I love Kung fu."}]
+			  }
+			]){
 			  numUids
 			}
 		  }`,
@@ -2454,18 +2391,26 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 
 	result = params.ExecuteAsPost(t, alphaURL)
 	common.RequireNoGQLErrors(t, result)
-	require.JSONEq(t, string(result.Data), `
+	testutil.CompareJSON(t, `
 	{
-		"querySearchTweets": [{
-			"text": "hello twitter",
-			"user": {
-				"screen_name": "manishrjain",
-				"followers": {
-					"users": [{
-						"name": "hi_balaji"
-					}]
+		"querySearchTweets": [
+			{
+				"text": "hello twitter",
+				"user": {
+					"screen_name": "manishrjain",
+					"followers": {
+						"users": [{"name": "hi_balaji"}]
+					}
+				}
+			},{
+				"text": "I love Kung fu.",
+				"user": {
+					"screen_name": "amazingPanda",
+					"followers": {
+						"users": [{"name": "twitter_bot"}]
+					}
 				}
 			}
-		}]
-	}`)
+		]
+	}`, string(result.Data))
 }
