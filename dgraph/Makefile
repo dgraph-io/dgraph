@@ -21,7 +21,7 @@ BUILD_BRANCH  ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 # use a large version number v99 on master branch
 ifeq ($(BUILD_BRANCH),master)
-BUILD_VERSION ?= 'v99_'$(BUILD)
+BUILD_VERSION ?= 'v20.11.0-'$(BUILD)
 else
 BUILD_VERSION ?= $(shell git describe --always --tags)
 endif
