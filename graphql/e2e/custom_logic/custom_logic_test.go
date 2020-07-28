@@ -36,7 +36,6 @@ import (
 const (
 	alphaURL             = "http://localhost:8180/graphql"
 	alphaAdminURL        = "http://localhost:8180/admin"
-	groupOnegRPC         = "localhost:9180"
 	subscriptionEndpoint = "ws://localhost:8180/graphql"
 	customTypes          = `type MovieDirector @remote {
 		 id: ID!
@@ -189,7 +188,9 @@ func TestCustomPostQueryWithBody(t *testing.T) {
 	result := params.ExecuteAsPost(t, alphaURL)
 	require.Nil(t, result.Errors)
 
-	expected := `{"myFavoriteMoviesPost":[{"id":"0x3","name":"Star Wars","director":[{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":[{"id":"0x6","name":"J.J. Abrams"}]}]}`
+	expected := `{"myFavoriteMoviesPost":[{"id":"0x3","name":"Star Wars","director":
+    [{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":
+    [{"id":"0x6","name":"J.J. Abrams"}]}]}`
 	require.JSONEq(t, expected, string(result.Data))
 }
 

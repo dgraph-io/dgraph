@@ -836,7 +836,6 @@ func userNameHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func userNameWithoutAddressHandler(w http.ResponseWriter, r *http.Request) {
-
 	expectedRequest := expectedRequest{
 		body: `{"uid":"0x5"}`,
 	}
