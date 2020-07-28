@@ -79,7 +79,6 @@ func TestLoaderXidmap(t *testing.T) {
 
 
 		"data": {
-			}
 		}
 		}
 	}`
