@@ -34,7 +34,7 @@ const (
 )
 
 func getJWT(b require.TestingT, metaInfo *testutil.AuthMeta) http.Header {
-	jwtToken, err := metaInfo.GetSignedToken("")
+	jwtToken, err := metaInfo.GetSignedToken("", 300*time.Second)
 	require.NoError(b, err)
 
 	h := make(http.Header)
