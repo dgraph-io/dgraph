@@ -98,6 +98,7 @@ set -o xtrace
 
 ratel_release="github.com/dgraph-io/ratel/server.ratelVersion"
 release="github.com/dgraph-io/dgraph/x.dgraphVersion"
+codenameKey="github.com/dgraph-io/dgraph/x.dgraphCodename"
 branch="github.com/dgraph-io/dgraph/x.gitBranch"
 commitSHA1="github.com/dgraph-io/dgraph/x.lastCommitSHA"
 commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
@@ -116,6 +117,7 @@ pushd $basedir/dgraph
   git checkout $TAG
   # HEAD here points to whatever is checked out.
   lastCommitSHA1=$(git rev-parse --short HEAD)
+  codename="shuri"
   gitBranch=$(git rev-parse --abbrev-ref HEAD)
   lastCommitTime=$(git log -1 --format=%ci)
   release_version=$(git describe --always --tags)
@@ -153,7 +155,7 @@ popd
 # Build Windows.
 pushd $basedir/dgraph/dgraph
   xgo -go="go-$GOVERSION" --targets=windows/amd64 -ldflags \
-      "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/windows
   mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
 popd
@@ -171,7 +173,7 @@ popd
 # Build Darwin.
 pushd $basedir/dgraph/dgraph
   xgo -go="go-$GOVERSION" --targets=darwin-10.9/amd64 -ldflags \
-  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+  "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/darwin
   mv dgraph-darwin-10.9-amd64 $TMP/darwin/dgraph
 popd
@@ -189,7 +191,7 @@ popd
 # Build Linux.
 pushd $basedir/dgraph/dgraph
   xgo -go="go-$GOVERSION" --targets=linux/amd64 -ldflags \
-      "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   strip -x dgraph-linux-amd64
   mkdir $TMP/linux
   mv dgraph-linux-amd64 $TMP/linux/dgraph
