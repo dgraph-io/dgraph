@@ -229,7 +229,7 @@ pushd $TMP
 popd
 rm $TMP/Dockerfile
 
-# TODO Create Docker standalone image
+# Create Docker standalone image.
 pushd $basedir/dgraph/contrib/standalone
   make DGRAPH_VERSION=$DOCKER_TAG
 popd
@@ -272,8 +272,11 @@ fi
 echo
 echo "Push the Docker tag:"
 echo "  docker push dgraph/dgraph:$DOCKER_TAG"
+echo "  docker push dgraph/standalone:$DOCKER_TAG"
 echo
 echo "If this should be the latest release, then tag"
 echo "the image as latest too."
 echo "  docker tag dgraph/dgraph:$DOCKER_TAG dgraph/dgraph:latest"
+echo "  docker tag dgraph/standalone:$DOCKER_TAG dgraph/standalone:latest"
 echo "  docker push dgraph/dgraph:latest"
+echo "  docker push dgraph/standalone:latest"
