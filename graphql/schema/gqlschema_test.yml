@@ -2387,6 +2387,18 @@ invalid_schemas:
      "locations":[{"line":6, "column":5}]}
     ]
 
+  -
+    name: "Subscription typename should return error"
+    input: |
+      type Subscription {
+              name: String
+      }
+
+    errlist: [
+    {"message": "Subscription is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations": [{"line":1, "column":6}]},
+    ]
+
+
 valid_schemas:
   - name: "@auth on interface implementation"
     input: |
