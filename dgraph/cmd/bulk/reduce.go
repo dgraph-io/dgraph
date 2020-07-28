@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
