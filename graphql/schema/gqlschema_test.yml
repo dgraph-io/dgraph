@@ -2690,5 +2690,3 @@ valid_schemas:
         name: String
         owns: [Object] @dgraph(pred: "~Object.owner")
       }
-
-

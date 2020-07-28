@@ -167,6 +167,7 @@ func TestAuthSchemas(t *testing.T) {
 				require.NoError(t, errlist, sch.Name)
 
 				_, authError := FromString(schHandler.GQLSchema())
+
 				if diff := cmp.Diff(authError, sch.Errlist); diff != "" {
 					t.Errorf("error mismatch (-want +got):\n%s", diff)
 				}
