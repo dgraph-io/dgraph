@@ -18,8 +18,8 @@ PUBLIC="${PUBLIC:-public}"
 LOOP="${LOOP:-true}"
 # Binary of hugo command to run.
 HUGO="${HUGO:-hugo}"
-OLD_THEME="master"
-NEW_THEME="naman/docs-merge"
+OLD_THEME="old-theme"
+NEW_THEME="master"
 
 # TODO - Maybe get list of released versions from Github API and filter
 # those which have docs.
@@ -28,34 +28,41 @@ NEW_THEME="naman/docs-merge"
 # append '(latest)' to the version string, followed by the master version,
 # and then the older versions in descending order, such that the
 # build script can place the artifact in an appropriate location.
-VERSIONS_ARRAY=(
-	'namandocs'
-	'v20.03.1'
-	'master'
-	'v20.03.0'
-	'v1.2.2'
-	'v1.2.1'
-	'v1.2.0'
-	'v1.1.1'
-	'v1.1.0'
-	'v1.0.18'
-)
 
-OLD_VERSIONS=(
-	'v20.03.1'
-	'master'
-	'v20.03.0'
-	'v1.2.2'
-	'v1.2.1'
-	'v1.2.0'
-	'v1.1.1'
-	'v1.1.0'
-	'v1.0.18'
-)
 
+# these versions use new theme
 NEW_VERSIONS=(
 	'namandocs'
+	'master'
 )
+
+# these versions use old theme
+OLD_VERSIONS=(
+	'v20.03.4'
+	'v20.03.3'
+	'v20.03.1'
+	'v20.03.0'
+	'v1.2.2'
+	'v1.2.1'
+	'v1.2.0'
+	'v1.1.1'
+	'v1.1.0'
+	'v1.0.18'
+	'v1.0.17'
+	'v1.0.16'
+	'v1.0.15'
+	'v1.0.14'
+	'v1.0.13'
+	'v1.0.12'
+	'v1.0.11'
+	'v1.0.10'
+	'v1.0.9'
+	'v1.0.8'
+	'v1.0.7'
+	'v1.0.6'
+)
+
+VERSIONS_ARRAY=("${NEW_VERSIONS[@]}" "${OLD_VERSIONS[@]}")
 
 joinVersions() {
 	versions=$(printf ",%s" "${VERSIONS_ARRAY[@]}")
@@ -146,27 +153,9 @@ while true; do
 
 	currentBranch=$(git rev-parse --abbrev-ref HEAD)
 
-	# Lets check if the theme was updated.
+	# Lets check if the new theme was updated.
 	pushd themes/hugo-docs > /dev/null
 	git remote update > /dev/null
-	themeUpdated=1
-	if branchUpdated "${OLD_THEME}" ; then
-		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
-		themeUpdated=0
-	fi
-	popd > /dev/null
-
-	# Now lets check the theme.
-	echo -e "$(date)  Starting to check branches."
-	git remote update > /dev/null
-
-	for version in "${OLD_VERSIONS[@]}"
-	do
-		checkAndUpdate "$version"
-	done
-
-	Lets check if the theme was updated.
-	pushd themes/hugo-docs > /dev/null
 	themeUpdated=1
 	if branchUpdated "${NEW_THEME}" ; then
 		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
@@ -174,9 +163,26 @@ while true; do
 	fi
 	popd > /dev/null
 
+	echo -e "$(date)  Starting to check branches."
 	git remote update > /dev/null
 
 	for version in "${NEW_VERSIONS[@]}"
+	do
+		checkAndUpdate "$version"
+	done
+
+	# Lets check if the old theme was updated.
+	pushd themes/hugo-docs > /dev/null
+	themeUpdated=1
+	if branchUpdated "${OLD_THEME}" ; then
+		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
+		themeUpdated=0
+	fi
+	popd > /dev/null
+
+	git remote update > /dev/null
+
+	for version in "${OLD_VERSIONS[@]}"
 	do
 		checkAndUpdate "$version"
 	done
