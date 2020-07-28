@@ -351,9 +351,12 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		start := time.Now()
 
 		x.Check(ci.writer.Write(req.list))
-		splitBatch.Kv = append(splitBatch.Kv, req.splitList.Kv...)
-		if len(splitBatch.Kv) > maxSplitBatchSize {
-			r.writeSplitBatch(ci.writer, splitBatch)
+
+		if req.splitList != nil && len(req.splitList.Kv) > 0 {
+			splitBatch.Kv = append(splitBatch.Kv, req.splitList.Kv...)
+			if len(splitBatch.Kv) > maxSplitBatchSize {
+				r.writeSplitBatch(ci.writer, splitBatch)
+			}
 		}
 
 		if dur := time.Since(start).Round(time.Millisecond); dur > time.Second {
