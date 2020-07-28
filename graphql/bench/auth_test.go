@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	graphqlURL = "http://100.83.146.128:8080/graphql"
+	graphqlURL = "http://localhost:8080/graphql"
 )
 
 func getJWT(b require.TestingT, metaInfo *testutil.AuthMeta) http.Header {
@@ -188,7 +188,7 @@ func clearAll(b require.TestingT, metaInfo *testutil.AuthMeta) {
 //}
 
 func BenchmarkNestedQuery(b *testing.B) {
-	schemaFile := "schema.graphql"
+	schemaFile := "schema_auth.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)
 	require.NoError(b, err)
 
@@ -229,7 +229,7 @@ func BenchmarkNestedQuery(b *testing.B) {
 }
 
 func BenchmarkOneLevelQuery(b *testing.B) {
-	schemaFile := "schema.graphql"
+	schemaFile := "schema_auth.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)
 	require.NoError(b, err)
 
@@ -291,7 +291,7 @@ type Owner struct {
 
 type Cuisines []Cuisine
 
-func (c Cuisines) delete(b *testing.B, metaInfo *testutil.AuthMeta) {
+func (c Cuisines) delete(b require.TestingT, metaInfo *testutil.AuthMeta) {
 	getParams := &common.GraphQLParams{
 		Headers: getJWT(b, metaInfo),
 		Query: `
@@ -307,7 +307,7 @@ func (c Cuisines) delete(b *testing.B, metaInfo *testutil.AuthMeta) {
 	require.Nil(b, gqlResponse.Errors)
 }
 
-func (c Cuisines) add(b *testing.B, metaInfo *testutil.AuthMeta) {
+func (c Cuisines) add(b require.TestingT, metaInfo *testutil.AuthMeta) {
 	getParams := &common.GraphQLParams{
 		Headers: getJWT(b, metaInfo),
 		Query: `
@@ -342,7 +342,7 @@ func (r Restaurants) add(b require.TestingT, metaInfo *testutil.AuthMeta) {
 }
 
 func BenchmarkOneLevelMutation(b *testing.B) {
-	schemaFile := "schema.graphql"
+	schemaFile := "schema_auth.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)
 	require.NoError(b, err)
 
@@ -432,7 +432,7 @@ func generateMultiLevelMutationData(items int) Restaurants {
 }
 
 func BenchmarkMultiLevelMutation(b *testing.B) {
-	schemaFile := "schema.graphql"
+	schemaFile := "schema_auth.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)
 	require.NoError(b, err)
 
@@ -455,11 +455,14 @@ func BenchmarkMultiLevelMutation(b *testing.B) {
 			avgTime := int64(totalTime) / int64(i+1)
 			fmt.Printf("Avg Time: %d Time: %d \n", avgTime, reqTime)
 		}
+		// Stopping the timer as we don't want to include the clean up time in benchmark result.
 		b.StopTimer()
 		clearAll(b, metaInfo)
 	}
 }
 
+// generateOwnerRestaurant generates `items` number of `Owner`. Each `Owner` having
+// `items` number of `Restaurant`.
 func generateOwnerRestaurant(items int) Owners {
 	var owners Owners
 	ri := 1
@@ -504,7 +507,7 @@ func (o Owners) add(b *testing.B, metaInfo *testutil.AuthMeta) {
 }
 
 func BenchmarkMutation(b *testing.B) {
-	schemaFile := "schema.graphql"
+	schemaFile := "schema_auth.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)
 	require.NoError(b, err)
 
@@ -545,6 +548,7 @@ func BenchmarkMutation(b *testing.B) {
 			avgTime := int64(totalTime) / (int64(i + 1))
 			fmt.Printf("Avg Time: %d Time: %d \n", avgTime, reqTime)
 		}
+		// Stopping the timer as we don't want to include the clean up time in benchmark result.
 		b.StopTimer()
 		clearAll(b, metaInfo)
 	}
