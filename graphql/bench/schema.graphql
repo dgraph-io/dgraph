@@ -27,54 +27,7 @@ type RestaurantAddress implements Location {
     restaurant: Restaurant! @hasInverse(field: addr)
 }
 
-type Restaurant @auth(
-    query: { or: [
-        { rule: """
-        query($RName: String!) {
-            queryRestaurant(filter: { name: { anyofterms: $RName } }) {
-                __typename
-            }
-        }
-        """ },
-        { rule: """
-        query($RCurr: String!) {
-            queryRestaurant(filter: { currency: { eq: $RCurr } }) {
-                __typename
-            }
-        }
-        """ }]
-    },
-    add: { rule: """
-    query {
-        queryRestaurant {
-            cuisines(filter: {public: true})  {
-                __typename
-            }
-        }
-    }
-    """
-    },
-    update: { rule: """
-    query {
-        queryRestaurant {
-            cuisines(filter: {public: true})  {
-                __typename
-            }
-        }
-    }
-    """
-    },
-    delete: { rule: """
-    query {
-        queryRestaurant {
-            cuisines(filter: {public: true})  {
-                __typename
-            }
-        }
-    }
-    """
-    }
-) {
+type Restaurant {
     id: ID!
     xid: String! @id
     name: String!  @search(by: [term])
@@ -86,59 +39,10 @@ type Restaurant @auth(
     cuisines: [Cuisine]
     dishes: [Dish] @hasInverse(field: servedBy)
     createdAt: DateTime
+    owner: Owner
 }
 
-type Cuisine @auth(
-    query: { or: [
-        { rule: "{$Role: { eq: \"ADMIN\" }}" },
-        { or: [
-            { rule: """
-            query($RCurr: String!) {
-                queryCuisine {
-                    restaurants(filter: { currency: { eq: $RCurr } }) {
-                        __typename
-                    }
-                }
-            }
-            """
-            },
-            { rule: """
-            query($RName: String!) {
-                queryCuisine {
-                    restaurants(filter: { name: { anyofterms: $RName } }) {
-                        __typename
-                    }
-                }
-            }
-            """
-            }
-        ]}
-    ]},
-    add: { rule: """
-    query {
-        queryCuisine(filter: {public: true})  {
-            __typename
-        }
-    }
-    """
-    },
-    update: { rule: """
-    query {
-        queryCuisine(filter: {public: true}) {
-            __typename
-        }
-    }
-    """
-    },
-    delete: { rule: """
-    query {
-        queryCuisine(filter: {public: true})  {
-            __typename
-        }
-    }
-    """
-    }
-) {
+type Cuisine {
     id: ID!
     name: String! @id
     restaurants: [Restaurant] @hasInverse(field: cuisines)
@@ -147,19 +51,7 @@ type Cuisine @auth(
     public: Boolean @search
 }
 
-type Dish @auth(
-    query:
-    { rule: """
-    query($Dish: String!) {
-        queryDish(filter: { name: { anyofterms: $Dish } }) {
-            __typename
-        }
-    }
-    """ },
-    add: { rule: "{$Role: { eq: \"ADMIN\" }}"},
-    update: { rule: "{$Role: { eq: \"ADMIN\" }}"},
-    delete: { rule: "{$Role: { eq: \"ADMIN\" }}"}
-){
+type Dish {
     id: ID!
     name: String! @search(by: [term])
     type: String! @search(by: [hash])
@@ -169,6 +61,12 @@ type Dish @auth(
     isVeg: Boolean
     cuisine: Cuisine
     servedBy: Restaurant
+}
+
+type Owner {
+    username: String! @id
+    name: String! @search(by: [hash])
+    hasRestaurants: [Restaurant] @hasInverse(field: owner)
 }
 
 # Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
