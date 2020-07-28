@@ -28,11 +28,11 @@ MODIFIED = $(shell git diff-index --quiet HEAD || (echo "-mod"))
 export GO111MODULE := on
 
 # Build-time Go variables
-dgraphVersion	= github.com/dgraph-io/dgraph/x.dgraphVersion
-dgraphCodename	= github.com/dgraph-io/dgraph/x.dgraphCodename
-gitBranch	= github.com/dgraph-io/dgraph/x.gitBranch
-lastCommitSHA	= github.com/dgraph-io/dgraph/x.lastCommitSHA
-lastCommitTime	= github.com/dgraph-io/dgraph/x.lastCommitTime
+dgraphVersion   = github.com/dgraph-io/dgraph/x.dgraphVersion
+dgraphCodename  = github.com/dgraph-io/dgraph/x.dgraphCodename
+gitBranch       = github.com/dgraph-io/dgraph/x.gitBranch
+lastCommitSHA   = github.com/dgraph-io/dgraph/x.lastCommitSHA
+lastCommitTime  = github.com/dgraph-io/dgraph/x.lastCommitTime
 
 BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}${MODIFIED}" -X ${gitBranch}=${BUILD_BRANCH}'
 
