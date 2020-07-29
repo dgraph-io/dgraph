@@ -264,6 +264,12 @@ func (rf *resolverFactory) WithConventionResolvers(
 		})
 	}
 
+	for _, q := range s.Queries(schema.DQLQuery) {
+		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
+			return NewQueryResolver(nil, fns.Ex, StdQueryCompletion())
+		})
+	}
+
 	for _, m := range s.Mutations(schema.AddMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewDgraphResolver(fns.Arw(), fns.Ex, StdMutationCompletion(m.Name()))

@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/gql"
+
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -1185,13 +1187,73 @@ func customDirectiveValidation(sch *ast.Schema,
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: has %d arguments for @custom directive, "+
-				"it should contain exactly 1 argument.",
+				"it should contain exactly one of `http` or `dql` arguments.",
 			typ.Name, field.Name, l))
 	}
 
-	// 3. Validating http argument
 	httpArg := dir.Arguments.ForName("http")
-	if httpArg == nil || httpArg.Value.String() == "" {
+	dqlArg := dir.Arguments.ForName(dqlArg)
+
+	if httpArg == nil && dqlArg == nil {
+		errs = append(errs, gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: one of `http` or `dql` arguments must be present for @custom"+
+				" directive.",
+			typ.Name, field.Name))
+		return errs
+	}
+
+	// 3.1 Validating dql argument
+	if dqlArg != nil {
+		if typ.Name != "Query" {
+			errs = append(errs, gqlerror.ErrorPosf(
+				dqlArg.Position,
+				"Type %s; Field %s: @custom directive with `dql` can be used only on queries.",
+				typ.Name, field.Name))
+		}
+		if dqlArg.Value.Kind != ast.StringValue && dqlArg.Value.Kind != ast.BlockValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				dqlArg.Position,
+				"Type %s; Field %s: dql argument for @custom directive must be of type String.",
+				typ.Name, field.Name))
+		}
+		if strings.TrimSpace(dqlArg.Value.Raw) == "" {
+			errs = append(errs, gqlerror.ErrorPosf(
+				dqlArg.Position,
+				"Type %s; Field %s: dql argument for @custom directive must not be empty.",
+				typ.Name, field.Name))
+		}
+		if _, err := gql.Parse(gql.Request{Str: dqlArg.Value.Raw}); err != nil {
+			errs = append(errs, gqlerror.ErrorPosf(
+				dqlArg.Position,
+				"Type %s; Field %s: in dql argument for @custom directive: %s",
+				typ.Name, field.Name, err.Error()))
+		} else {
+			// TODO: tackle cases of:
+			// * same query name as GraphQL
+			// * correct return type mapping
+			// * correct field aliases
+			// * correct argument names in comparison to GraphQL args, their types
+			//fmt.Println(parsedDQL)
+		}
+		for _, arg := range field.Arguments {
+			if arg.Type.NamedType == "" || !isScalar(arg.Type.Name()) {
+				errs = append(errs, gqlerror.ErrorPosf(
+					dqlArg.Position,
+					"Type %s; Field %s: Argument %s: must be of a scalar type. "+
+						"@custom DQL queries accept only scalar arguments.",
+					typ.Name, field.Name, arg.Name))
+			}
+		}
+
+		// if there was dql, always return no matter we found errors or not,
+		// as rest of the validation is for http arg, and http won't be present together with dql
+		return errs
+	}
+
+	// 3.2 Validating http argument
+	// if we reach here, it means that httpArg != nil
+	if httpArg.Value.String() == "" {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: http argument for @custom directive should not be empty.",
@@ -1201,7 +1263,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	if httpArg.Value.Kind != ast.ObjectValue {
 		errs = append(errs, gqlerror.ErrorPosf(
 			httpArg.Position,
-			"Type %s; Field %s: http argument for @custom directive ff type Object.",
+			"Type %s; Field %s: http argument for @custom directive should be of type Object.",
 			typ.Name, field.Name))
 	}
 

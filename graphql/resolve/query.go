@@ -111,16 +111,33 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 		}
 	}
 
-	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
-	if err != nil {
-		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
-			query.ResponseName()))
+	var qry string
+	vars := make(map[string]string)
+
+	// DQL queries don't have any rewriter, as they are already in DQL form
+	if query.QueryType() == schema.DQLQuery {
+		qry = query.DQLQuery()
+		args := query.Arguments()
+		for k, v := range args {
+			vStr, err := x.ScalarToString(v)
+			if err != nil {
+				return emptyResult(schema.GQLWrapf(err, "couldn't convert argument %s to string",
+					k))
+			}
+			vars["$"+k] = vStr
+		}
+	} else {
+		dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
+		if err != nil {
+			return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
+				query.ResponseName()))
+		}
+		qry = dgraph.AsString(dgQuery)
 	}
 
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
-	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),
-		ReadOnly: true})
+	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars, ReadOnly: true})
 	queryTimer.Stop()
 
 	if err != nil {
