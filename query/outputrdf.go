@@ -13,63 +13,61 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package query
 
 import (
+	"bytes"
 	"fmt"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
+// rdfBuilder is used to generate RDF from subgraph.
+type rdfBuilder struct {
+	buf *bytes.Buffer
+}
+
 // ToRDF converts the given subgraph list into rdf format.
 func ToRDF(l *Latency, sgl []*SubGraph) ([]byte, error) {
-	output := ""
+	b := &rdfBuilder{
+		buf: &bytes.Buffer{},
+	}
 	for _, sg := range sgl {
+		if err := validateSubGraphForRDF(sg); err != nil {
+			return nil, err
+		}
 		// Skip parent graph. we don't want parent values.
 		for _, child := range sg.Children {
-			if err := castToRDF(&output, child); err != nil {
+			if err := b.castToRDF(child); err != nil {
 				return nil, err
 			}
 		}
 
 	}
-	return []byte(output), nil
+	return b.buf.Bytes(), nil
 }
 
 // castToRDF converts the given subgraph to RDF and appends to the
 // output string.
-func castToRDF(output *string, sg *SubGraph) error {
-
-	uidCount := sg.Attr == "uid" && sg.Params.DoCount && sg.IsInternal()
-	if uidCount {
-		return errors.New("uid count is not supported in the rdf output format")
+func (b *rdfBuilder) castToRDF(sg *SubGraph) error {
+	if err := validateSubGraphForRDF(sg); err != nil {
+		return err
 	}
-
-	if sg.Params.Normalize {
-		return errors.New("normalize directive is not supported in the rdf output format")
-	}
-
-	if sg.Params.IgnoreReflex {
-		return errors.New("ignorereflex directive is not supported in the rdf output format")
-	}
-
-	if sg.SrcFunc != nil && sg.SrcFunc.Name == "checkpwd" {
-		return errors.New("chkpwd function is not supported in the rdf output format")
-	}
-
 	if sg.SrcUIDs != nil {
 		// Get RDF for the given subgraph.
-		if err := rdfForSubgraph(output, sg); err != nil {
+		if err := b.rdfForSubgraph(sg); err != nil {
 			return err
 		}
 	}
-
 	// Recursively cnvert RDF for the children graph.
 	for _, child := range sg.Children {
-		err := castToRDF(output, child)
+		err := b.castToRDF(child)
 		if err != nil {
 			return err
 		}
@@ -78,13 +76,12 @@ func castToRDF(output *string, sg *SubGraph) error {
 }
 
 // rdfForSubgraph generates RDF and appends to the output parameter.
-func rdfForSubgraph(output *string, sg *SubGraph) error {
+func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 	for i, uid := range sg.SrcUIDs.Uids {
 		if sg.Params.IgnoreResult {
 			// Skip ignored values.
 			continue
 		}
-
 		if sg.IsInternal() {
 			if sg.Params.Expand != "" {
 				continue
@@ -99,68 +96,118 @@ func rdfForSubgraph(output *string, sg *SubGraph) error {
 			if err != nil {
 				return err
 			}
-			*output += fmt.Sprintf("<%#x> <%s> %s .\n", uid, sg.aggWithVarFieldName(),
-				string(outputval))
+			b.writeRDF(uid, []byte(sg.aggWithVarFieldName()), outputval)
 			continue
 		}
-
 		switch {
 		case len(sg.counts) > 0:
 			// Add count rdf.
-			rdfForCount(output, uid, sg.counts[i], sg)
+			b.rdfForCount(uid, sg.counts[i], sg)
 		case i < len(sg.uidMatrix) && len(sg.uidMatrix[i].Uids) != 0:
 			// Add posting list relation.
-			rdfForUIDList(output, uid, sg.uidMatrix[i], sg)
+			b.rdfForUIDList(uid, sg.uidMatrix[i], sg)
 		case i < len(sg.valueMatrix):
 			// TODO: add facet.
-			rdfForValueList(output, uid, sg.valueMatrix[i], sg.fieldName())
+			b.rdfForValueList(uid, sg.valueMatrix[i], sg.fieldName())
 		}
 	}
 	return nil
 }
 
+func (b *rdfBuilder) writeRDF(subject uint64, predicate []byte, object []byte) {
+	// add subject
+	b.writeTriple([]byte(fmt.Sprintf("%#x", subject)))
+	x.Check(b.buf.WriteByte(' '))
+	// add predicate
+	b.writeTriple(predicate)
+	x.Check(b.buf.WriteByte(' '))
+	// add object
+	x.Check2(b.buf.Write(object))
+	x.Check(b.buf.WriteByte(' '))
+	x.Check(b.buf.WriteByte('.'))
+	x.Check(b.buf.WriteByte('\n'))
+}
+
+func (b *rdfBuilder) writeTriple(val []byte) {
+	x.Check(b.buf.WriteByte('<'))
+	x.Check2(b.buf.Write(val))
+	x.Check(b.buf.WriteByte('>'))
+}
+
 // rdfForCount returns rdf for count fucntion.
-func rdfForCount(output *string, subject uint64, count uint32, sg *SubGraph) {
+func (b *rdfBuilder) rdfForCount(subject uint64, count uint32, sg *SubGraph) {
 	fieldName := sg.Params.Alias
 	if fieldName == "" {
 		fieldName = fmt.Sprintf("count(%s)", sg.Attr)
 	}
-	*output += fmt.Sprintf("<%#x> <%s> %d .\n", subject, fieldName, count)
+	b.writeRDF(subject, []byte(fieldName), []byte(strconv.FormatUint(uint64(count), 10)))
 }
 
 // rdfForUIDList returns rdf for uid list.
-func rdfForUIDList(output *string, subject uint64, list *pb.List, sg *SubGraph) {
+func (b *rdfBuilder) rdfForUIDList(subject uint64, list *pb.List, sg *SubGraph) {
 	for _, destUID := range list.Uids {
 		if algo.IndexOf(sg.DestUIDs, destUID) < 0 {
 			// This uid is filtered.
 			continue
 		}
-		// TODO: do the right RDF format.
-		*output += fmt.Sprintf("<%#x> <%s> <%#x> .\n", subject, sg.fieldName(), destUID)
+		// Build object.
+		b.writeRDF(
+			subject,
+			[]byte(sg.fieldName()),
+			buildTriple([]byte(fmt.Sprintf("%#x", destUID))))
 	}
 }
 
 // rdfForValueList returns rdf for the value list.
-func rdfForValueList(output *string, subject uint64, valueList *pb.ValueList, attr string) error {
+func (b *rdfBuilder) rdfForValueList(subject uint64, valueList *pb.ValueList, attr string) {
 	if attr == "uid" {
-		*output += fmt.Sprintf("<%#x> <%s> <%#x> .\n", subject, attr, subject)
-		return nil
+		b.writeRDF(subject,
+			[]byte(attr),
+			buildTriple([]byte(fmt.Sprintf("%#x", subject))))
+		return
 	}
 	for _, destValue := range valueList.Values {
 		val, err := convertWithBestEffort(destValue, attr)
 		if err != nil {
-			return err
+			continue
 		}
 		outputval, err := valToBytes(val)
 		if err != nil {
-			return err
+			continue
 		}
 		switch val.Tid {
 		case types.UidID:
-			*output += fmt.Sprintf("<%#x> <%s> <%s> .\n", subject, attr, string(outputval))
+			b.writeRDF(subject, []byte(attr), buildTriple(outputval))
 		default:
-			*output += fmt.Sprintf("<%#x> <%s> %s .\n", subject, attr, string(outputval))
+			b.writeRDF(subject, []byte(attr), outputval)
 		}
+	}
+}
+
+func buildTriple(val []byte) []byte {
+	buf := make([]byte, 0, 2+len(val))
+	buf = append(buf, '<')
+	buf = append(buf, val...)
+	buf = append(buf, '>')
+	return buf
+}
+
+func validateSubGraphForRDF(sg *SubGraph) error {
+	if sg.IsGroupBy() {
+		return errors.New("groupby is not supported in rdf output format")
+	}
+	uidCount := sg.Attr == "uid" && sg.Params.DoCount && sg.IsInternal()
+	if uidCount {
+		return errors.New("uid count is not supported in the rdf output format")
+	}
+	if sg.Params.Normalize {
+		return errors.New("normalize directive is not supported in the rdf output format")
+	}
+	if sg.Params.IgnoreReflex {
+		return errors.New("ignorereflex directive is not supported in the rdf output format")
+	}
+	if sg.SrcFunc != nil && sg.SrcFunc.Name == "checkpwd" {
+		return errors.New("chkpwd function is not supported in the rdf output format")
 	}
 	return nil
 }

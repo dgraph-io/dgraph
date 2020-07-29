@@ -48,3 +48,114 @@ func TestRDFResult(t *testing.T) {
 <0x19> <age> 17 .
 `)
 }
+
+func TestRDFNormalize(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x01)) @normalize {
+			mn: name
+			gender
+			friend {
+				n: name
+				d: dob
+				friend {
+					fn : name
+				}
+			}
+			son {
+				sn: name
+			}
+		}
+	}`
+	_, err := processQueryRDF(context.Background(), t, query)
+	require.Error(t, err, "normalize directive is not supported in the rdf output format")
+}
+
+func TestRDFGroupBy(t *testing.T) {
+	query := `
+	{
+		me(func: uid(1, 23, 24, 25, 31)) @groupby(age) {
+				count(uid)
+		}
+	}`
+	_, err := processQueryRDF(context.Background(), t, query)
+	require.Contains(t, err.Error(), "groupby is not supported in rdf output format")
+}
+
+func TestRDFUidCount(t *testing.T) {
+	query := `
+	{
+		me(func: gt(count(friend), 0)) {
+			count(uid)
+		}
+	}`
+	_, err := processQueryRDF(context.Background(), t, query)
+	require.Contains(t, err.Error(), "uid count is not supported in the rdf output format")
+}
+
+func TestRDFIngoreReflex(t *testing.T) {
+	query := `
+	{
+		me(func:anyofterms(name, "Michonne Rick Daryl")) @ignoreReflex {
+			name
+			friend {
+				name
+				friend {
+					name
+				}
+			}
+		}
+	}`
+	_, err := processQueryRDF(context.Background(), t, query)
+	require.Contains(t, err.Error(),
+		"ignorereflex directive is not supported in the rdf output format")
+}
+
+func TestRDFCheckPwd(t *testing.T) {
+	query := `
+    {
+        me(func: uid(0x01)) {
+			expand(_all_)
+			checkpwd(password, "12345")
+		}
+    }
+	`
+	_, err := processQueryRDF(context.Background(), t, query)
+	require.Contains(t, err.Error(),
+		"chkpwd function is not supported in the rdf output format")
+}
+
+func TestRDFPredicateCount(t *testing.T) {
+	query := `
+    {
+		me(func:anyofterms(name, "Michonne Rick Daryl")) {
+			name
+			count(friend)
+			friend {
+				name
+			}
+		}
+    }
+	`
+
+	rdf, err := processQueryRDF(context.Background(), t, query)
+	require.NoError(t, err)
+	require.Equal(t, `<0x1> <name> "Michonne" .
+<0x17> <name> "Rick Grimes" .
+<0x19> <name> "Daryl Dixon" .
+<0x1> <count(friend)> 5 .
+<0x17> <count(friend)> 1 .
+<0x19> <count(friend)> 0 .
+<0x1> <friend> <0x17> .
+<0x1> <friend> <0x18> .
+<0x1> <friend> <0x19> .
+<0x1> <friend> <0x1f> .
+<0x1> <friend> <0x65> .
+<0x17> <friend> <0x1> .
+<0x1> <name> "Michonne" .
+<0x17> <name> "Rick Grimes" .
+<0x18> <name> "Glenn Rhee" .
+<0x19> <name> "Daryl Dixon" .
+<0x1f> <name> "Andrea" .
+`, rdf)
+}
