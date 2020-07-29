@@ -72,7 +72,7 @@ const (
 `
 )
 
-var subExp = 3 * time.Second
+var subExp = 4 * time.Second
 
 func TestSubscription(t *testing.T) {
 
@@ -191,7 +191,7 @@ func TestSubscriptionAuth(t *testing.T) {
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
-	x.Config.PollInterval = time.Millisecond
+	x.Config.PollInterval = 0
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -341,7 +341,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
-	x.Config.PollInterval = time.Millisecond
+	x.Config.PollInterval = 0
 
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
@@ -448,7 +448,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
-	x.Config.PollInterval = time.Millisecond
+	x.Config.PollInterval = 0
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -612,7 +612,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
-	x.Config.PollInterval = time.Millisecond
+	x.Config.PollInterval = 0
 
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
