@@ -146,12 +146,12 @@ go test -v -tags standalone $SAVEDIR $QUIET || FOUND_DIFFS=1
 
 if [[ $CLEANUP == all ]]; then
     Info "bringing down zero and alpha and data volumes"
-    DockerCompose down -v
+    DockerCompose down -v --remove-orphans
 elif [[ $CLEANUP == none ]]; then
     Info "leaving up zero and alpha"
 else
     Info "bringing down zero and alpha only"
-    DockerCompose down
+    DockerCompose down --remove-orphans
 fi
 
 if [[ $FOUND_DIFFS -eq 0 ]]; then
