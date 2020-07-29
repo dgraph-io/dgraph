@@ -1854,6 +1854,12 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 		return nil, ctx.Err()
 	}
 
+	// It could be possible that the server isn't ready but a peer sends a
+	// request. In that case we should check for the health here.
+	if err := x.HealthCheck(); err != nil {
+		return nil, err
+	}
+
 	gid, err := groups().BelongsToReadOnly(q.Attr, q.ReadTs)
 	switch {
 	case err != nil:
@@ -2173,7 +2179,8 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 
 	for itr.Seek(countKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
-		pl, err := qs.cache.Get(item.Key())
+		var key []byte
+		pl, err := qs.cache.Get(item.KeyCopy(key))
 		if err != nil {
 			return err
 		}

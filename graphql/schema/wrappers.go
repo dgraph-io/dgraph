@@ -568,7 +568,6 @@ func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
-
 	// Auth rules can't be effectively validated as part of the normal rules -
 	// because they need the fully generated schema to be checked against.
 	authRules, err := authRules(s)
@@ -1102,7 +1101,7 @@ func queryType(name string, custom *ast.Directive) QueryType {
 		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
-	case name == "__schema" || name == "__type":
+	case name == "__schema" || name == "__type" || name == "__typename":
 		return SchemaQuery
 	case strings.HasPrefix(name, "query"):
 		return FilterQuery
@@ -1191,7 +1190,7 @@ func (m *mutation) SelectionSet() []Field {
 
 func (m *mutation) QueryField() Field {
 	for _, f := range m.SelectionSet() {
-		if f.Name() == NumUid || f.Name() == Typename {
+		if f.Name() == NumUid || f.Name() == Typename || f.Name() == Msg {
 			continue
 		}
 		// if @cascade was given on mutation itself, then it should get applied for the query which
