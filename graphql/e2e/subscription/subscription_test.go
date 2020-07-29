@@ -72,7 +72,7 @@ const (
 `
 )
 
-var subExp = 4 * time.Second
+var subExp = 3 * time.Second
 
 func TestSubscription(t *testing.T) {
 
