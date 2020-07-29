@@ -17,7 +17,6 @@
 package posting
 
 import (
-	"bytes"
 	"context"
 	"io/ioutil"
 	"math"
@@ -939,13 +938,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	}
 
 	kvs, err := ol.Rollup()
-	for i, kv := range kvs {
-		if i == 0 {
-			require.Equal(t, x.ByteData, kv.Key[0])
-			continue
-		}
-		require.Equal(t, x.ByteSplit, kv.Key[0])
-		require.Equal(t, -1, bytes.Compare(kvs[i-1].Key, kv.Key))
+	for _, kv := range kvs {
 		require.Equal(t, uint64(size+1), kv.Version)
 	}
 	require.NoError(t, err)

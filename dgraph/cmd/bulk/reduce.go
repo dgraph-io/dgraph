@@ -82,6 +82,7 @@ func (r *reducer) run() error {
 
 			writer := db.NewStreamWriter()
 			x.Check(writer.Prepare())
+			// Split lists are written to a separate DB first to avoid ordering issues.
 			r.splitWriter = tmpDb.NewManagedWriteBatch()
 
 			ci := &countIndexer{reducer: r, writer: writer}
@@ -99,7 +100,7 @@ func (r *reducer) run() error {
 			x.Check(writer.Flush())
 			x.Check(r.splitWriter.Flush())
 
-			// Write split lists to main DB.
+			// Write split lists back to the main DB.
 			r.writeSplitLists(db, tmpDb)
 
 			for _, itr := range mapItrs {

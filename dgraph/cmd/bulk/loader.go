@@ -88,8 +88,8 @@ type state struct {
 	readerChunkCh chan *bytes.Buffer
 	mapFileId     uint32 // Used atomically to name the output files of the mappers.
 	dbs           []*badger.DB
-	tmpDbs        []*badger.DB
-	writeTs       uint64 // All badger writes use this timestamp
+	tmpDbs        []*badger.DB // Temporary DB to write the split lists to avoid ordering issues.
+	writeTs       uint64       // All badger writes use this timestamp
 }
 
 type loader struct {
