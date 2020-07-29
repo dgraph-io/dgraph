@@ -28,7 +28,7 @@ Info "entering directory $SRCDIR"
 cd $SRCDIR
 
 Info "bringing down zero and alpha and data volumes"
-DockerCompose down -v
+DockerCompose down -v --remove-orphans
 
 Info "bringing up zero container"
 DockerCompose up -d --remove-orphans --force-recreate zero1
@@ -51,7 +51,7 @@ DockerCompose run -v $BENCHMARKS_REPO:$BENCHMARKS_REPO --name bulk_load zero1 \
 EOF
 
 Info "bringing up alpha container"
-DockerCompose up -d --force-recreate alpha1 alpha2 alpha3
+DockerCompose up -d --force-recreate --remove-orphans alpha1 alpha2 alpha3
 
 Info "waiting for alpha to be ready"
 DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"
@@ -71,7 +71,7 @@ Info "running regression queries"
 go test -v -tags systest || FOUND_DIFFS=1
 
 Info "bringing down zero and alpha and data volumes"
-DockerCompose down -v
+DockerCompose down -v --remove-orphans
 
 if [[ $FOUND_DIFFS -eq 0 ]]; then
     Info "no diffs found in query results"
