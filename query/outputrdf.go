@@ -48,7 +48,6 @@ func ToRDF(l *Latency, sgl []*SubGraph) ([]byte, error) {
 				return nil, err
 			}
 		}
-
 	}
 	return b.buf.Bytes(), nil
 }
@@ -67,8 +66,7 @@ func (b *rdfBuilder) castToRDF(sg *SubGraph) error {
 	}
 	// Recursively cnvert RDF for the children graph.
 	for _, child := range sg.Children {
-		err := b.castToRDF(child)
-		if err != nil {
+		if err := b.castToRDF(child); err != nil {
 			return err
 		}
 	}
@@ -107,7 +105,6 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 			// Add posting list relation.
 			b.rdfForUIDList(uid, sg.uidMatrix[i], sg)
 		case i < len(sg.valueMatrix):
-			// TODO: add facet.
 			b.rdfForValueList(uid, sg.valueMatrix[i], sg.fieldName())
 		}
 	}
@@ -208,6 +205,9 @@ func validateSubGraphForRDF(sg *SubGraph) error {
 	}
 	if sg.SrcFunc != nil && sg.SrcFunc.Name == "checkpwd" {
 		return errors.New("chkpwd function is not supported in the rdf output format")
+	}
+	if len(sg.facetsMatrix) != 0 {
+		return errors.New("facet is not supported in the rdf output format")
 	}
 	return nil
 }
