@@ -23,13 +23,15 @@ BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 # Use the next build version on master branch
 # NOTE: this needs to be updated with each new release
 ifeq ($(BUILD_BRANCH),master)
-BUILD_VERSION ?= 'v20.11.0-'$(BUILD)
+# Version on master is of the format <next-release-version>-g<commit-id>
+BUILD_VERSION ?= 'v20.11.0-g'$(BUILD)
 else
 BUILD_VERSION ?= $(shell git describe --always --tags)
 endif
 
 BUILD_TAGS    ?=
 GOPATH        ?= $(shell go env GOPATH)
+MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
 export GO111MODULE := on
 
