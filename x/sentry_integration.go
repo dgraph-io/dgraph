@@ -112,6 +112,7 @@ func ConfigureSentryScope(subcmd string) {
 		scope.SetTag("commit", lastCommitSHA)
 		scope.SetTag("commit_ts", lastCommitTime)
 		scope.SetTag("branch", gitBranch)
+		scope.SetTag("codename", dgraphCodename)
 		scope.SetLevel(sentry.LevelFatal)
 	})
 
