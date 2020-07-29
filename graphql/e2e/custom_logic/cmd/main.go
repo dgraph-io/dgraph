@@ -277,7 +277,7 @@ func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 	check2(w.Write(getDefaultResponse()))
 }
 
-func PostFavMoviesWithBodyHandler(w http.ResponseWriter, r *http.Request) {
+func postFavMoviesWithBodyHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodPost,
 		urlSuffix: "/0x123?name=Author",
@@ -1211,7 +1211,7 @@ func main() {
 	// for queries
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
-	http.HandleFunc("/favMoviesPostWithBody/", PostFavMoviesWithBodyHandler)
+	http.HandleFunc("/favMoviesPostWithBody/", postFavMoviesWithBodyHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
 	http.HandleFunc("/verifyCustomNameHeaders", verifyCustomNameHeadersHandler)
 	http.HandleFunc("/twitterfollowers", twitterFollwerHandler)
