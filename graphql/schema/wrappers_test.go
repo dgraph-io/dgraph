@@ -424,11 +424,18 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			nil,
 		},
 		{
-			"variable not found error",
+			"Skip one missing variable in the HTTP body",
 			map[string]interface{}{"postID": "0x9"},
 			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
+			map[string]interface{}{"post": map[string]interface{}{"id": "0x9"}},
 			nil,
-			errors.New("couldn't find variable: $id in variables map"),
+		},
+		{
+			"Skip all missing variables in the HTTP body",
+			map[string]interface{}{},
+			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
+			map[string]interface{}{"post": map[string]interface{}{}},
+			nil,
 		},
 	}
 

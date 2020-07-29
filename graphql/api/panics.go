@@ -34,6 +34,6 @@ func PanicHandler(fn func(error)) {
 
 		fn(errors.Errorf("Internal Server Error - a panic was trapped.  " +
 			"This indicates a bug in the GraphQL server.  A stack trace was logged.  " +
-			"Please let us know : https://github.com/dgraph-io/dgraph/issues."))
+			"Please let us know by filing an issue with the stack trace."))
 	}
 }

@@ -667,8 +667,7 @@ func completeDgraphResult(
 		glog.Errorf("Could not process Dgraph result : \n%s", string(dgResult))
 		return nullResponse(
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
-				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
-				"Please let us know : https://github.com/dgraph-io/dgraph/issues.").
+				"This probably indicates a bug in Dgraph. Please let us know by filing an issue.").
 				WithLocations(field.Location()))
 	}
 
@@ -949,10 +948,11 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				return
 			}
 
+			url := fconf.URL
 			if !graphql {
 				// For REST requests, we'll have to substitute the variables used in the URL.
 				mu.RLock()
-				fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL,
+				url, err = schema.SubstituteVarsInURL(url,
 					vals[idx].(map[string]interface{}))
 				if err != nil {
 					mu.RUnlock()
@@ -966,7 +966,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				mu.RUnlock()
 			}
 
-			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+			b, err = makeRequest(nil, fconf.Method, url, string(b), fconf.ForwardHeaders)
 			if err != nil {
 				errChan <- x.GqlErrorList{externalRequestError(err, f)}
 				return
@@ -1793,6 +1793,7 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		}
 		body = string(b)
 	}
+
 	b, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
 	if err != nil {
 		return emptyResult(externalRequestError(err, field))
