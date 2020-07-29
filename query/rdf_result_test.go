@@ -159,3 +159,15 @@ func TestRDFPredicateCount(t *testing.T) {
 <0x1f> <name> "Andrea" .
 `, rdf)
 }
+
+func TestRDFFacets(t *testing.T) {
+	query := `
+		{
+			shortest(from: 1, to:1001, numpaths: 4) {
+				path @facets(weight)
+			}
+		}`
+	_, err := processQueryRDF(context.Background(), t, query)
+	require.Contains(t, err.Error(),
+		"facet is not supported in the rdf output format")
+}
