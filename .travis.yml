@@ -49,8 +49,8 @@ jobs:
     script: make it-rpc
   - name: Integration Test - Stress
     script: make it-stress
-    env: 
-      - GOSSAMER_STRESS=true
+  - name: Integration Test - GRANDPA
+    script: make it-grandpa
   - name: Build Docker Image
     script:
     - make docker-build

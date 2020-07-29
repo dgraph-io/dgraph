@@ -276,7 +276,7 @@ func buildSpecAction(ctx *cli.Context) error {
 		return fmt.Errorf("error building genesis")
 	}
 
-	res := []byte{}  //nolint
+	res := []byte{} //nolint
 	if ctx.Bool(RawFlag.Name) {
 		res, err = bs.ToJSONRaw()
 	} else {

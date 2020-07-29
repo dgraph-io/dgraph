@@ -33,17 +33,15 @@ import (
 
 func TestMain(m *testing.M) {
 	if utils.MODE != "stress" {
-		_, _ = fmt.Fprintln(os.Stdout, "Going to skip stress test")
+		_, _ = fmt.Fprintln(os.Stdout, "Skipping stress test")
 		return
 	}
-
-	_, _ = fmt.Fprintln(os.Stdout, "Going to start stress test")
 
 	if utils.NETWORK_SIZE != "" {
 		var err error
 		numNodes, err = strconv.Atoi(utils.NETWORK_SIZE)
 		if err == nil {
-			_, _ = fmt.Fprintf(os.Stdout, "Going to use custom network size %d\n", numNodes)
+			_, _ = fmt.Fprintf(os.Stdout, "using custom network size %d\n", numNodes)
 		}
 	}
 

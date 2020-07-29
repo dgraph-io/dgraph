@@ -43,8 +43,12 @@ it-stable:
 
 ## it-stress: Runs Integration Tests stress mode
 it-stress: build
-	@echo "  >  \033[32mRunning Integration Tests stress mode...\033[0m "
-	HOSTNAME=0.0.0.0 MODE=stress go test ./tests/stress/... -timeout=10m -v -short
+	@echo "  >  \033[32mRunning stress tests...\033[0m "
+	HOSTNAME=0.0.0.0 MODE=stress go test ./tests/stress/... -timeout=10m -v -short -run TestSync_
+
+it-grandpa: build
+	@echo "  >  \033[32mRunning GRANDPA stress tests...\033[0m "
+	HOSTNAME=0.0.0.0 MODE=stress go test ./tests/stress/... -timeout=10m -v -short -run TestStress_Grandpa_
 
 it-rpc: build
 	@echo "  >  \033[32mRunning Integration Tests RPC Specs mode...\033[0m "
