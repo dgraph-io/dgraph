@@ -16,32 +16,37 @@ One important thing distinction is that we are building the Polkadot Runtime Env
 
 ## Contribution Steps
 
-**1. Set up gossamer following the instructions our [README](https://github.com/ChainSafe/gossamer/blob/development/README.md).**
+**1. Fork the gossamer repo.**
 
-**2. Fork the gossamer repo.**
+**2. Create a local clone of gossamer.**
 
-**3. Create a local clone of gossamer.**
+```
+go get -u github.com/ChainSafe/gossamer
+cd $GOPATH/src/github.com/ChainSafe/gossamer
+git init
+```
+You may encounter a `package github.com/ChainSafe/gossamer: no Go files in ...` message when doing `go get`. This is not an error, since there are no go files in the project root.
 
-**4. Link your local clone to the fork on your Github repo.**
+**3. Link your local clone to the fork on your Github repo.**
 
 ```
 $ git remote add your-gossamer-repo https://github.com/<your_github_user_name>/gossamer.git
 ```
 
-**5. Link your local clone to the ChainSafe Systems repo so that you can easily fetch future changes to the ChainSafe Systems repo.**
-
+**4. Link your local clone to the ChainSafe Systems repo so that you can easily fetch future changes to the ChainSafe Systems repo.**
+     
 ```
 $ git remote add gossamer https://github.com/ChainSafe/gossamer.git
 $ git remote -v (you should see myrepo and gossamer in the list of remotes)
 ```
 
-**6. Find something to work on.**
+**5. Find something to work on.**
 
 To start, check out our open issues. We recommend starting with an [issue labeled `Good First Issue`](https://github.com/ChainSafe/gossamer/issues?q=is%3Aopen+is%3Aissue+label%3A%22Good+First+Issue%22). Leave a comment to let us know that you would like to work on it. 
 
 Another option is to improve gossamer where you see fit based on your evaluation of our code. In order to best faciliate collabration, please create an issue before you start working on it.
 
-**7. Make improvements to the code.**
+**6. Make improvements to the code.**
 
 Each time you work on the code be sure that you are working on the branch that you have created as opposed to your local copy of the gossamer repo. Keeping your changes segregated in this branch will make it easier to merge your changes into the repo later.
 
@@ -49,7 +54,7 @@ Each time you work on the code be sure that you are working on the branch that y
 $ git checkout feature-in-progress-branch
 ```
 
-**8. Test your changes.**
+**7. Test your changes.**
 
 Changes that only affect a single file can be tested with
 
@@ -57,7 +62,7 @@ Changes that only affect a single file can be tested with
 $ go test <file_you_are_working_on>
 ```
 
-**9. Lint your changes.**
+**8. Lint your changes.**
 
 Before opening a pull request be sure to run the linter
 
@@ -65,7 +70,7 @@ Before opening a pull request be sure to run the linter
 $ gometallinter ./...
 ```
 
-**10. Create a pull request.**
+**9. Create a pull request.**
 
 Navigate your browser to [https://github.com/ChainSafe/gossamer](https://github.com/ChainSafe/gossamer) and click on the new pull request button. In the “base” box on the left, change the branch to “**base development**”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at [https://github.com/ChainSafe/gossamer/pulls](https://github.com/ChainSafe/gossamer/pulls).
 
