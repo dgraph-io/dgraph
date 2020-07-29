@@ -26,7 +26,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -78,10 +78,6 @@ func TestLoaderXidmap(t *testing.T) {
 		}
 	}`
 	expected := `{"q":[{"age":"13","location":"Wonderland","friend":[{"name":"Bob"}]}]}`
-	b, _ := ioutil.ReadAll(resp.Body)
-	expected := `{"code": "Success", "message": "Export completed."}`
-	require.Equal(t, expected, string(b))
-
 	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, expected, string(resp.GetJson()))
