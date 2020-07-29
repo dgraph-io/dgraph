@@ -19,6 +19,7 @@ package subscription_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/dgraph-io/dgraph/x"
 	"testing"
 	"time"
 
@@ -71,7 +72,7 @@ const (
 `
 )
 
-var subExp = 10 * time.Second
+var subExp = 3 * time.Second
 
 func TestSubscription(t *testing.T) {
 
@@ -190,6 +191,7 @@ func TestSubscriptionAuth(t *testing.T) {
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
+	x.Config.PollInterval = time.Millisecond
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -332,12 +334,14 @@ func TestSubscriptionAuth(t *testing.T) {
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res)
+	x.Config.PollInterval = time.Second
 }
 
 func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	x.Config.PollInterval = time.Millisecond
 
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
@@ -383,7 +387,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
+	jwtToken, err := metaInfo.GetSignedToken("secret", subExp)
 	require.NoError(t, err)
 
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
@@ -436,6 +440,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res)
+	x.Config.PollInterval = time.Second
 }
 
 func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndependently(t *testing.T) {
@@ -443,6 +448,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
+	x.Config.PollInterval = time.Millisecond
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -599,12 +605,14 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res) // 2nd subscription should get the empty response as subscription has expired.
+	x.Config.PollInterval = time.Second
 }
 
 func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndependently(t *testing.T) {
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	x.Config.PollInterval = time.Millisecond
 
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
@@ -645,7 +653,6 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
            }
          }`,
 	}
-
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
@@ -764,7 +771,6 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
-
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	err = json.Unmarshal(res, &resp)
@@ -808,4 +814,5 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res)
+	x.Config.PollInterval = time.Second
 }
