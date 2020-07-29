@@ -75,3 +75,13 @@ func TestDevControl_Network(t *testing.T) {
 	require.Equal(t, networkStartedMsg, res)
 	require.False(t, net.IsStopped())
 }
+
+func TestDevModule_SetAuthorities(t *testing.T) {
+	bs := newBABEService(t)
+	m := NewDevModule(bs, nil)
+	req := &[]interface{}{[]interface{}{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", float64(1)}}
+	var res string
+	err := m.SetAuthorities(nil, req, &res)
+	require.NoError(t, err)
+	require.Equal(t, "set 1 block producer authorities", res)
+}
