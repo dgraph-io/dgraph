@@ -88,6 +88,7 @@ type state struct {
 	readerChunkCh chan *bytes.Buffer
 	mapFileId     uint32 // Used atomically to name the output files of the mappers.
 	dbs           []*badger.DB
+	tmpDbs        []*badger.DB
 	writeTs       uint64 // All badger writes use this timestamp
 }
 
@@ -341,6 +342,9 @@ func (ld *loader) writeSchema() {
 
 func (ld *loader) cleanup() {
 	for _, db := range ld.dbs {
+		x.Check(db.Close())
+	}
+	for _, db := range ld.tmpDbs {
 		x.Check(db.Close())
 	}
 	ld.prog.endSummary()

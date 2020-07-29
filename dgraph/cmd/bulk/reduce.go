@@ -20,10 +20,13 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -45,9 +48,10 @@ import (
 
 type reducer struct {
 	*state
-	streamId  uint32
-	mu        sync.RWMutex
-	streamIds map[string]uint32
+	streamId    uint32
+	mu          sync.RWMutex
+	streamIds   map[string]uint32
+	splitWriter *badger.WriteBatch
 }
 
 const batchSize = 10000
@@ -64,7 +68,7 @@ func (r *reducer) run() error {
 		if err := thr.Do(); err != nil {
 			return err
 		}
-		go func(shardId int, db *badger.DB) {
+		go func(shardId int, db *badger.DB, tmpDb *badger.DB) {
 			defer thr.Done(nil)
 
 			mapFiles := filenamesInTree(dirs[shardId])
@@ -78,6 +82,7 @@ func (r *reducer) run() error {
 
 			writer := db.NewStreamWriter()
 			x.Check(writer.Prepare())
+			r.splitWriter = tmpDb.NewManagedWriteBatch()
 
 			ci := &countIndexer{reducer: r, writer: writer}
 			sort.Slice(partitionKeys, func(i, j int) bool {
@@ -92,17 +97,22 @@ func (r *reducer) run() error {
 			ci.wait()
 
 			x.Check(writer.Flush())
+			x.Check(r.splitWriter.Flush())
+
+			// Write split lists to main DB.
+			r.writeSplitLists(db, tmpDb)
+
 			for _, itr := range mapItrs {
 				if err := itr.Close(); err != nil {
 					fmt.Printf("Error while closing iterator: %v", err)
 				}
 			}
-		}(i, r.createBadger(i))
+		}(i, r.createBadger(i), r.createTmpBadger())
 	}
 	return thr.Finish()
 }
 
-func (r *reducer) createBadger(i int) *badger.DB {
+func (r *reducer) createBadgerInternal(dir string) *badger.DB {
 	if r.opt.EncryptionKey != nil {
 		// Need to set zero addr in WorkerConfig before checking the license.
 		x.WorkerConfig.ZeroAddr = []string{r.opt.ZeroAddr}
@@ -115,7 +125,7 @@ func (r *reducer) createBadger(i int) *badger.DB {
 		}
 	}
 
-	opt := badger.DefaultOptions(r.opt.shardOutputDirs[i]).WithSyncWrites(false).
+	opt := badger.DefaultOptions(dir).WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
 		WithLogger(nil).WithMaxCacheSize(1 << 20).
 		WithEncryptionKey(r.opt.EncryptionKey).WithCompression(bo.None)
@@ -128,8 +138,20 @@ func (r *reducer) createBadger(i int) *badger.DB {
 
 	// Zero out the key from memory.
 	opt.EncryptionKey = nil
+	return db
+}
 
+func (r *reducer) createBadger(i int) *badger.DB {
+	db := r.createBadgerInternal(r.opt.shardOutputDirs[i])
 	r.dbs = append(r.dbs, db)
+	return db
+}
+
+func (r *reducer) createTmpBadger() *badger.DB {
+	tmpDir, err := ioutil.TempDir(r.opt.TmpDir, "split")
+	x.Check(err)
+	db := r.createBadgerInternal(tmpDir)
+	r.tmpDbs = append(r.tmpDbs, db)
 	return db
 }
 
@@ -321,26 +343,9 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	}
 }
 
-func (r *reducer) writeSplitBatch(writer *badger.StreamWriter, batch *bpb.KVList) {
-	if len(batch.Kv) == 0 {
-		return
-	}
-
-	streamId := atomic.AddUint32(&r.streamId, 1)
-	for _, kv := range batch.Kv {
-		kv.StreamId = streamId
-	}
-	sort.Slice(batch.Kv, func(i, j int) bool {
-		return bytes.Compare(batch.Kv[i].Key, batch.Kv[j].Key) < 0
-	})
-	x.Check(writer.Write(batch))
-	batch.Kv = batch.Kv[:0]
-}
-
 func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
 
-	splitBatch := &bpb.KVList{}
 	for req := range writerCh {
 		req.wg.Wait()
 
@@ -351,22 +356,24 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		start := time.Now()
 
 		x.Check(ci.writer.Write(req.list))
-
-		if req.splitList != nil && len(req.splitList.Kv) > 0 {
-			splitBatch.Kv = append(splitBatch.Kv, req.splitList.Kv...)
-			if len(splitBatch.Kv) > maxSplitBatchSize {
-				r.writeSplitBatch(ci.writer, splitBatch)
-			}
-		}
+		x.Check(r.splitWriter.Write(req.splitList))
 
 		if dur := time.Since(start).Round(time.Millisecond); dur > time.Second {
 			fmt.Printf("writeCh: Time taken to write req: %v\n",
 				time.Since(start).Round(time.Millisecond))
 		}
 	}
+}
 
-	// Write the leftover split posting lists.
-	r.writeSplitBatch(ci.writer, splitBatch)
+func (r *reducer) writeSplitLists(db *badger.DB, tmpDb *badger.DB) {
+	writer := db.NewManagedWriteBatch()
+	stream := tmpDb.NewStreamAt(math.MaxUint64)
+	stream.LogPrefix = "writing split lists"
+	stream.Send = func(kvs *bpb.KVList) error {
+		return writer.Write(kvs)
+	}
+	x.Check(stream.Orchestrate(context.Background()))
+	x.Check(writer.Flush())
 }
 
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
