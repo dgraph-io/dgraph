@@ -20,12 +20,15 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 )
 
-// EpochDescriptor contains the information needed to verify blocks within a BABE epoch
-type EpochDescriptor struct {
+// Descriptor contains the information needed to verify blocks
+type Descriptor struct {
 	AuthorityData []*types.BABEAuthorityData
 	Randomness    [RandomnessLength]byte
 	Threshold     *big.Int
@@ -34,142 +37,178 @@ type EpochDescriptor struct {
 // VerificationManager assists the syncer in keeping track of what epoch is it currently syncing and verifying,
 // as well as keeping track of the NextEpochDesciptor which is required to create a Verifier for an epoch.
 type VerificationManager struct {
-	epochDescriptors map[uint64]*EpochDescriptor
-	blockState       BlockState
-	// TODO: map of epochs to epoch length changes, for use in determining block epoch
-	// TODO: BABE should signal to the verifier when the epoch changes and send it the current EpochDescriptor
+	lock        sync.Mutex
+	descriptors map[common.Hash]*Descriptor
+	branchNums  []int64                 // descending slice of branch numbers, for quicker access
+	branches    map[int64][]common.Hash // a map of block numbers -> block hashes, needed to check what chain a block is on when verifying ie. what descriptor to use
+	blockState  BlockState
+	// TODO: BABE should signal to the verifier when the epoch changes and send it the current Descriptor
+	// TODO: when a block is finalized, update branches/descriptors to delete any block data w/ number < finalized block number
 
 	// current epoch information
-	currentEpoch uint64
-	verifier     *epochVerifier // TODO: may need to keep historical verifiers
+	verifier *verifier // current chain head verifier TODO: remove, or keep historical verifiers
 }
 
-// NewVerificationManager returns a new VerificationManager
-func NewVerificationManager(blockState BlockState, currentEpoch uint64, descriptor *EpochDescriptor) (*VerificationManager, error) {
-	if blockState == nil {
-		return nil, ErrNilBlockState
-	}
-
-	verifier, err := newEpochVerifier(blockState, descriptor)
+// NewVerificationManagerFromRuntime returns a new VerificationManager
+func NewVerificationManagerFromRuntime(blockState BlockState, rt *runtime.Runtime) (*VerificationManager, error) {
+	descriptor, err := descriptorFromRuntime(rt)
 	if err != nil {
 		return nil, err
 	}
 
-	desciptors := make(map[uint64]*EpochDescriptor)
-	desciptors[currentEpoch] = descriptor
+	return NewVerificationManager(blockState, descriptor)
+}
+
+// NewVerificationManager returns a new NewVerificationManager
+func NewVerificationManager(blockState BlockState, descriptor *Descriptor) (*VerificationManager, error) {
+	if blockState == nil {
+		return nil, ErrNilBlockState
+	}
+
+	descriptors := make(map[common.Hash]*Descriptor)
+	branches := make(map[int64][]common.Hash)
+
+	// TODO: save VerificationManager in database when node shuts down, reload upon startup
+	descriptors[blockState.GenesisHash()] = descriptor
+	branches[0] = []common.Hash{blockState.GenesisHash()}
+
+	verifier, err := newVerifier(blockState, descriptor)
+	if err != nil {
+		return nil, err
+	}
 
 	return &VerificationManager{
-		blockState:       blockState,
-		epochDescriptors: desciptors,
-		currentEpoch:     currentEpoch,
-		verifier:         verifier,
+		blockState:  blockState,
+		descriptors: descriptors,
+		branchNums:  []int64{0},
+		branches:    branches,
+		verifier:    verifier,
 	}, nil
+}
+
+// SetRuntimeChangeAtBlock sets a runtime change at the given block
+// Blocks that are descendants of this block will be verified using the given runtime
+func (v *VerificationManager) SetRuntimeChangeAtBlock(header *types.Header, rt *runtime.Runtime) error {
+	descriptor, err := descriptorFromRuntime(rt)
+	if err != nil {
+		return err
+	}
+
+	v.setDescriptorChangeAtBlock(header, descriptor)
+	return nil
+}
+
+func (v *VerificationManager) setDescriptorChangeAtBlock(header *types.Header, descriptor *Descriptor) {
+	v.lock.Lock()
+	defer v.lock.Unlock()
+
+	num := header.Number.Int64()
+	if v.branches[num] == nil {
+		v.branches[num] = []common.Hash{}
+	}
+
+	for i, bn := range v.branchNums {
+		if num < bn || i == len(v.branchNums)-1 {
+			pre := make([]int64, len(v.branchNums[:i]))
+			copy(pre, v.branchNums[:i])
+			post := make([]int64, len(v.branchNums[i:]))
+			copy(post, v.branchNums[i:])
+			v.branchNums = append(append(pre, num), post...)
+			break
+		}
+	}
+
+	v.branches[num] = append(v.branches[num], header.Hash())
+	v.descriptors[header.Hash()] = descriptor
 }
 
 // VerifyBlock verifies the given header with verifyAuthorshipRight.
 func (v *VerificationManager) VerifyBlock(header *types.Header) (bool, error) {
-	epoch, err := v.getBlockEpoch(header)
-	if err != nil {
-		return false, err
-	}
+	var (
+		desc     *Descriptor
+		verifier *verifier
+		err      error
+	)
 
-	if epoch == v.currentEpoch {
-		return v.verifier.verifyAuthorshipRight(header)
-	}
+	// iterate through descending list of blocktree branches
+	for _, n := range v.branchNums {
 
-	if v.epochDescriptors[epoch] == nil {
-		// TODO: return an error here once updating of the verifier's epoch data is implemented
-		return v.verifier.verifyAuthorshipRight(header)
-	}
+		if header.Number.Int64() > n {
+			// this is a func so that locking can be deferred to whenever it exits
+			func() {
+				v.lock.Lock()
+				defer v.lock.Unlock()
 
-	verifier, err := newEpochVerifier(v.blockState, v.epochDescriptors[epoch])
-	if err != nil {
-		return false, err
-	}
+				// get block hashes at most recent branch
+				brs := v.branches[n]
 
-	return verifier.verifyAuthorshipRight(header)
-}
+				// check which branch this block is a descendant of
+				for _, hash := range brs {
+					// can only compare ParentHash, since current block isn't in blockState yet
+					if is, _ := v.blockState.IsDescendantOf(hash, header.ParentHash); is {
+						desc = v.descriptors[hash]
+						break
+					}
+				}
+			}()
 
-// getBlockEpoch gets the epoch number using the provided block hash
-func (v *VerificationManager) getBlockEpoch(header *types.Header) (epoch uint64, err error) {
-	// get slot number to determine epoch number
-	if len(header.Digest) == 0 {
-		return 0, fmt.Errorf("chain head missing digest")
-	}
-
-	preDigestBytes := header.Digest[0]
-
-	digestItem, err := types.DecodeDigestItem(preDigestBytes)
-	if err != nil {
-		return 0, err
-	}
-
-	preDigest, ok := digestItem.(*types.PreRuntimeDigest)
-	if !ok {
-		return 0, fmt.Errorf("first digest item is not pre-digest")
-	}
-
-	babeHeader := new(types.BabeHeader)
-	err = babeHeader.Decode(preDigest.Data)
-	if err != nil {
-		return 0, fmt.Errorf("cannot decode babe header from pre-digest: %s", err)
-	}
-
-	slot := babeHeader.SlotNumber
-
-	if slot != 0 {
-		// epoch number = (slot - genesis slot) / epoch length
-		epoch = (slot - 1) / 6 // TODO: use epoch length from babe or core config #762
-	}
-
-	return epoch, nil
-}
-
-// checkForConsensusDigest returns a consensus digest from the header, if it exists.
-func checkForConsensusDigest(header *types.Header) (*types.ConsensusDigest, error) {
-	// check if block header digest items exist
-	if header.Digest == nil || len(header.Digest) == 0 {
-		return nil, fmt.Errorf("header digest is not set")
-	}
-
-	// declare digest item
-	var consensusDigest *types.ConsensusDigest
-
-	// decode each digest item and check its type
-	for _, digest := range header.Digest {
-		item, err := types.DecodeDigestItem(digest)
-		if err != nil {
-			return nil, err
-		}
-
-		// check if digest item is consensus digest type
-		if item.Type() == types.ConsensusDigestType {
-			var ok bool
-			consensusDigest, ok = item.(*types.ConsensusDigest)
-			if ok {
+			if desc != nil {
 				break
 			}
 		}
 	}
 
-	return consensusDigest, nil
+	if desc == nil {
+		// we didn't find any data for the chain that this block is on, try to verify it with the current verifier anyways
+		verifier = v.verifier
+	} else {
+		verifier, err = newVerifier(v.blockState, desc)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return verifier.verifyAuthorshipRight(header)
 }
 
-// epochVerifier represents a BABE verifier for a specific epoch
-type epochVerifier struct {
+func descriptorFromRuntime(rt *runtime.Runtime) (*Descriptor, error) {
+	cfg, err := rt.BabeConfiguration()
+	if err != nil {
+		return nil, err
+	}
+
+	auths, err := types.BABEAuthorityDataRawToAuthorityData(cfg.GenesisAuthorities)
+	if err != nil {
+		return nil, err
+	}
+
+	threshold, err := CalculateThreshold(cfg.C1, cfg.C2, len(auths))
+	if err != nil {
+		return nil, err
+	}
+
+	return &Descriptor{
+		AuthorityData: auths,
+		Randomness:    cfg.Randomness,
+		Threshold:     threshold,
+	}, nil
+}
+
+// verifier is a BABE verifier for a specific authority set, randomness, and threshold
+type verifier struct {
 	blockState    BlockState
 	authorityData []*types.BABEAuthorityData
 	randomness    [RandomnessLength]byte
 	threshold     *big.Int
 }
 
-// newEpochVerifier returns a Verifier for the epoch described by the given descriptor
-func newEpochVerifier(blockState BlockState, descriptor *EpochDescriptor) (*epochVerifier, error) {
+// newVerifier returns a Verifier for the epoch described by the given descriptor
+func newVerifier(blockState BlockState, descriptor *Descriptor) (*verifier, error) {
 	if blockState == nil {
 		return nil, ErrNilBlockState
 	}
 
-	return &epochVerifier{
+	return &verifier{
 		blockState:    blockState,
 		authorityData: descriptor.AuthorityData,
 		randomness:    descriptor.Randomness,
@@ -178,7 +217,7 @@ func newEpochVerifier(blockState BlockState, descriptor *EpochDescriptor) (*epoc
 }
 
 // verifySlotWinner verifies the claim for a slot, given the BabeHeader for that slot.
-func (b *epochVerifier) verifySlotWinner(slot uint64, header *types.BabeHeader) (bool, error) {
+func (b *verifier) verifySlotWinner(slot uint64, header *types.BabeHeader) (bool, error) {
 	if len(b.authorityData) <= int(header.BlockProducerIndex) {
 		return false, fmt.Errorf("no authority data for index %d", header.BlockProducerIndex)
 	}
@@ -200,7 +239,7 @@ func (b *epochVerifier) verifySlotWinner(slot uint64, header *types.BabeHeader) 
 }
 
 // verifyAuthorshipRight verifies that the authority that produced a block was authorized to produce it.
-func (b *epochVerifier) verifyAuthorshipRight(header *types.Header) (bool, error) {
+func (b *verifier) verifyAuthorshipRight(header *types.Header) (bool, error) {
 	// header should have 2 digest items (possibly more in the future)
 	// first item should be pre-digest, second should be seal
 	if len(header.Digest) < 2 {

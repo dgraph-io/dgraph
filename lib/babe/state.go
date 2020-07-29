@@ -43,6 +43,7 @@ type BlockState interface {
 	HighestBlockHash() common.Hash
 	HighestBlockNumber() *big.Int
 	GetFinalizedHeader(uint64) (*types.Header, error)
+	IsDescendantOf(parent, child common.Hash) (bool, error)
 }
 
 // StorageState interface for storage state methods

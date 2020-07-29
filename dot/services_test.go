@@ -81,11 +81,38 @@ func TestCreateCoreService(t *testing.T) {
 	coreMsgs := make(chan network.Message)
 	networkMsgs := make(chan network.Message)
 
-	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
+	coreSrvc, err := createCoreService(cfg, nil, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
 	require.Nil(t, err)
 
 	// TODO: improve dot tests #687
 	require.NotNil(t, coreSrvc)
+}
+
+func TestCreateBlockVerifier(t *testing.T) {
+	cfg := NewTestConfig(t)
+	require.NotNil(t, cfg)
+
+	genFile := NewTestGenesisFile(t, cfg)
+	require.NotNil(t, genFile)
+
+	defer utils.RemoveTestDir(t)
+
+	cfg.Init.GenesisRaw = genFile.Name()
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	stateSrvc, err := createStateService(cfg)
+	require.NoError(t, err)
+
+	ks := keystore.NewKeystore()
+	require.NotNil(t, ks)
+	rt, err := createRuntime(cfg, stateSrvc, ks)
+	require.NoError(t, err)
+
+	cfg.Core.BabeThreshold = nil
+	_, err = createBlockVerifier(cfg, stateSrvc, rt)
+	require.NoError(t, err)
 }
 
 func TestCreateSyncService(t *testing.T) {
@@ -111,7 +138,10 @@ func TestCreateSyncService(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg.Core.BabeThreshold = nil
-	_, err = createSyncService(cfg, stateSrvc, nil, nil, rt)
+	ver, err := createBlockVerifier(cfg, stateSrvc, rt)
+	require.NoError(t, err)
+
+	_, err = createSyncService(cfg, stateSrvc, nil, nil, ver, rt)
 	require.NoError(t, err)
 }
 
@@ -172,7 +202,7 @@ func TestCreateRPCService(t *testing.T) {
 	rt, err := createRuntime(cfg, stateSrvc, ks)
 	require.NoError(t, err)
 
-	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
+	coreSrvc, err := createCoreService(cfg, nil, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
 	require.Nil(t, err)
 
 	networkSrvc := &network.Service{} // TODO: rpc service without network service
@@ -291,7 +321,7 @@ func TestNewWebSocketServer(t *testing.T) {
 	rt, err := createRuntime(cfg, stateSrvc, ks)
 	require.NoError(t, err)
 
-	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
+	coreSrvc, err := createCoreService(cfg, nil, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
 	require.Nil(t, err)
 
 	networkSrvc := &network.Service{}

@@ -246,9 +246,9 @@ func (b *Service) GetBlockChannel() <-chan types.Block {
 	return b.blockChan
 }
 
-// Descriptor returns the EpochDescriptor for the current Service.
-func (b *Service) Descriptor() *EpochDescriptor {
-	return &EpochDescriptor{
+// Descriptor returns the Descriptor for the current Service.
+func (b *Service) Descriptor() *Descriptor {
+	return &Descriptor{
 		AuthorityData: b.authorityData,
 		Randomness:    b.randomness,
 		Threshold:     b.epochThreshold,

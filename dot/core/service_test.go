@@ -111,7 +111,7 @@ func TestAnnounceBlock(t *testing.T) {
 	}
 }
 
-func TestCheckForRuntimeChanges(t *testing.T) {
+func TestHandleRuntimeChanges(t *testing.T) {
 	tt := trie.NewEmptyTrie()
 	rt := runtime.NewTestRuntimeWithTrie(t, runtime.NODE_RUNTIME, tt, log.LvlTrace)
 
@@ -140,7 +140,7 @@ func TestCheckForRuntimeChanges(t *testing.T) {
 	err = s.storageState.SetStorage([]byte(":code"), testRuntime)
 	require.Nil(t, err)
 
-	err = s.checkForRuntimeChanges()
+	err = s.HandleRuntimeChanges(testGenesisHeader)
 	require.Nil(t, err)
 }
 

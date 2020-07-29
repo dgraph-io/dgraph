@@ -165,7 +165,7 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *
 // Core Service
 
 // createCoreService creates the core service from the provided core configuration
-func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt *runtime.Runtime, ks *keystore.Keystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message) (*core.Service, error) {
+func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, verifier *babe.VerificationManager, rt *runtime.Runtime, ks *keystore.Keystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message) (*core.Service, error) {
 	logger.Info(
 		"creating core service...",
 		"authority", cfg.Core.Authority,
@@ -198,6 +198,7 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt
 		MsgSend:                 coreMsgs,    // message channel from core service to network service
 		IsBlockProducer:         cfg.Core.BabeAuthority,
 		IsFinalityAuthority:     cfg.Core.GrandpaAuthority,
+		Verifier:                verifier,
 	}
 
 	// create new core service
@@ -330,18 +331,8 @@ func createGRANDPAService(cfg *Config, rt *runtime.Runtime, st *state.Service, k
 	return grandpa.NewService(gsCfg)
 }
 
-func createSyncService(cfg *Config, st *state.Service, bp BlockProducer, fg core.FinalityGadget, rt *runtime.Runtime) (*sync.Service, error) {
-	var dh *core.DigestHandler
-	var err error
-	if cfg.Core.BabeAuthority || cfg.Core.GrandpaAuthority {
-		dh, err = core.NewDigestHandler(st.Block, bp, fg)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+func createBlockVerifier(cfg *Config, st *state.Service, rt *runtime.Runtime) (*babe.VerificationManager, error) {
 	// load BABE verification data from runtime
-	// TODO: authority data may change
 	babeCfg, err := rt.BabeConfiguration()
 	if err != nil {
 		return nil, err
@@ -354,6 +345,7 @@ func createSyncService(cfg *Config, st *state.Service, bp BlockProducer, fg core
 
 	var threshold *big.Int
 	var ok bool
+	// TODO: remove config options, directly set storage values in genesis
 	if cfg.Core.BabeThreshold != nil {
 		threshold, ok = cfg.Core.BabeThreshold.(*big.Int)
 		if !ok {
@@ -366,19 +358,30 @@ func createSyncService(cfg *Config, st *state.Service, bp BlockProducer, fg core
 		}
 	}
 
-	descriptor := &babe.EpochDescriptor{
+	descriptor := &babe.Descriptor{
 		AuthorityData: ad,
 		Randomness:    babeCfg.Randomness,
 		Threshold:     threshold,
 	}
 
-	// TODO: load current epoch from database chain head
-	ver, err := babe.NewVerificationManager(st.Block, 1, descriptor)
+	ver, err := babe.NewVerificationManager(st.Block, descriptor)
 	if err != nil {
 		return nil, err
 	}
 
 	logger.Info("verifier", "threshold", threshold)
+	return ver, nil
+}
+
+func createSyncService(cfg *Config, st *state.Service, bp BlockProducer, fg core.FinalityGadget, verifier *babe.VerificationManager, rt *runtime.Runtime) (*sync.Service, error) {
+	var dh *core.DigestHandler
+	var err error
+	if cfg.Core.BabeAuthority || cfg.Core.GrandpaAuthority {
+		dh, err = core.NewDigestHandler(st.Block, bp, fg)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	lvl, err := log.LvlFromString(cfg.Log.SyncLvl)
 	if err != nil {
@@ -390,7 +393,7 @@ func createSyncService(cfg *Config, st *state.Service, bp BlockProducer, fg core
 		BlockState:       st.Block,
 		TransactionQueue: st.TransactionQueue,
 		BlockProducer:    bp,
-		Verifier:         ver,
+		Verifier:         verifier,
 		Runtime:          rt,
 		DigestHandler:    dh,
 	}

@@ -217,6 +217,11 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 		return nil, err
 	}
 
+	ver, err := createBlockVerifier(cfg, stateSrvc, rt)
+	if err != nil {
+		return nil, err
+	}
+
 	var bp BlockProducer
 	var fg core.FinalityGadget
 
@@ -240,7 +245,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	}
 
 	// Syncer
-	syncer, err := createSyncService(cfg, stateSrvc, bp, fg, rt)
+	syncer, err := createSyncService(cfg, stateSrvc, bp, fg, ver, rt)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +253,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	// Core Service
 
 	// create core service and append core service to node services
-	coreSrvc, err := createCoreService(cfg, bp, fg, rt, ks, stateSrvc, coreMsgs, networkMsgs)
+	coreSrvc, err := createCoreService(cfg, bp, fg, ver, rt, ks, stateSrvc, coreMsgs, networkMsgs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create core service: %s", err)
 	}
