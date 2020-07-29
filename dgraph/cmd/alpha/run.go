@@ -471,7 +471,10 @@ func setupServer(closer *y.Closer) {
 	// The global epoch is set to maxUint64 while exiting the server.
 	// By using this information polling goroutine terminates the subscription.
 	globalEpoch := uint64(0)
-	mainServer, adminServer, gqlHealthStore := admin.NewServers(introspection, &globalEpoch, closer)
+	var mainServer web.IServeGraphQL
+	var gqlHealthStore *admin.GraphQLHealthStore
+	// Do not use := notation here because adminServer is a global variable.
+	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, &globalEpoch, closer)
 	http.Handle("/graphql", mainServer.HTTPHandler())
 	http.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
 		healthStatus := gqlHealthStore.GetHealth()
