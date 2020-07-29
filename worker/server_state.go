@@ -20,11 +20,13 @@ import (
 	"context"
 	"math"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -185,6 +187,8 @@ func (s *ServerState) initStorage() {
 // Dispose stops and closes all the resources inside the server state.
 func (s *ServerState) Dispose() {
 	s.gcCloser.SignalAndWait()
+	atomic.StoreUint32(&posting.BadgerClosed, 1)
+
 	if err := s.Pstore.Close(); err != nil {
 		glog.Errorf("Error while closing postings store: %v", err)
 	}
