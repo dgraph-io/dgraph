@@ -153,8 +153,8 @@ func init() {
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
 	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
 		"only be done when alpha is under ludicrous mode)")
-	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would be used to "+
-		"store blank nodes as an xid")
+	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
+		"be used to store blank nodes as an xid")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -229,9 +229,37 @@ func (l *loader) uid(val string) string {
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
+func generateBlankNode(val string) string {
+	sb := strings.Builder{}
+	x.Check2(sb.WriteString("u_"))
+	x.Check2(sb.WriteString(strconv.FormatUint(farm.Fingerprint64([]byte(val)), 10)))
+	return sb.String()
+}
+
+func generateUidFunc(val string) string {
+	sb := strings.Builder{}
+	sb.WriteString("uid(")
+	sb.WriteString(val)
+	sb.WriteRune(')')
+	return sb.String()
+}
+
+func generateQuery(node, predicate, xid string) string {
+	sb := strings.Builder{}
+	sb.WriteString(node)
+	sb.WriteString(" as ")
+	sb.WriteString(node)
+	sb.WriteString("(func: eq(")
+	sb.WriteString(predicate)
+	sb.WriteString(`, "`)
+	sb.WriteString(xid)
+	sb.WriteString(`")) {uid}`)
+	return sb.String()
+}
+
 func (l *loader) upsertUids(nqs []*api.NQuad) {
-	// We form upsertPredicate query for each of the ids we saw in the request, along with adding
-	// the corresponding xid to that uid. The mutation we added is only useful if the
+	// We form upsertPredicate query for each of the ids we saw in the request, along with
+	// adding the corresponding xid to that uid. The mutation we added is only useful if the
 	// uid doesn't exists.
 	//
 	// Example upsertPredicate mutation:
@@ -252,41 +280,43 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 
 	for _, i := range nqs {
 		// taking hash as the value might contain invalid symbols
-		ids[i.Subject] = fmt.Sprintf("u_%d", farm.Fingerprint64([]byte(i.Subject)))
+		ids[i.Subject] = generateBlankNode(i.Subject)
 
 		if len(i.ObjectId) > 0 {
 			// taking hash as the value might contain invalid symbols
-			ids[i.ObjectId] = fmt.Sprintf("u_%d", farm.Fingerprint64([]byte(i.ObjectId)))
+			ids[i.ObjectId] = generateBlankNode(i.ObjectId)
 		}
 	}
 
 	mutations := make([]*api.NQuad, 0, len(ids))
-	query := ""
+	query := strings.Builder{}
+	query.WriteString("query {")
+	query.WriteRune('\n')
 
 	for xid, idx := range ids {
 		if l.alloc.CheckUid(xid) {
 			continue
 		}
 
-		query += fmt.Sprintf(`%s as %s(func: eq(%s, "%s")) {uid}`, idx, idx, opt.upsertPredicate, xid)
-		query += "\n"
+		query.WriteString(generateQuery(idx, opt.upsertPredicate, xid))
+		query.WriteRune('\n')
 		mutations = append(mutations, &api.NQuad{
-			Subject:     fmt.Sprintf("uid(%s)", idx),
+			Subject:     generateUidFunc(idx),
 			Predicate:   opt.upsertPredicate,
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: xid}},
 		})
 	}
 
-	if query == "" {
+	if len(mutations) == 0 {
 		return
 	}
 
-	query = "query {\n" + query + "}"
+	query.WriteRune('}')
 
 	// allocate all the new xids
 	resp, err := l.dc.NewTxn().Do(l.opts.Ctx, &api.Request{
 		CommitNow: true,
-		Query:     query,
+		Query:     query.String(),
 		Mutations: []*api.Mutation{{Set: mutations}},
 	})
 
@@ -314,7 +344,7 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 		}
 
 		// new uid created in draph
-		if val, ok := resp.GetUids()["uid("+idx+")"]; ok {
+		if val, ok := resp.GetUids()[generateUidFunc(idx)]; ok {
 			uid, err := strconv.ParseUint(val, 0, 64)
 			if err != nil {
 				panic(err)
