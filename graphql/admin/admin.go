@@ -43,8 +43,7 @@ const (
 	errNoGraphQLSchema = "Not resolving %s. There's no GraphQL schema in Dgraph.  " +
 		"Use the /admin API to add a GraphQL schema"
 	errResolverNotFound = "%s was not executed because no suitable resolver could be found - " +
-		"this indicates a resolver or validation bug " +
-		"(Please let us know : https://github.com/dgraph-io/dgraph/issues)"
+		"this indicates a resolver or validation bug. Please let us know by filing an issue."
 
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `

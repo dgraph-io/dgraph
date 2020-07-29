@@ -76,9 +76,14 @@ func (qr *queryRewriter) Rewrite(
 		return &gql.GraphQuery{Attr: gqlQuery.ResponseName() + "()"}, nil
 	}
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
-	if err != nil {
-		return nil, err
+	authVariables, _ := ctx.Value(authorization.AuthVariables).(map[string]interface{})
+
+	if authVariables == nil {
+		customClaims, err := authorization.ExtractCustomClaims(ctx)
+		if err != nil {
+			return nil, err
+		}
+		authVariables = customClaims.AuthVariables
 	}
 
 	authRw := &authRewriter{
@@ -730,11 +735,19 @@ func addSelectionSetFrom(
 			q.Children = append(q.Children, child)
 		}
 
-		if rbac != schema.Uncertain {
+		// If RBAC rules are evaluated to Negative, we don't write queries for deeper levels.
+		// Hence we don't need to do any further processing for this field.
+		if rbac == schema.Negative {
 			continue
 		}
 
-		fieldAuth, authFilter := auth.rewriteAuthQueries(f.Type())
+		var fieldAuth []*gql.GraphQuery
+		var authFilter *gql.FilterTree
+		// If RBAC rules are evaluated to `Uncertain` then we add the Auth rules.
+		if rbac == schema.Uncertain {
+			fieldAuth, authFilter = auth.rewriteAuthQueries(f.Type())
+		}
+
 		if authFilter != nil {
 			if child.Filter == nil {
 				child.Filter = authFilter

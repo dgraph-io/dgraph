@@ -25,6 +25,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -177,7 +178,7 @@ func getJWT(t *testing.T, user, role string) http.Header {
 		metaInfo.AuthVars["ROLE"] = role
 	}
 
-	jwtToken, err := metaInfo.GetSignedToken("./sample_private_key.pem")
+	jwtToken, err := metaInfo.GetSignedToken("./sample_private_key.pem", 300*time.Second)
 	require.NoError(t, err)
 
 	h := make(http.Header)

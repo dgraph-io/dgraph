@@ -4,7 +4,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
-## Unreleased
+## [20.07.0] - 2020-07-28
+[20.07.0]: https://github.com/dgraph-io/dgraph/compare/v20.03.4...v20.07.0
 
 ### Changed
 
@@ -18,8 +19,9 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Add support for multiple uids in uid_in function ([#5292][])
 - Tag sentry events with additional version details. ([#5726][])
 - Sentry opt out banner. ([#5727][]) 
+- Replace shutdownCh and wait groups to a y.Closer for shutting down Alpha. ([#5560][])
 - Update badger to commit [e7b6e76f96e8][]. ([#5537][])
-- Update Badger ([#5661][])
+- Update Badger ([#5661][], [#6034][])
   - Fix assert in background compression and encryption. ([dgraph-io/badger#1366][])
   - GC: Consider size of value while rewriting ([dgraph-io/badger#1357][])
   - Restore: Account for value size as well ([dgraph-io/badger#1358][])
@@ -49,14 +51,25 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Support existing gqlschema nodes without xid. ([#5457][])
   - Add custom logic feature. ([#5004][])
   - Add extensions to query response. ([#5157][])
+  - Allow query of deleted nodes. ([#5949][])
+  - Allow more control over custom logic header names. ([#5809][])
+  - Adds Apollo tracing to GraphQL extensions. ([#5855][])
+  - Turn on subscriptions and adds directive to control subscription generation. ([#5856][])
+  - Add introspection headers to custom logic. ([#5858][]) 
+  - GraphQL health now reported by /probe/graphql. ([#5875][])
+  - Validate audience in authorization JWT and change `Dgraph.Authorization` format. ([#5980][])
+- Upgrade tool for 20.07. ([#5830][]) 
+- Async restore operations. ([#5704][])
 - Add LogRequest variable to GraphQL config input. ([#5197][])
 - Allow backup ID to be passed to restore endpoint. ([#5208][])
 - Added support for application/graphQL to graphQL endpoints. ([#5125][])
 - Add support for xidmap in bulkloader. Fixes [#4917][]. ([#5090][])
 - Add GraphQL admin endpoint to list backups. ([#5307][]) 
 - Enterprise features
+  - GraphQL schema get/update, Dgraph schema query/alter and /login are now admin operations. ([#5833][])
   - Backup can take S3 credentials from IAM. ([#5387][])
   - Online restore. ([#5095][]) 
+  - Retry restore proposals. ([#5765][])
   - Add support for encrypted backups in online restores. ([#5226][])
   - **Breaking changes**
     - [BREAKING] Vault Integration. ([#5402][])
@@ -64,6 +77,21 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 ### Fixed
 
 - GraphQL
+  - Validate JWT Claims and test JWT expiry. ([#6050][])
+  - Validate subscriptions in Operation function. ([#5983][]) 	
+  - Nested auth queries no longer search through all possible records. ([#5950][])	
+  - Apply auth rules on type having @dgraph directive. ([#5863][])	
+  - Custom Claim will be parsed as JSON if it is encoded as a string. ([#5862][])	
+  - Dgraph directive with reverse edge should work smoothly with interfaces. Fixed [#5744][]. ([#5982][])
+  - Fix case where Dgraph type was not generated for GraphQL interface. Fixes [#5311][]. ([#5828][])
+  - Fix panic error when there is no @withSubscription directive on any type. ([#5921][])	
+  - Fix OOM issue in graphql mutation rewriting. ([#5854][])	
+  - Preserve GraphQL schema after drop_data. ([#5840][])	
+  - Maintain Master's backward compatibility for `Dgraph.Authorization` in schema. ([#6014][])	
+  - Remote schema introspection for single remote endpoint. ([#5824][])	
+  - Requesting only \_\-typename now returns results. ([#5823][])	
+  - Typename for types should be filled in query for schema introspection queries. Fixes [#5792][]. ([#5891][])
+  - Update GraphQL schema only on Group-1 leader. ([#5829][])	
   - Add more validations for coercion of object/scalar and vice versa. ([#5534][])
   - Apply type filter for get query at root level. ([#5497][])
   - Fix mutation on predicate with special characters having dgraph directive. Fixes [#5296][]. ([#5526][])	
@@ -75,8 +103,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Remove custom directive from internal schema. ([#5354][])
   - Recover from panic within goroutines used for resolving custom fields. ([#5329][])
   - Start collecting and returning errors from remote remote GraphQL endpoints. ([#5328][])
-  - Fix response for partial admin queries. ([#5317][])		
-- Online restores only processes backups for the alpha's group. ([#5588][])
+  - Fix response for partial admin queries. ([#5317][])	
 - Avoid assigning duplicate RAFT IDs to new nodes. Fixes [#5436][]. ([#5571][])
 - Alpha: Gracefully shutdown ludicrous mode. ([#5561][])	
 - Use rampMeter for Executor. ([#5503][])
@@ -101,6 +128,15 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Indicate dev environment in Sentry events. ([#5051][])	
 - Replaced s2 contains point methods with go-geom. ([#5023][]
 - Change tablet size calculation to not depend on the right key. Fixes [#5408][]. ([#5684][])	
+- Fix alpha start in ludicrous mode. Fixes [#5601][]. ([#5912][])
+- Handle schema updates correctly in ludicrous mode. ([#5970][])	
+- Fix Panic because of nil map in groups.go. ([#6008][]) 	
+- update reverse index when updating single UID predicates. Fixes [#5732][]. ([#6005][]), ([#6015][])	
+- Fix expand(\_all\_) queries in ACL. Fixes [#5687][]. ([#5993][]) 	
+- Fix val queries when ACL is enabled. Fixes [#5687][]. ([#5995][])
+- Return error if server is not ready. ([#6020][]) 	
+- Reduce memory consumption of the map. ([#5957][]) 	
+- Cancel the context when opening connection to leader for streaming snapshot. ([#6045][])
 - **Breaking changes**
   - [BREAKING] Namespace dgraph internal types/predicates with `dgraph.` Fixes [#4878][]. ([#5185][])
   - [BREAKING] Remove shorthand for store_xids in bulk loader.  ([#5148][])
@@ -108,8 +144,11 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Enterprise:
   - Backup: Change groupId from int to uint32. ([#5605][])
   - Backup: Use a sync.Pool to allocate KVs during backup. ([#5579][])
+  - Backup: Fix segmentation fault when calling the /admin/backup edpoint. ([#6043][])
   - Restore: Make backupId optional in restore GraphQL interface. ([#5685][])
   - Restore: Move tablets to right group when restoring a backup. ([#5682][])
+  - Restore: Only processes backups for the alpha's group. ([#5588][])
+  - vault_format support for online restore and gql ([#5758][])	
 
 [#5661]: https://github.com/dgraph-io/dgraph/issues/5661
 [dgraph-io/badger#1366]: https://github.com/dgraph-io/badger/issues/1366
@@ -123,6 +162,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [dgraph-io/badger#1328]: https://github.com/dgraph-io/badger/issues/1328
 [dgraph-io/badger#1341]: https://github.com/dgraph-io/badger/issues/1341
 [dgraph-io/badger#1345]: https://github.com/dgraph-io/badger/issues/1345
+[#6050]: https://github.com/dgraph-io/dgraph/issues/6050
+[#6045]: https://github.com/dgraph-io/dgraph/issues/6045
 [#5725]: https://github.com/dgraph-io/dgraph/issues/5725
 [#5579]: https://github.com/dgraph-io/dgraph/issues/5579
 [#5685]: https://github.com/dgraph-io/dgraph/issues/5685
@@ -217,12 +258,58 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5408]: https://github.com/dgraph-io/dgraph/issues/5408
 [#5684]: https://github.com/dgraph-io/dgraph/issues/5684
 [e7b6e76f96e8]: https://github.com/dgraph-io/badger/commit/e7b6e76f96e8
+[#5949]: https://github.com/dgraph-io/dgraph/issues/5949
+[#5704]: https://github.com/dgraph-io/dgraph/issues/5704
+[#5765]: https://github.com/dgraph-io/dgraph/issues/5765
+[#5809]: https://github.com/dgraph-io/dgraph/issues/5809
+[#5830]: https://github.com/dgraph-io/dgraph/issues/5830
+[#5855]: https://github.com/dgraph-io/dgraph/issues/5855
+[#5856]: https://github.com/dgraph-io/dgraph/issues/5856
+[#5858]: https://github.com/dgraph-io/dgraph/issues/5858
+[#5833]: https://github.com/dgraph-io/dgraph/issues/5833
+[#5875]: https://github.com/dgraph-io/dgraph/issues/5875
+[#5980]: https://github.com/dgraph-io/dgraph/issues/5980
+[#5560]: https://github.com/dgraph-io/dgraph/issues/5560
+[#5912]: https://github.com/dgraph-io/dgraph/issues/5912
+[#5601]: https://github.com/dgraph-io/dgraph/issues/5601
+[#5970]: https://github.com/dgraph-io/dgraph/issues/5970
+[#6008]: https://github.com/dgraph-io/dgraph/issues/6008
+[#6005]: https://github.com/dgraph-io/dgraph/issues/6005
+[#6015]: https://github.com/dgraph-io/dgraph/issues/6015
+[#5732]: https://github.com/dgraph-io/dgraph/issues/5732
+[#5863]: https://github.com/dgraph-io/dgraph/issues/5863
+[#5862]: https://github.com/dgraph-io/dgraph/issues/5862
+[#5982]: https://github.com/dgraph-io/dgraph/issues/5982
+[#5744]: https://github.com/dgraph-io/dgraph/issues/5744
+[#5828]: https://github.com/dgraph-io/dgraph/issues/5828
+[#5311]: https://github.com/dgraph-io/dgraph/issues/5311
+[#5921]: https://github.com/dgraph-io/dgraph/issues/5921
+[#5854]: https://github.com/dgraph-io/dgraph/issues/5854
+[#5840]: https://github.com/dgraph-io/dgraph/issues/5840
+[#5758]: https://github.com/dgraph-io/dgraph/issues/5758
+[#5983]: https://github.com/dgraph-io/dgraph/issues/5983
+[#5957]: https://github.com/dgraph-io/dgraph/issues/5957
+[#6014]: https://github.com/dgraph-io/dgraph/issues/6014
+[#5824]: https://github.com/dgraph-io/dgraph/issues/5824
+[#5823]: https://github.com/dgraph-io/dgraph/issues/5823
+[#5891]: https://github.com/dgraph-io/dgraph/issues/5891
+[#5792]: https://github.com/dgraph-io/dgraph/issues/5792
+[#5829]: https://github.com/dgraph-io/dgraph/issues/5829
+[#5993]: https://github.com/dgraph-io/dgraph/issues/5993
+[#5687]: https://github.com/dgraph-io/dgraph/issues/5687
+[#5995]: https://github.com/dgraph-io/dgraph/issues/5995
+[#5687]: https://github.com/dgraph-io/dgraph/issues/5687
+[#6020]: https://github.com/dgraph-io/dgraph/issues/6020
+[#5950]: https://github.com/dgraph-io/dgraph/issues/5950
+[#5809]: https://github.com/dgraph-io/dgraph/issues/5809
+[#6034]: https://github.com/dgraph-io/dgraph/issues/6034
+[#6043]: https://github.com/dgraph-io/dgraph/issues/6043
 
-## [20.03.4] - Unreleased
+## [20.03.4] - 2020-07-23
 [20.03.4]: https://github.com/dgraph-io/dgraph/compare/v20.03.3...v20.03.4
 
 ### Changed
-- Update Badger 07/13/2020. ([#5941][],[#5616][])
+- Update Badger 07/13/2020. ([#5941][], [#5616][])
 
 ### Added
 - Sentry opt out banner. ([#5729][]) 
@@ -304,6 +391,31 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 ## [1.2.6] - Unreleased
 [1.2.6]: https://github.com/dgraph-io/dgraph/compare/v1.2.5...v1.2.6
 
+### Changed
+
+- Update Badger. ([#5940][], [#5990][])
+  - Fix assert in background compression and encryption. (dgraph-io/badger#1366)
+  - Avoid panic in filltables() (dgraph-io/badger#1365)
+  - Force KeepL0InMemory to be true when InMemory is true (dgraph-io/badger#1375)
+  - Tests: Use t.Parallel in TestIteratePrefix tests (dgraph-io/badger#1377)
+  - Remove second initialization of writech in Open (dgraph-io/badger#1382)
+  - Increase default valueThreshold from 32B to 1KB (dgraph-io/badger#1346)
+  - Pre allocate cache key for the block cache and the bloom filter cache (dgraph-io/badger#1371)
+  - Rework DB.DropPrefix (dgraph-io/badger#1381)
+  - Update head while replaying value log (dgraph-io/badger#1372)
+  - Update ristretto to commit f66de99 (dgraph-io/badger#1391)
+  - Enable cross-compiled 32bit tests on TravisCI (dgraph-io/badger#1392)
+  - Avoid panic on multiple closer.Signal calls (dgraph-io/badger#1401)
+  - Add a contribution guide (dgraph-io/badger#1379)
+  - Add assert to check integer overflow for table size (dgraph-io/badger#1402)
+  - Return error if the vlog writes exceeds more that 4GB. (dgraph-io/badger#1400)
+  - Revert "add assert to check integer overflow for table size (dgraph-io/badger#1402)" (dgraph-io/badger#1406)
+  - Revert "fix: Fix race condition in block.incRef (dgraph-io/badger#1337)" (dgraph-io/badger#1407)
+  - Revert "Buffer pool for decompression (dgraph-io/badger#1308)" (dgraph-io/badger#1408)
+  - Revert "Compress/Encrypt Blocks in the background (dgraph-io/badger#1227)" (dgraph-io/badger#1409)
+  - Add missing changelog for v2.0.3 (dgraph-io/badger#1410)
+  - Changelog for v20.07.0 (dgraph-io/badger#1411)
+
 ### Fixed
 
 - Alpha: Enable bloom filter caching. ([#5554][]) 	
@@ -313,9 +425,25 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Remove noisy logs in tablet move. ([#5592][]) 	
 - Avoid assigning duplicate RAFT IDs to new nodes. Fixes [#5436][]. ([#5603][]) 	
 - Update badger: Set KeepL0InMemory to false (badger default), and Set DetectConflicts to false. ([#5615][])
+- Use /tmp dir to store temporary index. Fixes [#4600][]. ([#5730][])
+- Split posting lists recursively. ([#4867][]) 
+- Set version when rollup is called with no splits. ([#4945][])	
+- Return error instead of panic (readPostingList). Fixes [#5749][]. ([#5908][]) 	
+- ServeTask: Return error if server is not ready. ([#6022][])	
 - Enterprise features
   - Backup: Change groupId from int to uint32. ([#5613][])
+  - Backup: During backup, collapse split posting lists into a single list. ([#4682][])
+  - Backup: Use a sync.Pool to allocate KVs during backup. ([#5579][])
 
+[#5730]: https://github.com/dgraph-io/dgraph/issues/5730
+[#4600]: https://github.com/dgraph-io/dgraph/issues/4600
+[#4682]: https://github.com/dgraph-io/dgraph/issues/4682
+[#4867]: https://github.com/dgraph-io/dgraph/issues/4867
+[#5579]: https://github.com/dgraph-io/dgraph/issues/5579
+[#4945]: https://github.com/dgraph-io/dgraph/issues/4945
+[#5908]: https://github.com/dgraph-io/dgraph/issues/5908
+[#5749]: https://github.com/dgraph-io/dgraph/issues/5749
+[#6022]: https://github.com/dgraph-io/dgraph/issues/6022
 [#5554]: https://github.com/dgraph-io/dgraph/issues/5554
 [#5596]: https://github.com/dgraph-io/dgraph/issues/5596
 [#5595]: https://github.com/dgraph-io/dgraph/issues/5595
@@ -325,6 +453,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5603]: https://github.com/dgraph-io/dgraph/issues/5603
 [#5615]: https://github.com/dgraph-io/dgraph/issues/5615
 [#5613]: https://github.com/dgraph-io/dgraph/issues/5613
+[#5940]: https://github.com/dgraph-io/dgraph/issues/5940
+[#5990]: https://github.com/dgraph-io/dgraph/issues/5613
 
 ## [20.03.3] - 2020-06-02
 [20.03.3]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.3
