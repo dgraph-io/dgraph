@@ -35,6 +35,8 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
+var defaultMaxPeerCount = 5
+
 // host wraps libp2p host with network host configuration and services
 type host struct {
 	logger     log.Logger
@@ -57,8 +59,8 @@ func newHost(ctx context.Context, cfg *Config, logger log.Logger) (*host, error)
 		return nil, err
 	}
 
-	// set connection manager
-	cm := &ConnManager{}
+	// create connection manager
+	cm := newConnManager(defaultMaxPeerCount)
 
 	// set libp2p host options
 	opts := []libp2p.Option{

@@ -73,7 +73,7 @@ func TestStress_Grandpa_SixAuthorities(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		errList := utils.StopNodes(t, nodes)
+		errList := utils.TearDown(t, nodes)
 		require.Len(t, errList, 0)
 	}()
 
@@ -95,7 +95,7 @@ func TestStress_Grandpa_NineAuthorities(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		errList := utils.StopNodes(t, nodes)
+		errList := utils.TearDown(t, nodes)
 		require.Len(t, errList, 0)
 	}()
 
