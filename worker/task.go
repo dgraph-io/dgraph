@@ -1224,14 +1224,8 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				return ctx.Err()
 			default:
 			}
-
 			var filterErr error
 			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
-				// Stop processing the filter on the first occurrence of an error.
-				if filterErr != nil {
-					return false
-				}
-
 				switch lang {
 				case "":
 					if isList {
@@ -1256,14 +1250,6 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 						}
 
 						return false
-					}
-
-					// Context could get cancelled while we were applying the filter.
-					select {
-					case <-ctx.Done():
-						filterErr = ctx.Err()
-						return false
-					default:
 					}
 
 					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
