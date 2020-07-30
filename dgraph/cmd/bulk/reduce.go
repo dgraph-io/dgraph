@@ -354,6 +354,8 @@ func (r *reducer) writeTmpSplits(kvsCh chan *bpb.KVList, wg *sync.WaitGroup) {
 		}
 
 		for i := 0; i < len(kvs.Kv); i += maxSplitBatchLen {
+			// Flush the write batch when the max batch length is reached to prevent the
+			// value log from growing over the allowed limit.
 			if splitBatchLen >= maxSplitBatchLen {
 				x.Check(r.splitWriter.Flush())
 				r.splitWriter = r.tmpDb.NewManagedWriteBatch()
@@ -417,11 +419,12 @@ func (r *reducer) writeSplitLists(db *badger.DB, tmpDb *badger.DB) {
 	splitBatchLen := 0
 
 	for itr.Rewind(); itr.Valid(); itr.Next() {
+		// Flush the write batch when the max batch length is reached to prevent the
+		// value log from growing over the allowed limit.
 		if splitBatchLen >= maxSplitBatchLen {
 			x.Check(writer.Flush())
 			writer = db.NewManagedWriteBatch()
 			splitBatchLen = 0
-
 		}
 		item := itr.Item()
 
