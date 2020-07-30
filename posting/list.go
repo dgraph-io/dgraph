@@ -811,12 +811,16 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	kv := &bpb.KV{}
 	kv.Version = out.newMinTs
 	kv.Key = l.key
+	if len(out.parts) == 0 {
+		x.AssertTrue(out.plist.Pack != nil)
+	}
 	val, meta := marshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 	kvs = append(kvs, kv)
 
 	for startUid, plist := range out.parts {
+		x.AssertTrue(plist.Pack != nil)
 		// Any empty posting list would still have BitEmpty set. And the main posting list
 		// would NOT have that posting list startUid in the splits list.
 		kv, err := out.marshalPostingListPart(l.key, startUid, plist)
