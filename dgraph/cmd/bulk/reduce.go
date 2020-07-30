@@ -47,11 +47,9 @@ import (
 
 type reducer struct {
 	*state
-	streamId    uint32
-	mu          sync.RWMutex
-	streamIds   map[string]uint32
-	splitWriter *badger.WriteBatch
-	tmpDb       *badger.DB
+	streamId  uint32
+	mu        sync.RWMutex
+	streamIds map[string]uint32
 }
 
 const batchSize = 10000
@@ -83,10 +81,9 @@ func (r *reducer) run() error {
 			writer := db.NewStreamWriter()
 			x.Check(writer.Prepare())
 			// Split lists are written to a separate DB first to avoid ordering issues.
-			r.tmpDb = tmpDb
-			r.splitWriter = tmpDb.NewManagedWriteBatch()
+			splitWriter := tmpDb.NewManagedWriteBatch()
 
-			ci := &countIndexer{reducer: r, writer: writer}
+			ci := &countIndexer{reducer: r, writer: writer, splitWriter: splitWriter, tmpDb: tmpDb}
 			sort.Slice(partitionKeys, func(i, j int) bool {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
 			})
@@ -344,7 +341,7 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	}
 }
 
-func (r *reducer) writeTmpSplits(kvsCh chan *bpb.KVList, wg *sync.WaitGroup) {
+func (r *reducer) writeTmpSplits(ci *countIndexer, kvsCh chan *bpb.KVList, wg *sync.WaitGroup) {
 	defer wg.Done()
 	splitBatchLen := 0
 
@@ -357,8 +354,8 @@ func (r *reducer) writeTmpSplits(kvsCh chan *bpb.KVList, wg *sync.WaitGroup) {
 			// Flush the write batch when the max batch length is reached to prevent the
 			// value log from growing over the allowed limit.
 			if splitBatchLen >= maxSplitBatchLen {
-				x.Check(r.splitWriter.Flush())
-				r.splitWriter = r.tmpDb.NewManagedWriteBatch()
+				x.Check(ci.splitWriter.Flush())
+				ci.splitWriter = ci.tmpDb.NewManagedWriteBatch()
 				splitBatchLen = 0
 			}
 
@@ -369,10 +366,10 @@ func (r *reducer) writeTmpSplits(kvsCh chan *bpb.KVList, wg *sync.WaitGroup) {
 				batch.Kv = kvs.Kv[i : i+maxSplitBatchLen]
 			}
 			splitBatchLen += len(batch.Kv)
-			x.Check(r.splitWriter.Write(batch))
+			x.Check(ci.splitWriter.Write(batch))
 		}
 	}
-	x.Check(r.splitWriter.Flush())
+	x.Check(ci.splitWriter.Flush())
 }
 
 func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *y.Closer) {
@@ -382,7 +379,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	tmpWg := new(sync.WaitGroup)
 	tmpWg.Add(1)
 	splitCh := make(chan *bpb.KVList, 2*runtime.NumCPU())
-	go r.writeTmpSplits(splitCh, tmpWg)
+	go r.writeTmpSplits(ci, splitCh, tmpWg)
 
 	for req := range writerCh {
 		req.wg.Wait()
