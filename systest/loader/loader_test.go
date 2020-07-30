@@ -75,6 +75,7 @@ func TestLoaderXidmap(t *testing.T) {
 			location
 			friend{
 				name
+			}
 		}
 	}`
 	expected := `{"q":[{"age":"13","location":"Wonderland","friend":[{"name":"Bob"}]}]}`
