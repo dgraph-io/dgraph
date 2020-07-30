@@ -46,6 +46,7 @@ const (
 	SubscriptionDirective = "withSubscription"
 
 	// custom directive args and fields
+	dqlArg = "dql"
 	mode   = "mode"
 	BATCH  = "BATCH"
 	SINGLE = "SINGLE"
@@ -121,7 +122,7 @@ directive @auth(
 	add: AuthRule,
 	update: AuthRule,
 	delete:AuthRule) on OBJECT
-directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
 directive @cascade on FIELD
 
