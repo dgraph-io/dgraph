@@ -508,7 +508,7 @@ func printKeys(db *badger.DB) {
 		x.Check(err)
 		var buf bytes.Buffer
 
-		if pk.IsSchema() || pk.IsType() {
+		if pk.IsSchema() || pk.IsType() || pk.HasStartUid {
 			continue
 		}
 
