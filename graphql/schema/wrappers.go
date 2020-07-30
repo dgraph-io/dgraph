@@ -80,6 +80,7 @@ const (
 	SchemaQuery          QueryType    = "schema"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
+	DQLQuery             QueryType    = "dql"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -115,6 +116,7 @@ type Field interface {
 	Name() string
 	Alias() string
 	ResponseName() string
+	Arguments() map[string]interface{}
 	ArgValue(name string) interface{}
 	IsArgListType(name string) bool
 	IDArgValue() (*string, uint64, error)
@@ -152,6 +154,7 @@ type Mutation interface {
 type Query interface {
 	Field
 	QueryType() QueryType
+	DQLQuery() string
 	Rename(newName string)
 	AuthFor(typ Type, jwtVars map[string]interface{}) Query
 }
@@ -625,12 +628,16 @@ func (f *field) IsAuthQuery() bool {
 	return f.field.Arguments.ForName("dgraph.uid") != nil
 }
 
-func (f *field) ArgValue(name string) interface{} {
+func (f *field) Arguments() map[string]interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
 		f.arguments = f.field.ArgumentMap(f.op.vars)
 	}
-	return f.arguments[name]
+	return f.arguments
+}
+
+func (f *field) ArgValue(name string) interface{} {
+	return f.Arguments()[name]
 }
 
 func (f *field) IsArgListType(name string) bool {
@@ -1031,6 +1038,10 @@ func (q *query) SetArgTo(arg string, val interface{}) {
 	(*field)(q).SetArgTo(arg, val)
 }
 
+func (q *query) Arguments() map[string]interface{} {
+	return (*field)(q).Arguments()
+}
+
 func (q *query) ArgValue(name string) interface{} {
 	return (*field)(q).ArgValue(name)
 }
@@ -1095,9 +1106,21 @@ func (q *query) QueryType() QueryType {
 	return queryType(q.Name(), q.op.inSchema.customDirectives["Query"][q.Name()])
 }
 
+func (q *query) DQLQuery() string {
+	if customDir := q.op.inSchema.customDirectives["Query"][q.Name()]; customDir != nil {
+		if dqlArgument := customDir.Arguments.ForName(dqlArg); dqlArgument != nil {
+			return dqlArgument.Value.Raw
+		}
+	}
+	return ""
+}
+
 func queryType(name string, custom *ast.Directive) QueryType {
 	switch {
 	case custom != nil:
+		if custom.Arguments.ForName(dqlArg) != nil {
+			return DQLQuery
+		}
 		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
@@ -1146,6 +1169,10 @@ func (m *mutation) SetArgTo(arg string, val interface{}) {
 
 func (m *mutation) IsArgListType(name string) bool {
 	return (*field)(m).IsArgListType(name)
+}
+
+func (m *mutation) Arguments() map[string]interface{} {
+	return (*field)(m).Arguments()
 }
 
 func (m *mutation) ArgValue(name string) interface{} {

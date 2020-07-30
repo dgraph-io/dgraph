@@ -854,12 +854,12 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"}, extra: "random")
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: has 2 arguments for @custom directive, it should contain exactly 1 argument.",
+    {"message": "Type Query; Field getAuthor1: has 2 arguments for @custom directive, it should contain exactly one of `http` or `dql` arguments.",
      "locations":[{"line":7, "column":32}]},
     {"message" : "Type Query; Field getAuthor1; url field inside @custom directive is invalid.", "locations" : [{"line":7, "column":52}]}
     ]
 
-  - name: "@custom directive without http argument"
+  - name: "@custom directive without http or dql argument"
     input: |
       type Author {
         id: ID!
@@ -870,8 +870,100 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
       }
     errlist: [
-      {"message": "Type Query; Field getAuthor1: http argument for @custom directive should not be empty.",
+      {"message": "Type Query; Field getAuthor1: one of `http` or `dql` arguments must be present for @custom directive.",
       "locations":[{"line":7, "column":32}]},
+    ]
+
+  - name: "@custom directive with both http and dql argument"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"},
+          dql: "{me(func: uid(0x1))}")
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1: has 2 arguments for @custom directive, it should contain exactly one of `http` or `dql` arguments.",
+     "locations":[{"line":7, "column":32}]},
+    ]
+
+  -
+    name: "@custom directive with dql on field"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+        name: String! @custom(dql: """
+          query {
+            me(func: uid(0x1)) {
+              uid
+            }
+          }
+        """)
+      }
+    errlist: [
+    {"message": "Type Author; Field name: @custom directive with `dql` can be used only on
+      queries.",
+     "locations": [{"line": 4,"column": 25}]}
+    ]
+
+  -
+    name: "@custom directive with dql on mutation"
+    input: |
+      type Mutation {
+        customMutation: String! @custom(dql: """
+          query {
+            me(func: uid(0x1)) {
+              uid
+            }
+          }
+        """)
+      }
+    errlist: [
+    {"message": "Type Mutation; Field customMutation: @custom directive with `dql` can be used only on queries.",
+     "locations": [{"line": 2,"column": 35}]}
+    ]
+
+  -
+    name: "@custom directive with invalid dql argument type"
+    input: |
+      type Query {
+        query1: String! @custom(dql: 5)
+      }
+    errlist: [
+    {"message": "Type Query; Field query1: dql argument for @custom directive must be of type String.",
+     "locations": [{"line": 2,"column": 27}]}
+    ]
+
+  -
+    name: "@custom directive with empty dql argument value"
+    input: |
+      type Query {
+        query1: String! @custom(dql: "  ")
+      }
+    errlist: [
+    {"message": "Type Query; Field query1: dql argument for @custom directive must not be empty.",
+     "locations": [{"line": 2,"column": 27}]}
+    ]
+
+  -
+    name: "@custom directive with dql having non scalar argument for query"
+    input: |
+      type Query {
+        query1(arg1: [String]): String! @custom(dql: """
+          query {
+            me(func: uid(0x1)) {
+              uid
+            }
+          }
+        """)
+      }
+    errlist: [
+    {"message": "Type Query; Field query1: Argument arg1: must be of a scalar type. @custom DQL queries accept only scalar arguments.",
+     "locations": [{"line": 2,"column": 43}]}
     ]
 
   -
@@ -2608,6 +2700,39 @@ valid_schemas:
           graphql: "query ($id: ID!, $age: Int!) { getAuthor(id: $id, age: $age) }",
           skipIntrospection: true
         })
+      }
+
+  -
+    name: "@custom directive with correct dql"
+    input: |
+      type Tweets {
+          id: ID!
+          text: String! @search(by: [fulltext])
+          user: User
+          timestamp: DateTime! @search
+      }
+      type User {
+          screen_name: String! @id
+          name: String
+          followers: Int @search
+          tweets: [Tweets] @hasInverse(field: user)
+      }
+      type Query {
+        tweetsByAuthorFollowers(search: String!): [Tweets] @custom(dql: """
+          query t($search: string) {
+              var(func: type(Tweets)) @filter(anyoftext(Tweets.text, $search)) {
+                  Tweets.user {
+                      followers as User.followers
+                  }
+                  userFollowerCount as sum(val(followers))
+              }
+              tweetsByAuthorFollowers(func: uid(userFollowerCount), orderdesc: val(userFollowerCount)) {
+                  id: uid
+                  text: Tweets.text
+                  timestamp: Tweets.timestamp
+              }
+          }
+      	""")
       }
 
   -
