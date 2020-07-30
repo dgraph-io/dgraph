@@ -2439,15 +2439,15 @@ func TestCustomDQL(t *testing.T) {
 	}
 	
 	type Query {
-	  tweetsByAuthorFollowers: [Tweets] @custom(dql: """
+	  dqlTweetsByAuthorFollowers: [Tweets] @custom(dql: """
 		query {
-			var(func: type(Tweets)) {
+			var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "DQL")) {
 				Tweets.user {
 					followers as User.followers
 				}
 				userFollowerCount as sum(val(followers))
 			}
-			tweetsByAuthorFollowers(func: uid(userFollowerCount), orderdesc: val(userFollowerCount)) {
+			dqlTweetsByAuthorFollowers(func: uid(userFollowerCount), orderdesc: val(userFollowerCount)) {
 				id: uid
 				text: Tweets.text
 				timestamp: Tweets.timestamp
@@ -2524,7 +2524,7 @@ func TestCustomDQL(t *testing.T) {
 	params = &common.GraphQLParams{
 		Query: `
 		query {
-		  tweetsByAuthorFollowers {
+		  dqlTweetsByAuthorFollowers {
 			text
 		  }
 		  filteredTweetsByAuthorFollowers(search: "hello") {
@@ -2541,15 +2541,12 @@ func TestCustomDQL(t *testing.T) {
 	common.RequireNoGQLErrors(t, result)
 
 	require.JSONEq(t, `{
-		"tweetsByAuthorFollowers": [
+		"dqlTweetsByAuthorFollowers": [
 		  {
 			"text": "Woah DQL works!"
 		  },
 		  {
 			"text": "Hello DQL!"
-		  },
-		  {
-			"text": "hmm, It worked."
 		  }
 		],
 		"filteredTweetsByAuthorFollowers": [
