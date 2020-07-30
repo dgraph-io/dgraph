@@ -19,10 +19,18 @@ BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME  = unnamed
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
-BUILD_VERSION  ?= $(shell git describe --always --tags)
-BUILD_TAGS     ?=
-GOPATH         ?= $(shell go env GOPATH)
 
+# Use the next build version on master branch
+# NOTE: this needs to be updated with each new release
+ifeq ($(BUILD_BRANCH),master)
+# Version on master is of the format <next-release-version>-g<commit-id>
+BUILD_VERSION ?= 'v20.11.0-g'$(BUILD)
+else
+BUILD_VERSION ?= $(shell git describe --always --tags)
+endif
+
+BUILD_TAGS    ?=
+GOPATH        ?= $(shell go env GOPATH)
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
 export GO111MODULE := on
