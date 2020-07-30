@@ -2439,6 +2439,15 @@ func TestCustomDQL(t *testing.T) {
 	}
 	
 	type Query {
+	  getFirstUserByFollowerCount(count: Int!): User @custom(dql: """
+		query getFirstUserByFollowerCount($count: int) {
+			getFirstUserByFollowerCount(func: eq(User.followers, $count), first: 1) {
+				screen_name: User.screen_name
+				followers: User.followers
+			}
+		}
+		""")
+		
 	  dqlTweetsByAuthorFollowers: [Tweets] @custom(dql: """
 		query {
 			var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "DQL")) {
@@ -2524,6 +2533,10 @@ func TestCustomDQL(t *testing.T) {
 	params = &common.GraphQLParams{
 		Query: `
 		query {
+		  getFirstUserByFollowerCount(count: 10) {
+			screen_name
+			followers
+		  }
 		  dqlTweetsByAuthorFollowers {
 			text
 		  }
@@ -2541,6 +2554,10 @@ func TestCustomDQL(t *testing.T) {
 	common.RequireNoGQLErrors(t, result)
 
 	require.JSONEq(t, `{
+		"getFirstUserByFollowerCount": {
+		  "screen_name": "pawan",
+		  "followers": 10
+		},
 		"dqlTweetsByAuthorFollowers": [
 		  {
 			"text": "Woah DQL works!"

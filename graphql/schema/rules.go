@@ -24,8 +24,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/gql"
-
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -1223,19 +1221,13 @@ func customDirectiveValidation(sch *ast.Schema,
 				"Type %s; Field %s: dql argument for @custom directive must not be empty.",
 				typ.Name, field.Name))
 		}
-		if _, err := gql.Parse(gql.Request{Str: dqlArg.Value.Raw}); err != nil {
-			errs = append(errs, gqlerror.ErrorPosf(
-				dqlArg.Position,
-				"Type %s; Field %s: in dql argument for @custom directive: %s",
-				typ.Name, field.Name, err.Error()))
-		} else {
-			// TODO: tackle cases of:
-			// * same query name as GraphQL
-			// * correct return type mapping
-			// * correct field aliases
-			// * correct argument names in comparison to GraphQL args, their types
-			//fmt.Println(parsedDQL)
-		}
+		// TODO: parse the DQL request here and validate it for errors. Not doing it now because the
+		// gql.Parse() method requires the variables to be present with the query, which can't be
+		// there at schema input time. Also check for following special conditions:
+		// * same query name as GraphQL
+		// * correct return type mapping
+		// * correct field aliases
+		// * correct argument names in comparison to GraphQL args, their types
 		for _, arg := range field.Arguments {
 			if arg.Type.NamedType == "" || !isScalar(arg.Type.Name()) {
 				errs = append(errs, gqlerror.ErrorPosf(

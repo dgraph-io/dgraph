@@ -950,23 +950,6 @@ invalid_schemas:
     ]
 
   -
-    name: "@custom directive with invalid dql argument value"
-    input: |
-      type Query {
-        query1: String! @custom(dql: """
-          query {
-            m(f: uid(0x1)) {
-              uid
-            }
-          }
-        """)
-      }
-    errlist: [
-    {"message": "Type Query; Field query1: in dql argument for @custom directive: line 2 column 4: Got invalid keyword: f at root",
-     "locations": [{"line": 2,"column": 27}]}
-    ]
-
-  -
     name: "@custom directive with dql having non scalar argument for query"
     input: |
       type Query {

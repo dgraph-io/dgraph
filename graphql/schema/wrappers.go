@@ -1119,8 +1119,8 @@ func (q *query) QueryType() QueryType {
 
 func (q *query) DQLQuery() string {
 	if customDir := q.op.inSchema.customDirectives["Query"][q.Name()]; customDir != nil {
-		if dqlArg := customDir.Arguments.ForName(dqlArg); dqlArg != nil {
-			return dqlArg.Value.Raw
+		if dqlArgument := customDir.Arguments.ForName(dqlArg); dqlArgument != nil {
+			return dqlArgument.Value.Raw
 		}
 	}
 	return ""
