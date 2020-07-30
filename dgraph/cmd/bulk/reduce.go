@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
-	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -52,10 +51,11 @@ type reducer struct {
 	mu          sync.RWMutex
 	streamIds   map[string]uint32
 	splitWriter *badger.WriteBatch
+	tmpDb       *badger.DB
 }
 
 const batchSize = 10000
-const maxSplitBatchSize = 1000
+const maxSplitBatchLen = 1000
 const batchAlloc = batchSize * 11 / 10
 
 func (r *reducer) run() error {
@@ -83,6 +83,7 @@ func (r *reducer) run() error {
 			writer := db.NewStreamWriter()
 			x.Check(writer.Prepare())
 			// Split lists are written to a separate DB first to avoid ordering issues.
+			r.tmpDb = tmpDb
 			r.splitWriter = tmpDb.NewManagedWriteBatch()
 
 			ci := &countIndexer{reducer: r, writer: writer}
@@ -98,7 +99,6 @@ func (r *reducer) run() error {
 			ci.wait()
 
 			x.Check(writer.Flush())
-			x.Check(r.splitWriter.Flush())
 
 			// Write split lists back to the main DB.
 			r.writeSplitLists(db, tmpDb)
@@ -344,8 +344,43 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 	}
 }
 
+func (r *reducer) writeTmpSplits(kvsCh chan *bpb.KVList, wg *sync.WaitGroup) {
+	defer wg.Done()
+	splitBatchLen := 0
+
+	for kvs := range kvsCh {
+		if kvs == nil || len(kvs.Kv) == 0 {
+			continue
+		}
+
+		for i := 0; i < len(kvs.Kv); i += maxSplitBatchLen {
+			if splitBatchLen >= maxSplitBatchLen {
+				x.Check(r.splitWriter.Flush())
+				r.splitWriter = r.tmpDb.NewManagedWriteBatch()
+				splitBatchLen = 0
+			}
+
+			batch := &bpb.KVList{}
+			if i+maxSplitBatchLen >= len(kvs.Kv) {
+				batch.Kv = kvs.Kv[i:]
+			} else {
+				batch.Kv = kvs.Kv[i : i+maxSplitBatchLen]
+			}
+			splitBatchLen += len(batch.Kv)
+			x.Check(r.splitWriter.Write(batch))
+		}
+	}
+	x.Check(r.splitWriter.Flush())
+}
+
 func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *y.Closer) {
 	defer closer.Done()
+
+	// Concurrently write split lists to a temporary badger.
+	tmpWg := new(sync.WaitGroup)
+	tmpWg.Add(1)
+	splitCh := make(chan *bpb.KVList, 2*runtime.NumCPU())
+	go r.writeTmpSplits(splitCh, tmpWg)
 
 	for req := range writerCh {
 		req.wg.Wait()
@@ -357,23 +392,51 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		start := time.Now()
 
 		x.Check(ci.writer.Write(req.list))
-		x.Check(r.splitWriter.Write(req.splitList))
+		if req.splitList != nil && len(req.splitList.Kv) > 0 {
+			splitCh <- req.splitList
+		}
 
 		if dur := time.Since(start).Round(time.Millisecond); dur > time.Second {
 			fmt.Printf("writeCh: Time taken to write req: %v\n",
 				time.Since(start).Round(time.Millisecond))
 		}
 	}
+
+	// Wait for split lists to be written to the temporary badger.
+	close(splitCh)
+	tmpWg.Wait()
 }
 
 func (r *reducer) writeSplitLists(db *badger.DB, tmpDb *badger.DB) {
+	txn := tmpDb.NewTransactionAt(math.MaxUint64, false)
+	defer txn.Discard()
+	itr := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer itr.Close()
+
 	writer := db.NewManagedWriteBatch()
-	stream := tmpDb.NewStreamAt(math.MaxUint64)
-	stream.LogPrefix = "writing split lists"
-	stream.Send = func(kvs *bpb.KVList) error {
-		return writer.Write(kvs)
+	splitBatchLen := 0
+
+	for itr.Rewind(); itr.Valid(); itr.Next() {
+		if splitBatchLen >= maxSplitBatchLen {
+			x.Check(writer.Flush())
+			writer = db.NewManagedWriteBatch()
+			splitBatchLen = 0
+
+		}
+		item := itr.Item()
+
+		valCopy, err := item.ValueCopy(nil)
+		x.Check(err)
+		kv := &bpb.KV{
+			Key:       item.KeyCopy(nil),
+			Value:     valCopy,
+			UserMeta:  []byte{item.UserMeta()},
+			Version:   item.Version(),
+			ExpiresAt: item.ExpiresAt(),
+		}
+		writer.Write(&bpb.KVList{Kv: []*bpb.KV{kv}})
+		splitBatchLen += 1
 	}
-	x.Check(stream.Orchestrate(context.Background()))
 	x.Check(writer.Flush())
 }
 
