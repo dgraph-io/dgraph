@@ -36,7 +36,7 @@ func TestRDFResult(t *testing.T) {
 
 	rdf, err := processQueryRDF(context.Background(), t, query)
 	require.NoError(t, err)
-	require.Equal(t, string(rdf), `<0x1> <name> "Michonne" .
+	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
 <0x1> <friend> <0x17> .
 <0x1> <friend> <0x18> .
 <0x1> <friend> <0x19> .
@@ -169,5 +169,5 @@ func TestRDFFacets(t *testing.T) {
 		}`
 	_, err := processQueryRDF(context.Background(), t, query)
 	require.Contains(t, err.Error(),
-		"facet is not supported in the rdf output format")
+		"facets are not supported in the rdf output format")
 }

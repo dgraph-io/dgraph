@@ -206,8 +206,8 @@ func validateSubGraphForRDF(sg *SubGraph) error {
 	if sg.SrcFunc != nil && sg.SrcFunc.Name == "checkpwd" {
 		return errors.New("chkpwd function is not supported in the rdf output format")
 	}
-	if len(sg.facetsMatrix) != 0 {
-		return errors.New("facet is not supported in the rdf output format")
+	if sg.Params.Facet != nil && !sg.Params.ExpandAll {
+		return errors.New("facets are not supported in the rdf output format")
 	}
 	return nil
 }
