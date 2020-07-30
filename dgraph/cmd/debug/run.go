@@ -500,9 +500,24 @@ func printKeys(db *badger.DB) {
 	var loop int
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()
+		if item.UserMeta() != posting.BitCompletePosting {
+			continue
+		}
+
 		pk, err := x.Parse(item.Key())
 		x.Check(err)
 		var buf bytes.Buffer
+
+		if pk.IsSchema() || pk.IsType() {
+			continue
+		}
+
+		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
+		x.Check(err)
+
+		if pl.Pack() != nil {
+			continue
+		}
 
 		// Don't use a switch case here. Because multiple of these can be true. In particular,
 		// IsSchema can be true alongside IsData.

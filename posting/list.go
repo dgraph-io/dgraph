@@ -77,6 +77,13 @@ type List struct {
 	maxTs       uint64 // max commit timestamp seen for this list.
 }
 
+func (l *List) Pack() *pb.UidPack {
+	if l == nil {
+		return nil
+	}
+	return l.plist.Pack
+}
+
 // NewList returns a new list with an immutable layer set to plist and the
 // timestamp of the immutable layer set to minTs.
 func NewList(key []byte, plist *pb.PostingList, minTs uint64) *List {
