@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	alphaGrpc            = "http://localhost:9180"
+	alphaGrpc            = "localhost:9180"
 	alphaURL             = "http://localhost:8180/graphql"
 	alphaAdminURL        = "http://localhost:8180/admin"
 	subscriptionEndpoint = "ws://localhost:8180/graphql"
@@ -2417,8 +2417,9 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 }
 
 func TestCustomDQL(t *testing.T) {
-	_, err := testutil.DgraphClientDropAll(alphaGrpc)
+	dg, err := testutil.DgraphClient(alphaGrpc)
 	require.NoError(t, err)
+	testutil.DropAll(t, dg)
 
 	schema := `
 	type Tweets {
@@ -2539,7 +2540,6 @@ func TestCustomDQL(t *testing.T) {
 	result = params.ExecuteAsPost(t, alphaURL)
 	common.RequireNoGQLErrors(t, result)
 
-	// TODO: add it
 	require.JSONEq(t, `{
 		"tweetsByAuthorFollowers": [
 		  {
