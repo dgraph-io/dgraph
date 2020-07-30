@@ -406,7 +406,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	tmpWg.Wait()
 }
 
-func (r *reducer) writeSplitLists(db *badger.DB, tmpDb *badger.DB) {
+func (r *reducer) writeSplitLists(db, tmpDb *badger.DB) {
 	txn := tmpDb.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	itr := txn.NewIterator(badger.DefaultIteratorOptions)
@@ -434,7 +434,7 @@ func (r *reducer) writeSplitLists(db *badger.DB, tmpDb *badger.DB) {
 			Version:   item.Version(),
 			ExpiresAt: item.ExpiresAt(),
 		}
-		writer.Write(&bpb.KVList{Kv: []*bpb.KV{kv}})
+		x.Check(writer.Write(&bpb.KVList{Kv: []*bpb.KV{kv}}))
 		splitBatchLen += 1
 	}
 	x.Check(writer.Flush())
@@ -494,8 +494,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser.SignalAndWait()
 }
 
-func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList,
-	splitList *bpb.KVList) []*countIndexEntry {
+func (r *reducer) toList(bufEntries [][]byte, list, splitList *bpb.KVList) []*countIndexEntry {
 	sort.Slice(bufEntries, func(i, j int) bool {
 		lh, err := GetKeyForMapEntry(bufEntries[i])
 		x.Check(err)
