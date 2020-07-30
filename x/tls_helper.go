@@ -53,6 +53,8 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls_cert", "", "(optional) The Cert file provided by the client to the server.")
 	flag.String("tls_key", "", "(optional) The private key file "+
 		"provided by the client to the server.")
+	flag.String("slash_grpc_endpoint", "", "Path to Slash GraphQL GRPC endpoint. If this is set, "+
+		"all other TLS options and connection options will be ignored")
 }
 
 // LoadServerTLSConfig loads the TLS config into the server with the given parameters.
@@ -72,8 +74,25 @@ func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) 
 	return GenerateServerTLSConfig(&conf)
 }
 
+// SlashTLSConfig returns the TLS config appropriate for SlashGraphQL
+func SlashTLSConfig(endpoint string) (*tls.Config, error) {
+	pool, err := generateCertPool("", true)
+	hostWithoutPort := strings.Split(endpoint, ":")[0]
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Config{
+		RootCAs:    pool,
+		ServerName: hostWithoutPort,
+	}, nil
+}
+
 // LoadClientTLSConfig loads the TLS config into the client with the given parameters.
 func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
+	if v.IsSet("slash_grpc_endpoint") {
+		return SlashTLSConfig(v.GetString("slash_grpc_endpoint"))
+	}
+
 	// When the --tls_cacert option is pecified, the connection will be set up using TLS instead of
 	// plaintext. However the client cert files are optional, depending on whether the server
 	// requires a client certificate.

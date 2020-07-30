@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,6 +36,7 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v2"
@@ -51,6 +53,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 type options struct {
@@ -363,7 +366,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	return nil
 }
 
-func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
+func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader {
 	var db *badger.DB
 	if len(opt.clientDir) > 0 {
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
@@ -379,8 +382,20 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 
 	}
 
+	dialOpts := []grpc.DialOption{}
+	if conf.IsSet("slash_grpc_endpoint") && conf.IsSet("auth_token") {
+		dialOpts = append(dialOpts, x.WithAuthorizationCredentials(conf.GetString("auth_token")))
+	}
+
+	var tlsConfig *tls.Config = nil
+	if conf.IsSet("slash_grpc_endpoint") {
+		var tlsErr error
+		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
+		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
+	}
+
 	// compression with zero server actually makes things worse
-	connzero, err := x.SetupConnection(opt.zero, nil, false)
+	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(connzero, db)
@@ -405,13 +420,20 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 }
 
 func run() error {
+	var zero string
+	if Live.Conf.IsSet("slash_grpc_endpoint") {
+		zero = Live.Conf.GetString("slash_grpc_endpoint")
+	} else {
+		zero = Live.Conf.GetString("zero")
+	}
+
 	var err error
 	x.PrintVersion()
 	opt = options{
 		dataFiles:      Live.Conf.GetString("files"),
 		dataFormat:     Live.Conf.GetString("format"),
 		schemaFile:     Live.Conf.GetString("schema"),
-		zero:           Live.Conf.GetString("zero"),
+		zero:           zero,
 		concurrent:     Live.Conf.GetInt("conc"),
 		batchSize:      Live.Conf.GetInt("batch"),
 		clientDir:      Live.Conf.GetString("xidmap"),
@@ -445,7 +467,7 @@ func run() error {
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
 
-	l := setup(bmOpts, dg)
+	l := setup(bmOpts, dg, Live.Conf)
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
