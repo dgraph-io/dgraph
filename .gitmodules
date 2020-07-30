@@ -1,0 +1,3 @@
+[submodule "wiki/themes/hugo-docs"]
+	path = wiki/themes/hugo-docs
+	url = https://github.com/dgraph-io/hugo-docs
