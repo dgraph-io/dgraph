@@ -429,6 +429,9 @@ func appendPosting(w io.Writer, o *pb.Posting) {
 			fmt.Fprintf(w, " String Value: %q", out.Value)
 		}
 	}
+	if len(o.Facets) > 0 {
+		fmt.Fprintf(w, " Num Facets: %d", len(o.Facets))
+	}
 	fmt.Fprintln(w, "")
 }
 
@@ -809,8 +812,8 @@ func run() {
 		return
 	}
 
-	min, max := getMinMax(db, opt.readTs)
-	fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
+	// min, max := getMinMax(db, opt.readTs)
+	// fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
 
 	switch {
 	case len(opt.keyLookup) > 0:
