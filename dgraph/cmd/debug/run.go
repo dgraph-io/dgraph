@@ -399,8 +399,8 @@ func history(lookup []byte, itr *badger.Iterator) {
 				appendPosting(&buf, p)
 			}
 
-			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
-				codec.ExactLen(plist.Pack), plist.Pack.Size())
+			fmt.Fprintf(&buf, " Num uids = %d. Size = %d Pack = %+v\n",
+				codec.ExactLen(plist.Pack), plist.Pack.Size(), plist.Pack)
 			dec := codec.Decoder{Pack: plist.Pack}
 			for uids := dec.Seek(0, codec.SeekStart); len(uids) > 0; uids = dec.Next() {
 				for _, uid := range uids {
