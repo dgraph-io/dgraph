@@ -52,8 +52,9 @@ var DefaultBootnodes = []string(nil)
 
 // Config is used to configure a network service
 type Config struct {
-	LogLvl log.Lvl
-	logger log.Logger
+	LogLvl  log.Lvl
+	logger  log.Logger
+	ErrChan chan<- error
 
 	// BasePath the data directory for the node
 	BasePath string

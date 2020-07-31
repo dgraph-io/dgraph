@@ -25,7 +25,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 )
 
-var maxResponseSize int64 = 12 // maximum number of block datas to reply with in a BlockResponse message.
+var maxResponseSize int64 = 128 // maximum number of block datas to reply with in a BlockResponse message.
 
 // CreateBlockResponse creates a block response message from a block request message
 func (s *Service) CreateBlockResponse(blockRequest *network.BlockRequestMessage) (*network.BlockResponseMessage, error) {

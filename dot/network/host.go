@@ -22,7 +22,7 @@ import (
 
 	log "github.com/ChainSafe/log15"
 	ds "github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-datastore/sync"
+	dsync "github.com/ipfs/go-datastore/sync"
 	"github.com/libp2p/go-libp2p"
 	libp2phost "github.com/libp2p/go-libp2p-core/host"
 	libp2pnetwork "github.com/libp2p/go-libp2p-core/network"
@@ -79,7 +79,7 @@ func newHost(ctx context.Context, cfg *Config, logger log.Logger) (*host, error)
 	}
 
 	// create DHT service
-	dht := kaddht.NewDHT(ctx, h, sync.MutexWrap(ds.NewMapDatastore()))
+	dht := kaddht.NewDHT(ctx, h, dsync.MutexWrap(ds.NewMapDatastore()))
 
 	// wrap host and DHT service with routed host
 	h = rhost.Wrap(h, dht)
@@ -156,7 +156,27 @@ func (h *host) bootstrap() {
 // send writes the given message to the outbound message stream for the given
 // peer (gets the already opened outbound message stream or opens a new one).
 func (h *host) send(p peer.ID, sub protocol.ID, msg Message) (err error) {
+	encMsg, err := msg.Encode()
+	if err != nil {
+		return err
+	}
 
+	err = h.sendBytes(p, sub, encMsg)
+	if err != nil {
+		return err
+	}
+
+	h.logger.Trace(
+		"Sent message to peer",
+		"host", h.id(),
+		"peer", p,
+		"type", msg.Type(),
+	)
+
+	return nil
+}
+
+func (h *host) sendBytes(p peer.ID, sub protocol.ID, msg []byte) (err error) {
 	// get outbound stream for given peer
 	s := h.getStream(p, sub)
 
@@ -177,28 +197,12 @@ func (h *host) send(p peer.ID, sub protocol.ID, msg Message) (err error) {
 		)
 	}
 
-	encMsg, err := msg.Encode()
-	if err != nil {
-		return err
-	}
-
-	msgLen := uint64(len(encMsg))
+	msgLen := uint64(len(msg))
 	lenBytes := uint64ToLEB128(msgLen)
-	encMsg = append(lenBytes, encMsg...)
+	msg = append(lenBytes, msg...)
 
-	_, err = s.Write(encMsg)
-	if err != nil {
-		return err
-	}
-
-	h.logger.Trace(
-		"Sent message to peer",
-		"host", h.id(),
-		"peer", p,
-		"type", msg.GetType(),
-	)
-
-	return nil
+	_, err = s.Write(msg)
+	return err
 }
 
 // broadcast sends a message to each connected peer

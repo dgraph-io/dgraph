@@ -285,7 +285,7 @@ func (s *Service) handleReceivedBlock(block *types.Block) (err error) {
 
 // handleReceivedMessage handles messages from the network service
 func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
-	msgType := msg.GetType()
+	msgType := msg.Type()
 
 	switch msgType {
 	case network.TransactionMsgType: // 4

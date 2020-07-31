@@ -51,7 +51,7 @@ func (g *gossip) handleMessage(msg Message, from peer.ID) {
 		g.logger.Trace(
 			"Gossiping message from peer",
 			"host", g.host.id(),
-			"type", msg.GetType(),
+			"type", msg.Type(),
 		)
 
 		// broadcast message to connected peers

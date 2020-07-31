@@ -54,7 +54,7 @@ type Message interface {
 	Encode() ([]byte, error)
 	Decode(io.Reader) error
 	String() string
-	GetType() int
+	Type() int
 	IDString() string
 }
 
@@ -113,8 +113,8 @@ type StatusMessage struct {
 	ChainStatus         []byte
 }
 
-// GetType returns the StatusMsgType int
-func (sm *StatusMessage) GetType() int {
+// Type returns StatusMsgType
+func (sm *StatusMessage) Type() int {
 	return StatusMsgType
 }
 
@@ -162,8 +162,8 @@ type BlockRequestMessage struct {
 	Max           *optional.Uint32
 }
 
-// GetType int
-func (bm *BlockRequestMessage) GetType() int {
+// Type returns BlockRequestMsgType
+func (bm *BlockRequestMessage) Type() int {
 	return BlockRequestMsgType
 }
 
@@ -291,8 +291,8 @@ type BlockAnnounceMessage struct {
 	Digest         [][]byte // any additional block info eg. logs, seal
 }
 
-// GetType int
-func (bm *BlockAnnounceMessage) GetType() int {
+// Type returns BlockAnnounceMsgType
+func (bm *BlockAnnounceMessage) Type() int {
 	return BlockAnnounceMsgType
 }
 
@@ -342,8 +342,8 @@ type BlockResponseMessage struct {
 	BlockData []*types.BlockData
 }
 
-// GetType int
-func (bm *BlockResponseMessage) GetType() int {
+// Type returns BlockResponseMsgType
+func (bm *BlockResponseMessage) Type() int {
 	return BlockResponseMsgType
 }
 
@@ -390,8 +390,8 @@ type TransactionMessage struct {
 	Extrinsics []types.Extrinsic
 }
 
-// GetType returns the TransactionMsgType
-func (tm *TransactionMessage) GetType() int {
+// Type returns TransactionMsgType
+func (tm *TransactionMessage) Type() int {
 	return TransactionMsgType
 }
 
@@ -463,8 +463,8 @@ type ConsensusMessage struct {
 	Data []byte
 }
 
-// GetType returns the type
-func (cm *ConsensusMessage) GetType() int {
+// Type returns ConsensusMsgType
+func (cm *ConsensusMessage) Type() int {
 	return ConsensusMsgType
 }
 
@@ -476,9 +476,7 @@ func (cm *ConsensusMessage) String() string {
 // Encode encodes a block response message using SCALE and appends the type byte to the start
 func (cm *ConsensusMessage) Encode() ([]byte, error) {
 	encMsg := []byte{ConsensusMsgType}
-
 	encMsg = append(encMsg, cm.ConsensusEngineID.ToBytes()...)
-
 	return append(encMsg, cm.Data...), nil
 }
 

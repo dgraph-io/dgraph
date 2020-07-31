@@ -71,6 +71,9 @@ func NewUint64OrHashFromBytes(data []byte) *Uint64OrHash {
 
 // Value returns the interface value.
 func (x *Uint64OrHash) Value() interface{} {
+	if x == nil {
+		return nil
+	}
 	return x.value
 }
 

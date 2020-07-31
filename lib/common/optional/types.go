@@ -51,6 +51,9 @@ func (x *Uint32) Value() uint32 {
 
 // String returns the value as a string.
 func (x *Uint32) String() string {
+	if x == nil {
+		return ""
+	}
 	if !x.exists {
 		return none
 	}
@@ -125,11 +128,18 @@ func (x *Hash) Exists() bool {
 
 // Value returns Hash Value
 func (x *Hash) Value() common.Hash {
+	if x == nil {
+		return common.Hash{}
+	}
 	return x.value
 }
 
 // String returns the value as a string.
 func (x *Hash) String() string {
+	if x == nil {
+		return ""
+	}
+
 	if !x.exists {
 		return none
 	}

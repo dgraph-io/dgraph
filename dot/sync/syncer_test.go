@@ -148,10 +148,10 @@ func TestHandleSeenBlocks_GreaterThanHighestSeen_Synced(t *testing.T) {
 
 func TestHandleBlockResponse(t *testing.T) {
 	syncer := newTestSyncer(t, nil)
-	syncer.highestSeenBlock = big.NewInt(20)
+	syncer.highestSeenBlock = big.NewInt(132)
 
 	responder := newTestSyncer(t, nil)
-	addTestBlocksToState(t, 16, responder.blockState)
+	addTestBlocksToState(t, 130, responder.blockState)
 
 	startNum := 1
 	start, err := variadic.NewUint64OrHash(startNum)
@@ -169,7 +169,7 @@ func TestHandleBlockResponse(t *testing.T) {
 	req2 := syncer.HandleBlockResponse(resp)
 	require.NotNil(t, req2)
 
-	// msg should contain blocks 1 to 13 (maxResponseSize # of blocks)
+	// msg should contain blocks 1 to 129 (maxResponseSize # of blocks)
 	require.Equal(t, uint64(startNum+int(maxResponseSize)), req2.StartingBlock.Value().(uint64))
 
 	resp2, err := responder.CreateBlockResponse(req)

@@ -96,7 +96,6 @@ func compareBlocksByNumber(t *testing.T, nodes []*utils.Node, num string) (map[c
 		go func(node *utils.Node) {
 			hash, err := utils.GetBlockHash(t, node, num)
 			if err != nil {
-				logger.Error("failed to get block hash for number", "node", node.Key, "error", err)
 				errs = append(errs, err)
 				wg.Done()
 				return

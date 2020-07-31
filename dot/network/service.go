@@ -50,6 +50,7 @@ type Service struct {
 	status         *status
 	gossip         *gossip
 	requestTracker *requestTracker
+	errCh          chan<- error
 
 	// Service interfaces
 	blockState   BlockState
@@ -120,6 +121,7 @@ func NewService(cfg *Config) (*Service, error) {
 		noMDNS:         cfg.NoMDNS,
 		noStatus:       cfg.NoStatus,
 		syncer:         cfg.Syncer,
+		errCh:          cfg.ErrChan,
 	}
 
 	return network, err
@@ -222,7 +224,7 @@ func (s *Service) receiveCoreMessages() {
 		s.logger.Debug(
 			"Broadcasting message from core service",
 			"host", s.host.id(),
-			"type", msg.GetType(),
+			"type", msg.Type(),
 		)
 
 		// broadcast message to connected peers
@@ -298,7 +300,10 @@ func (s *Service) handleSyncStream(stream libp2pnetwork.Stream) {
 	// the stream stays open until closed or reset
 }
 
+var maxReads = 16
+
 func (s *Service) readStream(stream libp2pnetwork.Stream, peer peer.ID, handler func(peer peer.ID, msg Message)) {
+
 	// create buffer stream for non-blocking read
 	r := bufio.NewReader(stream)
 
@@ -307,19 +312,33 @@ func (s *Service) readStream(stream libp2pnetwork.Stream, peer peer.ID, handler 
 		if err != nil {
 			s.logger.Error("Failed to read LEB128 encoding", "error", err)
 			_ = stream.Close()
+			s.errCh <- err
 			return
+		}
+
+		if length == 0 {
+			continue
 		}
 
 		msgBytes := make([]byte, length)
-		n, err := r.Read(msgBytes)
-		if err != nil {
-			s.logger.Error("Failed to read message from stream", "error", err)
-			_ = stream.Close()
-			return
+		tot := uint64(0)
+		for i := 0; i < maxReads; i++ {
+			n, err := r.Read(msgBytes[tot:]) //nolint
+			if err != nil {
+				s.logger.Error("Failed to read message from stream", "error", err)
+				_ = stream.Close()
+				s.errCh <- err
+				return
+			}
+
+			tot += uint64(n)
+			if tot == length {
+				break
+			}
 		}
 
-		if uint64(n) != length {
-			s.logger.Error("Failed to read entire message", "length", length, "read", n)
+		if tot != length {
+			s.logger.Error("Failed to read entire message", "length", length, "read" /*n*/, tot)
 			continue
 		}
 
@@ -329,6 +348,13 @@ func (s *Service) readStream(stream libp2pnetwork.Stream, peer peer.ID, handler 
 			s.logger.Error("Failed to decode message from peer", "peer", peer, "err", err)
 			continue
 		}
+
+		s.logger.Trace(
+			"Received message from peer",
+			"host", s.host.id(),
+			"peer", peer,
+			"type", msg.Type(),
+		)
 
 		// handle message based on peer status and message type
 		handler(peer, msg)
@@ -372,14 +398,7 @@ func (s *Service) handleSyncMessage(peer peer.ID, msg Message) {
 
 // handleMessage handles the message based on peer status and message type
 func (s *Service) handleMessage(peer peer.ID, msg Message) {
-	s.logger.Trace(
-		"Received message from peer",
-		"host", s.host.id(),
-		"peer", peer,
-		"type", msg.GetType(),
-	)
-
-	if msg.GetType() != StatusMsgType {
+	if msg.Type() != StatusMsgType {
 
 		// check if status is disabled or peer status is confirmed
 		if s.noStatus || s.status.confirmed(peer) {
@@ -387,6 +406,7 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 				req := s.syncer.HandleBlockAnnounce(an)
 				if req != nil {
 					s.requestTracker.addRequestedBlockID(req.ID)
+					log.Info("sending", "req", req)
 					err := s.host.send(peer, syncID, req)
 					if err != nil {
 						s.logger.Error("failed to send BlockRequest message", "peer", peer)

@@ -69,7 +69,7 @@ func TestService_ProcessBlockAnnounceMessage(t *testing.T) {
 
 	select {
 	case msg := <-msgSend:
-		msgType := msg.GetType()
+		msgType := msg.Type()
 		require.Equal(t, network.BlockAnnounceMsgType, msgType)
 		require.Equal(t, expected, msg)
 	case <-time.After(testMessageTimeout):

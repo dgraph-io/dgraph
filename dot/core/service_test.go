@@ -104,7 +104,7 @@ func TestAnnounceBlock(t *testing.T) {
 
 	select {
 	case msg := <-msgSend:
-		msgType := msg.GetType()
+		msgType := msg.Type()
 		require.Equal(t, network.BlockAnnounceMsgType, msgType)
 	case <-time.After(testMessageTimeout):
 		t.Error("timeout waiting for message")
