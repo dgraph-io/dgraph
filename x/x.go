@@ -740,7 +740,7 @@ func DivideAndRule(num int) (numGo, width int) {
 }
 
 // SetupConnection starts a secure gRPC connection to the given host.
-func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientConn, error) {
+func SetupConnection(host string, tlsCfg *tls.Config, useGz bool, dialOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	callOpts := append([]grpc.CallOption{},
 		grpc.MaxCallRecvMsgSize(GrpcMaxSize),
 		grpc.MaxCallSendMsgSize(GrpcMaxSize))
@@ -750,7 +750,7 @@ func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientC
 		callOpts = append(callOpts, grpc.UseCompressor(gzip.Name))
 	}
 
-	dialOpts := append([]grpc.DialOption{},
+	dialOpts = append(dialOpts,
 		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithBlock())
@@ -815,13 +815,38 @@ type CredOpt struct {
 	PasswordOpt string
 }
 
+type authorizationCredentials struct {
+	token string
+}
+
+func (a *authorizationCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{"Authorization": a.token}, nil
+}
+
+func (a *authorizationCredentials) RequireTransportSecurity() bool {
+	return true
+}
+
+// WithAuthorizationCredentials adds Authorization: <api-token> to every GRPC request
+// This is mostly used by Slash GraphQL to authenticate requests
+func WithAuthorizationCredentials(authToken string) grpc.DialOption {
+	return grpc.WithPerRPCCredentials(&authorizationCredentials{authToken})
+}
+
 // GetDgraphClient creates a Dgraph client based on the following options in the configuration:
+// --slash_grpc_endpoint specifies the grpc endpoint for slash. It takes precedence over --alpha and TLS
 // --alpha specifies a comma separated list of endpoints to connect to
 // --tls_cacert, --tls_cert, --tls_key etc specify the TLS configuration of the connection
 // --retries specifies how many times we should retry the connection to each endpoint upon failures
 // --user and --password specify the credentials we should use to login with the server
 func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
-	alphas := conf.GetString("alpha")
+	var alphas string
+	if conf.GetString("slash_grpc_endpoint") != "" {
+		alphas = conf.GetString("slash_grpc_endpoint")
+	} else {
+		alphas = conf.GetString("alpha")
+	}
+
 	if len(alphas) == 0 {
 		glog.Fatalf("The --alpha option must be set in order to connect to Dgraph")
 	}
@@ -842,10 +867,15 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 		}
 	}
 
+	dialOpts := []grpc.DialOption{}
+	if conf.GetString("slash_grpc_endpoint") != "" && conf.IsSet("auth_token") {
+		dialOpts = append(dialOpts, WithAuthorizationCredentials(conf.GetString("auth_token")))
+	}
+
 	for _, d := range ds {
 		var conn *grpc.ClientConn
 		for i := 0; i < retries; i++ {
-			conn, err = SetupConnection(d, tlsCfg, false)
+			conn, err = SetupConnection(d, tlsCfg, false, dialOpts...)
 			if err == nil {
 				break
 			}
