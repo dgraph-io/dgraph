@@ -153,11 +153,6 @@ func (h *host) bootstrap() {
 	}
 }
 
-// ping pings a peer using DHT
-func (h *host) ping(peer peer.ID) error {
-	return h.dht.Ping(h.ctx, peer)
-}
-
 // send writes the given message to the outbound message stream for the given
 // peer (gets the already opened outbound message stream or opens a new one).
 func (h *host) send(p peer.ID, sub protocol.ID, msg Message) (err error) {
