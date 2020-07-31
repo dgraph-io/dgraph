@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/glog"
 )
 
 var (
@@ -797,6 +798,7 @@ func (l *List) Length(readTs, afterUid uint64) int {
 // to be deleted, at which point the entire list will be marked for deletion.
 // As the list grows, existing parts might be split if they become too big.
 func (l *List) Rollup() ([]*bpb.KV, error) {
+	glog.Infof("Rolling up key %s", hex.EncodeToString(l.key))
 	l.RLock()
 	defer l.RUnlock()
 	out, err := l.rollup(math.MaxUint64, true)
