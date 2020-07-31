@@ -955,6 +955,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if p.Uid > endUid && split {
 			plist.Pack = enc.Done()
+			x.AssertTrue(plist.Pack != nil)
 			out.parts[startUid] = plist
 
 			splitIdx++
@@ -972,6 +973,9 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 		return nil, errors.Wrapf(err, "cannot iterate through the list")
 	}
 	plist.Pack = enc.Done()
+	if len(out.parts) == 0 {
+		x.AssertTrue(plist.Pack != nil)
+	}
 	if plist.Pack != nil {
 		if plist.Pack.BlockSize != uint32(blockSize) {
 			return nil, errors.Errorf("actual block size %d is different from expected value %d",
