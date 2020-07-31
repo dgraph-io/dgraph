@@ -142,7 +142,10 @@ func init() {
 		"Number of N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.StringP("auth_token", "t", "",
-		"The auth token passed to the server for Alter operation of the schema file")
+		"The auth token passed to the server for Alter operation of the schema file. If used with --slash_grpc_endpoint, then this "+
+			"should be set to the API token issued by Slash GraphQL")
+	flag.String("slash_grpc_endpoint", "", "Path to Slash GraphQL GRPC endpoint. If --slash_grpc_endpoint is set, "+
+		"all other TLS options and connection options will be ignored")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
 	flag.Bool("new_uids", false,

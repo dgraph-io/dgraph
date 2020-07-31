@@ -53,8 +53,6 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls_cert", "", "(optional) The Cert file provided by the client to the server.")
 	flag.String("tls_key", "", "(optional) The private key file "+
 		"provided by the client to the server.")
-	flag.String("slash_grpc_endpoint", "", "Path to Slash GraphQL GRPC endpoint. If this is set, "+
-		"all other TLS options and connection options will be ignored")
 }
 
 // LoadServerTLSConfig loads the TLS config into the server with the given parameters.
@@ -75,12 +73,13 @@ func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) 
 }
 
 // SlashTLSConfig returns the TLS config appropriate for SlashGraphQL
+// This assumes that endpoint is not empty, and in the format "domain.grpc.cloud.dg.io:443"
 func SlashTLSConfig(endpoint string) (*tls.Config, error) {
 	pool, err := generateCertPool("", true)
-	hostWithoutPort := strings.Split(endpoint, ":")[0]
 	if err != nil {
 		return nil, err
 	}
+	hostWithoutPort := strings.Split(endpoint, ":")[0]
 	return &tls.Config{
 		RootCAs:    pool,
 		ServerName: hostWithoutPort,
