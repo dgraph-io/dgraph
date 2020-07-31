@@ -110,7 +110,7 @@ func (r *reducer) run() error {
 	return thr.Finish()
 }
 
-func (r *reducer) createBadgerInternal(dir string) *badger.DB {
+func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB {
 	if r.opt.EncryptionKey != nil {
 		// Need to set zero addr in WorkerConfig before checking the license.
 		x.WorkerConfig.ZeroAddr = []string{r.opt.ZeroAddr}
@@ -129,7 +129,7 @@ func (r *reducer) createBadgerInternal(dir string) *badger.DB {
 		WithEncryptionKey(r.opt.EncryptionKey).WithCompression(bo.None)
 
 	// Overwrite badger options based on the options provided by the user.
-	r.setBadgerOptions(&opt)
+	r.setBadgerOptions(&opt, compression)
 
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
@@ -140,7 +140,7 @@ func (r *reducer) createBadgerInternal(dir string) *badger.DB {
 }
 
 func (r *reducer) createBadger(i int) *badger.DB {
-	db := r.createBadgerInternal(r.opt.shardOutputDirs[i])
+	db := r.createBadgerInternal(r.opt.shardOutputDirs[i], true)
 	r.dbs = append(r.dbs, db)
 	return db
 }
@@ -148,12 +148,18 @@ func (r *reducer) createBadger(i int) *badger.DB {
 func (r *reducer) createTmpBadger() *badger.DB {
 	tmpDir, err := ioutil.TempDir(r.opt.TmpDir, "split")
 	x.Check(err)
-	db := r.createBadgerInternal(tmpDir)
+	// Do not enable compression in temporary badger to improve performance.
+	db := r.createBadgerInternal(tmpDir, false)
 	r.tmpDbs = append(r.tmpDbs, db)
 	return db
 }
 
-func (r *reducer) setBadgerOptions(opt *badger.Options) {
+func (r *reducer) setBadgerOptions(opt *badger.Options, compression bool) {
+	if !compression {
+		opt.Compression = bo.None
+		opt.ZSTDCompressionLevel = 0
+		return
+	}
 	// Set the compression level.
 	opt.ZSTDCompressionLevel = r.state.opt.BadgerCompressionLevel
 	if r.state.opt.BadgerCompressionLevel < 1 {
