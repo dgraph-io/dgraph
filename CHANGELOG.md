@@ -1,4 +1,4 @@
-## [1.2.6] - Unreleased
+## [1.2.6] - 2020-07-31
 [1.2.6]: https://github.com/dgraph-io/dgraph/compare/v1.2.5...v1.2.6
 
 ### Changed
