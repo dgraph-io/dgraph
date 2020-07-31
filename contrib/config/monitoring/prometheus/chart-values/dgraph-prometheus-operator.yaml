@@ -64,7 +64,7 @@ prometheus:
           - default
       selector:
         matchLabels:
-          monitor: zero.dgraph-io
+          monitor: zero-dgraph-io
     - name: alpha-dgraph-io
       additionalLabels:
         app: dgraph-io
@@ -77,7 +77,7 @@ prometheus:
           - default
       selector:
         matchLabels:
-          monitor: alpha.dgraph-io
+          monitor: alpha-dgraph-io
 
 additionalPrometheusRules:
   - name: prometheus-rules-dgraph-io
