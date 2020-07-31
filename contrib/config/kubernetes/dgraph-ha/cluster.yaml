@@ -3,11 +3,13 @@ kind: ClusterConfig
 metadata:
   name: dgraph-ha-cluster
   region: us-east-2
+  version: "1.17"
 managedNodeGroups:
   - name: dgraph-ha-cluster-workers
     minSize: 3
     maxSize: 6
     desiredCapacity: 3
+    instanceType: m5.large
     labels: {role: worker}
     tags:
       nodegroup-role: worker
