@@ -83,7 +83,12 @@ func (r *reducer) run() error {
 			// Split lists are written to a separate DB first to avoid ordering issues.
 			splitWriter := tmpDb.NewManagedWriteBatch()
 
-			ci := &countIndexer{reducer: r, writer: writer, splitWriter: splitWriter, tmpDb: tmpDb}
+			ci := &countIndexer{
+				reducer: r,
+				writer: writer,
+				splitWriter: splitWriter,
+				tmpDb: tmpDb,
+			}
 			sort.Slice(partitionKeys, func(i, j int) bool {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
 			})
