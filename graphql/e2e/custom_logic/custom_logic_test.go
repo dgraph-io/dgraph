@@ -2695,9 +2695,12 @@ func TestCustomDQL(t *testing.T) {
 
 	  queryUserTweetCounts: [UserTweetCount] @custom(dql: """
 		query {
-			queryUserTweetCounts(func: type(User)) {
+			var(func: type(User)) {
+				tc as count(User.tweets)
+			}
+			queryUserTweetCounts(func: uid(tc), orderdesc: val(tc)) {
 				screen_name: User.screen_name
-				tweetCount: count(User.tweets)
+				tweetCount: val(tc)
 			}
 		}
 		""")
