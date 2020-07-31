@@ -841,7 +841,7 @@ func WithAuthorizationCredentials(authToken string) grpc.DialOption {
 // --user and --password specify the credentials we should use to login with the server
 func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	var alphas string
-	if conf.IsSet("slash_grpc_endpoint") {
+	if conf.GetString("slash_grpc_endpoint") != "" {
 		alphas = conf.GetString("slash_grpc_endpoint")
 	} else {
 		alphas = conf.GetString("alpha")
@@ -868,7 +868,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	}
 
 	dialOpts := []grpc.DialOption{}
-	if conf.IsSet("slash_grpc_endpoint") && conf.IsSet("auth_token") {
+	if conf.GetString("slash_grpc_endpoint") != "" && conf.IsSet("auth_token") {
 		dialOpts = append(dialOpts, WithAuthorizationCredentials(conf.GetString("auth_token")))
 	}
 

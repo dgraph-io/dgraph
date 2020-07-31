@@ -383,12 +383,12 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 	}
 
 	dialOpts := []grpc.DialOption{}
-	if conf.IsSet("slash_grpc_endpoint") && conf.IsSet("auth_token") {
+	if conf.GetString("slash_grpc_endpoint") != "" && conf.IsSet("auth_token") {
 		dialOpts = append(dialOpts, x.WithAuthorizationCredentials(conf.GetString("auth_token")))
 	}
 
 	var tlsConfig *tls.Config = nil
-	if conf.IsSet("slash_grpc_endpoint") {
+	if conf.GetString("slash_grpc_endpoint") != "" {
 		var tlsErr error
 		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
 		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
@@ -421,7 +421,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 
 func run() error {
 	var zero string
-	if Live.Conf.IsSet("slash_grpc_endpoint") {
+	if Live.Conf.GetString("slash_grpc_endpoint") != "" {
 		zero = Live.Conf.GetString("slash_grpc_endpoint")
 	} else {
 		zero = Live.Conf.GetString("zero")

@@ -89,7 +89,7 @@ func SlashTLSConfig(endpoint string) (*tls.Config, error) {
 
 // LoadClientTLSConfig loads the TLS config into the client with the given parameters.
 func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
-	if v.IsSet("slash_grpc_endpoint") {
+	if v.GetString("slash_grpc_endpoint") != "" {
 		return SlashTLSConfig(v.GetString("slash_grpc_endpoint"))
 	}
 
