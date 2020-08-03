@@ -104,6 +104,10 @@ func TestGrandpa_BaseCase(t *testing.T) {
 }
 
 func TestGrandpa_DifferentChains(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	// this asserts that all validators finalize the same block if they all see the
 	// same pre-votes and pre-commits, even if their chains are different lengths
 	kr, err := keystore.NewEd25519Keyring()

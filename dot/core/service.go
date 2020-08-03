@@ -70,6 +70,9 @@ type Service struct {
 	msgSend chan<- network.Message // send messages to network service
 	blkRec  <-chan types.Block     // receive blocks from BABE session
 
+	blockAddCh   chan *types.Block // receive blocks added to blocktree
+	blockAddChID byte
+
 	// State variables
 	lock    *sync.Mutex
 	started atomic.Value
@@ -137,6 +140,12 @@ func NewService(cfg *Config) (*Service, error) {
 		return nil, err
 	}
 
+	blockAddCh := make(chan *types.Block, 16)
+	id, err := cfg.BlockState.RegisterImportedChannel(blockAddCh)
+	if err != nil {
+		return nil, err
+	}
+
 	srv := &Service{
 		logger:                  logger,
 		rt:                      cfg.Runtime,
@@ -155,6 +164,8 @@ func NewService(cfg *Config) (*Service, error) {
 		verifier:                cfg.Verifier,
 		isFinalityAuthority:     cfg.IsFinalityAuthority,
 		lock:                    &sync.Mutex{},
+		blockAddCh:              blockAddCh,
+		blockAddChID:            id,
 	}
 
 	if cfg.NewBlocks != nil {
@@ -177,6 +188,9 @@ func (s *Service) Start() error {
 	// start receiving messages from network service
 	go s.receiveMessages()
 
+	// start handling imported blocks
+	go s.handleBlocks()
+
 	if s.isFinalityAuthority && s.finalityGadget != nil {
 		s.logger.Debug("routing finality gadget messages")
 		go s.sendVoteMessages()
@@ -193,6 +207,9 @@ func (s *Service) Stop() error {
 
 	// close channel to network service
 	if s.started.Load().(bool) {
+		s.blockState.UnregisterImportedChannel(s.blockAddChID)
+		close(s.blockAddCh)
+
 		if s.msgSend != nil {
 			close(s.msgSend)
 		}
@@ -221,6 +238,15 @@ func (s *Service) safeMsgSend(msg network.Message) error {
 
 	s.msgSend <- msg
 	return nil
+}
+
+func (s *Service) handleBlocks() {
+	for block := range s.blockAddCh {
+		err := s.handleRuntimeChanges(block.Header)
+		if err != nil {
+			log.Warn("failed to handle runtime change for block", "block", block.Header.Hash())
+		}
+	}
 }
 
 // receiveBlocks starts receiving blocks from the BABE session
@@ -275,12 +301,7 @@ func (s *Service) handleReceivedBlock(block *types.Block) (err error) {
 		Digest:         block.Header.Digest,
 	}
 
-	err = s.safeMsgSend(msg)
-	if err != nil {
-		return err
-	}
-
-	return s.HandleRuntimeChanges(block.Header)
+	return s.safeMsgSend(msg)
 }
 
 // handleReceivedMessage handles messages from the network service
@@ -309,9 +330,9 @@ func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
 	return err
 }
 
-// HandleRuntimeChanges checks if changes to the runtime code have occurred; if so, load the new runtime
+// handleRuntimeChanges checks if changes to the runtime code have occurred; if so, load the new runtime
 // It also updates the BABE service and block verifier with the new runtime
-func (s *Service) HandleRuntimeChanges(header *types.Header) error {
+func (s *Service) handleRuntimeChanges(header *types.Header) error {
 	currentCodeHash, err := s.storageState.LoadCodeHash()
 	if err != nil {
 		return err

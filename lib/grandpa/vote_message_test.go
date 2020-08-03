@@ -57,6 +57,10 @@ func TestCheckForEquivocation_NoEquivocation(t *testing.T) {
 }
 
 func TestCheckForEquivocation_WithEquivocation(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	st := newTestState(t)
 	voters := newTestVoters(t)
 

@@ -140,7 +140,7 @@ func TestHandleRuntimeChanges(t *testing.T) {
 	err = s.storageState.SetStorage([]byte(":code"), testRuntime)
 	require.Nil(t, err)
 
-	err = s.HandleRuntimeChanges(testGenesisHeader)
+	err = s.handleRuntimeChanges(testGenesisHeader)
 	require.Nil(t, err)
 }
 
