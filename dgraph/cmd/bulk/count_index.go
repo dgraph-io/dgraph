@@ -40,10 +40,12 @@ type current struct {
 
 type countIndexer struct {
 	*reducer
-	writer *badger.StreamWriter
-	cur    current
-	counts map[int][]uint64
-	wg     sync.WaitGroup
+	writer      *badger.StreamWriter
+	splitWriter *badger.WriteBatch
+	tmpDb       *badger.DB
+	cur         current
+	counts      map[int][]uint64
+	wg          sync.WaitGroup
 }
 
 // addUid adds the uid from rawKey to a count index if a count index is
