@@ -377,7 +377,7 @@ func createSyncService(cfg *Config, st *state.Service, bp BlockProducer, fg core
 	var dh *core.DigestHandler
 	var err error
 	if cfg.Core.BabeAuthority || cfg.Core.GrandpaAuthority {
-		dh, err = core.NewDigestHandler(st.Block, bp, fg)
+		dh, err = core.NewDigestHandler(st.Block, bp, fg, verifier)
 		if err != nil {
 			return nil, err
 		}

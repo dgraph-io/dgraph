@@ -59,6 +59,64 @@ func newTestVerificationManager(t *testing.T, descriptor *Descriptor) *Verificat
 	return vm
 }
 
+func TestVerificationManager_SetAuthorityChangeAtBlock(t *testing.T) {
+	descriptor := &Descriptor{
+		AuthorityData: []*types.BABEAuthorityData{{Weight: 1}},
+		Randomness:    [RandomnessLength]byte{77},
+		Threshold:     big.NewInt(99),
+	}
+
+	vm := newTestVerificationManager(t, descriptor)
+	require.Equal(t, []common.Hash{vm.blockState.GenesisHash()}, vm.branches[0])
+	require.Equal(t, descriptor, vm.descriptors[vm.blockState.GenesisHash()])
+
+	block1a := &types.Header{
+		Number:     big.NewInt(1),
+		ParentHash: vm.blockState.GenesisHash(),
+	}
+
+	block1b := &types.Header{
+		ExtrinsicsRoot: common.Hash{0x8},
+		Number:         big.NewInt(1),
+		ParentHash:     vm.blockState.GenesisHash(),
+	}
+
+	err := vm.blockState.AddBlock(&types.Block{
+		Header: block1a,
+		Body:   &types.Body{},
+	})
+	require.NoError(t, err)
+	err = vm.blockState.AddBlock(&types.Block{
+		Header: block1b,
+		Body:   &types.Body{},
+	})
+	require.NoError(t, err)
+
+	authsA := []*types.BABEAuthorityData{{Weight: 77}}
+	vm.SetAuthorityChangeAtBlock(block1a, authsA)
+	require.Equal(t, []int64{1, 0}, vm.branchNums)
+	require.Equal(t, []common.Hash{block1a.Hash()}, vm.branches[1])
+
+	expected := &Descriptor{
+		AuthorityData: authsA,
+		Randomness:    descriptor.Randomness,
+		Threshold:     descriptor.Threshold,
+	}
+	require.Equal(t, expected, vm.descriptors[block1a.Hash()])
+
+	authsB := []*types.BABEAuthorityData{{Weight: 88}}
+	vm.SetAuthorityChangeAtBlock(block1b, authsB)
+	require.Equal(t, []int64{1, 0}, vm.branchNums)
+	require.Equal(t, []common.Hash{block1a.Hash(), block1b.Hash()}, vm.branches[1])
+
+	expected = &Descriptor{
+		AuthorityData: authsB,
+		Randomness:    descriptor.Randomness,
+		Threshold:     descriptor.Threshold,
+	}
+	require.Equal(t, expected, vm.descriptors[block1b.Hash()])
+}
+
 func TestVerificationManager_VerifyBlock(t *testing.T) {
 	babeService := createTestService(t, &ServiceConfig{
 		EpochThreshold: maxThreshold,

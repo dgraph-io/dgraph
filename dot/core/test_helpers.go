@@ -49,6 +49,10 @@ func (v *mockVerifier) SetRuntimeChangeAtBlock(header *types.Header, rt *runtime
 	return nil
 }
 
+func (v *mockVerifier) SetAuthorityChangeAtBlock(header *types.Header, auths []*types.BABEAuthorityData) {
+
+}
+
 // mockBlockProducer implements the BlockProducer interface
 type mockBlockProducer struct {
 	auths []*types.BABEAuthorityData

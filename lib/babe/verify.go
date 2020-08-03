@@ -98,6 +98,33 @@ func (v *VerificationManager) SetRuntimeChangeAtBlock(header *types.Header, rt *
 	return nil
 }
 
+// SetAuthorityChangeAtBlock sets an authority change at the given block and all descendants of that block
+func (v *VerificationManager) SetAuthorityChangeAtBlock(header *types.Header, authorities []*types.BABEAuthorityData) {
+	v.lock.Lock()
+
+	num := header.Number.Int64()
+	desc := &Descriptor{
+		AuthorityData: authorities,
+	}
+
+	// find branch that header is on, set randomness and threshold to latest known on that chain
+	for _, bn := range v.branchNums {
+		if num >= bn {
+			for _, hash := range v.branches[bn] {
+				// found most recent ancestor descriptor
+				if is, _ := v.blockState.IsDescendantOf(hash, header.Hash()); is {
+					desc.Randomness = v.descriptors[hash].Randomness
+					desc.Threshold = v.descriptors[hash].Threshold
+					break
+				}
+			}
+		}
+	}
+
+	v.lock.Unlock()
+	v.setDescriptorChangeAtBlock(header, desc)
+}
+
 func (v *VerificationManager) setDescriptorChangeAtBlock(header *types.Header, descriptor *Descriptor) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -108,6 +135,11 @@ func (v *VerificationManager) setDescriptorChangeAtBlock(header *types.Header, d
 	}
 
 	for i, bn := range v.branchNums {
+		// number already stored, don't need to add to branch number slice
+		if bn == num {
+			break
+		}
+
 		if num < bn || i == len(v.branchNums)-1 {
 			pre := make([]int64, len(v.branchNums[:i]))
 			copy(pre, v.branchNums[:i])

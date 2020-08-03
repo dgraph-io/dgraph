@@ -55,7 +55,7 @@ func newTestDigestHandler(t *testing.T, withBABE, withGrandpa bool) *DigestHandl
 	}
 
 	time.Sleep(time.Second)
-	dh, err := NewDigestHandler(stateSrvc.Block, bp, fg)
+	dh, err := NewDigestHandler(stateSrvc.Block, bp, fg, &mockVerifier{})
 	require.NoError(t, err)
 	return dh
 }

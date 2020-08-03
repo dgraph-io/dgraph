@@ -30,6 +30,7 @@ type DigestHandler struct {
 	blockState          BlockState
 	grandpa             FinalityGadget
 	babe                BlockProducer
+	verifier            Verifier
 	isFinalityAuthority bool
 	isBlockProducer     bool
 
@@ -76,7 +77,7 @@ type resume struct {
 }
 
 // NewDigestHandler returns a new DigestHandler
-func NewDigestHandler(blockState BlockState, babe BlockProducer, grandpa FinalityGadget) (*DigestHandler, error) {
+func NewDigestHandler(blockState BlockState, babe BlockProducer, grandpa FinalityGadget, verifier Verifier) (*DigestHandler, error) {
 	imported := make(chan *types.Block)
 	finalized := make(chan *types.Header)
 	iid, err := blockState.RegisterImportedChannel(imported)
@@ -96,6 +97,7 @@ func NewDigestHandler(blockState BlockState, babe BlockProducer, grandpa Finalit
 		blockState:          blockState,
 		grandpa:             grandpa,
 		babe:                babe,
+		verifier:            verifier,
 		isFinalityAuthority: isFinalityAuthority,
 		isBlockProducer:     isBlockProducer,
 		stopped:             true,
@@ -153,7 +155,7 @@ func (h *DigestHandler) handleBlockImport() {
 		}
 
 		if h.isBlockProducer {
-			h.handleBABEChangesOnImport(block.Header.Number)
+			h.handleBABEChangesOnImport(block.Header)
 		}
 	}
 }
@@ -169,37 +171,43 @@ func (h *DigestHandler) handleBlockFinalization() {
 		}
 
 		if h.isBlockProducer {
-			h.handleBABEChangesOnFinalization(header.Number)
+			h.handleBABEChangesOnFinalization(header)
 		}
 	}
 }
 
-func (h *DigestHandler) handleBABEChangesOnImport(num *big.Int) {
+func (h *DigestHandler) handleBABEChangesOnImport(header *types.Header) {
+	num := header.Number
 	resume := h.babeResume
 	if resume != nil && num.Cmp(resume.atBlock) == 0 {
 		h.babe.SetAuthorities(h.babeAuths)
+		h.verifier.SetAuthorityChangeAtBlock(header, h.babeAuths)
 		h.babeResume = nil
 	}
 
 	fc := h.babeForcedChange
 	if fc != nil && num.Cmp(fc.atBlock) == 0 {
 		h.babe.SetAuthorities(fc.auths)
+		h.verifier.SetAuthorityChangeAtBlock(header, fc.auths)
 		h.babeForcedChange = nil
 	}
 }
 
-func (h *DigestHandler) handleBABEChangesOnFinalization(num *big.Int) {
+func (h *DigestHandler) handleBABEChangesOnFinalization(header *types.Header) {
+	num := header.Number
 	pause := h.babePause
 	if pause != nil && num.Cmp(pause.atBlock) == 0 {
 		// save authority data for Resume
 		h.babeAuths = h.babe.Authorities()
 		h.babe.SetAuthorities([]*types.BABEAuthorityData{})
+		h.verifier.SetAuthorityChangeAtBlock(header, []*types.BABEAuthorityData{})
 		h.babePause = nil
 	}
 
 	sc := h.babeScheduledChange
 	if sc != nil && num.Cmp(sc.atBlock) == 0 {
 		h.babe.SetAuthorities(sc.auths)
+		h.verifier.SetAuthorityChangeAtBlock(header, sc.auths)
 		h.babeScheduledChange = nil
 	}
 
