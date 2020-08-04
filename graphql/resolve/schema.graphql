@@ -241,6 +241,6 @@ type Y implements X @auth(
 }
 
 type Tweets {
-    name: String! @id
+    id: String! @id
     score: Int
 }

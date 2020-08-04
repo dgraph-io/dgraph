@@ -1342,16 +1342,16 @@
 - name: "getType by id should work"
   gqlquery: |-
     query {
-      getTweets(name: "1286891968727982081") {
+      getTweets(id: "1286891968727982081") {
         score
-        name
+        id
       }
     }
   dgquery: |-
     query {
-      getTweets(func: eq(Tweets.name, "1286891968727982081")) @filter(type(Tweets)) {
+      getTweets(func: eq(Tweets.id, "1286891968727982081")) @filter(type(Tweets)) {
         score : Tweets.score
-        name : Tweets.name
+        id : Tweets.id
         dgraph.uid : uid
       }
     }
