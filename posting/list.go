@@ -592,6 +592,7 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 					deleteBelowTs = effectiveTs
 					continue
 				}
+				mpost.StartTs = startTs
 				posts = append(posts, mpost)
 			}
 		}
