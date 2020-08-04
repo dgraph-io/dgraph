@@ -29,9 +29,9 @@ NEW_THEME="master"
 # and then the older versions in descending order, such that the
 # build script can place the artifact in an appropriate location.
 
-
 # these versions use new theme
 NEW_VERSIONS=(
+        'v20.07'
 	'master'
 )
 
