@@ -734,7 +734,16 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 func (f *field) XIDArg() string {
 	xidArgName := ""
 	passwordField := f.Type().PasswordField()
-	for _, arg := range f.field.Definition.Arguments {
+
+	args := f.field.Definition.Arguments
+	if len(f.field.Definition.Arguments) == 0 {
+		// For acl endpoints like getCurrentUser which redirects to getUser resolver, the field
+		// definition doesn't change and hence we can't find the arguments for getUser. As a
+		// fallback, we get the args from the query field arguments in that case.
+		args = f.op.inSchema.schema.Query.Fields.ForName(f.Name()).Arguments
+	}
+
+	for _, arg := range args {
 		if arg.Type.Name() != IDType && (passwordField == nil ||
 			arg.Name != passwordField.Name()) {
 			xidArgName = arg.Name
