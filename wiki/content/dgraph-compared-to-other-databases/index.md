@@ -1,5 +1,9 @@
 +++
 title = "Dgraph compared to other databases"
+[menu.main]
+  url = "/dgraph-compared-to-other-databases/"
+  identifier = "dgraph-compared-to-other-databases"
+  weight = 13
 +++
 
 This page attempts to draw a comparison between Dgraph and other popular graph databases/datastores. The summaries that follow are brief descriptions that may help a person decide if Dgraph will suit their needs.
@@ -22,7 +26,7 @@ Graph databases optimize internal data representation to be able to do graph ope
 
 ### Language
 
-Dgraph supports [GraphQL+-]({{< relref "query-language/index.md#graphql">}}),
+Dgraph supports [GraphQL+-]({{< relref "query-language/_index.md#graphql">}}),
 a variation of [GraphQL](https://graphql.org/), a query language created by
 Facebook. 
 GraphQL+-, as GraphQL itself, allows results to be produced as subgraph rather than lists.
