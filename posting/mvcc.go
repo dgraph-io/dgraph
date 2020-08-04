@@ -150,12 +150,12 @@ func (ir *incrRollupi) Process(closer *y.Closer) {
 		case <-forceRollupTick.C:
 			batch = ir.keysPool.Get().(*[][]byte)
 			if len(*batch) > 0 {
-				dorollup()
+				doRollup()
 			} else {
 				ir.keysPool.Put(batch)
 			}
 		case batch = <-ir.keysCh:
-			dorollup()
+			doRollup()
 			// throttle to 1 batch = 64 rollups per 100 ms.
 			<-limiter.C
 		}
