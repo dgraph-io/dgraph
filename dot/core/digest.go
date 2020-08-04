@@ -22,6 +22,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/scale"
+	log "github.com/ChainSafe/log15"
 )
 
 // DigestHandler is used to handle consensus messages and relevant authority updates to BABE and GRANDPA
@@ -180,14 +181,20 @@ func (h *DigestHandler) handleBABEChangesOnImport(header *types.Header) {
 	num := header.Number
 	resume := h.babeResume
 	if resume != nil && num.Cmp(resume.atBlock) == 0 {
-		h.babe.SetAuthorities(h.babeAuths)
+		err := h.babe.SetAuthorities(h.babeAuths)
+		if err != nil {
+			log.Warn("error setting authorities", "error", err)
+		}
 		h.verifier.SetAuthorityChangeAtBlock(header, h.babeAuths)
 		h.babeResume = nil
 	}
 
 	fc := h.babeForcedChange
 	if fc != nil && num.Cmp(fc.atBlock) == 0 {
-		h.babe.SetAuthorities(fc.auths)
+		err := h.babe.SetAuthorities(fc.auths)
+		if err != nil {
+			log.Warn("error setting authorities", "error", err)
+		}
 		h.verifier.SetAuthorityChangeAtBlock(header, fc.auths)
 		h.babeForcedChange = nil
 	}
@@ -199,14 +206,20 @@ func (h *DigestHandler) handleBABEChangesOnFinalization(header *types.Header) {
 	if pause != nil && num.Cmp(pause.atBlock) == 0 {
 		// save authority data for Resume
 		h.babeAuths = h.babe.Authorities()
-		h.babe.SetAuthorities([]*types.BABEAuthorityData{})
+		err := h.babe.SetAuthorities([]*types.BABEAuthorityData{})
+		if err != nil {
+			log.Warn("error setting authorities", "error", err)
+		}
 		h.verifier.SetAuthorityChangeAtBlock(header, []*types.BABEAuthorityData{})
 		h.babePause = nil
 	}
 
 	sc := h.babeScheduledChange
 	if sc != nil && num.Cmp(sc.atBlock) == 0 {
-		h.babe.SetAuthorities(sc.auths)
+		err := h.babe.SetAuthorities(sc.auths)
+		if err != nil {
+			log.Warn("error setting authorities", "error", err)
+		}
 		h.verifier.SetAuthorityChangeAtBlock(header, sc.auths)
 		h.babeScheduledChange = nil
 	}
@@ -360,7 +373,10 @@ func (h *DigestHandler) handleOnDisabled(d *types.ConsensusDigest) error {
 			}
 		}
 
-		h.babe.SetAuthorities(next)
+		err := h.babe.SetAuthorities(next)
+		if err != nil {
+			return err
+		}
 	} else {
 		curr := h.grandpa.Authorities()
 		next := []*types.GrandpaAuthorityData{}

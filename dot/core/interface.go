@@ -103,7 +103,7 @@ type BlockProducer interface {
 	GetBlockChannel() <-chan types.Block
 	SetRuntime(*runtime.Runtime) error
 	Authorities() []*types.BABEAuthorityData
-	SetAuthorities(a []*types.BABEAuthorityData)
+	SetAuthorities(a []*types.BABEAuthorityData) error
 }
 
 // Verifier is the interface for the block verifier

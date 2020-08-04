@@ -72,8 +72,9 @@ func (bp *mockBlockProducer) Authorities() []*types.BABEAuthorityData {
 	return bp.auths
 }
 
-func (bp *mockBlockProducer) SetAuthorities(a []*types.BABEAuthorityData) {
+func (bp *mockBlockProducer) SetAuthorities(a []*types.BABEAuthorityData) error {
 	bp.auths = a
+	return nil
 }
 
 // GetBlockChannel returns a new channel

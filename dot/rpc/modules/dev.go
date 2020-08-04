@@ -61,8 +61,8 @@ func (m *DevModule) Control(r *http.Request, req *[]string, res *string) error {
 	return err
 }
 
-// SetAuthorities dev rpc method that sets authorities for block producer
-func (m *DevModule) SetAuthorities(r *http.Request, req *[]interface{}, res *string) error {
+// SetBlockProducerAuthorities dev rpc method that sets authorities for block producer
+func (m *DevModule) SetBlockProducerAuthorities(r *http.Request, req *[]interface{}, res *string) error {
 	ab := []*types.BABEAuthorityData{}
 	for _, v := range *req {
 		kb := crypto.PublicAddressToByteArray(common.Address(v.([]interface{})[0].(string)))
@@ -76,7 +76,8 @@ func (m *DevModule) SetAuthorities(r *http.Request, req *[]interface{}, res *str
 		}
 		ab = append(ab, bd)
 	}
-	m.blockProducerAPI.SetAuthorities(ab)
+
+	err := m.blockProducerAPI.SetAuthorities(ab)
 	*res = fmt.Sprintf("set %v block producer authorities", len(ab))
-	return nil
+	return err
 }

@@ -260,9 +260,22 @@ func (b *Service) Authorities() []*types.BABEAuthorityData {
 	return b.authorityData
 }
 
-// SetAuthorities sets the current BABE authorities
-func (b *Service) SetAuthorities(a []*types.BABEAuthorityData) {
-	b.authorityData = a
+// SetAuthorities sets the current Block Producer Authorities and sets Authority index
+func (b *Service) SetAuthorities(data []*types.BABEAuthorityData) error {
+	// check key is in new Authorities list before we update Authorities Data
+	pub := b.keypair.Public()
+	found := false
+	for _, auth := range data {
+		if bytes.Equal(pub.Encode(), auth.ID.Encode()) {
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("key not in BABE authority data")
+	}
+
+	b.authorityData = data
+	return b.setAuthorityIndex()
 }
 
 // SetEpochData will set the authorityData and randomness

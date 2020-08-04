@@ -76,12 +76,30 @@ func TestDevControl_Network(t *testing.T) {
 	require.False(t, net.IsStopped())
 }
 
-func TestDevModule_SetAuthorities(t *testing.T) {
+func TestDevModule_SetBlockProducerAuthorities(t *testing.T) {
 	bs := newBABEService(t)
 	m := NewDevModule(bs, nil)
+	aBefore := bs.Authorities()
 	req := &[]interface{}{[]interface{}{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", float64(1)}}
 	var res string
-	err := m.SetAuthorities(nil, req, &res)
+	err := m.SetBlockProducerAuthorities(nil, req, &res)
 	require.NoError(t, err)
 	require.Equal(t, "set 1 block producer authorities", res)
+	aAfter := bs.Authorities()
+	// authorities before and after should be different since they were changed
+	require.NotEqual(t, aBefore, aAfter)
+}
+
+func TestDevModule_SetBlockProducerAuthorities_NotFound(t *testing.T) {
+	bs := newBABEService(t)
+	m := NewDevModule(bs, nil)
+	aBefore := bs.Authorities()
+
+	req := &[]interface{}{[]interface{}{"5FrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", float64(1)}}
+	var res string
+	err := m.SetBlockProducerAuthorities(nil, req, &res)
+	require.EqualError(t, err, "key not in BABE authority data")
+	aAfter := bs.Authorities()
+	// authorities before and after should be equal since they should not have changed (due to key error)
+	require.Equal(t, aBefore, aAfter)
 }
