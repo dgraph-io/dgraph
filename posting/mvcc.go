@@ -117,7 +117,7 @@ func (ir *incrRollupi) Process(closer *y.Closer) {
 
 	var batch *[][]byte
 
-	dorollup := func() {
+	doRollup := func() {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
 			hash := z.MemHash(key)
