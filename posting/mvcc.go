@@ -83,22 +83,16 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
 
-var lastSentTs int64 // keep track of ts of last batch rolled up.
 func (ir *incrRollupi) addKeyToBatch(key []byte) {
 	batch := ir.keysPool.Get().(*[][]byte)
 	*batch = append(*batch, key)
-	sent := atomic.LoadInt64(&lastSentTs)
-	now := time.Now().Unix()
-
-	// Rollup only if batch len is 64 or it has been more than 2 seconds since last batch.
-	if now-sent < 2 && len(*batch) < 64 {
+	if len(*batch) < 64 {
 		ir.keysPool.Put(batch)
 		return
 	}
 
 	select {
 	case ir.keysCh <- batch:
-		atomic.StoreInt64(&lastSentTs, now)
 	default:
 		// Drop keys and build the batch again. Lossy behavior.
 		*batch = (*batch)[:0]

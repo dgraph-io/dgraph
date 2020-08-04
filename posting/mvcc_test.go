@@ -25,13 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func BenchmarkIncrRollupAtomic(b *testing.B) {
-	buf := []byte("key")
-	for n := 0; n < b.N; n++ {
-		IncrRollup.addKeyToBatch(buf)
-	}
-}
-
 func TestRollupTimestamp(t *testing.T) {
 	key := x.DataKey("rollup", 1)
 	// 3 Delta commits.
