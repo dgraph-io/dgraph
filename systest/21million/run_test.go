@@ -30,7 +30,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 // JSON output can be hundreds of lines and diffs can scroll off the terminal before you
@@ -74,24 +73,31 @@ func TestQueries(t *testing.T) {
 
 			// The test query and expected result are separated by a delimiter.
 			bodies := strings.SplitN(contents, "\n---\n", 2)
+			// Dgraph can get into unhealthy state sometime. So, add retry for every query.
+			for retry := 0; retry < 3; retry++ {
+				// If a query takes too long to run, it probably means dgraph is stuck and there's
+				// no point in waiting longer or trying more tests.
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				resp, err := dg.NewTxn().Query(ctx, bodies[0])
+				cancel()
 
-			// If a query takes too long to run, it probably means dgraph is stuck and there's
-			// no point in waiting longer or trying more tests.
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-			resp, err := dg.NewTxn().Query(ctx, bodies[0])
-			cancel()
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatal("aborting test due to query timeout")
-			}
-			require.NoError(t, err)
+				if retry < 2 && (err != nil || ctx.Err() == context.DeadlineExceeded) {
+					continue
+				}
 
-			t.Logf("running %s", file.Name())
-			if *savedir != "" {
-				savepath = path.Join(*savedir, file.Name())
-			}
+				if ctx.Err() == context.DeadlineExceeded {
+					t.Fatal("aborting test due to query timeout")
+				}
 
-			if !testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet) {
-				diffs++
+				t.Logf("running %s", file.Name())
+				if *savedir != "" {
+					savepath = path.Join(*savedir, file.Name())
+				}
+
+				if !testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet) {
+					diffs++
+				}
+				break
 			}
 		})
 	}
