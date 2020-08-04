@@ -18,6 +18,8 @@ PUBLIC="${PUBLIC:-public}"
 LOOP="${LOOP:-true}"
 # Binary of hugo command to run.
 HUGO="${HUGO:-hugo}"
+OLD_THEME="old-theme"
+NEW_THEME="master"
 
 # TODO - Maybe get list of released versions from Github API and filter
 # those which have docs.
@@ -26,9 +28,16 @@ HUGO="${HUGO:-hugo}"
 # append '(latest)' to the version string, followed by the master version,
 # and then the older versions in descending order, such that the
 # build script can place the artifact in an appropriate location.
-VERSIONS_ARRAY=(
-	'v20.03.4'
+
+
+# these versions use new theme
+NEW_VERSIONS=(
 	'master'
+)
+
+# these versions use old theme
+OLD_VERSIONS=(
+	'v20.03.4'
 	'v20.03.3'
 	'v20.03.1'
 	'v20.03.0'
@@ -51,6 +60,8 @@ VERSIONS_ARRAY=(
 	'v1.0.7'
 	'v1.0.6'
 )
+
+VERSIONS_ARRAY=("${NEW_VERSIONS[@]}" "${OLD_VERSIONS[@]}")
 
 joinVersions() {
 	versions=$(printf ",%s" "${VERSIONS_ARRAY[@]}")
@@ -139,21 +150,42 @@ while true; do
 
 	currentBranch=$(git rev-parse --abbrev-ref HEAD)
 
-	# Lets check if the theme was updated.
+	if [ "$firstRun" = 1 ];
+	then
+		# clone the hugo-docs theme if not already there
+		[ ! -d 'themes/hugo-docs' ] && git clone https://github.com/dgraph-io/hugo-docs themes/hugo-docs
+	fi
+
+	# Lets check if the new theme was updated.
 	pushd themes/hugo-docs > /dev/null
 	git remote update > /dev/null
 	themeUpdated=1
-	if branchUpdated "master" ; then
+	if branchUpdated "${NEW_THEME}" ; then
 		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
 		themeUpdated=0
 	fi
 	popd > /dev/null
 
-	# Now lets check the theme.
 	echo -e "$(date)  Starting to check branches."
 	git remote update > /dev/null
 
-	for version in "${VERSIONS_ARRAY[@]}"
+	for version in "${NEW_VERSIONS[@]}"
+	do
+		checkAndUpdate "$version"
+	done
+
+	# Lets check if the old theme was updated.
+	pushd themes/hugo-docs > /dev/null
+	themeUpdated=1
+	if branchUpdated "${OLD_THEME}" ; then
+		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
+		themeUpdated=0
+	fi
+	popd > /dev/null
+
+	git remote update > /dev/null
+
+	for version in "${OLD_VERSIONS[@]}"
 	do
 		checkAndUpdate "$version"
 	done

@@ -1,5 +1,10 @@
 +++
 title = "Dgraph Releases"
+[menu.main]
+  url = "/releases/"
+  name = "Releases"
+  identifier = "releases"
+  weight = 14
 +++
 
 Dgraph releases starting with v20.03 follow [calendar versioning](https://calver.org).
