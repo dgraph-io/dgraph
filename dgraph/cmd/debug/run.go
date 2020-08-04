@@ -385,14 +385,10 @@ func history(lookup []byte, itr *badger.Iterator) {
 		if meta&posting.BitDeltaPosting > 0 {
 			plist := &pb.PostingList{}
 			x.Check(plist.Unmarshal(val))
-
-			fmt.Fprintf(&buf, " postings: %+v ", plist.Postings)
-
 			for _, p := range plist.Postings {
 				appendPosting(&buf, p)
 			}
 		}
-
 		if meta&posting.BitCompletePosting > 0 {
 			var plist pb.PostingList
 			x.Check(plist.Unmarshal(val))
