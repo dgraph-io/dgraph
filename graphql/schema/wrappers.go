@@ -87,7 +87,6 @@ const (
 	HTTPMutation         MutationType = "http"
 	NotSupportedMutation MutationType = "notsupported"
 	IDType                            = "ID"
-	IDArgName                         = "id"
 	InputArgName                      = "input"
 	FilterArgName                     = "filter"
 )
@@ -735,8 +734,8 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 func (f *field) XIDArg() string {
 	xidArgName := ""
 	passwordField := f.Type().PasswordField()
-	for _, arg := range f.field.Arguments {
-		if arg.Name != IDArgName && (passwordField == nil ||
+	for _, arg := range f.field.Definition.Arguments {
+		if arg.Type.Name() != IDType && (passwordField == nil ||
 			arg.Name != passwordField.Name()) {
 			xidArgName = arg.Name
 		}

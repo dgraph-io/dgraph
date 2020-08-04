@@ -1326,7 +1326,7 @@
         }
       }
     }
-  dgquery: |
+  dgquery: |-
     query {
       getPost(func: uid(0x1)) @filter(type(Post)) {
         postID : uid
@@ -1337,5 +1337,21 @@
           id : uid
           url : Comment.url
         }
+      }
+    }
+- name: "getType by id should work"
+  gqlquery: |-
+    query {
+      getTweets(name: "1286891968727982081") {
+        score
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getTweets(func: eq(Tweets.name, "1286891968727982081")) @filter(type(Tweets)) {
+        score : Tweets.score
+        name : Tweets.name
+        dgraph.uid : uid
       }
     }

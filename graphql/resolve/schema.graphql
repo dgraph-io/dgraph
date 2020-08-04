@@ -239,3 +239,8 @@ type Y implements X @auth(
 ){
   userRole: String @search(by: [hash])
 }
+
+type Tweets {
+    name: String! @id
+    score: Int
+}
