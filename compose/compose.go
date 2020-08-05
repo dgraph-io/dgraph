@@ -229,7 +229,7 @@ func getAlpha(idx int) service {
 
 func getJaeger() service {
 	svc := service{
-		Image:         "jaegertracing/all-in-one:latest",
+		Image:         "jaegertracing/all-in-one:1.18",
 		ContainerName: "jaeger",
 		WorkingDir:    "/working/jaeger",
 		Ports: []string{
@@ -267,7 +267,7 @@ func addMetrics(cfg *composeConfig) {
 	cfg.Volumes["grafana-volume"] = stringMap{}
 
 	cfg.Services["node-exporter"] = service{
-		Image:         "quay.io/prometheus/node-exporter",
+		Image:         "quay.io/prometheus/node-exporter:v1.0.1",
 		ContainerName: "node-exporter",
 		Pid:           "host",
 		WorkingDir:    "/working/jaeger",
@@ -280,7 +280,7 @@ func addMetrics(cfg *composeConfig) {
 	}
 
 	cfg.Services["prometheus"] = service{
-		Image:         "prom/prometheus",
+		Image:         "prom/prometheus:v2.20.1",
 		ContainerName: "prometheus",
 		Hostname:      "prometheus",
 		Ports: []string{
@@ -302,7 +302,7 @@ func addMetrics(cfg *composeConfig) {
 	}
 
 	cfg.Services["grafana"] = service{
-		Image:         "grafana/grafana",
+		Image:         "grafana/grafana:7.1.2",
 		ContainerName: "grafana",
 		Hostname:      "grafana",
 		Ports: []string{
