@@ -153,7 +153,7 @@ func (gs *graphqlSubscription) Subscribe(
 		}
 	}
 
-	if len(header) == 0 || customClaims.StandardClaims.ExpiresAt == nil {
+	if customClaims.StandardClaims.ExpiresAt == nil {
 		customClaims.StandardClaims.ExpiresAt = jwt.At(time.Time{})
 	}
 	req := &schema.Request{
