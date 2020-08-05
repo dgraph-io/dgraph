@@ -21,6 +21,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/services"
@@ -104,6 +105,7 @@ type BlockProducer interface {
 	SetRuntime(*runtime.Runtime) error
 	Authorities() []*types.BABEAuthorityData
 	SetAuthorities(a []*types.BABEAuthorityData) error
+	SetRandomness(a [babe.RandomnessLength]byte)
 }
 
 // Verifier is the interface for the block verifier

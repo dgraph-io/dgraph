@@ -278,6 +278,11 @@ func (b *Service) SetAuthorities(data []*types.BABEAuthorityData) error {
 	return b.setAuthorityIndex()
 }
 
+// SetRandomness sets randomness for BABE service
+func (b *Service) SetRandomness(a [RandomnessLength]byte) {
+	b.randomness = a
+}
+
 // SetEpochData will set the authorityData and randomness
 func (b *Service) SetEpochData(data *NextEpochDescriptor) error {
 	b.authorityData = data.Authorities

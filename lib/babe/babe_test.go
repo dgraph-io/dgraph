@@ -29,9 +29,8 @@ import (
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/trie"
-	"github.com/stretchr/testify/require"
-
 	log "github.com/ChainSafe/log15"
+	"github.com/stretchr/testify/require"
 )
 
 var emptyHash = trie.EmptyHash
@@ -341,4 +340,16 @@ func TestService_SetAuthorities_WrongKey(t *testing.T) {
 	aAfter := bs.authorityData
 	// auths before should equal auths after since there is an error with key, auths should not change
 	require.Equal(t, aBefore, aAfter)
+}
+
+func TestService_SetRandomness(t *testing.T) {
+	bs := createTestService(t, &ServiceConfig{})
+	rBefore := bs.randomness
+	rand := [RandomnessLength]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
+	bs.SetRandomness(rand)
+	rAfter := bs.randomness
+
+	require.NotEqual(t, rBefore, rAfter)
+
+	require.Equal(t, rand, rAfter)
 }

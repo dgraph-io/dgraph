@@ -2,6 +2,7 @@ package dot
 
 import (
 	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/services"
 )
@@ -16,4 +17,5 @@ type BlockProducer interface {
 	Resume() error
 	Authorities() []*types.BABEAuthorityData
 	SetAuthorities(a []*types.BABEAuthorityData) error
+	SetRandomness(a [babe.RandomnessLength]byte)
 }
