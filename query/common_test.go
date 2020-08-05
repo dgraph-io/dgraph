@@ -74,8 +74,8 @@ func processQueryRDF(ctx context.Context, t *testing.T, query string) (string, e
 	defer txn.Discard(ctx)
 
 	res, err := txn.Do(ctx, &api.Request{
-		Query:     query,
-		RdfFormat: true,
+		Query:      query,
+		RespFormat: api.Request_RDF,
 	})
 	if err != nil {
 		return "", err

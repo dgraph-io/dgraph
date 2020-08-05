@@ -175,6 +175,12 @@ func (b *rdfBuilder) rdfForValueList(subject uint64, valueList *pb.ValueList, at
 		switch val.Tid {
 		case types.UidID:
 			b.writeRDF(subject, []byte(attr), buildTriple(outputval))
+		case types.IntID:
+			b.writeRDF(subject, []byte(attr), quotedNumber(outputval))
+		case types.FloatID:
+			b.writeRDF(subject, []byte(attr), quotedNumber(outputval))
+		case types.GeoID:
+			// SKIP GEO ID. Since we don't support geo in RDF format.
 		default:
 			b.writeRDF(subject, []byte(attr), outputval)
 		}
@@ -210,4 +216,12 @@ func validateSubGraphForRDF(sg *SubGraph) error {
 		return errors.New("facets are not supported in the rdf output format")
 	}
 	return nil
+}
+
+func quotedNumber(val []byte) []byte {
+	tmpVal := make([]byte, 0, len(val)+2)
+	tmpVal = append(tmpVal, '"')
+	tmpVal = append(tmpVal, val...)
+	tmpVal = append(tmpVal, '"')
+	return tmpVal
 }

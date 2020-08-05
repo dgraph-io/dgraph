@@ -84,6 +84,8 @@ github.com/dgraph-io/dgo/v200 v200.0.0-20200401175452-e463f9234453 h1:DTgOrw91nM
 github.com/dgraph-io/dgo/v200 v200.0.0-20200401175452-e463f9234453/go.mod h1:Co+FwJrnndSrPORO8Gdn20dR7FPTfmXr0W/su0Ve/Ig=
 github.com/dgraph-io/dgo/v200 v200.0.0-20200720091212-f41d047addd1 h1:bB3SjXpTJ7YcYheynrAlc5K0nlmNgygsj8WHlhRncig=
 github.com/dgraph-io/dgo/v200 v200.0.0-20200720091212-f41d047addd1/go.mod h1:Co+FwJrnndSrPORO8Gdn20dR7FPTfmXr0W/su0Ve/Ig=
+github.com/dgraph-io/dgo/v200 v200.0.0-20200804060423-c5d7b9097381 h1:g5JuBmQHe5c5X7siWhv5TOINQpPwWbDYRvwvSa8sg5Q=
+github.com/dgraph-io/dgo/v200 v200.0.0-20200804060423-c5d7b9097381/go.mod h1:rHa+h3kI4M8ASOirxyIyNeXBfHFgeskVUum2OrDMN3U=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200715131837-c0460019ead2 h1:NSl3XXyON9bgmBJSAvr5FPrgILAovtoTs7FwdtaZZq0=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200715131837-c0460019ead2/go.mod h1:7z3c/5w0sMYYZF5bHsrh8IH4fKwG5O5Y70cPH1ZLLRQ=
 github.com/dgraph-io/ristretto v0.0.3-0.20200630154024-f66de99634de h1:t0UHb5vdojIDUqktM6+xJAfScFBsVpXZmqC9dsgJmeA=

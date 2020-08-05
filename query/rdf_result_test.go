@@ -43,9 +43,9 @@ func TestRDFResult(t *testing.T) {
 <0x17> <name> "Rick Grimes" .
 <0x18> <name> "Glenn Rhee" .
 <0x19> <name> "Daryl Dixon" .
-<0x17> <age> 15 .
-<0x18> <age> 15 .
-<0x19> <age> 17 .
+<0x17> <age> "15" .
+<0x18> <age> "15" .
+<0x19> <age> "17" .
 `)
 }
 
@@ -143,9 +143,9 @@ func TestRDFPredicateCount(t *testing.T) {
 	require.Equal(t, `<0x1> <name> "Michonne" .
 <0x17> <name> "Rick Grimes" .
 <0x19> <name> "Daryl Dixon" .
-<0x1> <count(friend)> 5 .
-<0x17> <count(friend)> 1 .
-<0x19> <count(friend)> 0 .
+<0x1> <count(friend)> "5" .
+<0x17> <count(friend)> "1" .
+<0x19> <count(friend)> "0" .
 <0x1> <friend> <0x17> .
 <0x1> <friend> <0x18> .
 <0x1> <friend> <0x19> .
@@ -170,4 +170,36 @@ func TestRDFFacets(t *testing.T) {
 	_, err := processQueryRDF(context.Background(), t, query)
 	require.Contains(t, err.Error(),
 		"facets are not supported in the rdf output format")
+}
+
+func TestDateRDF(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) {
+				name
+				gender
+				friend(orderdesc: film.film.initial_release_date) {
+					name
+					film.film.initial_release_date
+				}
+			}
+		}
+	`
+	rdf, err := processQueryRDF(context.Background(), t, query)
+	require.NoError(t, err)
+	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
+<0x1> <gender> "female" .
+<0x1> <friend> <0x19> .
+<0x1> <friend> <0x18> .
+<0x1> <friend> <0x17> .
+<0x1> <friend> <0x1f> .
+<0x17> <name> "Rick Grimes" .
+<0x18> <name> "Glenn Rhee" .
+<0x19> <name> "Daryl Dixon" .
+<0x1f> <name> "Andrea" .
+<0x17> <film.film.initial_release_date> "1900-01-02T00:00:00Z" .
+<0x18> <film.film.initial_release_date> "1909-05-05T00:00:00Z" .
+<0x19> <film.film.initial_release_date> "1929-01-10T00:00:00Z" .
+<0x1f> <film.film.initial_release_date> "1801-01-15T00:00:00Z" .
+`)
 }
