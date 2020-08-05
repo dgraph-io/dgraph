@@ -503,7 +503,7 @@ func printKeys(db *badger.DB) {
 	var loop int
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()
-		if item.UserMeta() != posting.BitCompletePosting {
+		if item.UserMeta() != posting.BitDeltaPosting {
 			continue
 		}
 
