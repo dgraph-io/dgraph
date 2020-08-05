@@ -515,10 +515,16 @@ func printKeys(db *badger.DB) {
 			continue
 		}
 
-		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
+		pl := &pb.PostingList{}
+		err = item.Value(func(val []byte) error {
+			if err := pl.Unmarshal(val); err != nil {
+				return err
+			}
+			return nil
+		})
 		x.Check(err)
 
-		if pl.Pack() != nil {
+		if pl.GetPack() != nil {
 			continue
 		}
 
