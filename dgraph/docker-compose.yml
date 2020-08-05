@@ -4,13 +4,13 @@ services:
     image: dgraph/dgraph:latest
     container_name: zero1
     working_dir: /data/zero1
-    ports:
+    ports: &zero-ports
       - 5180:5180
       - 6180:6180
-    labels:
+    labels: &zero-labels
       cluster: test
       service: zero
-    volumes:
+    volumes: &zero-vols
       - type: bind
         source: $GOPATH/bin
         target: /gobin
@@ -26,14 +26,8 @@ services:
     ports:
       - 5182:5182
       - 6182:6182
-    labels:
-      cluster: test
-      service: zero
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
+    labels: *zero-labels
+    volumes: *zero-vols
     command: /gobin/dgraph zero -o 102 --my=zero2:5182 --replicas 3 --idx 2 --logtostderr -v=2 --peer=zero1:5180
 
   zero3:
@@ -45,21 +39,15 @@ services:
     ports:
       - 5183:5183
       - 6183:6183
-    labels:
-      cluster: test
-      service: zero
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
+    labels: *zero-labels
+    volumes: *zero-vols
     command: /gobin/dgraph zero -o 103 --my=zero3:5183 --replicas 3 --idx 3 --logtostderr -v=2 --peer=zero1:5180
 
   alpha1:
     image: dgraph/dgraph:latest
     container_name: alpha1
     working_dir: /data/alpha1
-    volumes:
+    volumes: &alpha-vols
       - type: bind
         source: $GOPATH/bin
         target: /gobin
@@ -72,10 +60,10 @@ services:
         source: ../ee/enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
         read_only: true
-    ports:
+    ports: &alpha-ports
       - 8180:8180
       - 9180:9180
-    labels:
+    labels: &alpha-labels
       cluster: test
       service: alpha
     command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
@@ -86,25 +74,11 @@ services:
     working_dir: /data/alpha2
     depends_on:
       - alpha1
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
-        source: ../ee/acl/hmac-secret
-        target: /dgraph-acl/hmac-secret
-        read_only: true
-      - type: bind
-        source: ../ee/enc/test-fixtures/enc-key
-        target: /dgraph-enc/enc-key
-        read_only: true
+    volumes: *alpha-vols
     ports:
       - 8182:8182
       - 9182:9182
-    labels:
-      cluster: test
-      service: alpha
+    labels: *alpha-labels
     command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha3:
@@ -113,25 +87,11 @@ services:
     working_dir: /data/alpha3
     depends_on:
       - alpha2
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
-        source: ../ee/acl/hmac-secret
-        target: /dgraph-acl/hmac-secret
-        read_only: true
-      - type: bind
-        source: ../ee/enc/test-fixtures/enc-key
-        target: /dgraph-enc/enc-key
-        read_only: true
+    volumes: *alpha-vols
     ports:
       - 8183:8183
       - 9183:9183
-    labels:
-      cluster: test
-      service: alpha
+    labels: *alpha-labels
     command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha4:
@@ -140,25 +100,11 @@ services:
     working_dir: /data/alpha4
     depends_on:
       - alpha3
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
-        source: ../ee/acl/hmac-secret
-        target: /dgraph-acl/hmac-secret
-        read_only: true
-      - type: bind
-        source: ../ee/enc/test-fixtures/enc-key
-        target: /dgraph-enc/enc-key
-        read_only: true
+    volumes: *alpha-vols
     ports:
       - 8184:8184
       - 9184:9184
-    labels:
-      cluster: test
-      service: alpha
+    labels: *alpha-labels
     command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha4:7184 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha5:
@@ -167,25 +113,11 @@ services:
     working_dir: /data/alpha5
     depends_on:
       - alpha4
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
-        source: ../ee/acl/hmac-secret
-        target: /dgraph-acl/hmac-secret
-        read_only: true
-      - type: bind
-        source: ../ee/enc/test-fixtures/enc-key
-        target: /dgraph-enc/enc-key
-        read_only: true
+    volumes: *alpha-vols
     ports:
       - 8185:8185
       - 9185:9185
-    labels:
-      cluster: test
-      service: alpha
+    labels: *alpha-labels
     command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha5:7185 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   alpha6:
@@ -194,25 +126,11 @@ services:
     working_dir: /data/alpha6
     depends_on:
       - alpha5
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      - type: bind
-        source: ../ee/acl/hmac-secret
-        target: /dgraph-acl/hmac-secret
-        read_only: true
-      - type: bind
-        source: ../ee/enc/test-fixtures/enc-key
-        target: /dgraph-enc/enc-key
-        read_only: true
+    volumes: *alpha-vols
     ports:
       - 8186:8186
       - 9186:9186
-    labels:
-      cluster: test
-      service: alpha
+    labels: *alpha-labels
     command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha6:7186 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --acl_cache_ttl 5s
 
   minio1:

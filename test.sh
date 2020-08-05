@@ -144,7 +144,8 @@ function RunDefaultClusterTests {
 
 function RunCustomClusterTests {
     while read -r LINE; do
-        DIR="${LINE:1:-1}"
+        # making directory relative to current directory
+        DIR=".${LINE%?}"
         CFG="$DIR/docker-compose.yml"
         Info "Running tests in directory $DIR"
         restartCluster $DIR/docker-compose.yml
