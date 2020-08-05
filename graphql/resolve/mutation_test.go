@@ -169,6 +169,7 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 
 	compareMutations := func(t *testing.T, test []*dgraphMutation, generated []*dgoapi.Mutation) {
 		require.Len(t, generated, len(test))
+
 		for i, expected := range test {
 			require.Equal(t, expected.Cond, generated[i].Cond)
 			if len(generated[i].SetJson) > 0 || expected.SetJSON != "" {

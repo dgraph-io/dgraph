@@ -239,3 +239,20 @@ type Y implements X @auth(
 ){
   userRole: String @search(by: [hash])
 }
+
+type Post1 {
+  id: String! @id
+  content: String
+  comments: [Comment1]
+}
+
+type Person1 {
+  id: String! @id
+  name: String
+}
+
+type Comment1 {
+  id: String! @id
+  message: String
+  replies: [Comment1]
+}
