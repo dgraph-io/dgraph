@@ -92,7 +92,10 @@ func createTestService(t *testing.T, cfg *Config) (srvc *Service) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	t.Cleanup(func() {
+		utils.RemoveTestDir(t)
+		srvc.Stop()
+	})
 	return srvc
 }
 
