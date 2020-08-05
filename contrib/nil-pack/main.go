@@ -101,17 +101,31 @@ func sendQueries(client *dgo.Dgraph, wg *sync.WaitGroup) {
 }
 
 func main() {
-	client, err := testutil.DgraphClient("localhost:9180")
+	client1, err := testutil.DgraphClient("localhost:9180")
 	x.Check(err)
+	client2, err := testutil.DgraphClient("localhost:9182")
+	x.Check(err)
+	client3, err := testutil.DgraphClient("localhost:9183")
+	x.Check(err)
+
+	clients := []*dgo.Dgraph{client1, client2, client3}
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
 	// Use this sync group to start queries only after all the mutations have been done at least
 	// once.
+	numMutations := 3
 	mutationWg := &sync.WaitGroup{}
-	mutationWg.Add(1)
-	go sendQueries(client, mutationWg)
-	go sendMutations(client, mutationWg)
+	mutationWg.Add(numMutations)
+	// Send queries to all Alphas
+	go sendQueries(client1, mutationWg)
+	go sendQueries(client2, mutationWg)
+	go sendQueries(client3, mutationWg)
+
+	// Multiple mutations
+	for i := 0; i < numMutations; i++ {
+		go sendMutations(clients[i], mutationWg)
+	}
 
 	// This causes the script to wait indefinitely while queries and mutations run in
 	// different goroutines.
