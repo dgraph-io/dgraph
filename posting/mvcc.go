@@ -38,10 +38,12 @@ import (
 
 // incrRollupi is used to batch keys for rollup incrementally.
 type incrRollupi struct {
+	sync.RWMutex
 	// keysCh is populated with batch of 64 keys that needs to be rolled up during reads
 	keysCh chan *[][]byte
 	// keysPool is sync.Pool to share the batched keys to rollup.
-	keysPool *sync.Pool
+	keysPool map[int]*[][]byte
+	counter  int
 	count    uint64
 }
 
@@ -54,12 +56,8 @@ var (
 
 	// IncrRollup is used to batch keys for rollup incrementally.
 	IncrRollup = &incrRollupi{
-		keysCh: make(chan *[][]byte),
-		keysPool: &sync.Pool{
-			New: func() interface{} {
-				return new([][]byte)
-			},
-		},
+		keysCh:   make(chan *[][]byte),
+		keysPool: make(map[int]*[][]byte),
 	}
 )
 
@@ -84,19 +82,37 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 }
 
 func (ir *incrRollupi) addKeyToBatch(key []byte) {
-	batch := ir.keysPool.Get().(*[][]byte)
-	*batch = append(*batch, key)
-	if len(*batch) < 64 {
-		ir.keysPool.Put(batch)
+
+	var batch *[][]byte
+	ir.RLock()
+	for _, batch := range ir.keysPool {
+		*batch = append(*batch, key)
+		if len(*batch) < 64 {
+			return
+		} else {
+			break
+		}
+	}
+	ir.RUnlock()
+
+	// If the batch is nil, create a new one an add it to the map.
+	if batch == nil {
+		ir.Lock()
+		defer ir.Unlock()
+		ir.counter++
+		batch = new([][]byte)
+		*batch = append(*batch, key)
+		ir.keysPool[ir.counter] = batch
 		return
 	}
 
 	select {
 	case ir.keysCh <- batch:
 	default:
+		ir.Lock()
 		// Drop keys and build the batch again. Lossy behavior.
 		*batch = (*batch)[:0]
-		ir.keysPool.Put(batch)
+		ir.Unlock()
 	}
 }
 
@@ -127,8 +143,9 @@ func (ir *incrRollupi) Process(closer *y.Closer) {
 				}
 			}
 			// clear the batch and put it back in Sync keysPool
+			ir.Lock()
 			*batch = (*batch)[:0]
-			ir.keysPool.Put(batch)
+			ir.Unlock()
 
 			// throttle to 1 batch = 64 rollups per 100 ms.
 			<-limiter.C
