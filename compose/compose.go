@@ -18,14 +18,15 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
-	"os/user"
-
+	sv "github.com/Masterminds/semver/v3"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	yaml "gopkg.in/yaml.v2"
+	"io/ioutil"
+	"os"
+	"os/user"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -196,6 +197,12 @@ func getZero(idx int) service {
 
 func getAlpha(idx int) service {
 	basename := "alpha"
+	isMultiZeros := true
+	maxZeros := 1
+	currentOpt := fmt.Sprintf("zero%d:%d", 1, zeroBasePort + opts.PortOffset)
+	zeros := []string{ currentOpt }
+
+
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
 
@@ -204,11 +211,28 @@ func getAlpha(idx int) service {
 	if opts.TmpFS {
 		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/w", svc.name))
 	}
+	
+	var isInvalidVersion, _ = semverCompare("< 1.2.3 || 20.03.0", opts.Tag)
+	if isInvalidVersion {
+		isMultiZeros = false
+	}
+
+
+	if isMultiZeros {
+		maxZeros = opts.NumZeros
+	}
+
+    for i := 2; i <= maxZeros; i++ {
+    	currentOpt = fmt.Sprintf("zero%d:%d", i, zeroBasePort + opts.PortOffset + i)
+    	zeros = append(zeros, currentOpt)
+    }
+
+	zerosOpt := strings.Join(zeros, ",")
 
 	svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+getOffset(idx))
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
-	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort+opts.PortOffset)
+	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	svc.Command += fmt.Sprintf(" --idx=%d", idx)
 	if opts.WhiteList {
@@ -320,6 +344,21 @@ func addMetrics(cfg *composeConfig) {
 		}},
 	}
 }
+
+func semverCompare(constraint, version string) (bool, error) {
+	c, err := sv.NewConstraint(constraint)
+	if err != nil {
+		return false, err
+	}
+
+	v, err := sv.NewVersion(version)
+	if err != nil {
+		return false, err
+	}
+
+	return c.Check(v), nil
+}
+
 
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "compose: %v\n", err)
