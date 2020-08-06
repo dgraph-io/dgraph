@@ -140,8 +140,13 @@ func (gs *graphqlSubscription) Subscribe(
 			return nil, err
 		}
 
+		payloadLower := make(map[string]interface{})
+		for k, v := range payload {
+			payloadLower[strings.ToLower(k)] = v
+		}
+
 		name := authorization.GetHeader()
-		val, ok := payload[name].(string)
+		val, ok := payloadLower[strings.ToLower(name)].(string)
 		if ok {
 
 			md := metadata.New(map[string]string{
