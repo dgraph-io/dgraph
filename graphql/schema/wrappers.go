@@ -80,6 +80,7 @@ const (
 	SchemaQuery          QueryType    = "schema"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
+	DQLQuery             QueryType    = "dql"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -115,6 +116,7 @@ type Field interface {
 	Name() string
 	Alias() string
 	ResponseName() string
+	Arguments() map[string]interface{}
 	ArgValue(name string) interface{}
 	IsArgListType(name string) bool
 	IDArgValue() (*string, uint64, error)
@@ -152,6 +154,7 @@ type Mutation interface {
 type Query interface {
 	Field
 	QueryType() QueryType
+	DQLQuery() string
 	Rename(newName string)
 	AuthFor(typ Type, jwtVars map[string]interface{}) Query
 }
@@ -625,7 +628,7 @@ func (f *field) IsAuthQuery() bool {
 	return f.field.Arguments.ForName("dgraph.uid") != nil
 }
 
-func (f *field) ArgValue(name string) interface{} {
+func (f *field) Arguments() map[string]interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
 		f.arguments = f.field.ArgumentMap(f.op.vars)
@@ -637,7 +640,11 @@ func (f *field) ArgValue(name string) interface{} {
 			f.arguments = x.DeepCopyJsonMap(f.arguments)
 		}
 	}
-	return f.arguments[name]
+	return f.arguments
+}
+
+func (f *field) ArgValue(name string) interface{} {
+	return f.Arguments()[name]
 }
 
 func (f *field) IsArgListType(name string) bool {
@@ -1042,6 +1049,10 @@ func (q *query) SetArgTo(arg string, val interface{}) {
 	(*field)(q).SetArgTo(arg, val)
 }
 
+func (q *query) Arguments() map[string]interface{} {
+	return (*field)(q).Arguments()
+}
+
 func (q *query) ArgValue(name string) interface{} {
 	return (*field)(q).ArgValue(name)
 }
@@ -1106,9 +1117,21 @@ func (q *query) QueryType() QueryType {
 	return queryType(q.Name(), q.op.inSchema.customDirectives["Query"][q.Name()])
 }
 
+func (q *query) DQLQuery() string {
+	if customDir := q.op.inSchema.customDirectives["Query"][q.Name()]; customDir != nil {
+		if dqlArgument := customDir.Arguments.ForName(dqlArg); dqlArgument != nil {
+			return dqlArgument.Value.Raw
+		}
+	}
+	return ""
+}
+
 func queryType(name string, custom *ast.Directive) QueryType {
 	switch {
 	case custom != nil:
+		if custom.Arguments.ForName(dqlArg) != nil {
+			return DQLQuery
+		}
 		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
@@ -1157,6 +1180,10 @@ func (m *mutation) SetArgTo(arg string, val interface{}) {
 
 func (m *mutation) IsArgListType(name string) bool {
 	return (*field)(m).IsArgListType(name)
+}
+
+func (m *mutation) Arguments() map[string]interface{} {
+	return (*field)(m).Arguments()
 }
 
 func (m *mutation) ArgValue(name string) interface{} {
@@ -1841,22 +1868,18 @@ func parseBodyTemplate(body string) (*interface{}, map[string]bool, error) {
 	return &m, requiredFields, nil
 }
 
-func getVar(key string, variables map[string]interface{}) (interface{}, error) {
+func getVar(key string, variables map[string]interface{}) (interface{}, error, bool) {
 	if !strings.HasPrefix(key, "$") {
-		return nil, errors.Errorf("expected a variable to start with $. Found: %s", key)
+		return nil, errors.Errorf("expected a variable to start with $. Found: %s", key), true
 	}
 	val, ok := variables[key[1:]]
-	if !ok {
-		return nil, errors.Errorf("couldn't find variable: %s in variables map", key)
-	}
-
-	return val, nil
+	return val, nil, ok
 }
 
 func substituteSingleVarInBody(key string, valPtr *interface{},
 	variables map[string]interface{}) error {
 	// Look it up in the map and replace.
-	val, err := getVar(key, variables)
+	val, err, _ := getVar(key, variables)
 	if err != nil {
 		return err
 	}
@@ -1868,11 +1891,15 @@ func substituteVarInMapInBody(object, variables map[string]interface{}) error {
 	for k, v := range object {
 		switch val := v.(type) {
 		case string:
-			vval, err := getVar(val, variables)
+			vval, err, ok := getVar(val, variables)
 			if err != nil {
 				return err
 			}
-			object[k] = vval
+			if ok {
+				object[k] = vval
+			} else {
+				delete(object, k)
+			}
 		case map[string]interface{}:
 			if err := substituteVarInMapInBody(val, variables); err != nil {
 				return err
@@ -1892,7 +1919,7 @@ func substituteVarInSliceInBody(slice []interface{}, variables map[string]interf
 	for k, v := range slice {
 		switch val := v.(type) {
 		case string:
-			vval, err := getVar(val, variables)
+			vval, err, _ := getVar(val, variables)
 			if err != nil {
 				return err
 			}

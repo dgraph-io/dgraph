@@ -9,7 +9,7 @@ services:
     ports:
       - 5180:5180
       - 6180:6180
-    command: /gobin/dgraph zero --cwd=/data/zero1 --my=zero1:5180 -o 100 --bindall --logtostderr -v=0
+    command: /gobin/dgraph zero --cwd=/data/zero1 --my=zero1:5180 -o 100 --bindall --logtostderr -v=0 --replicas 3
     volumes:
       - type: bind
         source: $GOPATH/bin

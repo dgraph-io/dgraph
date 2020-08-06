@@ -5,6 +5,8 @@
         msg
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter": { "aSecret": { "anyofterms": "auth is applied" } } }
   dgmutations:
@@ -29,6 +31,8 @@
         msg
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter": { "title": { "anyofterms": "auth is applied" } } }
   dgmutations:
@@ -90,6 +94,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter": { "title": { "anyofterms": "auth is applied" } } }
   dgmutations:
@@ -206,7 +212,9 @@
     {
       "projs" : ["0x01", "0x02"]
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -244,7 +252,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -269,6 +279,8 @@
         "username": { "eq": "userxyz" }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [
@@ -297,6 +309,8 @@
         msg
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter":
       {
@@ -331,7 +345,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -359,7 +375,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -392,7 +410,9 @@
     {
       "ids" : ["0x01", "0x02"]
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{ "uid": "uid(x)" }]
@@ -416,6 +436,8 @@
     {
       "ids" : ["0x01", "0x02"]
     }
+  jwtvar:
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{ "uid": "uid(x)" }]
@@ -442,7 +464,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -474,7 +498,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -498,7 +524,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -522,7 +550,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{

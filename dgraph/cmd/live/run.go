@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,6 +36,7 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v2"
@@ -52,6 +54,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 type options struct {
@@ -141,7 +144,10 @@ func init() {
 		"Number of N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.StringP("auth_token", "t", "",
-		"The auth token passed to the server for Alter operation of the schema file")
+		"The auth token passed to the server for Alter operation of the schema file. If used with --slash_grpc_endpoint, then this "+
+			"should be set to the API token issued by Slash GraphQL")
+	flag.String("slash_grpc_endpoint", "", "Path to Slash GraphQL GRPC endpoint. If --slash_grpc_endpoint is set, "+
+		"all other TLS options and connection options will be ignored")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
 	flag.Bool("new_uids", false,
@@ -501,7 +507,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	return nil
 }
 
-func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
+func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader {
 	var db *badger.DB
 	if len(opt.clientDir) > 0 {
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
@@ -517,8 +523,20 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 
 	}
 
+	dialOpts := []grpc.DialOption{}
+	if conf.GetString("slash_grpc_endpoint") != "" && conf.IsSet("auth_token") {
+		dialOpts = append(dialOpts, x.WithAuthorizationCredentials(conf.GetString("auth_token")))
+	}
+
+	var tlsConfig *tls.Config = nil
+	if conf.GetString("slash_grpc_endpoint") != "" {
+		var tlsErr error
+		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
+		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
+	}
+
 	// compression with zero server actually makes things worse
-	connzero, err := x.SetupConnection(opt.zero, nil, false)
+	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(connzero, db)
@@ -543,13 +561,20 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 }
 
 func run() error {
+	var zero string
+	if Live.Conf.GetString("slash_grpc_endpoint") != "" {
+		zero = Live.Conf.GetString("slash_grpc_endpoint")
+	} else {
+		zero = Live.Conf.GetString("zero")
+	}
+
 	var err error
 	x.PrintVersion()
 	opt = options{
 		dataFiles:       Live.Conf.GetString("files"),
 		dataFormat:      Live.Conf.GetString("format"),
 		schemaFile:      Live.Conf.GetString("schema"),
-		zero:            Live.Conf.GetString("zero"),
+		zero:            zero,
 		concurrent:      Live.Conf.GetInt("conc"),
 		batchSize:       Live.Conf.GetInt("batch"),
 		clientDir:       Live.Conf.GetString("xidmap"),
@@ -584,7 +609,7 @@ func run() error {
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
 
-	l := setup(bmOpts, dg)
+	l := setup(bmOpts, dg, Live.Conf)
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
