@@ -131,7 +131,7 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 	opt := badger.DefaultOptions(dir).WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
 		WithLogger(nil).WithMaxCacheSize(1 << 20).
-		WithEncryptionKey(r.opt.EncryptionKey).WithCompression(bo.None)
+		WithEncryptionKey(r.opt.EncryptionKey)
 
 	// Overwrite badger options based on the options provided by the user.
 	r.setBadgerOptions(&opt, compression)
