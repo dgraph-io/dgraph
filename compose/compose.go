@@ -197,11 +197,11 @@ func getZero(idx int) service {
 
 func getAlpha(idx int) service {
 	basename := "alpha"
+
 	isMultiZeros := true
 	maxZeros := 1
-	currentOpt := fmt.Sprintf("zero%d:%d", 1, zeroBasePort + opts.PortOffset)
-	zeros := []string{ currentOpt }
-
+	zeroHostAddr := fmt.Sprintf("zero%d:%d", 1, zeroBasePort + opts.PortOffset)
+	zeros := []string{ zeroHostAddr }
 
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
@@ -211,20 +211,19 @@ func getAlpha(idx int) service {
 	if opts.TmpFS {
 		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/w", svc.name))
 	}
-	
+
 	var isInvalidVersion, _ = semverCompare("< 1.2.3 || 20.03.0", opts.Tag)
 	if isInvalidVersion {
 		isMultiZeros = false
 	}
-
 
 	if isMultiZeros {
 		maxZeros = opts.NumZeros
 	}
 
     for i := 2; i <= maxZeros; i++ {
-    	currentOpt = fmt.Sprintf("zero%d:%d", i, zeroBasePort + opts.PortOffset + i)
-    	zeros = append(zeros, currentOpt)
+		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort + opts.PortOffset + i)
+    	zeros = append(zeros, zeroHostAddr)
     }
 
 	zerosOpt := strings.Join(zeros, ",")
