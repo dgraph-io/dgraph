@@ -152,8 +152,8 @@ func (gs *graphqlSubscription) Subscribe(
 			}
 		}
 	}
-	//for the cases when no expiry is given in jwt or subscription doesn't have any authorization,
-	//we set their expiry to zero time
+	// for the cases when no expiry is given in jwt or subscription doesn't have any authorization,
+	// we set their expiry to zero time
 	if customClaims.StandardClaims.ExpiresAt == nil {
 		customClaims.StandardClaims.ExpiresAt = jwt.At(time.Time{})
 	}
