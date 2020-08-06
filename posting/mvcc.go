@@ -86,7 +86,7 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 func (ir *incrRollupi) addKeyToBatch(key []byte) {
 	batch := ir.keysPool.Get().(*[][]byte)
 	*batch = append(*batch, key)
-	if len(*batch) < 64 {
+	if len(*batch) < 16 {
 		ir.keysPool.Put(batch)
 		return
 	}
@@ -112,7 +112,7 @@ func (ir *incrRollupi) Process(closer *y.Closer) {
 	defer limiter.Stop()
 	cleanupTick := time.NewTicker(5 * time.Minute)
 	defer cleanupTick.Stop()
-	forceRollupTick := time.NewTicker(2 * time.Second)
+	forceRollupTick := time.NewTicker(500 * time.Millisecond)
 	defer forceRollupTick.Stop()
 
 	var batch *[][]byte
