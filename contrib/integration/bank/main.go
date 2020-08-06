@@ -38,12 +38,13 @@ import (
 )
 
 var (
-	users   = flag.Int("users", 100, "Number of accounts.")
-	conc    = flag.Int("txns", 3, "Number of concurrent transactions per client.")
-	dur     = flag.String("dur", "1m", "How long to run the transactions.")
-	alpha   = flag.String("alpha", "localhost:9080", "Address of Dgraph alpha.")
-	verbose = flag.Bool("verbose", true, "Output all logs in verbose mode.")
-	login   = flag.Bool("login", true, "Login as groot. Used for ACL-enabled cluster.")
+	users      = flag.Int("users", 100, "Number of accounts.")
+	conc       = flag.Int("txns", 3, "Number of concurrent transactions per client.")
+	queryCheck = flag.Int("check_every", 5, "Check total accounts and balances after every N mutations.")
+	dur        = flag.String("dur", "1m", "How long to run the transactions.")
+	alpha      = flag.String("alpha", "localhost:9080", "Address of Dgraph alpha.")
+	verbose    = flag.Bool("verbose", true, "Output all logs in verbose mode.")
+	login      = flag.Bool("login", true, "Login as groot. Used for ACL-enabled cluster.")
 )
 
 var startBal = 10
@@ -273,11 +274,10 @@ func (s *state) loop(dg *dgo.Dgraph, wg *sync.WaitGroup) {
 
 	var buf bytes.Buffer
 	for i := 0; ; i++ {
-		if i%5 == 0 {
+		if i%*queryCheck == 0 {
 			if err := s.runTotal(dg); err != nil {
 				log.Printf("Error while runTotal: %v", err)
 			}
-			continue
 		}
 
 		buf.Reset()
