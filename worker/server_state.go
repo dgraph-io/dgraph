@@ -132,13 +132,6 @@ func (s *ServerState) initStorage() {
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
 		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
 
-		// We should always force load LSM tables to memory, disregarding user settings, because
-		// Raft.Advance hits the WAL many times. If the tables are not in memory, retrieval slows
-		// down way too much, causing cluster membership issues. Because of prefix compression and
-		// value separation provided by Badger, this is still better than using the memory based WAL
-		// storage provided by the Raft library.
-		opt.TableLoadingMode = options.LoadToRAM
-
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
 		key := opt.EncryptionKey
