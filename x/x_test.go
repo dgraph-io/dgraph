@@ -79,7 +79,7 @@ func TestValidateAddress(t *testing.T) {
 		for _, st := range testData {
 			t.Run(st.name, func(t *testing.T) {
 				if len(st.err) != 0 {
-					require.Error(t, ValidateAddress(st.address), st.err)
+					require.EqualError(t, ValidateAddress(st.address), st.err)
 				} else {
 					require.NoError(t, ValidateAddress(st.address))
 				}
@@ -96,13 +96,13 @@ func TestValidateAddress(t *testing.T) {
 			{"Valid without port", "[2001:db8::1]", "address [2001:db8::1]: missing port in address"},
 			{"Valid with port", "[2001:db8::1]:8888", ""},
 			{"Invalid without port", "[2001:db8]", "address [2001:db8]: missing port in address"},
-			{"Invalid with port", "[2001:db8]:2222", "Invalid hostname"},
+			{"Invalid with port", "[2001:db8]:2222", "Invalid hostname: 2001:db8"},
 			{"Invalid port", "[2001:db8::1]:222222", "Invalid port: 222222"},
 		}
 		for _, st := range testData {
 			t.Run(st.name, func(t *testing.T) {
 				if len(st.err) != 0 {
-					require.Error(t, ValidateAddress(st.address), st.err)
+					require.EqualError(t, ValidateAddress(st.address), st.err)
 				} else {
 					require.NoError(t, ValidateAddress(st.address))
 				}
