@@ -578,7 +578,7 @@ func ValidateAddress(addr string) error {
 		return err
 	}
 	if p, err := strconv.Atoi(port); err != nil || p <= 0 || p >= 65536 {
-		return errors.Errorf("Invalid port")
+		return errors.Errorf("Invalid port: %v", p)
 	}
 	if ip := net.ParseIP(host); ip != nil {
 		return nil
@@ -588,7 +588,7 @@ func ValidateAddress(addr string) error {
 		return errors.Errorf("Hostname should be less than or equal to 255 characters")
 	}
 	if !regExpHostName.MatchString(host) {
-		return errors.Errorf("Invalid hostname")
+		return errors.Errorf("Invalid hostname: %v", host)
 	}
 	return nil
 }
