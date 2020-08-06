@@ -217,7 +217,7 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 			return
 		}
 		// We move the predicate only if the difference between size of both machines is
-		// atleast 10% of src group.
+		// atleast 10% of dst group.
 		if float64(sizeDiff) < 0.1*float64(groups[0].size) {
 			continue
 		}
