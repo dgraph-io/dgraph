@@ -34,6 +34,7 @@ import (
 )
 
 const (
+	alphaGrpc            = "localhost:9180"
 	alphaURL             = "http://localhost:8180/graphql"
 	alphaAdminURL        = "http://localhost:8180/admin"
 	subscriptionEndpoint = "ws://localhost:8180/graphql"
@@ -2626,4 +2627,175 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 			}
 		]
 	}`, string(result.Data))
+}
+
+func TestCustomDQL(t *testing.T) {
+	dg, err := testutil.DgraphClient(alphaGrpc)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+
+	schema := `
+	type Tweets {
+		id: ID!
+		text: String! @search(by: [fulltext])
+		user: User
+		timestamp: DateTime! @search
+	}
+	type User {
+		screen_name: String! @id
+		followers: Int @search
+		tweets: [Tweets] @hasInverse(field: user)
+	}
+	type UserTweetCount @remote {
+		screen_name: String
+		tweetCount: Int
+	}
+	
+	type Query {
+	  getFirstUserByFollowerCount(count: Int!): User @custom(dql: """
+		query getFirstUserByFollowerCount($count: int) {
+			getFirstUserByFollowerCount(func: eq(User.followers, $count), first: 1) {
+				screen_name: User.screen_name
+				followers: User.followers
+			}
+		}
+		""")
+		
+	  dqlTweetsByAuthorFollowers: [Tweets] @custom(dql: """
+		query {
+			var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "DQL")) {
+				Tweets.user {
+					followers as User.followers
+				}
+				userFollowerCount as sum(val(followers))
+			}
+			dqlTweetsByAuthorFollowers(func: uid(userFollowerCount), orderdesc: val(userFollowerCount)) {
+				id: uid
+				text: Tweets.text
+				timestamp: Tweets.timestamp
+			}
+		}
+		""")
+		
+	  filteredTweetsByAuthorFollowers(search: String!): [Tweets] @custom(dql: """
+		query t($search: string) {
+			var(func: type(Tweets)) @filter(anyoftext(Tweets.text, $search)) {
+				Tweets.user {
+					followers as User.followers
+				}
+				userFollowerCount as sum(val(followers))
+			}
+			filteredTweetsByAuthorFollowers(func: uid(userFollowerCount), orderdesc: val(userFollowerCount)) {
+				id: uid
+				text: Tweets.text
+				timestamp: Tweets.timestamp
+			}
+		}
+		""")
+
+	  queryUserTweetCounts: [UserTweetCount] @custom(dql: """
+		query {
+			var(func: type(User)) {
+				tc as count(User.tweets)
+			}
+			queryUserTweetCounts(func: uid(tc), orderdesc: val(tc)) {
+				screen_name: User.screen_name
+				tweetCount: val(tc)
+			}
+		}
+		""")
+	}
+	`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation {
+		  addTweets(input: [
+			{
+			  text: "Hello DQL!"
+			  user: {
+				screen_name: "abhimanyu"
+				followers: 5
+			  }
+			  timestamp: "2020-07-29"
+			}
+			{
+			  text: "Woah DQL works!"
+			  user: {
+				screen_name: "pawan"
+				followers: 10
+			  }
+			  timestamp: "2020-07-29"
+			}
+			{
+			  text: "hmm, It worked."
+			  user: {
+				screen_name: "abhimanyu"
+				followers: 5
+			  }
+			  timestamp: "2020-07-30"
+			}
+		  ]) {
+			numUids
+		  }
+		}`,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	params = &common.GraphQLParams{
+		Query: `
+		query {
+		  getFirstUserByFollowerCount(count: 10) {
+			screen_name
+			followers
+		  }
+		  dqlTweetsByAuthorFollowers {
+			text
+		  }
+		  filteredTweetsByAuthorFollowers(search: "hello") {
+			text
+		  }
+		  queryUserTweetCounts {
+			screen_name
+			tweetCount
+		  }
+		}`,
+	}
+
+	result = params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	require.JSONEq(t, `{
+		"getFirstUserByFollowerCount": {
+		  "screen_name": "pawan",
+		  "followers": 10
+		},
+		"dqlTweetsByAuthorFollowers": [
+		  {
+			"text": "Woah DQL works!"
+		  },
+		  {
+			"text": "Hello DQL!"
+		  }
+		],
+		"filteredTweetsByAuthorFollowers": [
+		  {
+			"text": "Hello DQL!"
+		  }
+		],
+		"queryUserTweetCounts": [
+		  {
+			"screen_name": "abhimanyu",
+			"tweetCount": 2
+		  },
+		  {
+			"screen_name": "pawan",
+			"tweetCount": 1
+		  }
+		]
+	  }`, string(result.Data))
 }

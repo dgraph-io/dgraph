@@ -1,0 +1,9 @@
+version: "3.8"
+services:
+  nginx:
+    image: nginx:1.19.0
+    volumes:
+      - "./public:/home/ubuntu/dgraph/wiki/public:ro"
+      - "./nginx/docs.conf:/etc/nginx/conf.d/default.conf:ro"
+    ports:
+      - 80:80
