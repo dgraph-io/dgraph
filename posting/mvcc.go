@@ -84,16 +84,19 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 func (ir *incrRollupi) addKeyToBatch(key []byte) {
 
 	var batch *[][]byte
-	ir.RLock()
-	for _, batch := range ir.keysPool {
-		*batch = append(*batch, key)
-		if len(*batch) < 64 {
+	ir.Lock()
+	for k, b := range ir.keysPool {
+		*b = append(*b, key)
+		if len(*b) < 64 {
+			ir.Unlock()
 			return
 		} else {
+			batch = b
+			delete(ir.keysPool, k)
 			break
 		}
 	}
-	ir.RUnlock()
+	ir.Unlock()
 
 	// If the batch is nil, create a new one an add it to the map.
 	if batch == nil {
@@ -109,10 +112,8 @@ func (ir *incrRollupi) addKeyToBatch(key []byte) {
 	select {
 	case ir.keysCh <- batch:
 	default:
-		ir.Lock()
 		// Drop keys and build the batch again. Lossy behavior.
-		*batch = (*batch)[:0]
-		ir.Unlock()
+		batch = nil
 	}
 }
 
@@ -142,10 +143,7 @@ func (ir *incrRollupi) Process(closer *y.Closer) {
 					}
 				}
 			}
-			// clear the batch and put it back in Sync keysPool
-			ir.Lock()
-			*batch = (*batch)[:0]
-			ir.Unlock()
+			batch = nil
 
 			// throttle to 1 batch = 64 rollups per 100 ms.
 			<-limiter.C
