@@ -22,14 +22,13 @@ import (
 	"encoding/json"
 	"github.com/dgrijalva/jwt-go/v4"
 	"google.golang.org/grpc/metadata"
-	"strconv"
-	"time"
-
 	"io"
 	"io/ioutil"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
@@ -138,18 +137,19 @@ func (gs *graphqlSubscription) Subscribe(
 		}
 
 		name := authorization.GetHeader()
-		var val, key string
+		var val interface{}
+		var key string
 		var ok bool
 		for key, val = range payload {
 			if strings.EqualFold(key, name) {
-				val, ok = payload[key].(string)
+				ok = true
 				break
 			}
 		}
 
 		if ok {
 			md := metadata.New(map[string]string{
-				"authorizationJwt": val,
+				"authorizationJwt": val.(string),
 			})
 			ctx = metadata.NewIncomingContext(ctx, md)
 
