@@ -45,6 +45,13 @@ var emptyHeader = &types.Header{
 	Number: big.NewInt(0),
 }
 
+var testEpochLength = uint64(10)
+
+var firstEpochInfo = &types.EpochInfo{
+	Duration:   testEpochLength,
+	FirstBlock: 1,
+}
+
 func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 	tt := trie.NewEmptyTrie()
 	rt := runtime.NewTestRuntimeWithTrie(t, runtime.NODE_RUNTIME, tt, log.LvlCrit)
@@ -79,13 +86,13 @@ func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 		cfg.TransactionQueue = state.NewTransactionQueue()
 	}
 
-	if cfg.BlockState == nil || cfg.StorageState == nil {
+	if cfg.BlockState == nil || cfg.StorageState == nil || cfg.EpochState == nil {
 		dbSrv := state.NewService("", log.LvlInfo)
 		dbSrv.UseMemDB()
 
 		genesisData := new(genesis.Data)
 
-		err = dbSrv.Initialize(genesisData, genesisHeader, tt)
+		err = dbSrv.Initialize(genesisData, genesisHeader, tt, firstEpochInfo)
 		require.NoError(t, err)
 
 		err = dbSrv.Start()
@@ -93,6 +100,7 @@ func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 
 		cfg.BlockState = dbSrv.Block
 		cfg.StorageState = dbSrv.Storage
+		cfg.EpochState = dbSrv.Epoch
 	}
 
 	babeService, err := NewService(cfg)
@@ -357,7 +365,7 @@ func TestService_SetEpochThreshold(t *testing.T) {
 func TestService_SetRandomness(t *testing.T) {
 	bs := createTestService(t, &ServiceConfig{})
 	rBefore := bs.randomness
-	rand := [RandomnessLength]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
+	rand := [types.RandomnessLength]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
 	bs.SetRandomness(rand)
 	rAfter := bs.randomness
 

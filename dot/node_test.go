@@ -40,6 +40,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var firstEpochInfo = &types.EpochInfo{
+	Duration:   200,
+	FirstBlock: 0,
+}
+
 // TestInitNode
 func TestInitNode(t *testing.T) {
 	cfg := NewTestConfig(t)
@@ -210,7 +215,7 @@ func TestInitNode_LoadGenesisData(t *testing.T) {
 	gen, err := genesis.NewGenesisFromJSONRaw(genPath)
 	require.Nil(t, err)
 
-	err = stateSrvc.Initialize(gen.GenesisData(), header, trie.NewEmptyTrie())
+	err = stateSrvc.Initialize(gen.GenesisData(), header, trie.NewEmptyTrie(), firstEpochInfo)
 	require.Nil(t, err)
 
 	err = stateSrvc.Start()

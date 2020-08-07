@@ -38,7 +38,7 @@ func newTestDigestHandler(t *testing.T, withBABE, withGrandpa bool) *DigestHandl
 
 	genesisData := new(genesis.Data)
 
-	err := stateSrvc.Initialize(genesisData, testGenesisHeader, trie.NewEmptyTrie())
+	err := stateSrvc.Initialize(genesisData, testGenesisHeader, trie.NewEmptyTrie(), firstEpochInfo)
 	require.NoError(t, err)
 
 	err = stateSrvc.Start()

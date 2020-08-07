@@ -112,7 +112,8 @@ func TestInitConfigFromFlags(t *testing.T) {
 			[]string{"config", "genesis-raw"},
 			[]interface{}{testCfgFile.Name(), "test_genesis"},
 			dot.InitConfig{
-				GenesisRaw: "test_genesis",
+				GenesisRaw:     "test_genesis",
+				TestFirstEpoch: true,
 			},
 		},
 	}
@@ -571,7 +572,8 @@ func TestUpdateConfigFromGenesisJSON(t *testing.T) {
 			FinalityGadgetLvl: "info",
 		},
 		Init: dot.InitConfig{
-			GenesisRaw: genFile.Name(),
+			GenesisRaw:     genFile.Name(),
+			TestFirstEpoch: true,
 		},
 		Account: testCfg.Account,
 		Core:    testCfg.Core,
@@ -624,7 +626,8 @@ func TestUpdateConfigFromGenesisJSON_Default(t *testing.T) {
 			FinalityGadgetLvl: "info",
 		},
 		Init: dot.InitConfig{
-			GenesisRaw: DefaultCfg.Init.GenesisRaw,
+			GenesisRaw:     DefaultCfg.Init.GenesisRaw,
+			TestFirstEpoch: true,
 		},
 		Account: testCfg.Account,
 		Core:    testCfg.Core,
@@ -674,7 +677,8 @@ func TestUpdateConfigFromGenesisData(t *testing.T) {
 			FinalityGadgetLvl: "info",
 		},
 		Init: dot.InitConfig{
-			GenesisRaw: genFile.Name(),
+			GenesisRaw:     genFile.Name(),
+			TestFirstEpoch: true,
 		},
 		Account: testCfg.Account,
 		Core:    testCfg.Core,

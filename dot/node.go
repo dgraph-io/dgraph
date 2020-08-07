@@ -27,6 +27,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/core"
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/keystore"
@@ -64,23 +65,55 @@ func InitNode(cfg *Config) error {
 	// create genesis from configuration file
 	gen, err := genesis.NewGenesisFromJSONRaw(cfg.Init.GenesisRaw)
 	if err != nil {
-		return fmt.Errorf("failed to load genesis from file: %s", err)
+		return fmt.Errorf("failed to load genesis from file: %w", err)
 	}
 
 	// create trie from genesis
 	t, err := genesis.NewTrieFromGenesis(gen)
 	if err != nil {
-		return fmt.Errorf("failed to create trie from genesis: %s", err)
+		return fmt.Errorf("failed to create trie from genesis: %w", err)
 	}
 
 	// create genesis block from trie
 	header, err := genesis.NewGenesisBlockFromTrie(t)
 	if err != nil {
-		return fmt.Errorf("failed to create genesis block from trie: %s", err)
+		return fmt.Errorf("failed to create genesis block from trie: %w", err)
 	}
 
 	// create new state service
 	stateSrvc := state.NewService(cfg.Global.BasePath, cfg.Global.lvl)
+
+	var genEpochInfo *types.EpochInfo
+	if !cfg.Init.TestFirstEpoch {
+		// create in-memeory storage for loading runtime info
+		genStorage, err := state.NewStorageState(database.NewMemDatabase(), t) //nolint
+		if err != nil {
+			return fmt.Errorf("failed to create in-memory storage: %w", err)
+		}
+
+		// create genesis runtime
+		r, err := genesis.NewRuntimeFromGenesis(gen, genStorage) //nolint
+		if err != nil {
+			return fmt.Errorf("failed to create genesis runtime: %w", err)
+		}
+
+		babeCfg, err := r.BabeConfiguration()
+		if err != nil {
+			return fmt.Errorf("failed to fetch genesis babe configuration: %w", err)
+		}
+
+		genEpochInfo = &types.EpochInfo{
+			Duration:   babeCfg.EpochLength,
+			FirstBlock: 0,
+			Randomness: babeCfg.Randomness,
+		}
+
+		r.Stop()
+	} else {
+		genEpochInfo = &types.EpochInfo{
+			Duration: 200,
+		}
+	}
 
 	// declare genesis data
 	data := gen.GenesisData()
@@ -95,7 +128,7 @@ func InitNode(cfg *Config) error {
 	data.ProtocolID = cfg.Network.ProtocolID
 
 	// initialize state service with genesis data, block, and trie
-	err = stateSrvc.Initialize(data, header, t)
+	err = stateSrvc.Initialize(data, header, t, genEpochInfo)
 	if err != nil {
 		return fmt.Errorf("failed to initialize state service: %s", err)
 	}

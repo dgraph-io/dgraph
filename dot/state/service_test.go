@@ -31,6 +31,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var firstEpochInfo = &types.EpochInfo{
+	Duration:   200,
+	FirstBlock: 0,
+}
+
 // helper method to create and start test state service
 func newTestService(t *testing.T) (state *Service) {
 	testDir := utils.NewTestDir(t)
@@ -55,7 +60,7 @@ func TestService_Start(t *testing.T) {
 
 	genesisData := new(genesis.Data)
 
-	err = state.Initialize(genesisData, genesisHeader, tr)
+	err = state.Initialize(genesisData, genesisHeader, tr, firstEpochInfo)
 	require.Nil(t, err)
 
 	err = state.Start()
@@ -75,7 +80,7 @@ func TestMemDB_Start(t *testing.T) {
 
 	genesisData := new(genesis.Data)
 
-	err = state.Initialize(genesisData, genesisHeader, tr)
+	err = state.Initialize(genesisData, genesisHeader, tr, firstEpochInfo)
 	require.Nil(t, err)
 
 	err = state.Start()
@@ -99,7 +104,7 @@ func TestService_BlockTree(t *testing.T) {
 	genesisData := new(genesis.Data)
 
 	tr := trie.NewEmptyTrie()
-	err = stateA.Initialize(genesisData, genesisHeader, tr)
+	err = stateA.Initialize(genesisData, genesisHeader, tr, firstEpochInfo)
 	require.Nil(t, err)
 
 	err = stateA.Start()

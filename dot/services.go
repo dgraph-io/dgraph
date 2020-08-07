@@ -147,6 +147,7 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *
 		BlockState:       st.Block,
 		StorageState:     st.Storage,
 		TransactionQueue: st.TransactionQueue,
+		EpochState:       st.Epoch,
 		StartSlot:        bestSlot + 1,
 		EpochThreshold:   threshold,
 		SlotDuration:     cfg.Core.SlotDuration,

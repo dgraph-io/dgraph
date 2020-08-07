@@ -251,6 +251,11 @@ func TestChainGetFinalizedHeadByRound(t *testing.T) {
 
 var genesisHeader, _ = types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), trie.EmptyHash, trie.EmptyHash, [][]byte{})
 
+var firstEpochInfo = &types.EpochInfo{
+	Duration:   200,
+	FirstBlock: 0,
+}
+
 func newTestChainService(t *testing.T) *state.Service {
 	testDir := utils.NewTestDir(t)
 	defer utils.RemoveTestDir(t)
@@ -261,7 +266,7 @@ func newTestChainService(t *testing.T) *state.Service {
 	stateSrvc.UseMemDB()
 	genesisData := new(genesis.Data)
 
-	err := stateSrvc.Initialize(genesisData, genesisHeader, tr)
+	err := stateSrvc.Initialize(genesisData, genesisHeader, tr, firstEpochInfo)
 	if err != nil {
 		t.Fatal(err)
 	}

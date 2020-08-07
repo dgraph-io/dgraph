@@ -31,6 +31,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/scale"
 	"github.com/ChainSafe/gossamer/lib/trie"
 )
@@ -87,6 +88,22 @@ func NewGenesisBlockFromTrie(t *trie.Trie) (*types.Header, error) {
 	}
 
 	return header, nil
+}
+
+// NewRuntimeFromGenesis creates a runtime instance from the genesis data
+func NewRuntimeFromGenesis(g *Genesis, storage runtime.Storage) (*runtime.Runtime, error) {
+	codeStr := g.GenesisFields().Raw[0][common.BytesToHex(common.CodeKey)]
+	if codeStr == "" {
+		return nil, fmt.Errorf("cannot find :code in genesis")
+	}
+
+	code := common.MustHexToBytes(codeStr)
+	cfg := &runtime.Config{
+		Storage: storage,
+		Imports: runtime.RegisterImports_NodeRuntime,
+	}
+
+	return runtime.NewRuntime(code, cfg)
 }
 
 // NewGenesisFromJSON parses Human Readable JSON formatted genesis file

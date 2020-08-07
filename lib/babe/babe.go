@@ -18,7 +18,6 @@ package babe
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -35,27 +34,12 @@ import (
 	log "github.com/ChainSafe/log15"
 )
 
-// RandomnessLength is the length of the epoch randomness (32 bytes)
-const RandomnessLength = 32
-
 var (
 	// MaxThreshold is the maximum BABE threshold (node authorized to produce a block every slot)
 	MaxThreshold = big.NewInt(0).SetBytes([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
 	// MinThreshold is the minimum BABE threshold (node never authorized to produce a block)
 	MinThreshold = big.NewInt(0)
 )
-
-// AuthorityData is an alias for []*types.BABEAuthorityData
-type AuthorityData []*types.BABEAuthorityData
-
-// String returns the AuthorityData as a formatted string
-func (d AuthorityData) String() string {
-	str := ""
-	for _, di := range []*types.BABEAuthorityData(d) {
-		str = str + fmt.Sprintf("[key=0x%x idx=%d] ", di.ID.Encode(), di.Weight)
-	}
-	return str
-}
 
 // Service contains the VRF keys for the validator, as well as BABE configuation data
 type Service struct {
@@ -65,6 +49,7 @@ type Service struct {
 	blockState       BlockState
 	storageState     StorageState
 	transactionQueue TransactionQueue
+	epochState       EpochState
 
 	// BABE authority keypair
 	keypair *sr25519.Keypair
@@ -74,10 +59,10 @@ type Service struct {
 
 	// Epoch configuration data
 	config         *types.BabeConfiguration
-	randomness     [RandomnessLength]byte
+	randomness     [types.RandomnessLength]byte
 	authorityIndex uint64
 	authorityData  []*types.BABEAuthorityData
-	epochThreshold *big.Int // validator threshold for this epoch
+	epochThreshold *big.Int // validator threshold
 	startSlot      uint64
 	slotToProof    map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
 
@@ -95,6 +80,7 @@ type ServiceConfig struct {
 	BlockState       BlockState
 	StorageState     StorageState
 	TransactionQueue TransactionQueue
+	EpochState       EpochState
 	Keypair          *sr25519.Keypair
 	Runtime          *runtime.Runtime
 	AuthData         []*types.BABEAuthorityData
@@ -113,6 +99,10 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		return nil, errors.New("blockState is nil")
 	}
 
+	if cfg.EpochState == nil {
+		return nil, errors.New("epochState is nil")
+	}
+
 	if cfg.Runtime == nil {
 		return nil, errors.New("runtime is nil")
 	}
@@ -125,6 +115,7 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		logger:           logger,
 		blockState:       cfg.BlockState,
 		storageState:     cfg.StorageState,
+		epochState:       cfg.EpochState,
 		keypair:          cfg.Keypair,
 		rt:               cfg.Runtime,
 		transactionQueue: cfg.TransactionQueue,
@@ -159,21 +150,16 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		}
 	}
 
-	logger.Info("created BABE service", "authorities", AuthorityData(babeService.authorityData))
-
-	babeService.randomness = babeService.config.Randomness
-
 	err = babeService.setAuthorityIndex()
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Debug("created BABE service", "authority index", babeService.authorityIndex, "threshold", babeService.epochThreshold)
-
+	logger.Debug("created BABE service", "authorities", AuthorityData(babeService.authorityData), "authority index", babeService.authorityIndex, "threshold", babeService.epochThreshold)
 	return babeService, nil
 }
 
-// Start a Service
+// Start starts BABE block authoring
 func (b *Service) Start() error {
 	b.started.Store(true)
 
@@ -184,15 +170,14 @@ func (b *Service) Start() error {
 		}
 	}
 
-	b.logger.Debug("[babe]", "epochThreshold", b.epochThreshold)
+	epoch, err := b.epochState.GetCurrentEpoch()
+	if err != nil {
+		return err
+	}
 
-	i := b.startSlot
-	var err error
-	for ; i < b.startSlot+b.config.EpochLength; i++ {
-		b.slotToProof[i], err = b.runLottery(i)
-		if err != nil {
-			return fmt.Errorf("error running slot lottery at slot %d: error %s", i, err)
-		}
+	err = b.initiateEpoch(epoch, b.startSlot)
+	if err != nil {
+		return err
 	}
 
 	go b.initiate()
@@ -225,11 +210,6 @@ func (b *Service) Stop() error {
 	}
 
 	return nil
-}
-
-// IsStopped returns true if the service is stopped (ie not producing blocks)
-func (b *Service) IsStopped() bool {
-	return !b.started.Load().(bool)
 }
 
 // SetRuntime sets the service's runtime
@@ -284,15 +264,14 @@ func (b *Service) SetEpochThreshold(a *big.Int) {
 }
 
 // SetRandomness sets randomness for BABE service
-func (b *Service) SetRandomness(a [RandomnessLength]byte) {
+// Note that this only takes effect at the end of an epoch, where it is used to calculate the next epoch's randomness
+func (b *Service) SetRandomness(a [types.RandomnessLength]byte) {
 	b.randomness = a
 }
 
-// SetEpochData will set the authorityData and randomness
-func (b *Service) SetEpochData(data *NextEpochDescriptor) error {
-	b.authorityData = data.Authorities
-	b.randomness = data.Randomness
-	return b.setAuthorityIndex()
+// IsStopped returns true if the service is stopped (ie not producing blocks)
+func (b *Service) IsStopped() bool {
+	return !b.started.Load().(bool)
 }
 
 func (b *Service) safeSend(msg types.Block) error {
@@ -372,11 +351,13 @@ func (b *Service) initiate() {
 }
 
 func (b *Service) invokeBlockAuthoring(startSlot uint64) {
-	for slotNum := startSlot; slotNum < startSlot+b.config.EpochLength; slotNum++ {
+	nextStartSlot := startSlot + b.config.EpochLength
+
+	for slotNum := startSlot; slotNum < nextStartSlot; slotNum++ {
 		start := time.Now()
 
 		if time.Since(start) <= b.slotDuration() {
-			if b.IsStopped() {
+			if b.IsStopped() { // TODO: change this to select case between stopped chan and time.After
 				return
 			}
 
@@ -388,9 +369,20 @@ func (b *Service) invokeBlockAuthoring(startSlot uint64) {
 		}
 	}
 
-	// loop forever
-	// TODO: signal to verifier that epoch has changed
-	b.invokeBlockAuthoring(startSlot + b.config.EpochLength)
+	// setup next epoch, re-invoke block authoring
+	next, err := b.incrementEpoch()
+	if err != nil {
+		b.logger.Error("failed to increment epoch", "error", err)
+		return
+	}
+
+	err = b.initiateEpoch(next, nextStartSlot)
+	if err != nil {
+		b.logger.Error("failed to initiate epoch", "epoch", next, "error", err)
+		return
+	}
+
+	b.invokeBlockAuthoring(nextStartSlot)
 }
 
 func (b *Service) handleSlot(slotNum uint64) {
@@ -450,42 +442,6 @@ func (b *Service) handleSlot(slotNum uint64) {
 			return
 		}
 	}
-}
-
-// runLottery runs the lottery for a specific slot number
-// returns an encoded VrfOutput and VrfProof if validator is authorized to produce a block for that slot, nil otherwise
-// output = return[0:32]; proof = return[32:96]
-func (b *Service) runLottery(slot uint64) (*VrfOutputAndProof, error) {
-	slotBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(slotBytes, slot)
-	vrfInput := append(slotBytes, b.randomness[:]...)
-
-	output, proof, err := b.vrfSign(vrfInput)
-	if err != nil {
-		return nil, err
-	}
-
-	outputInt := big.NewInt(0).SetBytes(output[:])
-	if b.epochThreshold == nil {
-		err = b.setEpochThreshold()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if outputInt.Cmp(b.epochThreshold) < 0 {
-		outbytes := [sr25519.VrfOutputLength]byte{}
-		copy(outbytes[:], output)
-		proofbytes := [sr25519.VrfProofLength]byte{}
-		copy(proofbytes[:], proof)
-		b.logger.Trace("lottery", "won slot", slot)
-		return &VrfOutputAndProof{
-			output: outbytes,
-			proof:  proofbytes,
-		}, nil
-	}
-
-	return nil, nil
 }
 
 func (b *Service) vrfSign(input []byte) (out []byte, proof []byte, err error) {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/ChainSafe/chaindb"
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/keystore"
@@ -14,18 +15,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newBlockState(t *testing.T) *state.BlockState {
+func newState(t *testing.T) (*state.BlockState, *state.EpochState) {
 	db := chaindb.NewMemDatabase()
 	bs, err := state.NewBlockStateFromGenesis(db, genesisHeader)
 	require.NoError(t, err)
-	return bs
+	es, err := state.NewEpochStateFromGenesis(db, &types.EpochInfo{
+		Duration: 200,
+	})
+	require.NoError(t, err)
+	return bs, es
 }
 
 func newBABEService(t *testing.T) *babe.Service {
 	kr, err := keystore.NewSr25519Keyring()
 	require.NoError(t, err)
 
-	bs := newBlockState(t)
+	bs, es := newState(t)
 	tt := trie.NewEmptyTrie()
 	rt := runtime.NewTestRuntimeWithTrie(t, runtime.NODE_RUNTIME, tt, log.LvlInfo)
 
@@ -34,6 +39,7 @@ func newBABEService(t *testing.T) *babe.Service {
 
 	cfg := &babe.ServiceConfig{
 		BlockState: bs,
+		EpochState: es,
 		Keypair:    kr.Alice,
 		Runtime:    rt,
 	}

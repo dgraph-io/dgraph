@@ -41,13 +41,18 @@ var testGenesisHeader = &types.Header{
 	StateRoot: trie.EmptyHash,
 }
 
+var firstEpochInfo = &types.EpochInfo{
+	Duration:   200,
+	FirstBlock: 0,
+}
+
 func newTestState(t *testing.T) *state.Service {
 	stateSrvc := state.NewService("", log.LvlInfo)
 	stateSrvc.UseMemDB()
 
 	genesisData := new(genesis.Data)
 
-	err := stateSrvc.Initialize(genesisData, testGenesisHeader, trie.NewEmptyTrie())
+	err := stateSrvc.Initialize(genesisData, testGenesisHeader, trie.NewEmptyTrie(), firstEpochInfo)
 	require.NoError(t, err)
 
 	err = stateSrvc.Start()

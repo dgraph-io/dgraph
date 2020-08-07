@@ -41,6 +41,7 @@ type Service struct {
 	Block            *BlockState
 	Network          *NetworkState
 	TransactionQueue *TransactionQueue
+	Epoch            *EpochState
 }
 
 // NewService create a new instance of Service
@@ -72,7 +73,7 @@ func (s *Service) DB() chaindb.Database {
 
 // Initialize initializes the genesis state of the DB using the given storage trie. The trie should be loaded with the genesis storage state.
 // This only needs to be called during genesis initialization of the node; it doesn't need to be called during normal startup.
-func (s *Service) Initialize(data *genesis.Data, header *types.Header, t *trie.Trie) error {
+func (s *Service) Initialize(data *genesis.Data, header *types.Header, t *trie.Trie, epochInfo *types.EpochInfo) error {
 	var db chaindb.Database
 
 	// check database type
@@ -121,6 +122,11 @@ func (s *Service) Initialize(data *genesis.Data, header *types.Header, t *trie.T
 		return fmt.Errorf("failed to create block state from genesis: %s", err)
 	}
 
+	epochState, err := NewEpochStateFromGenesis(db, epochInfo)
+	if err != nil {
+		return fmt.Errorf("failed to create epoch state: %s", err)
+	}
+
 	// check database type
 	if s.isMemDB {
 
@@ -130,6 +136,7 @@ func (s *Service) Initialize(data *genesis.Data, header *types.Header, t *trie.T
 		// append storage state and block state to state service
 		s.Storage = storageState
 		s.Block = blockState
+		s.Epoch = epochState
 
 	} else {
 
@@ -175,7 +182,7 @@ func (s *Service) storeInitialValues(db chaindb.Database, data *genesis.Data, he
 
 // Start initializes the Storage database and the Block database.
 func (s *Service) Start() error {
-	if !s.isMemDB && (s.Storage != nil || s.Block != nil || s.Network != nil) {
+	if !s.isMemDB && (s.Storage != nil || s.Block != nil || s.Network != nil || s.Epoch != nil) {
 		return nil
 	}
 
@@ -240,6 +247,9 @@ func (s *Service) Start() error {
 
 	// create transaction queue
 	s.TransactionQueue = NewTransactionQueue()
+
+	// create epoch state
+	s.Epoch = NewEpochState(db)
 
 	return nil
 }

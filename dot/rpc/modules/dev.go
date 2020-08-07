@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
@@ -106,11 +105,11 @@ func (m *DevModule) SetBABERandomness(r *http.Request, req *[]string, res *strin
 		return err
 	}
 
-	if len(reqB) != babe.RandomnessLength {
-		return fmt.Errorf("expected randomness value of %v bytes, received %v bytes", babe.RandomnessLength, len(reqB))
+	if len(reqB) != types.RandomnessLength {
+		return fmt.Errorf("expected randomness value of %v bytes, received %v bytes", types.RandomnessLength, len(reqB))
 	}
 
-	b := [babe.RandomnessLength]byte{}
+	b := [types.RandomnessLength]byte{}
 	for i := range b {
 		b[i] = reqB[i]
 	}

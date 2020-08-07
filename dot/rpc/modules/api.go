@@ -5,7 +5,6 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/runtime"
@@ -47,8 +46,8 @@ type BlockProducerAPI interface {
 	Pause() error
 	Resume() error
 	SetAuthorities(data []*types.BABEAuthorityData) error
-	SetEpochThreshold(a *big.Int)
-	SetRandomness(a [babe.RandomnessLength]byte)
+	SetRandomness([types.RandomnessLength]byte)
+	SetEpochThreshold(*big.Int)
 }
 
 // TransactionQueueAPI ...

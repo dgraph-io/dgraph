@@ -88,12 +88,10 @@ func addAuthorshipProof(t *testing.T, babeService *Service, slotNumber uint64) {
 	babeService.slotToProof[slotNumber] = outAndProof
 }
 
-func createTestBlock(t *testing.T, babeService *Service, parent *types.Header, exts [][]byte) (*types.Block, Slot) {
+func createTestBlock(t *testing.T, babeService *Service, parent *types.Header, exts [][]byte, slotNumber uint64) (*types.Block, Slot) {
 	// create proof that we can authorize this block
 	babeService.epochThreshold = maxThreshold
 	babeService.authorityIndex = 0
-
-	slotNumber := uint64(1)
 
 	addAuthorshipProof(t, babeService, slotNumber)
 
@@ -139,7 +137,7 @@ func TestBuildBlock_ok(t *testing.T) {
 	// TODO: re-add extrinsic
 	exts := [][]byte{}
 
-	block, slot := createTestBlock(t, babeService, emptyHeader, exts)
+	block, slot := createTestBlock(t, babeService, emptyHeader, exts, 1)
 
 	// create pre-digest
 	preDigest, err := babeService.buildBlockPreDigest(slot)

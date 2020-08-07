@@ -128,3 +128,13 @@ func BABEAuthorityDataRawToAuthorityData(adr []*BABEAuthorityDataRaw) ([]*BABEAu
 
 	return ad, nil
 }
+
+// RandomnessLength is the length of the epoch randomness (32 bytes)
+const RandomnessLength = 32
+
+// EpochInfo is internal BABE information for a given epoch
+type EpochInfo struct {
+	Duration   uint64 // number of slots in the epoch
+	FirstBlock uint64 // number of the first block in the epoch
+	Randomness [RandomnessLength]byte
+}

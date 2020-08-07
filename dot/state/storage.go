@@ -28,7 +28,7 @@ import (
 )
 
 var storagePrefix = []byte("storage")
-var codeKey = []byte(":code")
+var codeKey = common.CodeKey
 
 // StorageDB stores trie structure in an underlying database
 type StorageDB struct {

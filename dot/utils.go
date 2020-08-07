@@ -19,7 +19,6 @@ package dot
 import (
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -81,6 +80,7 @@ func NewTestConfig(t *testing.T) *Config {
 	}
 
 	cfg.Core.BabeThreshold = ""
+	cfg.Init.TestFirstEpoch = true
 	return cfg
 }
 
@@ -89,13 +89,9 @@ func NewTestConfigWithFile(t *testing.T) (*Config, *os.File) {
 	cfg := NewTestConfig(t)
 
 	file, err := ioutil.TempFile(cfg.Global.BasePath, "config-")
-	if err != nil {
-		fmt.Println(fmt.Errorf("failed to create temporary file: %s", err))
-		require.NoError(t, err)
-	}
+	require.NoError(t, err)
 
 	cfgFile := ExportConfig(cfg, file.Name())
-
 	return cfg, cfgFile
 }
 
@@ -104,9 +100,7 @@ func NewTestGenesis(t *testing.T) *genesis.Genesis {
 	fp := utils.GetGssmrGenesisRawPath()
 
 	gssmrGen, err := genesis.NewGenesisFromJSONRaw(fp)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	return &genesis.Genesis{
 		Name:       "test",

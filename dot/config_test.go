@@ -82,6 +82,7 @@ func TestLoadConfigGssmr(t *testing.T) {
 
 	cfg.Global.BasePath = utils.NewTestDir(t)
 	cfg.Init.GenesisRaw = GssmrGenesisPath
+	cfg.Init.TestFirstEpoch = true
 
 	defer utils.RemoveTestDir(t)
 
@@ -104,6 +105,7 @@ func TestLoadConfigKsmcc(t *testing.T) {
 
 	cfg.Global.BasePath = utils.NewTestDir(t)
 	cfg.Init.GenesisRaw = KsmccGenesisPath
+	cfg.Init.TestFirstEpoch = true
 
 	defer utils.RemoveTestDir(t)
 

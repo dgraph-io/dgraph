@@ -31,6 +31,9 @@ import (
 	"github.com/naoina/toml"
 )
 
+// TODO: create separate types for toml config and internal config, needed since we don't want to expose all
+// the internal config options, also type conversions might be needed from toml -> internal types
+
 // Config is a collection of configurations throughout the system
 type Config struct {
 	Global  GlobalConfig     `toml:"global"`
@@ -66,7 +69,8 @@ type LogConfig struct {
 
 // InitConfig is the configuration for the node initialization
 type InitConfig struct {
-	GenesisRaw string `toml:"genesis-raw"`
+	GenesisRaw     string `toml:"genesis-raw"`
+	TestFirstEpoch bool   `toml:"test-first-epoch"` // TODO: separate config file options vs. internal configuration
 }
 
 // AccountConfig is to marshal/unmarshal account config vars

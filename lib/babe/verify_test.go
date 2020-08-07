@@ -43,7 +43,7 @@ func newTestVerificationManager(t *testing.T, descriptor *Descriptor) *Verificat
 
 	genesisData := new(genesis.Data)
 
-	err := dbSrv.Initialize(genesisData, genesisHeader, trie.NewEmptyTrie())
+	err := dbSrv.Initialize(genesisData, genesisHeader, trie.NewEmptyTrie(), firstEpochInfo)
 	require.NoError(t, err)
 
 	err = dbSrv.Start()
@@ -62,7 +62,7 @@ func newTestVerificationManager(t *testing.T, descriptor *Descriptor) *Verificat
 func TestVerificationManager_SetAuthorityChangeAtBlock(t *testing.T) {
 	descriptor := &Descriptor{
 		AuthorityData: []*types.BABEAuthorityData{{Weight: 1}},
-		Randomness:    [RandomnessLength]byte{77},
+		Randomness:    [types.RandomnessLength]byte{77},
 		Threshold:     big.NewInt(99),
 	}
 
@@ -125,7 +125,7 @@ func TestVerificationManager_VerifyBlock(t *testing.T) {
 
 	vm := newTestVerificationManager(t, descriptor)
 
-	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
+	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{}, 1)
 	err := vm.blockState.AddBlock(block)
 	require.NoError(t, err)
 
@@ -174,7 +174,7 @@ func TestVerificationManager_VerifyBlock_Branches(t *testing.T) {
 	require.NoError(t, err)
 
 	// create a branch at block 1 on chain A
-	randomnessA := [RandomnessLength]byte{0x77}
+	randomnessA := [types.RandomnessLength]byte{0x77}
 
 	descriptorA := &Descriptor{
 		AuthorityData: descriptor.AuthorityData,
@@ -186,7 +186,7 @@ func TestVerificationManager_VerifyBlock_Branches(t *testing.T) {
 	require.Equal(t, []int64{1, 0}, vm.branchNums)
 
 	// create and verify block that's descendant of block B, should verify
-	block, _ := createTestBlock(t, babeService, block1b, [][]byte{})
+	block, _ := createTestBlock(t, babeService, block1b, [][]byte{}, 1)
 	require.NoError(t, err)
 
 	ok, err := vm.VerifyBlock(block.Header)
@@ -195,7 +195,7 @@ func TestVerificationManager_VerifyBlock_Branches(t *testing.T) {
 
 	// create and verify block that's descendant of block A, should verify
 	babeService.randomness = randomnessA
-	block, _ = createTestBlock(t, babeService, block1a, [][]byte{})
+	block, _ = createTestBlock(t, babeService, block1a, [][]byte{}, 1)
 	require.NoError(t, err)
 
 	ok, err = vm.VerifyBlock(block.Header)
@@ -257,7 +257,7 @@ func TestVerifySlotWinner(t *testing.T) {
 
 func TestVerifyAuthorshipRight(t *testing.T) {
 	babeService := createTestService(t, nil)
-	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
+	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{}, 1)
 
 	verifier, err := newVerifier(babeService.blockState, babeService.Descriptor())
 	if err != nil {
@@ -292,7 +292,7 @@ func TestVerifyAuthorshipRight_Equivocation(t *testing.T) {
 	}
 
 	// create and add first block
-	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
+	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{}, 1)
 	block.Header.Hash()
 
 	err = babeService.blockState.AddBlock(block)
@@ -310,7 +310,7 @@ func TestVerifyAuthorshipRight_Equivocation(t *testing.T) {
 	require.True(t, ok)
 
 	// create new block
-	block2, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
+	block2, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{}, 1)
 	block2.Header.Hash()
 
 	t.Log(block2.Header)

@@ -24,7 +24,6 @@ import (
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/keystore"
@@ -43,6 +42,11 @@ var testGenesisHeader = &types.Header{
 	StateRoot: trie.EmptyHash,
 }
 
+var firstEpochInfo = &types.EpochInfo{
+	Duration:   200,
+	FirstBlock: 0,
+}
+
 type mockVerifier struct{}
 
 func (v *mockVerifier) SetRuntimeChangeAtBlock(header *types.Header, rt *runtime.Runtime) error {
@@ -55,9 +59,7 @@ func (v *mockVerifier) SetAuthorityChangeAtBlock(header *types.Header, auths []*
 
 // mockBlockProducer implements the BlockProducer interface
 type mockBlockProducer struct {
-	auths          []*types.BABEAuthorityData
-	epochThreshold *big.Int
-	randomness     [babe.RandomnessLength]byte
+	auths []*types.BABEAuthorityData
 }
 
 // Start mocks starting
@@ -77,15 +79,6 @@ func (bp *mockBlockProducer) Authorities() []*types.BABEAuthorityData {
 func (bp *mockBlockProducer) SetAuthorities(a []*types.BABEAuthorityData) error {
 	bp.auths = a
 	return nil
-}
-
-func (bp *mockBlockProducer) SetEpochThreshold(a *big.Int) {
-	bp.epochThreshold = a
-}
-
-// SetBABERandomness mocks SetBABERandomness
-func (bp *mockBlockProducer) SetRandomness(a [babe.RandomnessLength]byte) {
-	bp.randomness = a
 }
 
 // GetBlockChannel returns a new channel
@@ -206,7 +199,7 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 
 	genesisData := new(genesis.Data)
 
-	err := stateSrvc.Initialize(genesisData, testGenesisHeader, trie.NewEmptyTrie())
+	err := stateSrvc.Initialize(genesisData, testGenesisHeader, trie.NewEmptyTrie(), firstEpochInfo)
 	require.Nil(t, err)
 
 	err = stateSrvc.Start()
