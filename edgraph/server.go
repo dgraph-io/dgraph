@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net"
 	"sort"
@@ -36,6 +37,7 @@ import (
 	"go.opencensus.io/tag"
 	"go.opencensus.io/trace"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -997,7 +999,8 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
-
+	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
+	grpc.SendHeader(ctx, md)
 	return resp, nil
 }
 
