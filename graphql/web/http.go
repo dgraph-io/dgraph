@@ -20,11 +20,10 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"strconv"
-	"time"
-
 	"github.com/dgrijalva/jwt-go/v4"
 	"google.golang.org/grpc/metadata"
+	"strconv"
+	"time"
 
 	"io"
 	"io/ioutil"
@@ -127,13 +126,11 @@ func (gs *graphqlSubscription) Subscribe(
 
 	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us in the context.
 	// And we are extracting the Auth JWT from those and passing them along.
-
-	header, _ := ctx.Value("Header").(json.RawMessage)
 	customClaims := &authorization.CustomClaims{
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: jwt.At(time.Time{}),
-		},
+		StandardClaims: jwt.StandardClaims{},
 	}
+	header, _ := ctx.Value("Header").(json.RawMessage)
+
 	if len(header) > 0 {
 		payload := make(map[string]interface{})
 		if err := json.Unmarshal(header, &payload); err != nil {
@@ -155,7 +152,11 @@ func (gs *graphqlSubscription) Subscribe(
 			}
 		}
 	}
-
+	// for the cases when no expiry is given in jwt or subscription doesn't have any authorization,
+	// we set their expiry to zero time
+	if customClaims.StandardClaims.ExpiresAt == nil {
+		customClaims.StandardClaims.ExpiresAt = jwt.At(time.Time{})
+	}
 	req := &schema.Request{
 		OperationName: operationName,
 		Query:         document,
