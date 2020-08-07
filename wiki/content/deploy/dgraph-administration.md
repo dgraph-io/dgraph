@@ -208,12 +208,16 @@ dgraph upgrade --acl -a localhost:9080 -u groot -p password
 5. [Restore]({{< relref "enterprise-features/binary-backups.md#restore-from-backup">}}) from the backups using upgraded `dgraph` binary
 6. Start a new Dgraph cluster using the restored data directories
 7. Upgrade ACL data using the following command:
-
-```
-dgraph upgrade --acl -a localhost:9080 -u groot -p password -f v20.03.0 -t v20.07.0
-```
-
-You can use `--dry-run` option in `dgraph upgrade` command to see what the upgrade command will do.
+    ```
+    dgraph upgrade --acl -a localhost:9080 -u groot -p password -f v20.03.0 -t v20.07.0
+    ```
+    You can use `--dry-run` option in `dgraph upgrade` command to see a dry run of what the upgrade
+    command will do.
+8. If you have introduced types or predicates in your schema whose names start with `dgraph.`, then
+you would need to manually alter schema to change their names to something else which isn't
+prefixed with `dgraph.`, and also do mutations to change the value of `dgraph.type` edge to the
+new type name and copy data from old predicate name to new predicate name for all the nodes which
+are affected. Then, you can drop the old types and predicates from DB.
 
 {{% notice "note" %}}
 If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section](/howto/#schema-types-scalar-uid-and-list-uid).
