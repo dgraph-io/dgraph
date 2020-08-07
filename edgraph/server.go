@@ -1074,6 +1074,8 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 			respMap["types"] = formatTypes(er.Types)
 		}
 		resp.Json, err = json.Marshal(respMap)
+	} else if qc.req.RespFormat == api.Request_RDF {
+		resp.Rdf, err = query.ToRDF(qc.latency, er.Subgraphs)
 	} else {
 		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs)
 	}

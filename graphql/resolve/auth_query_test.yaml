@@ -1,3 +1,192 @@
+- name: "Deep RBAC rule - All level true"
+  gqlquery: |
+    query {
+      queryContact {
+        id
+        nickName
+        adminTasks {
+          id
+          name
+          occurrances {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: ADMINISTRATOR
+    TaskRole: ADMINISTRATOR
+    TaskOccuranceRole: ADMINISTRATOR
+  dgquery: |-
+    query {
+      queryContact(func: uid(ContactRoot)) {
+        id : uid
+        nickName : Contact.nickName
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask5)) {
+          id : uid
+          name : AdminTask.name
+          occurrances : AdminTask.occurrances @filter(uid(TaskOccurance4)) {
+            due : TaskOccurance.due
+            comp : TaskOccurance.comp
+            dgraph.uid : uid
+          }
+        }
+      }
+      ContactRoot as var(func: uid(Contact6))
+      Contact6 as var(func: type(Contact))
+      var(func: uid(ContactRoot)) {
+        AdminTask1 as Contact.adminTasks
+      }
+      AdminTask5 as var(func: uid(AdminTask1))
+      var(func: uid(AdminTask1)) {
+        TaskOccurance2 as AdminTask.occurrances
+      }
+      TaskOccurance4 as var(func: uid(TaskOccurance2)) @filter(uid(TaskOccuranceAuth3))
+      TaskOccuranceAuth3 as var(func: uid(TaskOccurance2)) @filter(eq(TaskOccurance.role, "ADMINISTRATOR")) @cascade
+    }
+
+- name: "Deep RBAC rule - Level 0 false"
+  gqlquery: |
+    query {
+      queryContact {
+        id
+        nickName
+        adminTasks {
+          id
+          name
+          occurrances {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: User
+    TaskRole: ADMINISTRATOR
+    TaskOccuranceRole: ADMINISTRATOR
+  dgquery: |-
+    query {
+      queryContact()
+    }
+
+- name: "Deep RBAC rule - Level 1 false"
+  gqlquery: |
+    query {
+      queryContact {
+        id
+        nickName
+        adminTasks {
+          id
+          name
+          occurrances {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: ADMINISTRATOR
+    TaskRole: User
+    TaskOccuranceRole: ADMINISTRATOR
+  dgquery: |-
+    query {
+      queryContact(func: uid(ContactRoot)) {
+        id : uid
+        nickName : Contact.nickName
+      }
+      ContactRoot as var(func: uid(Contact5))
+      Contact5 as var(func: type(Contact))
+    }
+
+- name: "Deep RBAC rule - Level 2 false"
+  gqlquery: |
+    query {
+      queryContact {
+        id
+        nickName
+        adminTasks {
+          id
+          name
+          occurrances {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: ADMINISTRATOR
+    TaskRole: ADMINISTRATOR
+    TaskOccuranceRole: User
+  dgquery: |-
+    query {
+      queryContact(func: uid(ContactRoot)) {
+        id : uid
+        nickName : Contact.nickName
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask3)) {
+          id : uid
+          name : AdminTask.name
+        }
+      }
+      ContactRoot as var(func: uid(Contact4))
+      Contact4 as var(func: type(Contact))
+      var(func: uid(ContactRoot)) {
+        AdminTask1 as Contact.adminTasks
+      }
+      AdminTask3 as var(func: uid(AdminTask1))
+    }
+
+- name: "Deep RBAC rule - Level 1 type without auth."
+  gqlquery: |
+    query {
+      queryContact {
+        id
+        nickName
+        tasks {
+          id
+          name
+          occurrances {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: ADMINISTRATOR
+    TaskRole: ADMINISTRATOR
+    TaskOccuranceRole: ADMINISTRATOR
+  dgquery: |-
+    query {
+      queryContact(func: uid(ContactRoot)) {
+        id : uid
+        nickName : Contact.nickName
+        tasks : Contact.tasks @filter(uid(Task5)) {
+          id : uid
+          name : Task.name
+          occurrances : Task.occurrances @filter(uid(TaskOccurance4)) {
+            due : TaskOccurance.due
+            comp : TaskOccurance.comp
+            dgraph.uid : uid
+          }
+        }
+      }
+      ContactRoot as var(func: uid(Contact6))
+      Contact6 as var(func: type(Contact))
+      var(func: uid(ContactRoot)) {
+        Task1 as Contact.tasks
+      }
+      Task5 as var(func: uid(Task1))
+      var(func: uid(Task1)) {
+        TaskOccurance2 as Task.occurrances
+      }
+      TaskOccurance4 as var(func: uid(TaskOccurance2)) @filter(uid(TaskOccuranceAuth3))
+      TaskOccuranceAuth3 as var(func: uid(TaskOccurance2)) @filter(eq(TaskOccurance.role, "ADMINISTRATOR")) @cascade
+    }
+
 - name: "Auth query with @dgraph pred."
   gqlquery: |
     query {
@@ -5,7 +194,9 @@
         email
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
       queryStudent(func: uid(StudentRoot)) {
@@ -24,7 +215,9 @@
         email
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
       queryStudent()
@@ -41,6 +234,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       getProject(func: uid(ProjectRoot)) @filter(type(Project)) {
@@ -83,6 +278,8 @@
         ownedBy
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryUserSecret(func: uid(UserSecretRoot)) {
@@ -102,6 +299,8 @@
         ownedBy
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       getUserSecret(func: uid(UserSecretRoot)) @filter(type(UserSecret)) {
@@ -121,6 +320,8 @@
         ownedBy
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryUserSecret(func: uid(UserSecretRoot)) {
@@ -141,26 +342,28 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
-      query {
-        queryUser(func: uid(UserRoot)) {
-          issues : User.issues @filter(uid(Issue3)) {
-            id : uid
-          }
-          dgraph.uid : uid
+    query {
+      queryUser(func: uid(UserRoot)) {
+        issues : User.issues @filter(uid(Issue3)) {
+          id : uid
         }
-        UserRoot as var(func: uid(User4))
-        User4 as var(func: type(User))
-        var(func: uid(UserRoot)) {
-          Issue1 as User.issues
-        }
-        Issue3 as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
-        IssueAuth2 as var(func: uid(Issue1)) @cascade {
-          owner : Issue.owner @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
-        }
+        dgraph.uid : uid
       }
+      UserRoot as var(func: uid(User4))
+      User4 as var(func: type(User))
+      var(func: uid(UserRoot)) {
+        Issue1 as User.issues
+      }
+      Issue3 as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
+      IssueAuth2 as var(func: uid(Issue1)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+    }
 
 - name: "Deep RBAC rules false"
   gqlquery: |
@@ -172,7 +375,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
       query {
         queryUser(func: uid(UserRoot)) {
@@ -191,7 +396,9 @@
         msg
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
       queryIssue(func: uid(IssueRoot)) {
@@ -213,7 +420,9 @@
         logs
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
       queryComplexLog(func: uid(ComplexLogRoot)) {
@@ -231,7 +440,9 @@
         logs
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
       queryComplexLog()
@@ -244,7 +455,9 @@
         logs
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
       queryLog(func: uid(LogRoot)) {
@@ -262,7 +475,9 @@
         logs
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
      query {
        queryLog()
@@ -275,7 +490,9 @@
         msg
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
      query {
        queryIssue()
@@ -289,7 +506,9 @@
         name
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
      query {
        queryProject(func: uid(ProjectRoot)) {
@@ -307,6 +526,8 @@
         id
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryGroup(func: uid(GroupRoot)) {
@@ -331,7 +552,9 @@
         name
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
       queryProject(func: uid(ProjectRoot)) {
@@ -357,6 +580,8 @@
         ownedBy
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryUserSecret(func: uid(UserSecretRoot), orderasc: UserSecret.aSecret) {
@@ -376,6 +601,8 @@
         title
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryTicket(func: uid(TicketRoot)) {
@@ -410,6 +637,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -452,6 +681,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -490,6 +721,8 @@
         content
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
@@ -523,6 +756,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content) @cascade {
@@ -574,6 +809,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
@@ -632,6 +869,8 @@
         content
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot)) {
@@ -673,6 +912,8 @@
         id
       }
     }
+  jwtvar:
+    USER: "user1"
   dgquery: |-
     query {
       getLog()
@@ -706,7 +947,8 @@
         name
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
   dgquery: |-
     query {
       queryProject(func: uid(ProjectRoot)) {

@@ -2908,7 +2908,6 @@ func threeLevelDeepMutation(t *testing.T) {
 	}
 
 	gqlResponse := postExecutor(t, graphqlURL, addStudentParams)
-	fmt.Println(string(gqlResponse.Data))
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var actualResult struct {
@@ -3174,4 +3173,33 @@ func mutationsWithAlias(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, multiMutationExpected, string(gqlResponse.Data))
+}
+
+func updateMutationWithoutSetRemove(t *testing.T) {
+	country := addCountry(t, postExecutor)
+
+	updateCountryParams := &GraphQLParams{
+		Query: `mutation updateCountry($id: ID!){
+			updateCountry(input: {filter: {id: [$id]}}) {
+				numUids
+				country {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"id": country.ID},
+	}
+	gqlResponse := updateCountryParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	require.JSONEq(t, `{
+		"updateCountry": {
+			"numUids": 0,
+			"country": []
+    	}
+	}`, string(gqlResponse.Data))
+
+	// cleanup
+	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
 }

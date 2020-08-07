@@ -331,9 +331,8 @@ func (enc *encoder) IsEmpty(fj fastJsonNode) bool {
 }
 
 var (
-	boolTrue    = []byte("true")
-	boolFalse   = []byte("false")
-	emptyString = []byte(`""`)
+	boolTrue  = []byte("true")
+	boolFalse = []byte("false")
 
 	// Below variables are used in stringJsonMarshal function.
 	bufferPool = sync.Pool{
@@ -465,11 +464,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 		}
 		return boolFalse, nil
 	case types.DateTimeID:
-		// Return empty string instead of zero-time value string - issue#3166
 		t := v.Value.(time.Time)
-		if t.IsZero() {
-			return emptyString, nil
-		}
 		return t.MarshalJSON()
 	case types.GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
