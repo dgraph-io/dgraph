@@ -1007,6 +1007,10 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
 	resp := &api.Response{}
 	if len(qc.req.Query) == 0 {
+		// No query, so make the query cost 0.
+		resp.Metrics = &api.Metrics{
+			NumUids: map[string]uint64{"_total": 0},
+		}
 		return resp, nil
 	}
 	if ctx.Err() != nil {
