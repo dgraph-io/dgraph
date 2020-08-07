@@ -207,14 +207,14 @@ func queryWithTsForResp(queryText, contentType, debug string, ts uint64) (string
 	}
 	url := addr + "/query?" + strings.Join(params, "&")
 
-	_, body, cost, err := runWithRetriesForCost("POST", contentType, url, queryText)
+	_, body, resp, err := runWithRetriesForResp("POST", contentType, url, queryText)
 	if err != nil {
-		return "", 0, cost, err
+		return "", 0, resp, err
 	}
 
 	var r res
 	if err := json.Unmarshal(body, &r); err != nil {
-		return "", 0, cost, err
+		return "", 0, resp, err
 	}
 	startTs := r.Extensions.Txn.StartTs
 
@@ -224,7 +224,7 @@ func queryWithTsForResp(queryText, contentType, debug string, ts uint64) (string
 	}
 	output, err := json.Marshal(r2)
 
-	return string(output), startTs, cost, err
+	return string(output), startTs, resp, err
 }
 
 type mutationResponse struct {
