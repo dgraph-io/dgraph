@@ -568,7 +568,7 @@ func TestTransactionForCost(t *testing.T) {
 
 	_, _, cost, err := queryWithTsForCost(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
-	fmt.Println(cost)
+	require.Equal(t, "2", cost)
 }
 
 func TestTransactionBasicOldCommitFormat(t *testing.T) {
