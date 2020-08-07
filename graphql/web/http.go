@@ -141,17 +141,16 @@ func (gs *graphqlSubscription) Subscribe(
 		}
 
 		name := authorization.GetHeader()
-		var val string
-		var ok = false
-		for k := range payload {
-			if strings.EqualFold(k, name) {
-				val, ok = payload[k].(string)
+		var val, key string
+		var ok bool
+		for key, val = range payload {
+			if strings.EqualFold(key, name) {
+				val, ok = payload[key].(string)
 				break
 			}
 		}
 
 		if ok {
-
 			md := metadata.New(map[string]string{
 				"authorizationJwt": val,
 			})
