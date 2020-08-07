@@ -18,9 +18,12 @@ package schema
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
+
+	"github.com/vektah/gqlparser/v2/parser"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/google/go-cmp/cmp"
@@ -481,6 +484,48 @@ func TestParseBodyTemplate(t *testing.T) {
 			nil,
 		},
 		{
+			"parses body template with direct variable correctly",
+			`$authors`,
+			"$authors",
+			map[string]bool{"authors": true},
+			nil,
+		},
+		{
+			"parses body template with direct hardcoded int correctly",
+			`67`,
+			int64(67),
+			map[string]bool{},
+			nil,
+		},
+		{
+			"parses body template with direct hardcoded float correctly",
+			`67.23`,
+			67.23,
+			map[string]bool{},
+			nil,
+		},
+		{
+			"parses body template with direct hardcoded boolean correctly",
+			`true`,
+			true,
+			map[string]bool{},
+			nil,
+		},
+		{
+			"parses body template with direct hardcoded string correctly",
+			`"alice"`,
+			"alice",
+			map[string]bool{},
+			nil,
+		},
+		{
+			"parses body template with direct hardcoded null correctly",
+			`null`,
+			nil,
+			map[string]bool{},
+			nil,
+		},
+		{
 			"parses empty object body template correctly",
 			`{}`,
 			map[string]interface{}{},
@@ -515,33 +560,37 @@ func TestParseBodyTemplate(t *testing.T) {
 			nil,
 		},
 		{
-			"parses body template with direct variable correctly",
-			`$authors`,
-			"$authors",
-			map[string]bool{"authors": true},
+			"parses body template with an array of object and hardcoded scalars correctly",
+			`{ author: $id, admin: false, post: { id: $postID, rating: 4.5, 
+				comments: [{ text: $text, type: "hidden" }] }, age: 23, meta: null}`,
+			map[string]interface{}{"author": "$id", "admin": false,
+				"post": map[string]interface{}{"id": "$postID", "rating": 4.5,
+					"comments": []interface{}{map[string]interface{}{"text": "$text",
+						"type": "hidden"}}},
+				"age": int64(23), "meta": nil},
+			map[string]bool{"id": true, "postID": true, "text": true},
 			nil,
 		},
 		{
-			"json unmarshal error",
+			"bad template error",
 			`{ author: $id, post: { id $postID }}`,
 			nil,
 			nil,
-			errors.New("couldn't unmarshal HTTP body: {\"author\":\"$id\",\"post\":{\"id\"\"$postID\"}}" +
-				" as JSON"),
+			errors.New("input:1: Expected :, found $"),
 		},
 		{
 			"unmatched brackets error",
 			`{{ author: $id, post: { id: $postID }}`,
 			nil,
 			nil,
-			errors.New("found unmatched curly braces while parsing body template"),
+			errors.New("input:1: Expected Name, found {"),
 		},
 		{
 			"invalid character error",
 			`(author: $id, post: { id: $postID }}`,
 			nil,
 			nil,
-			errors.New("invalid character: ( while parsing body template"),
+			errors.New("input:1: Unexpected ("),
 		},
 	}
 
@@ -1080,5 +1129,54 @@ func TestParseSecrets(t *testing.T) {
 				require.Equal(t, test.expectedAuthHeader, authorization.GetHeader())
 			}
 		})
+	}
+}
+
+func Test(t *testing.T) {
+	doc, err := parser.ParseQuery(&ast.Source{Input: `query { userNames(id: $id, int: 1,
+float: 3.14, bool: true, string: "test", block: """my block""", nullVal: null, list: [1,3.1,{c:b}],
+car: { age: $age }, enumVal: ONE) }`})
+	fmt.Println(err)
+	args := doc.Operations[0].SelectionSet[0].(*ast.Field).Arguments
+	for _, arg := range args {
+		fmt.Println("**************************************")
+		fmt.Println("Name: ", arg.Name)
+		fmt.Println("Value: ", arg.Value.String())
+		fmt.Println("Raw: ", arg.Value.Raw)
+		fmt.Println("Kind: ", getKindName(arg.Value.Kind))
+		fmt.Println("VarDef: ", arg.Value.VariableDefinition)
+		fmt.Println("Def: ", arg.Value.Definition)
+		fmt.Println("ExpectedType: ", arg.Value.ExpectedType)
+		if arg.Value.Kind == ast.ListValue || arg.Value.Kind == ast.ObjectValue {
+			fmt.Println("Child[0].Name: ", arg.Value.Children[0].Name)
+		}
+		fmt.Println("**************************************")
+	}
+}
+
+func getKindName(kind ast.ValueKind) string {
+	switch kind {
+	case ast.ListValue:
+		return "ListValue"
+	case ast.ObjectValue:
+		return "ObjectValue"
+	case ast.NullValue:
+		return "NullValue"
+	case ast.Variable:
+		return "Variable"
+	case ast.BlockValue:
+		return "BlockValue"
+	case ast.BooleanValue:
+		return "BooleanValue"
+	case ast.EnumValue:
+		return "EnumValue"
+	case ast.FloatValue:
+		return "FloatValue"
+	case ast.IntValue:
+		return "IntValue"
+	case ast.StringValue:
+		return "StringValue"
+	default:
+		return "Unknown value"
 	}
 }

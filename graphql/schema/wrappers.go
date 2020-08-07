@@ -18,7 +18,6 @@ package schema
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -26,7 +25,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"text/scanner"
 
 	"github.com/vektah/gqlparser/v2/parser"
 
@@ -1816,64 +1814,86 @@ func isName(s string) bool {
 	return true
 }
 
+func parseAsGraphQLArg(bodyTemplate string) (*ast.Value, error) {
+	// bodyTemplate is always formed like { k1: 3.4, k2: $var, k3: "string", ...},
+	// so the `input` arg here will have an object value after parsing
+	doc, err := parser.ParseQuery(&ast.Source{Input: `query { dummy(input:` + bodyTemplate + `) }`})
+	if err != nil {
+		return nil, err
+	}
+	return doc.Operations[0].SelectionSet[0].(*ast.Field).Arguments[0].Value, nil
+}
+
+func parseAsJSONTemplate(value *ast.Value, vars map[string]bool, strictJSON bool) (interface{}, error) {
+	switch value.Kind {
+	case ast.ObjectValue:
+		m := make(map[string]interface{})
+		for _, elem := range value.Children {
+			elemVal, err := parseAsJSONTemplate(elem.Value, vars, strictJSON)
+			if err != nil {
+				return nil, err
+			}
+			m[elem.Name] = elemVal
+		}
+		return m, nil
+	case ast.ListValue:
+		var l []interface{}
+		for _, elem := range value.Children {
+			elemVal, err := parseAsJSONTemplate(elem.Value, vars, strictJSON)
+			if err != nil {
+				return nil, err
+			}
+			l = append(l, elemVal)
+		}
+		return l, nil
+	case ast.Variable:
+		vars[value.Raw] = true
+		return value.String(), nil
+	case ast.IntValue:
+		return strconv.ParseInt(value.Raw, 10, 64)
+	case ast.FloatValue:
+		return strconv.ParseFloat(value.Raw, 64)
+	case ast.BooleanValue:
+		return strconv.ParseBool(value.Raw)
+	case ast.StringValue:
+		return value.Raw, nil
+	case ast.BlockValue, ast.EnumValue:
+		if strictJSON {
+			return nil, fmt.Errorf("found unexpected value: %s", value.String())
+		}
+		return value.Raw, nil
+	case ast.NullValue:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unknown value kind: %d, for value: %s", value.Kind, value.String())
+	}
+}
+
 // Given a template for a body with variables defined, this function parses the body
-// and converts it into a JSON representation and returns that. It also returns a list of the field
-// names that are required by this template.
+// and converts it into a JSON representation and returns that. It also returns a list of the
+// variable names that are required by this template.
 // for e.g.
 // { author: $id, post: { id: $postID }}
 // would return
 // { "author" : "$id", "post": { "id": "$postID" }} and { "id": true, "postID": true}
 // If the final result is not a valid JSON, then an error is returned.
 func parseBodyTemplate(body string) (*interface{}, map[string]bool, error) {
-	var s scanner.Scanner
-	s.Init(strings.NewReader(body))
-
-	result := new(bytes.Buffer)
-	parsingVariable := false
-	depth := 0
-	requiredFields := make(map[string]bool)
-	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
-		text := s.TokenText()
-		switch {
-		case text == "{":
-			result.WriteString(text)
-			depth++
-		case text == "}":
-			depth--
-			result.WriteString(text)
-		case text == ":" || text == "," || text == "[" || text == "]":
-			result.WriteString(text)
-		case text == "$":
-			parsingVariable = true
-		case isName(text):
-			// Name could either be a key or be part of a variable after dollar.
-			if !parsingVariable {
-				result.WriteString(fmt.Sprintf(`"%s"`, text))
-				continue
-			}
-			requiredFields[text] = true
-			variable := "$" + text
-			fmt.Fprintf(result, `"%s"`, variable)
-			parsingVariable = false
-
-		default:
-			return nil, nil, errors.Errorf("invalid character: %s while parsing body template",
-				text)
-		}
-	}
-	if depth != 0 {
-		return nil, nil, errors.New("found unmatched curly braces while parsing body template")
-	}
-
-	if result.Len() == 0 {
+	if strings.TrimSpace(body) == "" {
 		return nil, nil, nil
 	}
 
-	var m interface{}
-	if err := json.Unmarshal(result.Bytes(), &m); err != nil {
-		return nil, nil, errors.Errorf("couldn't unmarshal HTTP body: %s as JSON", result.Bytes())
+	parsedBodyTemplate, err := parseAsGraphQLArg(body)
+	if err != nil {
+		return nil, nil, err
 	}
-	return &m, requiredFields, nil
+
+	requiredVariables := make(map[string]bool)
+	jsonTemplate, err := parseAsJSONTemplate(parsedBodyTemplate, requiredVariables, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &jsonTemplate, requiredVariables, nil
 }
 
 func getVar(key string, variables map[string]interface{}) (interface{}, error, bool) {
@@ -1958,6 +1978,7 @@ func SubstituteVarsInBody(jsonTemplate *interface{}, variables map[string]interf
 	}
 
 	switch val := (*jsonTemplate).(type) {
+	// TODO: handle other scalars here
 	case string:
 		return substituteSingleVarInBody(val, jsonTemplate, variables)
 	case map[string]interface{}:
