@@ -3,6 +3,7 @@ package modules
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 
 	"github.com/ChainSafe/gossamer/dot/types"
@@ -83,6 +84,19 @@ func (m *DevModule) SetBlockProducerAuthorities(r *http.Request, req *[]interfac
 	return err
 }
 
+// SetBABEEpochThreshold dev rpc method that sets BABE Epoch Threshold of the BABE Producer
+func (m *DevModule) SetBABEEpochThreshold(r *http.Request, req *string, res *string) error {
+	n := new(big.Int)
+	n, ok := n.SetString(*req, 10)
+	if !ok {
+		return fmt.Errorf("error setting threshold")
+	}
+	m.blockProducerAPI.SetEpochThreshold(n)
+	*res = fmt.Sprintf("set BABE Epoch Threshold to %v", n)
+
+	return nil
+}
+
 // SetBABERandomness dev rpc method to set BABE Randomness
 func (m *DevModule) SetBABERandomness(r *http.Request, req *[]string, res *string) error {
 	val := *req
@@ -102,5 +116,6 @@ func (m *DevModule) SetBABERandomness(r *http.Request, req *[]string, res *strin
 	}
 	m.blockProducerAPI.SetRandomness(b)
 	*res = "updated BABE Randomness"
+
 	return nil
 }
