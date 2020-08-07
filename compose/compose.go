@@ -18,15 +18,16 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"os/user"
+	"strings"
+
 	sv "github.com/Masterminds/semver/v3"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	yaml "gopkg.in/yaml.v2"
-	"io/ioutil"
-	"os"
-	"os/user"
-	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -200,8 +201,8 @@ func getAlpha(idx int) service {
 
 	isMultiZeros := true
 	maxZeros := 1
-	zeroHostAddr := fmt.Sprintf("zero%d:%d", 1, zeroBasePort + opts.PortOffset)
-	zeros := []string{ zeroHostAddr }
+	zeroHostAddr := fmt.Sprintf("zero%d:%d", 1, zeroBasePort+opts.PortOffset)
+	zeros := []string{zeroHostAddr}
 
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
@@ -221,10 +222,10 @@ func getAlpha(idx int) service {
 		maxZeros = opts.NumZeros
 	}
 
-    for i := 2; i <= maxZeros; i++ {
-		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort + opts.PortOffset + i)
-    	zeros = append(zeros, zeroHostAddr)
-    }
+	for i := 2; i <= maxZeros; i++ {
+		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+i)
+		zeros = append(zeros, zeroHostAddr)
+	}
 
 	zerosOpt := strings.Join(zeros, ",")
 
@@ -357,7 +358,6 @@ func semverCompare(constraint, version string) (bool, error) {
 
 	return c.Check(v), nil
 }
-
 
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "compose: %v\n", err)
