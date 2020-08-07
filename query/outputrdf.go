@@ -90,9 +90,9 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 			if !ok && val.Value == nil {
 				continue
 			}
-			outputval, err := valToBytes(val)
+			outputval, err := getObjectVal(val)
 			if err != nil {
-				return err
+				continue
 			}
 			b.writeRDF(uid, []byte(sg.aggWithVarFieldName()), outputval)
 			continue
@@ -137,7 +137,8 @@ func (b *rdfBuilder) rdfForCount(subject uint64, count uint32, sg *SubGraph) {
 	if fieldName == "" {
 		fieldName = fmt.Sprintf("count(%s)", sg.Attr)
 	}
-	b.writeRDF(subject, []byte(fieldName), []byte(strconv.FormatUint(uint64(count), 10)))
+	b.writeRDF(subject, []byte(fieldName),
+		quotedNumber([]byte(strconv.FormatUint(uint64(count), 10))))
 }
 
 // rdfForUIDList returns rdf for uid list.
@@ -168,22 +169,30 @@ func (b *rdfBuilder) rdfForValueList(subject uint64, valueList *pb.ValueList, at
 		if err != nil {
 			continue
 		}
-		outputval, err := valToBytes(val)
+		outputval, err := getObjectVal(val)
 		if err != nil {
 			continue
 		}
-		switch val.Tid {
-		case types.UidID:
-			b.writeRDF(subject, []byte(attr), buildTriple(outputval))
-		case types.IntID:
-			b.writeRDF(subject, []byte(attr), quotedNumber(outputval))
-		case types.FloatID:
-			b.writeRDF(subject, []byte(attr), quotedNumber(outputval))
-		case types.GeoID:
-			// SKIP GEO ID. Since we don't support geo in RDF format.
-		default:
-			b.writeRDF(subject, []byte(attr), outputval)
-		}
+		b.writeRDF(subject, []byte(attr), outputval)
+	}
+}
+
+func getObjectVal(v types.Val) ([]byte, error) {
+	outputval, err := valToBytes(v)
+	if err != nil {
+		return nil, err
+	}
+	switch v.Tid {
+	case types.UidID:
+		return buildTriple(outputval), nil
+	case types.IntID:
+		return quotedNumber(outputval), nil
+	case types.FloatID:
+		return quotedNumber(outputval), nil
+	case types.GeoID:
+		return nil, errors.New("Geo id is not supported in rdf output")
+	default:
+		return outputval, nil
 	}
 }
 
