@@ -839,7 +839,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", -1)
+	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
 	require.NoError(t, err)
 
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
