@@ -120,7 +120,7 @@ type graphqlSubscription struct {
 
 func (gs *graphqlSubscription) Subscribe(
 	ctx context.Context,
-	document string,
+	document,
 	operationName string,
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
@@ -143,8 +143,8 @@ func (gs *graphqlSubscription) Subscribe(
 		name := authorization.GetHeader()
 		var val string
 		var ok = false
-		for k, _ := range payload {
-			if strings.ToLower(k) == strings.ToLower(name) {
+		for k := range payload {
+			if strings.EqualFold(k, name) {
 				val, ok = payload[k].(string)
 				break
 			}
