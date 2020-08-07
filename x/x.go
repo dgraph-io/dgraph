@@ -146,7 +146,7 @@ const (
 	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
-	DgraphCostHeader = "numUids"
+	DgraphCostHeader = "Dgraph-TouchedUids"
 
 	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
 	GraphqlPredicates = `
