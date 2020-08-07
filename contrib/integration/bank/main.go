@@ -94,10 +94,10 @@ func (s *state) createAccounts(dg *dgo.Dgraph) {
 
 	var mu api.Mutation
 	mu.SetJson = data
+	resp, err := txn.Mutate(context.Background(), &mu)
 	if *verbose {
-		log.Printf("mutation: %s\n", mu.SetJson)
+		log.Printf("[StartTs: %v] Mutation: %s\n", resp.Txn.StartTs, mu.SetJson)
 	}
-	_, err = txn.Mutate(context.Background(), &mu)
 	x.Check(err)
 	x.Check(txn.Commit(context.Background()))
 }
@@ -137,7 +137,7 @@ func (s *state) runTotal(dg *dgo.Dgraph) error {
 		total += a.Bal
 	}
 	if *verbose {
-		log.Printf("Read: %v. Total: %d\n", accounts, total)
+		log.Printf("[StartTs: %v] Read: %v. Total: %d\n", resp.Txn.StartTs, accounts, total)
 	}
 	if len(accounts) > *users {
 		log.Fatalf("len(accounts) = %d", len(accounts))
@@ -160,12 +160,12 @@ func (s *state) findAccount(txn *dgo.Txn, key int) (account, error) {
 	}
 	accounts := m["q"]
 	if len(accounts) > 1 {
-		log.Printf("Query: %s. Response: %s\n", query, resp.Json)
+		log.Printf("[StartTs: %v] Query: %s. Response: %s\n", resp.Txn.StartTs, resp.Json)
 		log.Fatal("Found multiple accounts")
 	}
 	if len(accounts) == 0 {
 		if *verbose {
-			log.Printf("Unable to find account for K_%02d. JSON: %s\n", key, resp.Json)
+			log.Printf("[StartTs: %v] Unable to find account for K_%02d. StartTs: %v, JSON: %s\n", resp.Txn.StartTs, key, resp.Json)
 		}
 		return account{Key: key, Typ: "ba"}, nil
 	}
