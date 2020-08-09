@@ -196,6 +196,7 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 	return string(output), startTs, err
 }
 
+// queryWithTsForResp query the dgraph and returns it's http response and result.
 func queryWithTsForResp(queryText, contentType, debug string, ts uint64) (string,
 	uint64, *http.Response, error) {
 	params := make([]string, 0, 2)
