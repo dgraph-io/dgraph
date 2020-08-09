@@ -3,13 +3,12 @@
 main() {
   if [[ $1 =~ h(elp)?|\? ]]; then usage; fi
   if (( $# != 1 )); then usage; fi
-  SYSTEMD_PATH="/etc/systemd/system/"
-  DGRAPH_PATH="/var/lib/dgraph"
   REPLICAS=$1
 
   install_dgraph
   setup_user_group
   setup_systemd
+  setup_firewall
 }
 
 usage() {
@@ -28,12 +27,11 @@ setup_user_group() {
 }
 
 setup_firewall() {
-  setup_systemd() {
     case $(hostname) in
-      zero)
+      *zero*)
         PORTS=(5080 6080)
         ;;
-      alpha)
+      *alpha*)
         PORTS=(7080 8080 9080)
         ;;
     esac
@@ -60,7 +58,6 @@ setup_systemd_zero() {
   chown -R dgraph:dgraph /var/{lib,log}/dgraph
 
   install_systemd_unit "zero" "$EXEC"
-  setup_firewall "zero"
 }
 
 setup_systemd_alpha() {
@@ -76,7 +73,6 @@ setup_systemd_alpha() {
   chown -R dgraph:dgraph /var/{lib,log}/dgraph
 
   install_systemd_unit "alpha" "$EXEC"
-  setup_firewall "alpha"
 }
 
 install_systemd_unit() {
@@ -112,13 +108,13 @@ EOF
 
 setup_systemd() {
   case $(hostname) in
-    zero0*)
+    *zero0*)
       setup_systemd_zero "leader"
       ;;
-    zero[1-9]*)
+    *zero[1-9]*)
       setup_systemd_zero "peer"
       ;;
-    alpha*)
+    *alpha*)
       setup_systemd_alpha
       ;;
   esac
