@@ -1,4 +1,4 @@
-# systemd configuration for multiple nodes.
+# systemd configuration for multiple nodes
 
 This following document describes how to configure several nodes that are managed through [systemd](https://systemd.io/).
 
@@ -80,6 +80,15 @@ firewall-cmd --reload
 ```
 
 ## Configure Alpha Nodes
+
+On all Alpha Nodes, create the these directory paths that are owned by `dgraph` user:
+
+```bash
+mkdir -p /var/{log/dgraph,lib/dgraph/{w,p}}
+chown -R dgraph:dgraph /var/{lib,log}/dgraph
+```
+
+
 
 Edit the file [dgraph-alpha.service](dgraph-alpha.service) as required.  For the `--zero` prameter, you want to create a list that matches all the zeros in your cluster, so that when `{{ zero0 }}`, `{{ zero1 }}`, and `{{ zero2 }}` are replaced, you will have a string something like this (adjusted to your organization's domain):
 
