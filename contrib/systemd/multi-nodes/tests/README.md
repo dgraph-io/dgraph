@@ -1,6 +1,6 @@
 # SystemD Tests
 
-These are tests to both demonstrate and test functionality of systemd units to managed dgraph.
+These are tests to both demonstrate and test functionality of systemd units to manage dgraph.
 
 ## Requirements
 
@@ -46,7 +46,7 @@ vagrant ssh alpha0 --command "sudo journalctl -u dgraph-alpha"
 vagrant destroy --force
 ```
 
-## Tested Environments
+## Environments Tested
 
 * Guest OS
   * Cent OS 8
