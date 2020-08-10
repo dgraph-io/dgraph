@@ -1,6 +1,6 @@
 # SystemD Tests
 
-Thes are tests to both demonstrate and test functionality of systemd unit tests.
+These are tests to both demonstrate and test functionality of systemd units to managed dgraph.
 
 ## Requirements
 
@@ -11,5 +11,7 @@ Thes are tests to both demonstrate and test functionality of systemd unit tests.
 
 * Guest OS
   * Cent OS 8
+  * Ubuntu 18.04
 * VirtualMachines
   * libvrt (KVM)
+  * VirtualBox on Win10 Home

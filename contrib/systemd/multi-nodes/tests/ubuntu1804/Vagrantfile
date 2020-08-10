@@ -10,11 +10,13 @@ Vagrant.configure("2") do |config|
       node.vm.box = "generic/ubuntu1804"
       node.vm.hostname = "#{hostname}"
       node.vm.network "private_network", ip: ipaddr
+      node.vm.synced_folder ".", "/vagrant"
 
-      config.vm.provision "shell" do |shell|
+      node.vm.provision "shell" do |shell|
         shell.path = "provision.sh"
         shell.args = [replicas]
         shell.env = { DGRAPH_VERSION: version }
+        shell.privileged = true
       end
     end
   end
