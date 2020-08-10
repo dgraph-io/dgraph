@@ -8,7 +8,7 @@ You will configure the following types of Dgraph nodes:
 
 * zero nodes
   * zero leader node - an initial leader node configured at start of cluster, e.g. `zero0`
-  * zero peer nodes - peer nodes, , e.g. `zero1`, `zero2`, that point to the zero leader
+  * zero peer nodes - peer nodes, e.g. `zero1`, `zero2`, that point to the zero leader
 * alpha nodes - configured similarly, e.g. `alpha0`, `alpha1`, `alpha2`, that point to list of all zero nodes
 
 
