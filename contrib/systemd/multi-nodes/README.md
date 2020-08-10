@@ -8,8 +8,8 @@ You will configure the following types of Dgraph nodes:
 
 * zero nodes
   * zero leader node - an initial leader node configured at start of cluster, e.g. `zero0`
-  * zero peer nodes - peer nodes that point to the zero leader, e.g. `zero1`, `zero2`
-* alpha nodes - configured similarly, e.g. `alpha0`, `alpha1`, `alpha2`
+  * zero peer nodes - peer nodes, , e.g. `zero1`, `zero2`, that point to the zero leader
+* alpha nodes - configured similarly, e.g. `alpha0`, `alpha1`, `alpha2`, that point to list of all zero nodes
 
 
 > **NOTE** These commands are run as root using bash shell.
@@ -20,7 +20,7 @@ On all systems that will run a dgraph service, create `dgraph` group and user.
 
 ```bash
 groupadd --system dgraph
-useradd --system -d /var/lib/dgraph -s /bin/false -g dgraph dgraph
+useradd --system --home-dir /var/lib/dgraph --shell /bin/false --gid dgraph dgraph
 ```
 
 ## All Zero Nodes (Leader and Peers)
@@ -28,8 +28,8 @@ useradd --system -d /var/lib/dgraph -s /bin/false -g dgraph dgraph
 On all Zero Nodes, create the these directory paths that are owned by `dgraph` user:
 
 ```bash
-mkdir -p /var/{log/dgraph,lib/dgraph/zw}
-chown -R dgraph:dgraph /var/{lib,log}/dgraph
+mkdir --parents /var/{log/dgraph,lib/dgraph/zw}
+chown --recursive dgraph:dgraph /var/{lib,log}/dgraph
 ```
 
 ### Configure Zero Leader Node
@@ -69,7 +69,7 @@ ufw allow from any to any port 5080 proto tcp
 ufw allow from any to any port 6080 proto tcp
 ```
 
-On **CentOS 8**
+On **CentOS 8**:
 
 
 ```bash
@@ -84,11 +84,9 @@ firewall-cmd --reload
 On all Alpha Nodes, create the these directory paths that are owned by `dgraph` user:
 
 ```bash
-mkdir -p /var/{log/dgraph,lib/dgraph/{w,p}}
-chown -R dgraph:dgraph /var/{lib,log}/dgraph
+mkdir --parents /var/{log/dgraph,lib/dgraph/{w,p}}
+chown --recursive dgraph:dgraph /var/{lib,log}/dgraph
 ```
-
-
 
 Edit the file [dgraph-alpha.service](dgraph-alpha.service) as required.  For the `--zero` prameter, you want to create a list that matches all the zeros in your cluster, so that when `{{ zero0 }}`, `{{ zero1 }}`, and `{{ zero2 }}` are replaced, you will have a string something like this (adjusted to your organization's domain):
 
@@ -116,7 +114,7 @@ ufw allow from any to any port 8080 proto tcp
 ufw allow from any to any port 9080 proto tcp
 ```
 
-On **CentOS 8**
+On **CentOS 8**:
 
 
 ```bash
