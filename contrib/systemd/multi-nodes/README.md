@@ -46,7 +46,6 @@ systemctl enable dgraph-zero
 systemctl start dgraph-zero
 ```
 
-
 ### Configure Zero Peer Nodes
 
 This process is similar to previous step. Edit the file [dgraph-zero-peer.service](dgraph-zero-peer.service) as required. Replace the string `{{ zero0 }}` to match the hostname of the zero leader, such as `zero0.mycompany.com`.  You can also adjust `idx` and `replicas` if needed.
@@ -82,7 +81,7 @@ firewall-cmd --reload
 
 ## Configure Alpha Nodes
 
-Edit the file [dgraph-alpha.service](dgraph-alpha.service) as required.  For the `--zero` prameter, you want to create a list that matches all the zeros in your cluster, so that when `{{ zero0 }}`, `{{ zero1 }}`, and `{{ zero2 }}` are replaced, you will have a string something like this:
+Edit the file [dgraph-alpha.service](dgraph-alpha.service) as required.  For the `--zero` prameter, you want to create a list that matches all the zeros in your cluster, so that when `{{ zero0 }}`, `{{ zero1 }}`, and `{{ zero2 }}` are replaced, you will have a string something like this (adjusted to your organization's domain):
 
 ```
 --zero zero0.mycompany.com:5080,zero0.mycompany.com:5080,zero0.mycompany.com:5080
@@ -117,4 +116,42 @@ firewall-cmd --zone=public --permanent --add-port=7080/tcp
 firewall-cmd --zone=public --permanent --add-port=8080/tcp
 firewall-cmd --zone=public --permanent --add-port=9080/tcp
 firewall-cmd --reload
+```
+
+## Verifying Services
+
+Below are examples of checking the health of the nodes and cluster.
+
+> **NOTE** Replace mycompany.com to your domain or use the IP address.
+
+### Zero Nodes
+
+You can check the health and state endpoints of the service:
+
+```bash
+curl zero0.mycompany.com:6080/health
+curl zero0.mycompany.com:6080/state
+```
+
+On the system itself, you can check the serivce status and logs:
+
+```bash
+systemctl status dgraph-zero
+journalctl -u dgraph-zero
+```
+
+### Alpha Nodes
+
+You can check the health and state endpoints of the service:
+
+```bash
+curl alpha0.mycompany.com:6080/health
+curl alpha0.mycompany.com:6080/state
+```
+
+On the system itself, you can check the serivce status and logs:
+
+```bash
+systemctl status dgraph-alpha
+journalctl -u dgraph-alpha
 ```
