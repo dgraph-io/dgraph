@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,7 +29,6 @@ import (
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/runtime"
-
 	log "github.com/ChainSafe/log15"
 )
 
@@ -108,7 +106,7 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 	}
 
 	logger := log.New("pkg", "babe")
-	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	h := log.CallerFileHandler(log.StdoutHandler)
 	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
 
 	babeService := &Service{

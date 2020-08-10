@@ -26,9 +26,8 @@ import (
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/utils"
-	"github.com/stretchr/testify/require"
-
 	log "github.com/ChainSafe/log15"
+	"github.com/stretchr/testify/require"
 )
 
 // setupLogger sets up the gossamer logger
@@ -37,7 +36,7 @@ func setupLogger(cfg *Config) error {
 		cfg.Global.LogLevel = "info"
 	}
 
-	handler := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	handler := log.CallerFileHandler(log.StdoutHandler)
 	lvl, err := log.LvlFromString(cfg.Global.LogLevel)
 	if err != nil {
 		return err
