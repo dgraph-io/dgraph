@@ -196,6 +196,38 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 	return string(output), startTs, err
 }
 
+// queryWithTsForResp query the dgraph and returns it's http response and result.
+func queryWithTsForResp(queryText, contentType, debug string, ts uint64) (string,
+	uint64, *http.Response, error) {
+	params := make([]string, 0, 2)
+	if debug != "" {
+		params = append(params, "debug="+debug)
+	}
+	if ts != 0 {
+		params = append(params, fmt.Sprintf("startTs=%v", strconv.FormatUint(ts, 10)))
+	}
+	url := addr + "/query?" + strings.Join(params, "&")
+
+	_, body, resp, err := runWithRetriesForResp("POST", contentType, url, queryText)
+	if err != nil {
+		return "", 0, resp, err
+	}
+
+	var r res
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", 0, resp, err
+	}
+	startTs := r.Extensions.Txn.StartTs
+
+	// Remove the extensions.
+	r2 := res{
+		Data: r.Data,
+	}
+	output, err := json.Marshal(r2)
+
+	return string(output), startTs, resp, err
+}
+
 type mutationResponse struct {
 	keys    []string
 	preds   []string
@@ -312,6 +344,61 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
 		return nil, nil, errors.New(qr.Errors[0].Message)
 	}
 	return qr, body, nil
+}
+
+func runWithRetriesForResp(method, contentType, url string, body string) (
+	*x.QueryResWithData, []byte, *http.Response, error) {
+
+	req, err := createRequest(method, contentType, url, body)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	qr, respBody, resp, err := runRequestForResp(req)
+	if err != nil && strings.Contains(err.Error(), "Token is expired") {
+		grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
+			Endpoint:   addr + "/admin",
+			RefreshJwt: grootRefreshJwt,
+		})
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		// create a new request since the previous request would have been closed upon the err
+		retryReq, err := createRequest(method, contentType, url, body)
+		if err != nil {
+			return nil, nil, resp, err
+		}
+
+		return runRequestForResp(retryReq)
+	}
+	return qr, respBody, resp, err
+}
+
+// attach the grootAccessJWT to the request and sends the http request
+func runRequestForResp(req *http.Request) (*x.QueryResWithData, []byte, *http.Response, error) {
+	client := &http.Client{}
+	req.Header.Set("X-Dgraph-AccessToken", grootAccessJwt)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, nil, resp, err
+	}
+	if status := resp.StatusCode; status != http.StatusOK {
+		return nil, nil, resp, errors.Errorf("Unexpected status code: %v", status)
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, resp, errors.Errorf("unable to read from body: %v", err)
+	}
+
+	qr := new(x.QueryResWithData)
+	json.Unmarshal(body, qr) // Don't check error.
+	if len(qr.Errors) > 0 {
+		return nil, nil, resp, errors.New(qr.Errors[0].Message)
+	}
+	return qr, body, resp, nil
 }
 
 func commitWithTs(keys, preds []string, ts uint64) error {
@@ -451,6 +538,38 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
+}
+func TestTransactionForCost(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
+
+	q1 := `
+	{
+	  balances(func: anyofterms(name, "Alice Bob")) {
+	    name
+	    balance
+	  }
+	}
+	`
+	_, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+
+	m1 := `
+    {
+	  set {
+		_:alice <name> "Bob" .
+		_:alice <balance> "110" .
+		_:bob <balance> "60" .
+	  }
+	}
+	`
+
+	_, err = mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	_, _, resp, err := queryWithTsForResp(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.Equal(t, "2", resp.Header.Get(x.DgraphCostHeader))
 }
 
 func TestTransactionBasicOldCommitFormat(t *testing.T) {
