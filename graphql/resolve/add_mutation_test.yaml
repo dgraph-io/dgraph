@@ -2273,7 +2273,7 @@
         {"uid":"_:Comment14"}
       cond: "@if(eq(len(Comment16), 1) AND eq(len(Comment14), 0))"
     - setjson: |
-        {"uid":"_:Comment14"}
+        {"uid":"_:Comment14", "Comment1.replies": [{"uid": "_:Comment16"}]}
       cond: "@if(eq(len(Comment16), 0) AND eq(len(Comment14), 0))"
     - setjson: |
         {"uid":"uid(Comment16)"}
@@ -2287,3 +2287,15 @@
         uid
       }
     }
+  dgmutationssec:
+    - setjson: |
+        {
+          "Post1.comments":
+            [{
+              "uid":"uid(Comment14)"
+            }],
+          "Post1.id":"post1",
+          "dgraph.type":["Post1"],
+          "uid":"_:Post12"
+        }
+      cond: "@if(eq(len(Post12), 0) AND eq(len(Comment14), 1))"

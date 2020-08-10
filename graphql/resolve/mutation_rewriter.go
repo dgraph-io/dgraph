@@ -983,11 +983,17 @@ func rewriteObject(
 
 	var parentFrags []*mutationFragment
 
-	if !atTopLevel { // top level is never a reference - it's adding/updating
+	// TODO - Find out when is withAdditionalDeletes true?
+
+	if !atTopLevel { // top level is never a reference - it's a new addition.
+		// this is the case of a lower level having xid which is a reference.
 		if xid != nil && xidString != "" {
 			xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
 			if deepXID > 2 {
+				// TODO - Find out why do we do this only when deepXID > 2. Also, this check can be
+				// moved above with the xid != nil check.
+
 				// We need to link the parent to the already existing child
 				res := make(map[string]interface{}, 1)
 				res["uid"] = srcUID
@@ -1039,6 +1045,7 @@ func rewriteObject(
 	var myUID string
 	newObj := make(map[string]interface{}, len(obj))
 
+	// TODO - Can there by anything else apart from add at top level?
 	if !atTopLevel || topLevelAdd {
 		dgraphTypes := []string{typ.DgraphName()}
 		dgraphTypes = append(dgraphTypes, typ.Interfaces()...)
@@ -1075,21 +1082,41 @@ func rewriteObject(
 
 	if xid != nil && !atTopLevel {
 		if deepXID <= 2 { // elements in firstPass or not
-			// duplicate query in elements >= 2, as the pair firstPass element would already have the same query.
+			// duplicate query in elements >= 2, as the pair firstPass element would already have
+			// the same query.
 			frag.queries = []*gql.GraphQuery{
 				xidQuery(variable, xidString, xid.Name(), typ),
 			}
 		} else {
+			// TODO - Seems like we are creating two fragments for XID, one with condition that
+			// len == 0 and other about len == 1 and putting both into parentFrags. Why don't we
+			// just do it upfront above at once place?
+
 			// We need to link the parent to the element we are just creating
 			res := make(map[string]interface{}, 1)
 			res["uid"] = srcUID
-			addInverseLink(res, srcField.Inverse(), fmt.Sprintf("_:%s", variable))
+			this := fmt.Sprintf("_:%s", variable)
+			if srcField.Type().ListType() != nil {
+				res[srcField.Type().DgraphPredicate(srcField.Name())] =
+					[]interface{}{map[string]interface{}{"uid": this}}
+			} else {
+				res[srcField.Type().DgraphPredicate(srcField.Name())] =
+					map[string]interface{}{"uid": srcUID}
+			}
+			addInverseLink(res, srcField.Inverse(), this)
 
 			parentFrag := newFragment(res)
 			parentFrag.conditions = append(parentFrag.conditions, frag.conditions...)
 			parentFrags = append(parentFrags, parentFrag)
 		}
 	}
+
+	// if len(parentFrags) > 0 {
+	// 	for _, pf := range parentFrags {
+	// 		fmt.Printf("Parent frag: %+v, res: %+v\n", pf.conditions, pf.fragment)
+	// 	}
+	// }
+	// fmt.Printf("frag: %+v, res: %+v\n", frag.conditions, frag.fragment)
 
 	var childrenFirstPass []*mutationFragment
 
@@ -1106,6 +1133,7 @@ func rewriteObject(
 		sort.Strings(fields)
 
 		for _, field := range fields {
+			// fmt.Printf("field: %s\n", field)
 			val := obj[field]
 			var frags *mutationRes
 
@@ -1119,6 +1147,7 @@ func rewriteObject(
 
 			switch val := val.(type) {
 			case map[string]interface{}:
+				// fmt.Println("map")
 				// This field is another GraphQL object, which could either be linking to an
 				// existing node by it's ID
 				// { "title": "...", "author": { "id": "0x123" }
@@ -1131,6 +1160,7 @@ func rewriteObject(
 						withAdditionalDeletes, val, deepXID, xidMetadata)
 
 			case []interface{}:
+				// fmt.Println("list")
 				// This field is either:
 				// 1) A list of objects: e.g. if the schema said `categories: [Categories]`
 				//   Which can be references to existing objects
@@ -1146,6 +1176,7 @@ func rewriteObject(
 					rewriteList(ctx, fieldDef.Type(), fieldDef, myUID, varGen,
 						withAdditionalDeletes, val, deepXID, xidMetadata)
 			default:
+				// fmt.Println("default")
 				// This field is either:
 				// 1) a scalar value: e.g.
 				//   { "title": "My Post", ... }
@@ -1157,8 +1188,16 @@ func rewriteObject(
 				frags = &mutationRes{secondPass: []*mutationFragment{newFragment(val)}}
 			}
 
+			// for _, fp := range frags.firstPass {
+			// 	fmt.Printf("firstPass frag: %+v, conditions: %+v\n", fp.fragment, fp.conditions)
+			// }
+			// for _, fp := range frags.secondPass {
+			// 	fmt.Printf("secondPass frag: %+v, conditions: %+v\n", fp.fragment, fp.conditions)
+			// }
 			childrenFirstPass = appendFragments(childrenFirstPass, frags.firstPass)
 			results.secondPass = squashFragments(squashIntoObject(fieldName), results.secondPass, frags.secondPass)
+
+			// fmt.Printf("\n")
 		}
 	}
 
@@ -1168,19 +1207,34 @@ func rewriteObject(
 		results.secondPass = []*mutationFragment{}
 	}
 
+	// for _, fp := range results.firstPass {
+	// 	fmt.Printf("result1 frag: %+v, conditions: %+v\n", fp.fragment, fp.conditions)
+	// }
+
+	// TODO - What does it mean when this level is true?
 	// add current conditions to all the new fragments from children.
 	// childrens should only be addded when this level is true
 	conditions := []string{}
 	for _, i := range results.firstPass {
 		conditions = append(conditions, i.conditions...)
 	}
+
+	// fmt.Println("len cfp: ", len(childrenFirstPass))
 	for _, i := range childrenFirstPass {
 		i.conditions = append(i.conditions, conditions...)
 	}
 	results.firstPass = appendFragments(results.firstPass, childrenFirstPass)
 
+	// for _, fp := range results.firstPass {
+	// 	fmt.Printf("result2 frag: %+v, conditions: %+v\n", fp.fragment, fp.conditions)
+	// }
+
 	// parentFrags are reverse links to parents. only applicable for when deepXID > 2
 	results.firstPass = appendFragments(results.firstPass, parentFrags)
+
+	// for _, fp := range results.firstPass {
+	// 	fmt.Printf("result3 frag: %+v, conditions: %+v\n", fp.fragment, fp.conditions)
+	// }
 
 	// xidFrag contains the mutation to update object if it is present.
 	// add it to secondPass if deepXID <= 2, otherwise firstPass for relevant hasInverse links.
@@ -1189,6 +1243,10 @@ func rewriteObject(
 	} else if xidFrag != nil {
 		results.secondPass = appendFragments(results.secondPass, []*mutationFragment{xidFrag})
 	}
+
+	// for _, fp := range results.firstPass {
+	// 	fmt.Printf("result4 frag: %+v, conditions: %+v\n", fp.fragment, fp.conditions)
+	// }
 
 	// if !xidEncounteredFirstTime, we have already seen the relevant fragments.
 	if xid != nil && !atTopLevel && !xidEncounteredFirstTime {
