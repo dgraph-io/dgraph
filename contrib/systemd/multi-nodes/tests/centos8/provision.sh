@@ -74,9 +74,12 @@ setup_firewall() {
     esac
 
   if grep -q centos /etc/os-release; then
-    for PORT in ${PORTS[*]}; do
-      firewall-cmd --zone=public --permanent --add-port=$PORT/tcp
-    done
+    if /usr/bin/firewall-cmd --state 2>&1 | grep -q "^running$"; then
+      for PORT in ${PORTS[*]}; do
+        firewall-cmd --zone=public --permanent --add-port=$PORT/tcp
+        firewall-cmd --reload
+      done
+    fi
   elif grep -iq ubuntu /etc/os-release; then
     if /usr/sbin/ufw status | grep -wq active; then
       for PORT in ${PORTS[*]}; do
