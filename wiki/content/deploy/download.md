@@ -13,10 +13,10 @@ For a single server setup, recommended for new users, please see [Get Started]({
 ## Docker
 
 ```sh
-docker pull dgraph/dgraph:{{< version >}}
+docker pull dgraph/dgraph:shuri
 
 # You can test that it worked fine, by running:
-docker run -it dgraph/dgraph:{{< version >}} dgraph
+docker run -it dgraph/dgraph:shuri dgraph
 ```
 
 ## Automatic download
