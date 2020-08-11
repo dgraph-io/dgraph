@@ -2421,12 +2421,16 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 	params := &common.GraphQLParams{
 		Query: `
 		mutation{
-			addUser(input:[{
-			  screen_name:"manishrjain",
-			  tweets:[{
-				text:"hello twitter"
-			  }]
-			}]){
+			addUser(input:[
+			  {
+				  screen_name:"manishrjain",
+				  tweets:[{text:"hello twitter"}]
+			  }
+			  {
+				  screen_name:"amazingPanda",
+				  tweets:[{text:"I love Kung fu."}]
+			  }
+			]){
 			  numUids
 			}
 		  }`,
@@ -2456,16 +2460,24 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 	common.RequireNoGQLErrors(t, result)
 	require.JSONEq(t, string(result.Data), `
 	{
-		"querySearchTweets": [{
-			"text": "hello twitter",
-			"user": {
-				"screen_name": "manishrjain",
-				"followers": {
-					"users": [{
-						"name": "hi_balaji"
-					}]
+		"querySearchTweets": [
+			{
+				"text": "hello twitter",
+				"user": {
+					"screen_name": "manishrjain",
+					"followers": {
+						"users": [{"name": "hi_balaji"}]
+					}
+				}
+			},{
+				"text": "I love Kung fu.",
+				"user": {
+					"screen_name": "amazingPanda",
+					"followers": {
+						"users": [{"name": "twitter_bot"}]
+					}
 				}
 			}
-		}]
+		]
 	}`)
 }
