@@ -211,9 +211,14 @@ dgraph upgrade --acl -a localhost:9080 -u groot -p password
     ```
     dgraph upgrade --acl -a localhost:9080 -u groot -p password -f v20.03.0 -t v20.07.0
     ```
+    This is required because previously the type-names `User`, `Group` and `Rule` were used by ACL.
+    They have now been renamed as `dgraph.type.User`, `dgraph.type.Group` and `dgraph.type.Rule`, to
+    keep them in dgraph's internal namespace. This upgrade just changes the type-names for the ACL
+    nodes to the new type-names.
+    
     You can use `--dry-run` option in `dgraph upgrade` command to see a dry run of what the upgrade
     command will do.
-8. If you have introduced types or predicates in your schema whose names start with `dgraph.`, then
+8. If you have types or predicates in your schema whose names start with `dgraph.`, then
 you would need to manually alter schema to change their names to something else which isn't
 prefixed with `dgraph.`, and also do mutations to change the value of `dgraph.type` edge to the
 new type name and copy data from old predicate name to new predicate name for all the nodes which
