@@ -1418,7 +1418,11 @@ func customDirectiveValidation(sch *ast.Schema,
 	// 8. Validating body
 	var requiredFields map[string]bool
 	if body != nil {
-		_, requiredFields, err = parseBodyTemplate(body.Raw)
+		strictJSON := true
+		if graphql != nil {
+			strictJSON = false
+		}
+		_, requiredFields, err = parseBodyTemplate(body.Raw, strictJSON)
 		if err != nil {
 			errs = append(errs, gqlerror.ErrorPosf(body.Position,
 				"Type %s; Field %s; body template inside @custom directive could not be parsed.",
@@ -1564,7 +1568,7 @@ func customDirectiveValidation(sch *ast.Schema,
 					bodyBuilder.WriteString(comma)
 				}
 				bodyBuilder.WriteString("}")
-				_, requiredVars, err := parseBodyTemplate(bodyBuilder.String())
+				_, requiredVars, err := parseBodyTemplate(bodyBuilder.String(), false)
 				if err != nil {
 					errs = append(errs, gqlerror.ErrorPosf(graphql.Position,
 						"Type %s; Field %s: inside graphql in @custom directive, "+

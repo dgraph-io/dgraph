@@ -18,12 +18,9 @@ package schema
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
-
-	"github.com/vektah/gqlparser/v2/parser"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/google/go-cmp/cmp"
@@ -334,16 +331,14 @@ func TestCheckNonNulls(t *testing.T) {
 
 func TestSubstituteVarsInBody(t *testing.T) {
 	tcases := []struct {
-		name        string
-		variables   map[string]interface{}
-		template    interface{}
-		expected    interface{}
-		expectedErr error
+		name      string
+		variables map[string]interface{}
+		template  interface{}
+		expected  interface{}
 	}{
 		{
 			"handle nil template correctly",
 			map[string]interface{}{"id": "0x3", "postID": "0x9"},
-			nil,
 			nil,
 			nil,
 		},
@@ -352,21 +347,18 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			map[string]interface{}{"id": "0x3", "postID": "0x9"},
 			map[string]interface{}{},
 			map[string]interface{}{},
-			nil,
 		},
 		{
 			"substitutes variables correctly",
 			map[string]interface{}{"id": "0x3", "postID": "0x9"},
 			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
 			map[string]interface{}{"author": "0x3", "post": map[string]interface{}{"id": "0x9"}},
-			nil,
 		},
 		{
 			"substitutes nil variables correctly",
 			map[string]interface{}{"id": nil},
 			map[string]interface{}{"author": "$id"},
 			map[string]interface{}{"author": nil},
-			nil,
 		},
 		{
 			"substitutes variables with an array in template correctly",
@@ -378,7 +370,6 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			map[string]interface{}{"author": "0x3", "admin": false,
 				"post": map[string]interface{}{"id": "0x9",
 					"comments": []interface{}{"Random comment", 28}}, "age": 28},
-			nil,
 		},
 		{
 			"substitutes variables with an array of object in template correctly",
@@ -390,7 +381,6 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			map[string]interface{}{"author": "0x3", "admin": false,
 				"post": map[string]interface{}{"id": "0x9",
 					"comments": []interface{}{map[string]interface{}{"text": "Random comment"}}}, "age": 28},
-			nil,
 		},
 		{
 			"substitutes array variables correctly",
@@ -399,14 +389,12 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			map[string]interface{}{"ids": "$ids", "names": "$names", "check": "$check"},
 			map[string]interface{}{"ids": []int{1, 2, 3}, "names": []string{"M1", "M2"},
 				"check": []interface{}{1, 3.14, "test"}},
-			nil,
 		},
 		{
 			"substitutes object variables correctly",
 			map[string]interface{}{"author": map[string]interface{}{"id": 1, "name": "George"}},
 			map[string]interface{}{"author": "$author"},
 			map[string]interface{}{"author": map[string]interface{}{"id": 1, "name": "George"}},
-			nil,
 		},
 		{
 			"substitutes array of object variables correctly",
@@ -415,7 +403,6 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			map[string]interface{}{"authors": "$authors"},
 			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
 				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
-			nil,
 		},
 		{
 			"substitutes direct body variable correctly",
@@ -424,21 +411,47 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			"$authors",
 			[]interface{}{map[string]interface{}{"id": 1, "name": "George"},
 				map[string]interface{}{"id": 2, "name": "Jerry"}},
-			nil,
+		},
+		{
+			"keep direct hardcoded string as is",
+			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
+				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
+			"authors",
+			"authors",
+		},
+		{
+			"keep direct hardcoded int as is",
+			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
+				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
+			3,
+			3,
+		},
+		{
+			"substitute only variables and keep deep hardcoded values as is",
+			map[string]interface{}{"id": "0x3", "admin": false, "postID": "0x9",
+				"text": "Random comment", "age": 28},
+			map[string]interface{}{"author": "$id", "admin": true,
+				"post": map[string]interface{}{"id": "$postID", "rating": 4.5,
+					"comments": []interface{}{map[string]interface{}{"text": "$text",
+						"type": "hidden"}}},
+				"age": int64(23), "meta": nil},
+			map[string]interface{}{"author": "0x3", "admin": true,
+				"post": map[string]interface{}{"id": "0x9", "rating": 4.5,
+					"comments": []interface{}{map[string]interface{}{"text": "Random comment",
+						"type": "hidden"}}},
+				"age": int64(23), "meta": nil},
 		},
 		{
 			"Skip one missing variable in the HTTP body",
 			map[string]interface{}{"postID": "0x9"},
 			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
 			map[string]interface{}{"post": map[string]interface{}{"id": "0x9"}},
-			nil,
 		},
 		{
 			"Skip all missing variables in the HTTP body",
 			map[string]interface{}{},
 			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
 			map[string]interface{}{"post": map[string]interface{}{}},
-			nil,
 		},
 	}
 
@@ -450,13 +463,8 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			} else {
 				templatePtr = &test.template
 			}
-			err := SubstituteVarsInBody(templatePtr, test.variables)
-			if test.expectedErr == nil {
-				require.NoError(t, err)
-				require.Equal(t, test.expected, test.template)
-			} else {
-				require.EqualError(t, err, test.expectedErr.Error())
-			}
+			SubstituteVarsInBody(templatePtr, test.variables)
+			require.Equal(t, test.expected, test.template)
 		})
 	}
 }
@@ -535,8 +543,17 @@ func TestParseBodyTemplate(t *testing.T) {
 		{
 			"parses body template correctly",
 			`{ author: $id, post: { id: $postID }}`,
-			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
+			map[string]interface{}{"author": "$id",
+				"post": map[string]interface{}{"id": "$postID"}},
 			map[string]bool{"id": true, "postID": true},
+			nil,
+		},
+		{
+			"parses body template with underscores correctly",
+			`{ author_name: $author_name, post: { id: $postID }}`,
+			map[string]interface{}{"author_name": "$author_name",
+				"post": map[string]interface{}{"id": "$postID"}},
+			map[string]bool{"author_name": true, "postID": true},
 			nil,
 		},
 		{
@@ -596,7 +613,7 @@ func TestParseBodyTemplate(t *testing.T) {
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			b, requiredFields, err := parseBodyTemplate(test.template)
+			b, requiredFields, err := parseBodyTemplate(test.template, true)
 			if test.expectedErr == nil {
 				require.NoError(t, err)
 				require.Equal(t, test.requiredFields, requiredFields)
@@ -1129,54 +1146,5 @@ func TestParseSecrets(t *testing.T) {
 				require.Equal(t, test.expectedAuthHeader, authorization.GetHeader())
 			}
 		})
-	}
-}
-
-func Test(t *testing.T) {
-	doc, err := parser.ParseQuery(&ast.Source{Input: `query { userNames(id: $id, int: 1,
-float: 3.14, bool: true, string: "test", block: """my block""", nullVal: null, list: [1,3.1,{c:b}],
-car: { age: $age }, enumVal: ONE) }`})
-	fmt.Println(err)
-	args := doc.Operations[0].SelectionSet[0].(*ast.Field).Arguments
-	for _, arg := range args {
-		fmt.Println("**************************************")
-		fmt.Println("Name: ", arg.Name)
-		fmt.Println("Value: ", arg.Value.String())
-		fmt.Println("Raw: ", arg.Value.Raw)
-		fmt.Println("Kind: ", getKindName(arg.Value.Kind))
-		fmt.Println("VarDef: ", arg.Value.VariableDefinition)
-		fmt.Println("Def: ", arg.Value.Definition)
-		fmt.Println("ExpectedType: ", arg.Value.ExpectedType)
-		if arg.Value.Kind == ast.ListValue || arg.Value.Kind == ast.ObjectValue {
-			fmt.Println("Child[0].Name: ", arg.Value.Children[0].Name)
-		}
-		fmt.Println("**************************************")
-	}
-}
-
-func getKindName(kind ast.ValueKind) string {
-	switch kind {
-	case ast.ListValue:
-		return "ListValue"
-	case ast.ObjectValue:
-		return "ObjectValue"
-	case ast.NullValue:
-		return "NullValue"
-	case ast.Variable:
-		return "Variable"
-	case ast.BlockValue:
-		return "BlockValue"
-	case ast.BooleanValue:
-		return "BooleanValue"
-	case ast.EnumValue:
-		return "EnumValue"
-	case ast.FloatValue:
-		return "FloatValue"
-	case ast.IntValue:
-		return "IntValue"
-	case ast.StringValue:
-		return "StringValue"
-	default:
-		return "Unknown value"
 	}
 }
