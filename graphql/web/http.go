@@ -20,8 +20,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"github.com/dgrijalva/jwt-go/v4"
-	"google.golang.org/grpc/metadata"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -37,9 +35,11 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
+	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 )
 
 type Headerkey string
