@@ -146,6 +146,7 @@ const (
 	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
+	DgraphCostHeader = "Dgraph-TouchedUids"
 
 	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
 	GraphqlPredicates = `
@@ -572,22 +573,25 @@ func PageRange(count, offset, n int) (int, int) {
 }
 
 // ValidateAddress checks whether given address can be used with grpc dial function
-func ValidateAddress(addr string) bool {
+func ValidateAddress(addr string) error {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return false
+		return err
 	}
 	if p, err := strconv.Atoi(port); err != nil || p <= 0 || p >= 65536 {
-		return false
+		return errors.Errorf("Invalid port: %v", p)
 	}
 	if ip := net.ParseIP(host); ip != nil {
-		return true
+		return nil
 	}
 	// try to parse as hostname as per hostname RFC
 	if len(strings.Replace(host, ".", "", -1)) > 255 {
-		return false
+		return errors.Errorf("Hostname should be less than or equal to 255 characters")
 	}
-	return regExpHostName.MatchString(host)
+	if !regExpHostName.MatchString(host) {
+		return errors.Errorf("Invalid hostname: %v", host)
+	}
+	return nil
 }
 
 // RemoveDuplicates sorts the slice of strings and removes duplicates. changes the input slice.
