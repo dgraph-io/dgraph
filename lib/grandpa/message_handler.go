@@ -72,7 +72,7 @@ func decodeMessage(msg *ConsensusMessage) (m FinalityMessage, err error) {
 	var mi interface{}
 
 	switch msg.Data[0] {
-	case voteType:
+	case voteType, precommitType:
 		mi, err = scale.Decode(msg.Data[1:], &VoteMessage{Message: new(SignedMessage)})
 		m = mi.(*VoteMessage)
 	case finalizationType:

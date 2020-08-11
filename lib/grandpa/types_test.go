@@ -17,10 +17,12 @@
 package grandpa
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
+	"github.com/ChainSafe/gossamer/lib/scale"
 
 	"github.com/stretchr/testify/require"
 )
@@ -34,4 +36,56 @@ func TestPubkeyToVoter(t *testing.T) {
 	voter, err := state.pubkeyToVoter(kr.Alice.Public().(*ed25519.PublicKey))
 	require.NoError(t, err)
 	require.Equal(t, voters[0], voter)
+}
+
+func TestJustificationEncoding(t *testing.T) {
+	just := &Justification{
+		Vote:        testVote,
+		Signature:   testSignature,
+		AuthorityID: testAuthorityID,
+	}
+
+	enc, err := just.Encode()
+	require.NoError(t, err)
+
+	rw := &bytes.Buffer{}
+	rw.Write(enc)
+	dec, err := new(Justification).Decode(rw)
+	require.NoError(t, err)
+	require.Equal(t, just, dec)
+}
+
+func TestJustificationArrayEncoding(t *testing.T) {
+	just := []*Justification{
+		{
+			Vote:        testVote,
+			Signature:   testSignature,
+			AuthorityID: testAuthorityID,
+		},
+	}
+
+	enc, err := scale.Encode(just)
+	require.NoError(t, err)
+
+	dec, err := scale.Decode(enc, make([]*Justification, 1))
+	require.NoError(t, err)
+	require.Equal(t, just, dec.([]*Justification))
+}
+
+func TestFullJustification(t *testing.T) {
+	just := &Justification{
+		Vote:        testVote,
+		Signature:   testSignature,
+		AuthorityID: testAuthorityID,
+	}
+
+	fj := FullJustification([]*Justification{just})
+	enc, err := fj.Encode()
+	require.NoError(t, err)
+
+	rw := &bytes.Buffer{}
+	rw.Write(enc)
+	dec, err := FullJustification{}.Decode(rw)
+	require.NoError(t, err)
+	require.Equal(t, fj, dec)
 }

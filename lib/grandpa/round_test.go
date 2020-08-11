@@ -95,6 +95,9 @@ func TestGrandpa_BaseCase(t *testing.T) {
 		require.NoError(t, err)
 		err = gs.finalize()
 		require.NoError(t, err)
+		has, err := gs.blockState.HasJustification(gs.head.Hash())
+		require.NoError(t, err)
+		require.True(t, has)
 	}
 
 	finalized := gss[0].head.Hash()

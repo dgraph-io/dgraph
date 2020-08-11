@@ -65,3 +65,6 @@ var ErrInvalidMessageType = errors.New("cannot decode invalid message type")
 
 // ErrNotFinalizationMessage is returned when calling GetFinalizedHash on a message that isn't a FinalizationMessage
 var ErrNotFinalizationMessage = errors.New("cannot get finalized hash from VoteMessage")
+
+// ErrNoJustification is returned when no justification can be found for a block, ie. it has not been finalized
+var ErrNoJustification = errors.New("no justification found for block")

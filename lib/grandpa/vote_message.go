@@ -151,11 +151,6 @@ func (s *Service) validateMessage(m *VoteMessage) (*Vote, error) {
 		return vote, nil
 	}
 
-	equivocated := s.checkForEquivocation(voter, vote, m.Stage)
-	if equivocated {
-		return nil, ErrEquivocation
-	}
-
 	err = s.validateVote(vote)
 	if err == ErrBlockDoesNotExist {
 		s.tracker.add(m)
@@ -173,11 +168,22 @@ func (s *Service) validateMessage(m *VoteMessage) (*Vote, error) {
 		AuthorityID: pk.AsBytes(),
 	}
 
+	// add justification before checking for equivocation, since equivocatory vote may still be used in justification
+	if m.Stage == prevote {
+		s.pvJustifications[m.Message.Hash] = append(s.pvJustifications[m.Message.Hash], just)
+	} else if m.Stage == precommit {
+		s.pcJustifications[m.Message.Hash] = append(s.pcJustifications[m.Message.Hash], just)
+	}
+
+	equivocated := s.checkForEquivocation(voter, vote, m.Stage)
+	if equivocated {
+		return nil, ErrEquivocation
+	}
+
 	if m.Stage == prevote {
 		s.prevotes[pk.AsBytes()] = vote
 	} else if m.Stage == precommit {
 		s.precommits[pk.AsBytes()] = vote
-		s.pcJustifications[m.Message.Hash] = append(s.pcJustifications[m.Message.Hash], just)
 	}
 
 	return vote, nil
@@ -191,9 +197,6 @@ func (s *Service) checkForEquivocation(voter *Voter, vote *Vote, stage subround)
 
 	var eq map[ed25519.PublicKeyBytes][]*Vote
 	var votes map[ed25519.PublicKeyBytes]*Vote
-
-	s.mapLock.Lock()
-	defer s.mapLock.Unlock()
 
 	if stage == prevote {
 		eq = s.pvEquivocations

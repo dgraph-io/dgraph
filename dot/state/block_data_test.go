@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetSetReceiptMessageQueueJustification(t *testing.T) {
+func TestGetSet_ReceiptMessageQueue_Justification(t *testing.T) {
 	s := newTestBlockState(t, nil)
 	require.NotNil(t, s)
 

@@ -1,8 +1,8 @@
 package grandpa
 
 import (
+	"bytes"
 	"fmt"
-	"io"
 
 	"github.com/ChainSafe/gossamer/dot/core"
 	"github.com/ChainSafe/gossamer/dot/network"
@@ -34,9 +34,11 @@ func (s *Service) GetFinalizedChannel() <-chan FinalityMessage {
 }
 
 var (
-	// TODO: determine correct prefixes
-	voteType         byte = 0
-	finalizationType byte = 1
+	voteType            byte = 0
+	precommitType       byte = 1
+	finalizationType    byte = 2
+	catchUpRequestType  byte = 3 //nolint
+	catchUpResponseType byte = 4 //nolint
 )
 
 // FullVote represents a vote with additional information about the state
@@ -77,36 +79,11 @@ func (v *VoteMessage) ToConsensusMessage() (*ConsensusMessage, error) {
 		return nil, err
 	}
 
+	typ := byte(v.Stage)
 	return &ConsensusMessage{
 		ConsensusEngineID: types.GrandpaEngineID,
-		Data:              append([]byte{voteType}, enc...),
+		Data:              append([]byte{typ}, enc...),
 	}, nil
-}
-
-// Justification represents a justification for a finalized block
-type Justification struct {
-	Vote        *Vote
-	Signature   [64]byte
-	AuthorityID ed25519.PublicKeyBytes
-}
-
-// Encode returns the SCALE encoded Justification
-func (j *Justification) Encode() ([]byte, error) {
-	enc, err := j.Vote.Encode()
-	if err != nil {
-		return nil, err
-	}
-
-	enc = append(enc, j.Signature[:]...)
-	enc = append(enc, j.AuthorityID[:]...)
-	return enc, nil
-}
-
-// Decode returns the SCALE decoded Justification
-func (j *Justification) Decode(r io.Reader) (*Justification, error) {
-	sd := &scale.Decoder{Reader: r}
-	i, err := sd.Decode(j)
-	return i.(*Justification), err
 }
 
 // FinalizationMessage represents a network finalization message
@@ -135,4 +112,69 @@ func (s *Service) newFinalizationMessage(header *types.Header, round uint64) *Fi
 		Vote:          NewVoteFromHeader(header),
 		Justification: s.justification[round],
 	}
+}
+
+type catchUpRequest struct { //nolint
+	Round uint64
+	SetID uint64
+}
+
+func newCatchUpRequest(round, setID uint64) *catchUpRequest { //nolint
+	return &catchUpRequest{
+		Round: round,
+		SetID: setID,
+	}
+}
+
+type catchUpResponse struct {
+	Round                  uint64
+	SetID                  uint64
+	PreVoteJustification   FullJustification
+	PreCommitJustification FullJustification
+	Hash                   common.Hash
+	Number                 uint64
+}
+
+func (s *Service) newCatchUpResponse(round, setID uint64) (*catchUpResponse, error) {
+	// TODO: update blockState.GetFinalizedHeader to accept setID, use that instead, since mapping only stores from current setID
+	b := s.bestFinalCandidate[round]
+
+	has, err := s.blockState.HasJustification(b.hash)
+	if err != nil {
+		return nil, err
+	}
+
+	if !has {
+		return nil, ErrNoJustification
+	}
+
+	just, err := s.blockState.GetJustification(b.hash)
+	if err != nil {
+		return nil, err
+	}
+
+	r := &bytes.Buffer{}
+	_, err = r.Write(just)
+	if err != nil {
+		return nil, err
+	}
+
+	pvj, err := FullJustification{}.Decode(r)
+	if err != nil {
+		return nil, err
+	}
+
+	pcj, err := FullJustification{}.Decode(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &catchUpResponse{
+		Round:                  round,
+		SetID:                  setID,
+		PreVoteJustification:   pvj,
+		PreCommitJustification: pcj,
+		Hash:                   b.hash,
+		Number:                 b.number,
+	}, nil
 }

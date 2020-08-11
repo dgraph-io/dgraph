@@ -39,4 +39,7 @@ type BlockState interface {
 	BlocktreeAsString() string
 	RegisterImportedChannel(ch chan<- *types.Block) (byte, error)
 	UnregisterImportedChannel(id byte)
+	SetJustification(hash common.Hash, data []byte) error
+	HasJustification(hash common.Hash) (bool, error)
+	GetJustification(hash common.Hash) ([]byte, error)
 }
