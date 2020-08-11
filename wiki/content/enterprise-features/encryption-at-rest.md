@@ -59,7 +59,7 @@ restart successfully.
 Alternatively, for encryption keys sitting on Vault server, here is an example. To use Vault, there are some pre-requisites.
 1. Vault Server URL of the form `http://fqdn[ip]:port`. This will be used for the options `--vault_addr`.
 2. Vault Server must be configued with an approle auth. A `secret-id` and `role-id` must be generated and copied over to local files. This will be needed for the options `--vault_secretid_file` and `vault_roleid_file`.
-3. Vault Server must instantiate a KV store. And the Dgraph key must be one of the K/V pairs in this store. This will be the `--vault_field` option. The vaule of this key is the encryption key that Dgraph will use. THis key must be 16,24 or 32 bytes as explained above.
+3. Vault Server must instantiate a KV store containing a K/V for Dgraph. The `--vault_field` option must be the KV-v1 or KV-v2 format. The vaule of this key is the encryption key that Dgraph will use. This key must be 16,24 or 32 bytes as explained above.
 
 Next, here is an example of using Dgraph with a Vault server that holds the encryption key.
 ```bash
