@@ -141,10 +141,10 @@ func (gs *graphqlSubscription) Subscribe(
 			if !strings.EqualFold(key, name) {
 				continue
 			}
+
 			md := metadata.New(map[string]string{
 				"authorizationJwt": val.(string),
 			})
-
 			ctx = metadata.NewIncomingContext(ctx, md)
 			customClaims, err = authorization.ExtractCustomClaims(ctx)
 			if err != nil {
