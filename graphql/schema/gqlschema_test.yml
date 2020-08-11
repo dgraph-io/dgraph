@@ -2636,7 +2636,7 @@ valid_schemas:
       }
 
   -
-    name: "Query, Mutation in initial schema with @custom directive"
+    name: "initial schema with @custom directive"
     input: |
       type Author {
         id: ID!
