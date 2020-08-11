@@ -2662,7 +2662,7 @@ valid_schemas:
         getAuthorsForCountry(country_code: String!): [Author] @custom(http: {
             url: "http://blah.com"
             method: "POST"
-            body: "{country_code: $country_code, version: 1}"
+            body: "{country_code: $country_code, version: 1, tag: \"temp\"}"
         })
       }
       type Mutation {
