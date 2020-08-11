@@ -79,6 +79,8 @@ Alpha server.
 
 `-x, --xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
 
+`--ludicrous_mode` (default: false): Live loader by default does smart batching to ingest data faster. This is not required in ludicrous mode, and ends up taking more time and memory. This option allows the user to notify live loader that the alpha is running in ludicrous mode. This modeo disables smart batching, increasing speed and memory. This should only be used if dgraph is running in ludicrous mode.
+
 ## Bulk Loader
 
 {{% notice "note" %}}
