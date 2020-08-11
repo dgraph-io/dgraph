@@ -236,6 +236,8 @@ func (l *loader) uid(val string) string {
 }
 
 func generateBlankNode(val string) string {
+	// generates "u_hash(val)"
+
 	sb := strings.Builder{}
 	x.Check2(sb.WriteString("u_"))
 	x.Check2(sb.WriteString(strconv.FormatUint(farm.Fingerprint64([]byte(val)), 10)))
@@ -243,6 +245,8 @@ func generateBlankNode(val string) string {
 }
 
 func generateUidFunc(val string) string {
+	// generates "uid(val)"
+
 	sb := strings.Builder{}
 	sb.WriteString("uid(")
 	sb.WriteString(val)
@@ -251,6 +255,8 @@ func generateUidFunc(val string) string {
 }
 
 func generateQuery(node, predicate, xid string) string {
+	// generates "node as node(func: eq(predicate, xid)) {uid}"
+
 	sb := strings.Builder{}
 	sb.WriteString(node)
 	sb.WriteString(" as ")
