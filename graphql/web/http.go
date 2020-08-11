@@ -137,27 +137,22 @@ func (gs *graphqlSubscription) Subscribe(
 		}
 
 		name := authorization.GetHeader()
-		var val interface{}
-		var key string
-		var ok bool
-		for key, val = range payload {
-			if strings.EqualFold(key, name) {
-				ok = true
-				break
+		for key, val := range payload {
+			if !strings.EqualFold(key, name) {
+				continue
 			}
-		}
-
-		if ok {
 			md := metadata.New(map[string]string{
 				"authorizationJwt": val.(string),
 			})
-			ctx = metadata.NewIncomingContext(ctx, md)
 
+			ctx = metadata.NewIncomingContext(ctx, md)
 			customClaims, err = authorization.ExtractCustomClaims(ctx)
 			if err != nil {
 				return nil, err
 			}
+			break
 		}
+
 	}
 	// for the cases when no expiry is given in jwt or subscription doesn't have any authorization,
 	// we set their expiry to zero time
