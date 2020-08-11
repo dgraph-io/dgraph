@@ -79,6 +79,8 @@ Alpha server.
 
 `-x, --xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
 
+`-U --upsertPredicate` (default: disabled. Need a predicate): Stores blank nodes to uid in the given predicate. This would allow users to apply live loader on same data multiple times. This is an alternative to using `-x` to store the same identifies on disk. It is slower but more robust. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
+
 ## Bulk Loader
 
 {{% notice "note" %}}
