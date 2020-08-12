@@ -157,6 +157,12 @@ type UpdateUserPayload {
 # Generated Enums
 #######################
 
+enum UserHasFilter {
+	name
+	age
+	cars
+}
+
 enum UserOrderable {
 	name
 	age
@@ -182,6 +188,7 @@ input UserFilter {
 	and: UserFilter
 	or: UserFilter
 	not: UserFilter
+	has: UserHasFilter
 }
 
 input UserOrder {

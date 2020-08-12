@@ -171,12 +171,27 @@ type UpdateAuthorPayload {
 # Generated Enums
 #######################
 
+enum AuthorHasFilter {
+	name
+	posts
+}
+
 enum AuthorOrderable {
+	name
+}
+
+enum GenreHasFilter {
 	name
 }
 
 enum GenreOrderable {
 	name
+}
+
+enum PostHasFilter {
+	content
+	author
+	genre
 }
 
 enum PostOrderable {
@@ -205,6 +220,7 @@ input AddPostInput {
 input AuthorFilter {
 	id: [ID!]
 	not: AuthorFilter
+	has: AuthorHasFilter
 }
 
 input AuthorOrder {
@@ -224,6 +240,11 @@ input AuthorRef {
 	posts: [PostRef]
 }
 
+input GenreFilter {
+	not: GenreFilter
+	has: GenreHasFilter
+}
+
 input GenreOrder {
 	asc: GenreOrderable
 	desc: GenreOrderable
@@ -232,6 +253,11 @@ input GenreOrder {
 
 input GenreRef {
 	name: String
+}
+
+input PostFilter {
+	not: PostFilter
+	has: PostHasFilter
 }
 
 input PostOrder {

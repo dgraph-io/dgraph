@@ -149,6 +149,10 @@ type UpdatePostPayload {
 # Generated Enums
 #######################
 
+enum PostHasFilter {
+	content
+}
+
 enum PostOrderable {
 	content
 }
@@ -166,6 +170,7 @@ input PostFilter {
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
+	has: PostHasFilter
 }
 
 input PostOrder {

@@ -224,8 +224,21 @@ type UpdateStarshipPayload {
 # Generated Enums
 #######################
 
+enum CharacterHasFilter {
+	name
+	friends
+	appearsIn
+}
+
 enum CharacterOrderable {
 	name
+}
+
+enum DroidHasFilter {
+	name
+	friends
+	appearsIn
+	primaryFunction
 }
 
 enum DroidOrderable {
@@ -233,9 +246,22 @@ enum DroidOrderable {
 	primaryFunction
 }
 
+enum HumanHasFilter {
+	name
+	friends
+	appearsIn
+	starships
+	totalCredits
+}
+
 enum HumanOrderable {
 	name
 	totalCredits
+}
+
+enum StarshipHasFilter {
+	name
+	length
 }
 
 enum StarshipOrderable {
@@ -274,6 +300,7 @@ input CharacterFilter {
 	and: CharacterFilter
 	or: CharacterFilter
 	not: CharacterFilter
+	has: CharacterHasFilter
 }
 
 input CharacterOrder {
@@ -299,6 +326,7 @@ input DroidFilter {
 	and: DroidFilter
 	or: DroidFilter
 	not: DroidFilter
+	has: DroidHasFilter
 }
 
 input DroidOrder {
@@ -333,6 +361,7 @@ input HumanFilter {
 	and: HumanFilter
 	or: HumanFilter
 	not: HumanFilter
+	has: HumanHasFilter
 }
 
 input HumanOrder {
@@ -364,6 +393,7 @@ input StarshipFilter {
 	and: StarshipFilter
 	or: StarshipFilter
 	not: StarshipFilter
+	has: StarshipHasFilter
 }
 
 input StarshipOrder {

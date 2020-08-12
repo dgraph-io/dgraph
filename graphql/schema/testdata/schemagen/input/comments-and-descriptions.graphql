@@ -7,7 +7,7 @@ interface I {
     """
     Desc
     """
-    s: String!
+    s: String! #@search
 }
 
 """

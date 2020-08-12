@@ -168,6 +168,18 @@ type UpdatePostPayload {
 }
 
 #######################
+# Generated Enums
+#######################
+
+enum AuthorHasFilter {
+	posts
+}
+
+enum PostHasFilter {
+	author
+}
+
+#######################
 # Generated Inputs
 #######################
 
@@ -182,6 +194,7 @@ input AddPostInput {
 input AuthorFilter {
 	id: [ID!]
 	not: AuthorFilter
+	has: AuthorHasFilter
 }
 
 input AuthorPatch {
@@ -196,6 +209,7 @@ input AuthorRef {
 input PostFilter {
 	id: [ID!]
 	not: PostFilter
+	has: PostHasFilter
 }
 
 input PostPatch {

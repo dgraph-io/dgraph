@@ -2,18 +2,16 @@
 # Input Schema
 #######################
 
-interface LibraryItem {
-	refID: String! @id
+interface Desk {
+	name: String! @id
+	height: Int
 }
 
-type Book implements LibraryItem {
-	refID: String! @id
-	title: String
-	author: String
-}
-
-type Library {
-	items(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+type LaptopDesk implements Desk {
+	name: String! @id
+	height: Int
+	width: Int
+	Wooden: Boolean
 }
 
 #######################
@@ -139,30 +137,30 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+type AddLaptopDeskPayload {
+	laptopDesk(filter: LaptopDeskFilter, order: LaptopDeskOrder, first: Int, offset: Int): [LaptopDesk]
 	numUids: Int
 }
 
-type AddLibraryPayload {
-	library(first: Int, offset: Int): [Library]
-	numUids: Int
-}
-
-type DeleteBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+type DeleteDeskPayload {
+	desk(filter: DeskFilter, order: DeskOrder, first: Int, offset: Int): [Desk]
 	msg: String
 	numUids: Int
 }
 
-type DeleteLibraryItemPayload {
-	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+type DeleteLaptopDeskPayload {
+	laptopDesk(filter: LaptopDeskFilter, order: LaptopDeskOrder, first: Int, offset: Int): [LaptopDesk]
 	msg: String
 	numUids: Int
 }
 
-type UpdateBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+type UpdateDeskPayload {
+	desk(filter: DeskFilter, order: DeskOrder, first: Int, offset: Int): [Desk]
+	numUids: Int
+}
+
+type UpdateLaptopDeskPayload {
+	laptopDesk(filter: LaptopDeskFilter, order: LaptopDeskOrder, first: Int, offset: Int): [LaptopDesk]
 	numUids: Int
 }
 
@@ -170,79 +168,99 @@ type UpdateBookPayload {
 # Generated Enums
 #######################
 
-enum BookOrderable {
-	refID
-	title
-	author
+enum DeskHasFilter {
+	name
+	height
 }
 
-enum LibraryItemOrderable {
-	refID
+enum DeskOrderable {
+	name
+	height
+}
+
+enum LaptopDeskHasFilter {
+	name
+	height
+	width
+	Wooden
+}
+
+enum LaptopDeskOrderable {
+	name
+	height
+	width
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddBookInput {
-	refID: String!
-	title: String
-	author: String
+input AddLaptopDeskInput {
+	name: String!
+	height: Int
+	width: Int
+	Wooden: Boolean
 }
 
-input AddLibraryInput {
-	items: [LibraryItemRef]
+input DeskFilter {
+	name: StringHashFilter
+	and: DeskFilter
+	or: DeskFilter
+	not: DeskFilter
+	has: DeskHasFilter
 }
 
-input BookFilter {
-	refID: StringHashFilter
-	and: BookFilter
-	or: BookFilter
-	not: BookFilter
+input DeskOrder {
+	asc: DeskOrderable
+	desc: DeskOrderable
+	then: DeskOrder
 }
 
-input BookOrder {
-	asc: BookOrderable
-	desc: BookOrderable
-	then: BookOrder
+input DeskPatch {
+	height: Int
 }
 
-input BookPatch {
-	title: String
-	author: String
+input DeskRef {
+	name: String! @id
 }
 
-input BookRef {
-	refID: String
-	title: String
-	author: String
+input LaptopDeskFilter {
+	name: StringHashFilter
+	and: LaptopDeskFilter
+	or: LaptopDeskFilter
+	not: LaptopDeskFilter
+	has: LaptopDeskHasFilter
 }
 
-input LibraryItemFilter {
-	refID: StringHashFilter
-	and: LibraryItemFilter
-	or: LibraryItemFilter
-	not: LibraryItemFilter
+input LaptopDeskOrder {
+	asc: LaptopDeskOrderable
+	desc: LaptopDeskOrderable
+	then: LaptopDeskOrder
 }
 
-input LibraryItemOrder {
-	asc: LibraryItemOrderable
-	desc: LibraryItemOrderable
-	then: LibraryItemOrder
+input LaptopDeskPatch {
+	height: Int
+	width: Int
+	Wooden: Boolean
 }
 
-input LibraryItemRef {
-	refID: String! @id
+input LaptopDeskRef {
+	name: String
+	height: Int
+	width: Int
+	Wooden: Boolean
 }
 
-input LibraryRef {
-	items: [LibraryItemRef]
+input UpdateDeskInput {
+	filter: DeskFilter!
+	set: DeskPatch
+	remove: DeskPatch
 }
 
-input UpdateBookInput {
-	filter: BookFilter!
-	set: BookPatch
-	remove: BookPatch
+input UpdateLaptopDeskInput {
+	filter: LaptopDeskFilter!
+	set: LaptopDeskPatch
+	remove: LaptopDeskPatch
 }
 
 #######################
@@ -250,11 +268,10 @@ input UpdateBookInput {
 #######################
 
 type Query {
-	getLibraryItem(refID: String!): LibraryItem
-	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	getBook(refID: String!): Book
-	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	queryLibrary(first: Int, offset: Int): [Library]
+	getDesk(name: String!): Desk
+	queryDesk(filter: DeskFilter, order: DeskOrder, first: Int, offset: Int): [Desk]
+	getLaptopDesk(name: String!): LaptopDesk
+	queryLaptopDesk(filter: LaptopDeskFilter, order: LaptopDeskOrder, first: Int, offset: Int): [LaptopDesk]
 }
 
 #######################
@@ -262,10 +279,10 @@ type Query {
 #######################
 
 type Mutation {
-	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
-	addBook(input: [AddBookInput!]!): AddBookPayload
-	updateBook(input: UpdateBookInput!): UpdateBookPayload
-	deleteBook(filter: BookFilter!): DeleteBookPayload
-	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
+	updateDesk(input: UpdateDeskInput!): UpdateDeskPayload
+	deleteDesk(filter: DeskFilter!): DeleteDeskPayload
+	addLaptopDesk(input: [AddLaptopDeskInput!]!): AddLaptopDeskPayload
+	updateLaptopDesk(input: UpdateLaptopDeskInput!): UpdateLaptopDeskPayload
+	deleteLaptopDesk(filter: LaptopDeskFilter!): DeleteLaptopDeskPayload
 }
 

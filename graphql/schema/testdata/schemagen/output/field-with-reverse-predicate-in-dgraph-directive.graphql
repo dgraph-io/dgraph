@@ -173,8 +173,18 @@ type UpdateMoviePayload {
 # Generated Enums
 #######################
 
+enum MovieDirectorHasFilter {
+	name
+	directed
+}
+
 enum MovieDirectorOrderable {
 	name
+}
+
+enum MovieHasFilter {
+	name
+	director
 }
 
 enum MovieOrderable {
@@ -197,6 +207,7 @@ input AddMovieInput {
 input MovieDirectorFilter {
 	id: [ID!]
 	not: MovieDirectorFilter
+	has: MovieDirectorHasFilter
 }
 
 input MovieDirectorOrder {
@@ -219,6 +230,7 @@ input MovieDirectorRef {
 input MovieFilter {
 	id: [ID!]
 	not: MovieFilter
+	has: MovieHasFilter
 }
 
 input MovieOrder {

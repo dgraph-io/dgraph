@@ -217,18 +217,43 @@ type UpdateQuestionPayload {
 # Generated Enums
 #######################
 
+enum AnswerHasFilter {
+	text
+	datePublished
+	author
+	markedUseful
+}
+
 enum AnswerOrderable {
 	text
 	datePublished
+}
+
+enum AuthorHasFilter {
+	name
+	posts
 }
 
 enum AuthorOrderable {
 	name
 }
 
+enum PostHasFilter {
+	text
+	datePublished
+	author
+}
+
 enum PostOrderable {
 	text
 	datePublished
+}
+
+enum QuestionHasFilter {
+	text
+	datePublished
+	author
+	answered
 }
 
 enum QuestionOrderable {
@@ -266,6 +291,7 @@ input AnswerFilter {
 	and: AnswerFilter
 	or: AnswerFilter
 	not: AnswerFilter
+	has: AnswerHasFilter
 }
 
 input AnswerOrder {
@@ -295,6 +321,7 @@ input AuthorFilter {
 	and: AuthorFilter
 	or: AuthorFilter
 	not: AuthorFilter
+	has: AuthorHasFilter
 }
 
 input AuthorOrder {
@@ -321,6 +348,7 @@ input PostFilter {
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
+	has: PostHasFilter
 }
 
 input PostOrder {
@@ -346,6 +374,7 @@ input QuestionFilter {
 	and: QuestionFilter
 	or: QuestionFilter
 	not: QuestionFilter
+	has: QuestionHasFilter
 }
 
 input QuestionOrder {

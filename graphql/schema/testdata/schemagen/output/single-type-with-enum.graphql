@@ -158,6 +158,12 @@ type UpdatePostPayload {
 # Generated Enums
 #######################
 
+enum PostHasFilter {
+	title
+	text
+	postType
+}
+
 enum PostOrderable {
 	title
 	text
@@ -176,6 +182,7 @@ input AddPostInput {
 input PostFilter {
 	id: [ID!]
 	not: PostFilter
+	has: PostHasFilter
 }
 
 input PostOrder {

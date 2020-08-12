@@ -191,13 +191,29 @@ type UpdatePersonPayload {
 # Generated Enums
 #######################
 
+enum BusinessManHasFilter {
+	name
+	owns
+	companyName
+}
+
 enum BusinessManOrderable {
 	name
 	companyName
 }
 
+enum ObjectHasFilter {
+	name
+	ownedBy
+}
+
 enum ObjectOrderable {
 	name
+}
+
+enum PersonHasFilter {
+	name
+	owns
 }
 
 enum PersonOrderable {
@@ -221,6 +237,7 @@ input AddObjectInput {
 input BusinessManFilter {
 	id: [ID!]
 	not: BusinessManFilter
+	has: BusinessManHasFilter
 }
 
 input BusinessManOrder {
@@ -243,6 +260,7 @@ input BusinessManRef {
 input ObjectFilter {
 	id: [ID!]
 	not: ObjectFilter
+	has: ObjectHasFilter
 }
 
 input ObjectOrder {
@@ -265,6 +283,7 @@ input ObjectRef {
 input PersonFilter {
 	id: [ID!]
 	not: PersonFilter
+	has: PersonHasFilter
 }
 
 input PersonOrder {

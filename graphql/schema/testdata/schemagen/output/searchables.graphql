@@ -176,6 +176,30 @@ type UpdatePostPayload {
 # Generated Enums
 #######################
 
+enum PostHasFilter {
+	title
+	titleByEverything
+	text
+	tags
+	tagsHash
+	tagsExact
+	publishByYear
+	publishByMonth
+	publishByDay
+	publishByHour
+	numLikes
+	score
+	isPublished
+	postType
+	postTypeTrigram
+	postTypeRegexp
+	postTypeExact
+	postTypeHash
+	postTypeRegexpExact
+	postTypeHashRegexp
+	postTypeNone
+}
+
 enum PostOrderable {
 	title
 	titleByEverything
@@ -245,6 +269,7 @@ input PostFilter {
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
+	has: PostHasFilter
 }
 
 input PostOrder {

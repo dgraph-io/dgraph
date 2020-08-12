@@ -154,6 +154,10 @@ type UpdateUserPayload {
 # Generated Enums
 #######################
 
+enum UserHasFilter {
+	name
+}
+
 enum UserOrderable {
 	name
 }
@@ -175,6 +179,7 @@ input UpdateUserInput {
 input UserFilter {
 	id: [ID!]
 	not: UserFilter
+	has: UserHasFilter
 }
 
 input UserOrder {

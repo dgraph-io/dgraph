@@ -191,12 +191,28 @@ type UpdateOscarMoviePayload {
 # Generated Enums
 #######################
 
+enum DirectorHasFilter {
+	name
+	directed
+}
+
 enum DirectorOrderable {
 	name
 }
 
+enum MovieHasFilter {
+	name
+	director
+}
+
 enum MovieOrderable {
 	name
+}
+
+enum OscarMovieHasFilter {
+	name
+	director
+	year
 }
 
 enum OscarMovieOrderable {
@@ -221,6 +237,7 @@ input AddOscarMovieInput {
 input DirectorFilter {
 	id: [ID!]
 	not: DirectorFilter
+	has: DirectorHasFilter
 }
 
 input DirectorOrder {
@@ -241,6 +258,7 @@ input DirectorRef {
 input MovieFilter {
 	id: [ID!]
 	not: MovieFilter
+	has: MovieHasFilter
 }
 
 input MovieOrder {
@@ -261,6 +279,7 @@ input MovieRef {
 input OscarMovieFilter {
 	id: [ID!]
 	not: OscarMovieFilter
+	has: OscarMovieHasFilter
 }
 
 input OscarMovieOrder {

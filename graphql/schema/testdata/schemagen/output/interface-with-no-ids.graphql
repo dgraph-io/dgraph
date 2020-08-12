@@ -153,12 +153,26 @@ type AddUserPayload {
 # Generated Enums
 #######################
 
+enum MessageHasFilter {
+	text
+}
+
 enum MessageOrderable {
 	text
 }
 
+enum QuestionHasFilter {
+	text
+	askedBy
+}
+
 enum QuestionOrderable {
 	text
+}
+
+enum UserHasFilter {
+	name
+	messages
 }
 
 enum UserOrderable {
@@ -178,10 +192,20 @@ input AddUserInput {
 	name: String
 }
 
+input MessageFilter {
+	not: MessageFilter
+	has: MessageHasFilter
+}
+
 input MessageOrder {
 	asc: MessageOrderable
 	desc: MessageOrderable
 	then: MessageOrder
+}
+
+input QuestionFilter {
+	not: QuestionFilter
+	has: QuestionHasFilter
 }
 
 input QuestionOrder {
@@ -193,6 +217,11 @@ input QuestionOrder {
 input QuestionRef {
 	text: String
 	askedBy: UserRef
+}
+
+input UserFilter {
+	not: UserFilter
+	has: UserHasFilter
 }
 
 input UserOrder {

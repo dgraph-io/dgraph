@@ -176,13 +176,31 @@ type UpdateHumanPayload {
 # Generated Enums
 #######################
 
+enum CharacterHasFilter {
+	name
+	friends
+}
+
 enum CharacterOrderable {
 	name
+}
+
+enum EmployeeHasFilter {
+	employeeId
+	title
 }
 
 enum EmployeeOrderable {
 	employeeId
 	title
+}
+
+enum HumanHasFilter {
+	employeeId
+	title
+	name
+	friends
+	totalCredits
 }
 
 enum HumanOrderable {
@@ -210,6 +228,7 @@ input CharacterFilter {
 	and: CharacterFilter
 	or: CharacterFilter
 	not: CharacterFilter
+	has: CharacterHasFilter
 }
 
 input CharacterOrder {
@@ -227,6 +246,11 @@ input CharacterRef {
 	id: ID!
 }
 
+input EmployeeFilter {
+	not: EmployeeFilter
+	has: EmployeeHasFilter
+}
+
 input EmployeeOrder {
 	asc: EmployeeOrderable
 	desc: EmployeeOrderable
@@ -239,6 +263,7 @@ input HumanFilter {
 	and: HumanFilter
 	or: HumanFilter
 	not: HumanFilter
+	has: HumanHasFilter
 }
 
 input HumanOrder {

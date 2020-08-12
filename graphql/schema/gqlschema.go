@@ -545,6 +545,7 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		}
 
 		// types and inputs needed for query and search
+		//fmt.Println(defn.Kind)
 		addFilterType(sch, defn)
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
@@ -704,6 +705,7 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
+		fmt.Println(fld.Name)
 		if isID(fld) {
 			continue
 		}
@@ -794,9 +796,6 @@ func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName str
 //   ...
 // }
 func addFilterType(schema *ast.Schema, defn *ast.Definition) {
-	if !hasFilterable(defn) {
-		return
-	}
 
 	filterName := defn.Name + "Filter"
 	filter := &ast.Definition{
@@ -843,7 +842,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 	filter.Fields = append(filter.Fields,
 		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}},
-		&ast.FieldDefinition{Name: "has", Type: &ast.Type{NamedType: defn.Name + "HasFilter"}}
+		&ast.FieldDefinition{Name: "has", Type: &ast.Type{NamedType: defn.Name + "HasFilter"}},
 	)
 	schema.Types[filterName] = filter
 }
