@@ -25,11 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//type state struct {
-//	dg *dgo.Dgraph
-//}
-//var s state
-
 func TestMetricTxnAborts(t *testing.T) {
 	m1 := `
     {
@@ -38,13 +33,31 @@ func TestMetricTxnAborts(t *testing.T) {
 	  }
 	}
 	`
+	mr1, err := mutationWithTs(m1, "application/rdf", false, false, ts)
+	require.NoError(t, err)
 
-	for i := 1; i <= 1200; i++ {
-		_, err := mutationWithTs(m1, "application/rdf", false, false, ts)
-		require.NoError(t, err)
-	}
+	mr2, err := mutationWithTs(m1, "application/rdf", false, false, ts)
+	require.NoError(t, err)
+
+	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
+	// Create 'dgraph_txn_aborts' metric
+	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
+
+
+	// Fetch Metrics
+	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
+	require.NoError(t, err)
+
+	_, body, err := runRequest(req)
+	require.NoError(t, err)
+	metricsMap, err := extractMetrics(string(body))
+	requiredMetric := "dgraph_txn_aborts"
+	_, ok := metricsMap[requiredMetric]
+	require.True(t, ok, "the required metric %s is not found", requiredMetric)
 
 }
+
+
 
 func TestMetrics(t *testing.T) {
 	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
