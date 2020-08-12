@@ -852,13 +852,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			}
 
 			mu.RLock()
-			if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
-				errCh <- x.GqlErrorf("Evaluation of custom field failed while substituting "+
-					"variables into body for remote endpoint with an error: %s for field: %s "+
-					"within type: %s.", err, f.Name(), f.GetObjectName()).WithLocations(f.Location())
-				mu.RUnlock()
-				return
-			}
+			schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{}))
 			mu.RUnlock()
 			inputs[i] = temp
 		}
