@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -106,7 +107,8 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 	}
 
 	logger := log.New("pkg", "babe")
-	h := log.CallerFileHandler(log.StdoutHandler)
+	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	h = log.CallerFileHandler(h)
 	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
 
 	babeService := &Service{

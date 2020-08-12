@@ -47,6 +47,7 @@ type Service struct {
 // NewService create a new instance of Service
 func NewService(path string, lvl log.Lvl) *Service {
 	handler := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	handler = log.CallerFileHandler(handler)
 	logger.SetHandler(log.LvlFilterHandler(lvl, handler))
 
 	return &Service{

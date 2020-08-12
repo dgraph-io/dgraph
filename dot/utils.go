@@ -36,7 +36,8 @@ func setupLogger(cfg *Config) error {
 		cfg.Global.LogLevel = "info"
 	}
 
-	handler := log.CallerFileHandler(log.StdoutHandler)
+	handler := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	handler = log.CallerFileHandler(handler)
 	lvl, err := log.LvlFromString(cfg.Global.LogLevel)
 	if err != nil {
 		return err

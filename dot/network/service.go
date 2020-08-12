@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"os"
 	"sync"
 	"time"
 
@@ -74,7 +75,8 @@ type Service struct {
 func NewService(cfg *Config) (*Service, error) {
 	ctx := context.Background()
 
-	h := log.CallerFileHandler(log.StdoutHandler)
+	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	h = log.CallerFileHandler(h)
 	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
 	cfg.logger = logger
 

@@ -133,6 +133,7 @@ func NewService(cfg *Config) (*Service, error) {
 
 	logger := log.New("pkg", "core")
 	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	h = log.CallerFileHandler(h)
 	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
 
 	codeHash, err := cfg.StorageState.LoadCodeHash()

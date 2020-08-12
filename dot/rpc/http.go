@@ -19,6 +19,7 @@ package rpc
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/ChainSafe/gossamer/dot/rpc/modules"
@@ -72,7 +73,8 @@ var logger log.Logger
 // NewHTTPServer creates a new http server and registers an associated rpc server
 func NewHTTPServer(cfg *HTTPServerConfig) *HTTPServer {
 	logger = log.New("pkg", "rpc")
-	h := log.CallerFileHandler(log.StdoutHandler)
+	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	h = log.CallerFileHandler(h)
 	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
 
 	server := &HTTPServer{
