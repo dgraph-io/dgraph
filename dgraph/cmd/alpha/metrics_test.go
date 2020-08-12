@@ -19,6 +19,7 @@ package alpha
 import (
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -26,38 +27,53 @@ import (
 )
 
 func TestMetricTxnAborts(t *testing.T) {
-	m1 := `
+	mt := `
     {
 	  set {
 		<0x71>  <name> "Bob" .
 	  }
 	}
 	`
-	mr1, err := mutationWithTs(m1, "application/rdf", false, false, ts)
-	require.NoError(t, err)
 
-	mr2, err := mutationWithTs(m1, "application/rdf", false, false, ts)
+	// Create initial 'dgraph_txn_aborts' metric
+	mr1, err := mutationWithTs(mt, "application/rdf", false, false, ts)
 	require.NoError(t, err)
-
+	mr2, err := mutationWithTs(mt, "application/rdf", false, false, ts)
+	require.NoError(t, err)
 	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
-	// Create 'dgraph_txn_aborts' metric
 	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
-
 
 	// Fetch Metrics
 	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
 	require.NoError(t, err)
-
 	_, body, err := runRequest(req)
 	require.NoError(t, err)
 	metricsMap, err := extractMetrics(string(body))
 	requiredMetric := "dgraph_txn_aborts"
-	_, ok := metricsMap[requiredMetric]
+	txnAbort, ok := metricsMap[requiredMetric]
+	txnAbort1, _ := strconv.Atoi(txnAbort.(string))
 	require.True(t, ok, "the required metric %s is not found", requiredMetric)
 
+	// Create second 'dgraph_txn_aborts' metric
+	mr1, err = mutationWithTs(mt, "application/rdf", false, false, ts)
+	require.NoError(t, err)
+	mr2, err = mutationWithTs(mt, "application/rdf", false, false, ts)
+	require.NoError(t, err)
+	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
+	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
+
+	// Fetch Updated Metrics
+	req, err = http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
+	require.NoError(t, err)
+	_, body, err = runRequest(req)
+	require.NoError(t, err)
+	metricsMap, err = extractMetrics(string(body))
+	requiredMetric = "dgraph_txn_aborts"
+	txnAbort, ok = metricsMap["dgraph_txn_aborts"]
+	txnAbort2, _ := strconv.Atoi(txnAbort.(string))
+
+	require.Equal(t, txnAbort1+1, txnAbort2, "txnAbort was not incremented")
 }
-
-
 
 func TestMetrics(t *testing.T) {
 	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
@@ -93,15 +109,16 @@ func TestMetrics(t *testing.T) {
 
 func extractMetrics(metrics string) (map[string]interface{}, error) {
 	lines := strings.Split(metrics, "\n")
-	metricRegex, err := regexp.Compile("(^[a-z0-9_]+)")
+	metricRegex, err := regexp.Compile("(^\\w+|\\d+$)")
+
 	if err != nil {
 		return nil, err
 	}
 	metricsMap := make(map[string]interface{})
 	for _, line := range lines {
-		matches := metricRegex.FindStringSubmatch(line)
+		matches := metricRegex.FindAllString(line, -1)
 		if len(matches) > 0 {
-			metricsMap[matches[0]] = struct{}{}
+			metricsMap[matches[0]] = matches[1]
 		}
 	}
 	return metricsMap, nil
