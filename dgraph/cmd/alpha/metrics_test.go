@@ -36,9 +36,9 @@ func TestMetricTxnAborts(t *testing.T) {
 	`
 
 	// Create initial 'dgraph_txn_aborts' metric
-	mr1, err := mutationWithTs(mt, "application/rdf", false, false, ts)
+	mr1, err := mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
-	mr2, err := mutationWithTs(mt, "application/rdf", false, false, ts)
+	mr2, err := mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
 	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
 	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
@@ -51,13 +51,13 @@ func TestMetricTxnAborts(t *testing.T) {
 	metricsMap, err := extractMetrics(string(body))
 	requiredMetric := "dgraph_txn_aborts"
 	txnAbort, ok := metricsMap[requiredMetric]
+	require.True(t, ok, "the required metric '%s' is not found", requiredMetric)
 	txnAbort1, _ := strconv.Atoi(txnAbort.(string))
-	require.True(t, ok, "the required metric %s is not found", requiredMetric)
 
 	// Create second 'dgraph_txn_aborts' metric
-	mr1, err = mutationWithTs(mt, "application/rdf", false, false, ts)
+	mr1, err = mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
-	mr2, err = mutationWithTs(mt, "application/rdf", false, false, ts)
+	mr2, err = mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
 	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
 	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
