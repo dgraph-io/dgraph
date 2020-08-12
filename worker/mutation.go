@@ -19,11 +19,12 @@ package worker
 import (
 	"bytes"
 	"context"
-	ostats "go.opencensus.io/stats"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	ostats "go.opencensus.io/stats"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
