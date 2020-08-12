@@ -842,10 +842,9 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	filter.Fields = append(filter.Fields,
-		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}})
-
-	filter.Fields = append(filter.Fields,
-		&ast.FieldDefinition{Name: "has", Type: &ast.Type{NamedType: defn.Name + "HasFilter"}})
+		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}},
+		&ast.FieldDefinition{Name: "has", Type: &ast.Type{NamedType: defn.Name + "HasFilter"}}
+	)
 	schema.Types[filterName] = filter
 }
 
