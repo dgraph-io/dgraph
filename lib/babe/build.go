@@ -226,7 +226,7 @@ func (b *Service) buildBlockInherents(slot Slot) error {
 	}
 
 	// add finalnum
-	fin, err := b.blockState.GetFinalizedHeader(0)
+	fin, err := b.blockState.GetFinalizedHeader(0, 0)
 	if err != nil {
 		return err
 	}

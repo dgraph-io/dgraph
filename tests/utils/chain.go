@@ -79,9 +79,10 @@ func GetFinalizedHead(t *testing.T, node *Node) common.Hash {
 }
 
 // GetFinalizedHeadByRound calls the endpoint chain_getFinalizedHeadByRound to get the finalized head at a given round
+// TODO: add setID, hard-coded at 1 for now
 func GetFinalizedHeadByRound(t *testing.T, node *Node, round uint64) (common.Hash, error) {
 	p := strconv.Itoa(int(round))
-	respBody, err := PostRPC(ChainGetFinalizedHeadByRound, NewEndpoint(node.RPCPort), "["+p+"]")
+	respBody, err := PostRPC(ChainGetFinalizedHeadByRound, NewEndpoint(node.RPCPort), "["+p+",1]")
 	require.NoError(t, err)
 
 	var hash string

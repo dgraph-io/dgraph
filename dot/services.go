@@ -326,6 +326,7 @@ func createGRANDPAService(cfg *Config, rt *runtime.Runtime, st *state.Service, d
 		LogLvl:        lvl,
 		BlockState:    st.Block,
 		DigestHandler: dh,
+		SetID:         1,
 		Voters:        voters,
 		Keypair:       keys[0].(*ed25519.Keypair),
 	}

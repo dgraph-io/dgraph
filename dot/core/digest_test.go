@@ -88,7 +88,7 @@ func TestDigestHandler_BABEScheduledChange(t *testing.T) {
 
 	headers := addTestBlocksToState(t, 2, handler.blockState)
 	for _, h := range headers {
-		handler.blockState.SetFinalizedHash(h.Hash(), 0)
+		handler.blockState.SetFinalizedHash(h.Hash(), 0, 0)
 	}
 
 	auths := handler.babe.Authorities()
@@ -97,7 +97,7 @@ func TestDigestHandler_BABEScheduledChange(t *testing.T) {
 	// authorities should change on start of block 3 from start
 	headers = addTestBlocksToState(t, 1, handler.blockState)
 	for _, h := range headers {
-		handler.blockState.SetFinalizedHash(h.Hash(), 0)
+		handler.blockState.SetFinalizedHash(h.Hash(), 0, 0)
 	}
 
 	time.Sleep(time.Millisecond * 100)
@@ -222,7 +222,7 @@ func TestDigestHandler_BABEPauseAndResume(t *testing.T) {
 
 	headers := addTestBlocksToState(t, 3, handler.blockState)
 	for _, h := range headers {
-		handler.blockState.SetFinalizedHash(h.Hash(), 0)
+		handler.blockState.SetFinalizedHash(h.Hash(), 0, 0)
 	}
 
 	time.Sleep(time.Millisecond * 100)
@@ -279,7 +279,7 @@ func TestDigestHandler_GrandpaScheduledChange(t *testing.T) {
 
 	headers := addTestBlocksToState(t, 2, handler.blockState)
 	for _, h := range headers {
-		handler.blockState.SetFinalizedHash(h.Hash(), 0)
+		handler.blockState.SetFinalizedHash(h.Hash(), 0, 0)
 	}
 
 	auths := handler.grandpa.Authorities()
@@ -288,7 +288,7 @@ func TestDigestHandler_GrandpaScheduledChange(t *testing.T) {
 	// authorities should change on start of block 3 from start
 	headers = addTestBlocksToState(t, 1, handler.blockState)
 	for _, h := range headers {
-		handler.blockState.SetFinalizedHash(h.Hash(), 0)
+		handler.blockState.SetFinalizedHash(h.Hash(), 0, 0)
 	}
 
 	time.Sleep(time.Millisecond * 100)
@@ -413,7 +413,7 @@ func TestDigestHandler_GrandpaPauseAndResume(t *testing.T) {
 
 	headers := addTestBlocksToState(t, 3, handler.blockState)
 	for _, h := range headers {
-		handler.blockState.SetFinalizedHash(h.Hash(), 0)
+		handler.blockState.SetFinalizedHash(h.Hash(), 0, 0)
 	}
 
 	time.Sleep(time.Millisecond * 100)

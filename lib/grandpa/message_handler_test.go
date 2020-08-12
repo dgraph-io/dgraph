@@ -154,15 +154,15 @@ func TestMessageHandler_FinalizationMessage(t *testing.T) {
 	cm, err := fm.ToConsensusMessage()
 	require.NoError(t, err)
 
-	h := NewMessageHandler(nil, st.Block)
+	h := NewMessageHandler(gs, st.Block)
 	err = h.HandleMessage(cm)
 	require.NoError(t, err)
 
-	hash, err := st.Block.GetFinalizedHash(0)
+	hash, err := st.Block.GetFinalizedHash(0, 0)
 	require.NoError(t, err)
 	require.Equal(t, fm.Vote.hash, hash)
 
-	hash, err = st.Block.GetFinalizedHash(fm.Round)
+	hash, err = st.Block.GetFinalizedHash(fm.Round, gs.state.setID)
 	require.NoError(t, err)
 	require.Equal(t, fm.Vote.hash, hash)
 }

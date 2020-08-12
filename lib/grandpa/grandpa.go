@@ -100,7 +100,7 @@ func NewService(cfg *Config) (*Service, error) {
 	logger.Info("creating service", "key", cfg.Keypair.Public().Hex(), "voter set", Voters(cfg.Voters))
 
 	// get latest finalized header
-	head, err := cfg.BlockState.GetFinalizedHeader(0)
+	head, err := cfg.BlockState.GetFinalizedHeader(0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +436,7 @@ func (s *Service) attemptToFinalize() error {
 		}
 
 		// if we haven't received a finalization message for this block yet, broadcast a finalization message
-		s.logger.Debug("finalized block!!!", "round", s.state.round, "hash", s.head.Hash())
+		s.logger.Debug("finalized block!!!", "setID", s.state.setID, "round", s.state.round, "hash", s.head.Hash())
 		msg := s.newFinalizationMessage(s.head, s.state.round)
 
 		// TODO: safety
@@ -595,13 +595,13 @@ func (s *Service) finalize() error {
 	}
 
 	// set finalized head for round in db
-	err = s.blockState.SetFinalizedHash(bfc.hash, s.state.round)
+	err = s.blockState.SetFinalizedHash(bfc.hash, s.state.round, s.state.setID)
 	if err != nil {
 		return err
 	}
 
 	// set latest finalized head in db
-	return s.blockState.SetFinalizedHash(bfc.hash, 0)
+	return s.blockState.SetFinalizedHash(bfc.hash, 0, 0)
 }
 
 // derivePrimary returns the primary for the current round

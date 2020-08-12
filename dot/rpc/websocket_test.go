@@ -89,7 +89,7 @@ func (m *MockBlockAPI) GetBlockByHash(hash common.Hash) (*types.Block, error) {
 func (m *MockBlockAPI) GetBlockHash(blockNumber *big.Int) (*common.Hash, error) {
 	return nil, nil
 }
-func (m *MockBlockAPI) GetFinalizedHash(uint64) (common.Hash, error) {
+func (m *MockBlockAPI) GetFinalizedHash(uint64, uint64) (common.Hash, error) {
 	return common.Hash{}, nil
 }
 func (m *MockBlockAPI) RegisterImportedChannel(ch chan<- *types.Block) (byte, error) {

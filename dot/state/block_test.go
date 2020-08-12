@@ -270,15 +270,15 @@ func TestAddBlock_BlockNumberToHash(t *testing.T) {
 
 func TestFinalizedHash(t *testing.T) {
 	bs := newTestBlockState(t, testGenesisHeader)
-	h, err := bs.GetFinalizedHash(0)
+	h, err := bs.GetFinalizedHash(0, 0)
 	require.NoError(t, err)
 	require.Equal(t, testGenesisHeader.Hash(), h)
 
 	testhash := common.Hash{1, 2, 3, 4}
-	err = bs.SetFinalizedHash(testhash, 1)
+	err = bs.SetFinalizedHash(testhash, 1, 1)
 	require.NoError(t, err)
 
-	h, err = bs.GetFinalizedHash(1)
+	h, err = bs.GetFinalizedHash(1, 1)
 	require.NoError(t, err)
 	require.Equal(t, testhash, h)
 }
@@ -304,7 +304,7 @@ func TestFinalization_DeleteBlock(t *testing.T) {
 
 	// pick block to finalize
 	fin := leaves[len(leaves)-1]
-	err := bs.SetFinalizedHash(fin, 1)
+	err := bs.SetFinalizedHash(fin, 1, 1)
 	require.NoError(t, err)
 
 	// assert that every block except finalized has been deleted

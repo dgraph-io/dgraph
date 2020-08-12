@@ -136,10 +136,12 @@ type catchUpResponse struct {
 }
 
 func (s *Service) newCatchUpResponse(round, setID uint64) (*catchUpResponse, error) {
-	// TODO: update blockState.GetFinalizedHeader to accept setID, use that instead, since mapping only stores from current setID
-	b := s.bestFinalCandidate[round]
+	header, err := s.blockState.GetFinalizedHeader(round, setID)
+	if err != nil {
+		return nil, err
+	}
 
-	has, err := s.blockState.HasJustification(b.hash)
+	has, err := s.blockState.HasJustification(header.Hash())
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +150,7 @@ func (s *Service) newCatchUpResponse(round, setID uint64) (*catchUpResponse, err
 		return nil, ErrNoJustification
 	}
 
-	just, err := s.blockState.GetJustification(b.hash)
+	just, err := s.blockState.GetJustification(header.Hash())
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +176,7 @@ func (s *Service) newCatchUpResponse(round, setID uint64) (*catchUpResponse, err
 		SetID:                  setID,
 		PreVoteJustification:   pvj,
 		PreCommitJustification: pcj,
-		Hash:                   b.hash,
-		Number:                 b.number,
+		Hash:                   header.Hash(),
+		Number:                 header.Number.Uint64(),
 	}, nil
 }

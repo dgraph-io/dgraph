@@ -142,7 +142,7 @@ func NewBlockStateFromGenesis(db chaindb.Database, header *types.Header) (*Block
 	bs.genesisHash = header.Hash()
 
 	// set the latest finalized head to the genesis header
-	err = bs.SetFinalizedHash(bs.genesisHash, 0)
+	err = bs.SetFinalizedHash(bs.genesisHash, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -194,11 +194,13 @@ func arrivalTimeKey(hash common.Hash) []byte {
 	return append(arrivalTimePrefix, hash.ToBytes()...)
 }
 
-// finalizedHashKey = hashkey + round (LE encoded)
-func finalizedHashKey(round uint64) []byte {
+// finalizedHashKey = hashkey + round + setID (LE encoded)
+func finalizedHashKey(round, setID uint64) []byte {
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, round)
-	return append(common.FinalizedBlockHashKey, buf...)
+	key := append(common.FinalizedBlockHashKey, buf...)
+	binary.LittleEndian.PutUint64(buf, setID)
+	return append(key, buf...)
 }
 
 // GenesisHash returns the hash of the genesis block
@@ -397,8 +399,8 @@ func (bs *BlockState) SetBlockBody(hash common.Hash, body *types.Body) error {
 }
 
 // GetFinalizedHeader returns the latest finalized block header
-func (bs *BlockState) GetFinalizedHeader(round uint64) (*types.Header, error) {
-	h, err := bs.GetFinalizedHash(round)
+func (bs *BlockState) GetFinalizedHeader(round, setID uint64) (*types.Header, error) {
+	h, err := bs.GetFinalizedHash(round, setID)
 	if err != nil {
 		return nil, err
 	}
@@ -412,7 +414,8 @@ func (bs *BlockState) GetFinalizedHeader(round uint64) (*types.Header, error) {
 }
 
 // GetFinalizedHash gets the latest finalized block header
-func (bs *BlockState) GetFinalizedHash(round uint64) (common.Hash, error) {
+func (bs *BlockState) GetFinalizedHash(round, setID uint64) (common.Hash, error) {
+	// get current round
 	r, err := bs.GetRound()
 	if err != nil {
 		return common.Hash{}, err
@@ -423,7 +426,7 @@ func (bs *BlockState) GetFinalizedHash(round uint64) (common.Hash, error) {
 		return common.Hash{}, fmt.Errorf("round not yet finalized")
 	}
 
-	h, err := bs.db.Get(finalizedHashKey(round))
+	h, err := bs.db.Get(finalizedHashKey(round, setID))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -432,7 +435,7 @@ func (bs *BlockState) GetFinalizedHash(round uint64) (common.Hash, error) {
 }
 
 // SetFinalizedHash sets the latest finalized block header
-func (bs *BlockState) SetFinalizedHash(hash common.Hash, round uint64) error {
+func (bs *BlockState) SetFinalizedHash(hash common.Hash, round, setID uint64) error {
 	go bs.notifyFinalized(hash)
 	if round > 0 {
 		err := bs.SetRound(round)
@@ -449,7 +452,7 @@ func (bs *BlockState) SetFinalizedHash(hash common.Hash, round uint64) error {
 		}
 	}
 
-	return bs.db.Put(finalizedHashKey(round), hash[:])
+	return bs.db.Put(finalizedHashKey(round, setID), hash[:])
 }
 
 // SetRound sets the latest finalized GRANDPA round in the db

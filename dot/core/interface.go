@@ -43,9 +43,9 @@ type BlockState interface {
 	GetSlotForBlock(common.Hash) (uint64, error)
 	HighestBlockHash() common.Hash
 	HighestBlockNumber() *big.Int
-	GetFinalizedHeader(uint64) (*types.Header, error)
-	GetFinalizedHash(uint64) (common.Hash, error)
-	SetFinalizedHash(common.Hash, uint64) error
+	GetFinalizedHeader(uint64, uint64) (*types.Header, error)
+	GetFinalizedHash(uint64, uint64) (common.Hash, error)
+	SetFinalizedHash(common.Hash, uint64, uint64) error
 	RegisterImportedChannel(ch chan<- *types.Block) (byte, error)
 	UnregisterImportedChannel(id byte)
 	RegisterFinalizedChannel(ch chan<- *types.Header) (byte, error)

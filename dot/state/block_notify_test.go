@@ -61,7 +61,7 @@ func TestFinalizedChannel(t *testing.T) {
 	chain, _ := AddBlocksToState(t, bs, 3)
 
 	for _, b := range chain {
-		bs.SetFinalizedHash(b.Hash(), 0)
+		bs.SetFinalizedHash(b.Hash(), 0, 0)
 	}
 
 	for i := 0; i < 1; i++ {
@@ -128,7 +128,7 @@ func TestFinalizedChannel_Multi(t *testing.T) {
 	}
 
 	chain, _ := AddBlocksToState(t, bs, 1)
-	bs.SetFinalizedHash(chain[0].Hash(), 0)
+	bs.SetFinalizedHash(chain[0].Hash(), 0, 0)
 
 	var wg sync.WaitGroup
 	wg.Add(num)
