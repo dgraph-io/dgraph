@@ -7,7 +7,7 @@ title = "IDs"
 
 There's two types of identity built into Dgraph.  Those are accessed via the `ID` scalar type and the `@id` directive.
 
-### <a name="The ID type"></a>The ID type
+### The ID type
 
 In Dgraph, every node has a unique 64 bit identifier.  You can, but don't have to, expose that in GraphQL via the `ID` type.  `ID`s are auto-generated, immutable and never reused.  Each type can have at most one `ID` field.
 
@@ -26,7 +26,7 @@ In a single page app, you'll want to render the page for `http://.../posts/0x123
 
 You'll also be able to update and delete posts by id.
 
-### <a name="The @id directive"></a>The @id directive
+### The @id directive
 
 For some types, you'll need a unique identifier set from outside Dgraph.  A common example is a username.
 

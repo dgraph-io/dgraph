@@ -5,17 +5,17 @@ title = "Advanced Queries with GraphQL+-"
     weight = 2   
 +++
 
-*It is now possible to [embed GraphQL+- queries inside your GraphQL schema](https://graphql.dgraph.io/doc/custom/graphqlpm), which is recommended for most use cases. The rest of this document covers how to connect to connect to your Slash GraphQL backend with existing Dgraph clients.*
+*It is now possible to [embed GraphQL+- queries inside your GraphQL schema](/custom/graphqlpm), which is recommended for most use cases. The rest of this document covers how to connect to connect to your Slash GraphQL backend with existing Dgraph clients.*
 
 Slash GraphQL also supports running advanced queries with `GraphQL+-`, a query language that is unique to Dgraph. GraphQL+- should be used by advanced users who wish to make queries and mutations using existing Dgraph client libraries, either via the HTTP or gRPC endpoints. You can learn more about existing client libraries by following this [documentation](https://dgraph.io/docs/clients/).
 
-If you are getting started with Slash GraphQL, you might want to consider using our [GraphQL APIs](https://graphql.dgraph.io/doc/) instead. It will get you quickly started on the basics of using Slash GraphQL before you go into advanced topics.
+If you are getting started with Slash GraphQL, you might want to consider using our [GraphQL APIs](/) instead. It will get you quickly started on the basics of using Slash GraphQL before you go into advanced topics.
 
 Please note that Slash GraphQL does not allow you to alter the schema or create new predicates via GraphQL+-. You will also not be able ta access the /alter endpoint or it's gRPC equivalent. Please add your schema through the GraphQL endpoint (either via the UI or via the Admin API), before accessing the data with GraphQL+-.
 
 ## Authentication
 
-All the APIs documented here require an API token for access. Please see [Authentication](./admin/authentication) if you would like to create a new API token.
+All the APIs documented here require an API token for access. Please see [Authentication](/slash-graphql-admin/authentication) if you would like to create a new API token.
 
 ### HTTP
 
@@ -35,7 +35,7 @@ type Person {
 ```
 
 Here is an example of a cURL for `/mutate` endpoint:
-```cURL
+```shell
 curl -H "Content-Type: application/rdf" -H "x-auth-token: <api-key>" -X POST "<graphql-endpoint>/mutate?commitNow=true" -d $'
 {
  set {
@@ -46,7 +46,7 @@ curl -H "Content-Type: application/rdf" -H "x-auth-token: <api-key>" -X POST "<g
 }'
 ```
 Here is an example of a cURL for `/query` endpoint:
-```
+```shell
 curl -H "Content-Type: application/graphql+-" -H "x-auth-token: <api-key>" -XPOST "<graphql-endpoint>/query" -d '{
    queryPerson(func: type(Person))  {
      Person.name
@@ -66,7 +66,7 @@ Here is an example which uses the [pydgraph client](https://github.com/dgraph-io
 
 For initial setup, make sure you import the right packages and setup your `HOST` and `PORT` correctly.
 
-```python
+```pyw
 import grpc
 import sys
 import json
@@ -80,7 +80,7 @@ GRPC_PORT = "443"
 ```
 
 You will then need to pass your API key as follows:
-```python
+```pyw
 creds = grpc.ssl_channel_credentials()
 call_credentials = grpc.metadata_call_credentials(lambda context, callback: callback((("Authorization", "<api-key>"),), None))
 composite_credentials = grpc.composite_channel_credentials(creds, call_credentials)
@@ -89,7 +89,7 @@ client = pydgraph.DgraphClient(client_stub)
 ```
 
 For mutations, you can use the following example:
-```python
+```pyw
 mut = {
   "Person.name": "John Doe",
   "Person.age": "32",
@@ -105,7 +105,7 @@ finally:
 ```
 
 And for a query you can use the following example:
-```python
+```pyw
 query = """
 {
    queryPerson(func: type(Person))  {

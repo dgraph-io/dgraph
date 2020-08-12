@@ -80,7 +80,7 @@ queryAuthor(filter: { name: { eq: "Diggy" } } ) {
 
 There's different search possible for each type as explained below.
 
-### <a name="Int, Float and DateTime"></a>Int, Float and DateTime
+### Int, Float and DateTime
 
 | argument | constructed filter |
 |----------|----------------------|
@@ -146,7 +146,7 @@ queryAuthor(filter: { name: { eq: "Diggy" } } ) {
 }
 ```
 
-### <a name="DateTime"></a>DateTime
+### DateTime
 
 | argument | constructed filters |
 |----------|----------------------|
@@ -154,7 +154,7 @@ queryAuthor(filter: { name: { eq: "Diggy" } } ) {
 
 As well as `@search` with no arguments, `DateTime` also allows specifying how the search index should be built: by year, month, day or hour.  `@search` defaults to year, but once you understand your data and query patterns, you might want to changes that like `@search(by: [day])`.
 
-### <a name="Boolean"></a>Boolean
+### Boolean
 
 | argument | constructed filter |
 |----------|----------------------|
@@ -172,7 +172,7 @@ and
 filter: { isPublished: false }
 ```
 
-### <a name="String"></a>String
+### String
 
 Strings allow a wider variety of search options than other types.  For strings, you have the following options as arguments to `@search`.
 
@@ -190,7 +190,7 @@ Strings allow a wider variety of search options than other types.  For strings, 
 
 Exact and hash search has the standard lexicographic meaning. 
 
-```
+```graphql
 query {
     queryAuthor(filter: { name: { eq: "Diggy" } }) { ... }
 }
@@ -257,7 +257,7 @@ type Author {
 }
 ```
 
-### <a name="Enums"></a>Enums
+### Enums
 
 | argument | constructed searches |
 |----------|----------------------|
@@ -295,7 +295,7 @@ Which would find any post with the `GraphQL` tag.
 While `@search(by: [exact, regexp]` would also admit `lt` etc. and 
 
 ```graphql
-graphql {
+query {
     queryPost(filter: { tags: { regexp: "/.*aph.*/" } } ) { ... }
 }
 ```

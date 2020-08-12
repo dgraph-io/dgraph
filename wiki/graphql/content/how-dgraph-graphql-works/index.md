@@ -4,7 +4,7 @@ title = "How Dgraph GraphQL Works"
   url = "/how-dgraph-graphql-works/"
   name = "How Dgraph GraphQL Works"
   identifier = "how-dgraph-graphql-works"
-  weight = 16
+  weight = 2
 +++
 
 Dgraph is a GraphQL database.  That means, with Dgraph, you design your application in GraphQL, you iterate on your app in GraphQL and, when you need it, you scale with GraphQL.  

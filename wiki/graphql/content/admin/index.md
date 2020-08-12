@@ -1,5 +1,5 @@
 +++
-title = "Introduction"
+title = "Admin"
 [menu.main]
   url = "/admin/"
   name = "Admin"
@@ -13,7 +13,7 @@ The admin API and how to run Dgraph with GraphQL.
 
 The simplest way to start with Dgraph GraphQL is to run the all-in-one Docker image.
 
-```sh
+```shell
 docker run -it -p 8080:8080 dgraph/standalone:master
 ```
 
@@ -33,7 +33,7 @@ Dgraph's GraphQL runs in Dgraph and presents a GraphQL schema where the queries 
 
 **Warning: this means if you have a Dgraph instance and change its GraphQL schema, the schema of the underlying Dgraph will also be changed!**
 
-# /admin
+## /admin
 
 When you start Dgraph with GraphQL, two GraphQL endpoints are served.
 

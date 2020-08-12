@@ -9,7 +9,7 @@ title = "Search and Filtering"
 Queries generated for a GraphQL type allow you to generate a single of list of
 objects for a type.
 
-### get a single object
+### Get a single object
 
 Fetch the title, text and datePublished for a post with id `0x1`.
 
@@ -89,7 +89,7 @@ query {
 }
 ```
 
-### query list of objects
+### Query list of objects
 
 Fetch the title, text and and datePublished for all the posts.
 

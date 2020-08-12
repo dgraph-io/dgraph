@@ -20,4 +20,4 @@ In each case, both GET and POST requests are served.
 
 - `/admin` is where you'll find an admin API for administering your GraphQL instance. That's where you can update your GraphQL schema, perform health checks of your backend, and more.
 
-This section covers the API served at `/graphql`. See [Admin](/doc/admin) to learn more about the admin API.
+This section covers the API served at `/graphql`. See [Admin](/admin) to learn more about the admin API.

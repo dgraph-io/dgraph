@@ -3,6 +3,7 @@ date = "2017-03-20T22:25:17+11:00"
 title = "Overview"
 [menu.main]
     parent = "slash-graphql-admin"
+    name = "Overview"
     identifier = "slash-overview"
     weight = 1   
 +++

@@ -4,7 +4,6 @@ title = "Links in the Graph"
     parent = "schema"
     weight = 4   
 +++
-<!-- <h1>{props.pageContext.frontmatter.title}</h1> -->
 
 All the data in your app forms a GraphQL data graph.  That graph has nodes of particular types (the types you define in your schema) and links between the nodes to form the data graph.
 
@@ -12,7 +11,7 @@ Dgraph uses the types and fields in the schema to work out how to link that grap
 
 Edges in that graph are directed: either pointing in one direction or two.  You use the `@hasInverse` directive to tell Dgraph how to handle two-way edges.
 
-### <a name="One-way Edges"></a>One-way Edges
+### One-way Edges
 
 If you only ever need to traverse the graph between nodes in a particular direction, then your schema can simply contain the types and the link. 
 
@@ -33,7 +32,7 @@ You'll be able to traverse the graph from a Post to its author, but not able to 
 
 Note: Dgraph won't store the reverse direction, so if you change your schema to include a `@hasInverse`, you'll need to migrate the data to add the reverse edges.
 
-### <a name="Two-way edges"></a>Two-way edges - edges with an inverse
+### Two-way edges - edges with an inverse
 
 GraphQL schemas are always under-specified in that if we extended our schema to:
 
@@ -90,7 +89,7 @@ mutation {
 }
 ```
 
-### <a name="Many edges"></a>Many edges
+### Many edges
 
 It's not really possible to auto-detect what a schema designer meant for two-way edges.  There's not even only one possible relationship between two types. Consider, for example, if an app recorded the posts an `Author` had recently liked (so it can suggest interesting material) and just a tally of all likes on a post.
 

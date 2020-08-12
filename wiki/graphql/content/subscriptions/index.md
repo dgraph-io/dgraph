@@ -11,7 +11,7 @@ Subscriptions allow clients to listen to real-time messages from the server. The
 
 The client can unsubscribe by sending a message to the server. The server can also unsubscribe at any time due to errors or timeout. Another significant difference between queries/mutations and a subscription is that subscriptions are stateful and require maintaining the GraphQL document, variables, and context over the lifetime of the subscription.
 
-![Subscription](../../../images/docs/subscription_flow.png "Subscription in GraphQL")
+![Subscription](/images/subscription_flow.png "Subscription in GraphQL")
 
 ## Enable Subscriptions
 
@@ -30,7 +30,7 @@ type Todo @withSubscription {
 
 Once the schema is added, you can fire a subscription query, and we receive updates when the subscription query result is updated.
 
-![Subscription](../../../images/docs/subscription_example.png "Subscription Example")
+![Subscription](/images/subscription_example.gif "Subscription Example")
 
 ## Apollo Client Setup
 

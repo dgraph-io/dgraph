@@ -122,7 +122,7 @@ In our schema, we specify that one can only query tasks if the tasks's user has 
 
 The Authorization magic comment specifies the header the JWT comes from, the domain, and the key that's signed it. In this example, the key is tied to our dev Auth0 account.
 
-More information on how this works in [the documentation](/doc/authorization/).
+More information on how this works in [the documentation](/authorization/authorization-overview).
 
 Let's try querying back the tasks. We should be getting empty results here, since you no longer have access.
 

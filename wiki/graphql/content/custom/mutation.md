@@ -41,7 +41,7 @@ type Mutation {
 
 Find out more about how to turn off generated mutations and protecting mutations with authorization rules at:
 
-* [Remote Types - Turning off Generated Mutations with `@remote` Directive](/doc/custom/directive)
-* [Securing Mutations with the `@auth` Directive](/doc/authorization/mutations)
+* [Remote Types - Turning off Generated Mutations with `@remote` Directive](../directive)
+* [Securing Mutations with the `@auth` Directive](/authorization/mutations)
 
 ---

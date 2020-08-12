@@ -38,7 +38,7 @@ Export will usually return 3 files:
 It is possible to import data into a Slash GraphQL backend using [live loader](https://dgraph.io/docs/deploy/#live-loader). In order to import data, do the following steps
 
 1. First import your schema into your Slash GraphQL backend, using either the [Schema API](../schema) or via [the Schema Page](https://slash.dgraph.io/_/schema).
-2. Find the gRPC endpoint for your cluster, as described in the [advanced queries](../../slash-graphql/advanced-queries) section. This will look like frozen-mango-42.grpc.us-west-1.aws.cloud.dgraph.io:443
+2. Find the gRPC endpoint for your cluster, as described in the [advanced queries](/slash-graphql/advanced-queries) section. This will look like frozen-mango-42.grpc.us-west-1.aws.cloud.dgraph.io:443
 3. Run the live loader as follows. Do note that running this via docker requires you to use an unreleased tag (either master or v20.07-slash)
 
 ```shell

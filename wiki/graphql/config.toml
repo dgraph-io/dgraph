@@ -7,7 +7,14 @@ unsafe = true
 
 [markup.highlight]
 codeFences = true
-noClasses = false
+guessSyntax = false
+hl_Lines = ""
+lineNoStart = 1
+lineNos = false
+lineNumbersInTable = true
+noClasses = true
+style = "native"
+tabWidth = 4
 
 [markup.tableOfContents]
 endLevel = 3

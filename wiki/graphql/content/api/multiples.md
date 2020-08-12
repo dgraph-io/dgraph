@@ -8,7 +8,7 @@ title = "Multiple GraphQL Operations in a Request"
 
 GraphQL requests can contain one or more operations. Operations are one of `query`, `mutation`, or `subscription`. If a request only has one operation, then it can be unnamed like the following:
 
-# Single Operation
+## Single Operation
 
 The most basic request contains a single anonymous (unnamed) operation. Each operation can have one or more queries within in. For example, the following query has `query` operation running the queries "getTask" and "getUser":
 
@@ -44,7 +44,7 @@ Response:
 
 You can optionally name the operation as well, though it's not required if the request only has one operation as it's clear what needs to be executed.
 
-## Query Shorthand
+### Query Shorthand
 
 If a request only has a single query operation, then you can use the short-hand form of omitting the "query" keyword:
 
@@ -61,11 +61,11 @@ If a request only has a single query operation, then you can use the short-hand 
 }
 ```
 
-This simplfies queries when a query doesn't require an operation name or [variables](/doc/api/variables).
+This simplfies queries when a query doesn't require an operation name or [variables](../variables).
 
-# Multiple Operations
+## Multiple Operations
 
-If a request has two or more operations, then each operation must have a name. A request can only execute one operation, so you must also include the operation name to execute in the request (see the "operations" field for [requests](/doc/api/requests)). Every operation name in a request must be unique.
+If a request has two or more operations, then each operation must have a name. A request can only execute one operation, so you must also include the operation name to execute in the request (see the "operations" field for [requests](../requests)). Every operation name in a request must be unique.
 
 For example, in the following request has the operation names "getTaskAndUser" and "completedTasks".
 
@@ -143,7 +143,7 @@ And specifying the "completedTasks" operation executes the second query:
 }
 ```
 
-# Additional Details
+## Additional Details
 
 When an operation contains multiple queries, they are run concurrently and independently in a  Dgraph readonly transaction per query.
 

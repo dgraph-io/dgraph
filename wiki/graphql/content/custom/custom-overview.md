@@ -44,11 +44,11 @@ type MyType {
 
 ## Learn more
 
-Find out more about the  `@custom` directive [here](/doc/custom/directive), or check out:
+Find out more about the  `@custom` directive [here](../directive), or check out:
 
-* [custom query examples](/doc/custom/query)
-* [custom mutation examples](/doc/custom/mutation), or
-* [custom field examples](/doc/custom/field)
+* [custom query examples](../query)
+* [custom mutation examples](../mutation), or
+* [custom field examples](../field)
 
 
 

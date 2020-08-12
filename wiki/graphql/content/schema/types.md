@@ -7,7 +7,7 @@ title = "Types"
 
 This page describes how you use GraphQL types to set the Dgraph GraphQL schema.
 
-### <a name="Scalars"></a>Scalars
+### Scalars
 
 Dgraph GraphQL comes with the standard GraphQL scalars: `Int`, `Float`, `String`, `Boolean` and `ID`.  There's also a `DateTime` scalar - represented as a string in RFC3339 format.
 
@@ -35,7 +35,7 @@ type User {
 
 Scalar lists in Dgraph act more like sets, so `tags: [String]` would always contain unique tags.  Similarly, `recentScores: [Float]` could never contain duplicate scores.
 
-### <a name="Enums"></a>Enums
+### Enums
 
 You can define enums in your input schema.  For example:
 
@@ -53,7 +53,7 @@ type Post {
 }
 ```
 
-### <a name="Types"></a>Types 
+### Types 
 
 From the built-in scalars and the enums you add, you can generate types in the usual way for GraphQL.  For example:
 
@@ -84,7 +84,7 @@ type Author {
 * *Schema rule*: Lists of lists aren't accepted.  For example: `multiTags: [[Tag!]]` isn't valid.
 * *Schema rule*: Fields with arguments are not accepted in the input schema unless the field is implemented using the `@custom` directive.
 
-### <a name="Interfaces"></a>Interfaces
+### Interfaces
 
 GraphQL interfaces allow you to define a generic pattern that multiple types follow.  When a type implements an interface, that means it has all fields of the interface and some extras.  
 
