@@ -145,7 +145,7 @@ func printPosting(uid uint64, attr string, bp io.Writer, p *pb.Posting) error {
 	return nil
 }
 func main() {
-	dirlocation := flag.String("dir", "", "location of Badger directory")
+	dirlocation := flag.String("p", "", "location of Dgraph Alpha postings (p) directory")
 	flag.Parse()
 	dir := *dirlocation
 	file := "./exported_rdfs_" + time.Now().UTC().Format("2006_01_02_15_04_05") + ".rdf"
