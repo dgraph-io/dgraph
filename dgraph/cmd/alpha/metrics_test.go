@@ -17,9 +17,6 @@
 package alpha
 
 import (
-	"bytes"
-	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/x"
 	"net/http"
 	"regexp"
 	"strings"
@@ -28,55 +25,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//type state struct {
+//	dg *dgo.Dgraph
+//}
+//var s state
+
 func TestMetricTxnAborts(t *testing.T) {
-	t.Log("a string")
-  	t.Fail()
-
-	// borrowed from integraiton/testxn/main_test.go
-	// 1. create two transactions
-	// 2. commit two transactions
-	// 3. test metric of any number, should exist
-	// 4. save result of metric
-	// 5. create 10 transactions
-	// 6. commit 10 transactions
-	// 7. test that metric is +10 from original amount
-
-	op := &api.Operation{}
-	op.DropAll = true
-	require.NoError(t, s.dg.Alter(context.Background(), op))
-
-	txn := s.dg.NewTxn()
-
-	mu := &api.Mutation{}
-	mu.SetJson = []byte(`{"name": "Manish"}`)
-	assigned, err := txn.Mutate(context.Background(), mu)
-	if err != nil {
-		log.Fatalf("Error while running mutation: %v\n", err)
+	m1 := `
+    {
+	  set {
+		<0x71>  <name> "Bob" .
+	  }
 	}
-	if len(assigned.Uids) != 1 {
-		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
-	}
-	var uid string
-	for _, u := range assigned.Uids {
-		uid = u
+	`
+
+	for i := 1; i <= 1200; i++ {
+		_, err := mutationWithTs(m1, "application/rdf", false, false, ts)
+		require.NoError(t, err)
 	}
 
-	txn2 := s.dg.NewTxn()
-	mu = &api.Mutation{}
-	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Manish"}`, uid))
-	x.Check2(txn2.Mutate(context.Background(), mu))
-
-	require.NoError(t, txn.Commit(context.Background()))
-	err = txn2.Commit(context.Background())
-	x.AssertTrue(err != nil)
-
-	txn = s.dg.NewTxn()
-	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
-	resp, err := txn.Query(context.Background(), q)
-	if err != nil {
-		log.Fatalf("Error while running query: %v\n", err)
-	}
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 }
 
 func TestMetrics(t *testing.T) {
