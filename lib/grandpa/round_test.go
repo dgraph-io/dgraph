@@ -55,10 +55,11 @@ func setupGrandpa(t *testing.T, kp *ed25519.Keypair) (*Service, chan FinalityMes
 	voters := newTestVoters(t)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kp,
-		LogLvl:     log.LvlTrace,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kp,
+		LogLvl:        log.LvlTrace,
 	}
 
 	gs, err := NewService(cfg)

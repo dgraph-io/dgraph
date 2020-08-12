@@ -35,9 +35,10 @@ func TestCheckForEquivocation_NoEquivocation(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Bob,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Bob,
 	}
 
 	gs, err := NewService(cfg)
@@ -68,9 +69,10 @@ func TestCheckForEquivocation_WithEquivocation(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Bob,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Bob,
 	}
 
 	gs, err := NewService(cfg)
@@ -110,9 +112,10 @@ func TestCheckForEquivocation_WithExistingEquivocation(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Bob,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Bob,
 	}
 
 	gs, err := NewService(cfg)
@@ -164,9 +167,10 @@ func TestValidateMessage_Valid(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Bob,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Bob,
 	}
 
 	gs, err := NewService(cfg)
@@ -192,9 +196,10 @@ func TestValidateMessage_InvalidSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Bob,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Bob,
 	}
 
 	gs, err := NewService(cfg)
@@ -220,8 +225,9 @@ func TestValidateMessage_SetIDMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Keypair:    kr.Bob,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Keypair:       kr.Bob,
 	}
 
 	gs, err := NewService(cfg)
@@ -248,9 +254,10 @@ func TestValidateMessage_Equivocation(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Bob,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Bob,
 	}
 
 	gs, err := NewService(cfg)
@@ -289,9 +296,10 @@ func TestValidateMessage_BlockDoesNotExist(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Bob,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Bob,
 	}
 
 	gs, err := NewService(cfg)
@@ -319,9 +327,10 @@ func TestValidateMessage_IsNotDescendant(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Bob,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Bob,
 	}
 
 	gs, err := NewService(cfg)

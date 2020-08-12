@@ -25,6 +25,8 @@ import (
 	log "github.com/ChainSafe/log15"
 )
 
+var maxUint64 = uint64(2^64) - 1
+
 // DigestHandler is used to handle consensus messages and relevant authority updates to BABE and GRANDPA
 type DigestHandler struct {
 	// interfaces
@@ -123,6 +125,35 @@ func (h *DigestHandler) Stop() {
 	h.blockState.UnregisterFinalizedChannel(h.finalizedID)
 	close(h.imported)
 	close(h.finalized)
+}
+
+// SetFinalityGadget sets the digest handler's grandpa instance
+func (h *DigestHandler) SetFinalityGadget(grandpa FinalityGadget) {
+	h.grandpa = grandpa
+}
+
+// NextGrandpaAuthorityChange returns the block number of the next upcoming grandpa authorities change.
+// It returns 0 if no change is scheduled.
+func (h *DigestHandler) NextGrandpaAuthorityChange() uint64 {
+	next := maxUint64
+
+	if h.grandpaScheduledChange != nil {
+		next = h.grandpaScheduledChange.atBlock.Uint64()
+	}
+
+	if h.grandpaForcedChange != nil && h.grandpaForcedChange.atBlock.Uint64() < next {
+		next = h.grandpaForcedChange.atBlock.Uint64()
+	}
+
+	if h.grandpaPause != nil && h.grandpaPause.atBlock.Uint64() < next {
+		next = h.grandpaPause.atBlock.Uint64()
+	}
+
+	if h.grandpaResume != nil && h.grandpaResume.atBlock.Uint64() < next {
+		next = h.grandpaResume.atBlock.Uint64()
+	}
+
+	return next
 }
 
 // HandleConsensusDigest is the function used by the syncer to handle a consensus digest

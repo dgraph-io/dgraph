@@ -43,3 +43,8 @@ type BlockState interface {
 	HasJustification(hash common.Hash) (bool, error)
 	GetJustification(hash common.Hash) ([]byte, error)
 }
+
+// DigestHandler is the interface required by GRANDPA for the digest handler
+type DigestHandler interface {
+	NextGrandpaAuthorityChange() uint64
+}

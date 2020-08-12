@@ -268,17 +268,24 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 		nodeSrvcs = append(nodeSrvcs, bp)
 	}
 
+	dh, err := createDigestHandler(stateSrvc, bp, fg, ver)
+	if err != nil {
+		return nil, err
+	}
+
 	if cfg.Core.GrandpaAuthority {
 		// create GRANDPA service
-		fg, err = createGRANDPAService(cfg, rt, stateSrvc, ks)
+		fg, err = createGRANDPAService(cfg, rt, stateSrvc, dh, ks)
 		if err != nil {
 			return nil, err
 		}
 		nodeSrvcs = append(nodeSrvcs, fg)
 	}
 
+	dh.SetFinalityGadget(fg)
+
 	// Syncer
-	syncer, err := createSyncService(cfg, stateSrvc, bp, fg, ver, rt)
+	syncer, err := createSyncService(cfg, stateSrvc, bp, dh, ver, rt)
 	if err != nil {
 		return nil, err
 	}

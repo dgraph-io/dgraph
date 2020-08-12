@@ -440,3 +440,72 @@ func TestDigestHandler_GrandpaPauseAndResume(t *testing.T) {
 	auths = handler.grandpa.Authorities()
 	require.Equal(t, 1, len(auths))
 }
+
+func TestNextGrandpaAuthorityChange_OneChange(t *testing.T) {
+	handler := newTestDigestHandler(t, false, true)
+	handler.Start()
+	defer handler.Stop()
+
+	block := uint32(3)
+	sc := &types.GrandpaScheduledChange{
+		Auths: []*types.GrandpaAuthorityDataRaw{},
+		Delay: block,
+	}
+
+	data, err := sc.Encode()
+	require.NoError(t, err)
+
+	d := &types.ConsensusDigest{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              data,
+	}
+
+	err = handler.HandleConsensusDigest(d)
+	require.NoError(t, err)
+
+	next := handler.NextGrandpaAuthorityChange()
+	require.Equal(t, uint64(block), next)
+}
+
+func TestNextGrandpaAuthorityChange_MultipleChanges(t *testing.T) {
+	handler := newTestDigestHandler(t, false, true)
+	handler.Start()
+	defer handler.Stop()
+
+	later := uint32(5)
+	sc := &types.GrandpaScheduledChange{
+		Auths: []*types.GrandpaAuthorityDataRaw{},
+		Delay: later,
+	}
+
+	data, err := sc.Encode()
+	require.NoError(t, err)
+
+	d := &types.ConsensusDigest{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              data,
+	}
+
+	err = handler.HandleConsensusDigest(d)
+	require.NoError(t, err)
+
+	earlier := uint32(3)
+	fc := &types.GrandpaForcedChange{
+		Auths: []*types.GrandpaAuthorityDataRaw{},
+		Delay: earlier,
+	}
+
+	data, err = fc.Encode()
+	require.NoError(t, err)
+
+	d = &types.ConsensusDigest{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              data,
+	}
+
+	err = handler.HandleConsensusDigest(d)
+	require.NoError(t, err)
+
+	next := handler.NextGrandpaAuthorityChange()
+	require.Equal(t, uint64(earlier), next)
+}

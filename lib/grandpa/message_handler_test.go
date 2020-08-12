@@ -93,9 +93,10 @@ func TestMessageHandler_VoteMessage(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -132,9 +133,10 @@ func TestMessageHandler_FinalizationMessage(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)

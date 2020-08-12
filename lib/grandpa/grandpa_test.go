@@ -46,6 +46,12 @@ var firstEpochInfo = &types.EpochInfo{
 	FirstBlock: 0,
 }
 
+type mockDigestHandler struct{}
+
+func (h *mockDigestHandler) NextGrandpaAuthorityChange() uint64 {
+	return 2 ^ 64 - 1
+}
+
 func newTestState(t *testing.T) *state.Service {
 	stateSrvc := state.NewService("", log.LvlInfo)
 	stateSrvc.UseMemDB()
@@ -83,9 +89,10 @@ func TestUpdateAuthorities(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -119,9 +126,10 @@ func TestGetDirectVotes(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -160,9 +168,10 @@ func TestGetVotesForBlock_NoDescendantVotes(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -205,9 +214,10 @@ func TestGetVotesForBlock_DescendantVotes(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -262,9 +272,10 @@ func TestGetPossibleSelectedAncestors_SameAncestor(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -323,9 +334,10 @@ func TestGetPossibleSelectedAncestors_VaryingAncestor(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -389,9 +401,10 @@ func TestGetPossibleSelectedAncestors_VaryingAncestor_MoreBranches(t *testing.T)
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -461,9 +474,10 @@ func TestGetPossibleSelectedBlocks_OneBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -502,9 +516,10 @@ func TestGetPossibleSelectedBlocks_EqualVotes_SameAncestor(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -556,9 +571,10 @@ func TestGetPossibleSelectedBlocks_EqualVotes_VaryingAncestor(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -616,9 +632,10 @@ func TestGetPossibleSelectedBlocks_OneThirdEquivocating(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -659,9 +676,10 @@ func TestGetPossibleSelectedBlocks_MoreThanOneThirdEquivocating(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -711,9 +729,10 @@ func TestGetPreVotedBlock_OneBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -751,9 +770,10 @@ func TestGetPreVotedBlock_MultipleCandidates(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -805,9 +825,10 @@ func TestGetPreVotedBlock_EvenMoreCandidates(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -880,9 +901,10 @@ func TestIsCompletable(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -920,9 +942,10 @@ func TestFindParentWithNumber(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -954,9 +977,10 @@ func TestGetBestFinalCandidate_OneBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -997,9 +1021,10 @@ func TestGetBestFinalCandidate_PrecommitAncestor(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1045,9 +1070,10 @@ func TestGetBestFinalCandidate_NoPrecommit(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1088,9 +1114,10 @@ func TestGetBestFinalCandidate_PrecommitOnAnotherChain(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1133,9 +1160,10 @@ func TestDeterminePreVote_NoPrimaryPreVote(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1157,9 +1185,10 @@ func TestDeterminePreVote_WithPrimaryPreVote(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1185,9 +1214,10 @@ func TestDeterminePreVote_WithInvalidPrimaryPreVote(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1216,9 +1246,10 @@ func TestIsFinalizable_True(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1258,9 +1289,10 @@ func TestIsFinalizable_False(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1306,9 +1338,10 @@ func TestGetGrandpaGHOST_CommonAncestor(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1349,9 +1382,10 @@ func TestGetGrandpaGHOST_MultipleCandidates(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		BlockState: st.Block,
-		Voters:     voters,
-		Keypair:    kr.Alice,
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
