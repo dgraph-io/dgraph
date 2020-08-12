@@ -541,6 +541,7 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 			addInputType(sch, defn)
 			addAddPayloadType(sch, defn)
 			addMutations(sch, defn)
+
 		}
 
 		// types and inputs needed for query and search
@@ -548,6 +549,7 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
 		addQueries(sch, defn)
+		addTypeHasFilter(sch, defn)
 	}
 }
 
@@ -694,6 +696,24 @@ func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 	}
 }
 
+func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
+	filterName := defn.Name + "HasFilter"
+	filter := &ast.Definition{
+		Kind: ast.Enum,
+		Name: filterName,
+	}
+
+	for _, fld := range defn.Fields {
+		if isID(fld) {
+			continue
+		}
+		filter.EnumValues = append(filter.EnumValues,
+			&ast.EnumValueDefinition{Name: fld.Name})
+
+	}
+	schema.Types[filterName] = filter
+}
+
 func addOrderArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 	fldType := fld.Type.Name()
 	if hasOrderables(schema.Types[fldType]) {
@@ -823,6 +843,9 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 	filter.Fields = append(filter.Fields,
 		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}})
+
+	filter.Fields = append(filter.Fields,
+		&ast.FieldDefinition{Name: "has", Type: &ast.Type{NamedType: defn.Name + "HasFilter"}})
 	schema.Types[filterName] = filter
 }
 
