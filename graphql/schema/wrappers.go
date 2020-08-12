@@ -689,12 +689,8 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	bodyArg := httpArg.Value.Children.ForName("body")
 	graphqlArg := httpArg.Value.Children.ForName("graphql")
 	if bodyArg != nil {
-		strictJSON := true
-		if graphqlArg != nil {
-			strictJSON = false
-		}
 		bodyTemplate := bodyArg.Raw
-		_, rf, _ = parseBodyTemplate(bodyTemplate, strictJSON)
+		_, rf, _ = parseBodyTemplate(bodyTemplate, graphqlArg == nil)
 	}
 
 	if rf == nil {
@@ -1863,6 +1859,8 @@ func parseAsJSONTemplate(value *ast.Value, vars map[string]bool, strictJSON bool
 // would return
 // { "author" : "$id", "post": { "id": "$postID" }} and { "id": true, "postID": true}
 // If the final result is not a valid JSON, then an error is returned.
+//
+// In strictJSON mode block strings and enums are invalid and throw an error.
 // strictJSON should be false when the body template is being used for custom graphql arg parsing,
 // otherwise it should be true.
 func parseBodyTemplate(body string, strictJSON bool) (*interface{}, map[string]bool, error) {

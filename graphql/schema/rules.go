@@ -1418,15 +1418,11 @@ func customDirectiveValidation(sch *ast.Schema,
 	// 8. Validating body
 	var requiredFields map[string]bool
 	if body != nil {
-		strictJSON := true
-		if graphql != nil {
-			strictJSON = false
-		}
-		_, requiredFields, err = parseBodyTemplate(body.Raw, strictJSON)
+		_, requiredFields, err = parseBodyTemplate(body.Raw, graphql == nil)
 		if err != nil {
 			errs = append(errs, gqlerror.ErrorPosf(body.Position,
-				"Type %s; Field %s; body template inside @custom directive could not be parsed.",
-				typ.Name, field.Name))
+				"Type %s; Field %s; body template inside @custom directive could not be parsed: %s",
+				typ.Name, field.Name, err.Error()))
 		}
 		// Validating params to body template for Query/Mutation types. For other types the
 		// validation is performed later along with graphql.

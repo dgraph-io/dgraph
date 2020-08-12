@@ -1179,7 +1179,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1; body template inside @custom directive could not be parsed.",
+    {"message": "Type Query; Field getAuthor1; body template inside @custom directive could not be parsed: found unexpected value: name",
      "locations":[{"line":10, "column":12}]},
     ]
 
