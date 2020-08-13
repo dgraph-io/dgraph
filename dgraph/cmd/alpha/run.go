@@ -118,7 +118,7 @@ they form a Raft group and provide synchronous replication.
 		"Size of block cache for posting and wal dir badger of the form "+
 			"postingCacheSz:walCacheSz in MB. eg: 200:100 to use 200 mb cache in pstore "+
 			"and 100 mb cache in w store")
-	flag.Int("badger.bloomcache_mb", 512,
+	flag.Int("badger.bloomcache_mb", 0,
 		"Size of bloom filter cache for posting dir badger in MB.")
 	enc.RegisterFlags(flag)
 
