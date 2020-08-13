@@ -84,35 +84,39 @@ func (s *Service) CreateBlockResponse(blockRequest *network.BlockRequestMessage)
 		blockData.Justification = optional.NewBytes(false, nil)
 
 		// header
-		if (blockRequest.RequestedData & 1) == 1 {
+		if (blockRequest.RequestedData & network.RequestedDataHeader) == 1 {
 			retData, err := s.blockState.GetHeader(hash)
 			if err == nil && retData != nil {
 				blockData.Header = retData.AsOptional()
 			}
 		}
+
 		// body
-		if (blockRequest.RequestedData&2)>>1 == 1 {
+		if (blockRequest.RequestedData&network.RequestedDataBody)>>1 == 1 {
 			retData, err := s.blockState.GetBlockBody(hash)
 			if err == nil && retData != nil {
 				blockData.Body = retData.AsOptional()
 			}
 		}
+
 		// receipt
-		if (blockRequest.RequestedData&4)>>2 == 1 {
+		if (blockRequest.RequestedData&network.RequestedDataReceipt)>>2 == 1 {
 			retData, err := s.blockState.GetReceipt(hash)
 			if err == nil && retData != nil {
 				blockData.Receipt = optional.NewBytes(true, retData)
 			}
 		}
+
 		// message queue
-		if (blockRequest.RequestedData&8)>>3 == 1 {
+		if (blockRequest.RequestedData&network.RequestedDataMessageQueue)>>3 == 1 {
 			retData, err := s.blockState.GetMessageQueue(hash)
 			if err == nil && retData != nil {
 				blockData.MessageQueue = optional.NewBytes(true, retData)
 			}
 		}
+
 		// justification
-		if (blockRequest.RequestedData&16)>>4 == 1 {
+		if (blockRequest.RequestedData&network.RequestedDataJustification)>>4 == 1 {
 			retData, err := s.blockState.GetJustification(hash)
 			if err == nil && retData != nil {
 				blockData.Justification = optional.NewBytes(true, retData)

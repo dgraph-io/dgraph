@@ -162,6 +162,21 @@ type BlockRequestMessage struct {
 	Max           *optional.Uint32
 }
 
+// RequestedDataHeader flag for requesting header data
+const RequestedDataHeader = byte(1)
+
+// RequestedDataBody flag for requesting body data
+const RequestedDataBody = byte(2)
+
+// RequestedDataReceipt flag for requesting receipt data
+const RequestedDataReceipt = byte(4)
+
+// RequestedDataMessageQueue flag for requesting message queue data
+const RequestedDataMessageQueue = byte(8)
+
+// RequestedDataJustification flag for requesting justification data
+const RequestedDataJustification = byte(16)
+
 // Type returns BlockRequestMsgType
 func (bm *BlockRequestMessage) Type() int {
 	return BlockRequestMsgType
