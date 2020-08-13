@@ -42,6 +42,10 @@ const (
 	initSchema = `{
     "schema": [
         {
+            "predicate": "dgraph.cors",
+            "type": "string"
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
@@ -86,6 +90,10 @@ const (
     "schema": [
         {
             "predicate": "A.b",
+            "type": "string"
+        },
+        {
+            "predicate": "dgraph.cors",
             "type": "string"
         },
         {

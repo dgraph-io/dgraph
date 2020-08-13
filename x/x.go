@@ -122,6 +122,9 @@ const (
 {"predicate":"dgraph.rule.predicate","type":"string","index":true,"tokenizer":["exact"],"upsert":true},
 {"predicate":"dgraph.rule.permission","type":"int"}
 `
+	// CorsPredicate is the json representation of the predicate reserved by dgraph for the use
+	//of cors
+	CorsPredicate = `{"predicate":"dgraph.cors","type":"string"}`
 
 	InitialTypes = `
 "types": [{
