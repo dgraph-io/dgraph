@@ -1135,7 +1135,6 @@ func rewriteObject(
 		sort.Strings(fields)
 
 		for _, field := range fields {
-			// fmt.Printf("field: %s\n", field)
 			val := obj[field]
 			var frags *mutationRes
 
