@@ -326,6 +326,14 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
+	// Keys are added to the rollup batches here instead of at the point at which the
+	// transaction is committed because the transaction context does not keep track
+	// of the badger keys touched by mutations. It's useful to roll up lists even if
+	// the transaction is eventually aborted.
+	if len(l.mutationMap) > 0 {
+		IncrRollup.addKeyToBatch(l.key)
+	}
+
 	// If we have a delete all, then we replace the map entry with just one.
 	if hasDeleteAll(mpost) {
 		plist := &pb.PostingList{}
@@ -521,9 +529,6 @@ func (l *List) getMutation(startTs uint64) []byte {
 	l.RLock()
 	defer l.RUnlock()
 	if pl, ok := l.mutationMap[startTs]; ok {
-		for _, p := range pl.GetPostings() {
-			p.StartTs = 0
-		}
 		data, err := pl.Marshal()
 		x.Check(err)
 		return data
@@ -591,7 +596,6 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 					deleteBelowTs = effectiveTs
 					continue
 				}
-				mpost.StartTs = startTs
 				posts = append(posts, mpost)
 			}
 		}

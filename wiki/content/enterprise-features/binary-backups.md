@@ -213,7 +213,8 @@ mutation {
 
 ## Encrypted Backups
 
-Encrypted backups are a Enterprise feature that are available from v20.03.1 and v1.2.3 and allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups
+Encrypted backups are a Enterprise feature that are available from v20.03.1 and v1.2.3 and allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups.
+Starting with v20.07.0, we also added support for Encrypted Backups using encryption keys sitting on Vault. 
 
 
 ## New flag “Encrypted” in manifest.json
@@ -232,16 +233,15 @@ During **backup**: the 16 bytes IV is prepended to the Cipher-text data after en
 
 ## Backup
 
-Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”.
+Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”. Starting with v20.07.0, the alpha can alternatively be configured to interface with Vault server to obtain keys.
 
 {{% notice "note" %}}
-encryption_key_file was used for encryption-at-rest and will now also be used for encrypted backups.
+`encryption_key_file` or `vault_*` options was used for encryption-at-rest and will now also be used for encrypted backups.
 {{% /notice %}}
 
-The restore utility is a standalone tool today. Hence, a new flag “keyfile” is added to the restore utility so it can decrypt the backup. This keyfile must be the same key that was used for encryption during backup.
-
-
 ## Restore from Backup
+The restore utility is a standalone tool today. A new flag `--encryption_key_file` is added to the restore utility so it can decrypt the backup. This file must contain the same key that was used for encryption during backup.
+Alternatively, starting with v20.07.0, the `vault_*` options can be used to restore a backup. 
 
 The `dgraph restore` command restores the postings directory from a previously
 created backup to a directory in the local filesystem. Restore is intended to
@@ -271,6 +271,9 @@ series with a different ID is started. The backup series ID is stored in each
 The `--encryption_key_file` flag is required if you took the backup in an
 encrypted cluster and should point to the location of the same key used to
 run the cluster.
+
+The `--vault_*` flags specifies the Vault server address, role id, secret id and 
+field that contains the encryption key that was used to encrypt the backup.
 
 The restore feature will create a cluster with as many groups as the original
 cluster had at the time of the last backup. For each group, `dgraph restore`
