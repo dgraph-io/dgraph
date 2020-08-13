@@ -113,10 +113,10 @@ they form a Raft group and provide synchronous replication.
 			" mmap consumes more RAM, but provides better performance.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
-	flag.Int("badger.blockcache_size", 1024*1024*1024,
-		"Size of block cache for posting dir badger.")
-	flag.Int("badger.bloomcache_size", 512*1024*1024,
-		"Size of bloom filter cache for posting dir badger.")
+	flag.Int("badger.blockcache_mb", 1024,
+		"Size of block cache for posting dir badger in MB.")
+	flag.Int("badger.bloomcache_mb", 512,
+		"Size of bloom filter cache for posting dir badger in MB.")
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -580,8 +580,8 @@ func run() {
 		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-		BlockCacheSize:         Alpha.Conf.GetInt("badger.blockcache_size"),
-		BloomCacheSize:         Alpha.Conf.GetInt("badger.bloomcache_size"),
+		BlockCacheMB:           Alpha.Conf.GetInt("badger.blockcache_mb"),
+		BloomCacheMB:           Alpha.Conf.GetInt("badger.bloomcache_mb"),
 		PostingDir:             Alpha.Conf.GetString("postings"),
 		WALDir:                 Alpha.Conf.GetString("wal"),
 
