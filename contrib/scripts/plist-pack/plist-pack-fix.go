@@ -146,6 +146,7 @@ func printPosting(uid uint64, attr string, bp io.Writer, p *pb.Posting) error {
 }
 func main() {
 	dirlocation := flag.String("p", "", "location of Dgraph Alpha postings (p) directory")
+	doWrite := flag.Bool("fix-p", false, "Fix the p directory pack entries")
 	flag.Parse()
 	dir := *dirlocation
 	file := "./exported_rdfs_" + time.Now().UTC().Format("2006_01_02_15_04_05") + ".rdf"
@@ -222,15 +223,17 @@ func main() {
 					panic("unable to print posting:" + err.Error())
 				}
 			}
-			if len(plist.Postings) > 0 {
-				populatePackForPList(plist)
-				// Add to writeBatch
-				value, err := plist.Marshal()
-				if err != nil {
-					panic("unable to marshal posting list: " + err.Error())
+			if *doWrite {
+				if len(plist.Postings) > 0 {
+					populatePackForPList(plist)
+					// Add to writeBatch
+					value, err := plist.Marshal()
+					if err != nil {
+						panic("unable to marshal posting list: " + err.Error())
+					}
+					e := badger.NewEntry(item.KeyCopy(nil), value).WithMeta(posting.BitCompletePosting)
+					wb.SetEntryAt(e, item.Version())
 				}
-				e := badger.NewEntry(item.KeyCopy(nil), value).WithMeta(posting.BitCompletePosting)
-				wb.SetEntryAt(e, item.Version())
 			}
 		}
 	}
