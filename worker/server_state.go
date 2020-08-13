@@ -157,10 +157,10 @@ func (s *ServerState) initStorage() {
 		opt := badger.DefaultOptions(Config.PostingDir).
 			WithValueThreshold(1 << 10 /* 1KB */).
 			WithNumVersionsToKeep(math.MaxInt32).
-			WithMaxCacheSize(1 << 30).
+			WithMaxCacheSize(int64(Config.BlockCacheSize)).
 			WithKeepBlockIndicesInCache(true).
 			WithKeepBlocksInCache(true).
-			WithMaxBfCacheSize(500 << 20) // 500 MB of bloom filter cache.
+			WithMaxBfCacheSize(int64(Config.BloomCacheSize))
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.
