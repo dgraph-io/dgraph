@@ -28,6 +28,7 @@ import (
 	_ "net/http/pprof" // http profiler
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -108,10 +109,17 @@ they form a Raft group and provide synchronous replication.
 			" mmap consumes more RAM, but provides better performance.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
+
 	flag.String("encryption_key_file", "",
 		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
 			"The key size determines the corresponding block size for AES encryption "+
 			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+	flag.String("badger.blockcache_mb", "0:0",
+		"Size of block cache for posting and wal dir badger of the form "+
+			"postingCacheSz:walCacheSz in MB. eg: 200:100 to use 200 mb cache in pstore "+
+			"and 100 mb cache in w store")
+	flag.Int("badger.bloomcache_mb", 0,
+		"Size of bloom filter cache for posting dir badger in MB.")
 
 	// Snapshot and Transactions.
 	flag.Int("snapshot_after", 10000,
@@ -524,14 +532,44 @@ func run() {
 	}
 	bindall = Alpha.Conf.GetBool("bindall")
 
+	splits := strings.Split(Alpha.Conf.GetString("badger.blockcache_mb"), ":")
+	var err error
+	var pCacheSZ, wCacheSz int64
+	if len(splits) != 2 {
+		glog.Fatal("blockcache_mb should be of the form pstoreCacheSize:wstoreCacheSize")
+	}
+	// First part is the p cache size
+	pCacheSZ, err = strconv.ParseInt(splits[0], 10, 64)
+	if err != nil {
+		glog.Fatalf("Unable to convert %s to int", splits[0])
+	}
+	if pCacheSZ < 0 {
+		glog.Fatalf("cache size %s should be greater than or equal to 0", splits[0])
+	}
+
+	// Second is the w cache size
+	wCacheSz, err = strconv.ParseInt(splits[1], 10, 64)
+	if err != nil {
+		glog.Fatalf("Unable to convert %s to int", splits[1])
+	}
+	if wCacheSz < 0 {
+		glog.Fatalf("cache size %s should be greater than or equal to 0", splits[1])
+	}
+	bloomCacheSz := Alpha.Conf.GetInt("badger.bloomcache_mb")
+	if bloomCacheSz < 0 {
+		glog.Fatalf("cache size %s should be greater than or equal to 0", bloomCacheSz)
+	}
+
 	opts := worker.Options{
 		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
 		BadgerKeyFile:          Alpha.Conf.GetString("encryption_key_file"),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-
-		PostingDir: Alpha.Conf.GetString("postings"),
-		WALDir:     Alpha.Conf.GetString("wal"),
+		PBlockCacheMB:          pCacheSZ,
+		WBlockCacheMB:          wCacheSz,
+		BloomCacheMB:           bloomCacheSz,
+		PostingDir:             Alpha.Conf.GetString("postings"),
+		WALDir:                 Alpha.Conf.GetString("wal"),
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
