@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"math/big"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/grandpa"
 	"github.com/ChainSafe/gossamer/lib/keystore"
+	"github.com/ChainSafe/gossamer/lib/services"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
@@ -108,7 +110,7 @@ func TestNewNode(t *testing.T) {
 	cfg.Core.GrandpaAuthority = false
 	cfg.Core.BabeThreshold = nil
 
-	node, err := NewNode(cfg, ks)
+	node, err := NewNode(cfg, ks, nil)
 	require.Nil(t, err)
 
 	bp := node.Services.Get(&babe.Service{})
@@ -139,7 +141,7 @@ func TestNewNode_Authority(t *testing.T) {
 	cfg.Core.Authority = true
 	cfg.Core.BabeThreshold = nil
 
-	node, err := NewNode(cfg, ks)
+	node, err := NewNode(cfg, ks, nil)
 	require.Nil(t, err)
 
 	bp := node.Services.Get(&babe.Service{})
@@ -173,7 +175,7 @@ func TestStartNode(t *testing.T) {
 	cfg.Core.GrandpaAuthority = false
 	cfg.Core.BabeThreshold = nil
 
-	node, err := NewNode(cfg, ks)
+	node, err := NewNode(cfg, ks, nil)
 	require.Nil(t, err)
 
 	go func() {
@@ -285,7 +287,7 @@ func TestInitNode_LoadStorageRoot(t *testing.T) {
 	ks := keystore.NewKeystore()
 	require.NotNil(t, ks)
 
-	node, err := NewNode(cfg, ks)
+	node, err := NewNode(cfg, ks, nil)
 	require.Nil(t, err)
 
 	if reflect.TypeOf(node) != reflect.TypeOf(&Node{}) {
@@ -341,7 +343,7 @@ func TestInitNode_LoadBalances(t *testing.T) {
 	ks := keystore.NewKeystore()
 	require.NotNil(t, ks)
 
-	node, err := NewNode(cfg, ks)
+	node, err := NewNode(cfg, ks, nil)
 	require.Nil(t, err)
 
 	if reflect.TypeOf(node) != reflect.TypeOf(&Node{}) {
@@ -372,4 +374,21 @@ func TestInitNode_LoadBalances(t *testing.T) {
 	expected := binary.LittleEndian.Uint64(balbytes)
 
 	require.Equal(t, expected, bal)
+}
+
+func TestNode_StopFunc(t *testing.T) {
+	testvar := "before"
+	stopFunc := func() {
+		testvar = "after"
+	}
+
+	node := &Node{
+		Services: &services.ServiceRegistry{},
+		StopFunc: stopFunc,
+		wg:       sync.WaitGroup{},
+	}
+	node.wg.Add(1)
+
+	node.Stop()
+	require.Equal(t, testvar, "after")
 }

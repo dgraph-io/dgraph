@@ -25,6 +25,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/utils"
+
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )

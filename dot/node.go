@@ -43,6 +43,7 @@ var logger = log.New("pkg", "dot")
 type Node struct {
 	Name     string
 	Services *services.ServiceRegistry // registry of all node services
+	StopFunc func()                    // func to call when node stops, currently used for profiling
 	wg       sync.WaitGroup
 }
 
@@ -208,7 +209,7 @@ func NodeInitialized(basepath string, expected bool) bool {
 }
 
 // NewNode creates a new dot node from a dot node configuration
-func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
+func NewNode(cfg *Config, ks *keystore.Keystore, stopFunc func()) (*Node, error) {
 	err := setupLogger(cfg)
 	if err != nil {
 		return nil, err
@@ -347,6 +348,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 
 	node := &Node{
 		Name:     cfg.Global.Name,
+		StopFunc: stopFunc,
 		Services: services.NewServiceRegistry(),
 	}
 
@@ -382,6 +384,10 @@ func (n *Node) Start() error {
 
 // Stop stops all dot node services
 func (n *Node) Stop() {
+	if n.StopFunc != nil {
+		n.StopFunc()
+	}
+
 	// stop all node services
 	n.Services.StopAll()
 	n.wg.Done()

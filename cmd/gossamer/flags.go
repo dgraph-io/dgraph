@@ -73,6 +73,14 @@ var (
 		Name:  "basepath",
 		Usage: "Data directory for the node",
 	}
+	CPUProfFlag = cli.StringFlag{
+		Name:  "cpuprof",
+		Usage: "File to write CPU profile to",
+	}
+	MemProfFlag = cli.StringFlag{
+		Name:  "memprof",
+		Usage: "File to write memory profile to",
+	}
 )
 
 // Initialization-only flags
@@ -210,6 +218,8 @@ var (
 		ChainFlag,
 		ConfigFlag,
 		BasePathFlag,
+		CPUProfFlag,
+		MemProfFlag,
 	}
 
 	// StartupFlags are flags that are valid for use with the root command and the export subcommand
