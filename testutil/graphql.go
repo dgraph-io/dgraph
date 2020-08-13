@@ -158,9 +158,11 @@ func (a *AuthMeta) GetSignedToken(privateKeyFile string,
 		a.Namespace,
 		a.AuthVars,
 		jwt.StandardClaims{
-			ExpiresAt: jwt.At(time.Now().Add(expireAfter)),
-			Issuer:    "test",
+			Issuer: "test",
 		},
+	}
+	if expireAfter != -1 {
+		claims.ExpiresAt = jwt.At(time.Now().Add(expireAfter))
 	}
 
 	var signedString string

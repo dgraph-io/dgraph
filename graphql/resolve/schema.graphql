@@ -256,3 +256,8 @@ type Comment1 {
   message: String
   replies: [Comment1]
 }
+
+type Tweets {
+    id: String! @id
+    score: Int
+}
