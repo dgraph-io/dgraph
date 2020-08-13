@@ -108,6 +108,10 @@ they form a Raft group and provide synchronous replication.
 			" mmap consumes more RAM, but provides better performance.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
+	flag.Int("badger.blockcache_mb", 1024,
+		"Size of block cache for posting dir badger in MB.")
+	flag.Int("badger.bloomcache_mb", 512,
+		"Size of bloom filter cache for posting dir badger in MB.")
 	flag.String("encryption_key_file", "",
 		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
 			"The key size determines the corresponding block size for AES encryption "+
@@ -529,6 +533,8 @@ func run() {
 		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
 		BadgerKeyFile:          Alpha.Conf.GetString("encryption_key_file"),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
+		BlockCacheMB:           Alpha.Conf.GetInt("badger.blockcache_mb"),
+		BloomCacheMB:           Alpha.Conf.GetInt("badger.bloomcache_mb"),
 
 		PostingDir: Alpha.Conf.GetString("postings"),
 		WALDir:     Alpha.Conf.GetString("wal"),
