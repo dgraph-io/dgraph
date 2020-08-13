@@ -65,6 +65,10 @@ const (
 		generatedSchema: String!
 	}
 
+	type Cors @dgraph(type: "dgraph.cors"){
+		acceptedOrigins: [String]
+	}
+
 	"""
 	A NodeState is the state of an individual node in the Dgraph cluster.
 	"""
@@ -264,6 +268,7 @@ const (
 		health: [NodeState]
 		state: MembershipState
 		config: Config
+		getCors: Cors
 
 		` + adminQueries + `
 	}
@@ -297,6 +302,8 @@ const (
 		Alter the node's config.
 		"""
 		config(input: ConfigInput!): ConfigPayload
+		
+		updateCors(origins: [String]): Cors
 
 		` + adminMutations + `
 	}
@@ -553,13 +560,25 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 						false
 				})
 		}).
+		WithMutationResolver("updateCors", func(m schema.Mutation) resolve.MutationResolver {
+			return resolve.MutationResolverFunc(
+				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: m},
+						false
+				})
+		}).
 		WithQueryResolver("getGQLSchema", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
 				})
+		}).
+		WithQueryResolver("getCors", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(
+				func(ctx context.Context, query schema.Query) *resolve.Resolved {
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
+				})
 		})
-
 	for gqlMut, resolver := range adminMutationResolvers {
 		// gotta force go to evaluate the right function at each loop iteration
 		// otherwise you get variable capture issues
@@ -705,6 +724,9 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					dgEx,
 					resolve.StdQueryCompletion())
 			}).
+		WithQueryResolver("getCors", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveGetCors)
+		}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(
@@ -746,7 +768,10 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					resolve.NewDeleteRewriter(),
 					dgEx,
 					resolve.StdDeleteCompletion(m.Name()))
-			})
+			}).
+		WithMutationResolver("updateCors", func(m schema.Mutation) resolve.MutationResolver {
+			return resolve.MutationResolverFunc(resolveUpdateCors)
+		})
 }
 
 func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
