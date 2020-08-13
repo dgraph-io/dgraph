@@ -580,12 +580,11 @@ func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
 	splits := strings.Split(Alpha.Conf.GetString("badger.blockcache_mb"), ":")
-	var pCacheSZ, wCacheSz int64
 	if len(splits) != 2 {
 		glog.Fatal("blockcache_mb should be of the form pstoreCacheSize:wstoreCacheSize")
 	}
 	// First part is the p cache size
-	pCacheSZ, err = strconv.ParseInt(splits[0], 10, 64)
+	pCacheSZ, err := strconv.ParseInt(splits[0], 10, 64)
 	if err != nil {
 		glog.Fatalf("Unable to convert %s to int", splits[0])
 	}
@@ -594,7 +593,7 @@ func run() {
 	}
 
 	// Second is the w cache size
-	wCacheSz, err = strconv.ParseInt(splits[1], 10, 64)
+	wCacheSz, err := strconv.ParseInt(splits[1], 10, 64)
 	if err != nil {
 		glog.Fatalf("Unable to convert %s to int", splits[1])
 	}
@@ -603,7 +602,7 @@ func run() {
 	}
 	bloomCacheSz := Alpha.Conf.GetInt("badger.bloomcache_mb")
 	if bloomCacheSz < 0 {
-		glog.Fatalf("cache size %s should be greater than or equal to 0", bloomCacheSz)
+		glog.Fatalf("cache size %d should be greater than or equal to 0", bloomCacheSz)
 	}
 
 	opts := worker.Options{
