@@ -590,7 +590,7 @@ func run() {
 		glog.Fatalf("Unable to convert %s to int", splits[0])
 	}
 	if pCacheSZ < 0 {
-		glog.Fatalf("cache size %s should be greater than 0", splits[0])
+		glog.Fatalf("cache size %s should be greater than or equal to 0", splits[0])
 	}
 
 	// Second is the w cache size
@@ -599,7 +599,11 @@ func run() {
 		glog.Fatalf("Unable to convert %s to int", splits[1])
 	}
 	if wCacheSz < 0 {
-		glog.Fatalf("cache size %s should be greater than 0", splits[1])
+		glog.Fatalf("cache size %s should be greater than or equal to 0", splits[1])
+	}
+	bloomCacheSz := Alpha.Conf.GetInt("badger.bloomcache_mb")
+	if bloomCacheSz < 0 {
+		glog.Fatalf("cache size %s should be greater than or equal to 0", bloomCacheSz)
 	}
 
 	opts := worker.Options{
@@ -608,7 +612,7 @@ func run() {
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
 		PBlockCacheMB:          pCacheSZ,
 		WBlockCacheMB:          wCacheSz,
-		BloomCacheMB:           Alpha.Conf.GetInt("badger.bloomcache_mb"),
+		BloomCacheMB:           bloomCacheSz,
 		PostingDir:             Alpha.Conf.GetString("postings"),
 		WALDir:                 Alpha.Conf.GetString("wal"),
 
