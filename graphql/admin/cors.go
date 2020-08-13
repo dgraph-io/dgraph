@@ -58,7 +58,7 @@ func resolveUpdateCors(ctx context.Context, m schema.Mutation) (*resolve.Resolve
 	return &resolve.Resolved{
 		Data: map[string]interface{}{
 			m.Name(): map[string]interface{}{
-				"acceptedOrigins": m.ArgValue("origins").([]interface{}),
+				"acceptedOrigins": arrayToInterface(origins),
 			},
 		},
 		Field: m,

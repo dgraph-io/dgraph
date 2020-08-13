@@ -43,7 +43,8 @@ const (
     "schema": [
         {
             "predicate": "dgraph.cors",
-            "type": "string"
+            "type": "string",
+            "list": true
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -94,7 +95,8 @@ const (
         },
         {
             "predicate": "dgraph.cors",
-            "type": "string"
+            "type": "string",
+            "list": true
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -165,6 +167,11 @@ const (
         {
             "predicate": "A.c",
             "type": "int"
+        },
+        {
+            "predicate": "dgraph.cors",
+            "type": "string",
+            "list": true
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -246,6 +253,11 @@ const (
         {
             "predicate": "A.d",
             "type": "float"
+        },
+        {
+            "predicate": "dgraph.cors",
+            "type": "string",
+            "list": true
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -335,7 +347,6 @@ func admin(t *testing.T) {
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
 	require.NoError(t, err)
-
 	require.JSONEq(t, initSchema, string(resp.GetJson()))
 }
 
@@ -647,4 +658,82 @@ func adminState(t *testing.T) {
 	require.Equal(t, state.License.User, result.State.License.User)
 	require.Equal(t, state.License.ExpiryTs, result.State.License.ExpiryTs)
 	require.Equal(t, state.License.Enabled, result.State.License.Enabled)
+}
+
+func testCors(t *testing.T) {
+	t.Run("testing normal retrival", func(t *testing.T) {
+		queryParams := &GraphQLParams{
+			Query: `query{
+                getCors{
+                  acceptedOrigins
+                }
+              }`,
+		}
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.JSONEq(t, ` {
+            "getCors": {
+              "acceptedOrigins": [
+                "*"
+              ]
+            }
+          }`, string(gqlResponse.Data))
+	})
+
+	t.Run("mutating cors", func(t *testing.T) {
+		queryParams := &GraphQLParams{
+			Query: `mutation{
+                updateCors(origins:["google.com"]){
+                  acceptedOrigins
+                }
+              }`,
+		}
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.JSONEq(t, ` {
+            "updateCors": {
+              "acceptedOrigins": [
+                "google.com"
+              ]
+            }
+          }`, string(gqlResponse.Data))
+	})
+
+	t.Run("retrive mutated cors", func(t *testing.T) {
+		queryParams := &GraphQLParams{
+			Query: `query{
+                getCors{
+                  acceptedOrigins
+                }
+              }`,
+		}
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.JSONEq(t, ` {
+            "getCors": {
+              "acceptedOrigins": [
+                "google.com"
+              ]
+            }
+          }`, string(gqlResponse.Data))
+	})
+
+	t.Run("mutating empty cors", func(t *testing.T) {
+		queryParams := &GraphQLParams{
+			Query: `mutation{
+                updateCors(origins:[]){
+                  acceptedOrigins
+                }
+              }`,
+		}
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.JSONEq(t, ` {
+            "updateCors": {
+              "acceptedOrigins": [
+                "*"
+              ]
+            }
+          }`, string(gqlResponse.Data))
+	})
 }

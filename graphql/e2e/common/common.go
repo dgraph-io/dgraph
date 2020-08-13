@@ -326,6 +326,7 @@ func RunAll(t *testing.T) {
 	t.Run("fragment in query", fragmentInQuery)
 	t.Run("fragment in query on Interface", fragmentInQueryOnInterface)
 	t.Run("fragment in query on Object", fragmentInQueryOnObject)
+	t.Run("cors testing", testCors)
 
 }
 

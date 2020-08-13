@@ -335,12 +335,13 @@ func SetHttpStatus(w http.ResponseWriter, code int, msg string) {
 
 // AddCorsHeaders adds the CORS headers to an HTTP response.
 func AddCorsHeaders(w http.ResponseWriter) {
-	origins := AcceptedOrigins.Load().(map[string]struct{})
-	if len(origins) == 0 {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-	} else {
-		// check the origin and add.
-	}
+	// origins := AcceptedOrigins.Load().(map[string]struct{})
+	// if len(origins) == 0 {
+	// 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	// } else {
+	// 	// check the origin and add.
+	// }
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", AccessControlAllowedHeaders)
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
