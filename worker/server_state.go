@@ -130,7 +130,7 @@ func (s *ServerState) initStorage() {
 		opt := badger.LSMOnlyOptions(Config.WALDir)
 		opt = setBadgerOptions(opt)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
-		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
+		opt.MaxCacheSize = int64(Config.WBlockCacheMB * 1024 * 1024)
 
 		// We should always force load LSM tables to memory, disregarding user settings, because
 		// Raft.Advance hits the WAL many times. If the tables are not in memory, retrieval slows
@@ -157,11 +157,14 @@ func (s *ServerState) initStorage() {
 		opt := badger.DefaultOptions(Config.PostingDir).
 			WithValueThreshold(1 << 10 /* 1KB */).
 			WithNumVersionsToKeep(math.MaxInt32).
-			WithMaxCacheSize(int64(Config.BlockCacheMB * 1024 * 1024)).
-			WithKeepBlockIndicesInCache(true).
-			WithKeepBlocksInCache(true).
+			WithMaxCacheSize(int64(Config.PBlockCacheMB * 1024 * 1024)).
 			WithMaxBfCacheSize(int64(Config.BloomCacheMB * 1024 * 1024))
 		opt = setBadgerOptions(opt)
+		// Keep blocks and indices in cache only if we have a cache.
+		if Config.PBlockCacheMB > 0 {
+			opt.KeepBlocksInCache = true
+			opt.KeepBlockIndicesInCache = true
+		}
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.

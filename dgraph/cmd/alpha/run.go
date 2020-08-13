@@ -29,6 +29,7 @@ import (
 	_ "net/http/pprof" // http profiler
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -113,8 +114,10 @@ they form a Raft group and provide synchronous replication.
 			" mmap consumes more RAM, but provides better performance.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
-	flag.Int("badger.blockcache_mb", 1024,
-		"Size of block cache for posting dir badger in MB.")
+	flag.String("badger.blockcache_mb", "0:0",
+		"Size of block cache for posting and wal dir badger of the form "+
+			"postingCacheSz:walCacheSz in MB. eg: 200:100 to use 200 mb cache in pstore "+
+			"and 100 mb cache in w store")
 	flag.Int("badger.bloomcache_mb", 512,
 		"Size of bloom filter cache for posting dir badger in MB.")
 	enc.RegisterFlags(flag)
@@ -576,11 +579,35 @@ func run() {
 	}
 	bindall = Alpha.Conf.GetBool("bindall")
 
+	splits := strings.Split(Alpha.Conf.GetString("badger.blockcache_mb"), ":")
+	var pCacheSZ, wCacheSz int64
+	if len(splits) != 2 {
+		glog.Fatal("blockcache_mb should be of the form pstoreCacheSize:wstoreCacheSize")
+	}
+	// First part is the p cache size
+	pCacheSZ, err = strconv.ParseInt(splits[0], 10, 64)
+	if err != nil {
+		glog.Fatalf("Unable to convert %s to int", splits[0])
+	}
+	if pCacheSZ < 0 {
+		glog.Fatalf("cache size %s should be greater than 0", splits[0])
+	}
+
+	// Second is the w cache size
+	wCacheSz, err = strconv.ParseInt(splits[1], 10, 64)
+	if err != nil {
+		glog.Fatalf("Unable to convert %s to int", splits[1])
+	}
+	if wCacheSz < 0 {
+		glog.Fatalf("cache size %s should be greater than 0", splits[1])
+	}
+
 	opts := worker.Options{
 		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-		BlockCacheMB:           Alpha.Conf.GetInt("badger.blockcache_mb"),
+		PBlockCacheMB:          pCacheSZ,
+		WBlockCacheMB:          wCacheSz,
 		BloomCacheMB:           Alpha.Conf.GetInt("badger.bloomcache_mb"),
 		PostingDir:             Alpha.Conf.GetString("postings"),
 		WALDir:                 Alpha.Conf.GetString("wal"),
