@@ -49,6 +49,10 @@ type Options struct {
 	// higher value means more CPU intensive compression and better compression
 	// ratio.
 	BadgerCompressionLevel int
+	// BlockCacheMB is the size of block cache for PostingDir Badger in MBs.
+	BlockCacheMB int
+	// BloomCacheMB is the size of bloom filter cache for PostingDir Badger in MBs.
+	BloomCacheMB int
 	// WALDir is the path to the directory storing the write-ahead log.
 	WALDir string
 	// MutationsMode is the mode used to handle mutation requests.
