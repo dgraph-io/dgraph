@@ -4,6 +4,7 @@ title = "Mutations"
 [menu.main]
   url = "/mutations/"
   identifier = "mutations"
+  parent = "dql"
   weight = 6
 +++
 
