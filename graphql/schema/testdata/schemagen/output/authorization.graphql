@@ -226,10 +226,10 @@ input TodoFilter {
 	id: [ID!]
 	isPublic: Boolean
 	dateCompleted: StringTermFilter
+	has: TodoHasFilter
 	and: TodoFilter
 	or: TodoFilter
 	not: TodoFilter
-	has: TodoHasFilter
 }
 
 input TodoOrder {
@@ -273,10 +273,10 @@ input UpdateUserInput {
 
 input UserFilter {
 	username: StringHashFilter
+	has: UserHasFilter
 	and: UserFilter
 	or: UserFilter
 	not: UserFilter
-	has: UserHasFilter
 }
 
 input UserOrder {

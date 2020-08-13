@@ -193,8 +193,10 @@ input AddPostInput {
 
 input AuthorFilter {
 	id: [ID!]
-	not: AuthorFilter
 	has: AuthorHasFilter
+	and: AuthorFilter
+	or: AuthorFilter
+	not: AuthorFilter
 }
 
 input AuthorPatch {
@@ -208,8 +210,10 @@ input AuthorRef {
 
 input PostFilter {
 	id: [ID!]
-	not: PostFilter
 	has: PostHasFilter
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
 }
 
 input PostPatch {

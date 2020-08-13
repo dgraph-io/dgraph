@@ -225,10 +225,10 @@ input AddHumanInput {
 input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
+	has: CharacterHasFilter
 	and: CharacterFilter
 	or: CharacterFilter
 	not: CharacterFilter
-	has: CharacterHasFilter
 }
 
 input CharacterOrder {
@@ -247,8 +247,10 @@ input CharacterRef {
 }
 
 input EmployeeFilter {
-	not: EmployeeFilter
 	has: EmployeeHasFilter
+	and: EmployeeFilter
+	or: EmployeeFilter
+	not: EmployeeFilter
 }
 
 input EmployeeOrder {
@@ -260,10 +262,10 @@ input EmployeeOrder {
 input HumanFilter {
 	id: [ID!]
 	name: StringExactFilter
+	has: HumanHasFilter
 	and: HumanFilter
 	or: HumanFilter
 	not: HumanFilter
-	has: HumanHasFilter
 }
 
 input HumanOrder {

@@ -173,8 +173,10 @@ input AddCarInput {
 
 input CarFilter {
 	id: [ID!]
-	not: CarFilter
 	has: CarHasFilter
+	and: CarFilter
+	or: CarFilter
+	not: CarFilter
 }
 
 input CarOrder {

@@ -197,8 +197,10 @@ enum MessageOrderable {
 
 input AbstractFilter {
 	id: [ID!]
-	not: AbstractFilter
 	has: AbstractHasFilter
+	and: AbstractFilter
+	or: AbstractFilter
+	not: AbstractFilter
 }
 
 input AbstractOrder {
@@ -224,8 +226,10 @@ input AddMessageInput {
 
 input MessageFilter {
 	id: [ID!]
-	not: MessageFilter
 	has: MessageHasFilter
+	and: MessageFilter
+	or: MessageFilter
+	not: MessageFilter
 }
 
 input MessageOrder {

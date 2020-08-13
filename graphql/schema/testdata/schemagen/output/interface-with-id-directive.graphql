@@ -204,10 +204,10 @@ input AddLaptopDeskInput {
 
 input DeskFilter {
 	name: StringHashFilter
+	has: DeskHasFilter
 	and: DeskFilter
 	or: DeskFilter
 	not: DeskFilter
-	has: DeskHasFilter
 }
 
 input DeskOrder {
@@ -226,10 +226,10 @@ input DeskRef {
 
 input LaptopDeskFilter {
 	name: StringHashFilter
+	has: LaptopDeskHasFilter
 	and: LaptopDeskFilter
 	or: LaptopDeskFilter
 	not: LaptopDeskFilter
-	has: LaptopDeskHasFilter
 }
 
 input LaptopDeskOrder {

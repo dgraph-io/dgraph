@@ -178,8 +178,10 @@ input UpdateUserInput {
 
 input UserFilter {
 	id: [ID!]
-	not: UserFilter
 	has: UserHasFilter
+	and: UserFilter
+	or: UserFilter
+	not: UserFilter
 }
 
 input UserOrder {

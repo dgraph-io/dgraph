@@ -159,8 +159,10 @@ input AddAtypeInput {
 }
 
 input AtypeFilter {
-	not: AtypeFilter
 	has: AtypeHasFilter
+	and: AtypeFilter
+	or: AtypeFilter
+	not: AtypeFilter
 }
 
 input AtypeOrder {

@@ -219,8 +219,10 @@ input AddPostInput {
 
 input AuthorFilter {
 	id: [ID!]
-	not: AuthorFilter
 	has: AuthorHasFilter
+	and: AuthorFilter
+	or: AuthorFilter
+	not: AuthorFilter
 }
 
 input AuthorOrder {
@@ -241,8 +243,10 @@ input AuthorRef {
 }
 
 input GenreFilter {
-	not: GenreFilter
 	has: GenreHasFilter
+	and: GenreFilter
+	or: GenreFilter
+	not: GenreFilter
 }
 
 input GenreOrder {
@@ -256,8 +260,10 @@ input GenreRef {
 }
 
 input PostFilter {
-	not: PostFilter
 	has: PostHasFilter
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
 }
 
 input PostOrder {

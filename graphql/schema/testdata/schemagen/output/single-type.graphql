@@ -176,8 +176,10 @@ input AddMessageInput {
 
 input MessageFilter {
 	id: [ID!]
-	not: MessageFilter
 	has: MessageHasFilter
+	and: MessageFilter
+	or: MessageFilter
+	not: MessageFilter
 }
 
 input MessageOrder {

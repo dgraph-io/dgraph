@@ -288,10 +288,10 @@ input AnswerFilter {
 	id: [ID!]
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
+	has: AnswerHasFilter
 	and: AnswerFilter
 	or: AnswerFilter
 	not: AnswerFilter
-	has: AnswerHasFilter
 }
 
 input AnswerOrder {
@@ -318,10 +318,10 @@ input AnswerRef {
 input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
+	has: AuthorHasFilter
 	and: AuthorFilter
 	or: AuthorFilter
 	not: AuthorFilter
-	has: AuthorHasFilter
 }
 
 input AuthorOrder {
@@ -345,10 +345,10 @@ input PostFilter {
 	id: [ID!]
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
+	has: PostHasFilter
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
-	has: PostHasFilter
 }
 
 input PostOrder {
@@ -371,10 +371,10 @@ input QuestionFilter {
 	id: [ID!]
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
+	has: QuestionHasFilter
 	and: QuestionFilter
 	or: QuestionFilter
 	not: QuestionFilter
-	has: QuestionHasFilter
 }
 
 input QuestionOrder {

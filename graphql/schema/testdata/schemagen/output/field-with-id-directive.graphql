@@ -242,10 +242,10 @@ input AddPostInput {
 input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter_StringRegExpFilter
+	has: AuthorHasFilter
 	and: AuthorFilter
 	or: AuthorFilter
 	not: AuthorFilter
-	has: AuthorHasFilter
 }
 
 input AuthorOrder {
@@ -268,10 +268,10 @@ input AuthorRef {
 
 input GenreFilter {
 	name: StringHashFilter
+	has: GenreHasFilter
 	and: GenreFilter
 	or: GenreFilter
 	not: GenreFilter
-	has: GenreHasFilter
 }
 
 input GenreOrder {
@@ -286,8 +286,10 @@ input GenreRef {
 
 input PostFilter {
 	postID: [ID!]
-	not: PostFilter
 	has: PostHasFilter
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
 }
 
 input PostOrder {

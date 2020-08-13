@@ -181,8 +181,10 @@ input AddPostInput {
 
 input PostFilter {
 	id: [ID!]
-	not: PostFilter
 	has: PostHasFilter
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
 }
 
 input PostOrder {

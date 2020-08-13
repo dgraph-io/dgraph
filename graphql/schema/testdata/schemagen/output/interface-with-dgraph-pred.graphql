@@ -236,8 +236,10 @@ input AddObjectInput {
 
 input BusinessManFilter {
 	id: [ID!]
-	not: BusinessManFilter
 	has: BusinessManHasFilter
+	and: BusinessManFilter
+	or: BusinessManFilter
+	not: BusinessManFilter
 }
 
 input BusinessManOrder {
@@ -259,8 +261,10 @@ input BusinessManRef {
 
 input ObjectFilter {
 	id: [ID!]
-	not: ObjectFilter
 	has: ObjectHasFilter
+	and: ObjectFilter
+	or: ObjectFilter
+	not: ObjectFilter
 }
 
 input ObjectOrder {
@@ -282,8 +286,10 @@ input ObjectRef {
 
 input PersonFilter {
 	id: [ID!]
-	not: PersonFilter
 	has: PersonHasFilter
+	and: PersonFilter
+	or: PersonFilter
+	not: PersonFilter
 }
 
 input PersonOrder {

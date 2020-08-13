@@ -195,8 +195,10 @@ input AddTInput {
 }
 
 input IFilter {
-	not: IFilter
 	has: IHasFilter
+	and: IFilter
+	or: IFilter
+	not: IFilter
 }
 
 input IOrder {
@@ -207,8 +209,10 @@ input IOrder {
 
 input TFilter {
 	id: [ID!]
-	not: TFilter
 	has: THasFilter
+	and: TFilter
+	or: TFilter
+	not: TFilter
 }
 
 input TOrder {
