@@ -45,8 +45,8 @@ $ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -a 
 
 ### Encrypted imports via Live Loader (Enterprise Feature)
 
-A new flag `--encrption_key_file` is added to the Live Loader. This option is required to decrypt the encrypted export data and schema files. Once the export files are decrypted, the Live Loader streams the data to a live Alpha instance.
-Alternatively, starting with v20.07.0, the `vault_*` options can be used to decrypted the encrypted export and schema files. 
+A new flag `--encryption_key_file` is added to the Live Loader. This option is required to decrypt the encrypted export data and schema files. Once the export files are decrypted, the Live Loader streams the data to a live Alpha instance.
+Alternatively, starting with v20.07.0, the `vault_*` options can be used to decrypt the encrypted export and schema files.
 
 {{% notice "note" %}}
 If the live Alpha instance has encryption turned on, the `p` directory will be encrypted. Otherwise, the `p` directory is unencrypted.
