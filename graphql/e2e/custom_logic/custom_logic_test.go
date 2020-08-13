@@ -205,7 +205,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 				 secretHeaders: ["Github-Api-Token"]
 		 })
 	 }
-	 
+
 		 # Dgraph.Secret Github-Api-Token "random-fake-token"
 		 # Dgraph.Secret app "should-be-overriden"
 	 `
@@ -284,7 +284,7 @@ func TestSchemaIntrospectionForCustomQueryShouldForwardHeaders(t *testing.T) {
 			code: String!
 			name: String!
 		}
-		
+
 		type Query {
 			myCustom(yo: CountryInput!): [Country!]!
 			  @custom(
@@ -368,7 +368,7 @@ func TestCustomFieldsInSubscription(t *testing.T) {
 			  name
 			}
 		  }`,
-	})
+	}, `{}`)
 	require.NoError(t, err)
 	_, err = client.RecvMsg()
 	require.Contains(t, err.Error(), "Custom field `name` is not supported in graphql subscription")
@@ -407,7 +407,7 @@ func TestSubscriptionInNestedCustomField(t *testing.T) {
 				}
 			 }
 		  }`,
-	})
+	}, `{}`)
 	require.NoError(t, err)
 	_, err = client.RecvMsg()
 	require.Contains(t, err.Error(), "Custom field `anotherName` is not supported in graphql subscription")
@@ -1391,7 +1391,7 @@ func TestCustomLogicGraphql(t *testing.T) {
       code: String
       name: String
 	}
-	
+
 	type Query {
 		getCountry1(id: ID!): Country!
 		  @custom(
@@ -1426,7 +1426,7 @@ func TestCustomLogicGraphqlWithArgumentsOnFields(t *testing.T) {
       code(size: Int!): String
       name: String
 	}
-	
+
 	type Query {
 		getCountry2(id: ID!): Country!
 		  @custom(
@@ -1512,7 +1512,7 @@ func TestCustomLogicGraphQLValidArrayResponse(t *testing.T) {
       code: String
       name: String
 	}
-	
+
 	type Query {
 		getCountries(id: ID!): [Country]
 		  @custom(
@@ -2284,7 +2284,7 @@ func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
       code: String!
       name: String!
 	}
-	
+
 	type Mutation {
 		addCountry1(input: CountryInput!): Country! @custom(http: {
 										url: "http://mock:8888/setCountry",
@@ -2347,7 +2347,7 @@ func TestCustomGraphqlMutation1(t *testing.T) {
       code: String!
       name: String!
 	}
-	
+
 	type Mutation {
 		addCountry1(input: CountryInput!): Country! @custom(http: {
 					url: "http://mock:8888/setCountry"
@@ -2437,7 +2437,7 @@ func TestCustomGraphqlMutation2(t *testing.T) {
         code: String!
         name: String!
 	  }
-	  
+
 	type Mutation {
 		updateCountries(name: String, std: Int): [Country!]! @custom(http: {
 								url: "http://mock:8888/updateCountries",
@@ -2492,7 +2492,7 @@ func TestForValidInputArgument(t *testing.T) {
       code: String!
       name: String!
 	}
-	
+
 	type Query {
 		myCustom(yo: CountryInput!): [Country!]!
 		  @custom(

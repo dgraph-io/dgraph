@@ -1284,9 +1284,9 @@ func querynestedOnlyTypename(t *testing.T) {
 		  },
                   {
 			"__typename": "Post"
-		  },  
+		  },
 		  {
-			
+
 			"__typename": "Post"
 		  }
 		]
@@ -1312,8 +1312,8 @@ func onlytypenameForInterface(t *testing.T) {
 						eq: [EMPIRE]
 					}
 				}) {
-					
-					
+
+
 					... on Human {
 						__typename
 			                }
@@ -1327,7 +1327,7 @@ func onlytypenameForInterface(t *testing.T) {
 		expected := `{
 		"queryCharacter": [
 		  {
-                      "__typename": "Human"			
+                      "__typename": "Human"
 		  },
 		  {
 	             "__typename": "Droid"
