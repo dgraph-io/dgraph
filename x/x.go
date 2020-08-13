@@ -124,7 +124,7 @@ const (
 `
 	// CorsPredicate is the json representation of the predicate reserved by dgraph for the use
 	//of cors
-	CorsPredicate = `{"predicate":"dgraph.cors","type":"string"}`
+	CorsPredicate = `{"predicate":"dgraph.cors","type":"string","list":true}`
 
 	InitialTypes = `
 "types": [{

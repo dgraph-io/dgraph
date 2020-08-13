@@ -1564,6 +1564,14 @@ func ResetCors() {
 	}
 }
 
+func generateNquadsForCors(origins []string) []byte {
+	out := &bytes.Buffer{}
+	for _, origin := range origins {
+		out.Write([]byte(fmt.Sprintf("uid(cors) <dgraph.cors> \"%s\" . \n", origin)))
+	}
+	return out.Bytes()
+}
+
 // AddCorsOrigins Adds the cors origins to the Dgraph.
 func AddCorsOrigins(ctx context.Context, origins []string) error {
 	req := &api.Request{
@@ -1572,8 +1580,7 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 		}`,
 		Mutations: []*api.Mutation{
 			{
-				SetNquads: []byte(fmt.Sprintf(`uid(cors) <dgraph.cors> "%s" .`,
-					strings.Join(origins, ","))),
+				SetNquads: generateNquadsForCors(origins),
 				Cond:      `@if(eq(len(cors), 1))`,
 				DelNquads: []byte(`uid(cors) <dgraph.cors> * .`),
 			},
@@ -1601,7 +1608,7 @@ func GetCorsOrigins(ctx context.Context) ([]string, error) {
 
 	type corsResponse struct {
 		Me []struct {
-			DgraphCors string `json:"dgraph.cors"`
+			DgraphCors []string `json:"dgraph.cors"`
 		} `json:"me"`
 	}
 	corsRes := &corsResponse{}
@@ -1609,5 +1616,5 @@ func GetCorsOrigins(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	x.AssertTrue(len(corsRes.Me) == 1)
-	return strings.Split(corsRes.Me[0].DgraphCors, ","), nil
+	return corsRes.Me[0].DgraphCors, nil
 }

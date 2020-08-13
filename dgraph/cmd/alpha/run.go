@@ -757,17 +757,14 @@ func listenForCorsUpdate(closer *y.Closer) {
 		pl := &pb.PostingList{}
 		err := pl.Unmarshal(kv.GetValue())
 		if err != nil {
-			glog.Errorf("Unable to unmarshal the posting list for graphql schema update %s", err)
+			glog.Errorf("Unable to unmarshal the posting list for cors update %s", err)
 			return
 		}
-
-		// There should be only one posting.
-		if len(pl.Postings) != 1 {
-			glog.Errorf("Only one posting is expected in the graphql schema posting list but got %d",
-				len(pl.Postings))
-			return
+		// Get all the origins from the postings.
+		origins := make([]string, len(pl.Postings))
+		for i, posting := range pl.Postings {
+			origins[i] = string(posting.Value)
 		}
-		origins := strings.Split(string(pl.Postings[0].Value), ",")
 		glog.Infof("Updating cors origins: %+v", origins)
 		x.UpdateCors(origins)
 	}, 1, closer)

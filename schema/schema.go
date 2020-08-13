@@ -642,6 +642,7 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 		&pb.SchemaUpdate{
 			Predicate: "dgraph.cors",
 			ValueType: pb.Posting_STRING,
+			List:      true,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.type",
 			ValueType: pb.Posting_STRING,
