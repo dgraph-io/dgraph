@@ -20,6 +20,11 @@ encryption at rest as an enterprise feature. If encryption is enabled, Dgraph us
 [Advanced Encryption Standard (AES)](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard)
 algorithm to encrypt the data and secure it.
 
+Prior to v20.07.0, the encryption key file must be present on the local file system.
+Starting with [v20.07.0] (https://github.com/dgraph-io/dgraph/releases/tag/v20.07.0), 
+we have added support for encryption keys sitting on Vault servers. This allows an alternate
+way to configure the encryption keys needed for encrypting the data at rest.
+
 ## Set up Encryption
 
 To enable encryption, we need to pass a file that stores the data encryption key with the option
@@ -32,6 +37,8 @@ desired key size):
 ```
 dd if=/dev/random bs=1 count=32 of=enc_key_file
 ```
+
+Alternatively, you can use the `--vault_*` options to enable encrption as explained below. 
 
 ## Turn on Encryption
 
@@ -49,6 +56,24 @@ Once an Alpha has encryption enabled, the encryption key must be provided in ord
 If the Alpha server restarts, the `--encryption_key_file` option must be set along with the key in order to
 restart successfully.
 
+Alternatively, for encryption keys sitting on Vault server, here is an example. To use Vault, there are some pre-requisites.
+1. Vault Server URL of the form `http://fqdn[ip]:port`. This will be used for the options `--vault_addr`.
+2. Vault Server must be configued with an approle auth. A `secret-id` and `role-id` must be generated and copied over to local files. This will be needed for the options `--vault_secretid_file` and `vault_roleid_file`.
+3. Vault Server must instantiate a KV store containing a K/V for Dgraph. The `--vault_field` option must be the KV-v1 or KV-v2 format. The vaule of this key is the encryption key that Dgraph will use. This key must be 16,24 or 32 bytes as explained above.
+
+Next, here is an example of using Dgraph with a Vault server that holds the encryption key.
+```bash
+dgraph zero --my=localhost:5080 --replicas 1 --idx 1
+dgraph alpha --vault_addr https://localhost:8200 --vault_roleid_file ./roleid --vault_secretid_file ./secretid --vault_field enc_key_name --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
+```
+
+If multiple Alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option or the `--vault_*` options to
+each of the Alphas.
+
+Once an Alpha has encryption enabled, the encryption key must be provided in order to start the Alpha server.
+If the Alpha server restarts, the `--encryption_key_file` or the `--vault_*` option must be set along with the key in order to
+restart successfully.
+
 ## Turn off Encryption
 
 If you wish to turn off encryption from an existing Alpha, then you can export your data and import it
@@ -56,7 +81,7 @@ into a new Dgraph instance without encryption enabled.
 
 ## Change Encryption Key
 
-The master encryption key set by the `--encryption_key_file` option does not change automatically. The master
+The master encryption key set by the `--encryption_key_file` option (or one used in Vault KV store) does not change automatically. The master
 encryption key encrypts underlying *data keys* which are changed on a regular basis automatically (more info
 about this is covered on the encryption-at-rest [blog][encblog] post).
 
