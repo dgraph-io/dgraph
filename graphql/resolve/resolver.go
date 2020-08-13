@@ -1503,7 +1503,7 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				return nil, valueCoercionError(v)
 			}
 			// Lets try to see if this a whole number, otherwise return error because we
-			// might be losing informating by truncating it.
+			// might be losing information by truncating it.
 			truncated := math.Trunc(i)
 			if truncated == i {
 				val = int(truncated)

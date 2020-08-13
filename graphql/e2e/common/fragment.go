@@ -1,3 +1,19 @@
+/*
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package common
 
 import (
@@ -119,6 +135,17 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				__typename
 				...fullCharacterFrag
 			}
+			qc: queryCharacter {
+				__typename
+				... on Character {
+					... on Character {
+						... on Human {
+							name
+						}
+					}
+				}
+				... droidAppearsIn
+			}
 		}
 		fragment fullCharacterFrag on Character {
 			__typename
@@ -148,6 +175,9 @@ func fragmentInQueryOnInterface(t *testing.T) {
 		fragment droidFrag on Droid {
 			__typename
 			primaryFunction
+		}
+		fragment droidAppearsIn on Droid {
+			appearsIn
 		}
 		`,
 	}
@@ -179,12 +209,20 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				"appearsIn": ["EMPIRE"],
 				"primaryFunction": "Robot"
 			}
+		],
+		"qc":[
+			{
+				"__typename": "Human",
+				"name": "Han"
+			},
+			{
+				"__typename": "Droid",
+				"appearsIn": ["EMPIRE"]
+			}
 		]
 	}`, humanID, newStarship.ID, droidID)
 
-	var expected, result struct {
-		QueryCharacter []map[string]interface{}
-	}
+	var expected, result map[string]interface{}
 	err := json.Unmarshal([]byte(queryCharacterExpected), &expected)
 	require.NoError(t, err)
 	err = json.Unmarshal(gqlResponse.Data, &result)

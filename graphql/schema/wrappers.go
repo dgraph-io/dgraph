@@ -226,9 +226,10 @@ type operation struct {
 	header http.Header
 
 	// The fields below are used by schema introspection queries.
-	query    string
-	doc      *ast.QueryDocument
-	inSchema *schema
+	query                   string
+	doc                     *ast.QueryDocument
+	inSchema                *schema
+	interfaceImplFragFields map[*ast.Field]string
 }
 
 type field struct {
@@ -1007,9 +1008,16 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 		}
 		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
 			if origTyp.Kind == ast.Object {
+				// If the field is from an interface implemented by this object,
+				// and was fetched not because of a fragment on this object,
+				// but because of a fragment on some other object, then we don't need to include it.
+				fragType, ok := f.op.interfaceImplFragFields[f.field]
+				if ok && fragType != origTyp.Name {
+					return false
+				}
 				// If the field doesn't exist in the map corresponding to the object type, then we
 				// don't need to include it.
-				_, ok := f.op.inSchema.dgraphPredicate[origTyp.Name][f.Name()]
+				_, ok = f.op.inSchema.dgraphPredicate[origTyp.Name][f.Name()]
 				return ok || f.Name() == Typename
 			}
 		}
