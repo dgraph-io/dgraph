@@ -82,6 +82,10 @@ If data exists and new indices are specified in a schema mutation, any index not
 
 Reverse edges are also computed if specified by a schema mutation.
 
+{{% notice "note" %}}You can't define predicate names starting with `dgraph.`, it is reserved as the
+namespace for Dgraph's internal types/predicates. For example, defining `dgraph.name` as a
+predicate is invalid.{{% /notice  %}}
+
 
 ## Indexes in Background
 

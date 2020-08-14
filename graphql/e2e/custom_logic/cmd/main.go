@@ -281,7 +281,7 @@ func postFavMoviesWithBodyHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodPost,
 		urlSuffix: "/0x123?name=Author",
-		body:      `{"id":"0x123","name":"Author"}`,
+		body:      `{"id":"0x123","movie_type":"space","name":"Author"}`,
 		headers:   nil,
 	})
 	if err != nil {
