@@ -541,7 +541,6 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 			addInputType(sch, defn)
 			addAddPayloadType(sch, defn)
 			addMutations(sch, defn)
-
 		}
 
 		// types and inputs needed for query and search
@@ -714,10 +713,10 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
 
 	}
 
-	// Interfaces could have just ID field but Classes cannot for eg:
+	// Interfaces could have just ID field but Types cannot for eg:
 	// interface I {
-	//   id: ID!
-	//	}
+	// 	 id: ID!
+	// }
 	// is a valid interface but it do not have any field which can
 	// be filtered using has filter
 
@@ -806,10 +805,6 @@ func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName str
 //   ...
 // }
 func addFilterType(schema *ast.Schema, defn *ast.Definition) {
-	// if !hasFilterable(defn) {
-	// 	return
-	// }
-
 	filterName := defn.Name + "Filter"
 	filter := &ast.Definition{
 		Kind: ast.InputObject,
@@ -844,8 +839,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 		}
 	}
 
-	//Has filter makes sense only if there is atleast one non ID field in the defn
-	if (len(defn.Fields) == 1 && !isID(defn.Fields[0])) || len(defn.Fields) > 1 {
+	// Has filter makes sense only if there is atleast one non ID field in the defn
+	if len(getNonIDFields(schema, defn)) > 0 {
 		filter.Fields = append(filter.Fields,
 			&ast.FieldDefinition{Name: "has", Type: &ast.Type{NamedType: defn.Name + "HasFilter"}},
 		)
