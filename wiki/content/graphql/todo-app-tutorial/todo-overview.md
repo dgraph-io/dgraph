@@ -10,10 +10,10 @@ This is a simple tutorial which will take you through making a basic todo app us
 
 ### Steps
 
-- [Schema Design](../todo-schema-design)
-- [Basic UI](../todo-ui)
-- [Add Auth Rules](../todo-auth-rules)
-- [Use Auth0's JWT](../todo-auth0-jwt)
-- [Deploy on Slash GraphQL](../deploy)
+- [Schema Design](/graphql/todo-app-tutorial/todo-schema-design)
+- [Basic UI](/graphql/todo-app-tutorial/todo-ui)
+- [Add Auth Rules](/graphql/todo-app-tutorial/todo-auth-rules)
+- [Use Auth0's JWT](/graphql/todo-app-tutorial/todo-auth0-jwt)
+- [Deploy on Slash GraphQL](/graphql/todo-app-tutorial/deploy)
 
 ---
