@@ -3,5 +3,5 @@ title = "DQL"
 [menu.main]
   url = "/dql/"
   identifier = "dql"
-  weight = 3
+  weight = 4
 +++
