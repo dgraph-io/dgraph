@@ -8,7 +8,7 @@ title = "Overview"
   weight = 1
 +++
 
-**Welcome to the official Dgraph GraphQL documentation.**
+**Welcome to the official GraphQL documentation for Dgraph.**
 
 Designed from the ground up to be run in production, Dgraph is the native GraphQL database with a graph backend. It is open-source, scalable, distributed, highly available and lightning fast.
 

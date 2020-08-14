@@ -25,7 +25,7 @@ Designed from the ground up to be run in production, Dgraph is the native GraphQ
             </a>
           </div>
           <p class="section-desc">
-            Get Started with Dgraph GraphQL 
+            Get Started with GraphQL 
           </p>
         </div>
       </div>

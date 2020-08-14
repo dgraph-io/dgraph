@@ -1,8 +1,8 @@
 +++
-title = "How Dgraph GraphQL Works"
+title = "How GraphQL works within Dgraph"
 [menu.main]
   url = "/graphql/how-dgraph-graphql-works/"
-  name = "How Dgraph GraphQL Works"
+  name = "How GraphQL works within Dgraph"
   identifier = "how-dgraph-graphql-works"
   parent = "graphql"
   weight = 2
