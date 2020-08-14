@@ -14,7 +14,7 @@ The admin API and how to run Dgraph with GraphQL.
 
 The simplest way to start with Dgraph GraphQL is to run the all-in-one Docker image.
 
-```shell
+```
 docker run -it -p 8080:8080 dgraph/standalone:master
 ```
 

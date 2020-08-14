@@ -9,7 +9,7 @@ All the APIs documented here require an API token for access. A new API token ca
 
 All admin API requests must be authenticated by passing the API token as the 'X-Auth-Token' header to every HTTP request. You can verify that your API token works by using the following HTTP example.
 
-```shell
+```
 curl 'https://<your-backend>/admin' \
   -H 'X-Auth-Token: <your-token>' \
   -H 'Content-Type: application/json' \

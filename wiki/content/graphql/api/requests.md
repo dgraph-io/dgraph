@@ -40,7 +40,7 @@ POST requests sent with the Content-Type header `application/json` must have a P
 
 GET requests must be sent in the following format. The query, variables, and operation are sent as URL-encoded query parameters in the URL.
 
-```shell
+```
 http://localhost:8080/graphql?query={...}&variables={...}&operation=...
 ```
 

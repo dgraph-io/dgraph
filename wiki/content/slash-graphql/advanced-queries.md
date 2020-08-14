@@ -35,7 +35,7 @@ type Person {
 ```
 
 Here is an example of a cURL for `/mutate` endpoint:
-```shell
+```
 curl -H "Content-Type: application/rdf" -H "x-auth-token: <api-key>" -X POST "<graphql-endpoint>/mutate?commitNow=true" -d $'
 {
  set {
@@ -46,7 +46,7 @@ curl -H "Content-Type: application/rdf" -H "x-auth-token: <api-key>" -X POST "<g
 }'
 ```
 Here is an example of a cURL for `/query` endpoint:
-```shell
+```
 curl -H "Content-Type: application/graphql+-" -H "x-auth-token: <api-key>" -XPOST "<graphql-endpoint>/query" -d '{
    queryPerson(func: type(Person))  {
      Person.name
@@ -66,7 +66,7 @@ Here is an example which uses the [pydgraph client](https://github.com/dgraph-io
 
 For initial setup, make sure you import the right packages and setup your `HOST` and `PORT` correctly.
 
-```pyw
+```python
 import grpc
 import sys
 import json
@@ -80,7 +80,7 @@ GRPC_PORT = "443"
 ```
 
 You will then need to pass your API key as follows:
-```pyw
+```python
 creds = grpc.ssl_channel_credentials()
 call_credentials = grpc.metadata_call_credentials(lambda context, callback: callback((("Authorization", "<api-key>"),), None))
 composite_credentials = grpc.composite_channel_credentials(creds, call_credentials)
@@ -89,7 +89,7 @@ client = pydgraph.DgraphClient(client_stub)
 ```
 
 For mutations, you can use the following example:
-```pyw
+```python
 mut = {
   "Person.name": "John Doe",
   "Person.age": "32",
@@ -105,7 +105,7 @@ finally:
 ```
 
 And for a query you can use the following example:
-```pyw
+```python
 query = """
 {
    queryPerson(func: type(Person))  {

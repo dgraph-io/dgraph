@@ -60,13 +60,13 @@ installed on your machine.
 
 Let's begin by starting Dgraph standalone by running the command below:
 
-```shell
+```
 docker run -it -p 8080:8080 dgraph/standalone:master
 ```
 
 Let's load up the GraphQL schema file to Dgraph:
 
-```shell
+```
 curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
 ```
 
@@ -197,7 +197,7 @@ type Task {
 The `@search` directive is added to support the native search indexes of **Dgraph**.
 
 Resubmit the updated schema -
-```shell
+```
 curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
 ```
 
@@ -230,7 +230,7 @@ The `fulltext` search index provides the advanced search capability to perform e
 comparison as well as matching with language-specific stemming and stopwords.
 
 Resubmit the updated schema -
-```shell
+```
 curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
 ```
 

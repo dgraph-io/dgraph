@@ -10,7 +10,7 @@ Mutations also allows to perform deep mutation at multiple levels.
 
 We use the following schema to demonstrate some examples.
 
-**Schema**:
+## **Schema**:
 ```graphql
 type Author {
 	id: ID!
@@ -27,7 +27,7 @@ type Post {
 }
 ```
 
-**Example**: Deep Deep mutation using variables
+### **Example**: Deep Deep mutation using variables
 ```graphql
 mutation DeepAuthor($author: DeepAuthorInput!) {
   DeepAuthor(input: [$author]) {
@@ -57,7 +57,7 @@ Variables:
 }
 ```
 
-**Example**: Deep update mutation using variables
+### **Example**: Deep update mutation using variables
 ```graphql
 mutation updateAuthor($patch: UpdateAuthorInput!) {
   updateAuthor(input: $patch) {

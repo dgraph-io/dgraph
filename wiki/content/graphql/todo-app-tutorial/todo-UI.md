@@ -11,13 +11,13 @@ In this step, we will create a simple todo app (React) and integrate it with Aut
 
 Let's start by creating a React app using the `create-react-app` command.
 
-```shell
+```
 npx create-react-app todo-react-app
 ```
 
 To verify navigate to the folder, start the dev server, and visit [http://localhost:3000](http://localhost:3000).
 
-```shell
+```
 cd todo-react-app
 npm start
 ```
@@ -28,7 +28,7 @@ Refer this step in [GitHub](https://github.com/dgraph-io/graphql-sample-apps/com
 
 Now, let's install the various dependencies that we will need in the app.
 
-```shell
+```
 npm install todomvc-app-css classnames graphql-tag history react-router-dom
 ```
 
@@ -38,13 +38,13 @@ Refer this step in [GitHub](https://github.com/dgraph-io/graphql-sample-apps/com
 
 Let's start with installing the Apollo dependencies and then create a setup.
 
-```shell
+```
 npm install @apollo/react-hooks apollo-cache-inmemory apollo-client apollo-link-http graphql apollo-link-context
 ```
 
 Now, let's update our `src/App.js` with the below content to include the Apollo client setup.
 
-```jsm
+```javascript
 import React from "react"
 
 import ApolloClient from "apollo-client"
@@ -97,7 +97,7 @@ Now, let's add some queries and mutations.
 
 First, let's see how we can add a todo and get todos. Create a file `src/GraphQLData.js` and add the following.
 
-```jsm
+```javascript
 import gql from "graphql-tag";
 
 export const ADD_TODO = gql`
@@ -126,14 +126,14 @@ Refer to the complete set of queries and mutations [here](https://github.com/dgr
 Now, let's see how to use that to add a todo.
 Let's import the dependencies first in `src/TodoApp.js`
 
-```jsm
+```javascript
 import { useQuery, useMutation } from "@apollo/react-hooks"
 import { GET_TODOS, ADD_TODO } from "./GraphQLData"
 ```
 
 Let's now create the functions to add a todo and get todos.
 
-```jsm
+```javascript
 const TodoApp = () => {
 
 ...
@@ -190,7 +190,7 @@ Check the commit [here](https://github.com/dgraph-io/graphql-sample-apps/commit/
 
 Let's also add definitions for getting a user and adding it to `src/GraphQLData.js`.
 
-```jsm
+```javascript
 import gql from "graphql-tag";
 
 export const GET_USER = gql`
@@ -222,7 +222,7 @@ Check the updated file [here](https://github.com/dgraph-io/graphql-sample-apps/b
 
 Now, let's also add functions for these in `src/TodoApp.js`.
 
-```jsm
+```javascript
 ...
 import { GET_USER, GET_TODOS, ADD_USER, ADD_TODO, DELETE_TODO, TOGGLE_TODO, UPDATE_TODO, CLEAR_COMPLETED_TODO, TOGGLE_ALL_TODO } from "./GraphQLData";
 import { useAuth0 } from "./react-auth0-spa";
@@ -282,7 +282,7 @@ Check all the changes for the file [here](https://github.com/dgraph-io/graphql-s
 
 Let's create a short profile page to display user details. Add files `src/Profile.js` and `src/Profile.css`.
 
-```jsm
+```javascript
 import React from "react";
 import { useAuth0 } from "./react-auth0-spa";
 import './Profile.css';
@@ -323,7 +323,7 @@ Refer this step in [GitHub](https://github.com/dgraph-io/graphql-sample-apps/com
 
 Let's now start the app.
 
-```shell
+```
 npm start
 ```
 

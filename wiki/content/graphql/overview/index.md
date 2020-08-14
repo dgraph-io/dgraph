@@ -12,13 +12,13 @@ title = "Overview"
 
 Designed from the ground up to be run in production, Dgraph is the native GraphQL database with a graph backend. It is open-source, scalable, distributed, highly available and lightning fast.
 
-* These docs tell you all the details.  If you are looking for a walk through tutorial, then head over to our [tutorials section](/graphql/todo-tutorial/todo-overview).
+* These docs tell you all the details.  If you are looking for a walk through tutorial, then head over to our [tutorials section](/graphql/todo-app-tutorial/todo-overview).
 
 Dgraph gives you GraphQL.  You're always working with GraphQL, not a translation layer.  When you build an app with Dgraph, Dgraph is your GraphQL database.
 
 ## Exploring the docs
 
-* How it Works - Once you've got yourself started with [tutorials](/graphql/todo-tutorial/todo-overview), you might need to review [how it works](/graphql/how-dgraph-graphql-works) and [App Architecture with Dgraph](/graphql/app-architecture) to help guide you in designing you app with Dgraph.
+* How it Works - Once you've got yourself started with [tutorials](/graphql/todo-app-tutorial/todo-overview), you might need to review [how it works](/graphql/how-dgraph-graphql-works).
 * [Schema](/graphql/schema/schema-overview) - You'll need the schema reference to find out about all the options of what can be in your schema.
 * [The API](/graphql/api/api-overview) - The API section tells you about how the GraphQL API is served and how you can access it.
 * [Queries](/graphql/queries/queries-overview) - Everything you need to know about writing GraphQL queries.

@@ -41,7 +41,7 @@ It is possible to import data into a Slash GraphQL backend using [live loader](h
 2. Find the gRPC endpoint for your cluster, as described in the [advanced queries](/slash-graphql/advanced-queries) section. This will look like frozen-mango-42.grpc.us-west-1.aws.cloud.dgraph.io:443
 3. Run the live loader as follows. Do note that running this via docker requires you to use an unreleased tag (either master or v20.07-slash)
 
-```shell
+```
 docker run -it --rm -v /path/to/g01.json.gz:/tmp/g01.json.gz dgraph/dgraph:v20.07-slash \
   dgraph live --slash_grpc_endpoint=<grpc-endpoint>:443 -f /tmp/g01.json.gz -t <api-token>
 ```

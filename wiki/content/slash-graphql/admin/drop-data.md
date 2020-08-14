@@ -17,7 +17,7 @@ Please note that this endpoint requires [Authentication](../authentication).
 
 Please see the following curl as an example.
 
-```shell
+```
 curl 'https://<your-backend>/admin/slash' \
   -H 'X-Auth-Token: <your-token>' \
   -H 'Content-Type: application/graphql' \
@@ -26,7 +26,7 @@ curl 'https://<your-backend>/admin/slash' \
 
 If you would like to drop the schema along with the data, then you can set the `allDataAndSchema` flag.
 
-```shell
+```
 curl 'https://<your-backend>/admin/slash' \
   -H 'X-Auth-Token: <your-token>' \
   -H 'Content-Type: application/graphql' \

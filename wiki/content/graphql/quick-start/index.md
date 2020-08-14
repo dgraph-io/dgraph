@@ -43,7 +43,7 @@ With Dgraph you can turn that schema into a running GraphQL API in just two step
 
 It's a one-liner to bring up Dgraph with GraphQL.  *Note: The Dgraph standalone image is great for quick start and exploring, but it's not meant for production use.  Once you want to build an App or persist your data for restarts, you'll need to review the   [admin docs](../admin).*
 
-```bash
+```
 docker run -it -p 8080:8080 dgraph/standalone:master
 ```
 
@@ -55,7 +55,7 @@ Dgraph will run your GraphQL API at `/graphql` and an admin interface at `/admin
 
 Take the schema above, cut-and-paste it into a file called `schema.graphql` and run the following curl command.
 
-```bash
+```
 curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
 ```
 

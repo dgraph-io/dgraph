@@ -15,7 +15,7 @@ So we can use something known as "Rules" (left sidebar on dashboard page) to add
 ![Rule](/images/graphql/tutorial/todo/rule.png)
 
 Replace the content with the the following -
-```jsm
+```javascript
 function (user, context, callback) {
   const namespace = "https://dgraph.io/jwt/claims";
   context.idToken[namespace] =
@@ -35,7 +35,7 @@ Now let's go to `Settings` of our Auth0 application and then go down to view the
 
 Now let's run a command to get the public key from it, which we will add to our schema. Just change the `file_name` and run the command.
 
-```shell
+```
 openssl x509 -pubkey -noout -in file_name.pem
 ```
 
@@ -71,13 +71,13 @@ type User {
 ```
 
 Resubmit the updated schema -
-```shell
+```
 curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
 ```
 
 Let's get that token and see what all it contains, then update the frontend accordingly. For doing this, let's start our app again.
 
-```shell
+```
 npm start
 ```
 
@@ -121,7 +121,7 @@ To do this, we need to update the Apollo client setup to include the header whil
 
 The value we want is in the field `idToken` from Auth0. We get that by quickly updating `react-auth0-spa.js` to get `idToken` and pass it as a prop to our `App`.
 
-```jsm
+```javascript
 ...
 
 const [popupOpen, setPopupOpen] = useState(false);
@@ -157,7 +157,7 @@ Check the updated file [here](https://github.com/dgraph-io/graphql-sample-apps/b
 
  Now let's use that token while creating an Apollo client instance and give it to a header `X-Auth0-Token` in our case.  Let's update our `src/App.js` file.
 
-```jsm
+```javascript
 ...
 
 import { useAuth0 } from "./react-auth0-spa";
@@ -207,7 +207,7 @@ Refer this step in [GitHub](https://github.com/dgraph-io/graphql-sample-apps/com
 
 Let's now start the app.
 
-```shell
+```
 npm start
 ```
 
