@@ -1326,6 +1326,30 @@
       }
     }
 
+- name: "Update mutation error on @id field for empty value"
+  gqlmutation: |
+    mutation updateCountry($patch: UpdateCountryInput!) {
+      updateCountry(input: $patch) {
+        country {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "patch": {
+        "filter": {
+          "id": ["0x123"]
+        },
+        "set": {
+          "states": [ { "code": "", "name": "Alphabet" } ]
+        }
+      }
+    }
+  explanation: "The update mutation should not be allowed since value of @id field is empty."
+  error:
+    { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }
+
 - name: "Additional Deletes - Update references existing node by XID (updt single edge)"
   gqlmutation: |
     mutation updateComputerOwner($patch: UpdateComputerOwnerInput!) {
