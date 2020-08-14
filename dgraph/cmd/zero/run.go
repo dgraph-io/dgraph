@@ -80,7 +80,7 @@ instances to achieve high-availability.
 		"addr:port of this server, so other Dgraph alphas can talk to this.")
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
-	flag.Uint64("idx", 1, "Unique node index for this server.")
+	flag.Uint64("idx", 1, "Unique node index for this server. idx cannot be 0.")
 	flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
@@ -168,6 +168,10 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
+	}
+
+	if opts.nodeId == 0 {
+		log.Fatalf("ERROR: Cannot idx flag cannot be 0. Please try again with idx as a positive integer")
 	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
