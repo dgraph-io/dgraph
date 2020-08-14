@@ -95,7 +95,7 @@ type FinalityMessage interface {
 
 // ConsensusMessageHandler is the interface a consensus message handler must implement
 type ConsensusMessageHandler interface {
-	HandleMessage(*network.ConsensusMessage) error
+	HandleMessage(*network.ConsensusMessage) (*network.ConsensusMessage, error)
 }
 
 // BlockProducer is the interface that a block production service must implement

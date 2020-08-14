@@ -37,25 +37,15 @@ func NewMessageHandler(grandpa *Service, blockState BlockState) *MessageHandler 
 // HandleMessage handles a GRANDPA consensus message
 // if it is a FinalizationMessage, it updates the BlockState
 // if it is a VoteMessage, it sends it to the GRANDPA service
-func (h *MessageHandler) HandleMessage(msg *ConsensusMessage) error {
+func (h *MessageHandler) HandleMessage(msg *ConsensusMessage) (*ConsensusMessage, error) {
 	m, err := decodeMessage(msg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	fm, ok := m.(*FinalizationMessage)
 	if ok {
-		// set finalized head for round in db
-		err = h.blockState.SetFinalizedHash(fm.Vote.hash, fm.Round, h.grandpa.state.setID)
-		if err != nil {
-			return err
-		}
-
-		// set latest finalized head in db
-		err = h.blockState.SetFinalizedHash(fm.Vote.hash, 0, 0)
-		if err != nil {
-			return err
-		}
+		return h.handleFinalizationMessage(fm)
 	}
 
 	vm, ok := m.(*VoteMessage)
@@ -64,7 +54,31 @@ func (h *MessageHandler) HandleMessage(msg *ConsensusMessage) error {
 		h.grandpa.in <- vm
 	}
 
-	return nil
+	return nil, nil
+}
+
+func (h *MessageHandler) handleFinalizationMessage(msg *FinalizationMessage) (*ConsensusMessage, error) {
+	// check if msg has same setID but is 2 or more rounds ahead of us, if so, return catch-up request to send
+	if msg.Round > h.grandpa.state.round+1 { // TODO: FinalizationMessage does not have setID, confirm this is correct
+		req := newCatchUpRequest(msg.Round, h.grandpa.state.setID)
+		return req.ToConsensusMessage()
+	}
+
+	// TODO: check justification here
+
+	// set finalized head for round in db
+	err := h.blockState.SetFinalizedHash(msg.Vote.hash, msg.Round, h.grandpa.state.setID)
+	if err != nil {
+		return nil, err
+	}
+
+	// set latest finalized head in db
+	err = h.blockState.SetFinalizedHash(msg.Vote.hash, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 // decodeMessage decodes a network-level consensus message into a GRANDPA VoteMessage or FinalizationMessage

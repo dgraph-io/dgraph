@@ -115,8 +115,9 @@ func TestMessageHandler_VoteMessage(t *testing.T) {
 	require.NoError(t, err)
 
 	h := NewMessageHandler(gs, st.Block)
-	err = h.HandleMessage(cm)
+	out, err := h.HandleMessage(cm)
 	require.NoError(t, err)
+	require.Nil(t, out)
 
 	select {
 	case vote := <-gs.in:
@@ -126,7 +127,51 @@ func TestMessageHandler_VoteMessage(t *testing.T) {
 	}
 }
 
-func TestMessageHandler_FinalizationMessage(t *testing.T) {
+func TestMessageHandler_FinalizationMessage_NoCatchUpRequest(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	cfg := &Config{
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	gs.state.round = 77
+
+	gs.justification[77] = []*Justification{
+		{
+			Vote:        testVote,
+			Signature:   testSignature,
+			AuthorityID: gs.publicKeyBytes(),
+		},
+	}
+
+	fm := gs.newFinalizationMessage(gs.head, 77)
+	cm, err := fm.ToConsensusMessage()
+	require.NoError(t, err)
+
+	h := NewMessageHandler(gs, st.Block)
+	out, err := h.HandleMessage(cm)
+	require.NoError(t, err)
+	require.Nil(t, out)
+
+	hash, err := st.Block.GetFinalizedHash(0, 0)
+	require.NoError(t, err)
+	require.Equal(t, fm.Vote.hash, hash)
+
+	hash, err = st.Block.GetFinalizedHash(fm.Round, gs.state.setID)
+	require.NoError(t, err)
+	require.Equal(t, fm.Vote.hash, hash)
+}
+
+func TestMessageHandler_FinalizationMessage_WithCatchUpRequest(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
 	kr, err := keystore.NewEd25519Keyring()
@@ -155,14 +200,12 @@ func TestMessageHandler_FinalizationMessage(t *testing.T) {
 	require.NoError(t, err)
 
 	h := NewMessageHandler(gs, st.Block)
-	err = h.HandleMessage(cm)
+	out, err := h.HandleMessage(cm)
 	require.NoError(t, err)
+	require.NotNil(t, out)
 
-	hash, err := st.Block.GetFinalizedHash(0, 0)
+	req := newCatchUpRequest(77, gs.state.setID)
+	expected, err := req.ToConsensusMessage()
 	require.NoError(t, err)
-	require.Equal(t, fm.Vote.hash, hash)
-
-	hash, err = st.Block.GetFinalizedHash(fm.Round, gs.state.setID)
-	require.NoError(t, err)
-	require.Equal(t, fm.Vote.hash, hash)
+	require.Equal(t, expected, out)
 }

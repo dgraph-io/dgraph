@@ -37,7 +37,7 @@ var (
 	voteType            byte = 0
 	precommitType       byte = 1
 	finalizationType    byte = 2
-	catchUpRequestType  byte = 3 //nolint
+	catchUpRequestType  byte = 3
 	catchUpResponseType byte = 4 //nolint
 )
 
@@ -119,11 +119,24 @@ type catchUpRequest struct { //nolint
 	SetID uint64
 }
 
-func newCatchUpRequest(round, setID uint64) *catchUpRequest { //nolint
+func newCatchUpRequest(round, setID uint64) *catchUpRequest {
 	return &catchUpRequest{
 		Round: round,
 		SetID: setID,
 	}
+}
+
+// ToConsensusMessage converts the catchUpRequest into a network-level consensus message
+func (r *catchUpRequest) ToConsensusMessage() (*ConsensusMessage, error) {
+	enc, err := scale.Encode(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ConsensusMessage{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              append([]byte{catchUpRequestType}, enc...),
+	}, nil
 }
 
 type catchUpResponse struct {
