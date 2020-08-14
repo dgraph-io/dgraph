@@ -9,7 +9,7 @@ title = "Encryption at Rest"
 {{% notice "note" %}}
 This feature was introduced in [v1.1.1](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.1).
 For migrating unencrypted data to a new Dgraph cluster with encryption enabled, you need to
-[export the database](https://dgraph.io/docs/deploy/#exporting-database) and [fast data load](https://dgraph.io/docs/deploy/#fast-data-loading),
+[export the database](https://dgraph.io/docs/deploy/dgraph-administration/#exporting-database) and [fast data load](https://dgraph.io/docs/deploy/#fast-data-loading),
 preferably using the [bulk loader](https://dgraph.io/docs/deploy/#bulk-loader).
 {{% /notice %}}
 
@@ -101,4 +101,3 @@ badger rotate --dir w --old-key-path enc_key_file --new-key-path new_enc_key_fil
 ```
 
 Then, you can start Alpha with the `new_enc_key_file` key file to use the new key.
-
