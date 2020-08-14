@@ -164,7 +164,7 @@ var (
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 	// Nilbyte is a nil byte slice. Used
 	Nilbyte []byte
-	// AcceptedOrigins is allowed list of origins to make request.
+	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
 )
 
@@ -172,8 +172,8 @@ func init() {
 	AcceptedOrigins.Store(map[string]struct{}{})
 }
 
-// UpdateCors updates the cors allowlist with the given origins.
-func UpdateCors(origins []string) {
+// UpdateCorsOrigins updates the cors allowlist with the given origins.
+func UpdateCorsOrigins(origins []string) {
 	if len(origins) == 1 && origins[0] == "*" {
 		AcceptedOrigins.Store(map[string]struct{}{})
 		return
@@ -335,12 +335,6 @@ func SetHttpStatus(w http.ResponseWriter, code int, msg string) {
 
 // AddCorsHeaders adds the CORS headers to an HTTP response.
 func AddCorsHeaders(w http.ResponseWriter) {
-	// origins := AcceptedOrigins.Load().(map[string]struct{})
-	// if len(origins) == 0 {
-	// 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	// } else {
-	// 	// check the origin and add.
-	// }
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", AccessControlAllowedHeaders)

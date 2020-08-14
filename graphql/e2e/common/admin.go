@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
@@ -716,6 +717,32 @@ func testCors(t *testing.T) {
               ]
             }
           }`, string(gqlResponse.Data))
+	})
+
+	t.Run("testing cors for success", func(t *testing.T) {
+		client := &http.Client{}
+		req, err := http.NewRequest("GET", graphqlAdminTestURL, nil)
+		require.NoError(t, err)
+		req.Header.Add("Origin", "google.com")
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Origin"), "google.com")
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "POST, OPTIONS")
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Headers"), x.AccessControlAllowedHeaders)
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "true")
+	})
+
+	t.Run("testing cors for failure", func(t *testing.T) {
+		client := &http.Client{}
+		req, err := http.NewRequest("GET", graphqlAdminTestURL, nil)
+		require.NoError(t, err)
+		req.Header.Add("Origin", "googl.com")
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Origin"), "")
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "")
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Headers"), "")
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "")
 	})
 
 	t.Run("mutating empty cors", func(t *testing.T) {

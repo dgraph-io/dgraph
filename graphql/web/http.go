@@ -20,10 +20,11 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"github.com/dgrijalva/jwt-go/v4"
-	"google.golang.org/grpc/metadata"
 	"strconv"
 	"time"
+
+	"github.com/dgrijalva/jwt-go/v4"
+	"google.golang.org/grpc/metadata"
 
 	"io"
 	"io/ioutil"
@@ -295,7 +296,7 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 
 func commonHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		x.AddCorsHeaders(w)
+		addCorsHeaders(r.Header.Get("Origin"), w)
 		// Overwrite the allowed headers after also including headers which are part of
 		// forwardHeaders.
 		w.Header().Set("Access-Control-Allow-Headers", schema.AllowedHeaders())
@@ -317,4 +318,27 @@ func recoveryHandler(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// addCorsHeader checks the given origin is in allowlist or not. If it's in
+// allow list we'll let them access /graphql endpoint.
+func addCorsHeaders(origin string, w http.ResponseWriter) {
+	allowList := x.AcceptedOrigins.Load().(map[string]struct{})
+	_, ok := allowList[origin]
+	// Given origin is not in the allow list so let's not
+	// add any cors headers.
+	if !ok && len(allowList) != 0 {
+		return
+	} else if ok && len(allowList) != 0 {
+		// Let's set the respective origin address in the allow origin.
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	} else if len(allowList) == 0 {
+		// Since there is no allowlist to restrict we'll allow everyone
+		// to access.
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	}
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", x.AccessControlAllowedHeaders)
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Connection", "close")
 }
