@@ -2213,3 +2213,49 @@
         uid
       }
     }
+
+-
+  name: "Add mutation error on @id field for empty value"
+  gqlmutation: |
+    mutation addState($input: AddStateInput!) {
+      addState(input: [$input]) {
+        state {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "code": "",
+        "name": "NSW",
+        "country": { "id": "0x12" }
+      }
+    }
+  explanation: "The add mutation should not be allowed since value of @id field is empty."
+  error:
+    { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }
+
+-
+  name: "Add mutation error on @id field for empty value (Nested)"
+  gqlmutation: |
+    mutation addCountry($input: AddCountryInput!) {
+      addCountry(input: [$input]) {
+        country {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "name": "Dgraph Land",
+        "states": [ {
+          "code": "",
+          "name": "Dgraph"
+        } ]
+      }
+    }
+  explanation: "The add mutation should not be allowed since value of @id field is empty."
+  error:
+    { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }
