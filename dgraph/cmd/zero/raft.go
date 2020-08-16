@@ -51,12 +51,16 @@ type node struct {
 	lastQuorum time.Time
 }
 
-func (n *node) AmLeader() bool {
+func (n *node) amLeader() bool {
 	if n.Raft() == nil {
 		return false
 	}
 	r := n.Raft()
-	if r.Status().Lead != r.Status().ID {
+	return r.Status().Lead == r.Status().ID
+}
+
+func (n *node) AmLeader() bool {
+	if !n.amLeader() {
 		return false
 	}
 
@@ -630,7 +634,12 @@ func (n *node) checkQuorum(closer *y.Closer) {
 	for {
 		select {
 		case <-ticker.C:
-			quorum()
+			if n.amLeader() {
+				glog.V(2).Infof("RaftComm: [%#x] I'm the leader. Checking quorum", n.Id)
+				quorum()
+			} else {
+				glog.V(2).Infof("RaftComm: [%#x] I'm not the leader. Skipping quorum", n.Id)
+			}
 		case <-closer.HasBeenClosed():
 			return
 		}
