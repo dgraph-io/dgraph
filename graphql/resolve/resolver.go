@@ -1477,8 +1477,8 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case float64:
 			// The spec says that we can coerce a Float value to Int, if we don't lose information.
 			// See: https: //spec.graphql.org/June2018/#sec-Float
-			// Lets try to see if this is a whole number which could be converted to int32 without
-			// losing information, otherwise return error.
+			// Lets try to see if this number could be converted to int32 without losing
+			// information, otherwise return error.
 			// See: https://github.com/golang/go/issues/19405 to understand why the comparison
 			// should be done after double conversion.
 			i32Val := int32(v)
@@ -1500,8 +1500,8 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
-			// Lets try to see if this is a whole number which could be converted to int32 without
-			// losing information, otherwise return error.
+			// Lets try to see if this number could be converted to int32 without losing
+			// information, otherwise return error.
 			i32Val := int32(i)
 			if i == float64(i32Val) {
 				val = i32Val
@@ -1552,8 +1552,8 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
-			// Lets try to see if this is a whole number which could be converted to int64 without
-			// losing information, otherwise return error.
+			// Lets try to see if this number could be converted to int64 without losing
+			// information, otherwise return error.
 			i64Val := int64(i)
 			if i == float64(i64Val) {
 				val = i64Val
