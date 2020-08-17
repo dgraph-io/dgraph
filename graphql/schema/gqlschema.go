@@ -710,7 +710,6 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
 		}
 		filter.EnumValues = append(filter.EnumValues,
 			&ast.EnumValueDefinition{Name: fld.Name})
-
 	}
 
 	// Interfaces could have just ID field but Types cannot for eg:
@@ -840,7 +839,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	// Has filter makes sense only if there is atleast one non ID field in the defn
-	if len(getNonIDFields(schema, defn)) > 0 {
+	if len(getFieldsWithoutIDType(schema, defn)) > 0 {
 		filter.Fields = append(filter.Fields,
 			&ast.FieldDefinition{Name: "has", Type: &ast.Type{NamedType: defn.Name + "HasFilter"}},
 		)
