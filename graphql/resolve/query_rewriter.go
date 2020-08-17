@@ -1035,7 +1035,6 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// isPublished: true -> eq(Post.isPublished, true)
 				// OR an enum case
 				// postType: Question -> eq(Post.postType, "Question")
-
 				switch field {
 				case "has":
 					ands = append(ands, &gql.FilterTree{
