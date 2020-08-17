@@ -139,6 +139,11 @@ type AddAtypePayload {
 # Generated Enums
 #######################
 
+enum AtypeHasFilter {
+	iamDeprecated
+	soAmI
+}
+
 enum AtypeOrderable {
 	iamDeprecated
 	soAmI
@@ -151,6 +156,13 @@ enum AtypeOrderable {
 input AddAtypeInput {
 	iamDeprecated: String
 	soAmI: String!
+}
+
+input AtypeFilter {
+	has: AtypeHasFilter
+	and: AtypeFilter
+	or: AtypeFilter
+	not: AtypeFilter
 }
 
 input AtypeOrder {

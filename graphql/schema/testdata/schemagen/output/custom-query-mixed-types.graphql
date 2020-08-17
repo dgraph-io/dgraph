@@ -155,6 +155,10 @@ type UpdateCarPayload {
 # Generated Enums
 #######################
 
+enum CarHasFilter {
+	name
+}
+
 enum CarOrderable {
 	name
 }
@@ -169,6 +173,9 @@ input AddCarInput {
 
 input CarFilter {
 	id: [ID!]
+	has: CarHasFilter
+	and: CarFilter
+	or: CarFilter
 	not: CarFilter
 }
 

@@ -170,10 +170,24 @@ type UpdateBookPayload {
 # Generated Enums
 #######################
 
+enum BookHasFilter {
+	refID
+	title
+	author
+}
+
 enum BookOrderable {
 	refID
 	title
 	author
+}
+
+enum LibraryHasFilter {
+	items
+}
+
+enum LibraryItemHasFilter {
+	refID
 }
 
 enum LibraryItemOrderable {
@@ -196,6 +210,7 @@ input AddLibraryInput {
 
 input BookFilter {
 	refID: StringHashFilter
+	has: BookHasFilter
 	and: BookFilter
 	or: BookFilter
 	not: BookFilter
@@ -216,6 +231,13 @@ input BookRef {
 	refID: String
 	title: String
 	author: String
+}
+
+input LibraryFilter {
+	has: LibraryHasFilter
+	and: LibraryFilter
+	or: LibraryFilter
+	not: LibraryFilter
 }
 
 input LibraryItemFilter {
