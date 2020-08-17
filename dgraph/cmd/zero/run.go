@@ -186,7 +186,7 @@ func run() {
 	}
 
 	if opts.nodeId == 0 {
-		log.Fatalf("ERROR: Cannot idx flag cannot be 0. Please try again with idx as a positive integer")
+		log.Fatalf("ERROR: idx flag cannot be 0. Please try again with idx as a positive integer")
 	}
 
 	x.WorkerConfig = x.WorkerOptions{
