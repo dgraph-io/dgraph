@@ -529,9 +529,6 @@ func (l *List) getMutation(startTs uint64) []byte {
 	l.RLock()
 	defer l.RUnlock()
 	if pl, ok := l.mutationMap[startTs]; ok {
-		for _, p := range pl.GetPostings() {
-			p.StartTs = 0
-		}
 		data, err := pl.Marshal()
 		x.Check(err)
 		return data
@@ -599,7 +596,6 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 					deleteBelowTs = effectiveTs
 					continue
 				}
-				mpost.StartTs = startTs
 				posts = append(posts, mpost)
 			}
 		}

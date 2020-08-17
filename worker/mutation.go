@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	ostats "go.opencensus.io/stats"
+
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
@@ -783,6 +785,7 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	span.Annotate(attributes, "")
 
 	if tctx.Aborted || tctx.CommitTs == 0 {
+		ostats.Record(context.Background(), x.TxnAborts.M(1))
 		return 0, dgo.ErrAborted
 	}
 	return tctx.CommitTs, nil

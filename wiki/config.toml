@@ -1,17 +1,25 @@
+canonifyURLs = true
 languageCode = "en-us"
 theme = "hugo-docs"
-canonifyURLs = true
 
 [markup.goldmark.renderer]
 unsafe = true
 
 [markup.highlight]
-noClasses = false
+codeFences = true
+guessSyntax = false
+hl_Lines = ""
+lineNoStart = 1
+lineNos = false
+lineNumbersInTable = true
+noClasses = true
+style = "vs"
+tabWidth = 4
 
 [markup.tableOfContents]
-  endLevel = 3
-  ordered = false
-  startLevel = 2
+endLevel = 3
+ordered = false
+startLevel = 2
 
 # set by build script: title, baseurl
 title = "Dgraph Documentation"

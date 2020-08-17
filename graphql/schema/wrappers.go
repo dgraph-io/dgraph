@@ -185,6 +185,7 @@ type FieldDefinition interface {
 	Name() string
 	Type() Type
 	IsID() bool
+	HasIDDirective() bool
 	Inverse() FieldDefinition
 	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
 	ForwardEdge() FieldDefinition
@@ -1364,6 +1365,13 @@ func (fd *fieldDefinition) Name() string {
 
 func (fd *fieldDefinition) IsID() bool {
 	return isID(fd.fieldDef)
+}
+
+func (fd *fieldDefinition) HasIDDirective() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	return hasIDDirective(fd.fieldDef)
 }
 
 func hasIDDirective(fd *ast.FieldDefinition) bool {
