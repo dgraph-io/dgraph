@@ -67,7 +67,7 @@ func TestRestartNode(t *testing.T) {
 	err = utils.StartNodes(t, nodes)
 	require.NoError(t, err)
 
-	errList := utils.StopNodes(t, nodes)
+	errList := utils.TearDown(t, nodes)
 	require.Len(t, errList, 0)
 
 	err = utils.StartNodes(t, nodes)

@@ -45,7 +45,9 @@ func main() {
 	}
 	switch os.Args[1] {
 	case "install":
-		install()
+		install(false)
+	case "install-debug":
+		install(true)
 	case "lint":
 		lint()
 	case "test":
@@ -55,8 +57,7 @@ func main() {
 	}
 }
 
-func install() {
-
+func install(debug bool) {
 	argsList := append([]string{"list"}, []string{"./..."}...)
 
 	cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), argsList...)
@@ -74,6 +75,9 @@ func install() {
 	argsInstall := append([]string{"install"})
 	cmd = exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), argsInstall...)
 	cmd.Args = append(cmd.Args, "-v")
+	if debug {
+		cmd.Args = append(cmd.Args, "-gcflags=\"all=-N -l\"")
+	}
 	cmd.Args = append(cmd.Args, packages...)
 
 	fmt.Println("Build Gossamer", strings.Join(cmd.Args, " \\\n"))

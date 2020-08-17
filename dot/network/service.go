@@ -42,8 +42,10 @@ var logger = log.New("pkg", "network")
 
 // Service describes a network service
 type Service struct {
-	logger         log.Logger
-	ctx            context.Context
+	logger log.Logger
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	cfg            *Config
 	host           *host
 	mdns           *mdns
@@ -62,7 +64,6 @@ type Service struct {
 	msgRec  <-chan Message
 	msgSend chan<- Message
 	lock    sync.Mutex
-	closed  bool
 
 	// Configuration options
 	noBootstrap bool
@@ -73,7 +74,7 @@ type Service struct {
 
 // NewService creates a new network service from the configuration and message channels
 func NewService(cfg *Config) (*Service, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background()) //nolint
 
 	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
 	h = log.CallerFileHandler(h)
@@ -83,7 +84,7 @@ func NewService(cfg *Config) (*Service, error) {
 	// build configuration
 	err := cfg.build()
 	if err != nil {
-		return nil, err
+		return nil, err //nolint
 	}
 
 	if cfg.MsgRec == nil {
@@ -107,6 +108,7 @@ func NewService(cfg *Config) (*Service, error) {
 	network := &Service{
 		logger:         logger,
 		ctx:            ctx,
+		cancel:         cancel,
 		cfg:            cfg,
 		host:           host,
 		mdns:           newMDNS(host),
@@ -117,7 +119,6 @@ func NewService(cfg *Config) (*Service, error) {
 		networkState:   cfg.NetworkState,
 		msgRec:         cfg.MsgRec,
 		msgSend:        cfg.MsgSend,
-		closed:         false,
 		noBootstrap:    cfg.NoBootstrap,
 		noMDNS:         cfg.NoMDNS,
 		noStatus:       cfg.NoStatus,
@@ -130,6 +131,10 @@ func NewService(cfg *Config) (*Service, error) {
 
 // Start starts the network service
 func (s *Service) Start() error {
+	if s.IsStopped() {
+		s.ctx, s.cancel = context.WithCancel(context.Background())
+	}
+
 	// update network state
 	go s.updateNetworkState()
 
@@ -156,7 +161,6 @@ func (s *Service) Start() error {
 		s.mdns.start()
 	}
 
-	s.closed = false
 	return nil
 }
 
@@ -164,6 +168,15 @@ func (s *Service) Start() error {
 // the message channel from the network service to the core service (services that
 // are dependent on the host instance should be closed first)
 func (s *Service) Stop() error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	// close channel to core service
+	if s.msgSend != nil && !s.IsStopped() {
+		close(s.msgSend)
+	}
+
+	s.cancel()
 
 	// close mDNS discovery service
 	err := s.mdns.close()
@@ -177,66 +190,56 @@ func (s *Service) Stop() error {
 		s.logger.Error("Failed to close host", "error", err)
 	}
 
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	// close channel to core service
-	if !s.closed {
-		if s.msgSend != nil {
-			close(s.msgSend)
-		}
-		s.closed = true
-	}
-
 	return nil
 }
 
 // IsStopped returns true if the service is stopped
 func (s *Service) IsStopped() bool {
-	return s.closed
+	return s.ctx.Err() != nil
 }
 
 // updateNetworkState updates the network state at the set time interval
 func (s *Service) updateNetworkState() {
 	for {
-		if s.closed {
+		select {
+		case <-s.ctx.Done():
 			return
+		case <-time.After(NetworkStateTimeout):
+			s.networkState.SetHealth(s.Health())
+			s.networkState.SetNetworkState(s.NetworkState())
+			s.networkState.SetPeers(s.Peers())
 		}
-
-		s.networkState.SetHealth(s.Health())
-		s.networkState.SetNetworkState(s.NetworkState())
-		s.networkState.SetPeers(s.Peers())
-
-		// how frequently we update network state
-		time.Sleep(NetworkStateTimeout)
 	}
 }
 
 // receiveCoreMessages broadcasts messages from the core service
 func (s *Service) receiveCoreMessages() {
 	for {
-		// receive message from core service
-		msg, ok := <-s.msgRec
-		if !ok || msg == nil {
-			s.logger.Warn("Received nil message from core service")
-			return // exit
+		select {
+		case msg, ok := <-s.msgRec:
+			if !ok || msg == nil {
+				s.logger.Debug("Received nil message from core service")
+				continue
+			}
+
+			s.logger.Debug(
+				"Broadcasting message from core service",
+				"host", s.host.id(),
+				"type", msg.Type(),
+			)
+
+			// broadcast message to connected peers
+			s.host.broadcast(msg)
+		case <-s.ctx.Done():
+			return
 		}
-
-		s.logger.Debug(
-			"Broadcasting message from core service",
-			"host", s.host.id(),
-			"type", msg.Type(),
-		)
-
-		// broadcast message to connected peers
-		s.host.broadcast(msg)
 	}
 }
 
 func (s *Service) safeMsgSend(msg Message) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if s.closed {
+	if s.IsStopped() {
 		return errors.New("service has been stopped")
 	}
 	s.msgSend <- msg

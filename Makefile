@@ -73,6 +73,11 @@ build:
 	@echo "  >  \033[32mBuilding binary...\033[0m "
 	GOBIN=$(PWD)/bin go run scripts/ci.go install
 
+## debug: Builds application binary with debug flags and stores it in `./bin/gossamer`
+build-debug:
+	@echo "  >  \033[32mBuilding binary...\033[0m "
+	GOBIN=$(PWD)/bin go run scripts/ci.go install-debug
+
 ## init: Initialize gossamer using the default genesis and toml configuration files
 init:
 	./bin/gossamer --key alice init --genesis chain/gssmr/genesis.json
@@ -106,6 +111,6 @@ docker-build:
 gossamer: clean
 	GOBIN=$(PWD)/bin go run scripts/ci.go install
 
-## install: install the gossamer binary in /usr/local/bin; requires sudo
+## install: install the gossamer binary in $GOPATH/bin
 install:
-	GOBIN=/usr/local/bin go run scripts/ci.go install
+	GOBIN=$(GOPATH)/bin go run scripts/ci.go install

@@ -17,10 +17,10 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"math/big"
 	"os"
 	"sync"
-	"sync/atomic"
 
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/types"
@@ -40,6 +40,8 @@ var _ services.Service = &Service{}
 // and blocks by calling their respective validation functions in the runtime.
 type Service struct {
 	logger log.Logger
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	// State interfaces
 	blockState       BlockState
@@ -74,8 +76,7 @@ type Service struct {
 	blockAddChID byte
 
 	// State variables
-	lock    *sync.Mutex
-	started atomic.Value
+	lock *sync.Mutex // channel lock
 }
 
 // Config holds the configuration for the core Service.
@@ -147,8 +148,12 @@ func NewService(cfg *Config) (*Service, error) {
 		return nil, err
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	srv := &Service{
 		logger:                  logger,
+		ctx:                     ctx,
+		cancel:                  cancel,
 		rt:                      cfg.Runtime,
 		codeHash:                codeHash,
 		keys:                    cfg.Keystore,
@@ -175,27 +180,33 @@ func NewService(cfg *Config) (*Service, error) {
 		srv.blkRec = cfg.BlockProducer.GetBlockChannel()
 	}
 
-	srv.started.Store(false)
 	return srv, nil
 }
 
 // Start starts the core service
 func (s *Service) Start() error {
-	s.started.Store(true)
+	// we can ignore the `cancel` function returned by `context.WithCancel` since Stop() cancels the parent context,
+	// so all the child contexts should also be canceled. potentially update if there is a better way to do this
 
 	// start receiving blocks from BABE session
-	go s.receiveBlocks()
+	ctx, _ := context.WithCancel(s.ctx) //nolint
+	go s.receiveBlocks(ctx)
 
 	// start receiving messages from network service
-	go s.receiveMessages()
+	ctx, _ = context.WithCancel(s.ctx) //nolint
+	go s.receiveMessages(ctx)
 
 	// start handling imported blocks
-	go s.handleBlocks()
+	ctx, _ = context.WithCancel(s.ctx) //nolint
+	go s.handleBlocks(ctx)
 
 	if s.isFinalityAuthority && s.finalityGadget != nil {
 		s.logger.Debug("routing finality gadget messages")
-		go s.sendVoteMessages()
-		go s.sendFinalizationMessages()
+		ctx, _ = context.WithCancel(s.ctx) //nolint
+		go s.sendVoteMessages(ctx)
+
+		ctx, _ = context.WithCancel(s.ctx) //nolint
+		go s.sendFinalizationMessages(ctx)
 	}
 
 	return nil
@@ -205,17 +216,14 @@ func (s *Service) Start() error {
 func (s *Service) Stop() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+	s.cancel()
+
+	s.blockState.UnregisterImportedChannel(s.blockAddChID)
+	close(s.blockAddCh)
 
 	// close channel to network service
-	if s.started.Load().(bool) {
-		s.blockState.UnregisterImportedChannel(s.blockAddChID)
-		close(s.blockAddCh)
-
-		if s.msgSend != nil {
-			close(s.msgSend)
-		}
-
-		s.started.Store(false)
+	if s.msgSend != nil {
+		close(s.msgSend)
 	}
 
 	return nil
@@ -229,54 +237,70 @@ func (s *Service) StorageRoot() (common.Hash, error) {
 	return s.storageState.StorageRoot()
 }
 
-func (s *Service) safeMsgSend(msg network.Message) error {
+func (s *Service) safeMsgSend(msg network.Message) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if !s.started.Load().(bool) {
-		return ErrServiceStopped
+	if s.ctx.Err() != nil {
+		// context was canceled
+		return
 	}
 
 	s.msgSend <- msg
-	return nil
 }
 
-func (s *Service) handleBlocks() {
-	for block := range s.blockAddCh {
-		err := s.handleRuntimeChanges(block.Header)
-		if err != nil {
-			log.Warn("failed to handle runtime change for block", "block", block.Header.Hash())
+func (s *Service) handleBlocks(ctx context.Context) {
+	for {
+		select {
+		case block := <-s.blockAddCh:
+			if block == nil {
+				continue
+			}
+
+			err := s.handleRuntimeChanges(block.Header)
+			if err != nil {
+				log.Warn("failed to handle runtime change for block", "block", block.Header.Hash())
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
 
 // receiveBlocks starts receiving blocks from the BABE session
-func (s *Service) receiveBlocks() {
-	// receive block from BABE session
-	for block := range s.blkRec {
-		if block.Header != nil {
+func (s *Service) receiveBlocks(ctx context.Context) {
+	for {
+		select {
+		case block := <-s.blkRec:
+			if block.Header == nil {
+				continue
+			}
+
 			err := s.handleReceivedBlock(&block)
 			if err != nil {
-				s.logger.Error("failed to handle block from BABE session", "err", err)
+				s.logger.Warn("failed to handle block from BABE session", "err", err)
 			}
-		} else {
-			s.logger.Trace("receiveBlocks got nil Header")
+		case <-ctx.Done():
+			return
 		}
 	}
 }
 
 // receiveMessages starts receiving messages from the network service
-func (s *Service) receiveMessages() {
-	// receive message from network service
-	for msg := range s.msgRec {
-		if msg == nil {
-			s.logger.Error("failed to receive message from network service")
-			continue
-		}
+func (s *Service) receiveMessages(ctx context.Context) {
+	for {
+		select {
+		case msg := <-s.msgRec:
+			if msg == nil {
+				continue
+			}
 
-		err := s.handleReceivedMessage(msg)
-		if err != nil {
-			s.logger.Trace("failed to handle message from network service", "err", err)
+			err := s.handleReceivedMessage(msg)
+			if err != nil {
+				s.logger.Trace("failed to handle message from network service", "err", err)
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
@@ -302,7 +326,8 @@ func (s *Service) handleReceivedBlock(block *types.Block) (err error) {
 		Digest:         block.Header.Digest,
 	}
 
-	return s.safeMsgSend(msg)
+	s.safeMsgSend(msg)
+	return nil
 }
 
 // handleReceivedMessage handles messages from the network service
@@ -414,7 +439,8 @@ func (s *Service) IsBlockProducer() bool {
 // HandleSubmittedExtrinsic is used to send a Transaction message containing a Extrinsic @ext
 func (s *Service) HandleSubmittedExtrinsic(ext types.Extrinsic) error {
 	msg := &network.TransactionMessage{Extrinsics: []types.Extrinsic{ext}}
-	return s.safeMsgSend(msg)
+	s.safeMsgSend(msg)
+	return nil
 }
 
 //GetMetadata calls runtime Metadata_metadata function

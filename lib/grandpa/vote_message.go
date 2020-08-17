@@ -18,6 +18,7 @@ package grandpa
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
@@ -26,36 +27,37 @@ import (
 
 // receiveMessages receives messages from the in channel until the specified condition is met
 func (s *Service) receiveMessages(cond func() bool) {
-	done := false
+	ctx, cancel := context.WithCancel(s.ctx)
 
-	go func(done *bool) {
-		for msg := range s.in {
-			if *done {
+	go func() {
+		for {
+			select {
+			case msg := <-s.in:
+				s.logger.Trace("received vote message", "msg", msg)
+
+				vm, ok := msg.(*VoteMessage)
+				if !ok {
+					s.logger.Trace("failed to cast message to VoteMessage")
+					continue
+				}
+
+				v, err := s.validateMessage(vm)
+				if err != nil {
+					s.logger.Trace("failed to validate vote message", "message", vm, "error", err)
+					continue
+				}
+
+				s.logger.Debug("validated vote message", "vote", v, "subround", vm.Stage)
+			case <-ctx.Done():
 				s.logger.Trace("returning from receiveMessages")
 				return
 			}
-
-			s.logger.Trace("received vote message", "msg", msg)
-
-			vm, ok := msg.(*VoteMessage)
-			if !ok {
-				s.logger.Trace("failed to cast message to VoteMessage")
-				continue
-			}
-
-			v, err := s.validateMessage(vm)
-			if err != nil {
-				s.logger.Trace("failed to validate vote message", "message", vm, "error", err)
-				continue
-			}
-
-			s.logger.Debug("validated vote message", "vote", v, "subround", vm.Stage)
 		}
-	}(&done)
+	}()
 
 	for {
 		if cond() {
-			done = true
+			cancel()
 			return
 		}
 	}
@@ -71,7 +73,8 @@ func (s *Service) sendMessage(vote *Vote, stage subround) error {
 	s.chanLock.Lock()
 	defer s.chanLock.Unlock()
 
-	if s.stopped {
+	// context was canceled
+	if s.ctx.Err() != nil {
 		return nil
 	}
 

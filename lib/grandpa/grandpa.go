@@ -18,6 +18,7 @@ package grandpa
 
 import (
 	"bytes"
+	"context"
 	"math/big"
 	"os"
 	"sync"
@@ -37,12 +38,13 @@ var interval = time.Second
 type Service struct {
 	// preliminaries
 	logger        log.Logger
+	ctx           context.Context
+	cancel        context.CancelFunc
 	blockState    BlockState
 	digestHandler DigestHandler
 	keypair       *ed25519.Keypair
 	mapLock       sync.Mutex
 	chanLock      sync.Mutex
-	stopped       bool
 
 	// current state information
 	state            *State                             // current state
@@ -106,9 +108,12 @@ func NewService(cfg *Config) (*Service, error) {
 	}
 
 	in := make(chan FinalityMessage, 128)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &Service{
 		logger:             logger,
+		ctx:                ctx,
+		cancel:             cancel,
 		state:              NewState(cfg.Voters, cfg.SetID, 0),
 		blockState:         cfg.BlockState,
 		digestHandler:      cfg.DigestHandler,
@@ -126,7 +131,6 @@ func NewService(cfg *Config) (*Service, error) {
 		in:                 in,
 		out:                make(chan FinalityMessage, 128),
 		finalized:          make(chan FinalityMessage, 128),
-		stopped:            true,
 	}
 
 	return s, nil
@@ -134,8 +138,6 @@ func NewService(cfg *Config) (*Service, error) {
 
 // Start begins the GRANDPA finality service
 func (s *Service) Start() error {
-	s.stopped = false
-
 	go func() {
 		err := s.initiate()
 		if err != nil {
@@ -151,7 +153,7 @@ func (s *Service) Stop() error {
 	s.chanLock.Lock()
 	defer s.chanLock.Unlock()
 
-	s.stopped = true
+	s.cancel()
 	close(s.out)
 	s.tracker.stop()
 	return nil
@@ -231,18 +233,15 @@ func (s *Service) initiate() error {
 	s.logger.Trace("[grandpa] started message tracker")
 
 	// don't begin grandpa until we are at block 1
-	for {
-		if s.stopped {
-			return nil
-		}
+	h, err := s.blockState.BestBlockHeader()
+	if err != nil {
+		return err
+	}
 
-		h, err := s.blockState.BestBlockHeader()
+	if h != nil && h.Number.Int64() == 0 {
+		err := s.waitForFirstBlock()
 		if err != nil {
-			continue
-		}
-
-		if h != nil && h.Number.Int64() > 0 {
-			break
+			return err
 		}
 	}
 
@@ -252,7 +251,7 @@ func (s *Service) initiate() error {
 			return err
 		}
 
-		if s.stopped {
+		if s.ctx.Err() != nil {
 			return nil
 		}
 
@@ -261,6 +260,36 @@ func (s *Service) initiate() error {
 			return err
 		}
 	}
+}
+
+func (s *Service) waitForFirstBlock() error {
+	ch := make(chan *types.Block)
+	id, err := s.blockState.RegisterImportedChannel(ch)
+	if err != nil {
+		return err
+	}
+
+	defer s.blockState.UnregisterImportedChannel(id)
+
+	// loop until block 1
+	for {
+		done := false
+
+		select {
+		case block := <-ch:
+			if block != nil && block.Header != nil && block.Header.Number.Int64() > 0 {
+				done = true
+			}
+		case <-s.ctx.Done():
+			return nil
+		}
+
+		if done {
+			break
+		}
+	}
+
+	return nil
 }
 
 // playGrandpaRound executes a round of GRANDPA

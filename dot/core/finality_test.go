@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -52,9 +53,8 @@ func TestSendVoteMessages(t *testing.T) {
 		MsgSend:        msgSend,
 		FinalityGadget: fg,
 	})
-	s.started.Store(true)
 
-	go s.sendVoteMessages()
+	go s.sendVoteMessages(context.Background())
 	fg.out <- &mockFinalityMessage{}
 
 	select {
@@ -78,9 +78,8 @@ func TestSendFinalizationMessages(t *testing.T) {
 		MsgSend:        msgSend,
 		FinalityGadget: fg,
 	})
-	s.started.Store(true)
 
-	go s.sendFinalizationMessages()
+	go s.sendFinalizationMessages(context.Background())
 	fg.finalized <- &mockFinalityMessage{}
 
 	select {

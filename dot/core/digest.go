@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"math/big"
 
@@ -29,6 +30,9 @@ var maxUint64 = uint64(2^64) - 1
 
 // DigestHandler is used to handle consensus messages and relevant authority updates to BABE and GRANDPA
 type DigestHandler struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	// interfaces
 	blockState          BlockState
 	grandpa             FinalityGadget
@@ -42,9 +46,6 @@ type DigestHandler struct {
 	importedID  byte
 	finalized   chan *types.Header
 	finalizedID byte
-
-	// state variables
-	stopped bool
 
 	// BABE changes
 	babeScheduledChange *babeChange
@@ -96,14 +97,17 @@ func NewDigestHandler(blockState BlockState, babe BlockProducer, grandpa Finalit
 	isFinalityAuthority := grandpa != nil
 	isBlockProducer := babe != nil
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &DigestHandler{
+		ctx:                 ctx,
+		cancel:              cancel,
 		blockState:          blockState,
 		grandpa:             grandpa,
 		babe:                babe,
 		verifier:            verifier,
 		isFinalityAuthority: isFinalityAuthority,
 		isBlockProducer:     isBlockProducer,
-		stopped:             true,
 		imported:            imported,
 		importedID:          iid,
 		finalized:           finalized,
@@ -113,14 +117,15 @@ func NewDigestHandler(blockState BlockState, babe BlockProducer, grandpa Finalit
 
 // Start starts the DigestHandler
 func (h *DigestHandler) Start() {
-	go h.handleBlockImport()
-	go h.handleBlockFinalization()
-	h.stopped = false
+	ctx, _ := context.WithCancel(h.ctx) //nolint
+	go h.handleBlockImport(ctx)
+	ctx, _ = context.WithCancel(h.ctx) //nolint
+	go h.handleBlockFinalization(ctx)
 }
 
 // Stop stops the DigestHandler
 func (h *DigestHandler) Stop() {
-	h.stopped = true
+	h.cancel()
 	h.blockState.UnregisterImportedChannel(h.importedID)
 	h.blockState.UnregisterFinalizedChannel(h.finalizedID)
 	close(h.imported)
@@ -176,36 +181,47 @@ func (h *DigestHandler) HandleConsensusDigest(d *types.ConsensusDigest) error {
 	}
 }
 
-func (h *DigestHandler) handleBlockImport() {
-	for block := range h.imported {
-		if h.stopped {
+func (h *DigestHandler) handleBlockImport(ctx context.Context) {
+	for {
+		select {
+		case block := <-h.imported:
+			if block == nil || block.Header == nil {
+				continue
+			}
+
+			if h.isFinalityAuthority {
+				h.handleGrandpaChangesOnImport(block.Header.Number)
+			}
+
+			if h.isBlockProducer {
+				h.handleBABEChangesOnImport(block.Header)
+			}
+		case <-ctx.Done():
 			return
-		}
-
-		if h.isFinalityAuthority {
-			h.handleGrandpaChangesOnImport(block.Header.Number)
-		}
-
-		if h.isBlockProducer {
-			h.handleBABEChangesOnImport(block.Header)
 		}
 	}
 }
 
-func (h *DigestHandler) handleBlockFinalization() {
-	for header := range h.finalized {
-		if h.stopped {
+func (h *DigestHandler) handleBlockFinalization(ctx context.Context) {
+	for {
+		select {
+		case header := <-h.finalized:
+			if header == nil {
+				continue
+			}
+
+			if h.isFinalityAuthority {
+				h.handleGrandpaChangesOnFinalization(header.Number)
+			}
+
+			if h.isBlockProducer {
+				h.handleBABEChangesOnFinalization(header)
+			}
+		case <-ctx.Done():
 			return
 		}
-
-		if h.isFinalityAuthority {
-			h.handleGrandpaChangesOnFinalization(header.Number)
-		}
-
-		if h.isBlockProducer {
-			h.handleBABEChangesOnFinalization(header)
-		}
 	}
+
 }
 
 func (h *DigestHandler) handleBABEChangesOnImport(header *types.Header) {

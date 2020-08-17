@@ -17,6 +17,8 @@
 package core
 
 import (
+	"context"
+
 	"github.com/ChainSafe/gossamer/dot/network"
 )
 
@@ -28,45 +30,60 @@ func (s *Service) processConsensusMessage(msg *network.ConsensusMessage) error {
 	}
 
 	if out != nil {
-		return s.safeMsgSend(out)
+		s.safeMsgSend(out)
+		return nil
 	}
 
 	return nil
 }
 
 // sendVoteMessages routes a VoteMessage from the finality gadget to the network
-func (s *Service) sendVoteMessages() {
+func (s *Service) sendVoteMessages(ctx context.Context) {
 	out := s.finalityGadget.GetVoteOutChannel()
-	for v := range out {
-		msg, err := v.ToConsensusMessage()
-		if err != nil {
-			s.logger.Error("failed to convert VoteMessage to ConsensusMessage", "msg", msg)
-			continue
-		}
 
-		s.logger.Debug("sending VoteMessage to network", "msg", msg)
-		err = s.safeMsgSend(msg)
-		if err != nil {
-			s.logger.Error("failed to send grandpa vote message to network", "error", err)
+	for {
+		select {
+		case v := <-out:
+			if v == nil {
+				continue
+			}
+
+			msg, err := v.ToConsensusMessage()
+			if err != nil {
+				s.logger.Error("failed to convert VoteMessage to ConsensusMessage", "msg", msg)
+				continue
+			}
+
+			s.logger.Debug("sending VoteMessage to network", "msg", msg)
+			s.safeMsgSend(msg)
+		case <-ctx.Done():
+			return
 		}
 	}
 }
 
 // sendFinalityMessages routes a FinalizationMessage from the finality gadget to the network
-func (s *Service) sendFinalizationMessages() {
+func (s *Service) sendFinalizationMessages(ctx context.Context) {
 	out := s.finalityGadget.GetFinalizedChannel()
-	for v := range out {
-		s.logger.Info("finalized block!!!", "msg", v)
-		msg, err := v.ToConsensusMessage()
-		if err != nil {
-			s.logger.Error("failed to convert FinalizationMessage to ConsensusMessage", "msg", msg)
-			continue
-		}
 
-		s.logger.Debug("sending FinalityMessage to network", "msg", v)
-		err = s.safeMsgSend(msg)
-		if err != nil {
-			s.logger.Error("failed to send finalization message to network", "error", err)
+	for {
+		select {
+		case v := <-out:
+			if v == nil {
+				continue
+			}
+
+			s.logger.Info("finalized block!!!", "msg", v)
+			msg, err := v.ToConsensusMessage()
+			if err != nil {
+				s.logger.Error("failed to convert FinalizationMessage to ConsensusMessage", "msg", msg)
+				continue
+			}
+
+			s.logger.Debug("sending FinalityMessage to network", "msg", v)
+			s.safeMsgSend(msg)
+		case <-ctx.Done():
+			return
 		}
 	}
 }

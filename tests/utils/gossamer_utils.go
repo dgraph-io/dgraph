@@ -131,7 +131,7 @@ func StartGossamer(t *testing.T, node *Node) error {
 			"--rpcmods", "system,author,chain,state",
 			"--roles", "1", // no key provided, non-authority node
 			"--rpc",
-			"--log", "crit",
+			"--log", "info",
 		)
 	} else {
 		key = keyList[node.Idx]
@@ -146,7 +146,7 @@ func StartGossamer(t *testing.T, node *Node) error {
 			"--rpcmods", "system,author,chain,state,dev",
 			"--roles", "4", // authority node
 			"--rpc",
-			"--log", "crit",
+			"--log", "info",
 		)
 	}
 
