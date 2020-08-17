@@ -998,7 +998,7 @@ func rewriteObject(
 
 				res := make(map[string]interface{}, 1)
 				res["uid"] = srcUID
-				addInverseLink(res, srcField.Inverse(), fmt.Sprintf("uid(%s)", variable))
+				attachChild(res, parentTyp, srcField, fmt.Sprintf("uid(%s)", variable))
 				parentFrag := newFragment(res)
 				parentFrag.conditions = append(parentFrag.conditions, xidFrag.conditions...)
 				parentFrags = append(parentFrags, parentFrag)

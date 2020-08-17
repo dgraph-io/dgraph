@@ -2271,7 +2271,7 @@
         }
       cond: "@if(eq(len(Comment16), 0) AND eq(len(Comment14), 0))"
     - setjson: |
-        {"uid":"_:Comment14"}
+        {"uid":"_:Comment14", "Comment1.replies": [{"uid": "uid(Comment16)"}]}
       cond: "@if(eq(len(Comment16), 1) AND eq(len(Comment14), 0))"
     - setjson: |
         {"uid":"_:Comment14", "Comment1.replies": [{"uid": "_:Comment16"}]}
