@@ -1938,7 +1938,8 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	},
 	{
 		"predicate": "dgraph.cors",
-		"type": "string"
+		"type": "string",
+		"list": true
 	},
     {
       "predicate": "dgraph.graphql.schema",

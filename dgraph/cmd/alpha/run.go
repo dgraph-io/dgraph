@@ -719,7 +719,7 @@ func run() {
 				glog.Errorf("Error while retriving cors origins: %s", err.Error())
 				continue
 			}
-			x.UpdateCors(origins)
+			x.UpdateCorsOrigins(origins)
 			break
 		}
 	}()
@@ -766,6 +766,6 @@ func listenForCorsUpdate(closer *y.Closer) {
 			origins[i] = string(posting.Value)
 		}
 		glog.Infof("Updating cors origins: %+v", origins)
-		x.UpdateCors(origins)
+		x.UpdateCorsOrigins(origins)
 	}, 1, closer)
 }

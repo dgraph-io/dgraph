@@ -741,7 +741,6 @@ func testCors(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, resp.Header.Get("Access-Control-Allow-Origin"), "")
 		require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "")
-		require.Equal(t, resp.Header.Get("Access-Control-Allow-Headers"), "")
 		require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "")
 	})
 

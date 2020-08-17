@@ -423,7 +423,7 @@ func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (
 	}
 
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
-	mainServer := web.NewServer(globalEpoch, resolvers)
+	mainServer := web.NewServer(globalEpoch, resolvers, false)
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
@@ -433,7 +433,7 @@ func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (
 		Ex:  resolve.NewDgraphExecutor(),
 	}
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, globalEpoch, closer)
-	adminServer := web.NewServer(globalEpoch, adminResolvers)
+	adminServer := web.NewServer(globalEpoch, adminResolvers, true)
 
 	return mainServer, adminServer, mainHealthStore
 }
