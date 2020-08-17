@@ -1166,6 +1166,13 @@ func rewriteObject(
 				//   e.g. to remove the text or
 				//   { "friends": null, ... }
 				//   to remove all friends
+
+				// Fields with `id` directive cannot have empty values.
+				if fieldDef.HasIDDirective() && val == "" {
+					errFrag := newFragment(nil)
+					errFrag.err = fmt.Errorf("encountered an empty value for @id field `%s`", fieldName)
+					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+				}
 				frags = &mutationRes{secondPass: []*mutationFragment{newFragment(val)}}
 			}
 			childrenFirstPass = appendFragments(childrenFirstPass, frags.firstPass)
