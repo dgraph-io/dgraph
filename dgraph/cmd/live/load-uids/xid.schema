@@ -1,0 +1,3 @@
+name: string .
+value: string .
+xid: string @index(hash) .
