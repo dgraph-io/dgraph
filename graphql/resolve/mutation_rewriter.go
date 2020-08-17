@@ -276,7 +276,7 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*Upse
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		frag := rewriteObject(ctx, mutatedType, nil, "", varGen, true, obj, 0, xidMd)
+		frag := rewriteObject(ctx, nil, mutatedType, nil, "", varGen, true, obj, 0, xidMd)
 		mrw.frags = append(mrw.frags, frag.secondPass)
 
 		mutationsAll = buildMutations(mutationsAll, queries, frag.firstPass)
@@ -497,7 +497,7 @@ func (urw *UpdateRewriter) Rewrite(
 	var setFragF, setFragS, delFragF, delFragS []*mutationFragment
 
 	if setArg != nil {
-		setFrag := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, true,
+		setFrag := rewriteObject(ctx, nil, mutatedType, nil, srcUID, varGen, true,
 			setArg.(map[string]interface{}), 0, xidMd)
 
 		setFragF = setFrag.firstPass
@@ -505,7 +505,7 @@ func (urw *UpdateRewriter) Rewrite(
 	}
 
 	if delArg != nil {
-		delFrag := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, false,
+		delFrag := rewriteObject(ctx, nil, mutatedType, nil, srcUID, varGen, false,
 			delArg.(map[string]interface{}), 0, xidMd)
 		delFragF = delFrag.firstPass
 		delFragS = delFrag.secondPass
@@ -907,6 +907,7 @@ type mutationRes struct {
 // to secondPass, and then to make those links ourselves.
 func rewriteObject(
 	ctx context.Context,
+	parentTyp schema.Type,
 	typ schema.Type,
 	srcField schema.FieldDefinition,
 	srcUID string,
@@ -983,16 +984,21 @@ func rewriteObject(
 
 	var parentFrags []*mutationFragment
 
-	if !atTopLevel { // top level is never a reference - it's adding/updating
+	if !atTopLevel { // top level is never a reference - it's a new addition.
+		// this is the case of a lower level having xid which is a reference.
 		if xid != nil && xidString != "" {
 			xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
 			if deepXID > 2 {
-				// We need to link the parent to the already existing child
+				// Here we link the already existing node with an xid to the parent whose id is
+				// passed in srcUID. We do this linking only if there is a hasInverse relationship
+				// between the two.
+				// So for example if we had the addAuthor mutation which is also adding nested
+				// posts, then we link the authorUid(srcUID) - Author.posts - uid(Post) here.
+
 				res := make(map[string]interface{}, 1)
 				res["uid"] = srcUID
-				addInverseLink(res, srcField.Inverse(), fmt.Sprintf("uid(%s)", variable))
-
+				attachChild(res, parentTyp, srcField, fmt.Sprintf("uid(%s)", variable))
 				parentFrag := newFragment(res)
 				parentFrag.conditions = append(parentFrag.conditions, xidFrag.conditions...)
 				parentFrags = append(parentFrags, parentFrag)
@@ -1046,6 +1052,10 @@ func rewriteObject(
 		myUID = fmt.Sprintf("_:%s", variable)
 
 		if xid == nil || deepXID > 2 {
+			// Lets link the new node that we are creating with the parent if a @hasInverse
+			// exists between the two.
+			// So for example if we had the addAuthor mutation which is also adding nested
+			// posts, then we add the link _:Post Post.author AuthorUID(srcUID) here.
 			addInverseLink(newObj, srcField, srcUID)
 		}
 	} else {
@@ -1075,7 +1085,8 @@ func rewriteObject(
 
 	if xid != nil && !atTopLevel {
 		if deepXID <= 2 { // elements in firstPass or not
-			// duplicate query in elements >= 2, as the pair firstPass element would already have the same query.
+			// duplicate query in elements >= 2, as the pair firstPass element would already have
+			// the same query.
 			frag.queries = []*gql.GraphQuery{
 				xidQuery(variable, xidString, xid.Name(), typ),
 			}
@@ -1083,7 +1094,8 @@ func rewriteObject(
 			// We need to link the parent to the element we are just creating
 			res := make(map[string]interface{}, 1)
 			res["uid"] = srcUID
-			addInverseLink(res, srcField.Inverse(), fmt.Sprintf("_:%s", variable))
+			this := fmt.Sprintf("_:%s", variable)
+			attachChild(res, parentTyp, srcField, this)
 
 			parentFrag := newFragment(res)
 			parentFrag.conditions = append(parentFrag.conditions, frag.conditions...)
@@ -1127,7 +1139,7 @@ func rewriteObject(
 				// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
 				//          like here ^^
 				frags =
-					rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen,
+					rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
 						withAdditionalDeletes, val, deepXID, xidMetadata)
 
 			case []interface{}:
@@ -1143,7 +1155,7 @@ func rewriteObject(
 				//   { "title": "...", "scores": [10.5, 9.3, ... ]
 				//            like here ^^
 				frags =
-					rewriteList(ctx, fieldDef.Type(), fieldDef, myUID, varGen,
+					rewriteList(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
 						withAdditionalDeletes, val, deepXID, xidMetadata)
 			default:
 				// This field is either:
@@ -1163,9 +1175,10 @@ func rewriteObject(
 				}
 				frags = &mutationRes{secondPass: []*mutationFragment{newFragment(val)}}
 			}
-
 			childrenFirstPass = appendFragments(childrenFirstPass, frags.firstPass)
-			results.secondPass = squashFragments(squashIntoObject(fieldName), results.secondPass, frags.secondPass)
+
+			results.secondPass = squashFragments(squashIntoObject(fieldName), results.secondPass,
+				frags.secondPass)
 		}
 	}
 
@@ -1181,6 +1194,7 @@ func rewriteObject(
 	for _, i := range results.firstPass {
 		conditions = append(conditions, i.conditions...)
 	}
+
 	for _, i := range childrenFirstPass {
 		i.conditions = append(i.conditions, conditions...)
 	}
@@ -1588,17 +1602,23 @@ func authCheck(chk resultChecker, qry string) resultChecker {
 	}
 }
 
+func attachChild(res map[string]interface{}, parent schema.Type, child schema.FieldDefinition, childUID string) {
+	if parent == nil {
+		return
+	}
+	if child.Type().ListType() != nil {
+		res[parent.DgraphPredicate(child.Name())] =
+			[]interface{}{map[string]interface{}{"uid": childUID}}
+	} else {
+		res[parent.DgraphPredicate(child.Name())] = map[string]interface{}{"uid": childUID}
+	}
+}
+
 func addInverseLink(obj map[string]interface{}, srcField schema.FieldDefinition, srcUID string) {
 	if srcField != nil {
 		invField := srcField.Inverse()
 		if invField != nil {
-			if invField.Type().ListType() != nil {
-				obj[srcField.Type().DgraphPredicate(invField.Name())] =
-					[]interface{}{map[string]interface{}{"uid": srcUID}}
-			} else {
-				obj[srcField.Type().DgraphPredicate(invField.Name())] =
-					map[string]interface{}{"uid": srcUID}
-			}
+			attachChild(obj, srcField.Type(), invField, srcUID)
 		}
 	}
 }
@@ -1622,6 +1642,7 @@ func xidQuery(xidVariable, xidString, xidPredicate string, typ schema.Type) *gql
 
 func rewriteList(
 	ctx context.Context,
+	parentTyp schema.Type,
 	typ schema.Type,
 	srcField schema.FieldDefinition,
 	srcUID string,
@@ -1638,7 +1659,8 @@ func rewriteList(
 	for _, obj := range objects {
 		switch obj := obj.(type) {
 		case map[string]interface{}:
-			frag := rewriteObject(ctx, typ, srcField, srcUID, varGen, withAdditionalDeletes, obj, deepXID, xidMetadata)
+			frag := rewriteObject(ctx, parentTyp, typ, srcField, srcUID, varGen,
+				withAdditionalDeletes, obj, deepXID, xidMetadata)
 			if len(frag.secondPass) != 0 {
 				foundSecondPass = true
 			}
