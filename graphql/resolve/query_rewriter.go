@@ -958,7 +958,6 @@ func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}
 // bubble back to the user as a GraphQL error when the query fails. Really,
 // they should fail query validation and never get here.
 func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree {
-
 	var ands []*gql.FilterTree
 	var or *gql.FilterTree
 
@@ -1031,19 +1030,34 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					},
 				})
 			case interface{}:
+				// has: pred -> has(pred)
+				// OR
 				// isPublished: true -> eq(Post.isPublished, true)
 				// OR an enum case
 				// postType: Question -> eq(Post.postType, "Question")
-				fn := "eq"
-				ands = append(ands, &gql.FilterTree{
-					Func: &gql.Function{
-						Name: fn,
-						Args: []gql.Arg{
-							{Value: typ.DgraphPredicate(field)},
-							{Value: fmt.Sprintf("%v", dgFunc)},
+
+				switch field {
+				case "has":
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: field,
+							Args: []gql.Arg{
+								{Value: fmt.Sprintf("%v", dgFunc)},
+							},
 						},
-					},
-				})
+					})
+				default:
+					fn := "eq"
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(field)},
+								{Value: fmt.Sprintf("%v", dgFunc)},
+							},
+						},
+					})
+				}
 			}
 		}
 	}

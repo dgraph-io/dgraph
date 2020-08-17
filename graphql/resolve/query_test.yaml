@@ -166,6 +166,21 @@
         dgraph.uid : uid
       }
     }
+-
+  name: "Query with has Filter"
+  gqlquery: |
+    query {
+      queryTeacher(filter: {has: subject}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryTeacher(func: type(Teacher)) @filter(has(subject)) {
+        name : People.name
+        dgraph.uid : uid
+      }
+    }
 
 -
   name: "Filters in same input object implies AND"
