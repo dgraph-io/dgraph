@@ -984,17 +984,12 @@ func rewriteObject(
 
 	var parentFrags []*mutationFragment
 
-	// TODO - Find out when is withAdditionalDeletes true?
-
 	if !atTopLevel { // top level is never a reference - it's a new addition.
 		// this is the case of a lower level having xid which is a reference.
 		if xid != nil && xidString != "" {
 			xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
 			if deepXID > 2 {
-				// TODO - Find out why do we do this only when deepXID > 2. Also, this check can be
-				// moved above with the xid != nil check.
-
 				// Here we link the already existing node with an xid to the parent whose id is
 				// passed in srcUID. We do this linking only if there is a hasInverse relationship
 				// between the two.
@@ -1050,7 +1045,6 @@ func rewriteObject(
 	var myUID string
 	newObj := make(map[string]interface{}, len(obj))
 
-	// TODO - Can there by anything else apart from add at top level?
 	if !atTopLevel || topLevelAdd {
 		dgraphTypes := []string{typ.DgraphName()}
 		dgraphTypes = append(dgraphTypes, typ.Interfaces()...)
@@ -1097,22 +1091,11 @@ func rewriteObject(
 				xidQuery(variable, xidString, xid.Name(), typ),
 			}
 		} else {
-			// TODO - Seems like we are creating two fragments for XID, one with condition that
-			// len == 0 and other about len == 1 and putting both into parentFrags. Why don't we
-			// just do it upfront above at once place?
-
 			// We need to link the parent to the element we are just creating
 			res := make(map[string]interface{}, 1)
 			res["uid"] = srcUID
 			this := fmt.Sprintf("_:%s", variable)
-			if srcField.Type().ListType() != nil {
-				res[parentTyp.DgraphPredicate(srcField.Name())] =
-					[]interface{}{map[string]interface{}{"uid": this}}
-			} else {
-				res[parentTyp.DgraphPredicate(srcField.Name())] =
-					map[string]interface{}{"uid": this}
-			}
-			// addInverseLink(res, srcField.Inverse(), this)
+			attachChild(res, parentTyp, srcField, this)
 
 			parentFrag := newFragment(res)
 			parentFrag.conditions = append(parentFrag.conditions, frag.conditions...)
@@ -1198,7 +1181,6 @@ func rewriteObject(
 		results.secondPass = []*mutationFragment{}
 	}
 
-	// TODO - What does it mean when this level is true?
 	// add current conditions to all the new fragments from children.
 	// childrens should only be addded when this level is true
 	conditions := []string{}
@@ -1613,17 +1595,23 @@ func authCheck(chk resultChecker, qry string) resultChecker {
 	}
 }
 
+func attachChild(res map[string]interface{}, parent schema.Type, child schema.FieldDefinition, childUID string) {
+	if parent == nil {
+		return
+	}
+	if child.Type().ListType() != nil {
+		res[parent.DgraphPredicate(child.Name())] =
+			[]interface{}{map[string]interface{}{"uid": childUID}}
+	} else {
+		res[parent.DgraphPredicate(child.Name())] = map[string]interface{}{"uid": childUID}
+	}
+}
+
 func addInverseLink(obj map[string]interface{}, srcField schema.FieldDefinition, srcUID string) {
 	if srcField != nil {
 		invField := srcField.Inverse()
 		if invField != nil {
-			if invField.Type().ListType() != nil {
-				obj[srcField.Type().DgraphPredicate(invField.Name())] =
-					[]interface{}{map[string]interface{}{"uid": srcUID}}
-			} else {
-				obj[srcField.Type().DgraphPredicate(invField.Name())] =
-					map[string]interface{}{"uid": srcUID}
-			}
+			attachChild(obj, srcField.Type(), invField, srcUID)
 		}
 	}
 }
