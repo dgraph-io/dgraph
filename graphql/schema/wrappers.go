@@ -18,7 +18,6 @@ package schema
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -26,7 +25,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"text/scanner"
 
 	"github.com/vektah/gqlparser/v2/parser"
 
@@ -187,6 +185,7 @@ type FieldDefinition interface {
 	Name() string
 	Type() Type
 	IsID() bool
+	HasIDDirective() bool
 	Inverse() FieldDefinition
 	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
 	ForwardEdge() FieldDefinition
@@ -689,9 +688,10 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	httpArg := custom.Arguments.ForName("http")
 
 	bodyArg := httpArg.Value.Children.ForName("body")
+	graphqlArg := httpArg.Value.Children.ForName("graphql")
 	if bodyArg != nil {
 		bodyTemplate := bodyArg.Raw
-		_, rf, _ = parseBodyTemplate(bodyTemplate)
+		_, rf, _ = parseBodyTemplate(bodyTemplate, graphqlArg == nil)
 	}
 
 	if rf == nil {
@@ -715,7 +715,6 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 		}
 	}
 
-	graphqlArg := httpArg.Value.Children.ForName("graphql")
 	if graphqlArg == nil {
 		return true, rf
 	}
@@ -852,7 +851,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	}
 	// bodyTemplate will be empty if there was no body or graphql, like the case of a simple GET req
 	if bodyTemplate != "" {
-		bt, rf, err := parseBodyTemplate(bodyTemplate)
+		bt, rf, err := parseBodyTemplate(bodyTemplate, true)
 		if err != nil {
 			return fconf, err
 		}
@@ -930,11 +929,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			bodyVars["query"] = fconf.RemoteGqlQuery
 			bodyVars["variables"] = argMap
 		}
-		if fconf.Template != nil {
-			if err = SubstituteVarsInBody(fconf.Template, bodyVars); err != nil {
-				return fconf, errors.Wrapf(err, "while substituting vars in Body")
-			}
-		}
+		SubstituteVarsInBody(fconf.Template, bodyVars)
 	}
 	return fconf, nil
 }
@@ -1362,6 +1357,13 @@ func (fd *fieldDefinition) Name() string {
 
 func (fd *fieldDefinition) IsID() bool {
 	return isID(fd.fieldDef)
+}
+
+func (fd *fieldDefinition) HasIDDirective() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	return hasIDDirective(fd.fieldDef)
 }
 
 func hasIDDirective(fd *ast.FieldDefinition) bool {
@@ -1802,170 +1804,166 @@ func SubstituteVarsInURL(rawURL string, vars map[string]interface{}) (string,
 	return u.String(), nil
 }
 
-func isName(s string) bool {
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z':
-			continue
-		case r >= 'A' && r <= 'Z':
-			continue
-		default:
-			return false
-		}
+func parseAsGraphQLArg(bodyTemplate string) (*ast.Value, error) {
+	// bodyTemplate is always formed like { k1: 3.4, k2: $var, k3: "string", ...},
+	// so the `input` arg here will have an object value after parsing
+	doc, err := parser.ParseQuery(&ast.Source{Input: `query { dummy(input:` + bodyTemplate + `) }`})
+	if err != nil {
+		return nil, err
 	}
-	return true
+	return doc.Operations[0].SelectionSet[0].(*ast.Field).Arguments[0].Value, nil
+}
+
+func parseAsJSONTemplate(value *ast.Value, vars map[string]bool, strictJSON bool) (interface{}, error) {
+	switch value.Kind {
+	case ast.ObjectValue:
+		m := make(map[string]interface{})
+		for _, elem := range value.Children {
+			elemVal, err := parseAsJSONTemplate(elem.Value, vars, strictJSON)
+			if err != nil {
+				return nil, err
+			}
+			m[elem.Name] = elemVal
+		}
+		return m, nil
+	case ast.ListValue:
+		var l []interface{}
+		for _, elem := range value.Children {
+			elemVal, err := parseAsJSONTemplate(elem.Value, vars, strictJSON)
+			if err != nil {
+				return nil, err
+			}
+			l = append(l, elemVal)
+		}
+		return l, nil
+	case ast.Variable:
+		vars[value.Raw] = true
+		return value.String(), nil
+	case ast.IntValue:
+		return strconv.ParseInt(value.Raw, 10, 64)
+	case ast.FloatValue:
+		return strconv.ParseFloat(value.Raw, 64)
+	case ast.BooleanValue:
+		return strconv.ParseBool(value.Raw)
+	case ast.StringValue:
+		return value.Raw, nil
+	case ast.BlockValue, ast.EnumValue:
+		if strictJSON {
+			return nil, fmt.Errorf("found unexpected value: %s", value.String())
+		}
+		return value.Raw, nil
+	case ast.NullValue:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unknown value kind: %d, for value: %s", value.Kind, value.String())
+	}
 }
 
 // Given a template for a body with variables defined, this function parses the body
-// and converts it into a JSON representation and returns that. It also returns a list of the field
-// names that are required by this template.
+// and converts it into a JSON representation and returns that. It also returns a list of the
+// variable names that are required by this template.
 // for e.g.
 // { author: $id, post: { id: $postID }}
 // would return
 // { "author" : "$id", "post": { "id": "$postID" }} and { "id": true, "postID": true}
 // If the final result is not a valid JSON, then an error is returned.
-func parseBodyTemplate(body string) (*interface{}, map[string]bool, error) {
-	var s scanner.Scanner
-	s.Init(strings.NewReader(body))
-
-	result := new(bytes.Buffer)
-	parsingVariable := false
-	depth := 0
-	requiredFields := make(map[string]bool)
-	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
-		text := s.TokenText()
-		switch {
-		case text == "{":
-			result.WriteString(text)
-			depth++
-		case text == "}":
-			depth--
-			result.WriteString(text)
-		case text == ":" || text == "," || text == "[" || text == "]":
-			result.WriteString(text)
-		case text == "$":
-			parsingVariable = true
-		case isName(text):
-			// Name could either be a key or be part of a variable after dollar.
-			if !parsingVariable {
-				result.WriteString(fmt.Sprintf(`"%s"`, text))
-				continue
-			}
-			requiredFields[text] = true
-			variable := "$" + text
-			fmt.Fprintf(result, `"%s"`, variable)
-			parsingVariable = false
-
-		default:
-			return nil, nil, errors.Errorf("invalid character: %s while parsing body template",
-				text)
-		}
-	}
-	if depth != 0 {
-		return nil, nil, errors.New("found unmatched curly braces while parsing body template")
-	}
-
-	if result.Len() == 0 {
+//
+// In strictJSON mode block strings and enums are invalid and throw an error.
+// strictJSON should be false when the body template is being used for custom graphql arg parsing,
+// otherwise it should be true.
+func parseBodyTemplate(body string, strictJSON bool) (*interface{}, map[string]bool, error) {
+	if strings.TrimSpace(body) == "" {
 		return nil, nil, nil
 	}
 
-	var m interface{}
-	if err := json.Unmarshal(result.Bytes(), &m); err != nil {
-		return nil, nil, errors.Errorf("couldn't unmarshal HTTP body: %s as JSON", result.Bytes())
-	}
-	return &m, requiredFields, nil
-}
-
-func getVar(key string, variables map[string]interface{}) (interface{}, error, bool) {
-	if !strings.HasPrefix(key, "$") {
-		return nil, errors.Errorf("expected a variable to start with $. Found: %s", key), true
-	}
-	val, ok := variables[key[1:]]
-	return val, nil, ok
-}
-
-func substituteSingleVarInBody(key string, valPtr *interface{},
-	variables map[string]interface{}) error {
-	// Look it up in the map and replace.
-	val, err, _ := getVar(key, variables)
+	parsedBodyTemplate, err := parseAsGraphQLArg(body)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	*valPtr = val
-	return nil
+
+	requiredVariables := make(map[string]bool)
+	jsonTemplate, err := parseAsJSONTemplate(parsedBodyTemplate, requiredVariables, strictJSON)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &jsonTemplate, requiredVariables, nil
 }
 
-func substituteVarInMapInBody(object, variables map[string]interface{}) error {
+func isVar(key string) bool {
+	return strings.HasPrefix(key, "$")
+}
+
+func substituteVarInMapInBody(object, variables map[string]interface{}) {
 	for k, v := range object {
 		switch val := v.(type) {
 		case string:
-			vval, err, ok := getVar(val, variables)
-			if err != nil {
-				return err
-			}
-			if ok {
-				object[k] = vval
-			} else {
-				delete(object, k)
+			if isVar(val) {
+				vval, ok := variables[val[1:]]
+				if ok {
+					object[k] = vval
+				} else {
+					delete(object, k)
+				}
 			}
 		case map[string]interface{}:
-			if err := substituteVarInMapInBody(val, variables); err != nil {
-				return err
-			}
+			substituteVarInMapInBody(val, variables)
 		case []interface{}:
-			if err := substituteVarInSliceInBody(val, variables); err != nil {
-				return err
-			}
-		default:
-			return errors.Errorf("got unexpected type value in map: %+v", v)
+			substituteVarInSliceInBody(val, variables)
 		}
 	}
-	return nil
 }
 
-func substituteVarInSliceInBody(slice []interface{}, variables map[string]interface{}) error {
+func substituteVarInSliceInBody(slice []interface{}, variables map[string]interface{}) {
 	for k, v := range slice {
 		switch val := v.(type) {
 		case string:
-			vval, err, _ := getVar(val, variables)
-			if err != nil {
-				return err
+			if isVar(val) {
+				slice[k] = variables[val[1:]]
 			}
-			slice[k] = vval
 		case map[string]interface{}:
-			if err := substituteVarInMapInBody(val, variables); err != nil {
-				return err
-			}
+			substituteVarInMapInBody(val, variables)
 		case []interface{}:
-			if err := substituteVarInSliceInBody(val, variables); err != nil {
-				return err
-			}
-		default:
-			return errors.Errorf("got unexpected type value in array: %+v", v)
+			substituteVarInSliceInBody(val, variables)
 		}
 	}
-	return nil
 }
 
 // Given a JSON representation for a body with variables defined, this function substitutes
 // the variables and returns the final JSON.
 // for e.g.
-// { "author" : "$id", "post": { "id": "$postID" }} with variables {"id": "0x3", postID: "0x9"}
-// should return { "author" : "0x3", "post": { "id": "0x9" }}
-func SubstituteVarsInBody(jsonTemplate *interface{}, variables map[string]interface{}) error {
+// {
+//		"author" : "$id",
+//		"name" : "Jerry",
+//		"age" : 23,
+//		"post": {
+//			"id": "$postID"
+//		}
+// }
+// with variables {"id": "0x3",	postID: "0x9"}
+// should return
+// {
+//		"author" : "0x3",
+//		"name" : "Jerry",
+//		"age" : 23,
+//		"post": {
+//			"id": "0x9"
+//		}
+// }
+func SubstituteVarsInBody(jsonTemplate *interface{}, variables map[string]interface{}) {
 	if jsonTemplate == nil {
-		return nil
+		return
 	}
 
 	switch val := (*jsonTemplate).(type) {
 	case string:
-		return substituteSingleVarInBody(val, jsonTemplate, variables)
+		if isVar(val) {
+			*jsonTemplate = variables[val[1:]]
+		}
 	case map[string]interface{}:
-		return substituteVarInMapInBody(val, variables)
+		substituteVarInMapInBody(val, variables)
 	case []interface{}:
-		return substituteVarInSliceInBody(val, variables)
-	default:
-		return errors.Errorf("got unexpected type value in jsonTemplate: %+v", val)
+		substituteVarInSliceInBody(val, variables)
 	}
 }
 
@@ -2046,6 +2044,6 @@ func parseRequiredArgsFromGQLRequest(req string) (map[string]bool, error) {
 	bracket := strings.Index(req, "{")
 	req = req[bracket:]
 	args := req[strings.Index(req, "(")+1 : strings.LastIndex(req, ")")]
-	_, rf, err := parseBodyTemplate("{" + args + "}")
+	_, rf, err := parseBodyTemplate("{"+args+"}", false)
 	return rf, err
 }

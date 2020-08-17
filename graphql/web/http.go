@@ -20,17 +20,13 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"strconv"
-	"time"
-
-	"github.com/dgrijalva/jwt-go/v4"
-	"google.golang.org/grpc/metadata"
-
 	"io"
 	"io/ioutil"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
@@ -39,9 +35,11 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
+	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 )
 
 type Headerkey string
@@ -120,7 +118,7 @@ type graphqlSubscription struct {
 
 func (gs *graphqlSubscription) Subscribe(
 	ctx context.Context,
-	document string,
+	document,
 	operationName string,
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
@@ -139,19 +137,22 @@ func (gs *graphqlSubscription) Subscribe(
 		}
 
 		name := authorization.GetHeader()
-		val, ok := payload[name].(string)
-		if ok {
+		for key, val := range payload {
+			if !strings.EqualFold(key, name) {
+				continue
+			}
 
 			md := metadata.New(map[string]string{
-				"authorizationJwt": val,
+				"authorizationJwt": val.(string),
 			})
 			ctx = metadata.NewIncomingContext(ctx, md)
-
 			customClaims, err = authorization.ExtractCustomClaims(ctx)
 			if err != nil {
 				return nil, err
 			}
+			break
 		}
+
 	}
 	// for the cases when no expiry is given in jwt or subscription doesn't have any authorization,
 	// we set their expiry to zero time
