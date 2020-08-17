@@ -91,6 +91,7 @@ type FinalityGadget interface {
 // FinalityMessage is the interface a finality message must implement
 type FinalityMessage interface {
 	ToConsensusMessage() (*network.ConsensusMessage, error)
+	Type() byte
 }
 
 // ConsensusMessageHandler is the interface a consensus message handler must implement

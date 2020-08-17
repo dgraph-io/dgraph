@@ -17,13 +17,16 @@
 package grandpa
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
+	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
+	"github.com/ChainSafe/gossamer/lib/scale"
 
 	"github.com/stretchr/testify/require"
 )
@@ -81,6 +84,23 @@ func TestDecodeMessage_FinalizationMessage(t *testing.T) {
 				AuthorityID: kr.Alice.Public().(*ed25519.PublicKey).AsBytes(),
 			},
 		},
+	}
+
+	require.Equal(t, expected, msg)
+}
+
+func TestDecodeMessage_CatchUpRequest(t *testing.T) {
+	cm := &ConsensusMessage{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              common.MustHexToBytes("0x0311000000000000002200000000000000"),
+	}
+
+	msg, err := decodeMessage(cm)
+	require.NoError(t, err)
+
+	expected := &catchUpRequest{
+		Round: 0x11,
+		SetID: 0x22,
 	}
 
 	require.Equal(t, expected, msg)
@@ -206,6 +226,133 @@ func TestMessageHandler_FinalizationMessage_WithCatchUpRequest(t *testing.T) {
 
 	req := newCatchUpRequest(77, gs.state.setID)
 	expected, err := req.ToConsensusMessage()
+	require.NoError(t, err)
+	require.Equal(t, expected, out)
+}
+
+func TestMessageHandler_CatchUpRequest_InvalidRound(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	cfg := &Config{
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	req := newCatchUpRequest(77, 0)
+	cm, err := req.ToConsensusMessage()
+	require.NoError(t, err)
+
+	h := NewMessageHandler(gs, st.Block)
+	_, err = h.HandleMessage(cm)
+	require.Equal(t, ErrInvalidCatchUpRound, err)
+}
+
+func TestMessageHandler_CatchUpRequest_InvalidSetID(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	cfg := &Config{
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	req := newCatchUpRequest(1, 77)
+	cm, err := req.ToConsensusMessage()
+	require.NoError(t, err)
+
+	h := NewMessageHandler(gs, st.Block)
+	_, err = h.HandleMessage(cm)
+	require.Equal(t, ErrSetIDMismatch, err)
+}
+
+func TestMessageHandler_CatchUpRequest_WithResponse(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	cfg := &Config{
+		BlockState:    st.Block,
+		DigestHandler: &mockDigestHandler{},
+		Voters:        voters,
+		Keypair:       kr.Alice,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	// set up needed info for response
+	round := uint64(1)
+	setID := uint64(0)
+	gs.state.round = round + 1
+
+	testHeader := &types.Header{
+		Number: big.NewInt(1),
+	}
+
+	v := &Vote{
+		hash:   testHeader.Hash(),
+		number: 1,
+	}
+
+	err = gs.blockState.SetFinalizedHash(testHeader.Hash(), round, setID)
+	require.NoError(t, err)
+	err = gs.blockState.(*state.BlockState).SetHeader(testHeader)
+	require.NoError(t, err)
+
+	pvj := []*Justification{
+		{
+			Vote:        testVote,
+			Signature:   testSignature,
+			AuthorityID: testAuthorityID,
+		},
+	}
+
+	pvjEnc, err := scale.Encode(pvj)
+	require.NoError(t, err)
+
+	pcj := []*Justification{
+		{
+			Vote:        testVote2,
+			Signature:   testSignature,
+			AuthorityID: testAuthorityID,
+		},
+	}
+
+	pcjEnc, err := scale.Encode(pcj)
+	require.NoError(t, err)
+
+	err = gs.blockState.SetJustification(v.hash, append(pvjEnc, pcjEnc...))
+	require.NoError(t, err)
+
+	resp, err := gs.newCatchUpResponse(round, setID)
+	require.NoError(t, err)
+
+	expected, err := resp.ToConsensusMessage()
+	require.NoError(t, err)
+
+	// create and handle request
+	req := newCatchUpRequest(round, setID)
+	cm, err := req.ToConsensusMessage()
+	require.NoError(t, err)
+
+	h := NewMessageHandler(gs, st.Block)
+	out, err := h.HandleMessage(cm)
 	require.NoError(t, err)
 	require.Equal(t, expected, out)
 }

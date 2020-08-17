@@ -149,6 +149,10 @@ func (fm *mockFinalityMessage) ToConsensusMessage() (*network.ConsensusMessage, 
 	return testConsensusMessage, nil
 }
 
+func (fm *mockFinalityMessage) Type() byte {
+	return 0
+}
+
 type mockConsensusMessageHandler struct{}
 
 func (h *mockConsensusMessageHandler) HandleMessage(msg *network.ConsensusMessage) (*network.ConsensusMessage, error) {

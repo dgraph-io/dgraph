@@ -71,3 +71,6 @@ var ErrNotFinalizationMessage = errors.New("cannot get finalized hash from VoteM
 
 // ErrNoJustification is returned when no justification can be found for a block, ie. it has not been finalized
 var ErrNoJustification = errors.New("no justification found for block")
+
+// ErrInvalidCatchUpRound is returned when a catch-up message is received with an invalid round
+var ErrInvalidCatchUpRound = errors.New("catch up request is for future round")
