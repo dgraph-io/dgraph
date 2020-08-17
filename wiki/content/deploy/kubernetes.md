@@ -356,15 +356,24 @@ The following table lists the configurable parameters of the dgraph chart and th
 
 Dgraph exposes prometheus metrics to monitor the state of various components involved in the cluster, this includes dgraph alpha and zero.
 
-Follow the below mentioned steps to setup prometheus monitoring for your cluster:
+Below are instructions to setup Prometheus monitoring for your cluster.  This solution has the following parts:
 
-* Install Prometheus operator:
+* [prometheus-operator](https://coreos.com/blog/the-prometheus-operator.html) - a Kubernetes operator to install and configure Prometheus and Alert Manager.
+* [Prometheus](https://prometheus.io/) - the service that will scrape Dgraph for metrics
+* [AlertManager](https://prometheus.io/docs/alerting/latest/alertmanager/) - the service that will trigger alerts to a service (Slack, PagerDuty, etc) that you specify based on metrics exceeding threshold specified in Alert rules.
+* [Grafana](https://grafana.com/) - optional visualization solution that will use Prometheus as a source to create dashboards.
+
+### Installation through Manifests
+
+Follow the below mentioned steps to setup prometheus monitoring for your cluster.
+
+#### Install Prometheus operator
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/coreos/prometheus-operator/release-0.34/bundle.yaml
+kubectl apply --filename https://raw.githubusercontent.com/coreos/prometheus-operator/release-0.34/bundle.yaml
 ```
 
-* Ensure that the instance of `prometheus-operator` has started before continuing.
+Ensure that the instance of `prometheus-operator` has started before continuing.
 
 ```sh
 $ kubectl get deployments prometheus-operator
@@ -372,10 +381,12 @@ NAME                  DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
 prometheus-operator   1         1         1            1           3m
 ```
 
+#### Install Prometheus
+
 * Apply prometheus manifest present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/prometheus.yaml).
 
 ```sh
-$ kubectl apply -f prometheus.yaml
+$ kubectl apply --filename prometheus.yaml
 
 serviceaccount/prometheus-dgraph-io created
 clusterrole.rbac.authorization.k8s.io/prometheus-dgraph-io created
@@ -393,6 +404,8 @@ kubectl port-forward prometheus-dgraph-io-0 9090:9090
 
 The UI is accessible at port 9090. Open http://localhost:9090 in your browser to play around.
 
+#### Registering Alerts and Installing Alert Manager
+
 To register alerts from dgraph cluster with your prometheus deployment follow the steps below:
 
 * Create a kubernetes secret containing alertmanager configuration. Edit the configuration file present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/alertmanager-config.yaml)
@@ -401,7 +414,8 @@ with the required reciever configuration including the slack webhook credential 
 You can find more information about alertmanager configuration [here](https://prometheus.io/docs/alerting/configuration/).
 
 ```sh
-$ kubectl create secret generic alertmanager-alertmanager-dgraph-io --from-file=alertmanager.yaml=alertmanager-config.yaml
+$ kubectl create secret generic alertmanager-alertmanager-dgraph-io \
+    --from-file=alertmanager.yaml=alertmanager-config.yaml
 
 $ kubectl get secrets
 NAME                                            TYPE                 DATA   AGE
@@ -413,13 +427,57 @@ to use the default configured alert configuration. You can also add custom rules
 manifest.
 
 ```sh
-$ kubectl apply -f alertmanager.yaml
+$ kubectl apply --filename alertmanager.yaml
 alertmanager.monitoring.coreos.com/alertmanager-dgraph-io created
 service/alertmanager-dgraph-io created
 
-$ kubectl apply -f alert-rules.yaml
+$ kubectl apply --filename alert-rules.yaml
 prometheusrule.monitoring.coreos.com/prometheus-rules-dgraph-io created
 ```
+
+### Install Using Helm Chart
+
+There are Helm chart values that will install Prometheus, Alert Manager, and Grafana.
+
+You will first need to add the `prometheus-operator` Helm chart:
+
+```bash
+$ helm repo add stable https://kubernetes-charts.storage.googleapis.com
+```
+
+Afterward you will want to copy the Helm chart values present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/chart-values/dgraph-prometheus-operator.yaml) and edit them as appropriate, such as adding endpoints, adding alert rules, adjusting alert manager configuration, adding Grafana dashboard, etc.
+
+Once ready, install this with the following:
+
+```bash
+$ helm install my-prometheus-release \
+  --values dgraph-prometheus-operator.yaml \
+  --set grafana.adminPassword='<put-secret-password-here>' \
+  stable/prometheus-operator
+```
+
+**NOTE**: For security best practices, we want to keep secrets, such as the Grafana password outside of general configuration, so that it is not accidently checked into anywhere.  You can supply it through the command line, or create a seperate `secrets.yaml` that is never checked into a code repository:
+
+```yaml
+grafana:
+  adminPassword: <put-secret-password-here>
+```
+
+Then you can install this in a similar fashion:
+
+```bash
+$ helm install my-prometheus-release \
+  --values dgraph-prometheus-operator.yaml \
+  --values secrets.yaml \
+  stable/prometheus-operator
+```
+
+
+### Adding Dgraph Kubernetes Grafana Dashboard
+
+You can use the Grafana dashboard present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/grafana/dgraph-kubernetes-grafana-dashboard.json).  You can import this dashboard and select the Prometheus data source installed earlier.
+
+This will visualize all Dgraph Alpha and Zero Kubernetes Pods, using the regex pattern `"/dgraph-.*-[0-9]*$/`.  This can be changed by through the dashboard configuration and selecting the variable Pod.  This might be desirable when you have had multiple releases, and only want to visualize the current release.  For example, if you installed a new release `my-release-3` with the [Dgraph helm chart](https://github.com/dgraph-io/charts/), you can change the regex pattern to `"/my-release-3.*dgraph-.*-[0-9]*$/"` for the Pod variable.
 
 ## Kubernetes Storage
 
