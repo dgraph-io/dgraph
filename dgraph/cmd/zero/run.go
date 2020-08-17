@@ -171,7 +171,7 @@ func run() {
 	}
 
 	if opts.nodeId == 0 {
-		log.Fatalf("ERROR: Cannot idx flag cannot be 0. Please try again with idx as a positive integer")
+		log.Fatalf("ERROR: idx flag cannot be 0. Please try again with idx as a positive integer")
 	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
