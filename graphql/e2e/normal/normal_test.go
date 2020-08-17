@@ -209,7 +209,12 @@ func TestSchema_Normal(t *testing.T) {
 		{
 			"predicate": "dgraph.cors",
 			"type": "string",
-			"list": true
+			"list": true,
+			"index": true,
+      		"tokenizer": [
+      		  "exact"
+      		],
+      		"upsert": true
 		}, {
 			"predicate": "dgraph.graphql.xid",
 			"type": "string",

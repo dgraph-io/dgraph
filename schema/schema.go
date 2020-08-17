@@ -643,6 +643,9 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			Predicate: "dgraph.cors",
 			ValueType: pb.Posting_STRING,
 			List:      true,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			Upsert:    true,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.type",
 			ValueType: pb.Posting_STRING,
