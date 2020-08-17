@@ -12,4 +12,4 @@ The process for serving GraphQL with Dgraph is to add a set of GraphQL type defi
 
 The input schema may contain interfaces, types and enums that follow the usual GraphQL syntax and validation rules. 
 
-If you want to make your schema editing experience nicer, you should use an editor that does syntax highlighting for GraphQL.  With that, you may also want to include the definitions [here](../dgraph-schema) as an import.
+If you want to make your schema editing experience nicer, you should use an editor that does syntax highlighting for GraphQL.  With that, you may also want to include the definitions [here](/graphql/schema/dgraph-schema) as an import.

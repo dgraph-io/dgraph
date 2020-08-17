@@ -16,7 +16,7 @@ Wherever possible, we have maintained compatibility with the corresponding Dgrap
 
 Please see the following topics:
 
-* [Authentication](../authentication) will guide you in creating a API token. Since all admin APIs require an auth token, this is a good place to start.
-* [Schema](../schema) describes how to programatically query and update your GraphQL schema.
-* [Import and Exporting Data](../import-export) is a guide for exporting your data from a Slash GraphQL backend, and how to import it into another cluster
-* [Dropping Data](../drop-data) will guide you through dropping all data from your Slash GraphQL backend.
+* [Authentication](/slash-graphql/admin/authentication) will guide you in creating a API token. Since all admin APIs require an auth token, this is a good place to start.
+* [Schema](/slash-graphql/admin/schema) describes how to programatically query and update your GraphQL schema.
+* [Import and Exporting Data](/slash-graphql/admin/import-export) is a guide for exporting your data from a Slash GraphQL backend, and how to import it into another cluster
+* [Dropping Data](/slash-graphql/admin/drop-data) will guide you through dropping all data from your Slash GraphQL backend.

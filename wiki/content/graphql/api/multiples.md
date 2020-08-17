@@ -61,11 +61,11 @@ If a request only has a single query operation, then you can use the short-hand 
 }
 ```
 
-This simplfies queries when a query doesn't require an operation name or [variables](../variables).
+This simplfies queries when a query doesn't require an operation name or [variables](/graphql/api/variables).
 
 ## Multiple Operations
 
-If a request has two or more operations, then each operation must have a name. A request can only execute one operation, so you must also include the operation name to execute in the request (see the "operations" field for [requests](../requests)). Every operation name in a request must be unique.
+If a request has two or more operations, then each operation must have a name. A request can only execute one operation, so you must also include the operation name to execute in the request (see the "operations" field for [requests](/graphql/api/requests)). Every operation name in a request must be unique.
 
 For example, in the following request has the operation names "getTaskAndUser" and "completedTasks".
 

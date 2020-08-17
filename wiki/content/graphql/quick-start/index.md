@@ -41,7 +41,7 @@ With Dgraph you can turn that schema into a running GraphQL API in just two step
 
 ## Step 1 - Start Dgraph GraphQL
 
-It's a one-liner to bring up Dgraph with GraphQL.  *Note: The Dgraph standalone image is great for quick start and exploring, but it's not meant for production use.  Once you want to build an App or persist your data for restarts, you'll need to review the   [admin docs](../admin).*
+It's a one-liner to bring up Dgraph with GraphQL.  *Note: The Dgraph standalone image is great for quick start and exploring, but it's not meant for production use.  Once you want to build an App or persist your data for restarts, you'll need to review the   [admin docs](/graphql/admin).*
 
 ```
 docker run -it -p 8080:8080 dgraph/standalone:master
