@@ -259,6 +259,7 @@ func inputTypeNameValidation(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 	forbiddenInputTypeNames := map[string]bool{
 		// The types that we define in schemaExtras
+		"Int64":                true,
 		"DateTime":             true,
 		"DgraphIndex":          true,
 		"HTTPMethod":           true,
