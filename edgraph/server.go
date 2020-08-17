@@ -1546,8 +1546,14 @@ func ResetCors() {
 		}`,
 		Mutations: []*api.Mutation{
 			{
-				SetNquads: []byte(`_:a <dgraph.cors> "*" .`),
-				Cond:      `@if(eq(len(cors), 0))`,
+				Set: []*api.NQuad{
+					{
+						Subject:     "_:a",
+						Predicate:   "dgraph.cors",
+						ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "*"}},
+					},
+				},
+				Cond: `@if(eq(len(cors), 0))`,
 			},
 		},
 		CommitNow: true,
@@ -1612,9 +1618,10 @@ func GetCorsOrigins(ctx context.Context) ([]string, error) {
 		} `json:"me"`
 	}
 	corsRes := &corsResponse{}
+	fmt.Println(string(res.Json))
 	if err = json.Unmarshal(res.Json, corsRes); err != nil {
 		return nil, err
 	}
-	x.AssertTrue(len(corsRes.Me) == 1)
+	//x.AssertTrue(len(corsRes.Me) == 1)
 	return corsRes.Me[0].DgraphCors, nil
 }

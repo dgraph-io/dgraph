@@ -206,11 +206,16 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 	// build the final Dgraph schema
 	finalDgraphSchema := fmt.Sprintf(`{
     "schema": [
-        %s,
+		%s,
+		{
+            "predicate": "dgraph.cors",
+			"type": "string",
+			"list": true
+        },
         {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
-        },
+		},
         {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
