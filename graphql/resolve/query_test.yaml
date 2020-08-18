@@ -176,12 +176,43 @@
     }
   dgquery: |-
     query {
-      queryTeacher(func: type(Teacher)) @filter(has(subject)) {
+      queryTeacher(func: type(Teacher)) @filter(has(Teacher.subject)) {
         name : People.name
         dgraph.uid : uid
       }
     }
 
+-
+  name: "has Filter with not"
+  gqlquery: |
+    query {
+      queryTeacher(filter: { not : {has: subject } }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryTeacher(func: type(Teacher)) @filter(NOT (has(Teacher.subject))) {
+        name : People.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "has Filter with and"
+  gqlquery: |
+    query {
+      queryTeacher(filter: {has: subject, and: {has: teaches } }  ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryTeacher(func: type(Teacher)) @filter((has(Teacher.teaches) AND has(Teacher.subject))) {
+        name : People.name
+        dgraph.uid : uid
+      }
+    }
 -
   name: "Filters in same input object implies AND"
   gqlquery: |
@@ -213,6 +244,22 @@
         dgraph.uid : uid
       }
     }
+-
+  name: "has Filter with nested and'"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { dob: { le: "2001-01-01" }, and: { has : country } } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(((has(Author.country) AND le(Author.dob, "2001-01-01")) AND eq(Author.name, "A. N. Author"))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
 
 -
   name: "Filter with 'or'"

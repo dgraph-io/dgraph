@@ -1030,21 +1030,24 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					},
 				})
 			case interface{}:
-				// has: pred -> has(pred)
+				// has: comments -> has(Post.comments)
 				// OR
 				// isPublished: true -> eq(Post.isPublished, true)
 				// OR an enum case
 				// postType: Question -> eq(Post.postType, "Question")
 				switch field {
 				case "has":
-					ands = append(ands, &gql.FilterTree{
-						Func: &gql.Function{
-							Name: field,
-							Args: []gql.Arg{
-								{Value: fmt.Sprintf("%v", dgFunc)},
+					fieldName, ok := dgFunc.(string)
+					if ok {
+						ands = append(ands, &gql.FilterTree{
+							Func: &gql.Function{
+								Name: field,
+								Args: []gql.Arg{
+									{Value: typ.DgraphPredicate(fieldName)},
+								},
 							},
-						},
-					})
+						})
+					}
 				default:
 					fn := "eq"
 					ands = append(ands, &gql.FilterTree{
@@ -1060,7 +1063,6 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 			}
 		}
 	}
-
 	var andFt *gql.FilterTree
 	if len(ands) == 1 {
 		andFt = ands[0]
