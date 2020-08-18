@@ -960,7 +960,6 @@ func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}
 func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree {
 	var ands []*gql.FilterTree
 	var or *gql.FilterTree
-
 	// Get a stable ordering so we generate the same thing each time.
 	var keys []string
 	for key := range filter {
@@ -1063,6 +1062,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 			}
 		}
 	}
+
 	var andFt *gql.FilterTree
 	if len(ands) == 1 {
 		andFt = ands[0]
