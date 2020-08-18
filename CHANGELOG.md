@@ -11,7 +11,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 - Contrib k8s ha support dgraph alpha multiple zero support. ([#5988][])
 - Add retry for schema update. ([#6097][]) 
-- Add cluster lables to the jaeger containers. ([#6094][])
 - Queue keys for rollup during mutation. ([#6150][]) 
 
 ### Fixed
