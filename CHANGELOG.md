@@ -9,7 +9,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Changed
 
-- Contrib k8s ha support dgraph alpha multiple zero support. ([#5988][])
 - Add retry for schema update. ([#6097][]) 
 - Queue keys for rollup during mutation. ([#6150][]) 
 
