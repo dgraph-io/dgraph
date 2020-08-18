@@ -22,4 +22,4 @@ ordered = false
 startLevel = 2
 
 # set by build script: title, baseurl
-title = "Dgraph Documentations"
+title = "Dgraph Documentation"
