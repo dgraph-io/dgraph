@@ -6,17 +6,195 @@ title = "GraphQL Fragements"
     weight = 4   
 +++
 
-Documentation on GraphQL fragments is coming soon.
+A GraphQL fragment is a reusable unit of logic that can be shared between multiple queries and mutations.
+Here, we declare a `postData` fragment that can be used with any `Post` object:
 
-<!--using GraphQL fragments with Dgraph - there's fragments in the request as well as the type fragments to talk about**
+```graphql
+fragment postData on Post {
+  id
+  title
+  text
+  author {
+    username
+    displayName
+  }
+}
+```
 
-Case 1:
-you can see an example of a fragment here https://github.com/dgraph-io/graphql-sample-apps/blob/mjc/discuss/discuss-clone/src/components/operations.graphql
+The fragment has a subset of the fields from its associated type. In the above example, the `Post` type must declare all the fields present in the `postData` fragment for it be valid.
 
-and here https://github.com/dgraph-io/dgraph/blob/5a67b9497fdb4a2c67638e3fc2601d628aa238f0/graphql/e2e/common/fragment.go#L15-L26 and here https://github.com/dgraph-io/dgraph/blob/5a67b9497fdb4a2c67638e3fc2601d628aa238f0/graphql/e2e/common/fragment.go#L117-L153
+We can include the `postData` fragment in any number of queries and mutations as shown below.
+```graphql
+query allPosts {
+  queryPost(order: { desc: title }) {
+    ...postData
+  }
+}
+mutation addPost($post: AddPostInput!) {
+  addPost(input: [$post]) {
+    post {
+      ...postData
+    }
+  }
+}
+```
 
-Case 2: (on types)
-You can see how fragments on types works here https://github.com/dgraph-io/dgraph/blob/5a67b9497fdb4a2c67638e3fc2601d628aa238f0/graphql/e2e/common/query.go#L1179-L1196
+The above request is equivalent to:
+```graphql
+query allPosts {
+  queryPost(order: { desc: title }) {
+    id
+    title
+    text
+    author {
+      username
+      displayName
+    }
+  }
+}
 
+mutation addPost($post: AddPostInput!) {
+  addPost(input: [$post]) {
+    post {
+      id
+      title
+      text
+      author {
+        username
+        displayName
+      }
+    }
+  }
+}
+```
 
-This page should describe what fragments are used for (case 1 is reuse, case 2 is different results per type) and show how to submit a query with fragments and what the answer will look like.-->
+### Example :
+
+```graphql
+fragment postData on Post {
+  id
+  title
+  text
+  author {
+    username
+    displayName
+  }
+}
+mutation addPost($post: AddPostInput!) {
+  addPost(input: [$post]) {
+    post {
+      ...postData
+    }
+  }
+}
+```
+
+### Variable:
+
+```graphql
+{
+	"post": {
+    "text": "Hello World",
+		"title": "First Blog post",
+		"author": [{
+			"username": "arijit_ad",
+			"displayName": "Arijit Das"
+		}]
+	}
+}
+```
+
+### Result:
+
+```graphql
+{
+  "addPost": {
+    "post": [
+      {
+        "id": "0x27e0",
+        "title": "First Blog post",
+        "text": "Hello World",
+        "author": [
+          {
+            "username": "arijit_ad",
+            "displayName": "Arijit Das"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## Using fragments with interfaces
+
+It is possible to define fragments on interfaces.
+Here's an example of a query that includes in-line fragments:
+
+### Schema:
+
+```graphql
+interface Employee {
+    ename: String!
+}
+interface Character {
+    id: ID!
+    name: String! @search(by: [exact])
+}
+type Human implements Character & Employee {
+    totalCredits: Float
+}
+type Droid implements Character {
+    primaryFunction: String
+}
+```
+
+### Query:
+
+```graphql
+query allCharacters {
+  queryCharacter {
+    name
+    __typename
+    ... on Human {
+      totalCredits
+    }
+    ... on Droid {
+      primaryFunction
+    }
+  }
+}
+```
+
+The `allCharacters` query returns a list of `Character` objects. Since `Human` and `Droid` implements the `Character` interface, the fields in the result would be returned according to the type of object.
+
+### Result:
+
+```graphql
+{
+  "data": {
+    "queryCharacter": [
+      {
+        "name": "Human1",
+        "__typename": "Human",
+        "totalCredits": 200.23
+      },
+      {
+        "name": "Human2",
+        "__typename": "Human",
+        "totalCredits": 2.23
+      },
+      {
+        "name": "Droid1",
+        "__typename": "Droid",
+        "primaryFunction": "Code"
+      },
+      {
+        "name": "Droid2",
+        "__typename": "Droid",
+        "primaryFunction": "Automate"
+      }
+    ]
+  }
+}
+```
