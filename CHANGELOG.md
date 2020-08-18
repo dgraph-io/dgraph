@@ -12,7 +12,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - GraphQL
   - Remove github issues link from the error messages. ([#6183][])
   - Allow case insensitive auth header for graphql subscriptions. ([#6179][])
-- Add cluster lables to the jaeger containers ([#6009][], [#6095][]) 
 - Add retry for schema update ([#6098][]) 
 - Queue keys for rollup during mutation. ([#6151][]) 
 
