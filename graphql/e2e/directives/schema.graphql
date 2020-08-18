@@ -46,6 +46,7 @@ type Post @dgraph(type: "myPost") {
         tags: [String] @search(by: [exact])
         topic: String @search(by: [exact]) @dgraph(pred: "test.dgraph.topic")
         numLikes: Int @search
+        numViews: Int64 @search
         isPublished: Boolean @search @dgraph(pred: "is_published")
         postType: PostType @search(by: [hash, trigram])
         author: Author! @hasInverse(field: posts) @dgraph(pred: "post.author")

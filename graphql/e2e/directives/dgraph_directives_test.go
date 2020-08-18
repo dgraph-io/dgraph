@@ -154,6 +154,11 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"index": true,
 		"tokenizer": ["int"]
 	}, {
+		"predicate": "myPost.numViews",
+		"type": "int",
+		"index": true,
+		"tokenizer": ["int"]
+	}, {
 		"predicate": "myPost.postType",
 		"type": "string",
 		"index": true,
@@ -341,6 +346,8 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 			"name": "test.dgraph.topic"
 		}, {
 			"name": "myPost.numLikes"
+		}, {
+			"name": "myPost.numViews"
 		}, {
 			"name": "is_published"
 		}, {

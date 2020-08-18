@@ -12,7 +12,9 @@ type Post {
 	publishByMonth: DateTime @search(by: [month])
 	publishByDay: DateTime @search(by: [day])
 	publishByHour: DateTime @search(by: [hour])
+	publishTimestamp: Int64 @search
 
+	numViewers: Int64 @search(by: [int64])
 	numLikes: Int @search
 	score: Float @search
 	isPublished: Boolean @search
