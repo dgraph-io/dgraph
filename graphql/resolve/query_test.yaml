@@ -230,7 +230,7 @@
     }
 
 -
-  name: "Filter with nested 'and'"
+  name: "Filter with nested and'"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { dob: { le: "2001-01-01" }, and: { reputation: { gt: 2.5 } } } } ) {
@@ -244,7 +244,9 @@
         dgraph.uid : uid
       }
     }
--
+
+
+ -
   name: "has Filter with nested and'"
   gqlquery: |
     query {
@@ -406,7 +408,6 @@
       }
     }
 
-
 -
   name: "Filter with nested order"
   gqlquery: |
@@ -462,7 +463,6 @@
       }
     }
 
-
 -
   name: "Deep filter with first"
   gqlquery: |
@@ -508,7 +508,6 @@
         dgraph.uid : uid
       }
     }
-
 
 -
   name: "All Float filters work"
