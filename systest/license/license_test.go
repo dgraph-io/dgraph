@@ -153,7 +153,7 @@ func TestEnterpriseLicense(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, stateResponse.License["user"], tt.user)
-			require.Equal(t, stateResponse.License["enabled"], false)
+			require.Equal(t, stateResponse.License["enabled"], nil)
 		} else {
 			// check the error message in case the license is not applied
 			require.Equal(t, enterpriseResponse.Errors[0].Message, tt.message)
