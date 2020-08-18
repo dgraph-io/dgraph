@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net"
 	"sort"
@@ -36,6 +37,7 @@ import (
 	"go.opencensus.io/tag"
 	"go.opencensus.io/trace"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -997,13 +999,18 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
-
+	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
+	grpc.SendHeader(ctx, md)
 	return resp, nil
 }
 
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
 	resp := &api.Response{}
 	if len(qc.req.Query) == 0 {
+		// No query, so make the query cost 0.
+		resp.Metrics = &api.Metrics{
+			NumUids: map[string]uint64{"_total": 0},
+		}
 		return resp, nil
 	}
 	if ctx.Err() != nil {
@@ -1074,6 +1081,8 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 			respMap["types"] = formatTypes(er.Types)
 		}
 		resp.Json, err = json.Marshal(respMap)
+	} else if qc.req.RespFormat == api.Request_RDF {
+		resp.Rdf, err = query.ToRDF(qc.latency, er.Subgraphs)
 	} else {
 		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs)
 	}
