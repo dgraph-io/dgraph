@@ -17,6 +17,9 @@
 package grandpa
 
 import (
+	"reflect"
+
+	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/scale"
 )
 
@@ -74,10 +77,14 @@ func (h *MessageHandler) handleFinalizationMessage(msg *FinalizationMessage) (*C
 		return req.ToConsensusMessage()
 	}
 
-	// TODO: check justification here
+	// check justification here
+	err := h.verifyFinalizationMessageJustification(msg)
+	if err != nil {
+		return nil, err
+	}
 
 	// set finalized head for round in db
-	err := h.blockState.SetFinalizedHash(msg.Vote.hash, msg.Round, h.grandpa.state.setID)
+	err = h.blockState.SetFinalizedHash(msg.Vote.hash, msg.Round, h.grandpa.state.setID)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +96,62 @@ func (h *MessageHandler) handleFinalizationMessage(msg *FinalizationMessage) (*C
 	}
 
 	return nil, nil
+}
+func (h *MessageHandler) verifyFinalizationMessageJustification(fm *FinalizationMessage) error {
+	// verify justifications
+	sigCount := 0
+	for _, just := range fm.Justification {
+		err := h.verifyJustification(just, just.Vote, fm.Round, h.grandpa.state.setID, precommit)
+		if err != nil {
+			return err
+		}
+		sigCount++
+	}
+
+	// confirm total # signatures >= grandpa threshold
+	if !(uint64(sigCount) >= h.grandpa.state.threshold()) {
+		return ErrMinVotesNotMet
+	}
+	return nil
+}
+func (h *MessageHandler) verifyJustification(just *Justification, vote *Vote, round, setID uint64, stage subround) error {
+	// verify signature
+	msg, err := scale.Encode(&FullVote{
+		Stage: stage,
+		Vote:  vote,
+		Round: round,
+		SetID: setID,
+	})
+	if err != nil {
+		return err
+	}
+
+	pk, err := ed25519.NewPublicKey(just.AuthorityID[:])
+	if err != nil {
+		return err
+	}
+
+	ok, err := pk.Verify(msg, just.Signature[:])
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return ErrInvalidSignature
+	}
+
+	// verify authority in justification set
+	authFound := false
+	for _, auth := range h.grandpa.Authorities() {
+		if reflect.DeepEqual(auth.Key.AsBytes(), just.AuthorityID) {
+			authFound = true
+			break
+		}
+	}
+	if !authFound {
+		return ErrVoterNotFound
+	}
+	return nil
 }
 
 func (h *MessageHandler) handleCatchUpRequest(msg *catchUpRequest) (*ConsensusMessage, error) {
