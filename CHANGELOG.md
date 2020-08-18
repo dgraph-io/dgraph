@@ -7,10 +7,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 ## [1.2.7] - Unreleased
 [1.2.7]: https://github.com/dgraph-io/dgraph/compare/v1.2.6...v1.2.7
 
-### Changed
-
-- Contrib k8s ha support dgraph alpha multiple zero support. ([#5987][])
-
 ### Fixed
 
 - Don't allow idx flag to be set to 0 on dgraph zero. ([#6193][])
