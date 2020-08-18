@@ -184,6 +184,9 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"predicate": "roboDroid.primaryFunction",
 		"type": "string"
 	}, {
+		"predicate": "credits",
+		"type": "string"
+	}, {
 		"predicate": "star.ship.length",
 		"type": "float"
 	}, {
@@ -222,6 +225,21 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"predicate": "Student.taughtBy",
 		"type": "uid",
 		"list": true
+	}, {
+		"predicate": "Thing.name",
+		"type": "string"
+	}, {
+		"predicate": "ThingOne.color",
+		"type": "string"
+	}, {
+		"predicate": "ThingOne.usedBy",
+		"type": "string"
+	}, {
+		"predicate": "ThingTwo.color",
+		"type": "string"
+	}, {
+		"predicate": "ThingTwo.owner",
+		"type": "string"
 	}],
 	"types": [{
 		"fields": [{
@@ -347,6 +365,8 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 			"name": "appears_in"
 		}, {
 			"name": "roboDroid.primaryFunction"
+		}, {
+			"name": "credits"
 		}],
 		"name": "roboDroid"
 	}, {
@@ -383,7 +403,30 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 			"name": "Student.taughtBy"
 		}],
 		"name": "Student"
-	}]
+	}, {
+			"fields": [{
+				"name": "Thing.name"
+			}],
+			"name": "Thing"
+		}, {
+			"fields": [{
+				"name": "Thing.name"
+			}, {
+				"name": "ThingOne.color"
+			}, {
+				"name": "ThingOne.usedBy"
+			}],
+			"name": "ThingOne"
+		}, {
+			"fields": [{
+				"name": "Thing.name"
+			}, {
+				"name": "ThingTwo.color"
+			}, {
+				"name": "ThingTwo.owner"
+			}],
+			"name": "ThingTwo"
+		}]
 }
 	`
 

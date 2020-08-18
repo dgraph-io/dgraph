@@ -2023,6 +2023,7 @@ func addDroid(t *testing.T) string {
 			"name":            "R2-D2",
 			"primaryFunction": "Robot",
 			"appearsIn":       []string{"EMPIRE"},
+			"totalCredits":    20,
 		}},
 	}
 
@@ -2041,6 +2042,82 @@ func addDroid(t *testing.T) string {
 
 	requireUID(t, result.AddDroid.Droid[0].ID)
 	return result.AddDroid.Droid[0].ID
+}
+
+func addThingOne(t *testing.T) string {
+	addDroidParams := &GraphQLParams{
+		Query: `mutation addThingOne($input: AddThingOneInput!) {
+			addThingOne(input: [$input]) {
+				thingOne {
+					id
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": map[string]interface{}{
+			"name":   "Thing-1",
+			"color":  "White",
+			"usedBy": "me",
+		}},
+	}
+
+	gqlResponse := addDroidParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		AddThingOne struct {
+			ThingOne []struct {
+				ID string
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddThingOne.ThingOne[0].ID)
+	return result.AddThingOne.ThingOne[0].ID
+}
+
+func addThingTwo(t *testing.T) string {
+	addDroidParams := &GraphQLParams{
+		Query: `mutation addThingTwo($input: AddThingTwoInput!) {
+			addThingTwo(input: [$input]) {
+				thingTwo {
+					id
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": map[string]interface{}{
+			"name":  "Thing-2",
+			"color": "Black",
+			"owner": "someone",
+		}},
+	}
+
+	gqlResponse := addDroidParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		AddThingTwo struct {
+			ThingTwo []struct {
+				ID string
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddThingTwo.ThingTwo[0].ID)
+	return result.AddThingTwo.ThingTwo[0].ID
+}
+
+func deleteThingOne(t *testing.T, thingOneId string) {
+	thingOneFilter := map[string]interface{}{"id": []string{thingOneId}}
+	deleteGqlType(t, "ThingOne", thingOneFilter, 1, nil)
+}
+
+func deleteThingTwo(t *testing.T, thingTwoId string) {
+	thingTwoFilter := map[string]interface{}{"id": []string{thingTwoId}}
+	deleteGqlType(t, "ThingTwo", thingTwoFilter, 1, nil)
 }
 
 func updateCharacter(t *testing.T, id string) {

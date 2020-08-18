@@ -128,10 +128,12 @@ func fragmentInQueryOnInterface(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
 	droidID := addDroid(t)
+	thingOneId := addThingOne(t)
+	thingTwoId := addThingTwo(t)
 
 	queryCharacterParams := &GraphQLParams{
 		Query: `query {
-			queryCharacter(filter: null) {
+			queryCharacter {
 				__typename
 				...fullCharacterFrag
 			}
@@ -145,6 +147,34 @@ func fragmentInQueryOnInterface(t *testing.T) {
 					}
 				}
 				... droidAppearsIn
+			}
+			qc1: queryCharacter {
+				__typename
+				... on Human {
+					id
+					name
+					totalCredits
+				}
+				... on Droid {
+					id
+					name
+					totalCredits
+				}
+			}
+			queryThing {
+				__typename
+				... on ThingOne {
+					id
+					name
+					color
+					usedBy
+				}
+				... on ThingTwo {
+					id
+					name
+					color
+					owner
+				}
 			}
 		}
 		fragment fullCharacterFrag on Character {
@@ -219,8 +249,38 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				"__typename": "Droid",
 				"appearsIn": ["EMPIRE"]
 			}
+		],
+		"qc1":[
+			{
+				"__typename": "Human",
+				"id": "%s",
+				"name": "Han",
+				"totalCredits": 10
+			},
+			{
+				"__typename": "Droid",
+				"id": "%s",
+				"name": "R2-D2",
+				"totalCredits": 20
+			}
+		],
+		"queryThing":[
+			{
+				"__typename": "ThingOne",
+				"id": "%s",
+				"name": "Thing-1",
+				"color": "White",
+				"usedBy": "me"
+			},
+			{
+				"__typename": "ThingTwo",
+				"id": "%s",
+				"name": "Thing-2",
+				"color": "Black",
+				"owner": "someone"
+			}
 		]
-	}`, humanID, newStarship.ID, droidID)
+	}`, humanID, newStarship.ID, droidID, humanID, droidID, thingOneId, thingTwoId)
 
 	var expected, result map[string]interface{}
 	err := json.Unmarshal([]byte(queryCharacterExpected), &expected)
@@ -231,6 +291,8 @@ func fragmentInQueryOnInterface(t *testing.T) {
 	require.Equal(t, expected, result)
 
 	cleanupStarwars(t, newStarship.ID, humanID, droidID)
+	deleteThingOne(t, thingOneId)
+	deleteThingTwo(t, thingTwoId)
 }
 
 func fragmentInQueryOnObject(t *testing.T) {

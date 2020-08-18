@@ -678,6 +678,7 @@ func addSelectionSetFrom(
 	// fetch them from Dgraph.
 	requiredFields := make(map[string]bool)
 	addedFields := make(map[string]bool)
+	fieldAdded := make(map[string]bool)
 	for _, f := range field.SelectionSet() {
 		hasCustom, rf := f.HasCustomDirective()
 		if hasCustom {
@@ -695,9 +696,14 @@ func addSelectionSetFrom(
 			continue
 		}
 
+		if _, ok := fieldAdded[f.DgraphAlias()]; ok {
+			continue
+		}
+		fieldAdded[f.DgraphAlias()] = true
+
 		child := &gql.GraphQuery{}
 
-		child.Alias = f.Name()
+		child.Alias = f.DgraphAlias()
 
 		if f.Type().Name() == schema.IDType {
 			child.Attr = "uid"

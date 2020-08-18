@@ -112,6 +112,8 @@ type Operation interface {
 type Field interface {
 	Name() string
 	Alias() string
+	// DgraphAlias is used as an alias in DQL while rewriting the GraphQL field
+	DgraphAlias() string
 	ResponseName() string
 	Arguments() map[string]interface{}
 	ArgValue(name string) interface{}
@@ -209,6 +211,8 @@ type schema struct {
 	mutatedType map[string]*astType
 	// Map from typename to ast.Definition
 	typeNameAst map[string][]*ast.Definition
+	// map from field name to bool, indicating if a field name was repeated across different types
+	repeatedFieldNames map[string]bool
 	// customDirectives stores the mapping of typeName -> fieldName -> @custom definition.
 	// It is read-only.
 	// The outer map will contain typeName key only if one of the fields on that type has @custom.
@@ -538,6 +542,44 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	return typeNameAst
 }
 
+func repeatedFieldMappings(s *ast.Schema) map[string]bool {
+	repeatedFieldNames := make(map[string]bool)
+
+	for _, typ := range s.Types {
+		if typ.Kind != ast.Interface {
+			continue
+		}
+
+		interfaceFields := make(map[string]bool)
+		for _, field := range typ.Fields {
+			interfaceFields[field.Name] = true
+		}
+
+		repeatedFieldsInTypesWithCommonAncestor := make(map[string]bool)
+		for _, typ := range s.PossibleTypes[typ.Name] {
+			for _, field := range typ.Fields {
+				if interfaceFields[field.Name] || field.Type.Name() == IDType {
+					continue
+				}
+
+				if _, ok := repeatedFieldsInTypesWithCommonAncestor[field.Name]; ok {
+					repeatedFieldsInTypesWithCommonAncestor[field.Name] = true
+				} else {
+					repeatedFieldsInTypesWithCommonAncestor[field.Name] = false
+				}
+			}
+		}
+
+		for fName, repeated := range repeatedFieldsInTypesWithCommonAncestor {
+			if repeated {
+				repeatedFieldNames[fName] = true
+			}
+		}
+	}
+
+	return repeatedFieldNames
+}
+
 func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
 	customDirectives := make(map[string]map[string]*ast.Directive)
 
@@ -579,11 +621,12 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
-		schema:           s,
-		dgraphPredicate:  dgraphPredicate,
-		typeNameAst:      typeMappings(s),
-		customDirectives: customMappings(s),
-		authRules:        authRules,
+		schema:             s,
+		dgraphPredicate:    dgraphPredicate,
+		typeNameAst:        typeMappings(s),
+		repeatedFieldNames: repeatedFieldMappings(s),
+		customDirectives:   customMappings(s),
+		authRules:          authRules,
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
 
@@ -603,6 +646,24 @@ func (f *field) Name() string {
 
 func (f *field) Alias() string {
 	return f.field.Alias
+}
+
+func (f *field) DgraphAlias() string {
+	dgAlias := f.field.Name
+	if f.op.inSchema.repeatedFieldNames[dgAlias] {
+		//if f.Type().Name() == IDType {
+		//	dgAlias = f.GetObjectName() + "." + dgAlias
+		//} else {
+		dgAlias = f.DgraphPredicate()
+		//}
+	}
+	//if typName, ok := f.op.interfaceImplFragFields[f.field]; ok {
+	//	dgAlias += typName
+	//}
+	//if f.field.Alias != f.field.Name {
+	//	dgAlias += "_" + f.field.Alias
+	//}
+	return dgAlias
 }
 
 func (f *field) ResponseName() string {
@@ -1056,6 +1117,10 @@ func (q *query) Alias() string {
 	return (*field)(q).Alias()
 }
 
+func (q *query) DgraphAlias() string {
+	return q.Name()
+}
+
 func (q *query) SetArgTo(arg string, val interface{}) {
 	(*field)(q).SetArgTo(arg, val)
 }
@@ -1183,6 +1248,10 @@ func (m *mutation) Name() string {
 
 func (m *mutation) Alias() string {
 	return (*field)(m).Alias()
+}
+
+func (m *mutation) DgraphAlias() string {
+	return m.Name()
 }
 
 func (m *mutation) SetArgTo(arg string, val interface{}) {
