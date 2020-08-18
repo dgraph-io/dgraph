@@ -6,4 +6,4 @@ services:
       - "./public:/home/ubuntu/dgraph/wiki/public:ro"
       - "./nginx/docs.conf:/etc/nginx/conf.d/default.conf:ro"
     ports:
-      - 80:80
+      - 82:80
