@@ -29,10 +29,12 @@ import (
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -74,6 +76,9 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	if err != nil {
 		return err
 	}
+	// Clear the list from the cache after a rollup.
+	posting.RemoveCacheFor(key)
+
 	const N = uint64(1000)
 	if glog.V(2) {
 		if count := atomic.AddUint64(&ir.count, 1); count%N == 0 {
@@ -254,6 +259,29 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	return nil
 }
 
+// ResetCache will clear all the cached list.
+func ResetCache() {
+	lCache.Clear()
+}
+// RemoveCacheFor will delete the list corresponding to the given key.
+func RemoveCacheFor(key []byte) {
+	lCache.Del(key)
+}
+// RemoveCachedKeys will delete the cached list by this txn.
+func (txn *Txn) RemoveCachedKeys() {
+	if txn == nil || txn.cache == nil {
+		return
+	}
+	for key := range txn.cache.deltas {
+		lCache.Del(key)
+	}
+}
+
+// TODO: use ristretto version with this function. Included in ristretto commit 9353c.
+func WaitForCache() {
+	// lCache.Wait()
+}
+
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	if plist == nil {
 		return errors.Errorf("cannot unmarshal value to a nil posting list of key %s",
@@ -366,6 +394,27 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 }
 
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+	cachedVal, ok := lCache.Get(key)
+	if ok {
+		l, ok := cachedVal.(*List)
+		if ok {
+			// No need to clone the immutable layer or the key since mutations will not modify it.
+			lCopy := &List{
+				minTs: l.minTs,
+				maxTs: l.maxTs,
+				key:   key,
+				plist: l.plist,
+			}
+			if l.mutationMap != nil {
+				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+				for ts, pl := range l.mutationMap {
+					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+				}
+			}
+			return lCopy, nil
+		}
+	}
+
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
@@ -377,5 +426,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	itr := txn.NewKeyIterator(key, iterOpts)
 	defer itr.Close()
 	itr.Seek(key)
-	return ReadPostingList(key, itr)
+	l, err := ReadPostingList(key, itr)
+	if err != nil {
+		return l, err
+	}
+	lCache.Set(key, l, 0)
+	return l, nil
 }
