@@ -230,7 +230,7 @@
     }
 
 -
-  name: "Filter with nested and'"
+  name: "Filter with nested 'and'"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { dob: { le: "2001-01-01" }, and: { reputation: { gt: 2.5 } } } } ) {
@@ -247,7 +247,7 @@
 
 
  -
-  name: "has Filter with nested and'"
+  name: "has Filter with nested 'and'"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { dob: { le: "2001-01-01" }, and: { has : country } } } ) {
