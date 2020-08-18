@@ -12,7 +12,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - GraphQL
   - Remove github issues link from the error messages. ([#6183][])
   - Allow case insensitive auth header for graphql subscriptions. ([#6179][])
-- Add cluster lables to the jaeger containers ([#6009][], [#6095][]) 
 - Add retry for schema update ([#6098][]) 
 - Queue keys for rollup during mutation. ([#6151][]) 
 
@@ -68,9 +67,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Changed
 
-- Contrib k8s ha support dgraph alpha multiple zero support. ([#5988][])
 - Add retry for schema update. ([#6097][]) 
-- Add cluster lables to the jaeger containers. ([#6094][])
 - Queue keys for rollup during mutation. ([#6150][]) 
 
 ### Fixed
@@ -93,10 +90,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ## [1.2.7] - Unreleased
 [1.2.7]: https://github.com/dgraph-io/dgraph/compare/v1.2.6...v1.2.7
-
-### Changed
-
-- Contrib k8s ha support dgraph alpha multiple zero support. ([#5987][])
 
 ### Fixed
 
