@@ -588,7 +588,7 @@
         id : uid
         ownedBy : UserSecret.ownedBy
       }
-      UserSecretRoot as var(func: uid(UserSecret1), orderasc: UserSecret.aSecret) @filter(uid(UserSecretAuth2))
+      UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
       UserSecret1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
@@ -729,7 +729,7 @@
         content : Movie.content
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie1), orderasc: Movie.content) @filter((NOT (uid(MovieAuth2)) AND (uid(MovieAuth3) OR uid(MovieAuth4))))
+      MovieRoot as var(func: uid(Movie1)) @filter((NOT (uid(MovieAuth2)) AND (uid(MovieAuth3) OR uid(MovieAuth4))))
       Movie1 as var(func: type(Movie)) @filter(eq(Movie.content, "A. N. Author"))
       MovieAuth2 as var(func: uid(Movie1)) @filter(eq(Movie.hidden, true)) @cascade
       MovieAuth3 as var(func: uid(Movie1)) @cascade {
@@ -769,7 +769,7 @@
         }
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie3), orderasc: Movie.content) @filter((NOT (uid(MovieAuth4)) AND (uid(MovieAuth5) OR uid(MovieAuth6))))
+      MovieRoot as var(func: uid(Movie3)) @filter((NOT (uid(MovieAuth4)) AND (uid(MovieAuth5) OR uid(MovieAuth6))))
       Movie3 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
       MovieAuth4 as var(func: uid(Movie3)) @filter(eq(Movie.hidden, true)) @cascade
       MovieAuth5 as var(func: uid(Movie3)) @cascade {
@@ -833,7 +833,7 @@
         }
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie8), orderasc: Movie.content) @filter((NOT (uid(MovieAuth9)) AND (uid(MovieAuth10) OR uid(MovieAuth11))))
+      MovieRoot as var(func: uid(Movie8)) @filter((NOT (uid(MovieAuth9)) AND (uid(MovieAuth10) OR uid(MovieAuth11))))
       Movie8 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
       MovieAuth9 as var(func: uid(Movie8)) @filter(eq(Movie.hidden, true)) @cascade
       MovieAuth10 as var(func: uid(Movie8)) @cascade {

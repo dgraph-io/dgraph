@@ -458,7 +458,6 @@ func (authRw *authRewriter) addAuthQueries(
 			Args: []gql.Arg{{Value: authRw.varName}},
 		},
 		Filter: filter,
-		Order:  dgQuery.Order,
 	}
 
 	dgQuery.Filter = nil
