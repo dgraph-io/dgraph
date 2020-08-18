@@ -958,6 +958,7 @@ func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}
 // bubble back to the user as a GraphQL error when the query fails. Really,
 // they should fail query validation and never get here.
 func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree {
+
 	var ands []*gql.FilterTree
 	var or *gql.FilterTree
 	// Get a stable ordering so we generate the same thing each time.
@@ -1036,17 +1037,16 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// postType: Question -> eq(Post.postType, "Question")
 				switch field {
 				case "has":
-					fieldName, ok := dgFunc.(string)
-					if ok {
-						ands = append(ands, &gql.FilterTree{
-							Func: &gql.Function{
-								Name: field,
-								Args: []gql.Arg{
-									{Value: typ.DgraphPredicate(fieldName)},
-								},
+					fieldName := dgFunc.(string)
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: field,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(fieldName)},
 							},
-						})
-					}
+						},
+					})
+
 				default:
 					fn := "eq"
 					ands = append(ands, &gql.FilterTree{
