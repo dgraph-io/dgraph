@@ -85,10 +85,10 @@ func (r *reducer) run() error {
 			splitWriter := tmpDb.NewManagedWriteBatch()
 
 			ci := &countIndexer{
-				reducer: r,
-				writer: writer,
+				reducer:     r,
+				writer:      writer,
 				splitWriter: splitWriter,
-				tmpDb: tmpDb,
+				tmpDb:       tmpDb,
 			}
 			sort.Slice(partitionKeys, func(i, j int) bool {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
@@ -453,8 +453,8 @@ func (r *reducer) writeSplitLists(db, tmpDb *badger.DB) {
 }
 
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
-	cpu := runtime.NumCPU()
-	fmt.Printf("Num CPUs: %d\n", cpu)
+	cpu := r.opt.NumGoroutines
+	fmt.Printf("Num Encoders: %d\n", cpu)
 	encoderCh := make(chan *encodeRequest, 2*cpu)
 	writerCh := make(chan *encodeRequest, 2*cpu)
 	encoderCloser := y.NewCloser(cpu)
