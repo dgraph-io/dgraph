@@ -49,7 +49,7 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 		return resolve.EmptyResult(m, err), false
 	}
 
-	schHandler, err := schema.NewHandler(input.Set.Schema)
+	schHandler, err := schema.NewHandler(input.Set.Schema, false)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}

@@ -708,6 +708,8 @@ func TestAuthQueryRewriting(t *testing.T) {
 		strSchema := string(result)
 
 		authMeta, err := authorization.Parse(strSchema)
+		authorization.SetAuthMeta(authMeta)
+
 		metaInfo := &testutil.AuthMeta{
 			PublicKey: authMeta.VerificationKey,
 			Namespace: authMeta.Namespace,

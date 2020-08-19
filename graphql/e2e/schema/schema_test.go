@@ -17,9 +17,11 @@
 package schema
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -326,6 +328,92 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 	// we should still get the schema we inserted earlier
 	require.Equal(t, schema, getGQLSchemaRequireId(t, groupOneAdminServer))
 
+}
+
+// VerifyEmptySchema verifies that the schema is not set in the GraphQL server.
+func VerifyEmptySchema(t *testing.T) {
+	queryStudent := `
+	query {
+		queryStudent {
+			email
+		}
+	}`
+
+	queryParams := &common.GraphQLParams{
+		Query: queryStudent,
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Contains(t, gqlResponse.Errors.Error(), "There's no GraphQL schema in Dgraph")
+}
+
+func TestGQLSchemaValidate(t *testing.T) {
+	testCases := []struct {
+		schema string
+		error string
+		valid 	bool
+	}{
+		{
+			schema: `
+				type Task @auth(
+					query: { rule: "{$USERROLE: { eq: \"USER\"}}" }
+				) {
+					id: ID!
+					name: String!
+					occurrences: [TaskOccurrence] @hasInverse(field: task)
+				}
+				
+				type TaskOccurrence @auth(
+					query: { rule: "query { queryTaskOccurrence { task { id } } }" }
+				) {
+					id: ID!
+					due: DateTime
+					comp: DateTime
+					task: Task @hasInverse(field: occurrences)
+				}
+			`,
+			valid: true,
+		},
+		{
+			schema: `
+				type X {
+					id: ID @dgraph(pred: "X.id")
+					name: String
+				}
+				type Y {
+					f1: String! @dgraph(pred:"~movie")
+				}
+			`,
+			error: `input:3: Type X; Field id: has the @dgraph directive but fields of type ID can't have the @dgraph directive. input:7: Type Y; Field f1 is of type String, but reverse predicate in @dgraph directive only applies to fields with object types. `,
+			valid: false,
+		},
+	}
+
+	response :=  struct {
+		Status string
+		Error string
+	}{}
+	validateUrl := common.GraphqlAdminURL + "/schema/validate"
+
+	for _, tcase := range testCases {
+		resp, err := http.Post(validateUrl, "application/json", bytes.NewBuffer([]byte(tcase.schema)))
+		require.NoError(t, err)
+
+		decoder := json.NewDecoder(resp.Body)
+		err = decoder.Decode(&response)
+		require.NoError(t, err)
+
+		// Verify that we only validate the schema and not set it.
+		VerifyEmptySchema(t)
+
+		if tcase.valid {
+			require.Equal(t, resp.StatusCode, http.StatusOK)
+			require.Equal(t, response.Status, "valid")
+			continue
+		}
+		require.Equal(t, resp.StatusCode, http.StatusBadRequest)
+		require.Equal(t, response.Status, "invalid")
+		require.Contains(t, response.Error, tcase.error)
+	}
 }
 
 func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {

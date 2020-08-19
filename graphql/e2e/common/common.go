@@ -37,8 +37,8 @@ import (
 )
 
 const (
-	graphqlURL      = "http://localhost:8180/graphql"
-	graphqlAdminURL = "http://localhost:8180/admin"
+	GraphqlURL      = "http://localhost:8180/graphql"
+	GraphqlAdminURL = "http://localhost:8180/admin"
 	AlphagRPC       = "localhost:9180"
 
 	adminDgraphHealthURL           = "http://localhost:8280/health?all"
@@ -173,7 +173,7 @@ type student struct {
 }
 
 func BootstrapServer(schema, data []byte) {
-	err := checkGraphQLStarted(graphqlAdminURL)
+	err := checkGraphQLStarted(GraphqlAdminURL)
 	if err != nil {
 		x.Panic(errors.Errorf(
 			"Waited for GraphQL test server to become available, but it never did.\n"+
@@ -195,7 +195,7 @@ func BootstrapServer(schema, data []byte) {
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
-	err = addSchema(graphqlAdminURL, string(schema))
+	err = addSchema(GraphqlAdminURL, string(schema))
 	if err != nil {
 		x.Panic(err)
 	}
@@ -371,7 +371,7 @@ func gzipCompressionHeader(t *testing.T) {
 		}`,
 	}
 
-	req, err := queryCountry.createGQLPost(graphqlURL)
+	req, err := queryCountry.createGQLPost(GraphqlURL)
 	require.NoError(t, err)
 
 	req.Header.Set("Content-Encoding", "gzip")
@@ -398,7 +398,7 @@ func gzipCompressionNoHeader(t *testing.T) {
 		gzipEncoding: true,
 	}
 
-	req, err := queryCountry.createGQLPost(graphqlURL)
+	req, err := queryCountry.createGQLPost(GraphqlURL)
 	require.NoError(t, err)
 
 	req.Header.Del("Content-Encoding")
@@ -424,7 +424,7 @@ func getQueryEmptyVariable(t *testing.T) {
 			}
 		}`,
 	}
-	req, err := queryCountry.createGQLGet(graphqlURL)
+	req, err := queryCountry.createGQLGet(GraphqlURL)
 	require.NoError(t, err)
 
 	q := req.URL.Query()
@@ -634,7 +634,7 @@ func allCountriesAdded() ([]*country, error) {
 		return nil, errors.Wrap(err, "unable to build GraphQL query")
 	}
 
-	req, err := http.NewRequest("POST", graphqlURL, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", GraphqlURL, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to build GraphQL request")
 	}

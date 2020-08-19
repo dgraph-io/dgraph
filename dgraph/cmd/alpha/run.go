@@ -497,6 +497,29 @@ func setupServer(closer *y.Closer) {
 		adminSchemaHandler(w, r, adminServer)
 	})))
 
+	http.Handle("/admin/schema/validate", http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		schema := readRequest(w, r)
+		if schema == nil {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		err := admin.SchemaValidate(string(schema))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			// There could be multiple errors, so replace the newline with whitespace since the newline is an
+			// invalid JSON character.
+			errStr := strings.ReplaceAll(err.Error(), "\n", " ")
+			x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"invalid", "error" : "%s"}`, errStr))))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"valid"}`))))
+	}))
+
 	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			shutDownHandler(w, r, adminServer)

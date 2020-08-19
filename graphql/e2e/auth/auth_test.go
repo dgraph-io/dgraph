@@ -1260,6 +1260,7 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			panic(err)
 		}
+		authorization.SetAuthMeta(authMeta)
 
 		metaInfo = &testutil.AuthMeta{
 			PublicKey: authMeta.VerificationKey,
