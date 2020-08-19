@@ -300,7 +300,7 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 		fd:       fd,
 		reader:   reader,
 		batchCh:  make(chan *iteratorEntry, 3),
-		freelist: make(chan *iteratorEntry, 3),
+		freelist: make(chan *iteratorEntry, 64),
 	}
 	return header, itr
 }
