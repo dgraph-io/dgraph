@@ -216,7 +216,8 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 		}
 		x.Check2(r.Discard(n))
 
-		eBuf = make([]byte, sz)
+		// eBuf would be released in toList.
+		eBuf = y.Calloc(int(sz))
 		x.Check2(io.ReadFull(r, eBuf))
 
 		key, err = GetKeyForMapEntry(eBuf)
@@ -507,6 +508,12 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 }
 
 func (r *reducer) toList(bufEntries [][]byte, list, splitList *bpb.KVList) []*countIndexEntry {
+	defer func() {
+		for _, buf := range bufEntries {
+			y.Free(buf)
+		}
+	}()
+
 	sort.Slice(bufEntries, func(i, j int) bool {
 		lh, err := GetKeyForMapEntry(bufEntries[i])
 		x.Check(err)
