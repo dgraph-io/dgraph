@@ -218,8 +218,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 		}
 		x.Check2(r.Discard(n))
 
-		cbuf.WriteLen(int(sz))
-		eBuf := cbuf.Allocate(int(sz))
+		eBuf := cbuf.SliceAllocate(int(sz))
 		x.Check2(io.ReadFull(r, eBuf))
 
 		key, err = GetKeyForMapEntry(eBuf)
@@ -315,11 +314,12 @@ type countIndexEntry struct {
 }
 
 type encodeRequest struct {
-	entries   [][]byte
+	cbuf      *y.Buffer
 	countKeys []*countIndexEntry
 	wg        *sync.WaitGroup
 	list      *bpb.KVList
 	splitList *bpb.KVList
+	offsets   []int
 }
 
 func (r *reducer) streamIdFor(pred string) uint32 {
@@ -341,11 +341,17 @@ func (r *reducer) streamIdFor(pred string) uint32 {
 
 func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
-	for req := range entryCh {
 
+	// Create a slice of offsets.
+	// var offset []int
+	// var sortedOffsets []int
+	var offsets []int
+	for req := range entryCh {
+		req.offsets = offsets
 		req.list = &bpb.KVList{}
 		req.splitList = &bpb.KVList{}
-		countKeys := r.toList(req.entries, req.list, req.splitList)
+		countKeys := r.toList(req)
+		offsets = req.offsets
 
 		for _, kv := range req.list.Kv {
 			pk, err := x.Parse(kv.Key)
@@ -474,11 +480,13 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	go r.startWriting(ci, writerCh, writerCloser)
 
 	for i := 0; i < len(partitionKeys); i++ {
-		entries := make([][]byte, 0, len(mapItrs))
+		cbuf := y.NewBuffer(4 << 20)
 		for _, itr := range mapItrs {
 			res := itr.Next()
 			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
-			entries = append(entries, res.batch)
+			cbuf.Write(res.batch)
+			y.Free(res.batch)
+			// entries = append(entries, res.batch)
 			itr.release(res)
 		}
 
@@ -486,21 +494,21 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		wg.Add(1)
 		atomic.AddInt32(&r.prog.numEncoding, 1)
 
-		req := &encodeRequest{entries: entries, wg: wg}
+		req := &encodeRequest{cbuf: cbuf, wg: wg}
 		encoderCh <- req
 		writerCh <- req
 	}
 
 	// Drain the last batch
-	batch := make([][]byte, 0, batchAlloc)
+	cbuf := y.NewBuffer(1 << 20)
 	for _, itr := range mapItrs {
 		res := itr.Next()
 		y.AssertTrue(res.partitionKey == nil)
-		batch = append(batch, res.batch)
+		cbuf.Write(res.batch)
 	}
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
-	req := &encodeRequest{entries: batch, wg: wg}
+	req := &encodeRequest{cbuf: cbuf, wg: wg}
 	atomic.AddInt32(&r.prog.numEncoding, 1)
 	encoderCh <- req
 	writerCh <- req
@@ -514,17 +522,20 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser.SignalAndWait()
 }
 
-func (r *reducer) toList(bufEntries [][]byte, list, splitList *bpb.KVList) []*countIndexEntry {
+func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
+	cbuf := req.cbuf
 	defer func() {
-		for _, buf := range bufEntries {
-			y.Free(buf)
-		}
+		cbuf.Release()
 	}()
 
-	sort.Slice(bufEntries, func(i, j int) bool {
-		lh, err := GetKeyForMapEntry(bufEntries[i])
+	list := req.list
+	splitList := req.splitList
+	req.offsets = cbuf.SliceOffsets(req.offsets[:0])
+
+	sort.Slice(req.offsets, func(i, j int) bool {
+		lh, err := GetKeyForMapEntry(cbuf.Slice(req.offsets[i]))
 		x.Check(err)
-		rh, err := GetKeyForMapEntry(bufEntries[j])
+		rh, err := GetKeyForMapEntry(cbuf.Slice(req.offsets[j]))
 		x.Check(err)
 		return bytes.Compare(lh, rh) < 0
 	})
@@ -628,8 +639,9 @@ func (r *reducer) toList(bufEntries [][]byte, list, splitList *bpb.KVList) []*co
 		currentBatch = currentBatch[:0]
 	}
 
-	for _, entry := range bufEntries {
+	for _, offset := range req.offsets {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
+		entry := cbuf.Slice(offset)
 		entryKey, err := GetKeyForMapEntry(entry)
 		x.Check(err)
 		if !bytes.Equal(entryKey, currentKey) && currentKey != nil {
