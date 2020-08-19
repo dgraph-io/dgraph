@@ -1,5 +1,5 @@
 +++
-title = "Administering Your Slash GraphQL Backend"
+title = "Administering Your Backend"
 [menu.main]
   url = "/slash-graphql/admin/"
   identifier = "slash-graphql-admin"
