@@ -142,6 +142,9 @@ func Init(ps *badger.DB) {
 	go updateMemoryMetrics(closer)
 
 	// Initialize cache.
+	if !x.WorkerConfig.PlCache {
+		return
+	}
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 200e6,
@@ -177,7 +180,6 @@ func Init(ps *badger.DB) {
 				x.CacheKeptGets.M(int64(m.GetsKept())))
 		}
 	}()
-
 }
 
 // Cleanup waits until the closer has finished processing.

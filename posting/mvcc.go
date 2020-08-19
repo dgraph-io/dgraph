@@ -29,7 +29,6 @@ import (
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -77,7 +76,7 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		return err
 	}
 	// Clear the list from the cache after a rollup.
-	posting.RemoveCacheFor(key)
+	RemoveCacheFor(key)
 
 	const N = uint64(1000)
 	if glog.V(2) {
@@ -263,10 +262,12 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 func ResetCache() {
 	lCache.Clear()
 }
+
 // RemoveCacheFor will delete the list corresponding to the given key.
 func RemoveCacheFor(key []byte) {
 	lCache.Del(key)
 }
+
 // RemoveCachedKeys will delete the cached list by this txn.
 func (txn *Txn) RemoveCachedKeys() {
 	if txn == nil || txn.cache == nil {
@@ -277,9 +278,8 @@ func (txn *Txn) RemoveCachedKeys() {
 	}
 }
 
-// TODO: use ristretto version with this function. Included in ristretto commit 9353c.
 func WaitForCache() {
-	// lCache.Wait()
+	lCache.Wait()
 }
 
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {

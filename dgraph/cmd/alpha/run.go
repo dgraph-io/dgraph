@@ -198,6 +198,10 @@ they form a Raft group and provide synchronous replication.
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
+
+	// Flag to enable posting list Ristretto cache.
+	flag.Bool("pl_cache", false, "EXPERIMENTAL. Set to true to enable the posting list cache. "+
+		"Right now this cache is not guaranteed to be consistent, hence it's an experimental flag.")
 }
 
 func setupCustomTokenizers() {
@@ -637,6 +641,7 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
+		PlCache:             Alpha.Conf.GetBool("pl_cache"),
 	}
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
