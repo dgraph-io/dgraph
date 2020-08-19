@@ -128,8 +128,9 @@ finally:
 It is possible to use Ratel to visualize your Slash GraphQL backend with GraphQL+-. You may use self hosted Ratel, or using [Dgraph Play](https://play.dgraph.io/?latest#connection)
 
 In order to configure Ratel, please do the following:
+
 * Click the Dgraph logo in the top left to bring up the connection screen (by default, it has the caption: play.dgraph.io)
-* Enter the path to your backend's host. This is obtained by removing `/graphql` from the end of your graphql endpoint. As an example, if your graphql endpoint is `https://frozen-mango-42.us-west-2.aws.cloud.dgraph.io/graphql`, then the host for ratel will be at `https://frozen-mango.us-west-2.aws.cloud.dgraph.io`
+* Enter your backend's host in the Dgraph Server URL field. This is obtained by removing `/graphql` from the end of your graphql endpoint. As an example, if your graphql endpoint is `https://frozen-mango-42.us-west-2.aws.cloud.dgraph.io/graphql`, then the host for ratel will be at `https://frozen-mango.us-west-2.aws.cloud.dgraph.io`
 * Click the blue 'Connect' button. You should see a green tick check next to the word connected
 * Click on the 'Extra Settings' tab, and enter your API token into the 'Slash API Key" field. Please see [Authentication](/slash-graphql/admin/authentication) if you would like to create a new API token.
 * Click on the blue 'Continue' button
