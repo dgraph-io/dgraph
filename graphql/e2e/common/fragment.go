@@ -142,6 +142,7 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				... on Character {
 					... on Character {
 						... on Human {
+							id
 							name
 						}
 					}
@@ -149,16 +150,12 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				... droidAppearsIn
 			}
 			qc1: queryCharacter {
-				__typename
 				... on Human {
+					__typename
 					id
-					name
-					totalCredits
 				}
 				... on Droid {
 					id
-					name
-					totalCredits
 				}
 			}
 			queryThing {
@@ -174,6 +171,15 @@ func fragmentInQueryOnInterface(t *testing.T) {
 					name
 					color
 					owner
+				}
+			}
+			qt: queryThing {
+				... on ThingOne {
+					__typename
+					id
+				}
+				... on ThingTwo {
+					__typename
 				}
 			}
 		}
@@ -243,6 +249,7 @@ func fragmentInQueryOnInterface(t *testing.T) {
 		"qc":[
 			{
 				"__typename": "Human",
+				"id": "%s",
 				"name": "Han"
 			},
 			{
@@ -253,15 +260,10 @@ func fragmentInQueryOnInterface(t *testing.T) {
 		"qc1":[
 			{
 				"__typename": "Human",
-				"id": "%s",
-				"name": "Han",
-				"totalCredits": 10
+				"id": "%s"
 			},
 			{
-				"__typename": "Droid",
-				"id": "%s",
-				"name": "R2-D2",
-				"totalCredits": 20
+				"id": "%s"
 			}
 		],
 		"queryThing":[
@@ -279,8 +281,18 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				"color": "Black",
 				"owner": "someone"
 			}
+		],
+		"qt":[
+			{
+				"__typename": "ThingOne",
+				"id": "%s"
+			},
+			{
+				"__typename": "ThingTwo"
+			}
 		]
-	}`, humanID, newStarship.ID, droidID, humanID, droidID, thingOneId, thingTwoId)
+	}`, humanID, newStarship.ID, droidID, humanID, humanID, droidID, thingOneId, thingTwoId,
+		thingOneId)
 
 	var expected, result map[string]interface{}
 	err := json.Unmarshal([]byte(queryCharacterExpected), &expected)

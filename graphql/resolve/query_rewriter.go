@@ -677,7 +677,9 @@ func addSelectionSetFrom(
 	// are required in the body template for other fields requested within the query. We must
 	// fetch them from Dgraph.
 	requiredFields := make(map[string]bool)
+	// addedFields is a map from field name to bool
 	addedFields := make(map[string]bool)
+	// fieldAdded is a map from field's dgraph alias to bool
 	fieldAdded := make(map[string]bool)
 	for _, f := range field.SelectionSet() {
 		hasCustom, rf := f.HasCustomDirective()
@@ -696,14 +698,17 @@ func addSelectionSetFrom(
 			continue
 		}
 
+		// skip if we have already added a query for this field in DQL. It helps make sure that if
+		// a field is being asked twice or more, each time with a new alias, then we only add it
+		// once in DQL query.
 		if _, ok := fieldAdded[f.DgraphAlias()]; ok {
 			continue
 		}
 		fieldAdded[f.DgraphAlias()] = true
 
-		child := &gql.GraphQuery{}
-
-		child.Alias = f.DgraphAlias()
+		child := &gql.GraphQuery{
+			Alias: f.DgraphAlias(),
+		}
 
 		if f.Type().Name() == schema.IDType {
 			child.Attr = "uid"
@@ -825,13 +830,14 @@ func addSelectionSetFrom(
 	for _, fname := range rfset {
 		if _, ok := addedFields[fname]; !ok {
 			f := field.Type().Field(fname)
-			child := &gql.GraphQuery{}
-			child.Alias = f.Name()
+			child := &gql.GraphQuery{
+				Alias: f.DgraphAlias(),
+			}
 
 			if f.Type().Name() == schema.IDType {
 				child.Attr = "uid"
 			} else {
-				child.Attr = field.Type().DgraphPredicate(fname)
+				child.Attr = f.DgraphPredicate()
 			}
 			q.Children = append(q.Children, child)
 		}

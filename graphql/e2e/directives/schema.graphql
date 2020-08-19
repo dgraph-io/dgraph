@@ -99,7 +99,6 @@ type Human implements Character & Employee {
 
 type Droid implements Character @dgraph(type: "roboDroid") {
         primaryFunction: String
-        totalCredits: Float @dgraph(pred: "credits")
 }
 
 enum Episode {

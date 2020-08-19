@@ -746,6 +746,10 @@ func completeDgraphResult(
 		// case
 	}
 
+	// TODO: correctly handle DgraphAlias for custom field resolution, at present it uses f.Name(),
+	// it should be using f.DgraphAlias() to get values from valToComplete.
+	// It works ATM because there hasn't been a scenario where there are two fields with same
+	// name in implementing types of an interface with @custom on some field in those types.
 	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.DgraphAlias()])
 	if err != nil {
 		errs = append(errs, schema.AsGQLErrors(err)...)

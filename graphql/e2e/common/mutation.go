@@ -2027,7 +2027,6 @@ func addDroid(t *testing.T) string {
 			"name":            "R2-D2",
 			"primaryFunction": "Robot",
 			"appearsIn":       []string{"EMPIRE"},
-			"totalCredits":    20,
 		}},
 	}
 
@@ -3176,6 +3175,7 @@ func ensureAliasInMutationPayload(t *testing.T) {
 		Query: `mutation {
 			addState(input: [{xcode: "S1", name: "State1"}]) {
 				type: __typename
+				numUids
 				count: numUids
 				op: state {
 					xcode
@@ -3187,8 +3187,15 @@ func ensureAliasInMutationPayload(t *testing.T) {
 	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	addStateExpected := `{"addState":{"type":"AddStatePayload","count":1,"op":[{"xcode":"S1"}]}}`
-	require.Equal(t, addStateExpected, string(gqlResponse.Data))
+	addStateExpected := `{
+		"addState": {
+			"type": "AddStatePayload",
+			"numUids": 1,
+			"count": 1,
+			"op": [{"xcode":"S1"}]
+		}
+	}`
+	require.JSONEq(t, addStateExpected, string(gqlResponse.Data))
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
 	deleteState(t, filter, 1, nil)
@@ -3233,6 +3240,7 @@ func mutationsWithAlias(t *testing.T) {
 				set: { name: "Testland Alias" }
 			}) {
 				updatedCountry: country {
+					name
 					theName: name
 				}
 			}
@@ -3246,7 +3254,7 @@ func mutationsWithAlias(t *testing.T) {
 			"filter": map[string]interface{}{"id": []string{newCountry.ID}}},
 	}
 	multiMutationExpected := `{
-		"upd": { "updatedCountry": [{ "theName": "Testland Alias" }] },
+		"upd": { "updatedCountry": [{ "name": "Testland Alias", "theName": "Testland Alias" }] },
 		"del" : { "message": "Deleted", "uids": 1 }
 	}`
 

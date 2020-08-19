@@ -85,9 +85,6 @@ func TestSchema_Normal(t *testing.T) {
 			"predicate": "Droid.primaryFunction",
 			"type": "string"
 		}, {
-			"predicate": "Droid.totalCredits",
-			"type": "float"
-		}, {
 			"predicate": "Employee.ename",
 			"type": "string"
 		}, {
@@ -285,8 +282,6 @@ func TestSchema_Normal(t *testing.T) {
 				"name": "Character.appearsIn"
 			}, {
 				"name": "Droid.primaryFunction"
-			}, {
-				"name": "Droid.totalCredits"
 			}],
 			"name": "Droid"
 		}, {

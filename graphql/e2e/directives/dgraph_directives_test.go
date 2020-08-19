@@ -189,9 +189,6 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"predicate": "roboDroid.primaryFunction",
 		"type": "string"
 	}, {
-		"predicate": "credits",
-		"type": "string"
-	}, {
 		"predicate": "star.ship.length",
 		"type": "float"
 	}, {
@@ -372,8 +369,6 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 			"name": "appears_in"
 		}, {
 			"name": "roboDroid.primaryFunction"
-		}, {
-			"name": "credits"
 		}],
 		"name": "roboDroid"
 	}, {
