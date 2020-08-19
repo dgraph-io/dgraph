@@ -169,7 +169,7 @@ func (s *state) findAccount(txn *dgo.Txn, key int) (account, error) {
 	}
 	if len(accounts) == 0 {
 		if *verbose {
-			log.Printf("[StartTs: %v] Unable to find account for K_%02d. StartTs: %v, JSON: %s\n", resp.Txn.StartTs, key, resp.Json)
+			log.Printf("[StartTs: %v] Unable to find account for K_%02d. JSON: %s\n", resp.Txn.StartTs, key, resp.Json)
 		}
 		return account{Key: key, Typ: "ba"}, nil
 	}
@@ -258,13 +258,13 @@ func (s *state) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 		return err
 	}
 	if len(assigned.GetUids()) > 0 {
-		fmt.Fprintf(w, "CREATED K_%02d: %+v for %+v\n", dst.Key, assigned.GetUids(), dst)
+		fmt.Fprintf(w, "[StartTs: %v] CREATED K_%02d: %+v for %+v\n", assigned.Txn.StartTs, dst.Key, assigned.GetUids(), dst)
 		for _, uid := range assigned.GetUids() {
 			dst.Uid = uid
 		}
 	}
-	fmt.Fprintf(w, "MOVED [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n",
-		amount, src.Key, dst.Key, src, dst)
+	fmt.Fprintf(w, "[StartTs: %v] MOVED [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n",
+		assigned.Txn.StartTs, amount, src.Key, dst.Key, src, dst)
 	return nil
 }
 
@@ -286,10 +286,10 @@ func (s *state) loop(dg *dgo.Dgraph, wg *sync.WaitGroup) {
 
 		buf.Reset()
 		err := s.runTransaction(dg, &buf)
-		if *verbose {
-			log.Printf("Final error: %v. %s", err, buf.String())
-		}
 		if err != nil {
+			if *verbose {
+				log.Printf("Final error: %v. %s", err, buf.String())
+			}
 			atomic.AddInt32(&s.aborts, 1)
 		} else {
 			r := atomic.AddInt32(&s.runs, 1)
