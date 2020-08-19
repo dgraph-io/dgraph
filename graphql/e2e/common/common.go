@@ -125,6 +125,7 @@ type post struct {
 	Text        string    `json:"text,omitempty"`
 	Tags        []string  `json:"tags,omitempty"`
 	NumLikes    int       `json:"numLikes,omitempty"`
+	NumViews    int64     `json:"numViews,omitempty"`
 	IsPublished bool      `json:"isPublished,omitempty"`
 	PostType    string    `json:"postType,omitempty"`
 	Author      *author   `json:"author,omitempty"`
@@ -247,7 +248,8 @@ func RunAll(t *testing.T) {
 	t.Run("queries with error", queriesWithError)
 	t.Run("date filters", dateFilters)
 	t.Run("float filters", floatFilters)
-	t.Run("int filters", intFilters)
+	t.Run("Int filters", int32Filters)
+	t.Run("Int64 filters", int64Filters)
 	t.Run("boolean filters", booleanFilters)
 	t.Run("term filters", termFilters)
 	t.Run("full text filters", fullTextFilters)

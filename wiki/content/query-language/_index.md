@@ -4,6 +4,6 @@ title = "Query Language"
 [menu.main]
   url = "/query-language/"
   identifier = "query-language"
+  parent = "dql"
   weight = 4 
 +++
-

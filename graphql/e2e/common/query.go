@@ -663,7 +663,7 @@ func authorTest(t *testing.T, filter interface{}, expected []*author) {
 	}
 }
 
-func intFilters(t *testing.T) {
+func int32Filters(t *testing.T) {
 	cases := map[string]struct {
 		Filter   interface{}
 		Expected []*post
@@ -689,6 +689,42 @@ func intFilters(t *testing.T) {
 				{Title: "Learning GraphQL in Dgraph"}}},
 		"greater than": {
 			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"gt": 87}},
+			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			postTest(t, test.Filter, test.Expected)
+		})
+	}
+}
+
+func int64Filters(t *testing.T) {
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*post
+	}{
+		"less than": {
+			Filter: map[string]interface{}{"numViews": map[string]interface{}{"lt": 274877906944}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Random post"}}},
+		"less or equal": {
+			Filter: map[string]interface{}{"numViews": map[string]interface{}{"le": 274877906944}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Learning GraphQL in Dgraph"},
+				{Title: "Random post"}}},
+		"equal": {
+			Filter:   map[string]interface{}{"numViews": map[string]interface{}{"eq": 274877906944}},
+			Expected: []*post{{Title: "Learning GraphQL in Dgraph"}}},
+		"greater or equal": {
+			Filter: map[string]interface{}{"numViews": map[string]interface{}{"ge": 274877906944}},
+			Expected: []*post{
+				{Title: "Introducing GraphQL in Dgraph"},
+				{Title: "Learning GraphQL in Dgraph"}}},
+		"greater than": {
+			Filter:   map[string]interface{}{"numViews": map[string]interface{}{"gt": 274877906944}},
 			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
 	}
 

@@ -292,6 +292,19 @@ invalid_schemas:
       ]
 
   -
+    name: "Search with wrong arg (int) with error on default search type (Int64)"
+    input: |
+      type X {
+        y: Int64 @search(by: [int])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument int doesn't
+          apply to field type Int64.  Search by int applies to fields of type Int. Fields of
+          type Int64 are searchable by just @search.",
+       "locations":[{"line":2, "column":13}]}
+    ]
+
+  -
     name: "Search with wrong arg with error on search type"
     input: |
       type X {
@@ -2570,6 +2583,9 @@ valid_schemas:
         int1: Int @search
         int2: Int @search(by: [int])
         int3: Int @search(by: [])
+        int64_1: Int64 @search
+        int64_2: Int64 @search(by: [int64])
+        int64_3: Int64 @search(by: [])
         float1: Float @search
         float2: Float @search(by: [float])
         float3: Float @search(by: [])
@@ -2830,4 +2846,43 @@ valid_schemas:
         id: ID!
         name: String
         owns: [Object] @dgraph(pred: "~Object.owner")
+      }
+
+  - name: "@custom getAuthor query is allowed if Author is of remote type"
+    input: |
+      type Author @remote {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+      }
+
+  - name: "@custom addAuthor mutation is allowed if Author is of remote type"
+    input: |
+      type Author @remote {
+        id: ID!
+        name: String
+      }
+
+      type Mutation {
+        addAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+      }
+
+  - name: "UpdateAuthorInput is allowed if Author is of remote type"
+    input: |
+      type Author @remote {
+        id: ID!
+        name: String
+      }
+
+      type User {
+        id: ID!
+        name: String
+      }
+
+      input UpdateAuthorInput {
+        id: ID!
+        name: String
       }

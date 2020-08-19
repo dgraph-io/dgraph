@@ -526,8 +526,8 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 
 // getMutation returns a marshaled version of posting list mutation stored internally.
 func (l *List) getMutation(startTs uint64) []byte {
-	l.RLock()
-	defer l.RUnlock()
+	l.Lock()
+	defer l.Unlock()
 	if pl, ok := l.mutationMap[startTs]; ok {
 		for _, p := range pl.GetPostings() {
 			p.StartTs = 0
