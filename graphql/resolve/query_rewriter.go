@@ -1037,7 +1037,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// postType: Question -> eq(Post.postType, "Question")
 				switch field {
 				case "has":
-					fieldName := dgFunc.(string)
+					fieldName := fmt.Sprintf("%v", dgFunc)
 					ands = append(ands, &gql.FilterTree{
 						Func: &gql.Function{
 							Name: field,
