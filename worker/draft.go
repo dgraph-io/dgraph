@@ -84,6 +84,8 @@ func (id op) String() string {
 		return "opSnapshot"
 	case opIndexing:
 		return "opIndexing"
+	case opBackup:
+		return "opBackup"
 	default:
 		return "opUnknown"
 	}
@@ -93,6 +95,7 @@ const (
 	opRollup op = iota + 1
 	opSnapshot
 	opIndexing
+	opBackup
 )
 
 // startTask is used to check whether an op is already going on.
@@ -127,6 +130,17 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 			return nil, errors.Errorf("another operation is already running")
 		}
 		go posting.IncrRollup.Process(closer)
+	case opBackup:
+		// Backup cancels all other operations, except for other backups since
+		// only one restore operation should be active any given moment.
+		for otherId, otherCloser := range n.ops {
+			if otherId == opBackup {
+				return nil, errors.Errorf("another backup operation is already running")
+			}
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
+			otherCloser.SignalAndWait()
+		}
 	case opSnapshot, opIndexing:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
