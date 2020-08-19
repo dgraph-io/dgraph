@@ -43,16 +43,17 @@ $ dgraph live -C -f <path-to-gzipped-RDF-or-JSON-file>
 $ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -a <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
 
-### Encrypted imports via Live Loader
+### Encrypted imports via Live Loader (Enterprise Feature)
 
-A new flag keyfile is added to the Live Loader. This option is required to decrypt the encrypted export data and schema files. Once the export files are decrypted, the Live Loader streams the data to a live Alpha instance.
+A new flag `--encryption_key_file` is added to the Live Loader. This option is required to decrypt the encrypted export data and schema files. Once the export files are decrypted, the Live Loader streams the data to a live Alpha instance.
+Alternatively, starting with v20.07.0, the `vault_*` options can be used to decrypt the encrypted export and schema files.
 
 {{% notice "note" %}}
 If the live Alpha instance has encryption turned on, the `p` directory will be encrypted. Otherwise, the `p` directory is unencrypted.
 {{% /notice %}}
 
-### Encrypted RDF/JSON file and schema via Live Loader
-`dgraph live -f <path-to-encrypted-gzipped-RDF-or-JSON-file> -s <path-to-encrypted-schema> -keyfile <path-to-keyfile-to-decrypt-files>`
+#### Encrypted RDF/JSON file and schema via Live Loader
+`dgraph live -f <path-to-encrypted-gzipped-RDF-or-JSON-file> -s <path-to-encrypted-schema> --encryption_keyfile <path-to-keyfile-to-decrypt-files>`
 
 ### Other Live Loader options
 
@@ -78,6 +79,9 @@ Alpha server.
 `-a, --alpha` (default: `localhost:9080`): Dgraph Alpha gRPC server address to connect for live loading. This can be a comma-separated list of Alphas addresses in the same cluster to distribute the load, e.g.,  `"alpha:grpc_port,alpha2:grpc_port,alpha3:grpc_port"`.
 
 `-x, --xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
+
+`--vault_*` flags specifies the Vault server address, role id, secret id and 
+field that contains the encryption key that can be used to decrypt the encrypted export. 
 
 ## Bulk Loader
 
@@ -215,7 +219,7 @@ $ dgraph bulk -f <file1.rdf, file2.rdf> ...
 
 ```
 
-### Encryption at rest with Bulk Loader
+### Encryption at rest with Bulk Loader (Enterprise Feature)
 
 Even before the Dgraph cluster starts, we can load data using Bulk Loader with the encryption feature turned on. Later we can point the generated `p` directory to a new Alpha server.
 
@@ -224,8 +228,10 @@ Here's an example to run Bulk Loader with a key used to write encrypted data:
 ```bash
 dgraph bulk --encryption_key_file ./enc_key_file -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
 ```
+Alternatively, starting with v20.07.0, the `vault_*` options can be used to decrypt the encrypted export. 
 
-### Encrypting imports via Bulk Loader
+
+### Encrypting imports via Bulk Loader (Enterprise Feature)
 
 The Bulk Loader’s `encryption_key_file` option was previously used to encrypt the output `p ` directory. This same option will also be used to decrypt the encrypted export data and schema files.
 
@@ -249,6 +255,8 @@ Input is not encrypted and the output `p` dir is also not encrypted.
 
 Input is not encrypted but the output is encrypted. (This is the migration use case mentioned above).
 
+Alternatively, starting with v20.07.0, the `vault_*` options can be used instead of the `--encryption_key_file` option above to achieve the same effect except that the keys are sitting in a Vault server. 
+
 ### Other Bulk Loader options
 
 `--new_uids` (default: false): Assign new UIDs instead of using the existing
@@ -265,6 +273,9 @@ filenames. This is useful if you need to define a strict format manually.
 `--store_xids`: Generate a xid edge for each node. It will store the XIDs (The identifier / Blank-nodes) in an attribute named `xid` in the entity itself. It is useful if you gonna use [External IDs](/mutations#external-ids).
 
 `--xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
+
+`--vault_*` flags specifies the Vault server address, role id, secret id and 
+field that contains the encryption key that can be used to decrypt the encrypted export. 
 
 ### Tuning & monitoring
 

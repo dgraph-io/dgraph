@@ -4,6 +4,100 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+## [20.07.1] - Unreleased
+[20.07.1]: https://github.com/dgraph-io/dgraph/compare/v20.07.0...v20.07.1
+
+### Changed
+
+- GraphQL
+  - Remove github issues link from the error messages. ([#6183][])
+  - Allow case insensitive auth header for graphql subscriptions. ([#6179][])
+- Add retry for schema update ([#6098][]) 
+- Queue keys for rollup during mutation. ([#6151][]) 
+
+### Added
+
+- GraphQL
+  - Adds auth for subscriptions. ([#6165][]) 
+  
+### Fixed
+
+- GraphQL
+  - Multiple queries in a single request should not share the same variables. ([#6158][])
+  - Fixes panic in update mutation without set & remove. ([#6160][])
+  - Fixes wrong query parameter value for custom field URL. ([#6161][])
+  - Fix auth rewriting for nested queries when RBAC rule is true. ([#6167][])
+  - Disallow Subscription typename. ([#6173][]) 
+  - Panic fix when subscription expiry is not present in jwt. ([#6175][])
+  - Fix getType queries when id was used as a name for types other than ID. ([#6180][])
+  - Don't reserve certain queries/mutations/inputs when a type is remote. ([#6201][])
+  - Linking of xids for deep mutations. ([#6203][])
+  - Prevent empty values in fields having `id` directive. ([#6196][]) 
+- Fix out of order issues with split keys in bulk loader. ([#6124][])
+- Rollup a batch if more than 2 seconds elapsed since last batch. ([#6137][])
+- Refactor: Simplify how list splits are tracked. ([#6070][])
+- Fix: Don't allow idx flag to be set to 0 on dgraph zero. ([#6192][]) 
+- Fix error message for idx = 0 for dgraph zero. ([#6199][])
+
+[#6201]: https://github.com/dgraph-io/dgraph/issues/6201
+[#6203]: https://github.com/dgraph-io/dgraph/issues/6203
+[#6196]: https://github.com/dgraph-io/dgraph/issues/6196
+[#6124]: https://github.com/dgraph-io/dgraph/issues/6124
+[#6137]: https://github.com/dgraph-io/dgraph/issues/6137
+[#6070]: https://github.com/dgraph-io/dgraph/issues/6070
+[#6192]: https://github.com/dgraph-io/dgraph/issues/6192
+[#6199]: https://github.com/dgraph-io/dgraph/issues/6199
+[#6158]: https://github.com/dgraph-io/dgraph/issues/6158
+[#6160]: https://github.com/dgraph-io/dgraph/issues/6160
+[#6161]: https://github.com/dgraph-io/dgraph/issues/6161
+[#6167]: https://github.com/dgraph-io/dgraph/issues/6167
+[#6173]: https://github.com/dgraph-io/dgraph/issues/6173
+[#6175]: https://github.com/dgraph-io/dgraph/issues/6175
+[#6180]: https://github.com/dgraph-io/dgraph/issues/6180
+[#6183]: https://github.com/dgraph-io/dgraph/issues/6183
+[#6179]: https://github.com/dgraph-io/dgraph/issues/6179
+[#6009]: https://github.com/dgraph-io/dgraph/issues/6009
+[#6095]: https://github.com/dgraph-io/dgraph/issues/6095
+[#6098]: https://github.com/dgraph-io/dgraph/issues/6098
+[#6151]: https://github.com/dgraph-io/dgraph/issues/6151
+[#6165]: https://github.com/dgraph-io/dgraph/issues/6165
+
+## [20.03.5] - Unreleased
+[20.03.5]: https://github.com/dgraph-io/dgraph/compare/v20.03.4...v20.03.5
+
+### Changed
+
+- Add retry for schema update. ([#6097][]) 
+- Queue keys for rollup during mutation. ([#6150][]) 
+
+### Fixed
+
+- Fix out of order issues with split keys in bulk loader. ([#6125][])
+- Rollup a batch if more than 2 seconds elapsed since last batch. ([#6138][])
+- Simplify how list splits are tracked. ([#6071][])
+- Perform rollups more aggresively. ([#6147][]) 
+- Don't allow idx flag to be set to 0 on dgraph zero. ([#6156][]) 
+
+[#5988]: https://github.com/dgraph-io/dgraph/issues/5988
+[#6097]: https://github.com/dgraph-io/dgraph/issues/6097
+[#6094]: https://github.com/dgraph-io/dgraph/issues/6094
+[#6150]: https://github.com/dgraph-io/dgraph/issues/6150
+[#6125]: https://github.com/dgraph-io/dgraph/issues/6125
+[#6138]: https://github.com/dgraph-io/dgraph/issues/6138
+[#6071]: https://github.com/dgraph-io/dgraph/issues/6071
+[#6156]: https://github.com/dgraph-io/dgraph/issues/6156
+[#6147]: https://github.com/dgraph-io/dgraph/issues/6147
+
+## [1.2.7] - Unreleased
+[1.2.7]: https://github.com/dgraph-io/dgraph/compare/v1.2.6...v1.2.7
+
+### Fixed
+
+- Don't allow idx flag to be set to 0 on dgraph zero. ([#6193][])
+
+[#5987]: https://github.com/dgraph-io/dgraph/issues/5987
+[#6193]: https://github.com/dgraph-io/dgraph/issues/6193
+
 ## [20.07.0] - 2020-07-28
 [20.07.0]: https://github.com/dgraph-io/dgraph/compare/v20.03.4...v20.07.0
 
@@ -388,7 +482,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6007]: https://github.com/dgraph-io/dgraph/issues/6007
 [#6021]: https://github.com/dgraph-io/dgraph/issues/6021
 
-## [1.2.6] - Unreleased
+## [1.2.6] - 2020-07-31
 [1.2.6]: https://github.com/dgraph-io/dgraph/compare/v1.2.5...v1.2.6
 
 ### Changed

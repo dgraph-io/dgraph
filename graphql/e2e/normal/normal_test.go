@@ -125,6 +125,11 @@ func TestSchema_Normal(t *testing.T) {
 			"index": true,
 			"tokenizer": ["int"]
 		}, {
+			"predicate": "Post.numViews",
+			"type": "int",
+			"index": true,
+			"tokenizer": ["int"]
+		}, {
 			"predicate": "Post.postType",
 			"type": "string",
 			"index": true,
@@ -309,6 +314,8 @@ func TestSchema_Normal(t *testing.T) {
 				"name": "Post.topic"
 			}, {
 				"name": "Post.numLikes"
+			}, {
+				"name": "Post.numViews"
 			}, {
 				"name": "Post.isPublished"
 			}, {

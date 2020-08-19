@@ -165,7 +165,7 @@ func TestCustomPostQueryWithBody(t *testing.T) {
 	 type Query {
 		 myFavoriteMoviesPost(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
 				 url: "http://mock:8888/favMoviesPostWithBody/$id?name=$name",
-                 body:"{id:$id,name:$name,num:$num}"
+                 body:"{id:$id,name:$name,num:$num,movie_type:\"space\"}"
 				 method: "POST"
 		 })
 	 }`
