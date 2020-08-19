@@ -19,6 +19,7 @@ package schema
 import (
 	"bytes"
 	"fmt"
+	"github.com/golang/glog"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -670,11 +671,22 @@ func (f *field) Include() bool {
 }
 
 func (f *field) Cascade() []string {
-
-	if f.field.Directives.ForName(cascadeDirective) == nil {
+	dir := f.field.Directives.ForName(cascadeDirective)
+	if dir == nil {
 		return nil
 	}
-	return []string{"__all__"}
+   arg:= dir.Arguments.ForName("fields")
+   if arg ==nil || arg.Value==nil ||len(arg.Value.Children)==0{
+	   return []string{"__all__"}
+   }
+   var  fields []string
+   typ:=f.Type()
+   for _,child:= range arg.Value.Children{
+
+   		fields=append(fields,typ.DgraphPredicate(child.Value.Raw))
+   }
+   glog.Infof("%v",fields)
+   return fields
 }
 
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
