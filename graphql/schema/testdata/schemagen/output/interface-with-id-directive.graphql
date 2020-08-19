@@ -242,6 +242,7 @@ input LibraryFilter {
 
 input LibraryItemFilter {
 	refID: StringHashFilter
+	has: LibraryItemHasFilter
 	and: LibraryItemFilter
 	or: LibraryItemFilter
 	not: LibraryItemFilter
