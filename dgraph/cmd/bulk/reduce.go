@@ -186,6 +186,8 @@ type iteratorEntry struct {
 	batch        [][]byte
 }
 
+var numReused uint64
+
 func (mi *mapIterator) release(ie *iteratorEntry) {
 	ie.batch = ie.batch[:0]
 	select {
@@ -227,6 +229,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	for _, pKey := range partitionsKeys {
 		select {
 		case ie = <-mi.freelist:
+			atomic.AddUint64(&numReused, 1)
 		default:
 			ie = &iteratorEntry{
 				batch: make([][]byte, 0, batchAlloc),
