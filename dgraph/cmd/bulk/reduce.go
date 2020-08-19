@@ -585,6 +585,8 @@ func (r *reducer) toList(bufEntries [][]byte, list, splitList *bpb.KVList) []*co
 		}
 
 		pl.Pack = codec.Encode(uids, 256)
+		defer codec.FreePack(pl.Pack)
+
 		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)

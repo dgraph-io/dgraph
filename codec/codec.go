@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"math"
 	"sort"
+	"unsafe"
 
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-groupvarint"
@@ -46,15 +48,47 @@ type Encoder struct {
 	uids      []uint64
 }
 
+var blockSize = int(unsafe.Sizeof(pb.UidBlock{}))
+
+// AllocateBlock would allocate a block via Calloc. This block must be released via a call to
+// ReleaseBlock.
+func AllocateBlock() *pb.UidBlock {
+	// Allocate blocks manually.
+	b := y.Calloc(blockSize)
+	return (*pb.UidBlock)(unsafe.Pointer(&b[0]))
+}
+
+// FreeBlock releases a previously manually allocated UidBlock.
+func FreeBlock(ub *pb.UidBlock) {
+	buf := (*[y.MaxArrayLen]byte)(unsafe.Pointer(ub))[:blockSize:blockSize]
+	y.Free(buf)
+}
+
+func FreePack(pack *pb.UidPack) {
+	for _, b := range pack.Blocks {
+		y.Free(b.Deltas)
+		FreeBlock(b)
+	}
+}
+
 func (e *Encoder) packBlock() {
 	if len(e.uids) == 0 {
 		return
 	}
-	block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
+
+	// Allocate blocks manually.
+	block := AllocateBlock()
+	block.Base = e.uids[0]
+	block.NumUids = uint32(len(e.uids))
+
+	// block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
 	last := e.uids[0]
 	e.uids = e.uids[1:]
 
-	var out bytes.Buffer
+	var out y.Buffer
+	// We are not releasing the allocated memory here. Instead, block.Deltas would need to be
+	// released at the end.
+
 	buf := make([]byte, 17)
 	tmpUids := make([]uint32, 4)
 	for {
@@ -102,7 +136,7 @@ func (e *Encoder) Add(uid uint64) {
 	}
 }
 
-// Done returns the final output of the encoder.
+// Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
 func (e *Encoder) Done() *pb.UidPack {
 	e.packBlock()
 	return e.pack
