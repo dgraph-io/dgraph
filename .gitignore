@@ -4,6 +4,9 @@
 /dgraph-bulk-loader
 /osx-docker-gopath
 
+# docs
+/public
+
 # fuzzing output
 gql/gql-fuzz.zip
 gql/fuzz-data/crashers
