@@ -268,6 +268,11 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	addPagination(dgQuery, field)
 }
 
+func addFilterToField(dgQuery *gql.GraphQuery, field schema.Field) {
+	filter, _ := field.ArgValue("filter").(map[string]interface{})
+	addFilter(dgQuery, field.Type(), filter)
+}
+
 func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
 	if query.Attr != "" {
 		addTypeFilter(query, field.Type())
@@ -453,12 +458,9 @@ func (authRw *authRewriter) addAuthQueries(
 			Args: []gql.Arg{{Value: authRw.varName}},
 		},
 		Filter: filter,
-		Order:  dgQuery.Order,
-		Args:   dgQuery.Args,
 	}
 
 	dgQuery.Filter = nil
-	dgQuery.Args = nil
 
 	// The user query starts from the var query generated above and is filtered
 	// by the the filter generated from auth processing, so now we build
@@ -799,7 +801,7 @@ func addSelectionSetFrom(
 				},
 			}
 
-			addArgumentsToField(selectionQry, f)
+			addFilterToField(selectionQry, f)
 			selectionQry.Filter = child.Filter
 			authQueries = append(authQueries, parentQry, selectionQry)
 			child.Filter = &gql.FilterTree{
@@ -808,10 +810,6 @@ func addSelectionSetFrom(
 					Args: []gql.Arg{{Value: filtervarName}},
 				},
 			}
-
-			// We already apply the following to `selectionQry` by calling addArgumentsToField()
-			// hence they are no longer required.
-			child.Args = nil
 		}
 		authQueries = append(authQueries, selectionAuth...)
 		authQueries = append(authQueries, fieldAuth...)
