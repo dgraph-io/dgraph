@@ -189,6 +189,9 @@ type iteratorEntry struct {
 var numCreated, numReused uint64
 
 func (mi *mapIterator) release(ie *iteratorEntry) {
+	ie.partitionKey = nil
+	ie.batch = nil
+
 	select {
 	case mi.freelist <- ie:
 	default:
@@ -200,13 +203,15 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	prevKeyExist := false
 	var buf, key []byte
 	var err error
+	var prevOffset int
 
-	var cbuf y.Buffer
+	cbuf := y.NewBuffer(64)
 	// readKey reads the next map entry key.
 	readMapEntry := func() error {
 		if prevKeyExist {
 			return nil
 		}
+		prevOffset = cbuf.Len()
 		r := mi.reader
 		buf, err = r.Peek(binary.MaxVarintLen64)
 		if err != nil {
@@ -234,7 +239,6 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 		}
 		ie.partitionKey = pKey
 		for {
-			prevOffset := cbuf.Len()
 			err := readMapEntry()
 			if err == io.EOF {
 				break
@@ -245,10 +249,20 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 				// map entry is already part of cBuf.
 				continue
 			}
+
 			all := cbuf.Bytes()
-			ie.batch = all[:prevOffset] // This would be released in toList.
-			cbuf.Reset()
+			if prevOffset > 0 {
+				ie.batch = all[:prevOffset] // This would be released in toList.
+			} else {
+				ie.batch = nil
+			}
+			cbuf = y.NewBuffer(64)
 			cbuf.Write(all[prevOffset:])
+			prevOffset = 0
+
+			// Reinit the key because previous cbuf has been allocated to ie.batch.
+			key, err = GetKeyForMapEntry(cbuf.Slice(0))
+			x.Check(err)
 
 			// Current key is not part of this batch so track that we have already read the key.
 			prevKeyExist = true
@@ -485,7 +499,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			res := itr.Next()
 			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
 			cbuf.Write(res.batch)
-			y.Free(res.batch)
+			y.Free(res.batch) // Maybe move into itr.release
 			// entries = append(entries, res.batch)
 			itr.release(res)
 		}
