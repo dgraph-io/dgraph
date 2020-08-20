@@ -201,9 +201,7 @@ func (mi *mapIterator) release(ie *iteratorEntry) {
 func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	var ie *iteratorEntry
 	prevKeyExist := false
-	var buf, key []byte
-	var err error
-
+	var key []byte
 	cbuf := y.NewBuffer(64)
 	// readKey reads the next map entry key.
 
@@ -213,7 +211,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 			return nil
 		}
 		r := mi.reader
-		buf, err = r.Peek(binary.MaxVarintLen64)
+		buf, err := r.Peek(binary.MaxVarintLen64)
 		if err != nil {
 			return err
 		}
@@ -224,12 +222,10 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 		x.Check2(r.Discard(n))
 
 		if cap(mapEntry) < int(sz) {
-			mapEntry = make([]byte, int(sz))
+			mapEntry = make([]byte, 2*int(sz))
 		}
 		mapEntry = mapEntry[:int(sz)]
 		x.Check2(io.ReadFull(r, mapEntry))
-		// eBuf := cbuf.SliceAllocate(int(sz))
-		// x.Check2(io.ReadFull(r, eBuf))
 
 		key, err = GetKeyForMapEntry(mapEntry)
 		return err
@@ -251,6 +247,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 			x.Check(err)
 			if bytes.Compare(key, ie.partitionKey) < 0 {
 				prevKeyExist = false
+				x.AssertTrue(len(mapEntry) > 0)
 				b := cbuf.SliceAllocate(len(mapEntry))
 				copy(b, mapEntry)
 				// map entry is already part of cBuf.
