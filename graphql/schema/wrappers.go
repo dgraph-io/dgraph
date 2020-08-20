@@ -19,7 +19,6 @@ package schema
 import (
 	"bytes"
 	"fmt"
-	"github.com/golang/glog"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -686,7 +685,6 @@ func (f *field) Cascade() []string {
 
    		fields=append(fields,typ.DgraphPredicate(child.Value.Raw))
    }
-   glog.Infof("%v",fields)
    return fields
 }
 

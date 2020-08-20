@@ -63,3 +63,24 @@ func variableTypeCheck(observers *validator.Events, addError validator.AddErrFun
 			value.ExpectedType.String()), validator.At(value.Position))
 	})
 }
+
+func directiveArgumentsCheck(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnDirective(func(walker *validator.Walker, directive *ast.Directive) {
+
+		if directive.Name=="cascade" && len(directive.Arguments)==1 {
+				if directive.Arguments.ForName("fields")==nil {
+					return
+				}
+			for _, child := range directive.Arguments.ForName("fields").Value.Children {
+				if directive.ParentDefinition.Fields.ForName(child.Value.Raw) == nil {
+					addError(validator.Message("Field `%s` is not present in type `%s`. You can only use fields which are in type `%s`",
+						child.Value.Raw,directive.ParentDefinition.Name,directive.ParentDefinition.Name))
+				}
+				return
+			}
+
+		}
+        return
+
+	})
+}

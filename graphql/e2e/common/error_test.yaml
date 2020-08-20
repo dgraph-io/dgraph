@@ -89,7 +89,7 @@
     [ { "message": "must be defined",
       "path": [ "variable", "filter"] } ]
 -
-  name: "subscription on type without @withSubscription directive should retur error"
+  name: "subscription on type without @withSubscription directive should return error"
   gqlrequest: |
     subscription {
       getAuthor(id: "0x1") { name }
@@ -99,4 +99,19 @@
   errors:
     [ { "message": "Cannot query field \"getAuthor\" on type \"Subscription\".",
         "locations": [ { "line": 2, "column": 3 } ] } ]
+
+-
+  name: "Only the fields which are avaliable in type on which @cascade is applied, can be present as a argument to @cascade"
+  gqlrequest: |
+    query {
+      queryAuthor @cascade(fields:["title"]){
+        dob
+        reputation
+      }
+    }
+  gqlvariables:
+    { }
+  errors:
+    [ { "message": "Field `title` is not present in type `Author`. You can only use fields which are in type `Author`",
+    } ]
 

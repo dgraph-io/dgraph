@@ -744,6 +744,135 @@
     }
 
 -
+  name: "Parameterized Cascade directive on filter query"
+  gqlquery: |
+    query {
+      queryAuthor @cascade(fields:["dob"]) {
+        dob
+        name
+        posts {
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade(Author.dob) {
+        dob : Author.dob
+        name : Author.name
+        posts : Author.posts {
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive on get query"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") @cascade(fields:["dob"]) {
+        dob
+        name
+        posts {
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) @cascade(Author.dob) {
+        dob : Author.dob
+        name : Author.name
+        posts : Author.posts {
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive on query field"
+  gqlquery: |
+    query {
+      queryAuthor {
+        dob
+        posts @cascade(fields:["text"]) {
+          text
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        dob : Author.dob
+        posts : Author.posts @cascade(Post.text) {
+          text : Post.text
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive on root and query field"
+  gqlquery: |
+    query {
+      queryAuthor @cascade(fields:["dob"]) {
+        dob
+        reputation
+        posts @cascade(fields:["text"]) {
+          text
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade(Author.dob) {
+        dob : Author.dob
+        reputation : Author.reputation
+        posts : Author.posts @cascade(Post.text) {
+          text : Post.text
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive with multiple parameters on root and query field"
+  gqlquery: |
+    query {
+      queryAuthor @cascade(fields:["dob","reputation"]) {
+        dob
+        reputation
+        posts @cascade(fields:["text","title"]) {
+          text
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade(Author.dob,Author.reputation) {
+        dob : Author.dob
+        reputation : Author.reputation
+        posts : Author.posts @cascade(Post.text,Post.title) {
+          text : Post.text
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "getHuman which implements an interface"
   gqlquery: |
     query {
