@@ -183,61 +183,48 @@ type mapIterator struct {
 
 type iteratorEntry struct {
 	partitionKey []byte
-	batch        []byte
+	batch        *y.Buffer
 }
 
 var numCreated, numReused uint64
 
 func (mi *mapIterator) release(ie *iteratorEntry) {
-	ie.partitionKey = nil
-	ie.batch = nil
-
-	select {
-	case mi.freelist <- ie:
-	default:
-	}
+	ie.batch.Release()
 }
 
 func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	var ie *iteratorEntry
 	prevKeyExist := false
-	var key []byte
-	cbuf := y.NewBuffer(64)
+	var mapEntry, key, sizeBuf []byte
+	var err error
+	var cbuf *y.Buffer
 	// readKey reads the next map entry key.
-
-	var mapEntry []byte
 	readMapEntry := func() error {
 		if prevKeyExist {
 			return nil
 		}
 		r := mi.reader
-		buf, err := r.Peek(binary.MaxVarintLen64)
+		sizeBuf, err = r.Peek(binary.MaxVarintLen64)
 		if err != nil {
 			return err
 		}
-		sz, n := binary.Uvarint(buf)
+		sz, n := binary.Uvarint(sizeBuf)
 		if n <= 0 {
 			log.Fatalf("Could not read uvarint: %d", n)
 		}
 		x.Check2(r.Discard(n))
-
 		if cap(mapEntry) < int(sz) {
-			mapEntry = make([]byte, 2*int(sz))
+			mapEntry = make([]byte, int(sz))
 		}
 		mapEntry = mapEntry[:int(sz)]
 		x.Check2(io.ReadFull(r, mapEntry))
-
 		key, err = GetKeyForMapEntry(mapEntry)
 		return err
 	}
 
 	for _, pKey := range partitionsKeys {
-		select {
-		case ie = <-mi.freelist:
-			atomic.AddUint64(&numReused, 1)
-		default:
-			ie = &iteratorEntry{}
-		}
+		cbuf = y.NewBuffer(64)
+		ie = &iteratorEntry{}
 		ie.partitionKey = pKey
 		for {
 			err := readMapEntry()
@@ -245,41 +232,36 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 				break
 			}
 			x.Check(err)
+
 			if bytes.Compare(key, ie.partitionKey) < 0 {
-				prevKeyExist = false
-				x.AssertTrue(len(mapEntry) > 0)
 				b := cbuf.SliceAllocate(len(mapEntry))
 				copy(b, mapEntry)
+				prevKeyExist = false
 				// map entry is already part of cBuf.
 				continue
 			}
-
-			if cbuf.Len() > 0 {
-				ie.batch = cbuf.Bytes() // Would be deallocated in reduce.
-				cbuf = y.NewBuffer(64)
-			}
-
 			// Current key is not part of this batch so track that we have already read the key.
 			prevKeyExist = true
 			break
 		}
+		ie.batch = cbuf
 		mi.batchCh <- ie
 	}
 
 	// Drain the last items.
+	cbuf = y.NewBuffer(64)
 	for {
 		err := readMapEntry()
 		if err == io.EOF {
 			break
 		}
 		x.Check(err)
-
 		b := cbuf.SliceAllocate(len(mapEntry))
 		copy(b, mapEntry)
 		prevKeyExist = false
 	}
 	mi.batchCh <- &iteratorEntry{
-		batch:        cbuf.Bytes(),
+		batch:        cbuf,
 		partitionKey: nil,
 	}
 }
@@ -496,12 +478,9 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		for _, itr := range mapItrs {
 			res := itr.Next()
 			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
-			cbuf.Write(res.batch)
-			y.Free(res.batch) // Maybe move into itr.release
-			// entries = append(entries, res.batch)
+			cbuf.Write(res.batch.Bytes())
 			itr.release(res)
 		}
-
 		wg := new(sync.WaitGroup)
 		wg.Add(1)
 		atomic.AddInt32(&r.prog.numEncoding, 1)
@@ -516,7 +495,8 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	for _, itr := range mapItrs {
 		res := itr.Next()
 		y.AssertTrue(res.partitionKey == nil)
-		cbuf.Write(res.batch)
+		cbuf.Write(res.batch.Bytes())
+		itr.release(res)
 	}
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
@@ -543,7 +523,6 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	list := req.list
 	splitList := req.splitList
 	req.offsets = cbuf.SliceOffsets(req.offsets[:0])
-
 	sort.Slice(req.offsets, func(i, j int) bool {
 		lh, err := GetKeyForMapEntry(cbuf.Slice(req.offsets[i]))
 		x.Check(err)
@@ -623,7 +602,6 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 
 		pl.Pack = codec.Encode(uids, 256)
 		defer codec.FreePack(pl.Pack)
-
 		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
