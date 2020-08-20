@@ -775,9 +775,8 @@ func booleanFilters(t *testing.T) {
 				{Title: "Introducing GraphQL in Dgraph"},
 				{Title: "Learning GraphQL in Dgraph"}}},
 		"false": {
-			Filter: map[string]interface{}{"isPublished": false},
-			Expected: []*post{
-				{Title: "Random post"}}},
+			Filter:   map[string]interface{}{"isPublished": false},
+			Expected: []*post{{Title: "Random post"}}},
 	}
 
 	for name, test := range cases {
@@ -906,9 +905,8 @@ func scalarListFilters(t *testing.T) {
 				{Title: "Learning GraphQL in Dgraph"},
 				{Title: "Random post"}}},
 		"greater than": {
-			Filter: map[string]interface{}{"tags": map[string]interface{}{"gt": "GraphQL"}},
-			Expected: []*post{
-				{Title: "Random post"}}},
+			Filter:   map[string]interface{}{"tags": map[string]interface{}{"gt": "GraphQL"}},
+			Expected: []*post{{Title: "Random post"}}},
 	}
 
 	for name, test := range cases {
