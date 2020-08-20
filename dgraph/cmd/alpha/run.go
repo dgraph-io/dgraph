@@ -105,11 +105,18 @@ they form a Raft group and provide synchronous replication.
 
 	// Options around how to set up Badger.
 	flag.String("badger.tables", "mmap",
-		"[ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
+		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for the postings directory. "+
 			"Option sequence consume most to least RAM while providing best to worst read "+
 			"performance respectively.")
 	flag.String("badger.vlog", "mmap",
-		"[mmap, disk] Specifies how Badger Value log is stored."+
+		"[mmap, disk] Specifies how Badger Value log is stored for the postings directory."+
+			" mmap consumes more RAM, but provides better performance.")
+	flag.String("badger.wal_tables", "mmap",
+		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for the write-ahead log. "+
+			"Option sequence consume most to least RAM while providing best to worst read "+
+			"performance respectively.")
+	flag.String("badger.wal_vlog", "mmap",
+		"[mmap, disk] Specifies how Badger Value log is stored for the write-ahead log."+
 			" mmap consumes more RAM, but provides better performance.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
@@ -575,6 +582,8 @@ func run() {
 	opts := worker.Options{
 		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
+		BadgerWalTables:        Alpha.Conf.GetString("badger.wal_tables"),
+		BadgerWalVlog:          Alpha.Conf.GetString("badger.wal_vlog"),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
 		PostingDir:             Alpha.Conf.GetString("postings"),
 		WALDir:                 Alpha.Conf.GetString("wal"),
