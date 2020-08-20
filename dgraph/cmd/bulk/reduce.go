@@ -203,15 +203,15 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	prevKeyExist := false
 	var buf, key []byte
 	var err error
-	var prevOffset int
 
 	cbuf := y.NewBuffer(64)
 	// readKey reads the next map entry key.
+
+	var mapEntry []byte
 	readMapEntry := func() error {
 		if prevKeyExist {
 			return nil
 		}
-		prevOffset = cbuf.Len()
 		r := mi.reader
 		buf, err = r.Peek(binary.MaxVarintLen64)
 		if err != nil {
@@ -223,10 +223,15 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 		}
 		x.Check2(r.Discard(n))
 
-		eBuf := cbuf.SliceAllocate(int(sz))
-		x.Check2(io.ReadFull(r, eBuf))
+		if cap(mapEntry) < int(sz) {
+			mapEntry = make([]byte, int(sz))
+		}
+		mapEntry = mapEntry[:int(sz)]
+		x.Check2(io.ReadFull(r, mapEntry))
+		// eBuf := cbuf.SliceAllocate(int(sz))
+		// x.Check2(io.ReadFull(r, eBuf))
 
-		key, err = GetKeyForMapEntry(eBuf)
+		key, err = GetKeyForMapEntry(mapEntry)
 		return err
 	}
 
@@ -246,23 +251,16 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 			x.Check(err)
 			if bytes.Compare(key, ie.partitionKey) < 0 {
 				prevKeyExist = false
+				b := cbuf.SliceAllocate(len(mapEntry))
+				copy(b, mapEntry)
 				// map entry is already part of cBuf.
 				continue
 			}
 
-			all := cbuf.Bytes()
-			if prevOffset > 0 {
-				ie.batch = all[:prevOffset] // This would be released in toList.
-			} else {
-				ie.batch = nil
+			if cbuf.Len() > 0 {
+				ie.batch = cbuf.Bytes() // Would be deallocated in reduce.
+				cbuf = y.NewBuffer(64)
 			}
-			cbuf = y.NewBuffer(64)
-			cbuf.Write(all[prevOffset:])
-			prevOffset = 0
-
-			// Reinit the key because previous cbuf has been allocated to ie.batch.
-			key, err = GetKeyForMapEntry(cbuf.Slice(0))
-			x.Check(err)
 
 			// Current key is not part of this batch so track that we have already read the key.
 			prevKeyExist = true
@@ -278,6 +276,9 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 			break
 		}
 		x.Check(err)
+
+		b := cbuf.SliceAllocate(len(mapEntry))
+		copy(b, mapEntry)
 		prevKeyExist = false
 	}
 	mi.batchCh <- &iteratorEntry{
