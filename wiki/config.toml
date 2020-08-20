@@ -30,17 +30,15 @@ title = "Dgraph Documentation"
   identifier = "get-started"
   weight = 1
 [[menu.main]]
-<<<<<<< HEAD
   name = "Tutorials"
   url = "/tutorials/"
   identifier = "tutorials"
   weight = 2
-=======
+  [[menu.main]]
   name = "GraphQL"
   url = "/graphql/"
   identifier = "graphql"
   weight = 3
->>>>>>> be6437afc... docs: Port GraphQL docs to v20.03 (#6222)
 [[menu.main]]
   name = "Query Language"
   url = "/query-language/"
