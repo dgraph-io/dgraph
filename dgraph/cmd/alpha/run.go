@@ -517,7 +517,7 @@ func setupServer(closer *y.Closer) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"valid"}`))))
+		x.Check2(w.Write([]byte(`{"status":"valid"}`)))
 	}))
 
 	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},

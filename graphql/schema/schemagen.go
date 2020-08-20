@@ -117,7 +117,7 @@ func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error
 	}
 
 	metaInfo, err := authorization.ParseAuthMeta(authSecret)
-	if  err != nil {
+	if err != nil {
 		return nil, nil, err
 	}
 	return m, metaInfo, nil
