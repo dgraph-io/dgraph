@@ -1697,15 +1697,18 @@ func queryWithCascade(t *testing.T) {
 		}, {
 			Name:       "Jerry",
 			Reputation: 4.6,
+			Country:&country{Name:"outer Galaxy2"},
 			Posts:      []*post{{Title: "Outside", Tags: []string{}}},
 		}, {
 			Name:  "Kramer",
+			Country:&country{Name:"outer space2"},
 			Posts: []*post{{Title: "Ha! Cosmo Kramer", Text: "Giddy up!", Tags: []string{}}},
 		},
 	}, postExecutor)
 	authorIds := []string{authors[0].ID, authors[1].ID, authors[2].ID}
 	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID,
 		authors[2].Posts[0].PostID}
+	countryIds:=[]string{authors[1].Country.ID,authors[2].Country.ID}
 	getAuthorByIdQuery := `query ($id: ID!) {
 							  getAuthor(id: $id) @cascade {
 								reputation
@@ -1826,6 +1829,108 @@ func queryWithCascade(t *testing.T) {
 							}]
 						}`,
 		},
+		{
+			name: "parameterized cascade with argument at outer level only",
+			query: `query ($ids: [ID!]) {
+					  queryAuthor(filter: {id: $ids})  @cascade(fields:["name"]) {
+						reputation
+                        name
+						country {
+                          name
+						}
+					  }
+					}`,
+			variables: map[string]interface{}{"ids": authorIds},
+			respData: `{
+							"queryAuthor": [{
+								"reputation": 4.6,
+								 "name":"Jerry",
+								 "country": {
+									"name": "outer Galaxy2"
+								   }
+                                 },
+                                 {
+								 "name":"Kramer",
+                                 "reputation": null,
+								 "country": {
+									"name": "outer space2"
+								   }
+                                 },
+                               { 
+								"reputation": 4.5,
+								 "name":"George",
+								 "country": null
+							}]
+						}`,
+		},
+		{
+			name: "parameterized cascade only at inner level ",
+			query: `query ($ids: [ID!]) {
+					  queryAuthor(filter: {id: $ids})  {
+						reputation
+                        name
+						posts @cascade(fields:["text"]) {
+						  title
+						  text
+						}
+					  }
+					}`,
+			variables: map[string]interface{}{"ids": authorIds},
+			respData: `{
+							"queryAuthor": [{
+								"reputation": 4.5,
+								 "name":"George",
+								"posts": [{
+									"title": "A show about nothing",
+									"text": "Got ya!"
+								}]
+							},
+                            {
+                                "name":"Kramer",
+                                "reputation": null,
+								"posts": [{
+									"title": "Ha! Cosmo Kramer",
+									"text": "Giddy up!"
+								}]
+							},
+                            {
+                                "name":"Jerry",
+								"reputation": 4.6,	
+								"posts": []
+                            }]
+						}`,
+		},
+		{
+			name: "parameterized cascade at all levels ",
+			query: `query ($ids: [ID!]) {
+					  queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","name"]) {
+						reputation
+                        name
+                        dob
+						posts @cascade(fields:["text"]) {
+						  title
+						  text
+						}
+					  }
+					}`,
+			variables: map[string]interface{}{"ids": authorIds},
+			respData: `{
+							"queryAuthor": [{
+								"reputation": 4.5,
+								 "name":"George",	
+                                 "dob": null,
+								"posts": [{
+									"title": "A show about nothing",
+									"text": "Got ya!"
+								}]
+							}, {
+                                  "dob": null,                                                    
+                                  "name": "Jerry",
+                                  "posts": [],
+                                  "reputation": 4.6
+							}]
+						}`,
+		},
 	}
 
 	for _, tcase := range tcases {
@@ -1842,6 +1947,7 @@ func queryWithCascade(t *testing.T) {
 
 	// cleanup
 	deleteAuthors(t, authorIds, nil)
+	deleteCountry(t, map[string]interface{}{"id": countryIds},len(countryIds), nil)
 	deleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
 	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
 		nil)
