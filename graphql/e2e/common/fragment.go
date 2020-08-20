@@ -142,8 +142,10 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				... on Character {
 					... on Character {
 						... on Human {
-							id
-							name
+							... on Human {
+								id
+								name
+							}
 						}
 					}
 				}
