@@ -89,18 +89,6 @@
         "Post.author": { "uid": "_:author2" }
     },
     {
-        "uid": "_:post5",
-        "dgraph.type": "Post",
-        "Post.title": "No text",
-        "Post.text": null,
-        "Post.tags": ["NULL"],
-        "Post.topic": "NULL",
-        "Post.numLikes": 0,
-        "Post.isPublished": false,
-        "Post.postType": "Fact",
-        "Post.author": { "uid": "_:author2" }
-    },
-    {
         "uid": "_:nsw",
         "dgraph.type": "State",
         "State.name": "NSW",
