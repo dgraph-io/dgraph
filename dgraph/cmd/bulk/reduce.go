@@ -183,20 +183,19 @@ type mapIterator struct {
 
 type iteratorEntry struct {
 	partitionKey []byte
-	batch        *y.Buffer
+	cbuf         *y.Buffer
 }
 
 var numCreated, numReused uint64
 
 func (mi *mapIterator) release(ie *iteratorEntry) {
-	ie.batch.Release()
+	ie.cbuf.Release()
 }
 
 func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	var ie *iteratorEntry
 	prevKeyExist := false
-	var mapEntry, key, sizeBuf []byte
-	var err error
+	var mapEntry, key []byte
 	var cbuf *y.Buffer
 	// readKey reads the next map entry key.
 	readMapEntry := func() error {
@@ -204,7 +203,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 			return nil
 		}
 		r := mi.reader
-		sizeBuf, err = r.Peek(binary.MaxVarintLen64)
+		sizeBuf, err := r.Peek(binary.MaxVarintLen64)
 		if err != nil {
 			return err
 		}
@@ -223,9 +222,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	}
 
 	for _, pKey := range partitionsKeys {
-		cbuf = y.NewBuffer(64)
-		ie = &iteratorEntry{}
-		ie.partitionKey = pKey
+		ie = &iteratorEntry{partitionKey: pKey, cbuf: y.NewBuffer(64)}
 		for {
 			err := readMapEntry()
 			if err == io.EOF {
@@ -234,7 +231,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 			x.Check(err)
 
 			if bytes.Compare(key, ie.partitionKey) < 0 {
-				b := cbuf.SliceAllocate(len(mapEntry))
+				b := ie.cbuf.SliceAllocate(len(mapEntry))
 				copy(b, mapEntry)
 				prevKeyExist = false
 				// map entry is already part of cBuf.
@@ -244,7 +241,6 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 			prevKeyExist = true
 			break
 		}
-		ie.batch = cbuf
 		mi.batchCh <- ie
 	}
 
@@ -261,7 +257,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 		prevKeyExist = false
 	}
 	mi.batchCh <- &iteratorEntry{
-		batch:        cbuf,
+		cbuf:         cbuf,
 		partitionKey: nil,
 	}
 }
@@ -478,7 +474,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		for _, itr := range mapItrs {
 			res := itr.Next()
 			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
-			cbuf.Write(res.batch.Bytes())
+			cbuf.Write(res.cbuf.Bytes())
 			itr.release(res)
 		}
 		wg := new(sync.WaitGroup)
@@ -495,7 +491,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	for _, itr := range mapItrs {
 		res := itr.Next()
 		y.AssertTrue(res.partitionKey == nil)
-		cbuf.Write(res.batch.Bytes())
+		cbuf.Write(res.cbuf.Bytes())
 		itr.release(res)
 	}
 	wg := new(sync.WaitGroup)
