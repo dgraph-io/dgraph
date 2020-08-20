@@ -50,6 +50,11 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Status,
 		return nil, err
 	}
 
+	closer, err := g.Node.startTask(opBackup)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot start backup operation")
+	}
+	defer closer.Done()
 	bp := NewBackupProcessor(pstore, req)
 	return bp.WriteBackup(ctx)
 }

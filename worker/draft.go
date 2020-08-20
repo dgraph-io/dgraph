@@ -86,6 +86,8 @@ func (id op) String() string {
 		return "opIndexing"
 	case opRestore:
 		return "opRestore"
+	case opBackup:
+		return "opBackup"
 	default:
 		return "opUnknown"
 	}
@@ -96,6 +98,7 @@ const (
 	opSnapshot
 	opIndexing
 	opRestore
+	opBackup
 )
 
 // startTask is used to check whether an op is already running. If a rollup is running,
@@ -136,6 +139,17 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRestore {
 				return nil, errors.Errorf("another restore operation is already running")
+			}
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
+			otherCloser.SignalAndWait()
+		}
+	case opBackup:
+		// Backup cancels all other operations, except for other backups since
+		// only one restore operation should be active any given moment.
+		for otherId, otherCloser := range n.ops {
+			if otherId == opBackup {
+				return nil, errors.Errorf("another backup operation is already running")
 			}
 			// Remove from map and signal the closer to cancel the operation.
 			delete(n.ops, otherId)
