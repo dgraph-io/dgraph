@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -73,8 +74,8 @@ func (r *reducer) run() error {
 			mapFiles := filenamesInTree(dirs[shardId])
 			var mapItrs []*mapIterator
 			partitionKeys := [][]byte{}
-			for _, mapFile := range mapFiles {
-				header, itr := newMapIterator(mapFile)
+			for i, mapFile := range mapFiles {
+				header, itr := newMapIterator(i, mapFile)
 				partitionKeys = append(partitionKeys, header.PartitionKeys...)
 				mapItrs = append(mapItrs, itr)
 			}
@@ -94,11 +95,26 @@ func (r *reducer) run() error {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
 			})
 
+			// Remove the duplicate keys before passing it to the
+			// mapper file iterator.
+			filteredPartitionKeys := [][]byte{}
+			for _, key := range partitionKeys {
+				if len(filteredPartitionKeys) == 0 {
+					fmt.Println(hex.Dump(key))
+					filteredPartitionKeys = append(filteredPartitionKeys, key)
+					continue
+				}
+				if bytes.Equal(filteredPartitionKeys[len(filteredPartitionKeys)-1], key) {
+					continue
+				}
+				fmt.Println(hex.Dump(key))
+				filteredPartitionKeys = append(filteredPartitionKeys, key)
+			}
 			// Start batching for the given keys.
 			for _, itr := range mapItrs {
-				go itr.startBatching(partitionKeys)
+				go itr.startBatching(filteredPartitionKeys)
 			}
-			r.reduce(partitionKeys, mapItrs, ci)
+			r.reduce(filteredPartitionKeys, mapItrs, ci)
 			ci.wait()
 
 			x.Check(writer.Flush())
@@ -179,20 +195,26 @@ type mapIterator struct {
 	reader   *bufio.Reader
 	batchCh  chan *iteratorEntry
 	freelist chan *iteratorEntry
+	id       int
 }
 
 type iteratorEntry struct {
 	partitionKey []byte
 	batch        []byte
+	bufGenesis   *y.Buffer
 }
 
 var numCreated, numReused uint64
 
 func (mi *mapIterator) release(ie *iteratorEntry) {
-	select {
-	case mi.freelist <- ie:
-	default:
-	}
+	//ie.bufGenesis.Reset()
+	ie.bufGenesis.Release()
+	// select {
+	// case mi.freelist <- ie:
+	// default:
+	// 	// We are not able to reuse the allocated buf. So, freeing it now.
+	// 	// ie.bufGenesis.Release()
+	// }
 }
 
 func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
@@ -201,7 +223,8 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	var buf, key []byte
 	var err error
 
-	var cbuf y.Buffer
+	var cbuf *y.Buffer
+	tmpBuf := &bytes.Buffer{}
 	// readKey reads the next map entry key.
 	readMapEntry := func() error {
 		if prevKeyExist {
@@ -222,15 +245,28 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 		x.Check2(io.ReadFull(r, eBuf))
 
 		key, err = GetKeyForMapEntry(eBuf)
+		// if strings.Contains(hex.Dump(key), "......W.vf......") {
+		// 	fmt.Println("inner key", hex.Dump(key))
+		// 	fmt.Println("inner pk", hex.Dump(ie.partitionKey))
+		// 	fmt.Println("itr inner id", mi.id)
+		// }
 		return err
 	}
 
 	for _, pKey := range partitionsKeys {
-		select {
-		case ie = <-mi.freelist:
-			atomic.AddUint64(&numReused, 1)
-		default:
-			ie = &iteratorEntry{}
+		// select {
+		// case ie = <-mi.freelist:
+		// 	cbuf = ie.bufGenesis
+		// 	atomic.AddUint64(&numReused, 1)
+		// default:
+		// 	cbuf = y.NewBuffer(64)
+		// 	ie = &iteratorEntry{
+		// 		bufGenesis: cbuf,
+		// 	}
+		// }
+		cbuf = y.NewBuffer(64)
+		ie = &iteratorEntry{
+			bufGenesis: cbuf,
 		}
 		ie.partitionKey = pKey
 		for {
@@ -240,16 +276,37 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 				break
 			}
 			x.Check(err)
+			// tracked := false
+			// if strings.Contains(hex.Dump(key), "......W.vf......") {
+			// 	fmt.Println("key", hex.Dump(key))
+			// 	fmt.Println("pk", hex.Dump(ie.partitionKey))
+			// 	fmt.Println("itr id", mi.id)
+			// 	tracked = true
+			// }
 			if bytes.Compare(key, ie.partitionKey) < 0 {
+				if prevKeyExist {
+					// cached key is part of this batch so let's insert it.
+					if tmpBuf.Len() > 0 {
+						cbuf.Write(tmpBuf.Bytes())
+						tmpBuf.Reset()
+					}
+				}
 				prevKeyExist = false
 				// map entry is already part of cBuf.
 				continue
 			}
 			all := cbuf.Bytes()
-			ie.batch = all[:prevOffset] // This would be released in toList.
-			cbuf.Reset()
-			cbuf.Write(all[prevOffset:])
-
+			// if tracked {
+			// 	fmt.Print("tracked offset", prevOffset)
+			// }
+			// ie.batch = all[:prevOffset]
+			// if tracked {
+			// 	fmt.Print("tracked offset", prevOffset)
+			// 	fmt.Println("length", len(ie.batch))
+			// }
+			ie.bufGenesis = cbuf
+			// Find a way to free nicely.
+			tmpBuf.Write(all[prevOffset:])
 			// Current key is not part of this batch so track that we have already read the key.
 			prevKeyExist = true
 			break
@@ -258,6 +315,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	}
 
 	// Drain the last items.
+	cbuf = y.NewBuffer(64)
 	for {
 		err := readMapEntry()
 		if err == io.EOF {
@@ -269,6 +327,17 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	mi.batchCh <- &iteratorEntry{
 		batch:        cbuf.Bytes(),
 		partitionKey: nil,
+		bufGenesis:   cbuf,
+	}
+
+	// Let's free all the allocated memory from the buffered channel.
+	for {
+		select {
+		case ie = <-mi.freelist:
+			ie.bufGenesis.Release()
+		default:
+			break
+		}
 	}
 }
 
@@ -280,7 +349,7 @@ func (mi *mapIterator) Next() *iteratorEntry {
 	return <-mi.batchCh
 }
 
-func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
+func newMapIterator(i int, filename string) (*pb.MapHeader, *mapIterator) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	gzReader, err := gzip.NewReader(fd)
@@ -304,6 +373,7 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 		reader:   reader,
 		batchCh:  make(chan *iteratorEntry, 3),
 		freelist: make(chan *iteratorEntry, 64),
+		id:       i,
 	}
 	return header, itr
 }
@@ -485,11 +555,8 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			res := itr.Next()
 			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
 			cbuf.Write(res.batch)
-			y.Free(res.batch)
-			// entries = append(entries, res.batch)
 			itr.release(res)
 		}
-
 		wg := new(sync.WaitGroup)
 		wg.Add(1)
 		atomic.AddInt32(&r.prog.numEncoding, 1)
@@ -505,6 +572,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		res := itr.Next()
 		y.AssertTrue(res.partitionKey == nil)
 		cbuf.Write(res.batch)
+		itr.release(res)
 	}
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
@@ -531,7 +599,6 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	list := req.list
 	splitList := req.splitList
 	req.offsets = cbuf.SliceOffsets(req.offsets[:0])
-
 	sort.Slice(req.offsets, func(i, j int) bool {
 		lh, err := GetKeyForMapEntry(cbuf.Slice(req.offsets[i]))
 		x.Check(err)
@@ -611,7 +678,6 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 
 		pl.Pack = codec.Encode(uids, 256)
 		defer codec.FreePack(pl.Pack)
-
 		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
