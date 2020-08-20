@@ -81,8 +81,8 @@ var (
 	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
-    TxnAborts = stats.Int64("txn_aborts",
-    	"Number of transaction aborts",stats.UnitDimensionless)
+	TxnAborts = stats.Int64("txn_aborts",
+		"Number of transaction aborts", stats.UnitDimensionless)
 
 	// CacheInUse records the amount of memory used by the cache.
 	CacheInUse = stats.Int64("cache_in_use_bytes",
@@ -247,7 +247,7 @@ var (
 			Aggregation: view.LastValue(),
 			TagKeys:     nil,
 		},
-// Cache Metrics.
+		// Cache Metrics.
 		{
 			Name:        CacheInUse.Name(),
 			Measure:     CacheInUse,

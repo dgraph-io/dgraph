@@ -362,12 +362,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	if len(proposal.Mutations.Schema) > 0 || len(proposal.Mutations.Types) > 0 {
-		if len(proposal.Mutations.Schema) > 0 {
-			// Clear the entire cache if there is a schema update because the index rebuild
-			// will invalidate the state.
-			posting.ResetCache()
-		}
-
 		// MaxAssigned would ensure that everything that's committed up until this point
 		// would be picked up in building indexes. Any uncommitted txns would be cancelled
 		// by detectPendingTxns below.
@@ -393,6 +387,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
 			return err
+		}
+
+		// Clear the entire cache if there is a schema update because the index rebuild
+		// will invalidate the state.
+		if len(proposal.Mutations.Schema) > 0 {
+			posting.ResetCache()
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
