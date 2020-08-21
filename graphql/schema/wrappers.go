@@ -682,7 +682,6 @@ func (f *field) Cascade() []string {
    var  fields []string
    typ:=f.Type()
    for _,child:= range arg.Value.Children{
-
    		fields=append(fields,typ.DgraphPredicate(child.Value.Raw))
    }
    return fields
