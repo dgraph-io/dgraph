@@ -8,8 +8,8 @@ title = "Using Kubernetes"
 
 The following section covers running Dgraph with Kubernetes. We have tested Dgraph with Kubernetes versions 1.14 to 1.16 on [GKE](https://cloud.google.com/kubernetes-engine) and versions 1.14 to 1.17 on [EKS](https://aws.amazon.com/eks/).
 
-{{% notice "note" %}}These instructions are for running Dgraph Alpha without TLS configuration.
-Instructions for running with TLS refer [TLS instructions]({{< relref "tls-configuration.md" >}}).{{% /notice %}}
+{{% notice "note" %}}These instructions are for running Dgraph alpha service without TLS configuration.
+Instructions for running Dgraph alpha service with TLS refer [TLS instructions]({{< relref "tls-configuration.md" >}}).{{% /notice %}}
 
 * Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) which is used to deploy
   and manage applications on kubernetes.
@@ -17,10 +17,9 @@ Instructions for running with TLS refer [TLS instructions]({{< relref "tls-confi
   * For Amazon [EKS](https://aws.amazon.com/eks/), you can use [eksctl](https://eksctl.io/) to quickly provision a new cluster. If you are new to this, Amazon has an article [Getting started with eksctl](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html).
   * For Google Cloud [GKE](https://cloud.google.com/kubernetes-engine), you can use [Google Cloud SDK](https://cloud.google.com/sdk/install) and the `gcloud container clusters create` command to quickly provision a new cluster.
 
-On Amazon [EKS](https://aws.amazon.com/eks/), you would see something like this:
+Verify that you have your cluster up and running using `kubectl get nodes`. If you used `eksctl` or `gcloud container clusters create` with the default options, you should have 2-3 worker nodes ready.
 
-Verify that you have your cluster up and running using `kubectl get nodes`. If you used `kops` with
-the default options, you should have a master and two worker nodes ready.
+On Amazon [EKS](https://aws.amazon.com/eks/), you would see something like this:
 
 ```sh
 ➜  kubernetes git:(master) ✗ kubectl get nodes
@@ -177,8 +176,8 @@ dgraph-zero-2         1/1     Running   0          5m6s
 
 {{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs --follow dgraph-alpha-0` and `kubectl logs --follow dgraph-zero-0`.{{% /notice %}}
 
-### Test Dgraph HA Cluster Setup
 
+### Test Dgraph HA Cluster Setup
 Port forward from your local machine to the pod
 
 ```sh
@@ -345,7 +344,7 @@ helm install my-release dgraph/dgraph --values my-config-values.yaml
 Afterward you can run `kubectl get ingress` to see the status and access these through their hostname, such as `http://alpha.<my-domain-name>` and `http://ratel.<my-domain-name>`
 
 
-{{% notice "note" %}}Ingress controllers will likely have an option to configure access for private internal networks.  Consult documentation from the ingress controller provider for further information.{{% /notice %}}
+{{% notice "tip" %}}Ingress controllers will likely have an option to configure access for private internal networks.  Consult documentation from the ingress controller provider for further information.{{% /notice %}}
 
 
 
