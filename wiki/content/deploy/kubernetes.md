@@ -227,8 +227,7 @@ The above command will install a recent version of the dgraph docker image. You 
 helm install my-release dgraph/dgraph --set image.tag="v1.2.6"
 ```
 
-{{% notice "note" %}}When configuring dgraph image tag, be careful not to use `latest` or `master` on a production system.{{% /notice %}}
-
+{{% notice "warning" %}}When configuring dgraph image tag, be careful not to use `latest` or `master` in a production environment. These tags may have the dgraph version change causing mixed version dgraph cluster that can lead to outage and potential data loss.{{% /notice %}}
 
 #### Dgraph Configuration Files
 
