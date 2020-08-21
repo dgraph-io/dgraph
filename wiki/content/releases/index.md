@@ -16,7 +16,7 @@ You can watch the [Announce][] Discuss category to know about the latest release
 
  Dgraph Release Series | Current Release | Supported? | First Release Date | End of life
 -----------------------|-----------------|------------|--------------------|------------
- v20.07.x              | [V20.07.0][]    | Yes        | July 2020          | July 2021       
+ v20.07.x              | [v20.07.0][]    | Yes        | July 2020          | July 2021       
  v20.03.x              | [v20.03.4][]    | Yes        | March 2020         | March 2021
  v1.2.x                | [v1.2.6][]      | Yes        | January 2020       | January 2021
  v1.1.x                | [v1.1.1][]      | Yes        | January 2020       | January 2021
