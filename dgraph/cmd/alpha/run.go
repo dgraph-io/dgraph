@@ -200,7 +200,8 @@ they form a Raft group and provide synchronous replication.
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
 
 	// Flag to enable posting list Ristretto cache.
-	flag.Bool("pl_cache", false, "EXPERIMENTAL. Set to true to enable the posting list cache. "+
+	flag.Int("pl_cachemb", 0, "EXPERIMENTAL. Size of the posting list cache in MBs. "+
+		"Cache will be disabled if this value is zero."+
 		"Right now this cache is not guaranteed to be consistent, hence it's an experimental flag.")
 }
 
@@ -641,7 +642,7 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
-		PlCache:             Alpha.Conf.GetBool("pl_cache"),
+		PlCacheMb:           uint32(Alpha.Conf.GetInt("pl_cachemb")),
 	}
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)

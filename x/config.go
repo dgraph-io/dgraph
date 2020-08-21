@@ -91,8 +91,9 @@ type WorkerOptions struct {
 	// queries hence it has been kept as int32. LogRequest value 1 enables logging of requests
 	// coming to alphas and 0 disables it.
 	LogRequest int32
-	// PlCache indicates whether the cache for posting lists is enabled.
-	PlCache bool
+	// PlCacheMb indicates the size of the posting lists cache. A value of zero indicates the cache
+	// is disabled
+	PlCacheMb uint32
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

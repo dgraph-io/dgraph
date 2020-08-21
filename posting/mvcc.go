@@ -397,7 +397,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	cachedVal, ok := lCache.Get(key)
 	if ok {
 		l, ok := cachedVal.(*List)
-		if ok {
+		if ok && l != nil {
 			// No need to clone the immutable layer or the key since mutations will not modify it.
 			lCopy := &List{
 				minTs: l.minTs,

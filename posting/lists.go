@@ -142,13 +142,13 @@ func Init(ps *badger.DB) {
 	go updateMemoryMetrics(closer)
 
 	// Initialize cache.
-	if !x.WorkerConfig.PlCache {
+	if x.WorkerConfig.PlCacheMb == 0 {
 		return
 	}
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 200e6,
-		MaxCost:     int64(Config.AllottedMemory * 1024 * 1024),
+		MaxCost:     int64(x.WorkerConfig.PlCacheMb * 1024 * 1024),
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
@@ -162,22 +162,9 @@ func Init(ps *badger.DB) {
 	x.Check(err)
 	go func() {
 		m := lCache.Metrics
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(60 * time.Second)
 		for range ticker.C {
-			ostats.Record(context.Background(),
-				x.CacheInUse.M(int64(m.CostAdded()-m.CostEvicted())),
-				x.CacheAddedKeys.M(int64(m.KeysAdded())),
-				x.CacheEvictedKeys.M(int64(m.KeysEvicted())),
-				x.CacheUpdatedKeys.M(int64(m.KeysUpdated())),
-				x.CacheHits.M(int64(m.Hits())),
-				x.CacheHitRatio.M(m.Ratio()),
-				x.CacheMiss.M(int64(m.Misses())),
-				x.CacheAddedBytes.M(int64(m.CostAdded())),
-				x.CacheEvictedBytes.M(int64(m.CostEvicted())),
-				x.CacheDroppedSet.M(int64(m.SetsDropped())),
-				x.CacheRejectedSet.M(int64(m.SetsRejected())),
-				x.CacheDroppedGets.M(int64(m.GetsDropped())),
-				x.CacheKeptGets.M(int64(m.GetsKept())))
+			glog.Infof("Posting list cache metrics: %s", m)
 		}
 	}()
 }
