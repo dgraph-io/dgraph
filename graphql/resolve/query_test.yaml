@@ -257,13 +257,13 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter(((gt(Author.country) AND le(Author.dob, "2001-01-01")) AND eq(Author.name, "A. N. Author"))) {
+      queryAuthor(func: type(Author)) @filter(((has(Author.country) AND le(Author.dob, "2001-01-01")) AND eq(Author.name, "A. N. Author"))) {
         name : Author.name
         dgraph.uid : uid
       }
     }
 
-    -
+-
   name: "Filter with 'or'"
   gqlquery: |
     query {
@@ -1463,7 +1463,7 @@
         id : Tweets.id
         dgraph.uid : uid
       }
-  }
+    }
 
 - name: "querying a field multiple times with different aliases adds it only once in rewriting"
   gqlquery: |-

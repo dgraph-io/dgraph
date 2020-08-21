@@ -172,6 +172,7 @@ type UpdateMessagePayload {
 enum MessageHasFilter {
 	content
 	author
+	uniqueId
 	datePosted
 }
 

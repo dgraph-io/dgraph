@@ -205,6 +205,8 @@ enum PostHasFilter {
 	publishByMonth
 	publishByDay
 	publishByHour
+	publishTimestamp
+	numViewers
 	numLikes
 	score
 	isPublished
