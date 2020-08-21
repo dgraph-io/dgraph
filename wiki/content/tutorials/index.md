@@ -4,6 +4,7 @@ title = "Tutorials - Get Started with Dgraph series"
   url = "/tutorials"
   name = "Tutorials"
   identifier = "tutorials"
+  parent = "dql"
   weight = 3
 +++
 
