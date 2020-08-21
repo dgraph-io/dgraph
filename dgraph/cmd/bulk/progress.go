@@ -21,8 +21,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type phase int32
@@ -118,7 +118,7 @@ func (p *progress) reportOnce() {
 			niceFloat(float64(reduceKeyCount)),
 			niceFloat(float64(reduceKeyCount)/elapsed.Seconds()),
 			atomic.LoadInt32(&p.numEncoding),
-			atomic.LoadInt64(&y.NumAllocs)/(1<<20),
+			atomic.LoadInt64(&z.NumAllocBytes)/(1<<20),
 			atomic.LoadUint64(&numReused),
 		)
 	default:
