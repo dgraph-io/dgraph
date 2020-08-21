@@ -807,6 +807,12 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	if out == nil {
 		return nil, nil
 	}
+	defer func() {
+		codec.FreePack(out.plist.Pack)
+		for _, part := range out.parts {
+			codec.FreePack(part.Pack)
+		}
+	}()
 
 	var kvs []*bpb.KV
 	kv := &bpb.KV{}

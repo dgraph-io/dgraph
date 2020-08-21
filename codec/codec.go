@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-groupvarint"
 )
 
@@ -54,19 +55,19 @@ var blockSize = int(unsafe.Sizeof(pb.UidBlock{}))
 // ReleaseBlock.
 func AllocateBlock() *pb.UidBlock {
 	// Allocate blocks manually.
-	b := y.Calloc(blockSize)
+	b := z.Calloc(blockSize)
 	return (*pb.UidBlock)(unsafe.Pointer(&b[0]))
 }
 
 // FreeBlock releases a previously manually allocated UidBlock.
 func FreeBlock(ub *pb.UidBlock) {
-	buf := (*[y.MaxArrayLen]byte)(unsafe.Pointer(ub))[:blockSize:blockSize]
-	y.Free(buf)
+	buf := (*[z.MaxArrayLen]byte)(unsafe.Pointer(ub))[:blockSize:blockSize]
+	z.Free(buf)
 }
 
 func FreePack(pack *pb.UidPack) {
 	for _, b := range pack.Blocks {
-		y.Free(b.Deltas)
+		z.Free(b.Deltas)
 		FreeBlock(b)
 	}
 }

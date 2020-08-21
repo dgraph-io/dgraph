@@ -33,6 +33,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/dgraph-io/badger/v2"
 	bo "github.com/dgraph-io/badger/v2/options"
@@ -44,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type reducer struct {
@@ -510,6 +512,18 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser.SignalAndWait()
 }
 
+var mapEntrySz = int(unsafe.Sizeof(pb.MapEntry{}))
+
+func newMapEntry() *pb.MapEntry {
+	b := z.Calloc(mapEntrySz)
+	return (*pb.MapEntry)(unsafe.Pointer(&b[0]))
+}
+
+func freeMapEntry(me *pb.MapEntry) {
+	buf := (*[z.MaxArrayLen]byte)(unsafe.Pointer(me))[:mapEntrySz:mapEntrySz]
+	z.Free(buf)
+}
+
 func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	cbuf := req.cbuf
 	defer func() {
@@ -537,6 +551,11 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	countEntries := []*countIndexEntry{}
 	currentBatch := make([]*pb.MapEntry, 0, 100)
 	freelist := make([]*pb.MapEntry, 0)
+	defer func() {
+		for _, me := range freelist {
+			freeMapEntry(me)
+		}
+	}()
 
 	appendToList := func() {
 		if len(currentBatch) == 0 {
@@ -630,19 +649,22 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 		entry := cbuf.Slice(offset)
 		entryKey, err := GetKeyForMapEntry(entry)
 		x.Check(err)
+
 		if !bytes.Equal(entryKey, currentKey) && currentKey != nil {
 			appendToList()
 		}
+
 		currentKey = append(currentKey[:0], entryKey...)
 		var mapEntry *pb.MapEntry
 		if len(freelist) == 0 {
 			// Create a new map entry.
-			mapEntry = &pb.MapEntry{}
+			mapEntry = newMapEntry()
 		} else {
 			// Obtain from freelist.
-			mapEntry = freelist[0]
+			lidx := len(freelist) - 1
+			mapEntry = freelist[lidx]
 			mapEntry.Reset()
-			freelist = freelist[1:]
+			freelist = freelist[:lidx]
 		}
 		x.Check(mapEntry.Unmarshal(entry))
 		currentBatch = append(currentBatch, mapEntry)
