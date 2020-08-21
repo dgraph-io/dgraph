@@ -228,6 +228,39 @@ The above command will install a recent version of the dgraph docker image. You 
 helm install my-release dgraph/dgraph --set image.tag="v1.2.6"
 ```
 
+{{% notice "note" %}}When configuring dgraph image tag, be careful not to use `latest` or `master` on a production system.{{% /notice %}}
+
+
+#### Dgraph Configuration Files
+
+You can supply a dgraph config files (see [Config]({{< relref "config.md" >}})) for alpha and zero with Helm chart configuration values:
+
+```yaml
+# my-config-values.yaml
+alpha:
+  configFile:
+    config.yaml: |
+      alsologtostderr: true
+      badger:
+        compression_level: 3
+        tables: mmap
+        vlog: mmap
+      postings: /dgraph/data/p
+      wal: /dgraph/data/w
+      lru_mb: 2048
+zero:
+  configFile:
+    config.yaml: |
+      alsologtostderr: true
+      wal: /dgraph/data/zw
+```
+
+And then install with alpha and zero configuration using this:
+
+```sh
+helm install my-release dgraph/dgraph --values my-config-values.yaml
+```
+
 #### Exposing Alpha and Ratel Services
 
 By default zero and alpha services are exposed only within the kubernetes cluster as
@@ -235,12 +268,11 @@ kubernetes service type `ClusterIP`.
 
 In order to expose the alpha service and ratel service publicly you can use kubernetes service type `LoadBalancer`, or an Ingress resource.
 
-
 ##### LoadBalancer (Public Internet)
 
 To use an external load balancer, set the service type to `LoadBalancer`. 
 
-{{% notice "note" %}}For security purposes we recommend restricting access to any public endpoints, such as using a white list.
+{{% notice "note" %}}For security purposes we recommend limiting access to any public endpoints, such as using a white list.{{% /notice %}}
 
 You can expose alpha service to the Internet as follows:
 
@@ -256,13 +288,14 @@ helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer" --
 
 ##### LoadBalancer (Private Internal Network)
 
-An external load balancer can be configured to face internally to a private subnet rather the public Internet.  This way it can be accessed securely by clients clients on the same network, or through a VPN or a jump server. In Kubernetes, this is often configured through service annotations by the provider.  Here's a small list of  of annotations:
+An external load balancer can be configured to face internally to a private subnet rather the public Internet.  This way it can be accessed securely by clients on the same network, or through a VPN or a jump server. In Kubernetes, this is often configured through service annotations by the provider.  Here's a small list of  of annotations:
 
 |Provider    | Documentation Reference   | Annotation |
 |------------|---------------------------|------------|
 |AWS         |[Amazon EKS: Load Balancing](https://docs.aws.amazon.com/eks/latest/userguide/load-balancing.html)|`service.beta.kubernetes.io/aws-load-balancer-internal: "true"`|
 |Azure       |[AKS: Internal Load Balancer](https://docs.microsoft.com/azure/aks/internal-lb)|`service.beta.kubernetes.io/azure-load-balancer-internal: "true"`|
 |Google Cloud|[GKE: Internal Load Balancing](https://cloud.google.com/kubernetes-engine/docs/how-to/internal-load-balancing)|`cloud.google.com/load-balancer-type: "Internal"`|
+
 
 As an example, using Amazon [EKS](https://aws.amazon.com/eks/) as the provider, you could create a Helm chart configuration values like this below: 
 
@@ -288,7 +321,7 @@ helm install my-release dgraph/dgraph --values my-config-values.yaml
 
 ##### Ingress Resource
 
-You can expose alpha and ratel using an ingress resource that can route traffic to services resources.  Before using this option you may need to install an [ingress controller](https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/) first, as is the case with [AKS](https://docs.microsoft.com/azure/aks/) and [EKS](https://aws.amazon.com/eks/), while in the case of [GKE](https://cloud.google.com/kubernetes-engine), this comes bundled with a default ingress controller.  When routing traffic based on the `hostname`, you may want to integrate an addon like [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) so that DNS records can be registered automatically when deploying dgraph.
+You can expose alpha and ratel using an [ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) resource that can route traffic to services resources.  Before using this option you may need to install an [ingress controller](https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/) first, as is the case with [AKS](https://docs.microsoft.com/azure/aks/) and [EKS](https://aws.amazon.com/eks/), while in the case of [GKE](https://cloud.google.com/kubernetes-engine), this comes bundled with a default ingress controller.  When routing traffic based on the `hostname`, you may want to integrate an addon like [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) so that DNS records can be registered automatically when deploying dgraph.
 
 As an examples, you can configure a single ingress resourse that uses [ingress-nginx](https://github.com/kubernetes/ingress-nginx) for alpha and ratel services, by creating Helm chart confgiuration values like this below:
 
@@ -299,8 +332,8 @@ global:
     enabled: false
     annotations:
       kubernetes.io/ingress.class: nginx
-    ratel_hostname: ratel.<my-domain-name>
-    alpha_hostname: alpha.<my-domain-name>
+    ratel_hostname: "ratel.<my-domain-name>"
+    alpha_hostname: "alpha.<my-domain-name>"
 ```
 
 And then expose alpha and ratel services through an ingress:
@@ -309,7 +342,12 @@ And then expose alpha and ratel services through an ingress:
 helm install my-release dgraph/dgraph --values my-config-values.yaml
 ```
 
-Ingress controllers will likely have an option to configure endpoints for private internal networks.  Consult documentation from the ingress control provider for this information.
+Afterward you can run `kubectl get ingress` to see the status and access these through their hostname, such as `http://alpha.<my-domain-name>` and `http://ratel.<my-domain-name>`
+
+
+{{% notice "note" %}}Ingress controllers will likely have an option to configure access for private internal networks.  Consult documentation from the ingress controller provider for further information.{{% /notice %}}
+
+
 
 
 ### Upgrading the Chart
@@ -552,7 +590,7 @@ spec:
 Then, in the StatefulSet configuration you can claim this local storage in
 .spec.volumeClaimTemplate:
 
-```
+```yaml
 kind: StatefulSet
 ...
  volumeClaimTemplates:
