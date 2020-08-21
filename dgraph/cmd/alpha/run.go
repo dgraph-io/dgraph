@@ -104,20 +104,17 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
-	flag.String("badger.tables", "mmap",
-		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for the postings directory. "+
-			"Option sequence consume most to least RAM while providing best to worst read "+
-			"performance respectively.")
-	flag.String("badger.vlog", "mmap",
-		"[mmap, disk] Specifies how Badger Value log is stored for the postings directory."+
-			" mmap consumes more RAM, but provides better performance.")
-	flag.String("badger.wal_tables", "mmap",
-		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for the write-ahead log. "+
-			"Option sequence consume most to least RAM while providing best to worst read "+
-			"performance respectively.")
-	flag.String("badger.wal_vlog", "mmap",
-		"[mmap, disk] Specifies how Badger Value log is stored for the write-ahead log."+
-			" mmap consumes more RAM, but provides better performance.")
+	flag.String("badger.tables", "mmap,mmap",
+		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for the postings and "+
+			"write-ahead directory. Option sequence consume most to least RAM while providing "+
+			"best to worst read performance respectively. If you pass two values separated by a "+
+			"comma, the first value will be used for the postings directory and the second for "+
+			"the write-ahead log directory.")
+	flag.String("badger.vlog", "mmap,mmap",
+		"[mmap, disk] Specifies how Badger Value log is stored for the postings and write-ahead "+
+			"log directory. mmap consumes more RAM, but provides better performance. If you pass "+
+			"two values separated by a comma the first value will be used for the postings "+
+			"directory and the second for the w directory.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
 	enc.RegisterFlags(flag)
@@ -580,10 +577,6 @@ func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
 	opts := worker.Options{
-		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
-		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
-		BadgerWalTables:        Alpha.Conf.GetString("badger.wal_tables"),
-		BadgerWalVlog:          Alpha.Conf.GetString("badger.wal_vlog"),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
 		PostingDir:             Alpha.Conf.GetString("postings"),
 		WALDir:                 Alpha.Conf.GetString("wal"),
@@ -591,6 +584,32 @@ func run() {
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+	}
+
+	badgerTables := strings.Split(Alpha.Conf.GetString("badger.tables"), ",")
+	if len(badgerTables) != 1 && len(badgerTables) != 2 {
+		glog.Fatalf("Unable to read badger.tables options. Expected single value or two "+
+			"comma-separated values. Got %s", Alpha.Conf.GetString("badger.tables"))
+	}
+	if len(badgerTables) == 1 {
+		opts.BadgerTables = badgerTables[0]
+		opts.BadgerWalTables = badgerTables[0]
+	} else {
+		opts.BadgerTables = badgerTables[0]
+		opts.BadgerWalTables = badgerTables[1]
+	}
+
+	badgerVlog := strings.Split(Alpha.Conf.GetString("badger.vlog"), ",")
+	if len(badgerVlog) != 1 && len(badgerVlog) != 2 {
+		glog.Fatalf("Unable to read badger.vlog options. Expected single value or two "+
+			"comma-separated values. Got %s", Alpha.Conf.GetString("badger.vlog"))
+	}
+	if len(badgerVlog) == 1 {
+		opts.BadgerVlog = badgerVlog[0]
+		opts.BadgerWalVlog = badgerVlog[0]
+	} else {
+		opts.BadgerVlog = badgerVlog[0]
+		opts.BadgerWalVlog = badgerVlog[1]
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
