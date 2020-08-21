@@ -20,11 +20,13 @@ import (
 	"bytes"
 	"math"
 	"sort"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-groupvarint"
 )
 
@@ -50,24 +52,38 @@ type Encoder struct {
 
 var blockSize = int(unsafe.Sizeof(pb.UidBlock{}))
 
+var NumBlock int32
+
+var NumDelta int32
+
 // AllocateBlock would allocate a block via Calloc. This block must be released via a call to
 // ReleaseBlock.
 func AllocateBlock() *pb.UidBlock {
+	atomic.AddInt32(&NumBlock, 1)
 	// Allocate blocks manually.
-	b := y.Calloc(blockSize)
+	b := z.Calloc(blockSize)
 	return (*pb.UidBlock)(unsafe.Pointer(&b[0]))
 }
 
 // FreeBlock releases a previously manually allocated UidBlock.
 func FreeBlock(ub *pb.UidBlock) {
-	buf := (*[y.MaxArrayLen]byte)(unsafe.Pointer(ub))[:blockSize:blockSize]
-	y.Free(buf)
+	buf := (*[z.MaxArrayLen]byte)(unsafe.Pointer(ub))[:blockSize:blockSize]
+	z.Free(buf)
+	atomic.AddInt32(&NumBlock, -1)
 }
 
 func FreePack(pack *pb.UidPack) {
+	if pack == nil {
+		return
+	}
 	for _, b := range pack.Blocks {
-		y.Free(b.Deltas)
-		FreeBlock(b)
+		atomic.AddInt32(&NumDelta, -1)
+		if b != nil {
+			FreeBlock(b)
+		}
+		if b.Deltas != nil {
+			z.Free(b.Deltas)
+		}
 	}
 }
 
@@ -85,7 +101,8 @@ func (e *Encoder) packBlock() {
 	last := e.uids[0]
 	e.uids = e.uids[1:]
 
-	var out y.Buffer
+	out := y.NewBuffer(64)
+	atomic.AddInt32(&NumDelta, 1)
 	// We are not releasing the allocated memory here. Instead, block.Deltas would need to be
 	// released at the end.
 

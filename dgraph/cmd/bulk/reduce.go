@@ -598,7 +598,7 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 
 		pl.Pack = codec.Encode(uids, 256)
 		defer codec.FreePack(pl.Pack)
-		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
+		shouldSplit := false //pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup()

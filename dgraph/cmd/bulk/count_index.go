@@ -94,6 +94,7 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 		pl.Pack = codec.Encode(uids, 256)
 		data, err := pl.Marshal()
 		x.Check(err)
+		codec.FreePack(pl.Pack)
 		list.Kv = append(list.Kv, &bpb.KV{
 			Key:      x.CountKey(pred, uint32(count), rev),
 			Value:    data,

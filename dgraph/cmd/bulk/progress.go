@@ -21,8 +21,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type phase int32
@@ -118,9 +119,12 @@ func (p *progress) reportOnce() {
 			niceFloat(float64(reduceKeyCount)),
 			niceFloat(float64(reduceKeyCount)/elapsed.Seconds()),
 			atomic.LoadInt32(&p.numEncoding),
-			atomic.LoadInt64(&y.NumAllocs)/(1<<20),
+			z.NumAllocsMB(),
 			atomic.LoadUint64(&numReused),
 		)
+		fmt.Println("allocs", z.NumAllocsMB())
+		fmt.Println("block", atomic.LoadInt32(&codec.NumBlock))
+		fmt.Println("delta", atomic.LoadInt32(&codec.NumDelta))
 	default:
 		x.AssertTruef(false, "invalid phase")
 	}

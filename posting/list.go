@@ -808,6 +808,16 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 		return nil, nil
 	}
 
+	defer func() {
+		for _, pl := range out.parts {
+			if pl.Pack != nil {
+				codec.FreePack(pl.Pack)
+			}
+		}
+		if out.plist.Pack != nil {
+			codec.FreePack(out.plist.Pack)
+		}
+	}()
 	var kvs []*bpb.KV
 	kv := &bpb.KV{}
 	kv.Version = out.newMinTs

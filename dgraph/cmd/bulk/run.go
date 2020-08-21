@@ -28,10 +28,13 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/cobra"
 )
 
@@ -241,6 +244,12 @@ func run() {
 	loader.reduceStage()
 	loader.writeSchema()
 	loader.cleanup()
+	fmt.Println("allocs", z.NumAllocsMB())
+	fmt.Println("block", atomic.LoadInt32(&codec.NumBlock))
+	fmt.Println("delta", atomic.LoadInt32(&codec.NumDelta))
+	x.AssertTrue(atomic.LoadInt32(&codec.NumBlock) == 0)
+	x.AssertTrue(atomic.LoadInt32(&codec.NumDelta) == 0)
+	x.AssertTrue(z.NumAllocsMB() == 0)
 }
 
 func maxOpenFilesWarning() {
