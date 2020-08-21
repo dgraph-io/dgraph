@@ -1,3 +1,19 @@
+/*
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package common
 
 import (
@@ -34,12 +50,12 @@ func fragmentInMutation(t *testing.T) {
 	gqlResponse := addStarshipParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	addStarshipExpected := fmt.Sprintf(`{"addStarship":{
+	addStarshipExpected := `{"addStarship":{
 		"starship":[{
 			"name":"Millennium Falcon",
 			"length":2
 		}]
-	}}`)
+	}}`
 
 	var expected, result struct {
 		AddStarship struct {
@@ -112,12 +128,61 @@ func fragmentInQueryOnInterface(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
 	droidID := addDroid(t)
+	thingOneId := addThingOne(t)
+	thingTwoId := addThingTwo(t)
 
 	queryCharacterParams := &GraphQLParams{
 		Query: `query {
-			queryCharacter(filter: null) {
+			queryCharacter {
 				__typename
 				...fullCharacterFrag
+			}
+			qc: queryCharacter {
+				__typename
+				... on Character {
+					... on Character {
+						... on Human {
+							... on Human {
+								id
+								name
+							}
+						}
+					}
+				}
+				... droidAppearsIn
+			}
+			qc1: queryCharacter {
+				... on Human {
+					__typename
+					id
+				}
+				... on Droid {
+					id
+				}
+			}
+			queryThing {
+				__typename
+				... on ThingOne {
+					id
+					name
+					color
+					usedBy
+				}
+				... on ThingTwo {
+					id
+					name
+					color
+					owner
+				}
+			}
+			qt: queryThing {
+				... on ThingOne {
+					__typename
+					id
+				}
+				... on ThingTwo {
+					__typename
+				}
 			}
 		}
 		fragment fullCharacterFrag on Character {
@@ -149,6 +214,9 @@ func fragmentInQueryOnInterface(t *testing.T) {
 			__typename
 			primaryFunction
 		}
+		fragment droidAppearsIn on Droid {
+			appearsIn
+		}
 		`,
 	}
 
@@ -179,12 +247,56 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				"appearsIn": ["EMPIRE"],
 				"primaryFunction": "Robot"
 			}
+		],
+		"qc":[
+			{
+				"__typename": "Human",
+				"id": "%s",
+				"name": "Han"
+			},
+			{
+				"__typename": "Droid",
+				"appearsIn": ["EMPIRE"]
+			}
+		],
+		"qc1":[
+			{
+				"__typename": "Human",
+				"id": "%s"
+			},
+			{
+				"id": "%s"
+			}
+		],
+		"queryThing":[
+			{
+				"__typename": "ThingOne",
+				"id": "%s",
+				"name": "Thing-1",
+				"color": "White",
+				"usedBy": "me"
+			},
+			{
+				"__typename": "ThingTwo",
+				"id": "%s",
+				"name": "Thing-2",
+				"color": "Black",
+				"owner": "someone"
+			}
+		],
+		"qt":[
+			{
+				"__typename": "ThingOne",
+				"id": "%s"
+			},
+			{
+				"__typename": "ThingTwo"
+			}
 		]
-	}`, humanID, newStarship.ID, droidID)
+	}`, humanID, newStarship.ID, droidID, humanID, humanID, droidID, thingOneId, thingTwoId,
+		thingOneId)
 
-	var expected, result struct {
-		QueryCharacter []map[string]interface{}
-	}
+	var expected, result map[string]interface{}
 	err := json.Unmarshal([]byte(queryCharacterExpected), &expected)
 	require.NoError(t, err)
 	err = json.Unmarshal(gqlResponse.Data, &result)
@@ -193,6 +305,8 @@ func fragmentInQueryOnInterface(t *testing.T) {
 	require.Equal(t, expected, result)
 
 	cleanupStarwars(t, newStarship.ID, humanID, droidID)
+	deleteThingOne(t, thingOneId)
+	deleteThingTwo(t, thingTwoId)
 }
 
 func fragmentInQueryOnObject(t *testing.T) {
