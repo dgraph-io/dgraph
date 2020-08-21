@@ -62,7 +62,7 @@ func InitServerState() {
 	x.WorkerConfig.ProposedGroupId = groupId
 }
 
-func setBadgerOptions(opt badger.Options) badger.Options {
+func setBadgerOptions(opt badger.Options, withCompression bool) badger.Options {
 	opt = opt.WithSyncWrites(false).
 		WithTruncate(true).
 		WithLogger(&x.ToGlog{}).
@@ -80,7 +80,7 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
 	// Default value of badgerCompressionLevel is 3 so compression will always
 	// be enabled, unless it is explicitly disabled by setting the value to 0.
-	if Config.BadgerCompressionLevel != 0 {
+	if withCompression && Config.BadgerCompressionLevel != 0 {
 		// By default, compression is disabled in badger.
 		opt.Compression = options.ZSTD
 		opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
@@ -128,9 +128,8 @@ func (s *ServerState) initStorage() {
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
 		opt := badger.LSMOnlyOptions(Config.WALDir)
-		opt = setBadgerOptions(opt)
+		opt = setBadgerOptions(opt, false)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
-		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
 
 		// We should always force load LSM tables to memory, disregarding user settings, because
 		// Raft.Advance hits the WAL many times. If the tables are not in memory, retrieval slows
@@ -161,7 +160,7 @@ func (s *ServerState) initStorage() {
 			WithKeepBlockIndicesInCache(true).
 			WithKeepBlocksInCache(true).
 			WithMaxBfCacheSize(500 << 20) // 500 MB of bloom filter cache.
-		opt = setBadgerOptions(opt)
+		opt = setBadgerOptions(opt, true)
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
