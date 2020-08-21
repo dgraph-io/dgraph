@@ -6,10 +6,10 @@ title = "Using Kubernetes"
     weight = 6
 +++
 
-The following section covers running Dgraph with Kubernetes. We have tested Dgraph with Kubernetes 1.14 to 1.15 on [GKE](https://cloud.google.com/kubernetes-engine) and [EKS](https://aws.amazon.com/eks/).
+The following section covers running Dgraph with Kubernetes. We have tested Dgraph with Kubernetes versions 1.14 to 1.16 on [GKE](https://cloud.google.com/kubernetes-engine) and versions 1.14 to 1.17 on [EKS](https://aws.amazon.com/eks/).
 
 {{% notice "note" %}}These instructions are for running Dgraph Alpha without TLS configuration.
-Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
+Instructions for running with TLS refer [TLS instructions]({{< relref "tls-configuration.md" >}}).{{% /notice %}}
 
 * Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) which is used to deploy
   and manage applications on kubernetes.
@@ -222,25 +222,95 @@ To install the chart with the release name `my-release`:
 helm install my-release dgraph/dgraph
 ```
 
-The above command will install the latest available dgraph docker image. In order to install the older versions:
+The above command will install a recent version of the dgraph docker image. You can set the version an explicit version, such as:
 
 ```sh
-helm install my-release dgraph/dgraph --set image.tag="latest"
+helm install my-release dgraph/dgraph --set image.tag="v1.2.6"
 ```
 
+#### Exposing Alpha and Ratel Services
+
 By default zero and alpha services are exposed only within the kubernetes cluster as
-kubernetes service type `ClusterIP`. In order to expose the alpha service publicly
-you can use kubernetes service type `LoadBalancer`:
+kubernetes service type `ClusterIP`.
+
+In order to expose the alpha service and ratel service publicly you can use kubernetes service type `LoadBalancer`, or an Ingress resource.
+
+
+##### LoadBalancer (Public Internet)
+
+To use an external load balancer, set the service type to `LoadBalancer`. 
+
+{{% notice "note" %}}For security purposes we recommend restricting access to any public endpoints, such as using a white list.
+
+You can expose alpha service to the Internet as follows:
 
 ```sh
 helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer"
 ```
 
-Similarly, you can expose alpha and ratel service to the internet as follows:
+Similarly, you can expose alpha and ratel service to the Internet as follows:
 
 ```sh
 helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer" --set ratel.service.type="LoadBalancer"
 ```
+
+##### LoadBalancer (Private Internal Network)
+
+An external load balancer can be configured to face internally to a private subnet rather the public Internet.  This way it can be accessed securely by clients clients on the same network, or through a VPN or a jump server. In Kubernetes, this is often configured through service annotations by the provider.  Here's a small list of  of annotations:
+
+|Provider    | Documentation Reference   | Annotation |
+|------------|---------------------------|------------|
+|AWS         |[Amazon EKS: Load Balancing](https://docs.aws.amazon.com/eks/latest/userguide/load-balancing.html)|`service.beta.kubernetes.io/aws-load-balancer-internal: "true"`|
+|Azure       |[AKS: Internal Load Balancer](https://docs.microsoft.com/azure/aks/internal-lb)|`service.beta.kubernetes.io/azure-load-balancer-internal: "true"`|
+|Google Cloud|[GKE: Internal Load Balancing](https://cloud.google.com/kubernetes-engine/docs/how-to/internal-load-balancing)|`cloud.google.com/load-balancer-type: "Internal"`|
+
+As an example, using Amazon [EKS](https://aws.amazon.com/eks/) as the provider, you could create a Helm chart configuration values like this below: 
+
+```yaml
+# my-config-values.yaml
+alpha:
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+ratel:
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+```
+
+And then expose alpha and ratel services privately:
+
+```sh
+helm install my-release dgraph/dgraph --values my-config-values.yaml
+```
+
+##### Ingress Resource
+
+You can expose alpha and ratel using an ingress resource that can route traffic to services resources.  Before using this option you may need to install an [ingress controller](https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/) first, as is the case with [AKS](https://docs.microsoft.com/azure/aks/) and [EKS](https://aws.amazon.com/eks/), while in the case of [GKE](https://cloud.google.com/kubernetes-engine), this comes bundled with a default ingress controller.  When routing traffic based on the `hostname`, you may want to integrate an addon like [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) so that DNS records can be registered automatically when deploying dgraph.
+
+As an examples, you can configure a single ingress resourse that uses [ingress-nginx](https://github.com/kubernetes/ingress-nginx) for alpha and ratel services, by creating Helm chart confgiuration values like this below:
+
+```yaml
+# my-config-values.yaml
+global:
+  ingress:
+    enabled: false
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    ratel_hostname: ratel.<my-domain-name>
+    alpha_hostname: alpha.<my-domain-name>
+```
+
+And then expose alpha and ratel services through an ingress:
+
+```sh
+helm install my-release dgraph/dgraph --values my-config-values.yaml
+```
+
+Ingress controllers will likely have an option to configure endpoints for private internal networks.  Consult documentation from the ingress control provider for this information.
+
 
 ### Upgrading the Chart
 
@@ -283,74 +353,14 @@ helm delete my-release
 Deletion of the StatefulSet doesn't cascade to deleting associated PVCs. To delete them:
 
 ```sh
-kubectl delete pvc -l release=my-release,chart=dgraph
+kubectl delete pvc --selector release=my-release
 ```
 
 ### Configuration
 
-The following table lists the configurable parameters of the dgraph chart and their default values.
+The latest configuration settings can be found:
 
-|              Parameter               |                             Description                             |                       Default                       |
-| ------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------------- |
-| `image.registry`                     | Container registry name                                             | `docker.io`                                         |
-| `image.repository`                   | Container image name                                                | `dgraph/dgraph`                                     |
-| `image.tag`                          | Container image tag                                                 | `latest`                                            |
-| `image.pullPolicy`                   | Container pull policy                                               | `Always`                                            |
-| `zero.name`                          | Zero component name                                                 | `zero`                                              |
-| `zero.updateStrategy`                | Strategy for upgrading zero nodes                                   | `RollingUpdate`                                     |
-| `zero.monitorLabel`                  | Monitor label for zero, used by prometheus.                         | `zero-dgraph-io`                                    |
-| `zero.rollingUpdatePartition`        | Partition update strategy                                           | `nil`                                               |
-| `zero.podManagementPolicy`           | Pod management policy for zero nodes                                | `OrderedReady`                                      |
-| `zero.replicaCount`                  | Number of zero nodes                                                | `3`                                                 |
-| `zero.shardReplicaCount`             | Max number of replicas per data shard                               | `5`                                                 |
-| `zero.terminationGracePeriodSeconds` | Zero server pod termination grace period                            | `60`                                                |
-| `zero.antiAffinity`                  | Zero anti-affinity policy                                           | `soft`                                              |
-| `zero.podAntiAffinitytopologyKey`    | Anti affinity topology key for zero nodes                           | `kubernetes.io/hostname`                            |
-| `zero.nodeAffinity`                  | Zero node affinity policy                                           | `{}`                                                |
-| `zero.service.type`                  | Zero node service type                                              | `ClusterIP`                                         |
-| `zero.securityContext.enabled`       | Security context for zero nodes enabled                             | `false`                                             |
-| `zero.securityContext.fsGroup`       | Group id of the zero container                                      | `1001`                                              |
-| `zero.securityContext.runAsUser`     | User ID for the zero container                                      | `1001`                                              |
-| `zero.persistence.enabled`           | Enable persistence for zero using PVC                               | `true`                                              |
-| `zero.persistence.storageClass`      | PVC Storage Class for zero volume                                   | `nil`                                               |
-| `zero.persistence.accessModes`       | PVC Access Mode for zero volume                                     | `ReadWriteOnce`                                     |
-| `zero.persistence.size`              | PVC Storage Request for zero volume                                 | `8Gi`                                               |
-| `zero.nodeSelector`                  | Node labels for zero pod assignment                                 | `{}`                                                |
-| `zero.tolerations`                   | Zero tolerations                                                    | `[]`                                                |
-| `zero.resources`                     | Zero node resources requests & limits                               | `{}`                                                |
-| `zero.livenessProbe`                 | Zero liveness probes                                                | `See values.yaml for defaults`                      |
-| `zero.readinessProbe`                | Zero readiness probes                                               | `See values.yaml for defaults`                      |
-| `alpha.name`                         | Alpha component name                                                | `alpha`                                             |
-| `alpha.updateStrategy`               | Strategy for upgrading alpha nodes                                  | `RollingUpdate`                                     |
-| `alpha.monitorLabel`                 | Monitor label for alpha, used by prometheus.                        | `alpha-dgraph-io`                                   |
-| `alpha.rollingUpdatePartition`       | Partition update strategy                                           | `nil`                                               |
-| `alpha.podManagementPolicy`          | Pod management policy for alpha nodes                               | `OrderedReady`                                      |
-| `alpha.replicaCount`                 | Number of alpha nodes                                               | `3`                                                 |
-| `alpha.terminationGracePeriodSeconds`| Alpha server pod termination grace period                           | `60`                                                |
-| `alpha.antiAffinity`                 | Alpha anti-affinity policy                                          | `soft`                                              |
-| `alpha.podAntiAffinitytopologyKey`   | Anti affinity topology key for zero nodes                           | `kubernetes.io/hostname`                            |
-| `alpha.nodeAffinity`                 | Alpha node affinity policy                                          | `{}`                                                |
-| `alpha.service.type`                 | Alpha node service type                                             | `ClusterIP`                                         |
-| `alpha.securityContext.enabled`      | Security context for alpha nodes enabled                            | `false`                                             |
-| `alpha.securityContext.fsGroup`      | Group id of the alpha container                                     | `1001`                                              |
-| `alpha.securityContext.runAsUser`    | User ID for the alpha container                                     | `1001`                                              |
-| `alpha.persistence.enabled`          | Enable persistence for alpha using PVC                              | `true`                                              |
-| `alpha.persistence.storageClass`     | PVC Storage Class for alpha volume                                  | `nil`                                               |
-| `alpha.persistence.accessModes`      | PVC Access Mode for alpha volume                                    | `ReadWriteOnce`                                     |
-| `alpha.persistence.size`             | PVC Storage Request for alpha volume                                | `8Gi`                                               |
-| `alpha.nodeSelector`                 | Node labels for alpha pod assignment                                | `{}`                                                |
-| `alpha.tolerations`                  | Alpha tolerations                                                   | `[]`                                                |
-| `alpha.resources`                    | Alpha node resources requests & limits                              | `{}`                                                |
-| `alpha.livenessProbe`                | Alpha liveness probes                                               | `See values.yaml for defaults`                      |
-| `alpha.readinessProbe`               | Alpha readiness probes                                              | `See values.yaml for defaults`                      |
-| `ratel.name`                         | Ratel component name                                                | `ratel`                                             |
-| `ratel.replicaCount`                 | Number of ratel nodes                                               | `1`                                                 |
-| `ratel.service.type`                 | Ratel service type                                                  | `ClusterIP`                                         |
-| `ratel.securityContext.enabled`      | Security context for ratel nodes enabled                            | `false`                                             |
-| `ratel.securityContext.fsGroup`      | Group id of the ratel container                                     | `1001`                                              |
-| `ratel.securityContext.runAsUser`    | User ID for the ratel container                                     | `1001`                                              |
-| `ratel.livenessProbe`                | Ratel liveness probes                                               | `See values.yaml for defaults`                      |
-| `ratel.readinessProbe`               | Ratel readiness probes                                              | `See values.yaml for defaults`                      |
+ * https://github.com/dgraph-io/charts/blob/master/charts/dgraph/README.md#configuration
 
 ## Monitoring in Kubernetes
 
