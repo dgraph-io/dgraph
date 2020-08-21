@@ -741,25 +741,14 @@ func hasFilters(t *testing.T) {
 	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
 	newPost := addPostWithNullText(t, newAuthor.ID, newCountry.ID, postExecutor)
 
-	cases := map[string]struct {
-		Filter   interface{}
-		Expected []*post
-	}{
-		"has": {
-			Filter: map[string]interface{}{"has": "text"},
-			Expected: []*post{
-				{Title: "GraphQL doco"},
-				{Title: "Introducing GraphQL in Dgraph"},
-				{Title: "Learning GraphQL in Dgraph"},
-				{Title: "Random post"}}},
-	}
+	Filter := map[string]interface{}{"has": "text"}
+	Expected := []*post{
+		{Title: "GraphQL doco"},
+		{Title: "Introducing GraphQL in Dgraph"},
+		{Title: "Learning GraphQL in Dgraph"},
+		{Title: "Random post"}}
 
-	for name, test := range cases {
-		t.Run(name, func(t *testing.T) {
-			postTest(t, test.Filter, test.Expected)
-		})
-	}
-
+	postTest(t, Filter, Expected)
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
 
