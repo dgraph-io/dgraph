@@ -114,6 +114,8 @@ type Operation interface {
 type Field interface {
 	Name() string
 	Alias() string
+	// DgraphAlias is used as an alias in DQL while rewriting the GraphQL field
+	DgraphAlias() string
 	ResponseName() string
 	Arguments() map[string]interface{}
 	ArgValue(name string) interface{}
@@ -185,7 +187,10 @@ type Type interface {
 // (which in turn must have a FieldDefinition of the right type in the schema.)
 type FieldDefinition interface {
 	Name() string
+	DgraphAlias() string
+	DgraphPredicate() string
 	Type() Type
+	ParentType() Type
 	IsID() bool
 	HasIDDirective() bool
 	Inverse() FieldDefinition
@@ -211,6 +216,9 @@ type schema struct {
 	mutatedType map[string]*astType
 	// Map from typename to ast.Definition
 	typeNameAst map[string][]*ast.Definition
+	// map from field name to bool, indicating if a field name was repeated across different types
+	// implementing the same interface
+	repeatedFieldNames map[string]bool
 	// customDirectives stores the mapping of typeName -> fieldName -> @custom definition.
 	// It is read-only.
 	// The outer map will contain typeName key only if one of the fields on that type has @custom.
@@ -227,6 +235,10 @@ type operation struct {
 	op     *ast.OperationDefinition
 	vars   map[string]interface{}
 	header http.Header
+	// interfaceImplFragFields stores a mapping from a field collected from a fragment inside an
+	// interface to its typeCondition. It is used during completion to find out if a field should
+	// be included in GraphQL response or not.
+	interfaceImplFragFields map[*ast.Field]string
 
 	// The fields below are used by schema introspection queries.
 	query    string
@@ -245,6 +257,7 @@ type field struct {
 
 type fieldDefinition struct {
 	fieldDef        *ast.FieldDefinition
+	parentType      Type
 	inSchema        *schema
 	dgraphPredicate map[string]map[string]string
 }
@@ -539,6 +552,57 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	return typeNameAst
 }
 
+func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) map[string]bool {
+	repeatedFieldNames := make(map[string]bool)
+
+	for _, typ := range s.Types {
+		if typ.Kind != ast.Interface {
+			continue
+		}
+
+		interfaceFields := make(map[string]bool)
+		for _, field := range typ.Fields {
+			interfaceFields[field.Name] = true
+		}
+
+		type fieldInfo struct {
+			dgPred   string
+			repeated bool
+		}
+
+		repeatedFieldsInTypesWithCommonAncestor := make(map[string]*fieldInfo)
+		for _, typ := range s.PossibleTypes[typ.Name] {
+			typPreds := dgPreds[typ.Name]
+			for _, field := range typ.Fields {
+				// ignore this field if it was inherited from the common interface or is of ID type.
+				// We ignore ID type fields too, because they map only to uid in dgraph and can't
+				// map to two different predicates.
+				if interfaceFields[field.Name] || field.Type.Name() == IDType {
+					continue
+				}
+				// if we find a field with same name from types implementing a common interface
+				// and its DgraphPredicate is different than what was previously encountered, then
+				// we mark it as repeated field, so that queries will rewrite it with correct alias
+				dgPred := typPreds[field.Name]
+				if fInfo, ok := repeatedFieldsInTypesWithCommonAncestor[field.Name]; ok && fInfo.
+					dgPred != dgPred {
+					repeatedFieldsInTypesWithCommonAncestor[field.Name].repeated = true
+				} else {
+					repeatedFieldsInTypesWithCommonAncestor[field.Name] = &fieldInfo{dgPred: dgPred}
+				}
+			}
+		}
+
+		for fName, info := range repeatedFieldsInTypesWithCommonAncestor {
+			if info.repeated {
+				repeatedFieldNames[fName] = true
+			}
+		}
+	}
+
+	return repeatedFieldNames
+}
+
 func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
 	customDirectives := make(map[string]map[string]*ast.Directive)
 
@@ -580,11 +644,12 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
-		schema:           s,
-		dgraphPredicate:  dgraphPredicate,
-		typeNameAst:      typeMappings(s),
-		customDirectives: customMappings(s),
-		authRules:        authRules,
+		schema:             s,
+		dgraphPredicate:    dgraphPredicate,
+		typeNameAst:        typeMappings(s),
+		repeatedFieldNames: repeatedFieldMappings(s, dgraphPredicate),
+		customDirectives:   customMappings(s),
+		authRules:          authRules,
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
 
@@ -604,6 +669,16 @@ func (f *field) Name() string {
 
 func (f *field) Alias() string {
 	return f.field.Alias
+}
+
+func (f *field) DgraphAlias() string {
+	// if this field is repeated, then it should be aliased using its dgraph predicate which will be
+	// unique across repeated fields
+	if f.op.inSchema.repeatedFieldNames[f.Name()] {
+		return f.DgraphPredicate()
+	}
+	// if not repeated, alias it using its name
+	return f.Name()
 }
 
 func (f *field) ResponseName() string {
@@ -996,11 +1071,6 @@ func (f *field) TypeName(dgraphTypes []interface{}) string {
 }
 
 func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
-	// As ID maps to uid in dgraph, so it is not stored as an edge, hence does not appear in
-	// f.op.inSchema.dgraphPredicate map. So, always include the queried field if it is of ID type.
-	if f.Type().Name() == IDType {
-		return true
-	}
 	// Given a list of dgraph types, we query the schema and find the one which is an ast.Object
 	// and not an Interface object.
 	for _, typ := range dgraphTypes {
@@ -1010,10 +1080,22 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 		}
 		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
 			if origTyp.Kind == ast.Object {
-				// If the field doesn't exist in the map corresponding to the object type, then we
-				// don't need to include it.
-				_, ok := f.op.inSchema.dgraphPredicate[origTyp.Name][f.Name()]
-				return ok || f.Name() == Typename
+				// If the field is from an interface implemented by this object,
+				// and was fetched not because of a fragment on this object,
+				// but because of a fragment on some other object, then we don't need to include it.
+				fragType, ok := f.op.interfaceImplFragFields[f.field]
+				if ok && fragType != origTyp.Name {
+					return false
+				}
+
+				// We include the field in response only if any of the following conditions hold:
+				// * Field is __typename
+				// * The field is of ID type: As ID maps to uid in dgraph, so it is not stored as an
+				//	 edge, hence does not appear in f.op.inSchema.dgraphPredicate map. So, always
+				//	 include the queried field if it is of ID type.
+				// * If the field exists in the map corresponding to the object type
+				_, ok = f.op.inSchema.dgraphPredicate[origTyp.Name][f.Name()]
+				return ok || f.Type().Name() == IDType || f.Name() == Typename
 			}
 		}
 
@@ -1048,6 +1130,10 @@ func (q *query) Name() string {
 
 func (q *query) Alias() string {
 	return (*field)(q).Alias()
+}
+
+func (q *query) DgraphAlias() string {
+	return q.Name()
 }
 
 func (q *query) SetArgTo(arg string, val interface{}) {
@@ -1177,6 +1263,10 @@ func (m *mutation) Name() string {
 
 func (m *mutation) Alias() string {
 	return (*field)(m).Alias()
+}
+
+func (m *mutation) DgraphAlias() string {
+	return m.Name()
 }
 
 func (m *mutation) SetArgTo(arg string, val interface{}) {
@@ -1335,6 +1425,7 @@ func (t *astType) Field(name string) FieldDefinition {
 		fieldDef:        t.inSchema.schema.Types[t.Name()].Fields.ForName(name),
 		inSchema:        t.inSchema,
 		dgraphPredicate: t.dgraphPredicate,
+		parentType:      t,
 	}
 }
 
@@ -1347,6 +1438,7 @@ func (t *astType) Fields() []FieldDefinition {
 				fieldDef:        fld,
 				inSchema:        t.inSchema,
 				dgraphPredicate: t.dgraphPredicate,
+				parentType:      t,
 			})
 	}
 
@@ -1355,6 +1447,17 @@ func (t *astType) Fields() []FieldDefinition {
 
 func (fd *fieldDefinition) Name() string {
 	return fd.fieldDef.Name
+}
+
+func (fd *fieldDefinition) DgraphAlias() string {
+	if fd.inSchema.repeatedFieldNames[fd.Name()] {
+		return fd.DgraphPredicate()
+	}
+	return fd.Name()
+}
+
+func (fd *fieldDefinition) DgraphPredicate() string {
+	return fd.dgraphPredicate[fd.parentType.Name()][fd.Name()]
 }
 
 func (fd *fieldDefinition) IsID() bool {
@@ -1385,6 +1488,10 @@ func (fd *fieldDefinition) Type() Type {
 	}
 }
 
+func (fd *fieldDefinition) ParentType() Type {
+	return fd.parentType
+}
+
 func (fd *fieldDefinition) Inverse() FieldDefinition {
 
 	invDirective := fd.fieldDef.Directives.ForName(inverseDirective)
@@ -1397,8 +1504,9 @@ func (fd *fieldDefinition) Inverse() FieldDefinition {
 		return nil // really not possible
 	}
 
+	typeWrapper := fd.Type()
 	// typ must exist if the schema passed GQL validation
-	typ := fd.inSchema.schema.Types[fd.Type().Name()]
+	typ := fd.inSchema.schema.Types[typeWrapper.Name()]
 
 	// fld must exist if the schema passed our validation
 	fld := typ.Fields.ForName(invFieldArg.Value.Raw)
@@ -1406,7 +1514,9 @@ func (fd *fieldDefinition) Inverse() FieldDefinition {
 	return &fieldDefinition{
 		fieldDef:        fld,
 		inSchema:        fd.inSchema,
-		dgraphPredicate: fd.dgraphPredicate}
+		dgraphPredicate: fd.dgraphPredicate,
+		parentType:      typeWrapper,
+	}
 }
 
 // ForwardEdge gets the field definition for a forward edge if this field is a reverse edge
@@ -1429,8 +1539,9 @@ func (fd *fieldDefinition) ForwardEdge() FieldDefinition {
 	}
 
 	fedge := strings.Trim(name, "<~>")
+	typeWrapper := fd.Type()
 	// typ must exist if the schema passed GQL validation
-	typ := fd.inSchema.schema.Types[fd.Type().Name()]
+	typ := fd.inSchema.schema.Types[typeWrapper.Name()]
 
 	var fld *ast.FieldDefinition
 	// Have to range through all the fields and find the correct forward edge. This would be
@@ -1453,7 +1564,9 @@ func (fd *fieldDefinition) ForwardEdge() FieldDefinition {
 	return &fieldDefinition{
 		fieldDef:        fld,
 		inSchema:        fd.inSchema,
-		dgraphPredicate: fd.dgraphPredicate}
+		dgraphPredicate: fd.dgraphPredicate,
+		parentType:      typeWrapper,
+	}
 }
 
 func (t *astType) Name() string {
@@ -1529,8 +1642,9 @@ func (t *astType) IDField() FieldDefinition {
 	for _, fd := range def.Fields {
 		if isID(fd) {
 			return &fieldDefinition{
-				fieldDef: fd,
-				inSchema: t.inSchema,
+				fieldDef:   fd,
+				inSchema:   t.inSchema,
+				parentType: t,
 			}
 		}
 	}
@@ -1550,8 +1664,9 @@ func (t *astType) PasswordField() FieldDefinition {
 	}
 
 	return &fieldDefinition{
-		fieldDef: fd,
-		inSchema: t.inSchema,
+		fieldDef:   fd,
+		inSchema:   t.inSchema,
+		parentType: t,
 	}
 }
 
@@ -1564,8 +1679,9 @@ func (t *astType) XIDField() FieldDefinition {
 	for _, fd := range def.Fields {
 		if hasIDDirective(fd) {
 			return &fieldDefinition{
-				fieldDef: fd,
-				inSchema: t.inSchema,
+				fieldDef:   fd,
+				inSchema:   t.inSchema,
+				parentType: t,
 			}
 		}
 	}
