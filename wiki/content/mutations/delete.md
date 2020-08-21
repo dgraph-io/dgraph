@@ -41,7 +41,7 @@ The pattern `S * *` deletes all the known edges out of a node, any reverse edges
 edges and any indexing for the removed data. The predicates to delete are
 derived from the type information for that node (the value of the `dgraph.type`
 edges on that node and their corresponding definitions in the schema). If the type information
-for the node `S` is missing, the delete operation will not work.
+for the node `S` is missing then the delete operation will not work.
 
 
 ```sh
