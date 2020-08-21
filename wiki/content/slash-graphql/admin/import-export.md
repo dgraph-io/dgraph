@@ -16,12 +16,10 @@ Please note that this endpoint requires [Authentication](/slash-graphql/admin/au
 Below is a sample GraphQL body to export data to JSON.
 
 ```graphql
-{
-  mutation {
-    export {
-      response { code message }
-      signedUrls
-    }
+mutation {
+  export {
+    response { code message }
+    signedUrls
   }
 }
 ```
