@@ -136,6 +136,15 @@ pushd $basedir/dgraph/protos
   fi
 popd
 
+# Clone Badger repo.
+pushd $basedir
+  git clone https://github.com/dgraph-io/badger.git
+  # Check out badger version specific to the Dgraph release.
+  # This assumes the release is a proper tag.
+  cd ./badger
+  git checkout "$(grep badger/v2 $basedir/dgraph/go.mod | awk '{ print $2 }')" # v2.2007.1 in go.mod
+popd
+
 # Clone ratel repo.
 pushd $basedir
   git clone https://github.com/dgraph-io/ratel.git
@@ -145,15 +154,6 @@ pushd $basedir/ratel
   nvm install --lts
   (export GO111MODULE=off; ./scripts/build.prod.sh)
   ./scripts/test.sh
-popd
-
-# Clone Badger repo.
-pushd $basedir
-  git clone https://github.com/dgraph-io/badger.git
-  # Check out badger version specific to the Dgraph release.
-  # This assumes the release is a proper tag.
-  cd ./badger
-  git checkout "$(grep badger/v2 $basedir/dgraph/go.mod | awk '{ print $2 }')" # v2.2007.1 in go.mod
 popd
 
 # Build Windows.
