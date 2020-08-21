@@ -16,14 +16,12 @@ Please note that this endpoint requires [Authentication](/slash-graphql/admin/au
 Below is a sample GraphQL body to export data to JSON.
 
 ```graphql
-{
   mutation {
     export {
       response { code message }
       signedUrls
     }
   }
-}
 ```
 
 The `signedUrls` output field contains a list of URLs which can be downloaded. The URLs will expire after 48 hours.
