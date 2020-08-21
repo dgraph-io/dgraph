@@ -783,13 +783,13 @@ func addPostWithNullText(t *testing.T, authorID, countryID string,
 	addPostParams := &GraphQLParams{
 		Query: `mutation addPost($post: AddPostInput!) {
 			addPost(input: [$post]) {
-			  post {
+			  post( filter : {not :{has : text} }){
 				postID
 				title
 				text
 				isPublished
 				tags
-				author {
+				author(filter: {has:country}) {
 					id
 					name
 					country {
