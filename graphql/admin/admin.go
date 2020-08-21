@@ -268,7 +268,7 @@ const (
 		health: [NodeState]
 		state: MembershipState
 		config: Config
-		getCors: Cors
+		getAllowedCORSOrigins: Cors
 
 		` + adminQueries + `
 	}
@@ -303,7 +303,7 @@ const (
 		"""
 		config(input: ConfigInput!): ConfigPayload
 		
-		updateCors(origins: [String]): Cors
+		replaceAllowedCORSOrigins(origins: [String]): Cors
 
 		` + adminMutations + `
 	}
@@ -560,7 +560,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 						false
 				})
 		}).
-		WithMutationResolver("updateCors", func(m schema.Mutation) resolve.MutationResolver {
+		WithMutationResolver("replaceAllowedCORSOrigins", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
 				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: m},
@@ -573,7 +573,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
 				})
 		}).
-		WithQueryResolver("getCors", func(q schema.Query) resolve.QueryResolver {
+		WithQueryResolver("getAllowedCORSOrigins", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
@@ -724,7 +724,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					dgEx,
 					resolve.StdQueryCompletion())
 			}).
-		WithQueryResolver("getCors", func(q schema.Query) resolve.QueryResolver {
+		WithQueryResolver("getAllowedCORSOrigins", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveGetCors)
 		}).
 		WithMutationResolver("addUser",
@@ -769,8 +769,8 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					dgEx,
 					resolve.StdDeleteCompletion(m.Name()))
 			}).
-		WithMutationResolver("updateCors", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(resolveUpdateCors)
+		WithMutationResolver("replaceAllowedCORSOrigins", func(m schema.Mutation) resolve.MutationResolver {
+			return resolve.MutationResolverFunc(resolveReplaceAllowedCORSOrigins)
 		})
 }
 

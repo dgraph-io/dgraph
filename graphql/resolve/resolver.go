@@ -1310,7 +1310,7 @@ func completeObject(
 		// f.Type().ListType() to be non-nil.
 		if val != nil && f.Type().ListType() != nil {
 			switch val.(type) {
-			case []interface{}, []map[string]interface{}, []string:
+			case []interface{}, []map[string]interface{}:
 			default:
 				// We were expecting a list but got a value which wasn't a list. Lets return an
 				// error.

@@ -42,7 +42,7 @@ func getOrigins(m schema.Mutation) ([]string, error) {
 }
 
 // resolveUpdateCors update the cors details.
-func resolveUpdateCors(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+func resolveReplaceAllowedCORSOrigins(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	origins, err := getOrigins(m)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false

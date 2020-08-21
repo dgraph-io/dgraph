@@ -188,9 +188,6 @@ func TestCustomPostQueryWithBody(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	if result.Errors != nil {
-		fmt.Println(result.Errors.Error())
-	}
 	require.Nil(t, result.Errors)
 
 	expected := `{"myFavoriteMoviesPost":[{"id":"0x3","name":"Star Wars","director":

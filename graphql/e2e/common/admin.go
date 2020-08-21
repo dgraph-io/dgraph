@@ -685,7 +685,7 @@ func testCors(t *testing.T) {
 	t.Run("testing normal retrival", func(t *testing.T) {
 		queryParams := &GraphQLParams{
 			Query: `query{
-                getCors{
+                getAllowedCORSOrigins{
                   acceptedOrigins
                 }
               }`,
@@ -693,7 +693,7 @@ func testCors(t *testing.T) {
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
-            "getCors": {
+            "getAllowedCORSOrigins": {
               "acceptedOrigins": [
                 "*"
               ]
@@ -704,7 +704,7 @@ func testCors(t *testing.T) {
 	t.Run("mutating cors", func(t *testing.T) {
 		queryParams := &GraphQLParams{
 			Query: `mutation{
-                updateCors(origins:["google.com"]){
+                replaceAllowedCORSOrigins(origins:["google.com"]){
                   acceptedOrigins
                 }
               }`,
@@ -712,7 +712,7 @@ func testCors(t *testing.T) {
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
-            "updateCors": {
+            "replaceAllowedCORSOrigins": {
               "acceptedOrigins": [
                 "google.com"
               ]
@@ -723,7 +723,7 @@ func testCors(t *testing.T) {
 	t.Run("retrive mutated cors", func(t *testing.T) {
 		queryParams := &GraphQLParams{
 			Query: `query{
-                getCors{
+                getAllowedCORSOrigins{
                   acceptedOrigins
                 }
               }`,
@@ -731,7 +731,7 @@ func testCors(t *testing.T) {
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
-            "getCors": {
+            "getAllowedCORSOrigins": {
               "acceptedOrigins": [
                 "google.com"
               ]
@@ -767,7 +767,7 @@ func testCors(t *testing.T) {
 	t.Run("mutating empty cors", func(t *testing.T) {
 		queryParams := &GraphQLParams{
 			Query: `mutation{
-                updateCors(origins:[]){
+                replaceAllowedCORSOrigins(origins:[]){
                   acceptedOrigins
                 }
               }`,
@@ -775,7 +775,7 @@ func testCors(t *testing.T) {
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
-            "updateCors": {
+            "replaceAllowedCORSOrigins": {
               "acceptedOrigins": [
                 "*"
               ]
