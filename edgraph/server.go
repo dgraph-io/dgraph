@@ -84,9 +84,9 @@ const (
 	// NoAuthorize is used to indicate that authorization needs to be skipped.
 	// Used when ACL needs to query information for performing the authorization check.
 	NoAuthorize
-	// AuthorizeCors is used to indicate that the given request is authorized to do
+	// CorsMutationAllowed is used to indicate that the given request is authorized to do
 	// cors mutation.
-	AuthorizeCors
+	CorsMutationAllowed
 )
 
 var (
@@ -979,8 +979,8 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		}
 	}
 
-	if doAuth != AuthorizeCors {
-		if rerr = authorizeCors(ctx, qc); rerr != nil {
+	if doAuth != CorsMutationAllowed {
+		if rerr = validateCorsInMutation(ctx, qc); rerr != nil {
 			return
 		}
 	}
@@ -1221,7 +1221,9 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
-func authorizeCors(ctx context.Context, qc *queryContext) error {
+// validateCorsInMutation check whether mutation contains cors predication. If it's contain cors
+// predicate, we'll throw an error.
+func validateCorsInMutation(ctx context.Context, qc *queryContext) error {
 	validateNquad := func(nquads []*api.NQuad) error {
 		for _, nquad := range nquads {
 			if nquad.Predicate != "dgraph.cors" {
@@ -1562,7 +1564,7 @@ func ResetCors() {
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		if _, err := (&Server{}).doQuery(ctx, req, AuthorizeCors); err != nil {
+		if _, err := (&Server{}).doQuery(ctx, req, CorsMutationAllowed); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -1593,7 +1595,7 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 		},
 		CommitNow: true,
 	}
-	_, err := (&Server{}).doQuery(ctx, req, AuthorizeCors)
+	_, err := (&Server{}).doQuery(ctx, req, CorsMutationAllowed)
 	return err
 }
 
@@ -1618,10 +1620,12 @@ func GetCorsOrigins(ctx context.Context) ([]string, error) {
 		} `json:"me"`
 	}
 	corsRes := &corsResponse{}
-	fmt.Println(string(res.Json))
 	if err = json.Unmarshal(res.Json, corsRes); err != nil {
 		return nil, err
 	}
-	//x.AssertTrue(len(corsRes.Me) == 1)
+	if len(corsRes.Me) > 1 {
+		glog.Errorf("Something went wrong in cors predicate, expected 1 predicate but got %d",
+			len(corsRes.Me))
+	}
 	return corsRes.Me[0].DgraphCors, nil
 }
