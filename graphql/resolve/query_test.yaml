@@ -1463,4 +1463,95 @@
         id : Tweets.id
         dgraph.uid : uid
       }
+  }
+
+- name: "querying a field multiple times with different aliases adds it only once in rewriting"
+  gqlquery: |-
+    query {
+      queryThingOne {
+        i1: id
+        i2: id
+        name
+        n: name
+        n1: name
+      }
+    }
+  dgquery: |-
+    query {
+      queryThingOne(func: type(ThingOne)) {
+        id : uid
+        name : Thing.name
+      }
+    }
+
+- name: "query with fragments inside interface"
+  gqlquery: |-
+    query {
+      queryThing {
+        __typename
+        ... on ThingOne {
+          id
+          name
+          color
+          prop
+          usedBy
+        }
+        ... thingTwoFrag
+      }
+    }
+    fragment thingTwoFrag on ThingTwo {
+      id
+      name
+      color
+      prop
+      owner
+    }
+  dgquery: |-
+    query {
+      queryThing(func: type(Thing)) {
+        dgraph.type
+        id : uid
+        name : Thing.name
+        ThingOne.color : ThingOne.color
+        prop : prop
+        usedBy : ThingOne.usedBy
+        ThingTwo.color : ThingTwo.color
+        owner : ThingTwo.owner
+      }
+    }
+
+- name: "query only __typename in fragments inside interface"
+  gqlquery: |-
+    query {
+      queryThing {
+        ... on ThingOne {
+          __typename
+        }
+        ... on ThingTwo {
+          __typename
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryThing(func: type(Thing)) {
+        dgraph.type
+        dgraph.uid : uid
+      }
+    }
+
+- name: "query only __typename in fragment inside object"
+  gqlquery: |-
+    query {
+      queryThingOne {
+        ... on ThingOne {
+          __typename
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryThingOne(func: type(ThingOne)) {
+        dgraph.uid : uid
+      }
     }

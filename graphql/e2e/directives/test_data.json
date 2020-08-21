@@ -48,6 +48,7 @@
         "myPost.tags": ["GraphQL", "Dgraph", "Database"],
         "test.dgraph.topic": "GraphQL",
         "myPost.numLikes": 100,
+        "myPost.numViews": 280000000000,
         "is_published": true,
         "myPost.postType": "Fact",
         "post.author": { "uid": "_:author1" }
@@ -60,6 +61,7 @@
         "myPost.tags": ["GraphQL", "Dgraph"],
         "test.dgraph.topic": "Learn",
         "myPost.numLikes": 87,
+        "myPost.numViews": 274877906944,
         "is_published": true,
         "myPost.postType": "Question",
         "post.author": { "uid": "_:author2" }
@@ -72,6 +74,7 @@
         "myPost.tags": ["GraphQL", "Dgraph"],
         "test.dgraph.topic": "Docs",
         "myPost.numLikes": 77,
+        "myPost.numViews": 2147483648,
         "is_published": true,
         "myPost.postType": "Opinion",
         "post.author": { "uid": "_:author1" }
@@ -84,6 +87,7 @@
         "myPost.tags": ["Random"],
         "test.dgraph.topic": "Random",
         "myPost.numLikes": 0,
+        "myPost.numViews": 0,
         "is_published": false,
         "myPost.postType": "Fact",
         "post.author": { "uid": "_:author2" }

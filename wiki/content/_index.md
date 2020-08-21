@@ -1,6 +1,7 @@
 +++
 date = "2017-03-20T19:35:35+11:00"
 title = "Dgraph Documentation"
+aliases = ["/contribute"]
 [menu.main]
   url = "/"
   name = "Home"

@@ -61,10 +61,18 @@ const (
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
 	schemaExtras = `
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can currently represent values in range [-(2^53)+1, (2^53)-1] without any error.
+Values out of this range but representable by a signed 64-bit integer, may get coercion error.
+"""
+scalar Int64
+
 scalar DateTime
 
 enum DgraphIndex {
 	int
+	int64
 	float
 	bool
 	hash
@@ -132,6 +140,14 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+}
+
+input Int64Filter {
+	eq: Int64
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
 }
 
 input FloatFilter {
@@ -211,6 +227,7 @@ var numUids = &ast.FieldDefinition{
 // == supported Dgraph index -> GraphQL type it applies to
 var supportedSearches = map[string]searchTypeIndex{
 	"int":      {"Int", "int"},
+	"int64":    {"Int64", "int"},
 	"float":    {"Float", "float"},
 	"bool":     {"Boolean", "bool"},
 	"hash":     {"String", "hash"},
@@ -225,11 +242,12 @@ var supportedSearches = map[string]searchTypeIndex{
 	"hour":     {"DateTime", "hour"},
 }
 
-// GraphQL scalar type -> default Dgraph index (/search)
+// GraphQL scalar type -> default search arg
 // used if the schema specifies @search without an arg
 var defaultSearches = map[string]string{
 	"Boolean":  "bool",
 	"Int":      "int",
+	"Int64":    "int64",
 	"Float":    "float",
 	"String":   "term",
 	"DateTime": "year",
@@ -254,6 +272,7 @@ var filtersCollisions = map[string][]string{
 // GraphQL types that can be used for ordering in orderasc and orderdesc.
 var orderable = map[string]bool{
 	"Int":      true,
+	"Int64":    true,
 	"Float":    true,
 	"String":   true,
 	"DateTime": true,
@@ -270,6 +289,7 @@ var enumDirectives = map[string]bool{
 var builtInFilters = map[string]string{
 	"bool":     "Boolean",
 	"int":      "IntFilter",
+	"int64":    "Int64Filter",
 	"float":    "FloatFilter",
 	"year":     "DateTimeFilter",
 	"month":    "DateTimeFilter",
@@ -288,6 +308,7 @@ var scalarToDgraph = map[string]string{
 	"ID":       "uid",
 	"Boolean":  "bool",
 	"Int":      "int",
+	"Int64":    "int",
 	"Float":    "float",
 	"String":   "string",
 	"DateTime": "dateTime",

@@ -19,10 +19,18 @@ type Message implements Abstract {
 # Extended Definitions
 #######################
 
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can currently represent values in range [-(2^53)+1, (2^53)-1] without any error.
+Values out of this range but representable by a signed 64-bit integer, may get coercion error.
+"""
+scalar Int64
+
 scalar DateTime
 
 enum DgraphIndex {
 	int
+	int64
 	float
 	bool
 	hash
@@ -90,6 +98,14 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+}
+
+input Int64Filter {
+	eq: Int64
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
 }
 
 input FloatFilter {
