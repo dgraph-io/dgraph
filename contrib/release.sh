@@ -150,6 +150,9 @@ popd
 # Clone Badger repo.
 pushd $basedir
   git clone https://github.com/dgraph-io/badger.git
+  # Check out badger version specific to the Dgraph release.
+  # This assumes the release is a proper tag.
+  git checkout "$(grep badger/v2 $basedir/dgraph/go.mod | awk '{ print $2 }')" # v2.2007.1 in go.mod
 popd
 
 # Build Windows.
