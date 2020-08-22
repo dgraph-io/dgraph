@@ -66,6 +66,9 @@ func FreeBlock(ub *pb.UidBlock) {
 }
 
 func FreePack(pack *pb.UidPack) {
+	if pack == nil {
+		return
+	}
 	for _, b := range pack.Blocks {
 		z.Free(b.Deltas)
 		FreeBlock(b)
