@@ -807,12 +807,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	if out == nil {
 		return nil, nil
 	}
-	defer func() {
-		codec.FreePack(out.plist.Pack)
-		for _, part := range out.parts {
-			codec.FreePack(part.Pack)
-		}
-	}()
+	defer out.free()
 
 	var kvs []*bpb.KV
 	kv := &bpb.KV{}
@@ -859,6 +854,7 @@ func (l *List) SingleListRollup(kv *bpb.KV) error {
 	// out is only nil when the list's minTs is greater than readTs but readTs
 	// is math.MaxUint64 so that's not possible. Assert that's true.
 	x.AssertTrue(out != nil)
+	defer out.free()
 
 	kv.Version = out.newMinTs
 	kv.Key = l.key
@@ -904,6 +900,43 @@ type rollupOutput struct {
 	parts    map[uint64]*pb.PostingList
 	newMinTs uint64
 }
+
+func (out *rollupOutput) free() {
+	codec.FreePack(out.plist.Pack)
+	for _, part := range out.parts {
+		codec.FreePack(part.Pack)
+	}
+}
+
+/*
+// sanityCheck can be kept around for debugging, and can be called when deallocating Pack.
+func sanityCheck(prefix string, out *rollupOutput) {
+	seen := make(map[string]string)
+
+	hb := func(which string, pack *pb.UidPack, block *pb.UidBlock) {
+		paddr := fmt.Sprintf("%p", pack)
+		baddr := fmt.Sprintf("%p", block)
+		if pa, has := seen[baddr]; has {
+			glog.Fatalf("[%s %s] Have already seen this block: %s in pa:%s. Now found in pa: %s (num blocks: %d) as well. Block [base: %d. Len: %d] Full map size: %d. \n",
+				prefix, which, baddr, pa, paddr, len(pack.Blocks), block.Base, len(block.Deltas), len(seen))
+		}
+		seen[baddr] = which + "_" + paddr
+	}
+
+	if out.plist.Pack != nil {
+		for _, block := range out.plist.Pack.Blocks {
+			hb("main", out.plist.Pack, block)
+		}
+	}
+	for startUid, part := range out.parts {
+		if part.Pack != nil {
+			for _, block := range part.Pack.Blocks {
+				hb("part_"+strconv.Itoa(int(startUid)), part.Pack, block)
+			}
+		}
+	}
+}
+*/
 
 // Merge all entries in mutation layer with commitTs <= l.commitTs into
 // immutable layer. Note that readTs can be math.MaxUint64, so do NOT use it
@@ -980,7 +1013,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 		}
 	}
 
-	if len(l.plist.Splits) > 0 {
+	if split && len(l.plist.Splits) > 0 {
 		out.parts[startUid] = plist
 	}
 
@@ -1356,7 +1389,7 @@ func shouldSplit(plist *pb.PostingList) bool {
 }
 
 func (out *rollupOutput) updateSplits() {
-	if out.plist == nil {
+	if out.plist == nil || len(out.parts) > 0 {
 		out.plist = &pb.PostingList{}
 	}
 	out.plist.Splits = out.splits()
