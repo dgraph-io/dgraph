@@ -45,7 +45,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 )
 
 type reducer struct {
@@ -515,13 +514,14 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 var mapEntrySz = int(unsafe.Sizeof(pb.MapEntry{}))
 
 func newMapEntry() *pb.MapEntry {
-	b := z.Calloc(mapEntrySz)
-	return (*pb.MapEntry)(unsafe.Pointer(&b[0]))
+	return &pb.MapEntry{}
+	// b := z.Calloc(mapEntrySz)
+	// return (*pb.MapEntry)(unsafe.Pointer(&b[0]))
 }
 
 func freeMapEntry(me *pb.MapEntry) {
-	buf := (*[z.MaxArrayLen]byte)(unsafe.Pointer(me))[:mapEntrySz:mapEntrySz]
-	z.Free(buf)
+	// buf := (*[z.MaxArrayLen]byte)(unsafe.Pointer(me))[:mapEntrySz:mapEntrySz]
+	// z.Free(buf)
 }
 
 func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
