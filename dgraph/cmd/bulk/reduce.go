@@ -186,8 +186,6 @@ type iteratorEntry struct {
 	cbuf         *y.Buffer
 }
 
-var numCreated, numReused uint64
-
 func (mi *mapIterator) release(ie *iteratorEntry) {
 	ie.cbuf.Release()
 }
