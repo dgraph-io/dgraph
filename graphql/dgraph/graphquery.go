@@ -74,7 +74,7 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 			x.Check2(b.WriteString(" @cascade"))
 		} else {
 			x.Check2(b.WriteString(" @cascade("))
-			x.Check2(b.WriteString(strings.Join(query.Cascade,",")))
+			x.Check2(b.WriteString(strings.Join(query.Cascade, ",")))
 			x.Check2(b.WriteRune(')'))
 		}
 	}
