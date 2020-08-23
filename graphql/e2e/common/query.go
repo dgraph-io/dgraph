@@ -1688,7 +1688,7 @@ func DgraphDirectiveWithSpecialCharacters(t *testing.T) {
 }
 
 func queryWithCascade(t *testing.T) {
-	// for testing @cascade with get by ID and filter queries, also for testing @cascade on field
+	// for testing normal @cascade and parameterized @cascade with get by ID and filter queries on multiple levels
 	authors := addMultipleAuthorFromRef(t, []*author{
 		{
 			Name:       "George",
@@ -1697,18 +1697,20 @@ func queryWithCascade(t *testing.T) {
 		}, {
 			Name:       "Jerry",
 			Reputation: 4.6,
-			Country:&country{Name:"outer Galaxy2"},
+			Country:    &country{Name: "outer Galaxy2"},
 			Posts:      []*post{{Title: "Outside", Tags: []string{}}},
 		}, {
-			Name:  "Kramer",
-			Country:&country{Name:"outer space2"},
-			Posts: []*post{{Title: "Ha! Cosmo Kramer", Text: "Giddy up!", Tags: []string{}}},
+			Name:    "Kramer",
+			Country: &country{Name: "outer space2"},
+			Posts:   []*post{{Title: "Ha! Cosmo Kramer", Text: "Giddy up!", Tags: []string{}}},
 		},
 	}, postExecutor)
+	newStarship := addStarship(t)
+	humanID:=addHuman(t, newStarship.ID)
 	authorIds := []string{authors[0].ID, authors[1].ID, authors[2].ID}
 	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID,
 		authors[2].Posts[0].PostID}
-	countryIds:=[]string{authors[1].Country.ID,authors[2].Country.ID}
+	countryIds := []string{authors[1].Country.ID, authors[2].Country.ID}
 	getAuthorByIdQuery := `query ($id: ID!) {
 							  getAuthor(id: $id) @cascade {
 								reputation
@@ -1845,18 +1847,16 @@ func queryWithCascade(t *testing.T) {
 							"queryAuthor": [{
 								"reputation": 4.6,
 								 "name":"Jerry",
-								 "country": {
+								"country": {
 									"name": "outer Galaxy2"
-								   }
-                                 },
-                                 {
+								}
+							},{
 								 "name":"Kramer",
                                  "reputation": null,
-								 "country": {
+								"country": {
 									"name": "outer space2"
-								   }
-                                 },
-                               { 
+								}
+							},{ 
 								"reputation": 4.5,
 								 "name":"George",
 								 "country": null
@@ -1884,18 +1884,16 @@ func queryWithCascade(t *testing.T) {
 									"title": "A show about nothing",
 									"text": "Got ya!"
 								}]
-							},
-                            {
+							},{
                                 "name":"Kramer",
                                 "reputation": null,
 								"posts": [{
 									"title": "Ha! Cosmo Kramer",
 									"text": "Giddy up!"
 								}]
-							},
-                            {
+							},{
                                 "name":"Jerry",
-								"reputation": 4.6,	
+								"reputation": 4.6,
 								"posts": []
                             }]
 						}`,
@@ -1917,17 +1915,50 @@ func queryWithCascade(t *testing.T) {
 			respData: `{
 							"queryAuthor": [{
 								"reputation": 4.5,
-								 "name":"George",	
+								 "name":"George",
                                  "dob": null,
 								"posts": [{
 									"title": "A show about nothing",
 									"text": "Got ya!"
 								}]
 							}, {
-                                  "dob": null,                                                    
+                                  "dob": null,                                          
                                   "name": "Jerry",
                                   "posts": [],
                                   "reputation": 4.6
+							}]
+						}`,
+		},
+		{
+			name: "parameterized cascade on field of interface ",
+			query: `query  {
+					  queryHuman() @cascade(fields:["name"]) {
+                      name
+                      totalCredits
+					  }
+					}`,
+			respData: `{
+							"queryHuman": [{
+								"name": "Han",
+								"totalCredits":10
+							}]
+						}`,
+		},
+		{
+			name: "parameterized cascade on interface ",
+			query: `query {
+                    	queryCharacter (filter: { appearsIn: { eq: [EMPIRE] } }) @cascade(fields:["appearsIn"])
+                        {
+                        	name
+                            appearsIn
+               			} 
+		     		 }`,
+			respData: `{
+							"queryCharacter": [{
+								"name": "Han",
+								"appearsIn":[
+                                   "EMPIRE"
+								]
 							}]
 						}`,
 		},
@@ -1947,8 +1978,9 @@ func queryWithCascade(t *testing.T) {
 
 	// cleanup
 	deleteAuthors(t, authorIds, nil)
-	deleteCountry(t, map[string]interface{}{"id": countryIds},len(countryIds), nil)
+	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
 	deleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
 	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
 		nil)
+	cleanupStarwars(t, newStarship.ID, humanID,"")
 }

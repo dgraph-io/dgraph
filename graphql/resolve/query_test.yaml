@@ -825,7 +825,7 @@
       queryAuthor @cascade(fields:["dob"]) {
         dob
         reputation
-        posts @cascade(fields:["text"]) {
+        posts @cascade(fields:["text","title"]) {
           text
           title
         }
@@ -836,7 +836,7 @@
       queryAuthor(func: type(Author)) @cascade(Author.dob) {
         dob : Author.dob
         reputation : Author.reputation
-        posts : Author.posts @cascade(Post.text) {
+        posts : Author.posts @cascade(Post.text, Post.title) {
           text : Post.text
           title : Post.title
           dgraph.uid : uid

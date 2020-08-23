@@ -675,16 +675,16 @@ func (f *field) Cascade() []string {
 	if dir == nil {
 		return nil
 	}
-   arg:= dir.Arguments.ForName("fields")
-   if arg ==nil || arg.Value==nil ||len(arg.Value.Children)==0{
-	   return []string{"__all__"}
-   }
-   var  fields []string
-   typ:=f.Type()
-   for _,child:= range arg.Value.Children{
-   		fields=append(fields,typ.DgraphPredicate(child.Value.Raw))
-   }
-   return fields
+	arg := dir.Arguments.ForName(cascadeArg)
+	if arg == nil || arg.Value == nil || len(arg.Value.Children) == 0 {
+		return []string{"__all__"}
+	}
+	var fields []string
+	typ := f.Type()
+	for _, child := range arg.Value.Children {
+			fields = append(fields, typ.DgraphPredicate(child.Value.Raw))
+	}
+	return fields
 }
 
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
