@@ -83,6 +83,9 @@ func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
 		// Settings for the write-ahead log.
 		badgerTables = Config.BadgerWalTables
 		badgerVlog = Config.BadgerWalVlog
+		// disable cache and compression explicitly for write-ahead log
+		opt.MaxCacheSize = 0
+		opt.Compression = options.None
 	} else {
 		// Settings for the data directory.
 		badgerTables = Config.BadgerTables
