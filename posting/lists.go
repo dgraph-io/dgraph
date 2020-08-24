@@ -162,9 +162,9 @@ func Init(ps *badger.DB) {
 	x.Check(err)
 	go func() {
 		m := lCache.Metrics
-		ticker := time.NewTicker(60 * time.Second)
+		ticker := time.NewTicker(5 * time.Minute)
 		for range ticker.C {
-			glog.Infof("Posting list cache metrics: %s", m)
+			glog.V(2).Infof("Posting list cache metrics: %s", m)
 		}
 	}()
 }

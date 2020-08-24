@@ -265,6 +265,7 @@ func ResetCache() {
 
 // RemoveCacheFor will delete the list corresponding to the given key.
 func RemoveCacheFor(key []byte) {
+	// TODO: investigate if this can be done by calling Set with a nil value.
 	lCache.Del(key)
 }
 
@@ -279,7 +280,8 @@ func (txn *Txn) RemoveCachedKeys() {
 }
 
 func WaitForCache() {
-	lCache.Wait()
+	// TODO Investigate if this is needed and why Jepsen tests fail with the cache enabled.
+	// lCache.Wait()
 }
 
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
