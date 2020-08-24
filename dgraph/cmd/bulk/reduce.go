@@ -44,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type reducer struct {
@@ -102,6 +103,7 @@ func (r *reducer) run() error {
 			ci.wait()
 
 			x.Check(writer.Flush())
+			fmt.Println("Writing split lists back to the main DB now")
 
 			// Write split lists back to the main DB.
 			r.writeSplitLists(db, tmpDb)
@@ -351,6 +353,21 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 		req.countKeys = countKeys
 		req.wg.Done()
 		atomic.AddInt32(&r.prog.numEncoding, -1)
+
+		// If there's too many pending writes, then pause here, before picking a request to encode
+		// from
+		for {
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			gomem := int64(ms.HeapInuse / (1 << 20))
+			cmem := z.NumAllocsMB()
+			if gomem+cmem < 16384 { // TODO: Make this a flag.
+				break
+			}
+			fmt.Printf("Sleeping to allow memory usage to reduce before processing more requests."+
+				" Gomem: %d Cmem: %d\n", gomem, cmem)
+			time.Sleep(time.Second)
+		}
 	}
 }
 
@@ -615,6 +632,7 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 
 		pl.Pack = codec.Encode(uids, 256)
 		defer codec.FreePack(pl.Pack)
+
 		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
