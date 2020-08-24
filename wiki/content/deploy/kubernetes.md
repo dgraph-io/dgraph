@@ -286,7 +286,7 @@ helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer" --
 
 ##### LoadBalancer (Private Internal Network)
 
-An external load balancer can be configured to face internally to a private subnet rather the public Internet.  This way it can be accessed securely by clients on the same network, or through a VPN or a jump server. In Kubernetes, this is often configured through service annotations by the provider.  Here's a small list of  of annotations:
+An external load balancer can be configured to face internally to a private subnet rather the public Internet.  This way it can be accessed securely by clients on the same network, through a VPN, or from a jump server. In Kubernetes, this is often configured through service annotations by the provider.  Here's a small list of annotations from cloud providers:
 
 |Provider    | Documentation Reference   | Annotation |
 |------------|---------------------------|------------|
