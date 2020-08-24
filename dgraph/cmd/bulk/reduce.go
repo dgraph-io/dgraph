@@ -33,7 +33,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/dgraph-io/badger/v2"
 	bo "github.com/dgraph-io/badger/v2/options"
@@ -540,17 +539,55 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser.SignalAndWait()
 }
 
-var mapEntrySz = int(unsafe.Sizeof(pb.MapEntry{}))
+type mapEntry []byte
 
-func newMapEntry() *pb.MapEntry {
-	return &pb.MapEntry{}
-	// b := z.Calloc(mapEntrySz)
-	// return (*pb.MapEntry)(unsafe.Pointer(&b[0]))
+// type mapEntry struct {
+// 	uid   uint64 // if plist is filled, then corresponds to plist's uid.
+// 	key   []byte
+// 	plist []byte
+// }
+
+func mapEntrySize(key []byte, p *pb.Posting) int {
+	return 8 + 4 + 4 + len(key) + p.Size()
 }
 
-func freeMapEntry(me *pb.MapEntry) {
-	// buf := (*[z.MaxArrayLen]byte)(unsafe.Pointer(me))[:mapEntrySz:mapEntrySz]
-	// z.Free(buf)
+func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
+	if p != nil {
+		uid = p.Uid
+	}
+	binary.BigEndian.PutUint64(dst[0:8], p.Uid)
+	binary.BigEndian.PutUint32(dst[8:12], uint32(len(key)))
+
+	psz := p.Size()
+	binary.BigEndian.PutUint32(dst[12:16], uint32(psz))
+
+	n := copy(dst[16:], key)
+
+	pbuf := dst[16+n:]
+	_, err := p.MarshalToSizedBuffer(pbuf[:psz])
+	x.Check(err)
+
+	x.AssertTrue(len(dst) == 16+n+psz)
+}
+
+func (me mapEntry) Size() int {
+	return len(me)
+}
+
+func (me mapEntry) Uid() uint64 {
+	return binary.BigEndian.Uint64(me[0:8])
+}
+
+func (me mapEntry) Key() []byte {
+	sz := binary.BigEndian.Uint32(me[8:12])
+	return me[16 : 16+sz]
+}
+
+func (me mapEntry) Plist() []byte {
+	ksz := binary.BigEndian.Uint32(me[8:12])
+	sz := binary.BigEndian.Uint32(me[12:16])
+	start := 16 + ksz
+	return me[start : start+sz]
 }
 
 func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
@@ -579,13 +616,7 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	writeVersionTs := r.state.writeTs
 
 	countEntries := []*countIndexEntry{}
-	currentBatch := make([]*pb.MapEntry, 0, 100)
-	freelist := make([]*pb.MapEntry, 0)
-	defer func() {
-		for _, me := range freelist {
-			freeMapEntry(me)
-		}
-	}()
+	var currentBatch []int
 
 	appendToList := func() {
 		if len(currentBatch) == 0 {
@@ -600,20 +631,23 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 
 		// Now make a list and write it to badger.
 		sort.Slice(currentBatch, func(i, j int) bool {
-			return less(currentBatch[i], currentBatch[j])
+			lhs := mapEntry(cbuf.Slice(currentBatch[i]))
+			rhs := mapEntry(cbuf.Slice(currentBatch[j]))
+			return less(lhs, rhs)
 		})
-		for _, mapEntry := range currentBatch {
-			uid := mapEntry.Uid
-			if mapEntry.Posting != nil {
-				uid = mapEntry.Posting.Uid
-			}
+
+		for _, offset := range currentBatch {
+			me := mapEntry(cbuf.Slice(offset))
+			uid := me.Uid()
 			if len(uids) > 0 && uids[len(uids)-1] == uid {
 				continue
 			}
 			// TODO: Potentially could be doing codec.Encoding right here.
 			uids = append(uids, uid)
-			if mapEntry.Posting != nil {
-				pl.Postings = append(pl.Postings, mapEntry.Posting)
+			if pbuf := me.Plist(); len(pbuf) > 0 {
+				p := &pb.Posting{}
+				x.Check(p.Unmarshal(pbuf))
+				pl.Postings = append(pl.Postings, p)
 			}
 		}
 
@@ -669,36 +703,21 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 
 		uids = uids[:0]
 		pl.Reset()
-		// Now we have written the list. It's time to reuse the current batch.
-		freelist = append(freelist, currentBatch...)
 		// Reset the current batch.
 		currentBatch = currentBatch[:0]
 	}
 
 	for _, offset := range req.offsets {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
-		entry := cbuf.Slice(offset)
-		entryKey, err := GetKeyForMapEntry(entry)
-		x.Check(err)
+		entry := mapEntry(cbuf.Slice(offset))
+		entryKey := entry.Key()
 
 		if !bytes.Equal(entryKey, currentKey) && currentKey != nil {
 			appendToList()
 		}
 
 		currentKey = append(currentKey[:0], entryKey...)
-		var mapEntry *pb.MapEntry
-		if len(freelist) == 0 {
-			// Create a new map entry.
-			mapEntry = newMapEntry()
-		} else {
-			// Obtain from freelist.
-			lidx := len(freelist) - 1
-			mapEntry = freelist[lidx]
-			mapEntry.Reset()
-			freelist = freelist[:lidx]
-		}
-		x.Check(mapEntry.Unmarshal(entry))
-		currentBatch = append(currentBatch, mapEntry)
+		currentBatch = append(currentBatch, offset)
 	}
 
 	appendToList()
