@@ -114,3 +114,19 @@
   errors:
     [ { "message": "Field `title` is not present in type `Author`. You can only use fields which are in type `Author`",
     } ]
+
+-
+  name: "@cascade only accepts numUids or given type name as arguments for add or update payload "
+  gqlrequest: |
+    mutation {
+      addAuthor(input:[{name:"jatin"}]) @cascade(fields:["name"]) {
+        author {
+          name
+            }
+          }
+      }
+  gqlvariables:
+    { }
+  errors:
+    [ { "message": "Field `name` is not present in type `AddAuthorPayload`. You can only use fields which are in type `AddAuthorPayload`",
+    } ]

@@ -75,8 +75,9 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 			if directive.Arguments.ForName(cascadeArg) == nil {
 				return
 			}
+			dir := directive.ParentDefinition.Fields
 			for _, child := range directive.Arguments.ForName(cascadeArg).Value.Children {
-				if directive.ParentDefinition.Fields.ForName(child.Value.Raw) == nil {
+				if dir.ForName(child.Value.Raw) == nil {
 					addError(validator.Message("Field `%s` is not present in type `%s`. You can only use fields which are in type `%s`",
 						child.Value.Raw, directive.ParentDefinition.Name, directive.ParentDefinition.Name))
 					return

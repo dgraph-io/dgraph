@@ -756,7 +756,11 @@ func (f *field) Cascade() []string {
 	}
 	fields := make([]string, 0, len(arg.Value.Children))
 	typ := f.Type()
-	idField := typ.IDField().Name()
+	var idField string
+	if f.field.ObjectDefinition.Name == "Query" {
+		idField = typ.IDField().Name()
+	}
+
 	for _, child := range arg.Value.Children {
 		if idField == child.Value.Raw {
 			fields = append(fields, "uid")
