@@ -39,12 +39,16 @@ const (
 type Options struct {
 	// PostingDir is the path to the directory storing the postings..
 	PostingDir string
-	// BadgerTables is the name of the mode used to load the badger tables.
+	// BadgerTables is the name of the mode used to load the badger tables for the p directory.
 	BadgerTables string
-	// BadgerVlog is the name of the mode used to load the badger value log.
+	// BadgerVlog is the name of the mode used to load the badger value log for the p directory.
 	BadgerVlog string
 	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
 	BadgerKeyFile string
+	// BadgerWalTables is the name of the mode used to load the badger tables for the w directory.
+	BadgerWalTables string
+	// BadgerWalVlog is the name of the mode used to load the badger value log for the w directory.
+	BadgerWalVlog string
 	// BadgerCompressionLevel is the ZSTD compression level used by badger. A
 	// higher value means more CPU intensive compression and better compression
 	// ratio.
