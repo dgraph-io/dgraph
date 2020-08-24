@@ -743,7 +743,7 @@ func testCors(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		client := &http.Client{}
-		req, err := http.NewRequest("GET", graphqlAdminTestURL, nil)
+		req, err := http.NewRequest("GET", graphqlURL, nil)
 		require.NoError(t, err)
 		req.Header.Add("Origin", "google.com")
 		resp, err := client.Do(req)
@@ -754,7 +754,7 @@ func testCors(t *testing.T) {
 		require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "true")
 
 		client = &http.Client{}
-		req, err = http.NewRequest("GET", graphqlAdminTestURL, nil)
+		req, err = http.NewRequest("GET", graphqlURL, nil)
 		require.NoError(t, err)
 		req.Header.Add("Origin", "googl.com")
 		resp, err = client.Do(req)
