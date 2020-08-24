@@ -352,10 +352,7 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 		}
 		req.countKeys = countKeys
 		req.wg.Done()
-		atomic.AddInt32(&r.prog.numEncoding, -1)
 
-		// If there's too many pending writes, then pause here, before picking a request to encode
-		// from
 		for {
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
@@ -366,7 +363,7 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 			}
 			fmt.Printf("Sleeping to allow memory usage to reduce before processing more requests."+
 				" Gomem: %d Cmem: %d\n", gomem, cmem)
-			time.Sleep(time.Second)
+			time.Sleep(15 * time.Second)
 		}
 	}
 }
@@ -485,7 +482,19 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser := z.NewCloser(1)
 	go r.startWriting(ci, writerCh, writerCloser)
 
+	throttle := func() {
+		for {
+			sz := atomic.LoadInt64(&r.prog.numEncoding)
+			if sz < 4<<30 {
+				return
+			}
+			fmt.Printf("Not sending out more encoder load. Num Bytes being encoded: %d\n", sz)
+			time.Sleep(10 * time.Second)
+		}
+	}
+
 	for i := 0; i < len(partitionKeys); i++ {
+		throttle()
 		cbuf := y.NewBuffer(4 << 20)
 		for _, itr := range mapItrs {
 			res := itr.Next()
@@ -493,16 +502,20 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			cbuf.Write(res.cbuf.Bytes())
 			itr.release(res)
 		}
+		if cbuf.Len() > 1<<30 {
+			fmt.Printf("Encoding a buffer of size: %d\n", cbuf.Len())
+		}
+		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
+
 		wg := new(sync.WaitGroup)
 		wg.Add(1)
-		atomic.AddInt32(&r.prog.numEncoding, 1)
-
 		req := &encodeRequest{cbuf: cbuf, wg: wg}
 		encoderCh <- req
 		writerCh <- req
 	}
 
-	// Drain the last batch
+	throttle()
+	fmt.Println("Draining the last batch")
 	cbuf := y.NewBuffer(1 << 20)
 	for _, itr := range mapItrs {
 		res := itr.Next()
@@ -510,10 +523,11 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		cbuf.Write(res.cbuf.Bytes())
 		itr.release(res)
 	}
+	atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
+
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	req := &encodeRequest{cbuf: cbuf, wg: wg}
-	atomic.AddInt32(&r.prog.numEncoding, 1)
 	encoderCh <- req
 	writerCh <- req
 
@@ -542,6 +556,7 @@ func freeMapEntry(me *pb.MapEntry) {
 func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	cbuf := req.cbuf
 	defer func() {
+		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.Len()))
 		cbuf.Release()
 	}()
 

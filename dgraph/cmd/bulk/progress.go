@@ -39,7 +39,7 @@ type progress struct {
 	mapEdgeCount    int64
 	reduceEdgeCount int64
 	reduceKeyCount  int64
-	numEncoding     int32
+	numEncoding     int64
 
 	start       time.Time
 	startReduce time.Time
@@ -118,7 +118,7 @@ func (p *progress) reportOnce() {
 			pct = fmt.Sprintf("%.2f%% ", 100*float64(reduceEdgeCount)/float64(mapEdgeCount))
 		}
 		fmt.Printf("[%s] REDUCE %s %sedge_count:%s edge_speed:%s/sec "+
-			"plist_count:%s plist_speed:%s/sec. Num Encoding: %d. Num Allocs MBs: %d \n",
+			"plist_count:%s plist_speed:%s/sec. Num Encoding MBs: %d. Num Allocs MBs: %d \n",
 			timestamp,
 			x.FixedDuration(now.Sub(p.start)),
 			pct,
@@ -126,7 +126,7 @@ func (p *progress) reportOnce() {
 			niceFloat(float64(reduceEdgeCount)/elapsed.Seconds()),
 			niceFloat(float64(reduceKeyCount)),
 			niceFloat(float64(reduceKeyCount)/elapsed.Seconds()),
-			atomic.LoadInt32(&p.numEncoding),
+			atomic.LoadInt64(&p.numEncoding)/(1<<20),
 			atomic.LoadInt64(&z.NumAllocBytes)/(1<<20),
 		)
 	default:
