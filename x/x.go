@@ -1002,7 +1002,7 @@ func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, clos
 		// might be under contention.
 		lifeTooShort := le.Count > 0 && le.Sum > 0 && float64(le.Sum)/float64(le.Count) < 5
 		// Check misses and hits to ensure we're not looking at a closed cache.
-		hitRatioTooLow := metrics.misses != 0 && metrics.Hits < 0.4
+		hitRatioTooLow := metrics.Misses != 0 && metrics.Hits < 0.4
 		if lifeTooShort || hitRatioTooLow {
 			glog.Infof("======== Contention in cache %s =====", prefix)
 			glog.Info(metrics)
