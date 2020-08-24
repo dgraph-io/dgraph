@@ -35,7 +35,8 @@ import (
 )
 
 type expectedRequest struct {
-	method    string
+	method string
+	// Send urlSuffix as empty string to ignore comparison
 	urlSuffix string
 	body      string
 	// Send headers as nil to ignore comparing headers.
@@ -172,7 +173,8 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 		return getError("Invalid HTTP method", r.Method)
 	}
 
-	if !strings.HasSuffix(r.URL.String(), expectedRequest.urlSuffix) {
+	if expectedRequest.urlSuffix != "" && !strings.HasSuffix(r.URL.String(),
+		expectedRequest.urlSuffix) {
 		return getError("Invalid URL", r.URL.String())
 	}
 
@@ -275,6 +277,20 @@ func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 	check2(w.Write(getDefaultResponse()))
 }
 
+func postFavMoviesWithBodyHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/0x123?name=Author",
+		body:      `{"id":"0x123","movie_type":"space","name":"Author"}`,
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+	check2(w.Write(getDefaultResponse()))
+}
+
 func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodGet,
@@ -317,15 +333,18 @@ func verifyCustomNameHeadersHandler(w http.ResponseWriter, r *http.Request) {
 
 func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
-		method:    http.MethodGet,
-		urlSuffix: "/twitterfollowers?screen_name=manishrjain",
-		body:      "",
+		method: http.MethodGet,
+		body:   "",
 	})
 	if err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write([]byte(`
+
+	var resp string
+	switch r.URL.Query().Get("screen_name") {
+	case "manishrjain":
+		resp = `
 	{
 		"users": [{
 			"id": 1231723732206411776,
@@ -337,7 +356,16 @@ func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
 			"friends_count": 117,
 			"statuses_count": 0
 		}]
-	}`)))
+	}`
+	case "amazingPanda":
+		resp = `
+	{
+		"users": [{
+			"name": "twitter_bot"
+		}]
+	}`
+	}
+	check2(w.Write([]byte(resp)))
 }
 
 func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
@@ -366,6 +394,36 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
         {
           "id": "0x3",
           "name": "Mov2"
+        }
+    ]`)))
+}
+
+func favMoviesCreateWithNullBodyHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/favMoviesCreateWithNullBody",
+		body:      `{"movies":[{"director":[{"name":"Dir1"}],"name":"Mov1"},{"name":null}]}`,
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	check2(w.Write([]byte(`[
+        {
+          "id": "0x1",
+          "name": "Mov1",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "Dir1"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": null
         }
     ]`)))
 }
@@ -581,19 +639,6 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 	check2(fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["getPosts"].Schema)))
 }
 
-func getPostswithLike(w http.ResponseWriter, r *http.Request) {
-	_, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
-		urlSuffix: "/getPostswithLike",
-		body:      ``,
-	})
-	if err != nil {
-		check2(w.Write([]byte(err.Error())))
-		return
-	}
-
-	check2(fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["getPostswithLike"].Schema)))
-}
-
 type input struct {
 	ID string `json:"uid"`
 }
@@ -789,6 +834,39 @@ func nameHandler(w http.ResponseWriter, r *http.Request, input entity) {
 func userNameHandler(w http.ResponseWriter, r *http.Request) {
 	var inputBody input
 	nameHandler(w, r, &inputBody)
+}
+
+func userNameWithoutAddressHandler(w http.ResponseWriter, r *http.Request) {
+	expectedRequest := expectedRequest{
+		body: `{"uid":"0x5"}`,
+	}
+
+	b, err := ioutil.ReadAll(r.Body)
+	fmt.Println(b, err)
+	if err != nil {
+		err = getError("Unable to read request body", err.Error())
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	if string(b) != expectedRequest.body {
+		err = getError("Unexpected value for request body", string(b))
+	}
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	var inputBody input
+	if err := json.Unmarshal(b, &inputBody); err != nil {
+		fmt.Println("while doing JSON unmarshal: ", err)
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	n := fmt.Sprintf(`"%s"`, inputBody.Name())
+	check2(fmt.Fprint(w, n))
+
 }
 
 func carHandler(w http.ResponseWriter, r *http.Request) {
@@ -1133,6 +1211,7 @@ func main() {
 	// for queries
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
+	http.HandleFunc("/favMoviesPostWithBody/", postFavMoviesWithBodyHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
 	http.HandleFunc("/verifyCustomNameHeaders", verifyCustomNameHeadersHandler)
 	http.HandleFunc("/twitterfollowers", twitterFollwerHandler)
@@ -1141,7 +1220,7 @@ func main() {
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
 	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)
 	http.HandleFunc("/favMoviesDelete/", favMoviesDeleteHandler)
-
+	http.HandleFunc("/favMoviesCreateWithNullBody", favMoviesCreateWithNullBodyHandler)
 	// The endpoints below are for testing custom resolution of fields within type definitions.
 	// for testing batch mode
 	http.HandleFunc("/userNames", userNamesHandler)
@@ -1153,6 +1232,7 @@ func main() {
 
 	// for testing single mode
 	http.HandleFunc("/userName", userNameHandler)
+	http.HandleFunc("/userNameWithoutAddress", userNameWithoutAddressHandler)
 	http.HandleFunc("/checkHeadersForUserName", userNameHandlerWithHeaders)
 	http.HandleFunc("/car", carHandler)
 	http.HandleFunc("/class", classHandler)
@@ -1215,7 +1295,6 @@ func main() {
 	bsch := graphql.MustParseSchema(graphqlResponses["batchOperationSchema"].Schema, &query{})
 	bh := &relay.Handler{Schema: bsch}
 	http.HandleFunc("/getPosts", getPosts)
-	http.HandleFunc("/getPostswithLike", getPostswithLike)
 	http.Handle("/gqlUserNames", bh)
 	http.Handle("/gqlCars", bh)
 	http.HandleFunc("/gqlCarsWithErrors", gqlCarsWithErrorHandler)

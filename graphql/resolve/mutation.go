@@ -233,7 +233,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			Data:       map[string]interface{}{mutation.Name(): nil},
+			Data:       map[string]interface{}{mutation.DgraphAlias(): nil},
 			Field:      mutation,
 			Err:        err,
 			Extensions: ext,
@@ -244,6 +244,18 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	if err != nil {
 		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
 			resolverFailed
+	}
+	if len(upserts) == 0 {
+		return &Resolved{
+			Data: map[string]interface{}{
+				mutation.DgraphAlias(): map[string]interface{}{
+					schema.NumUid:                       0,
+					mutation.QueryField().DgraphAlias(): nil,
+				}},
+			Field:      mutation,
+			Err:        nil,
+			Extensions: ext,
+		}, resolverSucceeded
 	}
 
 	result := make(map[string]interface{})
@@ -321,9 +333,9 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	if resolved.Data == nil && resolved.Err != nil {
 		return &Resolved{
 			Data: map[string]interface{}{
-				mutation.Name(): map[string]interface{}{
-					schema.NumUid:                numUids,
-					mutation.QueryField().Name(): nil,
+				mutation.DgraphAlias(): map[string]interface{}{
+					schema.NumUid:                       numUids,
+					mutation.QueryField().DgraphAlias(): nil,
 				}},
 			Field:      mutation,
 			Err:        err,
@@ -337,7 +349,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 
 	dgRes := resolved.Data.(map[string]interface{})
 	dgRes[schema.NumUid] = numUids
-	resolved.Data = map[string]interface{}{mutation.Name(): dgRes}
+	resolved.Data = map[string]interface{}{mutation.DgraphAlias(): dgRes}
 	resolved.Field = mutation
 	resolved.Extensions = ext
 
@@ -375,10 +387,11 @@ func authorizeNewNodes(
 	queryExecutor DgraphExecutor,
 	txn *dgoapi.TxnContext) error {
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
 	if err != nil {
 		return schema.GQLWrapf(err, "authorization failed")
 	}
+	authVariables := customClaims.AuthVariables
 	newRw := &authRewriter{
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),

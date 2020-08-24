@@ -18,7 +18,6 @@ package schema
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -26,7 +25,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"text/scanner"
 
 	"github.com/vektah/gqlparser/v2/parser"
 
@@ -80,6 +78,7 @@ const (
 	SchemaQuery          QueryType    = "schema"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
+	DQLQuery             QueryType    = "dql"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -87,7 +86,6 @@ const (
 	HTTPMutation         MutationType = "http"
 	NotSupportedMutation MutationType = "notsupported"
 	IDType                            = "ID"
-	IDArgName                         = "id"
 	InputArgName                      = "input"
 	FilterArgName                     = "filter"
 )
@@ -114,7 +112,10 @@ type Operation interface {
 type Field interface {
 	Name() string
 	Alias() string
+	// DgraphAlias is used as an alias in DQL while rewriting the GraphQL field
+	DgraphAlias() string
 	ResponseName() string
+	Arguments() map[string]interface{}
 	ArgValue(name string) interface{}
 	IsArgListType(name string) bool
 	IDArgValue() (*string, uint64, error)
@@ -152,6 +153,7 @@ type Mutation interface {
 type Query interface {
 	Field
 	QueryType() QueryType
+	DQLQuery() string
 	Rename(newName string)
 	AuthFor(typ Type, jwtVars map[string]interface{}) Query
 }
@@ -183,8 +185,12 @@ type Type interface {
 // (which in turn must have a FieldDefinition of the right type in the schema.)
 type FieldDefinition interface {
 	Name() string
+	DgraphAlias() string
+	DgraphPredicate() string
 	Type() Type
+	ParentType() Type
 	IsID() bool
+	HasIDDirective() bool
 	Inverse() FieldDefinition
 	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
 	ForwardEdge() FieldDefinition
@@ -208,6 +214,9 @@ type schema struct {
 	mutatedType map[string]*astType
 	// Map from typename to ast.Definition
 	typeNameAst map[string][]*ast.Definition
+	// map from field name to bool, indicating if a field name was repeated across different types
+	// implementing the same interface
+	repeatedFieldNames map[string]bool
 	// customDirectives stores the mapping of typeName -> fieldName -> @custom definition.
 	// It is read-only.
 	// The outer map will contain typeName key only if one of the fields on that type has @custom.
@@ -224,6 +233,10 @@ type operation struct {
 	op     *ast.OperationDefinition
 	vars   map[string]interface{}
 	header http.Header
+	// interfaceImplFragFields stores a mapping from a field collected from a fragment inside an
+	// interface to its typeCondition. It is used during completion to find out if a field should
+	// be included in GraphQL response or not.
+	interfaceImplFragFields map[*ast.Field]string
 
 	// The fields below are used by schema introspection queries.
 	query    string
@@ -242,6 +255,7 @@ type field struct {
 
 type fieldDefinition struct {
 	fieldDef        *ast.FieldDefinition
+	parentType      Type
 	inSchema        *schema
 	dgraphPredicate map[string]map[string]string
 }
@@ -536,6 +550,57 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	return typeNameAst
 }
 
+func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) map[string]bool {
+	repeatedFieldNames := make(map[string]bool)
+
+	for _, typ := range s.Types {
+		if typ.Kind != ast.Interface {
+			continue
+		}
+
+		interfaceFields := make(map[string]bool)
+		for _, field := range typ.Fields {
+			interfaceFields[field.Name] = true
+		}
+
+		type fieldInfo struct {
+			dgPred   string
+			repeated bool
+		}
+
+		repeatedFieldsInTypesWithCommonAncestor := make(map[string]*fieldInfo)
+		for _, typ := range s.PossibleTypes[typ.Name] {
+			typPreds := dgPreds[typ.Name]
+			for _, field := range typ.Fields {
+				// ignore this field if it was inherited from the common interface or is of ID type.
+				// We ignore ID type fields too, because they map only to uid in dgraph and can't
+				// map to two different predicates.
+				if interfaceFields[field.Name] || field.Type.Name() == IDType {
+					continue
+				}
+				// if we find a field with same name from types implementing a common interface
+				// and its DgraphPredicate is different than what was previously encountered, then
+				// we mark it as repeated field, so that queries will rewrite it with correct alias
+				dgPred := typPreds[field.Name]
+				if fInfo, ok := repeatedFieldsInTypesWithCommonAncestor[field.Name]; ok && fInfo.
+					dgPred != dgPred {
+					repeatedFieldsInTypesWithCommonAncestor[field.Name].repeated = true
+				} else {
+					repeatedFieldsInTypesWithCommonAncestor[field.Name] = &fieldInfo{dgPred: dgPred}
+				}
+			}
+		}
+
+		for fName, info := range repeatedFieldsInTypesWithCommonAncestor {
+			if info.repeated {
+				repeatedFieldNames[fName] = true
+			}
+		}
+	}
+
+	return repeatedFieldNames
+}
+
 func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
 	customDirectives := make(map[string]map[string]*ast.Directive)
 
@@ -577,11 +642,12 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
-		schema:           s,
-		dgraphPredicate:  dgraphPredicate,
-		typeNameAst:      typeMappings(s),
-		customDirectives: customMappings(s),
-		authRules:        authRules,
+		schema:             s,
+		dgraphPredicate:    dgraphPredicate,
+		typeNameAst:        typeMappings(s),
+		repeatedFieldNames: repeatedFieldMappings(s, dgraphPredicate),
+		customDirectives:   customMappings(s),
+		authRules:          authRules,
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
 
@@ -601,6 +667,16 @@ func (f *field) Name() string {
 
 func (f *field) Alias() string {
 	return f.field.Alias
+}
+
+func (f *field) DgraphAlias() string {
+	// if this field is repeated, then it should be aliased using its dgraph predicate which will be
+	// unique across repeated fields
+	if f.op.inSchema.repeatedFieldNames[f.Name()] {
+		return f.DgraphPredicate()
+	}
+	// if not repeated, alias it using its name
+	return f.Name()
 }
 
 func (f *field) ResponseName() string {
@@ -625,7 +701,7 @@ func (f *field) IsAuthQuery() bool {
 	return f.field.Arguments.ForName("dgraph.uid") != nil
 }
 
-func (f *field) ArgValue(name string) interface{} {
+func (f *field) Arguments() map[string]interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
 		f.arguments = f.field.ArgumentMap(f.op.vars)
@@ -637,7 +713,11 @@ func (f *field) ArgValue(name string) interface{} {
 			f.arguments = x.DeepCopyJsonMap(f.arguments)
 		}
 	}
-	return f.arguments[name]
+	return f.arguments
+}
+
+func (f *field) ArgValue(name string) interface{} {
+	return f.Arguments()[name]
 }
 
 func (f *field) IsArgListType(name string) bool {
@@ -683,9 +763,10 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	httpArg := custom.Arguments.ForName("http")
 
 	bodyArg := httpArg.Value.Children.ForName("body")
+	graphqlArg := httpArg.Value.Children.ForName("graphql")
 	if bodyArg != nil {
 		bodyTemplate := bodyArg.Raw
-		_, rf, _ = parseBodyTemplate(bodyTemplate)
+		_, rf, _ = parseBodyTemplate(bodyTemplate, graphqlArg == nil)
 	}
 
 	if rf == nil {
@@ -709,7 +790,6 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 		}
 	}
 
-	graphqlArg := httpArg.Value.Children.ForName("graphql")
 	if graphqlArg == nil {
 		return true, rf
 	}
@@ -735,8 +815,17 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 func (f *field) XIDArg() string {
 	xidArgName := ""
 	passwordField := f.Type().PasswordField()
-	for _, arg := range f.field.Arguments {
-		if arg.Name != IDArgName && (passwordField == nil ||
+
+	args := f.field.Definition.Arguments
+	if len(f.field.Definition.Arguments) == 0 {
+		// For acl endpoints like getCurrentUser which redirects to getUser resolver, the field
+		// definition doesn't change and hence we can't find the arguments for getUser. As a
+		// fallback, we get the args from the query field arguments in that case.
+		args = f.op.inSchema.schema.Query.Fields.ForName(f.Name()).Arguments
+	}
+
+	for _, arg := range args {
+		if arg.Type.Name() != IDType && (passwordField == nil ||
 			arg.Name != passwordField.Name()) {
 			xidArgName = arg.Name
 		}
@@ -837,7 +926,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	}
 	// bodyTemplate will be empty if there was no body or graphql, like the case of a simple GET req
 	if bodyTemplate != "" {
-		bt, rf, err := parseBodyTemplate(bodyTemplate)
+		bt, rf, err := parseBodyTemplate(bodyTemplate, true)
 		if err != nil {
 			return fconf, err
 		}
@@ -915,11 +1004,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			bodyVars["query"] = fconf.RemoteGqlQuery
 			bodyVars["variables"] = argMap
 		}
-		if fconf.Template != nil {
-			if err = SubstituteVarsInBody(fconf.Template, bodyVars); err != nil {
-				return fconf, errors.Wrapf(err, "while substituting vars in Body")
-			}
-		}
+		SubstituteVarsInBody(fconf.Template, bodyVars)
 	}
 	return fconf, nil
 }
@@ -984,11 +1069,6 @@ func (f *field) TypeName(dgraphTypes []interface{}) string {
 }
 
 func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
-	// As ID maps to uid in dgraph, so it is not stored as an edge, hence does not appear in
-	// f.op.inSchema.dgraphPredicate map. So, always include the queried field if it is of ID type.
-	if f.Type().Name() == IDType {
-		return true
-	}
 	// Given a list of dgraph types, we query the schema and find the one which is an ast.Object
 	// and not an Interface object.
 	for _, typ := range dgraphTypes {
@@ -998,10 +1078,22 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 		}
 		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
 			if origTyp.Kind == ast.Object {
-				// If the field doesn't exist in the map corresponding to the object type, then we
-				// don't need to include it.
-				_, ok := f.op.inSchema.dgraphPredicate[origTyp.Name][f.Name()]
-				return ok || f.Name() == Typename
+				// If the field is from an interface implemented by this object,
+				// and was fetched not because of a fragment on this object,
+				// but because of a fragment on some other object, then we don't need to include it.
+				fragType, ok := f.op.interfaceImplFragFields[f.field]
+				if ok && fragType != origTyp.Name {
+					return false
+				}
+
+				// We include the field in response only if any of the following conditions hold:
+				// * Field is __typename
+				// * The field is of ID type: As ID maps to uid in dgraph, so it is not stored as an
+				//	 edge, hence does not appear in f.op.inSchema.dgraphPredicate map. So, always
+				//	 include the queried field if it is of ID type.
+				// * If the field exists in the map corresponding to the object type
+				_, ok = f.op.inSchema.dgraphPredicate[origTyp.Name][f.Name()]
+				return ok || f.Type().Name() == IDType || f.Name() == Typename
 			}
 		}
 
@@ -1038,8 +1130,16 @@ func (q *query) Alias() string {
 	return (*field)(q).Alias()
 }
 
+func (q *query) DgraphAlias() string {
+	return q.Name()
+}
+
 func (q *query) SetArgTo(arg string, val interface{}) {
 	(*field)(q).SetArgTo(arg, val)
+}
+
+func (q *query) Arguments() map[string]interface{} {
+	return (*field)(q).Arguments()
 }
 
 func (q *query) ArgValue(name string) interface{} {
@@ -1106,9 +1206,21 @@ func (q *query) QueryType() QueryType {
 	return queryType(q.Name(), q.op.inSchema.customDirectives["Query"][q.Name()])
 }
 
+func (q *query) DQLQuery() string {
+	if customDir := q.op.inSchema.customDirectives["Query"][q.Name()]; customDir != nil {
+		if dqlArgument := customDir.Arguments.ForName(dqlArg); dqlArgument != nil {
+			return dqlArgument.Value.Raw
+		}
+	}
+	return ""
+}
+
 func queryType(name string, custom *ast.Directive) QueryType {
 	switch {
 	case custom != nil:
+		if custom.Arguments.ForName(dqlArg) != nil {
+			return DQLQuery
+		}
 		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
@@ -1151,12 +1263,20 @@ func (m *mutation) Alias() string {
 	return (*field)(m).Alias()
 }
 
+func (m *mutation) DgraphAlias() string {
+	return m.Name()
+}
+
 func (m *mutation) SetArgTo(arg string, val interface{}) {
 	(*field)(m).SetArgTo(arg, val)
 }
 
 func (m *mutation) IsArgListType(name string) bool {
 	return (*field)(m).IsArgListType(name)
+}
+
+func (m *mutation) Arguments() map[string]interface{} {
+	return (*field)(m).Arguments()
 }
 
 func (m *mutation) ArgValue(name string) interface{} {
@@ -1303,6 +1423,7 @@ func (t *astType) Field(name string) FieldDefinition {
 		fieldDef:        t.inSchema.schema.Types[t.Name()].Fields.ForName(name),
 		inSchema:        t.inSchema,
 		dgraphPredicate: t.dgraphPredicate,
+		parentType:      t,
 	}
 }
 
@@ -1315,6 +1436,7 @@ func (t *astType) Fields() []FieldDefinition {
 				fieldDef:        fld,
 				inSchema:        t.inSchema,
 				dgraphPredicate: t.dgraphPredicate,
+				parentType:      t,
 			})
 	}
 
@@ -1325,8 +1447,26 @@ func (fd *fieldDefinition) Name() string {
 	return fd.fieldDef.Name
 }
 
+func (fd *fieldDefinition) DgraphAlias() string {
+	if fd.inSchema.repeatedFieldNames[fd.Name()] {
+		return fd.DgraphPredicate()
+	}
+	return fd.Name()
+}
+
+func (fd *fieldDefinition) DgraphPredicate() string {
+	return fd.dgraphPredicate[fd.parentType.Name()][fd.Name()]
+}
+
 func (fd *fieldDefinition) IsID() bool {
 	return isID(fd.fieldDef)
+}
+
+func (fd *fieldDefinition) HasIDDirective() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	return hasIDDirective(fd.fieldDef)
 }
 
 func hasIDDirective(fd *ast.FieldDefinition) bool {
@@ -1346,6 +1486,10 @@ func (fd *fieldDefinition) Type() Type {
 	}
 }
 
+func (fd *fieldDefinition) ParentType() Type {
+	return fd.parentType
+}
+
 func (fd *fieldDefinition) Inverse() FieldDefinition {
 
 	invDirective := fd.fieldDef.Directives.ForName(inverseDirective)
@@ -1358,8 +1502,9 @@ func (fd *fieldDefinition) Inverse() FieldDefinition {
 		return nil // really not possible
 	}
 
+	typeWrapper := fd.Type()
 	// typ must exist if the schema passed GQL validation
-	typ := fd.inSchema.schema.Types[fd.Type().Name()]
+	typ := fd.inSchema.schema.Types[typeWrapper.Name()]
 
 	// fld must exist if the schema passed our validation
 	fld := typ.Fields.ForName(invFieldArg.Value.Raw)
@@ -1367,7 +1512,9 @@ func (fd *fieldDefinition) Inverse() FieldDefinition {
 	return &fieldDefinition{
 		fieldDef:        fld,
 		inSchema:        fd.inSchema,
-		dgraphPredicate: fd.dgraphPredicate}
+		dgraphPredicate: fd.dgraphPredicate,
+		parentType:      typeWrapper,
+	}
 }
 
 // ForwardEdge gets the field definition for a forward edge if this field is a reverse edge
@@ -1390,8 +1537,9 @@ func (fd *fieldDefinition) ForwardEdge() FieldDefinition {
 	}
 
 	fedge := strings.Trim(name, "<~>")
+	typeWrapper := fd.Type()
 	// typ must exist if the schema passed GQL validation
-	typ := fd.inSchema.schema.Types[fd.Type().Name()]
+	typ := fd.inSchema.schema.Types[typeWrapper.Name()]
 
 	var fld *ast.FieldDefinition
 	// Have to range through all the fields and find the correct forward edge. This would be
@@ -1414,7 +1562,9 @@ func (fd *fieldDefinition) ForwardEdge() FieldDefinition {
 	return &fieldDefinition{
 		fieldDef:        fld,
 		inSchema:        fd.inSchema,
-		dgraphPredicate: fd.dgraphPredicate}
+		dgraphPredicate: fd.dgraphPredicate,
+		parentType:      typeWrapper,
+	}
 }
 
 func (t *astType) Name() string {
@@ -1490,8 +1640,9 @@ func (t *astType) IDField() FieldDefinition {
 	for _, fd := range def.Fields {
 		if isID(fd) {
 			return &fieldDefinition{
-				fieldDef: fd,
-				inSchema: t.inSchema,
+				fieldDef:   fd,
+				inSchema:   t.inSchema,
+				parentType: t,
 			}
 		}
 	}
@@ -1511,8 +1662,9 @@ func (t *astType) PasswordField() FieldDefinition {
 	}
 
 	return &fieldDefinition{
-		fieldDef: fd,
-		inSchema: t.inSchema,
+		fieldDef:   fd,
+		inSchema:   t.inSchema,
+		parentType: t,
 	}
 }
 
@@ -1525,8 +1677,9 @@ func (t *astType) XIDField() FieldDefinition {
 	for _, fd := range def.Fields {
 		if hasIDDirective(fd) {
 			return &fieldDefinition{
-				fieldDef: fd,
-				inSchema: t.inSchema,
+				fieldDef:   fd,
+				inSchema:   t.inSchema,
+				parentType: t,
 			}
 		}
 	}
@@ -1612,7 +1765,7 @@ func (t *astType) Interfaces() []string {
 // satisfy a valid post.
 func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) error {
 	for _, fld := range t.inSchema.schema.Types[t.Name()].Fields {
-		if fld.Type.NonNull && !isID(fld) && !(fld.Name == exclusion) {
+		if fld.Type.NonNull && !isID(fld) && fld.Name != exclusion {
 			if val, ok := obj[fld.Name]; !ok || val == nil {
 				return errors.Errorf(
 					"type %s requires a value for field %s, but no value present",
@@ -1767,170 +1920,166 @@ func SubstituteVarsInURL(rawURL string, vars map[string]interface{}) (string,
 	return u.String(), nil
 }
 
-func isName(s string) bool {
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z':
-			continue
-		case r >= 'A' && r <= 'Z':
-			continue
-		default:
-			return false
-		}
+func parseAsGraphQLArg(bodyTemplate string) (*ast.Value, error) {
+	// bodyTemplate is always formed like { k1: 3.4, k2: $var, k3: "string", ...},
+	// so the `input` arg here will have an object value after parsing
+	doc, err := parser.ParseQuery(&ast.Source{Input: `query { dummy(input:` + bodyTemplate + `) }`})
+	if err != nil {
+		return nil, err
 	}
-	return true
+	return doc.Operations[0].SelectionSet[0].(*ast.Field).Arguments[0].Value, nil
+}
+
+func parseAsJSONTemplate(value *ast.Value, vars map[string]bool, strictJSON bool) (interface{}, error) {
+	switch value.Kind {
+	case ast.ObjectValue:
+		m := make(map[string]interface{})
+		for _, elem := range value.Children {
+			elemVal, err := parseAsJSONTemplate(elem.Value, vars, strictJSON)
+			if err != nil {
+				return nil, err
+			}
+			m[elem.Name] = elemVal
+		}
+		return m, nil
+	case ast.ListValue:
+		var l []interface{}
+		for _, elem := range value.Children {
+			elemVal, err := parseAsJSONTemplate(elem.Value, vars, strictJSON)
+			if err != nil {
+				return nil, err
+			}
+			l = append(l, elemVal)
+		}
+		return l, nil
+	case ast.Variable:
+		vars[value.Raw] = true
+		return value.String(), nil
+	case ast.IntValue:
+		return strconv.ParseInt(value.Raw, 10, 64)
+	case ast.FloatValue:
+		return strconv.ParseFloat(value.Raw, 64)
+	case ast.BooleanValue:
+		return strconv.ParseBool(value.Raw)
+	case ast.StringValue:
+		return value.Raw, nil
+	case ast.BlockValue, ast.EnumValue:
+		if strictJSON {
+			return nil, fmt.Errorf("found unexpected value: %s", value.String())
+		}
+		return value.Raw, nil
+	case ast.NullValue:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unknown value kind: %d, for value: %s", value.Kind, value.String())
+	}
 }
 
 // Given a template for a body with variables defined, this function parses the body
-// and converts it into a JSON representation and returns that. It also returns a list of the field
-// names that are required by this template.
+// and converts it into a JSON representation and returns that. It also returns a list of the
+// variable names that are required by this template.
 // for e.g.
 // { author: $id, post: { id: $postID }}
 // would return
 // { "author" : "$id", "post": { "id": "$postID" }} and { "id": true, "postID": true}
 // If the final result is not a valid JSON, then an error is returned.
-func parseBodyTemplate(body string) (*interface{}, map[string]bool, error) {
-	var s scanner.Scanner
-	s.Init(strings.NewReader(body))
-
-	result := new(bytes.Buffer)
-	parsingVariable := false
-	depth := 0
-	requiredFields := make(map[string]bool)
-	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
-		text := s.TokenText()
-		switch {
-		case text == "{":
-			result.WriteString(text)
-			depth++
-		case text == "}":
-			depth--
-			result.WriteString(text)
-		case text == ":" || text == "," || text == "[" || text == "]":
-			result.WriteString(text)
-		case text == "$":
-			parsingVariable = true
-		case isName(text):
-			// Name could either be a key or be part of a variable after dollar.
-			if !parsingVariable {
-				result.WriteString(fmt.Sprintf(`"%s"`, text))
-				continue
-			}
-			requiredFields[text] = true
-			variable := "$" + text
-			fmt.Fprintf(result, `"%s"`, variable)
-			parsingVariable = false
-
-		default:
-			return nil, nil, errors.Errorf("invalid character: %s while parsing body template",
-				text)
-		}
-	}
-	if depth != 0 {
-		return nil, nil, errors.New("found unmatched curly braces while parsing body template")
-	}
-
-	if result.Len() == 0 {
+//
+// In strictJSON mode block strings and enums are invalid and throw an error.
+// strictJSON should be false when the body template is being used for custom graphql arg parsing,
+// otherwise it should be true.
+func parseBodyTemplate(body string, strictJSON bool) (*interface{}, map[string]bool, error) {
+	if strings.TrimSpace(body) == "" {
 		return nil, nil, nil
 	}
 
-	var m interface{}
-	if err := json.Unmarshal(result.Bytes(), &m); err != nil {
-		return nil, nil, errors.Errorf("couldn't unmarshal HTTP body: %s as JSON", result.Bytes())
-	}
-	return &m, requiredFields, nil
-}
-
-func getVar(key string, variables map[string]interface{}) (interface{}, error) {
-	if !strings.HasPrefix(key, "$") {
-		return nil, errors.Errorf("expected a variable to start with $. Found: %s", key)
-	}
-	val, ok := variables[key[1:]]
-	if !ok {
-		return nil, errors.Errorf("couldn't find variable: %s in variables map", key)
-	}
-
-	return val, nil
-}
-
-func substituteSingleVarInBody(key string, valPtr *interface{},
-	variables map[string]interface{}) error {
-	// Look it up in the map and replace.
-	val, err := getVar(key, variables)
+	parsedBodyTemplate, err := parseAsGraphQLArg(body)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	*valPtr = val
-	return nil
+
+	requiredVariables := make(map[string]bool)
+	jsonTemplate, err := parseAsJSONTemplate(parsedBodyTemplate, requiredVariables, strictJSON)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &jsonTemplate, requiredVariables, nil
 }
 
-func substituteVarInMapInBody(object, variables map[string]interface{}) error {
+func isVar(key string) bool {
+	return strings.HasPrefix(key, "$")
+}
+
+func substituteVarInMapInBody(object, variables map[string]interface{}) {
 	for k, v := range object {
 		switch val := v.(type) {
 		case string:
-			vval, err := getVar(val, variables)
-			if err != nil {
-				return err
+			if isVar(val) {
+				vval, ok := variables[val[1:]]
+				if ok {
+					object[k] = vval
+				} else {
+					delete(object, k)
+				}
 			}
-			object[k] = vval
 		case map[string]interface{}:
-			if err := substituteVarInMapInBody(val, variables); err != nil {
-				return err
-			}
+			substituteVarInMapInBody(val, variables)
 		case []interface{}:
-			if err := substituteVarInSliceInBody(val, variables); err != nil {
-				return err
-			}
-		default:
-			return errors.Errorf("got unexpected type value in map: %+v", v)
+			substituteVarInSliceInBody(val, variables)
 		}
 	}
-	return nil
 }
 
-func substituteVarInSliceInBody(slice []interface{}, variables map[string]interface{}) error {
+func substituteVarInSliceInBody(slice []interface{}, variables map[string]interface{}) {
 	for k, v := range slice {
 		switch val := v.(type) {
 		case string:
-			vval, err := getVar(val, variables)
-			if err != nil {
-				return err
+			if isVar(val) {
+				slice[k] = variables[val[1:]]
 			}
-			slice[k] = vval
 		case map[string]interface{}:
-			if err := substituteVarInMapInBody(val, variables); err != nil {
-				return err
-			}
+			substituteVarInMapInBody(val, variables)
 		case []interface{}:
-			if err := substituteVarInSliceInBody(val, variables); err != nil {
-				return err
-			}
-		default:
-			return errors.Errorf("got unexpected type value in array: %+v", v)
+			substituteVarInSliceInBody(val, variables)
 		}
 	}
-	return nil
 }
 
 // Given a JSON representation for a body with variables defined, this function substitutes
 // the variables and returns the final JSON.
 // for e.g.
-// { "author" : "$id", "post": { "id": "$postID" }} with variables {"id": "0x3", postID: "0x9"}
-// should return { "author" : "0x3", "post": { "id": "0x9" }}
-func SubstituteVarsInBody(jsonTemplate *interface{}, variables map[string]interface{}) error {
+// {
+//		"author" : "$id",
+//		"name" : "Jerry",
+//		"age" : 23,
+//		"post": {
+//			"id": "$postID"
+//		}
+// }
+// with variables {"id": "0x3",	postID: "0x9"}
+// should return
+// {
+//		"author" : "0x3",
+//		"name" : "Jerry",
+//		"age" : 23,
+//		"post": {
+//			"id": "0x9"
+//		}
+// }
+func SubstituteVarsInBody(jsonTemplate *interface{}, variables map[string]interface{}) {
 	if jsonTemplate == nil {
-		return nil
+		return
 	}
 
 	switch val := (*jsonTemplate).(type) {
 	case string:
-		return substituteSingleVarInBody(val, jsonTemplate, variables)
+		if isVar(val) {
+			*jsonTemplate = variables[val[1:]]
+		}
 	case map[string]interface{}:
-		return substituteVarInMapInBody(val, variables)
+		substituteVarInMapInBody(val, variables)
 	case []interface{}:
-		return substituteVarInSliceInBody(val, variables)
-	default:
-		return errors.Errorf("got unexpected type value in jsonTemplate: %+v", val)
+		substituteVarInSliceInBody(val, variables)
 	}
 }
 
@@ -2011,6 +2160,6 @@ func parseRequiredArgsFromGQLRequest(req string) (map[string]bool, error) {
 	bracket := strings.Index(req, "{")
 	req = req[bracket:]
 	args := req[strings.Index(req, "(")+1 : strings.LastIndex(req, ")")]
-	_, rf, err := parseBodyTemplate("{" + args + "}")
+	_, rf, err := parseBodyTemplate("{"+args+"}", false)
 	return rf, err
 }

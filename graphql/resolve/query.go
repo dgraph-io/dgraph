@@ -19,6 +19,8 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strconv"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -29,6 +31,8 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
+
+var errNotScalar = errors.New("provided value is not a scalar, can't convert it to string")
 
 // A QueryResolver can resolve a single query.
 type QueryResolver interface {
@@ -104,23 +108,43 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			Data:       map[string]interface{}{query.Name(): nil},
+			Data:       map[string]interface{}{query.DgraphAlias(): nil},
 			Field:      query,
 			Err:        err,
 			Extensions: ext,
 		}
 	}
 
-	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
-	if err != nil {
-		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
-			query.ResponseName()))
+	var qry string
+	vars := make(map[string]string)
+
+	// DQL queries don't need any rewriting, as they are already in DQL form
+	if query.QueryType() == schema.DQLQuery {
+		qry = query.DQLQuery()
+		args := query.Arguments()
+		for k, v := range args {
+			// dgoapi.Request{}.Vars accepts only string values for variables,
+			// so need to convert all variable values to string
+			vStr, err := convertScalarToString(v)
+			if err != nil {
+				return emptyResult(schema.GQLWrapf(err, "couldn't convert argument %s to string",
+					k))
+			}
+			// the keys in dgoapi.Request{}.Vars are assumed to be prefixed with $
+			vars["$"+k] = vStr
+		}
+	} else {
+		dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
+		if err != nil {
+			return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
+				query.ResponseName()))
+		}
+		qry = dgraph.AsString(dgQuery)
 	}
 
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
-	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),
-		ReadOnly: true})
+	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars, ReadOnly: true})
 	queryTimer.Stop()
 
 	if err != nil {
@@ -149,4 +173,25 @@ func resolveIntrospection(ctx context.Context, q schema.Query) *Resolved {
 		Field: q,
 		Err:   schema.AppendGQLErrs(err, err2),
 	}
+}
+
+// converts scalar values received from GraphQL arguments to go string
+// If it is a scalar only possible cases are: string, bool, int64, float64 and nil.
+func convertScalarToString(val interface{}) (string, error) {
+	var str string
+	switch v := val.(type) {
+	case string:
+		str = v
+	case bool:
+		str = strconv.FormatBool(v)
+	case int64:
+		str = strconv.FormatInt(v, 10)
+	case float64:
+		str = strconv.FormatFloat(v, 'f', -1, 64)
+	case nil:
+		str = ""
+	default:
+		return "", errNotScalar
+	}
+	return str, nil
 }

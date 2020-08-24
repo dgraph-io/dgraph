@@ -20,6 +20,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -35,15 +37,17 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 var (
-	users   = flag.Int("users", 100, "Number of accounts.")
-	conc    = flag.Int("txns", 3, "Number of concurrent transactions per client.")
-	dur     = flag.String("dur", "1m", "How long to run the transactions.")
-	alpha   = flag.String("alpha", "localhost:9080", "Address of Dgraph alpha.")
-	verbose = flag.Bool("verbose", true, "Output all logs in verbose mode.")
-	login   = flag.Bool("login", true, "Login as groot. Used for ACL-enabled cluster.")
+	users      = flag.Int("users", 100, "Number of accounts.")
+	conc       = flag.Int("txns", 3, "Number of concurrent transactions per client.")
+	dur        = flag.String("dur", "1m", "How long to run the transactions.")
+	alpha      = flag.String("alpha", "localhost:9080", "Address of Dgraph alpha.")
+	verbose    = flag.Bool("verbose", true, "Output all logs in verbose mode.")
+	login      = flag.Bool("login", true, "Login as groot. Used for ACL-enabled cluster.")
+	slashToken = flag.String("slash-token", "", "Slash GraphQL API token")
 )
 
 var startBal = 10
@@ -300,6 +304,36 @@ func (s *state) loop(dg *dgo.Dgraph, wg *sync.WaitGroup) {
 	}
 }
 
+type authorizationCredentials struct {
+	token string
+}
+
+func (a *authorizationCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{"Authorization": a.token}, nil
+}
+
+func (a *authorizationCredentials) RequireTransportSecurity() bool {
+	return true
+}
+
+func grpcConnection(one string) (*grpc.ClientConn, error) {
+	if slashToken == nil || *slashToken == "" {
+		return grpc.Dial(one, grpc.WithInsecure())
+	}
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+	return grpc.Dial(
+		one,
+		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+			RootCAs:    pool,
+			ServerName: strings.Split(one, ":")[0],
+		})),
+		grpc.WithPerRPCCredentials(&authorizationCredentials{*slashToken}),
+	)
+}
+
 func main() {
 	flag.Parse()
 
@@ -308,7 +342,7 @@ func main() {
 
 	var clients []*dgo.Dgraph
 	for _, one := range all {
-		conn, err := grpc.Dial(one, grpc.WithInsecure())
+		conn, err := grpcConnection(one)
 		if err != nil {
 			log.Fatal(err)
 		}

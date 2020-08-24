@@ -66,19 +66,23 @@ func TestValidateAddress(t *testing.T) {
 		testData := []struct {
 			name    string
 			address string
-			isValid bool
+			err     string
 		}{
-			{"Valid without port", "190.0.0.1", false},
-			{"Valid with port", "192.5.32.1:333", true},
-			{"Invalid without port", "12.0.0", false},
+			{"Valid without port", "190.0.0.1", "address 190.0.0.1: missing port in address"},
+			{"Valid with port", "192.5.32.1:333", ""},
+			{"Invalid without port", "12.0.0", "address 12.0.0: missing port in address"},
 			// the following test returns true because 12.0.0 is considered as valid
 			// hostname
-			{"Invalid with port", "12.0.0:3333", true},
+			{"Valid with port", "12.0.0:3333", ""},
+			{"Invalid port", "190.0.0.1:222222", "Invalid port: 222222"},
 		}
-		for _, subtest := range testData {
-			st := subtest
+		for _, st := range testData {
 			t.Run(st.name, func(t *testing.T) {
-				require.Equal(t, st.isValid, ValidateAddress(st.address))
+				if len(st.err) != 0 {
+					require.EqualError(t, ValidateAddress(st.address), st.err)
+				} else {
+					require.NoError(t, ValidateAddress(st.address))
+				}
 			})
 		}
 
@@ -87,17 +91,21 @@ func TestValidateAddress(t *testing.T) {
 		testData := []struct {
 			name    string
 			address string
-			isValid bool
+			err     string
 		}{
-			{"Valid without port", "[2001:db8::1]", false},
-			{"Valid with port", "[2001:db8::1]:8888", true},
-			{"Invalid without port", "[2001:db8]", false},
-			{"Invalid with port", "[2001:db8]:2222", false},
+			{"Valid without port", "[2001:db8::1]", "address [2001:db8::1]: missing port in address"},
+			{"Valid with port", "[2001:db8::1]:8888", ""},
+			{"Invalid without port", "[2001:db8]", "address [2001:db8]: missing port in address"},
+			{"Invalid with port", "[2001:db8]:2222", "Invalid hostname: 2001:db8"},
+			{"Invalid port", "[2001:db8::1]:222222", "Invalid port: 222222"},
 		}
-		for _, subtest := range testData {
-			st := subtest
+		for _, st := range testData {
 			t.Run(st.name, func(t *testing.T) {
-				require.Equal(t, st.isValid, ValidateAddress(st.address))
+				if len(st.err) != 0 {
+					require.EqualError(t, ValidateAddress(st.address), st.err)
+				} else {
+					require.NoError(t, ValidateAddress(st.address))
+				}
 			})
 		}
 	})

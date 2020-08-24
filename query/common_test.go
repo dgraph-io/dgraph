@@ -29,11 +29,17 @@ import (
 )
 
 func setSchema(schema string) {
-	err := client.Alter(context.Background(), &api.Operation{
-		Schema: schema,
-	})
-	if err != nil {
-		panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
+	for retry := 0; retry < 3; retry++ {
+		err := client.Alter(context.Background(), &api.Operation{
+			Schema: schema,
+		})
+		if err == nil {
+			return
+		}
+		// We'll panic if we are in last iteration.
+		if retry == 2 {
+			panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
+		}
 	}
 }
 
@@ -61,6 +67,20 @@ func processQuery(ctx context.Context, t *testing.T, query string) (string, erro
 	jsonResponse, err := json.Marshal(response)
 	require.NoError(t, err)
 	return string(jsonResponse), err
+}
+
+func processQueryRDF(ctx context.Context, t *testing.T, query string) (string, error) {
+	txn := client.NewTxn()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Do(ctx, &api.Request{
+		Query:      query,
+		RespFormat: api.Request_RDF,
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(res.Rdf), err
 }
 
 func processQueryNoErr(t *testing.T, query string) string {

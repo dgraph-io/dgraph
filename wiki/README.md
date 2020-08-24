@@ -13,7 +13,7 @@ We use [Hugo](https://gohugo.io/) for our documentation.
 2. From within the `wiki` folder, run the command below to get the theme.
 
 ```
-cd themes && git clone https://github.com/dgraph-io/hugo-docs
+pushd themes && git clone https://github.com/dgraph-io/hugo-docs && popd
 ```
 
 3. Run `./scripts/local.sh` within the `wiki` folder and visit `http://localhost:1313` to see the
@@ -21,7 +21,7 @@ documentation site.
 
 (Optional) To run queries *within* the documentation using a different Dgraph instance, set the `DGRAPH_ENDPOINT` environment variable before starting the local web server:
 ```
-DGRAPH_ENDPOINT="http://localhost:8080/query?latency=true" ./local.sh
+DGRAPH_ENDPOINT="http://localhost:8080/query?latency=true" ./scripts/local.sh
 ```
 
 Now you can make changes to the docs and see them being updated instantly thanks to Hugo.

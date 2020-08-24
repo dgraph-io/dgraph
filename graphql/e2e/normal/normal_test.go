@@ -125,6 +125,11 @@ func TestSchema_Normal(t *testing.T) {
 			"index": true,
 			"tokenizer": ["int"]
 		}, {
+			"predicate": "Post.numViews",
+			"type": "int",
+			"index": true,
+			"tokenizer": ["int"]
+		}, {
 			"predicate": "Post.postType",
 			"type": "string",
 			"index": true,
@@ -217,12 +222,25 @@ func TestSchema_Normal(t *testing.T) {
 			"index": true,
 			"tokenizer": ["exact"],
 			"list": true
-		},{
-                         "predicate": "Person.name",
-			 "type": "string"
-                  
-                   }],
-
+		}, {
+			"predicate": "Person.name",
+			"type": "string"
+		}, {
+			"predicate": "Thing.name",
+			"type": "string"
+		}, {
+			"predicate": "ThingOne.color",
+			"type": "string"
+		}, {
+			"predicate": "ThingOne.usedBy",
+			"type": "string"
+		}, {
+			"predicate": "ThingTwo.color",
+			"type": "string"
+		}, {
+			"predicate": "ThingTwo.owner",
+			"type": "string"
+		}],
 		"types": [{
 			"fields": [{
 				"name": "Author.name"
@@ -310,6 +328,8 @@ func TestSchema_Normal(t *testing.T) {
 			}, {
 				"name": "Post.numLikes"
 			}, {
+				"name": "Post.numViews"
+			}, {
 				"name": "Post.isPublished"
 			}, {
 				"name": "Post.postType"
@@ -370,12 +390,35 @@ func TestSchema_Normal(t *testing.T) {
 			}, {
 				"name": "Student.taughtBy"
 			}],
-                        "name": "Student"
-                },{
+				"name": "Student"
+		}, {
 			"fields": [{
 				"name": "Person.name"
 			}],
 			"name": "Person"
+		}, {
+			"fields": [{
+				"name": "Thing.name"
+			}],
+			"name": "Thing"
+		}, {
+			"fields": [{
+				"name": "Thing.name"
+			}, {
+				"name": "ThingOne.color"
+			}, {
+				"name": "ThingOne.usedBy"
+			}],
+			"name": "ThingOne"
+		}, {
+			"fields": [{
+				"name": "Thing.name"
+			}, {
+				"name": "ThingTwo.color"
+			}, {
+				"name": "ThingTwo.owner"
+			}],
+			"name": "ThingTwo"
 		}, {
 			"fields": [{
 				"name": "dgraph.graphql.schema"

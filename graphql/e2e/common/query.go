@@ -378,6 +378,43 @@ func deepFilter(t *testing.T) {
 	}
 }
 
+func deepHasFilter(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+	newPost1 := addPostWithNullText(t, newAuthor.ID, newCountry.ID, postExecutor)
+	newPost2 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+	getAuthorParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Test Author" } }) {
+				name
+				posts(filter: {not :{ has : text } }) {
+					title
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := getAuthorParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.QueryAuthor))
+
+	expected := &author{
+		Name:  "Test Author",
+		Posts: []*post{{Title: "No text"}},
+	}
+
+	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost1, newPost2})
+}
+
 // manyQueries runs multiple queries in the one block.  Internally, the GraphQL
 // server should run those concurrently, but the results should be returned in the
 // requested order.  This makes sure those many test runs are reassembled correctly.
@@ -663,7 +700,7 @@ func authorTest(t *testing.T, filter interface{}, expected []*author) {
 	}
 }
 
-func intFilters(t *testing.T) {
+func int32Filters(t *testing.T) {
 	cases := map[string]struct {
 		Filter   interface{}
 		Expected []*post
@@ -689,6 +726,58 @@ func intFilters(t *testing.T) {
 				{Title: "Learning GraphQL in Dgraph"}}},
 		"greater than": {
 			Filter:   map[string]interface{}{"numLikes": map[string]interface{}{"gt": 87}},
+			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			postTest(t, test.Filter, test.Expected)
+		})
+	}
+}
+
+func hasFilters(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+	newPost := addPostWithNullText(t, newAuthor.ID, newCountry.ID, postExecutor)
+
+	Filter := map[string]interface{}{"has": "text"}
+	Expected := []*post{
+		{Title: "GraphQL doco"},
+		{Title: "Introducing GraphQL in Dgraph"},
+		{Title: "Learning GraphQL in Dgraph"},
+		{Title: "Random post"}}
+
+	postTest(t, Filter, Expected)
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
+}
+
+func int64Filters(t *testing.T) {
+	cases := map[string]struct {
+		Filter   interface{}
+		Expected []*post
+	}{
+		"less than": {
+			Filter: map[string]interface{}{"numViews": map[string]interface{}{"lt": 274877906944}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Random post"}}},
+		"less or equal": {
+			Filter: map[string]interface{}{"numViews": map[string]interface{}{"le": 274877906944}},
+			Expected: []*post{
+				{Title: "GraphQL doco"},
+				{Title: "Learning GraphQL in Dgraph"},
+				{Title: "Random post"}}},
+		"equal": {
+			Filter:   map[string]interface{}{"numViews": map[string]interface{}{"eq": 274877906944}},
+			Expected: []*post{{Title: "Learning GraphQL in Dgraph"}}},
+		"greater or equal": {
+			Filter: map[string]interface{}{"numViews": map[string]interface{}{"ge": 274877906944}},
+			Expected: []*post{
+				{Title: "Introducing GraphQL in Dgraph"},
+				{Title: "Learning GraphQL in Dgraph"}}},
+		"greater than": {
+			Filter:   map[string]interface{}{"numViews": map[string]interface{}{"gt": 274877906944}},
 			Expected: []*post{{Title: "Introducing GraphQL in Dgraph"}}},
 	}
 
@@ -1284,9 +1373,9 @@ func querynestedOnlyTypename(t *testing.T) {
 		  },
                   {
 			"__typename": "Post"
-		  },  
+		  },
 		  {
-			
+
 			"__typename": "Post"
 		  }
 		]
@@ -1311,8 +1400,8 @@ func onlytypenameForInterface(t *testing.T) {
 						eq: [EMPIRE]
 					}
 				}) {
-					
-					
+
+
 					... on Human {
 						__typename
 			                }
@@ -1326,7 +1415,7 @@ func onlytypenameForInterface(t *testing.T) {
 		expected := `{
 		"queryCharacter": [
 		  {
-                      "__typename": "Human"			
+                      "__typename": "Human"
 		  },
 		  {
 	             "__typename": "Droid"
@@ -1600,6 +1689,7 @@ func queryWithAlias(t *testing.T) {
 		Query: `query {
 			post : queryPost (filter: {title : { anyofterms : "Introducing" }} ) {
 				type : __typename
+				title
 				postTitle : title
 				postAuthor : author {
 					theName : name
@@ -1614,6 +1704,7 @@ func queryWithAlias(t *testing.T) {
 		`{
 			"post": [ {
 				"type": "Post",
+				"title": "Introducing GraphQL in Dgraph",
 				"postTitle": "Introducing GraphQL in Dgraph",
 				"postAuthor": { "theName": "Ann Author" }}]}`,
 		string(gqlResponse.Data))

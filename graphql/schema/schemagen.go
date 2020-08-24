@@ -453,7 +453,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						if arg != nil {
 							indexes = append(indexes, getAllSearchIndexes(arg.Value)...)
 						} else {
-							indexes = append(indexes, defaultSearches[f.Type.Name()])
+							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
+								Name()]].dgIndex)
 						}
 					}
 

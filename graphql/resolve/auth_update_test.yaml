@@ -7,6 +7,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { "filter": { "id": [ "0x123" ] },
@@ -34,6 +36,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -101,6 +105,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -171,6 +177,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -238,6 +246,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -306,6 +316,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -375,6 +387,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -445,7 +459,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "log":
       {
@@ -470,7 +486,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "log":
       {
@@ -499,7 +517,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "proj":
       {
@@ -534,7 +554,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "proj":
       {
@@ -562,7 +584,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "issue":
       {
@@ -594,7 +618,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "issue":
       {
@@ -618,7 +644,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "log":
       {
@@ -646,7 +674,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "log":
       {

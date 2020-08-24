@@ -83,6 +83,8 @@ schemas:
         t: Float
         tList: [Float]
         u: ID
+        v: Int64
+        vList: [Int64]
       }
     output: |
       type X {
@@ -95,6 +97,8 @@ schemas:
         X.sList
         X.t
         X.tList
+        X.v
+        X.vList
       }
       X.p: int .
       X.pList: [int] .
@@ -105,6 +109,8 @@ schemas:
       X.sList: [dateTime] .
       X.t: float .
       X.tList: [float] .
+      X.v: int .
+      X.vList: [int] .
 
   -
     name: "enum - always gets an index"
@@ -129,6 +135,8 @@ schemas:
       type X {
         i1: Int @search
         i2: Int @search(by: [int])
+        i64_1: Int64 @search
+        i64_2: Int64 @search(by: [int64])
         f1: Float @search
         f2: Float @search(by: [float])
         b1: Boolean @search
@@ -160,6 +168,8 @@ schemas:
       type X {
         X.i1
         X.i2
+        X.i64_1
+        X.i64_2
         X.f1
         X.f2
         X.b1
@@ -188,6 +198,8 @@ schemas:
       }
       X.i1: int @index(int) .
       X.i2: int @index(int) .
+      X.i64_1: int @index(int) .
+      X.i64_2: int @index(int) .
       X.f1: float @index(float) .
       X.f2: float @index(float) .
       X.b1: bool @index(bool) .

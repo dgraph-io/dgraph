@@ -35,9 +35,11 @@ import (
 )
 
 type ctxKey string
+type authVariablekey string
 
 const (
 	AuthJwtCtxKey  = ctxKey("authorizationJwt")
+	AuthVariables  = authVariablekey("authVariable")
 	RSA256         = "RS256"
 	HMAC256        = "HS256"
 	AuthMetaHeader = "# Dgraph.Authorization "
@@ -207,22 +209,6 @@ func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
-	// Extract the jwt and unmarshal the jwt to get the auth variables.
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, nil
-	}
-
-	jwtToken := md.Get(string(AuthJwtCtxKey))
-	if len(jwtToken) == 0 {
-		return nil, nil
-	} else if len(jwtToken) > 1 {
-		return nil, fmt.Errorf("invalid jwt auth token")
-	}
-	return validateToken(jwtToken[0])
-}
-
 func (c *CustomClaims) validateAudience() error {
 	// If there's no audience claim, ignore
 	if c.Audience == nil || len(c.Audience) == 0 {
@@ -249,14 +235,30 @@ func (c *CustomClaims) validateAudience() error {
 	return nil
 }
 
-func validateToken(jwtStr string) (map[string]interface{}, error) {
+func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
+	// return CustomClaims containing jwt and authvariables.
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return &CustomClaims{}, nil
+	}
+
+	jwtToken := md.Get(string(AuthJwtCtxKey))
+	if len(jwtToken) == 0 {
+		return &CustomClaims{}, nil
+	} else if len(jwtToken) > 1 {
+		return nil, fmt.Errorf("invalid jwt auth token")
+	}
+	return validateJWTCustomClaims(jwtToken[0])
+}
+
+func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	if metainfo.Algo == "" {
 		return nil, fmt.Errorf(
 			"jwt token cannot be validated because verification algorithm is not set")
 	}
 
 	// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we
-	// disable the `aud` claim verification at the library end using `WithoutClaimsValidation` and
+	// disable the `aud` claim verification at the library end using `WithoutAudienceValidation` and
 	// use our custom validation function `validateAudience`.
 	token, err :=
 		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
@@ -275,7 +277,7 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 				}
 			}
 			return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
-		}, jwt.WithoutClaimsValidation())
+		}, jwt.WithoutAudienceValidation())
 
 	if err != nil {
 		return nil, errors.Errorf("unable to parse jwt token:%v", err)
@@ -289,6 +291,5 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 	if err := claims.validateAudience(); err != nil {
 		return nil, err
 	}
-
-	return claims.AuthVariables, nil
+	return claims, nil
 }

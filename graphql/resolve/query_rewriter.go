@@ -76,9 +76,14 @@ func (qr *queryRewriter) Rewrite(
 		return &gql.GraphQuery{Attr: gqlQuery.ResponseName() + "()"}, nil
 	}
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
-	if err != nil {
-		return nil, err
+	authVariables, _ := ctx.Value(authorization.AuthVariables).(map[string]interface{})
+
+	if authVariables == nil {
+		customClaims, err := authorization.ExtractCustomClaims(ctx)
+		if err != nil {
+			return nil, err
+		}
+		authVariables = customClaims.AuthVariables
 	}
 
 	authRw := &authRewriter{
@@ -261,6 +266,11 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	addFilter(dgQuery, field.Type(), filter)
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
+}
+
+func addFilterToField(dgQuery *gql.GraphQuery, field schema.Field) {
+	filter, _ := field.ArgValue("filter").(map[string]interface{})
+	addFilter(dgQuery, field.Type(), filter)
 }
 
 func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
@@ -448,12 +458,9 @@ func (authRw *authRewriter) addAuthQueries(
 			Args: []gql.Arg{{Value: authRw.varName}},
 		},
 		Filter: filter,
-		Order:  dgQuery.Order,
-		Args:   dgQuery.Args,
 	}
 
 	dgQuery.Filter = nil
-	dgQuery.Args = nil
 
 	// The user query starts from the var query generated above and is filtered
 	// by the the filter generated from auth processing, so now we build
@@ -672,7 +679,10 @@ func addSelectionSetFrom(
 	// are required in the body template for other fields requested within the query. We must
 	// fetch them from Dgraph.
 	requiredFields := make(map[string]bool)
+	// addedFields is a map from field name to bool
 	addedFields := make(map[string]bool)
+	// fieldAdded is a map from field's dgraph alias to bool
+	fieldAdded := make(map[string]bool)
 	for _, f := range field.SelectionSet() {
 		hasCustom, rf := f.HasCustomDirective()
 		if hasCustom {
@@ -690,9 +700,17 @@ func addSelectionSetFrom(
 			continue
 		}
 
-		child := &gql.GraphQuery{}
+		// skip if we have already added a query for this field in DQL. It helps make sure that if
+		// a field is being asked twice or more, each time with a new alias, then we only add it
+		// once in DQL query.
+		if _, ok := fieldAdded[f.DgraphAlias()]; ok {
+			continue
+		}
+		fieldAdded[f.DgraphAlias()] = true
 
-		child.Alias = f.Name()
+		child := &gql.GraphQuery{
+			Alias: f.DgraphAlias(),
+		}
 
 		if f.Type().Name() == schema.IDType {
 			child.Attr = "uid"
@@ -730,11 +748,19 @@ func addSelectionSetFrom(
 			q.Children = append(q.Children, child)
 		}
 
-		if rbac != schema.Uncertain {
+		// If RBAC rules are evaluated to Negative, we don't write queries for deeper levels.
+		// Hence we don't need to do any further processing for this field.
+		if rbac == schema.Negative {
 			continue
 		}
 
-		fieldAuth, authFilter := auth.rewriteAuthQueries(f.Type())
+		var fieldAuth []*gql.GraphQuery
+		var authFilter *gql.FilterTree
+		// If RBAC rules are evaluated to `Uncertain` then we add the Auth rules.
+		if rbac == schema.Uncertain {
+			fieldAuth, authFilter = auth.rewriteAuthQueries(f.Type())
+		}
+
 		if authFilter != nil {
 			if child.Filter == nil {
 				child.Filter = authFilter
@@ -775,7 +801,7 @@ func addSelectionSetFrom(
 				},
 			}
 
-			addArgumentsToField(selectionQry, f)
+			addFilterToField(selectionQry, f)
 			selectionQry.Filter = child.Filter
 			authQueries = append(authQueries, parentQry, selectionQry)
 			child.Filter = &gql.FilterTree{
@@ -784,10 +810,6 @@ func addSelectionSetFrom(
 					Args: []gql.Arg{{Value: filtervarName}},
 				},
 			}
-
-			// We already apply the following to `selectionQry` by calling addArgumentsToField()
-			// hence they are no longer required.
-			child.Args = nil
 		}
 		authQueries = append(authQueries, selectionAuth...)
 		authQueries = append(authQueries, fieldAuth...)
@@ -806,13 +828,14 @@ func addSelectionSetFrom(
 	for _, fname := range rfset {
 		if _, ok := addedFields[fname]; !ok {
 			f := field.Type().Field(fname)
-			child := &gql.GraphQuery{}
-			child.Alias = f.Name()
+			child := &gql.GraphQuery{
+				Alias: f.DgraphAlias(),
+			}
 
 			if f.Type().Name() == schema.IDType {
 				child.Attr = "uid"
 			} else {
-				child.Attr = field.Type().DgraphPredicate(fname)
+				child.Attr = f.DgraphPredicate()
 			}
 			q.Children = append(q.Children, child)
 		}
@@ -948,7 +971,6 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 
 	var ands []*gql.FilterTree
 	var or *gql.FilterTree
-
 	// Get a stable ordering so we generate the same thing each time.
 	var keys []string
 	for key := range filter {
@@ -1018,19 +1040,35 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					},
 				})
 			case interface{}:
+				// has: comments -> has(Post.comments)
+				// OR
 				// isPublished: true -> eq(Post.isPublished, true)
 				// OR an enum case
 				// postType: Question -> eq(Post.postType, "Question")
-				fn := "eq"
-				ands = append(ands, &gql.FilterTree{
-					Func: &gql.Function{
-						Name: fn,
-						Args: []gql.Arg{
-							{Value: typ.DgraphPredicate(field)},
-							{Value: fmt.Sprintf("%v", dgFunc)},
+				switch field {
+				case "has":
+					fieldName := fmt.Sprintf("%v", dgFunc)
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: field,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(fieldName)},
+							},
 						},
-					},
-				})
+					})
+
+				default:
+					fn := "eq"
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(field)},
+								{Value: fmt.Sprintf("%v", dgFunc)},
+							},
+						},
+					})
+				}
 			}
 		}
 	}

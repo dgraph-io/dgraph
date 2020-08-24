@@ -714,6 +714,7 @@ func addPost(t *testing.T, authorID, countryID string,
 				isPublished
 				tags
 				numLikes
+				numViews
 				author {
 					id
 					name
@@ -730,6 +731,7 @@ func addPost(t *testing.T, authorID, countryID string,
 			"text":        "This post is just a test.",
 			"isPublished": true,
 			"numLikes":    1000,
+			"numViews":    9007199254740991, // (2^53)-1
 			"tags":        []string{"example", "test"},
 			"author":      map[string]interface{}{"id": authorID},
 		}},
@@ -743,6 +745,81 @@ func addPost(t *testing.T, authorID, countryID string,
 			"isPublished": true,
 			"tags": ["example", "test"],
 			"numLikes": 1000,
+			"numViews": 9007199254740991,
+			"author": {
+				"id": "%s",
+				"name": "Test Author",
+				"country": {
+					"id": "%s",
+					"name": "Testland"
+				}
+			}
+		}]
+	} }`, authorID, countryID)
+
+	gqlResponse := executeRequest(t, graphqlURL, addPostParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var expected, result struct {
+		AddPost struct {
+			Post []*post
+		}
+	}
+	err := json.Unmarshal([]byte(addPostExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddPost.Post[0].PostID)
+
+	opt := cmpopts.IgnoreFields(post{}, "PostID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	return result.AddPost.Post[0]
+}
+
+func addPostWithNullText(t *testing.T, authorID, countryID string,
+	executeRequest requestExecutor) *post {
+
+	addPostParams := &GraphQLParams{
+		Query: `mutation addPost($post: AddPostInput!) {
+			addPost(input: [$post]) {
+			  post( filter : {not :{has : text} }){
+				postID
+				title
+				text
+				isPublished
+				tags
+				author(filter: {has:country}) {
+					id
+					name
+					country {
+						id
+						name
+					}
+				}
+			  }
+			}
+		}`,
+		Variables: map[string]interface{}{"post": map[string]interface{}{
+			"title":       "No text",
+			"isPublished": false,
+			"numLikes":    0,
+			"tags":        []string{"no text", "null"},
+			"author":      map[string]interface{}{"id": authorID},
+		}},
+	}
+
+	addPostExpected := fmt.Sprintf(`{ "addPost": {
+		"post": [{
+			"postID": "_UID_",
+			"title": "No text",
+			"text": null,
+			"isPublished": false,
+			"tags": ["null","no text"],
+			"numLikes": 0,
 			"author": {
 				"id": "%s",
 				"name": "Test Author",
@@ -793,6 +870,7 @@ func requirePost(
 				isPublished
 				tags
 				numLikes
+				numViews
 				author @include(if: $getAuthor) {
 					id
 					name
@@ -1946,12 +2024,12 @@ func addStarship(t *testing.T) *starship {
 	gqlResponse := addStarshipParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	addStarshipExpected := fmt.Sprintf(`{"addStarship":{
+	addStarshipExpected := `{"addStarship":{
 		"starship":[{
 			"name":"Millennium Falcon",
 			"length":2
 		}]
-	}}`)
+	}}`
 
 	var expected, result struct {
 		AddStarship struct {
@@ -2041,6 +2119,82 @@ func addDroid(t *testing.T) string {
 
 	requireUID(t, result.AddDroid.Droid[0].ID)
 	return result.AddDroid.Droid[0].ID
+}
+
+func addThingOne(t *testing.T) string {
+	addDroidParams := &GraphQLParams{
+		Query: `mutation addThingOne($input: AddThingOneInput!) {
+			addThingOne(input: [$input]) {
+				thingOne {
+					id
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": map[string]interface{}{
+			"name":   "Thing-1",
+			"color":  "White",
+			"usedBy": "me",
+		}},
+	}
+
+	gqlResponse := addDroidParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		AddThingOne struct {
+			ThingOne []struct {
+				ID string
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddThingOne.ThingOne[0].ID)
+	return result.AddThingOne.ThingOne[0].ID
+}
+
+func addThingTwo(t *testing.T) string {
+	addDroidParams := &GraphQLParams{
+		Query: `mutation addThingTwo($input: AddThingTwoInput!) {
+			addThingTwo(input: [$input]) {
+				thingTwo {
+					id
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": map[string]interface{}{
+			"name":  "Thing-2",
+			"color": "Black",
+			"owner": "someone",
+		}},
+	}
+
+	gqlResponse := addDroidParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		AddThingTwo struct {
+			ThingTwo []struct {
+				ID string
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddThingTwo.ThingTwo[0].ID)
+	return result.AddThingTwo.ThingTwo[0].ID
+}
+
+func deleteThingOne(t *testing.T, thingOneId string) {
+	thingOneFilter := map[string]interface{}{"id": []string{thingOneId}}
+	deleteGqlType(t, "ThingOne", thingOneFilter, 1, nil)
+}
+
+func deleteThingTwo(t *testing.T, thingTwoId string) {
+	thingTwoFilter := map[string]interface{}{"id": []string{thingTwoId}}
+	deleteGqlType(t, "ThingTwo", thingTwoFilter, 1, nil)
 }
 
 func updateCharacter(t *testing.T, id string) {
@@ -2908,7 +3062,6 @@ func threeLevelDeepMutation(t *testing.T) {
 	}
 
 	gqlResponse := postExecutor(t, graphqlURL, addStudentParams)
-	fmt.Println(string(gqlResponse.Data))
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var actualResult struct {
@@ -3096,6 +3249,7 @@ func ensureAliasInMutationPayload(t *testing.T) {
 		Query: `mutation {
 			addState(input: [{xcode: "S1", name: "State1"}]) {
 				type: __typename
+				numUids
 				count: numUids
 				op: state {
 					xcode
@@ -3107,8 +3261,15 @@ func ensureAliasInMutationPayload(t *testing.T) {
 	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	addStateExpected := `{"addState":{"type":"AddStatePayload","count":1,"op":[{"xcode":"S1"}]}}`
-	require.Equal(t, addStateExpected, string(gqlResponse.Data))
+	addStateExpected := `{
+		"addState": {
+			"type": "AddStatePayload",
+			"numUids": 1,
+			"count": 1,
+			"op": [{"xcode":"S1"}]
+		}
+	}`
+	require.JSONEq(t, addStateExpected, string(gqlResponse.Data))
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
 	deleteState(t, filter, 1, nil)
@@ -3153,6 +3314,7 @@ func mutationsWithAlias(t *testing.T) {
 				set: { name: "Testland Alias" }
 			}) {
 				updatedCountry: country {
+					name
 					theName: name
 				}
 			}
@@ -3166,7 +3328,7 @@ func mutationsWithAlias(t *testing.T) {
 			"filter": map[string]interface{}{"id": []string{newCountry.ID}}},
 	}
 	multiMutationExpected := `{
-		"upd": { "updatedCountry": [{ "theName": "Testland Alias" }] },
+		"upd": { "updatedCountry": [{ "name": "Testland Alias", "theName": "Testland Alias" }] },
 		"del" : { "message": "Deleted", "uids": 1 }
 	}`
 
@@ -3174,4 +3336,33 @@ func mutationsWithAlias(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, multiMutationExpected, string(gqlResponse.Data))
+}
+
+func updateMutationWithoutSetRemove(t *testing.T) {
+	country := addCountry(t, postExecutor)
+
+	updateCountryParams := &GraphQLParams{
+		Query: `mutation updateCountry($id: ID!){
+			updateCountry(input: {filter: {id: [$id]}}) {
+				numUids
+				country {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"id": country.ID},
+	}
+	gqlResponse := updateCountryParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	require.JSONEq(t, `{
+		"updateCountry": {
+			"numUids": 0,
+			"country": []
+    	}
+	}`, string(gqlResponse.Data))
+
+	// cleanup
+	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
 }

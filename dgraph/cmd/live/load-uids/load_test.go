@@ -18,10 +18,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"path"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -29,6 +31,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -57,6 +60,75 @@ func checkDifferentUid(t *testing.T, wantMap, gotMap map[string]interface{}) {
 	gotMap["q"].([]interface{})[0].(map[string]interface{})["uid"] = -1
 	wantMap["q"].([]interface{})[0].(map[string]interface{})["uid"] = -1
 	testutil.CompareJSONMaps(t, wantMap, gotMap)
+}
+
+func checkUpsertLoadedData(t *testing.T) {
+	resp, err := dg.NewTxn().Query(context.Background(), `
+		{
+			q(func: eq(xid, "m.1234")) {
+				xid
+				name
+				value
+			}
+		}
+	`)
+	require.NoError(t, err)
+
+	gotMap := testutil.UnmarshalJSON(t, string(resp.GetJson()))
+	wantMap := testutil.UnmarshalJSON(t, `
+		{
+		    "q": [
+			    {
+					"xid": "m.1234",
+					"name": "name 1234",
+					"value": "value 1234"
+			    }
+			]
+		}
+	`)
+
+	testutil.CompareJSONMaps(t, wantMap, gotMap)
+}
+
+func TestLiveLoadUpsertAtOnce(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	file := testDataDir + "/xid_a.rdf, " + testDataDir + "/xid_b.rdf"
+
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--schema", testDataDir + "/xid.schema", "--files", file, "--alpha",
+			alphaService, "--zero", zeroService, "-u", "groot", "-p", "password",
+			"-U", "xid"},
+	}
+	_, err := testutil.Pipeline(pipeline)
+	require.NoError(t, err, "live loading JSON file exited with error")
+
+	checkUpsertLoadedData(t)
+}
+
+func TestLiveLoadUpsert(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--schema", testDataDir + "/xid.schema", "--files", testDataDir + "/xid_a.rdf",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password",
+			"-U", "xid"},
+	}
+	_, err := testutil.Pipeline(pipeline)
+	require.NoError(t, err, "live loading JSON file exited with error")
+
+	pipeline = [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--schema", testDataDir + "/xid.schema", "--files", testDataDir + "/xid_b.rdf",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password",
+			"-U", "xid"},
+	}
+	_, err = testutil.Pipeline(pipeline)
+	require.NoError(t, err, "live loading JSON file exited with error")
+
+	checkUpsertLoadedData(t)
 }
 
 func checkLoadedData(t *testing.T, newUids bool) {
@@ -131,7 +203,7 @@ func TestLiveLoadJsonUidKeep(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, false)
@@ -145,7 +217,7 @@ func TestLiveLoadJsonUidDiscard(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, true)
@@ -159,7 +231,7 @@ func TestLiveLoadRdfUidKeep(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, false)
@@ -173,7 +245,7 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, true)
@@ -212,7 +284,7 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 			"--encryption_key_file", testDataDir + "/../../../../ee/enc/test-fixtures/enc-key",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading exported schema exited with error")
 
 	// cleanup copied export files
@@ -235,6 +307,61 @@ func copyExportToLocalFs(t *testing.T) (string, string) {
 	groupId := strings.Split(exportFiles[0].Name(), ".")[0]
 
 	return childDirs[0].Name(), groupId
+}
+
+func extractErrLine(output string) string {
+	m := regexp.MustCompile(`Error while processing(.)*(rdf|json):`)
+	errLine := m.FindString(output)
+	return errLine
+}
+
+func TestLiveLoadFileName(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--files", testDataDir + "/correct1.rdf," + testDataDir + "/errored1.rdf",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
+	}
+
+	out, err := testutil.Pipeline(pipeline)
+	require.Error(t, err, "error expected: live loader exited with no error")
+	errLine := extractErrLine(out)
+	errLineExp := fmt.Sprintf(`Error while processing data file %s/errored1.rdf:`, testDataDir)
+	require.Equal(t, errLineExp, errLine, "incorrect name for errored file")
+}
+
+func TestLiveLoadFileNameMultipleErrored(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--files", testDataDir + "/correct1.rdf," + testDataDir + "/errored1.rdf," + testDataDir + "/errored2.rdf",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
+	}
+
+	out, err := testutil.Pipeline(pipeline)
+	require.Error(t, err, "error expected: live loader exited with no error")
+	errLine := extractErrLine(out)
+	errLineExp1 := fmt.Sprintf(`Error while processing data file %s/errored1.rdf:`, testDataDir)
+	errLineExp2 := fmt.Sprintf(`Error while processing data file %s/errored2.rdf:`, testDataDir)
+	assert.Contains(t, []string{errLineExp1, errLineExp2}, errLine, "incorrect name for errored file")
+}
+
+func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--files", testDataDir + "/correct1.rdf," + testDataDir + "/correct2.rdf," + testDataDir + "/errored1.rdf",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
+	}
+
+	out, err := testutil.Pipeline(pipeline)
+	require.Error(t, err, "error expected: live loader exited with no error")
+	errLine := extractErrLine(out)
+	errLineExp := fmt.Sprintf(`Error while processing data file %s/errored1.rdf:`, testDataDir)
+	require.Equal(t, errLineExp, errLine, "incorrect name for errored file")
 }
 
 func TestMain(m *testing.M) {
