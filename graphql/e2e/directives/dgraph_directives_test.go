@@ -164,6 +164,11 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"index": true,
 		"tokenizer": ["int"]
 	}, {
+		"predicate": "myPost.numViews",
+		"type": "int",
+		"index": true,
+		"tokenizer": ["int"]
+	}, {
 		"predicate": "myPost.postType",
 		"type": "string",
 		"index": true,
@@ -232,6 +237,21 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"predicate": "Student.taughtBy",
 		"type": "uid",
 		"list": true
+	}, {
+		"predicate": "Thing.name",
+		"type": "string"
+	}, {
+		"predicate": "ThingOne.color",
+		"type": "string"
+	}, {
+		"predicate": "ThingOne.usedBy",
+		"type": "string"
+	}, {
+		"predicate": "ThingTwo.color",
+		"type": "string"
+	}, {
+		"predicate": "ThingTwo.owner",
+		"type": "string"
 	}],
 	"types": [{
 		"fields": [{
@@ -334,6 +354,8 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		}, {
 			"name": "myPost.numLikes"
 		}, {
+			"name": "myPost.numViews"
+		}, {
 			"name": "is_published"
 		}, {
 			"name": "myPost.postType"
@@ -393,7 +415,30 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 			"name": "Student.taughtBy"
 		}],
 		"name": "Student"
-	}]
+	}, {
+			"fields": [{
+				"name": "Thing.name"
+			}],
+			"name": "Thing"
+		}, {
+			"fields": [{
+				"name": "Thing.name"
+			}, {
+				"name": "ThingOne.color"
+			}, {
+				"name": "ThingOne.usedBy"
+			}],
+			"name": "ThingOne"
+		}, {
+			"fields": [{
+				"name": "Thing.name"
+			}, {
+				"name": "ThingTwo.color"
+			}, {
+				"name": "ThingTwo.owner"
+			}],
+			"name": "ThingTwo"
+		}]
 }
 	`
 

@@ -233,7 +233,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			Data:       map[string]interface{}{mutation.Name(): nil},
+			Data:       map[string]interface{}{mutation.DgraphAlias(): nil},
 			Field:      mutation,
 			Err:        err,
 			Extensions: ext,
@@ -248,9 +248,9 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	if len(upserts) == 0 {
 		return &Resolved{
 			Data: map[string]interface{}{
-				mutation.Name(): map[string]interface{}{
-					schema.NumUid:                0,
-					mutation.QueryField().Name(): nil,
+				mutation.DgraphAlias(): map[string]interface{}{
+					schema.NumUid:                       0,
+					mutation.QueryField().DgraphAlias(): nil,
 				}},
 			Field:      mutation,
 			Err:        nil,
@@ -333,9 +333,9 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	if resolved.Data == nil && resolved.Err != nil {
 		return &Resolved{
 			Data: map[string]interface{}{
-				mutation.Name(): map[string]interface{}{
-					schema.NumUid:                numUids,
-					mutation.QueryField().Name(): nil,
+				mutation.DgraphAlias(): map[string]interface{}{
+					schema.NumUid:                       numUids,
+					mutation.QueryField().DgraphAlias(): nil,
 				}},
 			Field:      mutation,
 			Err:        err,
@@ -349,7 +349,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 
 	dgRes := resolved.Data.(map[string]interface{})
 	dgRes[schema.NumUid] = numUids
-	resolved.Data = map[string]interface{}{mutation.Name(): dgRes}
+	resolved.Data = map[string]interface{}{mutation.DgraphAlias(): dgRes}
 	resolved.Field = mutation
 	resolved.Extensions = ext
 

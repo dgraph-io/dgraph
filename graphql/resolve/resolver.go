@@ -698,7 +698,7 @@ func completeDgraphResult(
 			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result"))
 	}
 
-	switch val := valToComplete[field.Name()].(type) {
+	switch val := valToComplete[field.DgraphAlias()].(type) {
 	case []interface{}:
 		if field.Type().ListType() == nil {
 			// Turn Dgraph list result to single object
@@ -732,7 +732,7 @@ func completeDgraphResult(
 						field.Name(), field.Type().String()).WithLocations(field.Location()))
 			}
 
-			valToComplete[field.Name()] = internalVal
+			valToComplete[field.DgraphAlias()] = internalVal
 		}
 	case interface{}:
 		// no need to error in this case, this can be returned for custom HTTP query/mutation
@@ -746,7 +746,11 @@ func completeDgraphResult(
 		// case
 	}
 
-	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.Name()])
+	// TODO: correctly handle DgraphAlias for custom field resolution, at present it uses f.Name(),
+	// it should be using f.DgraphAlias() to get values from valToComplete.
+	// It works ATM because there hasn't been a scenario where there are two fields with same
+	// name in implementing types of an interface with @custom on some field in those types.
+	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.DgraphAlias()])
 	if err != nil {
 		errs = append(errs, schema.AsGQLErrors(err)...)
 	}
@@ -1289,7 +1293,7 @@ func completeObject(
 		x.Check2(buf.WriteString(f.ResponseName()))
 		x.Check2(buf.WriteString(`": `))
 
-		val := res[f.Name()]
+		val := res[f.DgraphAlias()]
 		if f.Name() == schema.Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
@@ -1347,7 +1351,7 @@ func completeValue(
 	switch val := val.(type) {
 	case map[string]interface{}:
 		switch field.Type().Name() {
-		case "String", "ID", "Boolean", "Float", "Int", "DateTime":
+		case "String", "ID", "Boolean", "Float", "Int", "Int64", "DateTime":
 			return nil, x.GqlErrorList{&x.GqlError{
 				Message:   errExpectedScalar,
 				Locations: []x.Location{field.Location()},
@@ -1476,15 +1480,13 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case float64:
 			// The spec says that we can coerce a Float value to Int, if we don't lose information.
 			// See: https: //spec.graphql.org/June2018/#sec-Float
-			// Lets try to see if this a whole number, otherwise return error because we
-			// might be losing informating by truncating it.
-			truncated := math.Trunc(v)
-			if truncated == v {
-				tv := int(truncated)
-				if tv > math.MaxInt32 || tv < math.MinInt32 {
-					return nil, valueCoercionError(v)
-				}
-				val = tv
+			// Lets try to see if this number could be converted to int32 without losing
+			// information, otherwise return error.
+			// See: https://github.com/golang/go/issues/19405 to understand why the comparison
+			// should be done after double conversion.
+			i32Val := int32(v)
+			if v == float64(i32Val) {
+				val = i32Val
 			} else {
 				return nil, valueCoercionError(v)
 			}
@@ -1495,17 +1497,17 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				val = 0
 			}
 		case string:
-			i, err := strconv.ParseFloat(v, 32)
+			i, err := strconv.ParseFloat(v, 64)
 			// An error can be encountered if we had a value that can't be fit into
-			// a 32 bit floating point number.
+			// a 64 bit floating point number.
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
-			// Lets try to see if this a whole number, otherwise return error because we
-			// might be losing informating by truncating it.
-			truncated := math.Trunc(i)
-			if truncated == i {
-				val = int(truncated)
+			// Lets try to see if this number could be converted to int32 without losing
+			// information, otherwise return error.
+			i32Val := int32(i)
+			if i == float64(i32Val) {
+				val = i32Val
 			} else {
 				return nil, valueCoercionError(v)
 			}
@@ -1515,14 +1517,55 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			}
 		case int:
 			// numUids are added as int, so we need special handling for that. Other number values
-			// in a JSON object are automatically unmarshaled as float so they are handle above.
+			// in a JSON object are automatically unmarshalled as float so they are handle above.
 			if v > math.MaxInt32 || v < math.MinInt32 {
 				return nil, valueCoercionError(v)
 			}
 		default:
 			return nil, valueCoercionError(v)
 		}
-
+	case "Int64":
+		switch v := val.(type) {
+		case float64:
+			// The spec says that we can coerce a Float value to Int, if we don't lose information.
+			// See: https: //spec.graphql.org/June2018/#sec-Float
+			// See: JSON RFC https://tools.ietf.org/html/rfc8259#section-6, to understand how the
+			// number type guarantees the correctness of integers only between the range
+			// [-(2**53)+1, (2**53)-1] and not the range [-(2**63), (2**63)-1].
+			// Lets try to see if this number could be converted to int64 without losing
+			// information, otherwise return error.
+			// See: https://github.com/golang/go/issues/19405 to understand why the comparison
+			// should be done after double conversion.
+			i64Val := int64(v)
+			if v == float64(i64Val) {
+				val = i64Val
+			} else {
+				return nil, valueCoercionError(v)
+			}
+		case bool:
+			if v {
+				val = 1
+			} else {
+				val = 0
+			}
+		case string:
+			i, err := strconv.ParseFloat(v, 64)
+			// An error can be encountered if we had a value that can't be fit into
+			// a 64 bit floating point number.
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			// Lets try to see if this number could be converted to int64 without losing
+			// information, otherwise return error.
+			i64Val := int64(i)
+			if i == float64(i64Val) {
+				val = i64Val
+			} else {
+				return nil, valueCoercionError(v)
+			}
+		default:
+			return nil, valueCoercionError(v)
+		}
 	case "Float":
 		switch v := val.(type) {
 		case bool:
