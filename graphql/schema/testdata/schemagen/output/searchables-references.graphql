@@ -191,9 +191,21 @@ type UpdatePostPayload {
 # Generated Enums
 #######################
 
+enum AuthorHasFilter {
+	name
+	dob
+	posts
+}
+
 enum AuthorOrderable {
 	name
 	dob
+}
+
+enum PostHasFilter {
+	title
+	text
+	datePublished
 }
 
 enum PostOrderable {
@@ -221,6 +233,7 @@ input AddPostInput {
 input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
+	has: AuthorHasFilter
 	and: AuthorFilter
 	or: AuthorFilter
 	not: AuthorFilter
@@ -249,6 +262,7 @@ input PostFilter {
 	postID: [ID!]
 	title: StringFullTextFilter_StringTermFilter
 	text: StringFullTextFilter_StringTermFilter
+	has: PostHasFilter
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter

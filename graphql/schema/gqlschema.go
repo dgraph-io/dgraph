@@ -570,6 +570,7 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
 		addQueries(sch, defn)
+		addTypeHasFilter(sch, defn)
 	}
 }
 
@@ -716,6 +717,35 @@ func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 	}
 }
 
+// addTypeHasFilter adds `enum TypeHasFilter {...}` to the Schema
+// if the object/interface has a field other than the ID field
+func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
+	filterName := defn.Name + "HasFilter"
+	filter := &ast.Definition{
+		Kind: ast.Enum,
+		Name: filterName,
+	}
+
+	for _, fld := range defn.Fields {
+		if isID(fld) {
+			continue
+		}
+		filter.EnumValues = append(filter.EnumValues,
+			&ast.EnumValueDefinition{Name: fld.Name})
+	}
+
+	// Interfaces could have just ID field but Types cannot for eg:
+	// interface I {
+	// 	 id: ID!
+	// }
+	// is a valid interface but it do not have any field which can
+	// be filtered using has filter
+
+	if len(filter.EnumValues) > 0 {
+		schema.Types[filterName] = filter
+	}
+}
+
 func addOrderArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 	fldType := fld.Type.Name()
 	if hasOrderables(schema.Types[fldType]) {
@@ -796,10 +826,6 @@ func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName str
 //   ...
 // }
 func addFilterType(schema *ast.Schema, defn *ast.Definition) {
-	if !hasFilterable(defn) {
-		return
-	}
-
 	filterName := defn.Name + "Filter"
 	filter := &ast.Definition{
 		Kind: ast.InputObject,
@@ -834,6 +860,13 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 		}
 	}
 
+	// Has filter makes sense only if there is atleast one non ID field in the defn
+	if len(getFieldsWithoutIDType(schema, defn)) > 0 {
+		filter.Fields = append(filter.Fields,
+			&ast.FieldDefinition{Name: "has", Type: &ast.Type{NamedType: defn.Name + "HasFilter"}},
+		)
+	}
+
 	// Not filter makes sense even if the filter has only one field. And/Or would only make sense
 	// if the filter has more than one field or if it has one non-id field.
 	if (len(filter.Fields) == 1 && !isID(filter.Fields[0])) || len(filter.Fields) > 1 {
@@ -843,8 +876,14 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 		)
 	}
 
+	// filter must have atleast one field. So not filter should be there.
+	// For eg, if defn has only one field,2 cases are possible:-
+	// 1- it is of ID type : then it contains filter of id type
+	// 2- it is of non-ID type :  then it will have 'has' filter
 	filter.Fields = append(filter.Fields,
-		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}})
+		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}},
+	)
+
 	schema.Types[filterName] = filter
 }
 
