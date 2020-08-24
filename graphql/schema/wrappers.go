@@ -679,10 +679,16 @@ func (f *field) Cascade() []string {
 	if arg == nil || arg.Value == nil || len(arg.Value.Children) == 0 {
 		return []string{"__all__"}
 	}
-	var fields []string
+	fields := make([]string, 0, len(arg.Value.Children))
 	typ := f.Type()
+	idField := typ.IDField().Name()
 	for _, child := range arg.Value.Children {
+		if idField == child.Value.Raw {
+			fields = append(fields, "uid")
+		} else {
 			fields = append(fields, typ.DgraphPredicate(child.Value.Raw))
+		}
+
 	}
 	return fields
 }

@@ -327,7 +327,7 @@ ADD_UPDATE_MUTATION:
   name: "parameterized cascade directive at multiple levels "
       gqlquery: |
         mutation {
-          ADD_UPDATE_MUTATION @cascade(fields:["title","text"]) {
+          ADD_UPDATE_MUTATION @cascade(fields:["title","text","id"]) {
             post {
               title
               text
@@ -340,7 +340,7 @@ ADD_UPDATE_MUTATION:
         }
       dgquery: |-
         query {
-          post(func: uid(0x4)) @cascade(post.title, post.text) {
+          post(func: uid(0x4)) @cascade(post.title, post.text, uid) {
             title : Post.title
             text : Post.text
             author : Post.author @cascade(Author.name, Author.dob) {

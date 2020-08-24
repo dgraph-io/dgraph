@@ -68,6 +68,10 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 	observers.OnDirective(func(walker *validator.Walker, directive *ast.Directive) {
 
 		if directive.Name == cascadeDirective && len(directive.Arguments) == 1 {
+			if directive.ParentDefinition == nil {
+				addError(validator.Message("Schema is not set yet. Please try after sometime."))
+				return
+			}
 			if directive.Arguments.ForName(cascadeArg) == nil {
 				return
 			}

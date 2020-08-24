@@ -849,7 +849,7 @@
   name: "Parameterized Cascade directive with multiple parameters on root and query field"
   gqlquery: |
     query {
-      queryAuthor @cascade(fields:["dob","reputation"]) {
+      queryAuthor @cascade(fields:["dob","reputation","id"]) {
         dob
         reputation
         posts @cascade(fields:["text","title"]) {
@@ -860,10 +860,10 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @cascade(Author.dob,Author.reputation) {
+      queryAuthor(func: type(Author)) @cascade(Author.dob, Author.reputation, uid) {
         dob : Author.dob
         reputation : Author.reputation
-        posts : Author.posts @cascade(Post.text,Post.title) {
+        posts : Author.posts @cascade(Post.text, Post.title) {
           text : Post.text
           title : Post.title
           dgraph.uid : uid

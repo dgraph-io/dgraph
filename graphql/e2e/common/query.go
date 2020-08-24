@@ -1706,7 +1706,7 @@ func queryWithCascade(t *testing.T) {
 		},
 	}, postExecutor)
 	newStarship := addStarship(t)
-	humanID:=addHuman(t, newStarship.ID)
+	humanID := addHuman(t, newStarship.ID)
 	authorIds := []string{authors[0].ID, authors[1].ID, authors[2].ID}
 	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID,
 		authors[2].Posts[0].PostID}
@@ -1930,6 +1930,28 @@ func queryWithCascade(t *testing.T) {
 						}`,
 		},
 		{
+			name: "parameterized cascade on ID type ",
+			query: `query ($ids: [ID!]) {
+					  queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","id"]) {
+						reputation
+                        name
+                        dob
+					  }
+					}`,
+			variables: map[string]interface{}{"ids": authorIds},
+			respData: `{
+							"queryAuthor": [{
+								"reputation": 4.5,
+								 "name":"George",
+                                 "dob": null
+							}, {
+                                  "dob": null,
+                                  "name": "Jerry",
+                                  "reputation": 4.6
+							}]
+						}`,
+		},
+		{
 			name: "parameterized cascade on field of interface ",
 			query: `query  {
 					  queryHuman() @cascade(fields:["name"]) {
@@ -1982,5 +2004,5 @@ func queryWithCascade(t *testing.T) {
 	deleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
 	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
 		nil)
-	cleanupStarwars(t, newStarship.ID, humanID,"")
+	cleanupStarwars(t, newStarship.ID, humanID, "")
 }
