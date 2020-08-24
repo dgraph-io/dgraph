@@ -43,6 +43,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -973,6 +974,55 @@ func IsGuardian(groups []string) bool {
 	}
 
 	return false
+}
+
+// MonitorCacheHealth periodically monitors the cache metrics and reports if
+// there is high contention in the cache.
+func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, closer *y.Closer) {
+	defer closer.Done()
+
+	checkCache := func(ct string) {
+		var metrics *ristretto.Metrics
+		switch ct {
+		case "block":
+			metrics = db.BlockCacheMetrics()
+		case "index":
+			metrics = db.IndexCacheMetrics()
+		default:
+			panic("invalid cache type")
+		}
+		if metrics == nil {
+			return
+		}
+		prefix := fmt.Sprintf("%s-%s", prefix, ct)
+		le := metrics.LifeExpectancySeconds()
+		glog.V(2).Infof("%s metrics %+v %+v", prefix, metrics, le)
+
+		// If the mean life expectancy is leff than 5 seconds, the cache
+		// might be under contention.
+		lifeTooShort := le.Count > 0 && le.Sum > 0 && float64(le.Sum)/float64(le.Count) < 5
+		// Check misses and hits to ensure we're not looking at a closed cache.
+		hitRatioTooLow := metrics.misses != 0 && metrics.Hits < 0.4
+		if lifeTooShort || hitRatioTooLow {
+			glog.Infof("======== Contention in cache %s =====", prefix)
+			glog.Info(metrics)
+			glog.Info(le)
+		}
+
+	}
+
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			checkCache("block")
+			checkCache("index")
+		case <-closer.HasBeenClosed():
+			return
+		}
+	}
 }
 
 // RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.

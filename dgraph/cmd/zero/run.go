@@ -235,7 +235,7 @@ func run() {
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
-		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20).WithLoadBloomsOnOpen(false)
+		WithValueLogFileSize(64 << 20).WithBlockSize(1 << 30).WithLoadBloomsOnOpen(false)
 
 	kvOpt.ZSTDCompressionLevel = 3
 
@@ -246,6 +246,10 @@ func run() {
 	gcCloser := y.NewCloser(1) // closer for vLogGC
 	go x.RunVlogGC(kv, gcCloser)
 	defer gcCloser.SignalAndWait()
+
+	cacheHealthCloser := y.NewCloser(1) // closer for cache health
+	go x.MonitorCacheHealth(10*time.Second, "zero", kv, cacheHealthCloser)
+	defer cacheHealthCloser.SignalAndWait()
 
 	store := raftwal.Init(kv, opts.nodeId, 0)
 

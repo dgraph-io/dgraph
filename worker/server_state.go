@@ -34,9 +34,10 @@ import (
 type ServerState struct {
 	FinishCh chan struct{} // channel to wait for all pending reqs to finish.
 
-	Pstore   *badger.DB
-	WALstore *badger.DB
-	gcCloser *y.Closer // closer for valueLogGC
+	Pstore            *badger.DB
+	WALstore          *badger.DB
+	gcCloser          *y.Closer // closer for valueLogGC
+	cacheHealthCloser *y.Closer
 
 	needTs chan tsReq
 }
@@ -142,7 +143,7 @@ func (s *ServerState) initStorage() {
 		opt := badger.LSMOnlyOptions(Config.WALDir)
 		opt = setBadgerOptions(opt, true)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
-		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
+		opt.BlockCacheSize = 10 << 20  // 10 mb of cache size for WAL.
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
@@ -162,10 +163,8 @@ func (s *ServerState) initStorage() {
 		opt := badger.DefaultOptions(Config.PostingDir).
 			WithValueThreshold(1 << 10 /* 1KB */).
 			WithNumVersionsToKeep(math.MaxInt32).
-			WithMaxCacheSize(1 << 30).
-			WithKeepBlockIndicesInCache(true).
-			WithKeepBlocksInCache(true).
-			WithMaxBfCacheSize(500 << 20) // 500 MB of bloom filter cache.
+			WithBlockCacheSize(1 << 20).
+			WithIndexCacheSize(500 << 20) // 500 MB of bloom filter cache.
 		opt = setBadgerOptions(opt, false)
 
 		// Print the options w/o exposing key.
@@ -185,10 +184,13 @@ func (s *ServerState) initStorage() {
 	s.gcCloser = y.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
 	go x.RunVlogGC(s.WALstore, s.gcCloser)
+	s.cacheHealthCloser = y.NewCloser(1)
+	go x.MonitorCacheHealth(10*time.Second, "pstore", s.Pstore, s.cacheHealthCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.
 func (s *ServerState) Dispose() {
+	s.cacheHealthCloser.SignalAndWait()
 	s.gcCloser.SignalAndWait()
 	if err := s.Pstore.Close(); err != nil {
 		glog.Errorf("Error while closing postings store: %v", err)
