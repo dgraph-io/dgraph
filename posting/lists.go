@@ -142,13 +142,15 @@ func Init(ps *badger.DB) {
 	go updateMemoryMetrics(closer)
 
 	// Initialize cache.
-	if x.WorkerConfig.PlCacheMb == 0 {
+	// TODO(Ibrahim): Add flag to switch cache on and off. For now cache is disabled.
+	if true {
 		return
 	}
+	// TODO(Ibrahim): Replace hard-coded value with value from flag.
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 200e6,
-		MaxCost:     int64(x.WorkerConfig.PlCacheMb * 1024 * 1024),
+		MaxCost:     int64(1000 * 1024 * 1024),
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
