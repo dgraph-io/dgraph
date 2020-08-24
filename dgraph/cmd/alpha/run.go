@@ -788,10 +788,16 @@ func listenForCorsUpdate(closer *y.Closer) {
 			glog.Errorf("Unable to unmarshal the posting list for cors update %s", err)
 			return
 		}
-		// Get all the origins from the postings.
-		origins := make([]string, len(pl.Postings))
-		for i, posting := range pl.Postings {
-			origins[i] = string(posting.Value)
+		origins := make([]string, 0)
+		for _, posting := range pl.Postings {
+			val := strings.TrimSpace(string(posting.Value))
+			if val == "_STAR_ALL" {
+				// If the posting list contains __STAR_ALL then it's a delete call.
+				// we usually do it before updating as part of upsert. So, let's
+				// ignore this update.
+				continue
+			}
+			origins = append(origins, val)
 		}
 		glog.Infof("Updating cors origins: %+v", origins)
 		x.UpdateCorsOrigins(origins)

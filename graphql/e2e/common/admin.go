@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
 
@@ -737,9 +738,10 @@ func testCors(t *testing.T) {
               ]
             }
           }`, string(gqlResponse.Data))
-	})
 
-	t.Run("testing cors for success", func(t *testing.T) {
+		// Wait for the subscription to hit.
+		time.Sleep(2 * time.Second)
+
 		client := &http.Client{}
 		req, err := http.NewRequest("GET", graphqlAdminTestURL, nil)
 		require.NoError(t, err)
@@ -750,14 +752,12 @@ func testCors(t *testing.T) {
 		require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "POST, OPTIONS")
 		require.Equal(t, resp.Header.Get("Access-Control-Allow-Headers"), x.AccessControlAllowedHeaders)
 		require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "true")
-	})
 
-	t.Run("testing cors for failure", func(t *testing.T) {
-		client := &http.Client{}
-		req, err := http.NewRequest("GET", graphqlAdminTestURL, nil)
+		client = &http.Client{}
+		req, err = http.NewRequest("GET", graphqlAdminTestURL, nil)
 		require.NoError(t, err)
 		req.Header.Add("Origin", "googl.com")
-		resp, err := client.Do(req)
+		resp, err = client.Do(req)
 		require.NoError(t, err)
 		require.Equal(t, resp.Header.Get("Access-Control-Allow-Origin"), "")
 		require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "")

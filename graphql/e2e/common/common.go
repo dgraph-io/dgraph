@@ -328,8 +328,12 @@ func RunAll(t *testing.T) {
 	t.Run("fragment in query", fragmentInQuery)
 	t.Run("fragment in query on Interface", fragmentInQueryOnInterface)
 	t.Run("fragment in query on Object", fragmentInQueryOnObject)
-	t.Run("cors testing", testCors)
+	//t.Run("cors testing", testCors)
+}
 
+// RunCorsTest test all cors related tests.
+func RunCorsTest(t *testing.T) {
+	testCors(t)
 }
 
 func gunzipData(data []byte) ([]byte, error) {
