@@ -1065,7 +1065,15 @@ func rewriteObject(
 	newObj["uid"] = myUID
 	frag := newFragment(newObj)
 	frag.newNodes[variable] = typ
+
 	results := &mutationRes{secondPass: []*mutationFragment{frag}}
+	if xid != nil && !atTopLevel && !xidEncounteredFirstTime {
+		// If this is an xid that has been encountered before, e.g. think add mutations with
+		// multiple objects as input. In that case we don't need to add the fragment to create this
+		// object, so we clear it out. We do need other fragments for linking this node to its
+		// parent which are added later.
+		results.secondPass = results.secondPass[:0]
+	}
 
 	// if xidString != "", then we are adding with an xid.  In which case, we have to ensure
 	// as part of the upsert that the xid doesn't already exist.
@@ -1209,11 +1217,6 @@ func rewriteObject(
 		results.firstPass = appendFragments(results.firstPass, []*mutationFragment{xidFrag})
 	} else if xidFrag != nil {
 		results.secondPass = appendFragments(results.secondPass, []*mutationFragment{xidFrag})
-	}
-
-	// if !xidEncounteredFirstTime, we have already seen the relevant fragments.
-	if xid != nil && !atTopLevel && !xidEncounteredFirstTime {
-		results.firstPass = []*mutationFragment{}
 	}
 
 	return results
