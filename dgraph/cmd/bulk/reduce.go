@@ -339,6 +339,7 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 		req.offsets = offsets
 		req.list = &bpb.KVList{}
 		req.splitList = &bpb.KVList{}
+
 		countKeys := r.toList(req)
 		offsets = req.offsets
 
