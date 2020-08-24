@@ -189,8 +189,18 @@ type UpdatePostPayload {
 # Generated Enums
 #######################
 
+enum AuthorHasFilter {
+	name
+}
+
 enum AuthorOrderable {
 	name
+}
+
+enum PostHasFilter {
+	title
+	text
+	author
 }
 
 enum PostOrderable {
@@ -214,6 +224,9 @@ input AddPostInput {
 
 input AuthorFilter {
 	id: [ID!]
+	has: AuthorHasFilter
+	and: AuthorFilter
+	or: AuthorFilter
 	not: AuthorFilter
 }
 
@@ -234,6 +247,9 @@ input AuthorRef {
 
 input PostFilter {
 	id: [ID!]
+	has: PostHasFilter
+	and: PostFilter
+	or: PostFilter
 	not: PostFilter
 }
 
