@@ -227,7 +227,7 @@ The above command will install a recent version of the dgraph docker image. You 
 helm install my-release dgraph/dgraph --set image.tag="v1.2.6"
 ```
 
-{{% notice "warning" %}}When configuring dgraph image tag, be careful not to use `latest` or `master` in a production environment. These tags may have the dgraph version change causing mixed version dgraph cluster that can lead to outage and potential data loss.{{% /notice %}}
+{{% notice "warning" %}}When configuring dgraph image tag, be careful not to use `latest` or `master` in a production environment. These tags may have the dgraph version change, causing a mixed version dgraph cluster that can lead to an outage and potential data loss.{{% /notice %}}
 
 #### Dgraph Configuration Files
 
@@ -264,7 +264,7 @@ helm install my-release dgraph/dgraph --values my-config-values.yaml
 By default zero and alpha services are exposed only within the kubernetes cluster as
 kubernetes service type `ClusterIP`.
 
-In order to expose the alpha service and ratel service publicly you can use kubernetes service type `LoadBalancer`, or an Ingress resource.
+In order to expose the alpha service and ratel service publicly you can use kubernetes service type `LoadBalancer` or an Ingress resource.
 
 ##### LoadBalancer (Public Internet)
 
