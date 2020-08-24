@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -56,7 +55,7 @@ func newExecutor(applied *y.WaterMark) *executor {
 		predChan:   make(map[string]chan *subMutation),
 		closer:     y.NewCloser(0),
 		applied:    applied,
-		workerChan: make(chan *mutation, 1000),
+		workerChan: make(chan *mutation),
 	}
 
 	for i := 0; i < 200; i++ {
@@ -78,10 +77,7 @@ func generateConflictKeys(p *subMutation) []uint64 {
 			continue
 		}
 
-		if schema.State().IsList(edge.Attr) {
-			uniq[1] = struct{}{}
-		}
-
+		uniq[0] = struct{}{}
 		uniq[posting.GetConflictKeys(pk, key, edge)] = struct{}{}
 	}
 
@@ -146,12 +142,10 @@ func (e *executor) worker() {
 
 		mut.graph.Lock()
 
-		toRun := make([]*mutation, 0)
-
 		for _, dependent := range mut.outEdges {
 			dependent.inDeg -= 1
 			if dependent.inDeg == 0 {
-				toRun = append(toRun, dependent)
+				e.workerChan <- dependent
 			}
 		}
 
@@ -174,12 +168,6 @@ func (e *executor) worker() {
 		}
 
 		mut.graph.Unlock()
-
-		for _, i := range toRun {
-			go func(j *mutation) {
-				e.workerChan <- j
-			}(i)
-		}
 	}
 }
 
@@ -190,7 +178,13 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 
 	for payload := range ch {
 		conflicts := generateConflictKeys(payload)
-		m := &mutation{m: payload, keys: conflicts, outEdges: make(map[uint64]*mutation), graph: g, inDeg: 0}
+		m := &mutation{
+			m:        payload,
+			keys:     conflicts,
+			outEdges: make(map[uint64]*mutation),
+			graph:    g,
+			inDeg:    0,
+		}
 
 		g.Lock()
 		for _, c := range conflicts {
