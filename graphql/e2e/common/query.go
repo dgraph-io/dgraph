@@ -1743,7 +1743,7 @@ func DgraphDirectiveWithSpecialCharacters(t *testing.T) {
 }
 
 func queryWithCascade(t *testing.T) {
-	// for testing normal @cascade and parameterized @cascade with get by ID and filter queries on multiple levels
+	// for testing normal and parameterized @cascade with get by ID and filter queries on multiple levels
 	authors := addMultipleAuthorFromRef(t, []*author{
 		{
 			Name:       "George",
@@ -1977,7 +1977,7 @@ func queryWithCascade(t *testing.T) {
 									"text": "Got ya!"
 								}]
 							}, {
-                                  "dob": null,                                          
+                                  "dob": null,
                                   "name": "Jerry",
                                   "posts": [],
                                   "reputation": 4.6
