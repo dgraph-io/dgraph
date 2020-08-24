@@ -319,9 +319,9 @@ helm install my-release dgraph/dgraph --values my-config-values.yaml
 
 ##### Ingress Resource
 
-You can expose alpha and ratel using an [ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) resource that can route traffic to services resources.  Before using this option you may need to install an [ingress controller](https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/) first, as is the case with [AKS](https://docs.microsoft.com/azure/aks/) and [EKS](https://aws.amazon.com/eks/), while in the case of [GKE](https://cloud.google.com/kubernetes-engine), this comes bundled with a default ingress controller.  When routing traffic based on the `hostname`, you may want to integrate an addon like [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) so that DNS records can be registered automatically when deploying dgraph.
+You can expose alpha and ratel using an [ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) resource that can route traffic to service resources.  Before using this option you may need to install an [ingress controller](https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/) first, as is the case with [AKS](https://docs.microsoft.com/azure/aks/) and [EKS](https://aws.amazon.com/eks/), while in the case of [GKE](https://cloud.google.com/kubernetes-engine), this comes bundled with a default ingress controller.  When routing traffic based on the `hostname`, you may want to integrate an addon like [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) so that DNS records can be registered automatically when deploying dgraph.
 
-As an examples, you can configure a single ingress resourse that uses [ingress-nginx](https://github.com/kubernetes/ingress-nginx) for alpha and ratel services, by creating Helm chart confgiuration values like this below:
+As an examples, you can configure a single ingress resource that uses [ingress-nginx](https://github.com/kubernetes/ingress-nginx) for alpha and ratel services, by creating Helm chart configuration values like this below:
 
 ```yaml
 # my-config-values.yaml
