@@ -378,6 +378,43 @@ func deepFilter(t *testing.T) {
 	}
 }
 
+func deepHasFilter(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+	newPost1 := addPostWithNullText(t, newAuthor.ID, newCountry.ID, postExecutor)
+	newPost2 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+	getAuthorParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Test Author" } }) {
+				name
+				posts(filter: {not :{ has : text } }) {
+					title
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := getAuthorParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.QueryAuthor))
+
+	expected := &author{
+		Name:  "Test Author",
+		Posts: []*post{{Title: "No text"}},
+	}
+
+	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost1, newPost2})
+}
+
 // manyQueries runs multiple queries in the one block.  Internally, the GraphQL
 // server should run those concurrently, but the results should be returned in the
 // requested order.  This makes sure those many test runs are reassembled correctly.
@@ -697,6 +734,22 @@ func int32Filters(t *testing.T) {
 			postTest(t, test.Filter, test.Expected)
 		})
 	}
+}
+
+func hasFilters(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+	newPost := addPostWithNullText(t, newAuthor.ID, newCountry.ID, postExecutor)
+
+	Filter := map[string]interface{}{"has": "text"}
+	Expected := []*post{
+		{Title: "GraphQL doco"},
+		{Title: "Introducing GraphQL in Dgraph"},
+		{Title: "Learning GraphQL in Dgraph"},
+		{Title: "Random post"}}
+
+	postTest(t, Filter, Expected)
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
 
 func int64Filters(t *testing.T) {

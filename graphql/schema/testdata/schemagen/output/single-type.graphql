@@ -169,6 +169,13 @@ type UpdateMessagePayload {
 # Generated Enums
 #######################
 
+enum MessageHasFilter {
+	content
+	author
+	uniqueId
+	datePosted
+}
+
 enum MessageOrderable {
 	content
 	author
@@ -189,6 +196,9 @@ input AddMessageInput {
 
 input MessageFilter {
 	id: [ID!]
+	has: MessageHasFilter
+	and: MessageFilter
+	or: MessageFilter
 	not: MessageFilter
 }
 

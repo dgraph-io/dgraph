@@ -2,9 +2,17 @@
 # Input Schema
 #######################
 
-type User {
+interface I {
 	id: ID!
-	name: String!
+}
+
+type T implements I {
+	id: ID!
+	text: String
+}
+
+type B {
+	name: String
 }
 
 #######################
@@ -146,19 +154,30 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddUserPayload {
-	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+type AddBPayload {
+	b(order: BOrder, first: Int, offset: Int): [B]
 	numUids: Int
 }
 
-type DeleteUserPayload {
-	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+type AddTPayload {
+	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+	numUids: Int
+}
+
+type DeleteIPayload {
+	i(filter: IFilter, first: Int, offset: Int): [I]
 	msg: String
 	numUids: Int
 }
 
-type UpdateUserPayload {
-	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+type DeleteTPayload {
+	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+	msg: String
+	numUids: Int
+}
+
+type UpdateTPayload {
+	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 	numUids: Int
 }
 
@@ -166,49 +185,87 @@ type UpdateUserPayload {
 # Generated Enums
 #######################
 
-enum UserHasFilter {
+enum BHasFilter {
 	name
 }
 
-enum UserOrderable {
+enum BOrderable {
 	name
+}
+
+enum THasFilter {
+	text
+}
+
+enum TOrderable {
+	text
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddUserInput {
-	name: String!
+input AddBInput {
+	name: String
 }
 
-input UpdateUserInput {
-	filter: UserFilter!
-	set: UserPatch
-	remove: UserPatch
+input AddTInput {
+	text: String
 }
 
-input UserFilter {
+input BFilter {
+	has: BHasFilter
+	and: BFilter
+	or: BFilter
+	not: BFilter
+}
+
+input BOrder {
+	asc: BOrderable
+	desc: BOrderable
+	then: BOrder
+}
+
+input BRef {
+	name: String
+}
+
+input IFilter {
 	id: [ID!]
-	has: UserHasFilter
-	and: UserFilter
-	or: UserFilter
-	not: UserFilter
+	not: IFilter
 }
 
-input UserOrder {
-	asc: UserOrderable
-	desc: UserOrderable
-	then: UserOrder
+input IRef {
+	id: ID!
 }
 
-input UserPatch {
-	name: String
+input TFilter {
+	id: [ID!]
+	has: THasFilter
+	and: TFilter
+	or: TFilter
+	not: TFilter
 }
 
-input UserRef {
+input TOrder {
+	asc: TOrderable
+	desc: TOrderable
+	then: TOrder
+}
+
+input TPatch {
+	text: String
+}
+
+input TRef {
 	id: ID
-	name: String
+	text: String
+}
+
+input UpdateTInput {
+	filter: TFilter!
+	set: TPatch
+	remove: TPatch
 }
 
 #######################
@@ -216,9 +273,11 @@ input UserRef {
 #######################
 
 type Query {
-	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
-	getUser(id: ID!): User
-	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	getI(id: ID!): I
+	queryI(filter: IFilter, first: Int, offset: Int): [I]
+	getT(id: ID!): T
+	queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+	queryB(order: BOrder, first: Int, offset: Int): [B]
 }
 
 #######################
@@ -226,8 +285,10 @@ type Query {
 #######################
 
 type Mutation {
-	addUser(input: [AddUserInput!]!): AddUserPayload
-	updateUser(input: UpdateUserInput!): UpdateUserPayload
-	deleteUser(filter: UserFilter!): DeleteUserPayload
+	deleteI(filter: IFilter!): DeleteIPayload
+	addT(input: [AddTInput!]!): AddTPayload
+	updateT(input: UpdateTInput!): UpdateTPayload
+	deleteT(filter: TFilter!): DeleteTPayload
+	addB(input: [AddBInput!]!): AddBPayload
 }
 
