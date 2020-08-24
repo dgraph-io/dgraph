@@ -401,12 +401,13 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
 	s.Stop()
 }
 
-func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
+func serveHTTP(l net.Listener, handler http.Handler, tlsCfg *tls.Config, closer *y.Closer) {
 	defer closer.Done()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
 		IdleTimeout:  2 * time.Minute,
+		Handler:      handler,
 	}
 	var err error
 	switch {
@@ -437,9 +438,22 @@ func setupServer(closer *y.Closer) {
 		log.Fatalf("Failed to setup TLS: %v\n", err)
 	}
 
-	httpListener, err := setupListener(laddr, httpPort())
+	redirectListener, err := setupListener(laddr, httpPort())
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	httpListener, err := setupListener(laddr, httpPort()+100)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var redirectPort int
+	switch addr := httpListener.Addr().(type) {
+	case *net.TCPAddr:
+		redirectPort = addr.Port
+	default:
+		log.Fatalf("Invalid listener address %s", addr)
 	}
 
 	grpcListener, err := setupListener(laddr, grpcPort())
@@ -447,17 +461,33 @@ func setupServer(closer *y.Closer) {
 		log.Fatal(err)
 	}
 
-	http.HandleFunc("/query", queryHandler)
-	http.HandleFunc("/query/", queryHandler)
-	http.HandleFunc("/mutate", mutationHandler)
-	http.HandleFunc("/mutate/", mutationHandler)
-	http.HandleFunc("/commit", commitHandler)
-	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
-	http.HandleFunc("/state", stateHandler)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		hostSplit := strings.Split(r.Host, ":")
+		hostWithoutPort := strings.Join(hostSplit[:len(hostSplit)-1], ":")
+		protocol := "http"
+		if tlsCfg != nil {
+			protocol = "https"
+		}
+		redirectAddr := fmt.Sprintf("%s://%s:%d%s", protocol, hostWithoutPort, redirectPort,
+			r.RequestURI)
+		http.Redirect(w, r, redirectAddr, http.StatusTemporaryRedirect)
+		return
+		// x.Check2(w.Write([]byte(
+		// 	"Dgraph browser is available for running separately using the dgraph-ratel binary")))
+	})
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/query", queryHandler)
+	mux.HandleFunc("/query/", queryHandler)
+	mux.HandleFunc("/mutate", mutationHandler)
+	mux.HandleFunc("/mutate/", mutationHandler)
+	mux.HandleFunc("/commit", commitHandler)
+	mux.HandleFunc("/alter", alterHandler)
+	mux.HandleFunc("/state", stateHandler)
 
 	// TODO: Figure out what this is for?
-	http.HandleFunc("/debug/store", storeStatsHandler)
+	mux.HandleFunc("/debug/store", storeStatsHandler)
 
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 
@@ -479,8 +509,8 @@ func setupServer(closer *y.Closer) {
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, &globalEpoch, closer)
-	http.Handle("/graphql", mainServer.HTTPHandler())
-	http.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/graphql", mainServer.HTTPHandler())
+	mux.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
 		if !healthStatus.Healthy {
@@ -490,35 +520,35 @@ func setupServer(closer *y.Closer) {
 		w.Header().Set("Content-Type", "application/json")
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s"}`, healthStatus.StatusMsg))))
 	})
-	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
+	mux.Handle("/admin", allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
 		http.MethodPost:    true,
 		http.MethodOptions: true,
 	}, adminAuthHandler(adminServer.HTTPHandler())))
 
-	http.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter,
+	mux.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		adminSchemaHandler(w, r, adminServer)
 	})))
 
-	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+	mux.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			shutDownHandler(w, r, adminServer)
 		}))))
 
-	http.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
+	mux.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
 		http.MethodPut:  true,
 		http.MethodPost: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		drainingHandler(w, r, adminServer)
 	}))))
 
-	http.Handle("/admin/export", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+	mux.Handle("/admin/export", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			exportHandler(w, r, adminServer)
 		}))))
 
-	http.Handle("/admin/config/lru_mb", allowedMethodsHandler(allowedMethods{
+	mux.Handle("/admin/config/lru_mb", allowedMethodsHandler(allowedMethods{
 		http.MethodGet: true,
 		http.MethodPut: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -532,13 +562,13 @@ func setupServer(closer *y.Closer) {
 	// Add OpenCensus z-pages.
 	zpages.Handle(http.DefaultServeMux, "/z")
 
-	http.HandleFunc("/", homeHandler)
-	http.HandleFunc("/ui/keywords", keywordHandler)
+	mux.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initialize the servers.
-	admin.ServerCloser = y.NewCloser(3)
+	admin.ServerCloser = y.NewCloser(4)
 	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
-	go serveHTTP(httpListener, tlsCfg, admin.ServerCloser)
+	go serveHTTP(redirectListener, nil, nil, admin.ServerCloser)
+	go serveHTTP(httpListener, mux, tlsCfg, admin.ServerCloser)
 
 	if Alpha.Conf.GetBool("telemetry") {
 		go edgraph.PeriodicallyPostTelemetry()
@@ -557,10 +587,14 @@ func setupServer(closer *y.Closer) {
 		if err := httpListener.Close(); err != nil {
 			glog.Warningf("Error while closing HTTP listener: %s", err)
 		}
+		if err := redirectListener.Close(); err != nil {
+			glog.Warningf("Error while closing HTTP redirect listener: %s", err)
+		}
 	}()
 
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
+	glog.Infoln("redirect HTTP server started. Listening on port", redirectPort)
 
 	admin.ServerCloser.Wait()
 }

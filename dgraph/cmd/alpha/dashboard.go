@@ -33,11 +33,6 @@ type keywords struct {
 	Keywords []keyword `json:"keywords"`
 }
 
-func homeHandler(w http.ResponseWriter, r *http.Request) {
-	x.Check2(w.Write([]byte(
-		"Dgraph browser is available for running separately using the dgraph-ratel binary")))
-}
-
 // Used to return a list of keywords, so that UI can show them for autocompletion.
 func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
