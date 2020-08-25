@@ -122,9 +122,9 @@
       addAuthor(input:[{name:"jatin"}]) @cascade(fields:["name"]) {
         author {
           name
-            }
-          }
+        }
       }
+    }
   gqlvariables:
     { }
   errors:

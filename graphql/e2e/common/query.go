@@ -1893,30 +1893,34 @@ func queryWithCascade(t *testing.T) {
 						reputation
                         name
 						country {
-                          name
+							name
 						}
 					  }
 					}`,
 			variables: map[string]interface{}{"ids": authorIds},
-			respData: `{
-							"queryAuthor": [{
-								"reputation": 4.6,
-								 "name":"Jerry",
-								"country": {
-									"name": "outer Galaxy2"
-								}
-							},{
-								 "name":"Kramer",
-                                 "reputation": null,
-								"country": {
-									"name": "outer space2"
-								}
-							},{ 
-								"reputation": 4.5,
-								 "name":"George",
-								 "country": null
-							}]
-						}`,
+			respData: 		 `{
+								  "queryAuthor": [
+									{
+									  "reputation": 4.6,
+									  "name": "Jerry",
+									  "country": {
+										"name": "outer Galaxy2"
+									  }
+									},
+									{
+									  "name": "Kramer",
+									  "reputation": null,
+									  "country": {
+										"name": "outer space2"
+									  }
+									},
+									{
+									  "reputation": 4.5,
+									  "name": "George",
+									  "country": null
+									}
+								  ]
+								}`,
 		},
 		{
 			name: "parameterized cascade only at inner level ",
@@ -1968,20 +1972,25 @@ func queryWithCascade(t *testing.T) {
 					}`,
 			variables: map[string]interface{}{"ids": authorIds},
 			respData: `{
-							"queryAuthor": [{
-								"reputation": 4.5,
-								 "name":"George",
-                                 "dob": null,
-								"posts": [{
-									"title": "A show about nothing",
-									"text": "Got ya!"
-								}]
-							}, {
-                                  "dob": null,
-                                  "name": "Jerry",
-                                  "posts": [],
-                                  "reputation": 4.6
-							}]
+						  "queryAuthor": [
+							{
+							  "reputation": 4.5,
+							  "name": "George",
+							  "dob": null,
+							  "posts": [
+								{
+								  "title": "A show about nothing",
+								  "text": "Got ya!"
+								}
+							  ]
+							},
+							{
+							  "dob": null,
+							  "name": "Jerry",
+							  "posts": [],
+							  "reputation": 4.6
+							}
+						  ]
 						}`,
 		},
 		{
@@ -1995,48 +2004,54 @@ func queryWithCascade(t *testing.T) {
 					}`,
 			variables: map[string]interface{}{"ids": authorIds},
 			respData: `{
-							"queryAuthor": [{
-								"reputation": 4.5,
-								 "name":"George",
-                                 "dob": null
-							}, {
-                                  "dob": null,
-                                  "name": "Jerry",
-                                  "reputation": 4.6
-							}]
+						  "queryAuthor": [
+							{
+							  "reputation": 4.5,
+							  "name": "George",
+							  "dob": null
+							},
+							{
+							  "dob": null,
+							  "name": "Jerry",
+							  "reputation": 4.6
+							}
+						  ]
 						}`,
 		},
 		{
 			name: "parameterized cascade on field of interface ",
 			query: `query  {
-					  queryHuman() @cascade(fields:["name"]) {
-                      name
-                      totalCredits
+                      queryHuman() @cascade(fields:["name"]) {
+						name
+						totalCredits
 					  }
 					}`,
 			respData: `{
-							"queryHuman": [{
-								"name": "Han",
-								"totalCredits":10
-							}]
+						  "queryHuman": [
+							{
+							  "name": "Han",
+							  "totalCredits": 10
+							}
+						  ]
 						}`,
 		},
 		{
 			name: "parameterized cascade on interface ",
 			query: `query {
-                    	queryCharacter (filter: { appearsIn: { eq: [EMPIRE] } }) @cascade(fields:["appearsIn"])
-                        {
-                        	name
-                            appearsIn
-               			} 
-		     		 }`,
+                      queryCharacter (filter: { appearsIn: { eq: [EMPIRE] } }) @cascade(fields:["appearsIn"]){	
+                        name
+                        appearsIn
+                      } 
+					}`,
 			respData: `{
-							"queryCharacter": [{
-								"name": "Han",
-								"appearsIn":[
-                                   "EMPIRE"
-								]
-							}]
+						  "queryCharacter": [
+							{
+							  "name": "Han",
+							  "appearsIn": [
+								"EMPIRE"
+							  ]
+							}
+						  ]
 						}`,
 		},
 	}
