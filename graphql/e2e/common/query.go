@@ -1927,34 +1927,42 @@ func queryWithCascade(t *testing.T) {
 			query: `query ($ids: [ID!]) {
 					  queryAuthor(filter: {id: $ids})  {
 						reputation
-                        name
+						name
 						posts @cascade(fields:["text"]) {
-						  title
-						  text
+                       		title
+							text
 						}
 					  }
 					}`,
 			variables: map[string]interface{}{"ids": authorIds},
 			respData: `{
-							"queryAuthor": [{
-								"reputation": 4.5,
-								 "name":"George",
-								"posts": [{
-									"title": "A show about nothing",
-									"text": "Got ya!"
-								}]
-							},{
-                                "name":"Kramer",
-                                "reputation": null,
-								"posts": [{
-									"title": "Ha! Cosmo Kramer",
-									"text": "Giddy up!"
-								}]
-							},{
-                                "name":"Jerry",
-								"reputation": 4.6,
-								"posts": []
-                            }]
+						  "queryAuthor": [
+							{
+							  "reputation": 4.5,
+							  "name": "George",
+							  "posts": [
+								{
+								  "title": "A show about nothing",
+								  "text": "Got ya!"
+								}
+							  ]
+							},
+							{
+							  "name": "Kramer",
+							  "reputation": null,
+							  "posts": [
+								{
+								  "title": "Ha! Cosmo Kramer",
+								  "text": "Giddy up!"
+								}
+							  ]
+							},
+							{
+							  "name": "Jerry",
+							  "reputation": 4.6,
+							  "posts": []
+							}
+						  ]
 						}`,
 		},
 		{
@@ -1962,11 +1970,11 @@ func queryWithCascade(t *testing.T) {
 			query: `query ($ids: [ID!]) {
 					  queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","name"]) {
 						reputation
-                        name
-                        dob
+						name
+						dob
 						posts @cascade(fields:["text"]) {
-						  title
-						  text
+							title
+							text
 						}
 					  }
 					}`,
@@ -1998,8 +2006,8 @@ func queryWithCascade(t *testing.T) {
 			query: `query ($ids: [ID!]) {
 					  queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","id"]) {
 						reputation
-                        name
-                        dob
+						name
+						dob
 					  }
 					}`,
 			variables: map[string]interface{}{"ids": authorIds},
