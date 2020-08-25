@@ -982,6 +982,47 @@
     }
 
 -
+  name: "parameterized cascade with interface implementation Human"
+  gqlquery: |
+    query {
+      queryHuman @cascade(fields:["id","name","ename","dob"]) {
+        id
+        name
+        ename
+        dob
+        female
+      }
+    }
+  dgquery: |-
+    query {
+      queryHuman(func: type(Human)) @cascade(uid, Character.name, Employee.ename, Human.dob) {
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        dob : Human.dob
+        female : Human.female
+      }
+    }
+
+-
+  name: "parameterized cascade with interface Character"
+  gqlquery: |
+    query {
+      queryCharacter @cascade(fields:["id","name"]) {
+        id
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryCharacter(func: type(Character)) @cascade(uid, Character.name) {
+        dgraph.type
+        id : uid
+        name : Character.name
+      }
+    }
+
+-
   name: "getHuman which implements an interface"
   gqlquery: |
     query {
