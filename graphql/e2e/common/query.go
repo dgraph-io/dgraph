@@ -1891,7 +1891,7 @@ func queryWithCascade(t *testing.T) {
 			query: `query ($ids: [ID!]) {
 					  queryAuthor(filter: {id: $ids})  @cascade(fields:["name"]) {
 						reputation
-                        name
+						name
 						country {
 							name
 						}
