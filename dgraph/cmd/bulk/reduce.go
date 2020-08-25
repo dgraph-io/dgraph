@@ -194,7 +194,7 @@ func (mi *mapIterator) release(ie *iteratorEntry) {
 func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	var ie *iteratorEntry
 	prevKeyExist := false
-	var mapEntry, key []byte
+	var meBuf, key []byte
 	var cbuf *y.Buffer
 	// readKey reads the next map entry key.
 	readMapEntry := func() error {
@@ -211,13 +211,13 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 			log.Fatalf("Could not read uvarint: %d", n)
 		}
 		x.Check2(r.Discard(n))
-		if cap(mapEntry) < int(sz) {
-			mapEntry = make([]byte, int(sz))
+		if cap(meBuf) < int(sz) {
+			meBuf = make([]byte, int(sz))
 		}
-		mapEntry = mapEntry[:int(sz)]
-		x.Check2(io.ReadFull(r, mapEntry))
-		key, err = GetKeyForMapEntry(mapEntry)
-		return err
+		meBuf = meBuf[:int(sz)]
+		x.Check2(io.ReadFull(r, meBuf))
+		key = MapEntry(meBuf).Key()
+		return nil
 	}
 
 	for _, pKey := range partitionsKeys {
@@ -230,8 +230,8 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 			x.Check(err)
 
 			if bytes.Compare(key, ie.partitionKey) < 0 {
-				b := ie.cbuf.SliceAllocate(len(mapEntry))
-				copy(b, mapEntry)
+				b := ie.cbuf.SliceAllocate(len(meBuf))
+				copy(b, meBuf)
 				prevKeyExist = false
 				// map entry is already part of cBuf.
 				continue
@@ -251,8 +251,8 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 			break
 		}
 		x.Check(err)
-		b := cbuf.SliceAllocate(len(mapEntry))
-		copy(b, mapEntry)
+		b := cbuf.SliceAllocate(len(meBuf))
+		copy(b, meBuf)
 		prevKeyExist = false
 	}
 	mi.batchCh <- &iteratorEntry{
@@ -539,7 +539,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser.SignalAndWait()
 }
 
-type mapEntry []byte
+type MapEntry []byte
 
 // type mapEntry struct {
 // 	uid   uint64 // if plist is filled, then corresponds to plist's uid.
@@ -555,7 +555,7 @@ func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
 	if p != nil {
 		uid = p.Uid
 	}
-	binary.BigEndian.PutUint64(dst[0:8], p.Uid)
+	binary.BigEndian.PutUint64(dst[0:8], uid)
 	binary.BigEndian.PutUint32(dst[8:12], uint32(len(key)))
 
 	psz := p.Size()
@@ -563,27 +563,29 @@ func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
 
 	n := copy(dst[16:], key)
 
-	pbuf := dst[16+n:]
-	_, err := p.MarshalToSizedBuffer(pbuf[:psz])
-	x.Check(err)
+	if psz > 0 {
+		pbuf := dst[16+n:]
+		_, err := p.MarshalToSizedBuffer(pbuf[:psz])
+		x.Check(err)
+	}
 
 	x.AssertTrue(len(dst) == 16+n+psz)
 }
 
-func (me mapEntry) Size() int {
+func (me MapEntry) Size() int {
 	return len(me)
 }
 
-func (me mapEntry) Uid() uint64 {
+func (me MapEntry) Uid() uint64 {
 	return binary.BigEndian.Uint64(me[0:8])
 }
 
-func (me mapEntry) Key() []byte {
+func (me MapEntry) Key() []byte {
 	sz := binary.BigEndian.Uint32(me[8:12])
 	return me[16 : 16+sz]
 }
 
-func (me mapEntry) Plist() []byte {
+func (me MapEntry) Plist() []byte {
 	ksz := binary.BigEndian.Uint32(me[8:12])
 	sz := binary.BigEndian.Uint32(me[12:16])
 	start := 16 + ksz
@@ -601,11 +603,9 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	splitList := req.splitList
 	req.offsets = cbuf.SliceOffsets(req.offsets[:0])
 	sort.Slice(req.offsets, func(i, j int) bool {
-		lh, err := GetKeyForMapEntry(cbuf.Slice(req.offsets[i]))
-		x.Check(err)
-		rh, err := GetKeyForMapEntry(cbuf.Slice(req.offsets[j]))
-		x.Check(err)
-		return bytes.Compare(lh, rh) < 0
+		lhs := MapEntry(cbuf.Slice(req.offsets[i]))
+		rhs := MapEntry(cbuf.Slice(req.offsets[j]))
+		return bytes.Compare(lhs.Key(), rhs.Key()) < 0
 	})
 
 	var currentKey []byte
@@ -631,13 +631,13 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 
 		// Now make a list and write it to badger.
 		sort.Slice(currentBatch, func(i, j int) bool {
-			lhs := mapEntry(cbuf.Slice(currentBatch[i]))
-			rhs := mapEntry(cbuf.Slice(currentBatch[j]))
+			lhs := MapEntry(cbuf.Slice(currentBatch[i]))
+			rhs := MapEntry(cbuf.Slice(currentBatch[j]))
 			return less(lhs, rhs)
 		})
 
 		for _, offset := range currentBatch {
-			me := mapEntry(cbuf.Slice(offset))
+			me := MapEntry(cbuf.Slice(offset))
 			uid := me.Uid()
 			if len(uids) > 0 && uids[len(uids)-1] == uid {
 				continue
@@ -709,7 +709,7 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 
 	for _, offset := range req.offsets {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
-		entry := mapEntry(cbuf.Slice(offset))
+		entry := MapEntry(cbuf.Slice(offset))
 		entryKey := entry.Key()
 
 		if !bytes.Equal(entryKey, currentKey) && currentKey != nil {
