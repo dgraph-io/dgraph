@@ -784,7 +784,7 @@ func run() {
 		db, err = badger.OpenManaged(bopts)
 	}
 	x.Check(err)
-	posting.Init(db)
+	posting.Init(db, 0)
 	defer db.Close()
 
 	if isWal {

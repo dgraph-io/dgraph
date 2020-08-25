@@ -1346,7 +1346,7 @@ func TestMain(m *testing.M) {
 
 	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))
 	x.Check(err)
-	Init(ps)
+	Init(ps, 0)
 	schema.Init(ps)
 
 	r := m.Run()
