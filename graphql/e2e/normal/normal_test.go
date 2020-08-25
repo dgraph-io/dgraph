@@ -27,6 +27,7 @@ import (
 
 func TestRunAll_Normal(t *testing.T) {
 	common.RunAll(t)
+	common.RunCorsTest(t)
 }
 
 func TestSchema_Normal(t *testing.T) {
@@ -205,6 +206,16 @@ func TestSchema_Normal(t *testing.T) {
 		}, {
 			"predicate": "dgraph.graphql.schema",
 			"type": "string"
+		},
+		{
+			"predicate": "dgraph.cors",
+			"type": "string",
+			"list": true,
+			"index": true,
+      		"tokenizer": [
+      		  "exact"
+      		],
+      		"upsert": true
 		}, {
 			"predicate": "dgraph.graphql.xid",
 			"type": "string",
