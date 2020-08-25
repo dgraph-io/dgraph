@@ -512,12 +512,11 @@ func setupServer(closer *y.Closer) {
 
 		w.WriteHeader(http.StatusBadRequest)
 		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
-		stringsJson, err := json.Marshal(errs)
+		errJson, err := json.Marshal(errs)
 		if err != nil {
-			x.Check2(w.Write([]byte(fmt.Sprintf(`{"valid":"false", "error" : %s}`, err))))
-			return
+			errJson = []byte(err.Error())
 		}
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"valid":"false", "error" : %s}`, stringsJson))))
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"valid":"false", "error" : %s}`, errJson))))
 	}))
 
 	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
