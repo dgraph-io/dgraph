@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"math/rand"
 	"net"
@@ -1098,4 +1099,34 @@ func DeepCopyJsonArray(a []interface{}) []interface{} {
 		}
 	}
 	return aCopy
+}
+
+// GetCachePercentages returns the slice of cache percentages given the ":" (colon) separated
+// cache percentages(integers) string and format of cpString.
+func GetCachePercentages(cpString string, format string) []int64 {
+	cp := strings.Split(cpString, ":")
+	// Sanity checks
+	if len(cp) != len(strings.Split(format, ":")) {
+		log.Fatalf("ERROR: cache percentage format is %s", format)
+	}
+
+	var cachePercent []int64
+	percentSum := 0
+	for _, percent := range cp {
+		x, err := strconv.Atoi(percent)
+		if err != nil {
+			log.Fatalf("ERROR: ERROR: unable to parse cache percentage(%s)", percent)
+		}
+		if x < 0 {
+			log.Fatalf("ERROR: cache percentage(%s) cannot be negative", percent)
+		}
+		cachePercent = append(cachePercent, int64(x))
+		percentSum += x
+	}
+
+	if percentSum != 100 {
+		log.Fatalf("ERROR: cache percentages (%s) does not sum up to 100", strings.Join(cp, "+"))
+	}
+
+	return cachePercent
 }

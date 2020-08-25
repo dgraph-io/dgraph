@@ -18,8 +18,6 @@ package zero
 
 import (
 	"context"
-	"strconv"
-	"strings"
 
 	//	"errors"
 	"fmt"
@@ -109,8 +107,8 @@ instances to achieve high-availability.
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 
 	// Add cache flags
-	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in dgraph")
-	flag.String("cache-percentage", "75:25", "Cache percentages for various caches (blockcache:indexCache)")
+	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero")
+	flag.String("cache_percentage", "100:0", "Cache percentages for various caches (blockcache:indexCache)")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -194,7 +192,7 @@ func run() {
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
-		cachePercentage:   Zero.Conf.GetString("cache-percentage"),
+		cachePercentage:   Zero.Conf.GetString("cache_percentage"),
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 
@@ -227,30 +225,10 @@ func run() {
 			opts.rebalanceInterval)
 	}
 
-	cp := strings.Split(opts.cachePercentage, ":")
-	// Sanity checks
 	x.AssertTruef(opts.totalCache >= 0, "ERROR: Cache size must be non-negative")
-	if len(cp) != 2 {
-		log.Fatalf("ERROR: cache percentage format is blockcache:indexCache")
-	}
 
-	var cachePercent [2]int64
-	percentSum := 0
-	for idx, percent := range cp {
-		x, err := strconv.Atoi(percent)
-		if err != nil {
-			log.Fatalf("ERROR: ERROR: unable to parse cache percentages")
-		}
-		if x < 0 {
-			log.Fatalf("ERROR: cache percentage cannot be negative")
-		}
-		cachePercent[idx] = int64(x)
-		percentSum += x
-	}
-
-	if percentSum != 100 {
-		log.Fatalf("ERROR: cache percentage does not sum up to 100")
-	}
+	glog.Info(opts.cachePercentage)
+	cachePercent := x.GetCachePercentages(opts.cachePercentage, "blockCache:indexCache")
 	blockCache := (cachePercent[0] * (opts.totalCache << 20)) / 100
 	indexCache := (cachePercent[1] * (opts.totalCache << 20)) / 100
 

@@ -29,7 +29,6 @@ import (
 	_ "net/http/pprof" // http profiler
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -206,8 +205,9 @@ they form a Raft group and provide synchronous replication.
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
 
 	// Add cache flags
-	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in dgraph")
-	flag.String("cache-percentage", "30:30:20:20", "Cache percentages for various caches (pblocksize:pindexsize:windexsize:postingListsize)")
+	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha")
+	flag.String("cache_percentage", "30:30:20:20", `Cache percentages for various caches
+		(PstoreBlockCache:PstoreIndexCache:PstoreIndexCache:PostingListCache)`)
 }
 
 func setupCustomTokenizers() {
@@ -583,44 +583,23 @@ func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
 	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
-	cachePercentage := Alpha.Conf.GetString("cache-percentage")
-
-	cp := strings.Split(cachePercentage, ":")
-	// Sanity checks
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
-	if len(cp) != 4 {
-		log.Fatalf("ERROR: cache percentage format is pblocksize:pindexsize:windexsize:postingListsize")
-	}
 
-	var cachePercent [4]int64
-	percentSum := 0
-	for idx, percent := range cp {
-		x, err := strconv.Atoi(percent)
-		if err != nil {
-			log.Fatalf("ERROR: unable to parse cache percentages")
-		}
-		if x < 0 {
-			log.Fatalf("ERROR: cache percentage cannot be negative")
-		}
-		cachePercent[idx] = int64(x)
-		percentSum += x
-	}
-
-	if percentSum != 100 {
-		log.Fatalf("ERROR: cache percentage does not sum up to 100")
-	}
-	pBlockSize := (cachePercent[0] * (totalCache << 20)) / 100
-	pIndexSize := (cachePercent[1] * (totalCache << 20)) / 100
-	wIndexSize := (cachePercent[2] * (totalCache << 20)) / 100
-	postingListSize := (cachePercent[3] * (totalCache << 20)) / 100
+	cachePercentage := Alpha.Conf.GetString("cache_percentage")
+	cachePercent := x.GetCachePercentages(cachePercentage,
+		"PstoreBlockCache:PstoreIndexCache:PstoreIndexCache:PostingListCache")
+	pstoreBlockCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
+	pstoreIndexCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
+	wstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
+	postingListCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
 
 	opts := worker.Options{
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
 		PostingDir:             Alpha.Conf.GetString("postings"),
 		WALDir:                 Alpha.Conf.GetString("wal"),
-		PBlockSize:             pBlockSize,
-		PIndexSize:             pIndexSize,
-		WIndexSize:             wIndexSize,
+		PBlockCacheSize:        pstoreBlockCacheSize,
+		PIndexCacheSize:        pstoreIndexCacheSize,
+		WIndexCacheSize:        wstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
@@ -741,7 +720,7 @@ func run() {
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	schema.Init(worker.State.Pstore)
-	posting.Init(worker.State.Pstore, postingListSize)
+	posting.Init(worker.State.Pstore, postingListCacheSize)
 	defer posting.Cleanup()
 	worker.Init(worker.State.Pstore)
 

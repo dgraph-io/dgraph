@@ -61,9 +61,9 @@ type Options struct {
 	// AllottedMemory is the estimated size taken by the LRU cache.
 	AllottedMemory float64
 
-	PBlockSize int64
-	PIndexSize int64
-	WIndexSize int64
+	PBlockCacheSize int64
+	PIndexCacheSize int64
+	WIndexCacheSize int64
 
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
 	HmacSecret x.SensitiveByteSlice
