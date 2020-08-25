@@ -318,6 +318,7 @@ func RunAll(t *testing.T) {
 	t.Run("alias works for mutations", mutationsWithAlias)
 	t.Run("three level deep", threeLevelDeepMutation)
 	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
+	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
