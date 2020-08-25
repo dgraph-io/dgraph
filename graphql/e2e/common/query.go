@@ -1889,13 +1889,13 @@ func queryWithCascade(t *testing.T) {
 		{
 			name: "parameterized cascade with argument at outer level only",
 			query: `query ($ids: [ID!]) {
-					  queryAuthor(filter: {id: $ids})  @cascade(fields:["name"]) {
-						reputation
-						name
-						country {
+						queryAuthor(filter: {id: $ids})  @cascade(fields:["name"]) {
+							reputation
 							name
+							country {
+								name
+							}
 						}
-					  }
 					}`,
 			variables: map[string]interface{}{"ids": authorIds},
 			respData: 		 `{
@@ -1925,14 +1925,14 @@ func queryWithCascade(t *testing.T) {
 		{
 			name: "parameterized cascade only at inner level ",
 			query: `query ($ids: [ID!]) {
-					  queryAuthor(filter: {id: $ids})  {
-						reputation
-						name
-						posts @cascade(fields:["text"]) {
-							title
-							text
+						queryAuthor(filter: {id: $ids})  {
+							reputation
+							name
+							posts @cascade(fields:["text"]) {
+								title
+								text
+							}
 						}
-					  }
 					}`,
 			variables: map[string]interface{}{"ids": authorIds},
 			respData: `{
@@ -1968,15 +1968,15 @@ func queryWithCascade(t *testing.T) {
 		{
 			name: "parameterized cascade at all levels ",
 			query: `query ($ids: [ID!]) {
-					  queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","name"]) {
-						reputation
-						name
-						dob
-						posts @cascade(fields:["text"]) {
-							title
-							text
+						queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","name"]) {
+							reputation
+							name
+							dob
+							posts @cascade(fields:["text"]) {
+								title
+								text
+							}
 						}
-					  }
 					}`,
 			variables: map[string]interface{}{"ids": authorIds},
 			respData: `{
@@ -2004,11 +2004,11 @@ func queryWithCascade(t *testing.T) {
 		{
 			name: "parameterized cascade on ID type ",
 			query: `query ($ids: [ID!]) {
-					  queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","id"]) {
-						reputation
-						name
-						dob
-					  }
+						queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","id"]) {
+							reputation
+							name
+							dob
+						}
 					}`,
 			variables: map[string]interface{}{"ids": authorIds},
 			respData: `{
@@ -2029,10 +2029,10 @@ func queryWithCascade(t *testing.T) {
 		{
 			name: "parameterized cascade on field of interface ",
 			query: `query  {
-                      queryHuman() @cascade(fields:["name"]) {
-						name
-						totalCredits
-					  }
+						queryHuman() @cascade(fields:["name"]) {
+							name
+							totalCredits
+						}
 					}`,
 			respData: `{
 						  "queryHuman": [
@@ -2046,10 +2046,10 @@ func queryWithCascade(t *testing.T) {
 		{
 			name: "parameterized cascade on interface ",
 			query: `query {
-                      queryCharacter (filter: { appearsIn: { eq: [EMPIRE] } }) @cascade(fields:["appearsIn"]){	
-                        name
-                        appearsIn
-                      } 
+						queryCharacter (filter: { appearsIn: { eq: [EMPIRE] } }) @cascade(fields:["appearsIn"]){	
+							name
+							appearsIn
+						} 
 					}`,
 			respData: `{
 						  "queryCharacter": [
