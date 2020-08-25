@@ -52,6 +52,7 @@ type executor struct {
 	predChan map[string]chan *subMutation
 	closer   *y.Closer
 	applied  *y.WaterMark
+	throttle *y.Throttle
 }
 
 func newExecutor(applied *y.WaterMark) *executor {
@@ -60,6 +61,7 @@ func newExecutor(applied *y.WaterMark) *executor {
 		predChan: make(map[string]chan *subMutation),
 		closer:   y.NewCloser(0),
 		applied:  applied,
+		throttle: y.NewThrottle(2000),
 	}
 
 	go ex.shutdown()
@@ -184,10 +186,12 @@ func (e *executor) worker(mut *mutation) {
 	atomic.AddInt64(&e.smCount, -1)
 
 	mut.graph.Lock()
+	e.throttle.Done(nil)
 
 	for _, dependent := range mut.outEdges {
 		dependent.inDeg -= 1
 		if dependent.inDeg == 0 {
+			e.throttle.Do()
 			go func(d *mutation) {
 				e.worker(d)
 			}(dependent)
@@ -252,6 +256,7 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 		g.Unlock()
 
 		if m.inDeg == 0 {
+			e.throttle.Do()
 			go func() {
 				e.worker(m)
 			}()
