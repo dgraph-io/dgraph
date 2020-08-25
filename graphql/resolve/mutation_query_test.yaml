@@ -303,7 +303,7 @@ ADD_UPDATE_MUTATION:
           post {
             title
             text
-            author @cascade(fields:["name","dob"]) {
+            author @cascade(fields:["name","dob","id"]) {
               name
               dob
             }
@@ -315,7 +315,7 @@ ADD_UPDATE_MUTATION:
         post(func: uid(0x4)) {
           title : Post.title
           text : Post.text
-          author : Post.author @cascade(Author.name, Author.dob) {
+          author : Post.author @cascade(Author.name, Author.dob, uid) {
             name : Author.name
             dob : Author.dob
             dgraph.uid : uid
