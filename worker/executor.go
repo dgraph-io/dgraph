@@ -20,14 +20,20 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
@@ -43,31 +49,54 @@ type executor struct {
 	smCount     int64 // Stores count for active sub mutations.
 
 	sync.RWMutex
-	predChan   map[string]chan *subMutation
-	workerChan chan *mutation
-	closer     *y.Closer
-	applied    *y.WaterMark
+	predChan map[string]chan *subMutation
+	closer   *y.Closer
+	applied  *y.WaterMark
 }
 
 func newExecutor(applied *y.WaterMark) *executor {
 	runtime.SetBlockProfileRate(1)
 	ex := &executor{
-		predChan:   make(map[string]chan *subMutation),
-		closer:     y.NewCloser(0),
-		applied:    applied,
-		workerChan: make(chan *mutation),
-	}
-
-	for i := 0; i < 200; i++ {
-		go ex.worker()
+		predChan: make(map[string]chan *subMutation),
+		closer:   y.NewCloser(0),
+		applied:  applied,
 	}
 
 	go ex.shutdown()
 	return ex
 }
 
-func generateConflictKeys(p *subMutation) []uint64 {
-	keys := make([]uint64, 0)
+func generateTokenKeys(nq *pb.DirectedEdge, tokenizers []tok.Tokenizer) ([]uint64, error) {
+	keys := make([]uint64, len(tokenizers))
+	errs := make([]string, 0)
+	for _, token := range tokenizers {
+		storageVal := types.Val{
+			Tid:   types.TypeID(nq.GetValueType()),
+			Value: nq.GetValue(),
+		}
+
+		schemaVal, err := types.Convert(storageVal, types.TypeID(nq.GetValueType()))
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
+		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(token,
+			nq.Lang))
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
+
+		for _, t := range toks {
+			keys = append(keys, farm.Fingerprint64(x.IndexKey(nq.Attr, t)))
+		}
+	}
+
+	if len(errs) > 0 {
+		return keys, fmt.Errorf(strings.Join(errs, "\n"))
+	}
+	return keys, nil
+}
+
+func generateConflictKeys(ctx context.Context, p *subMutation) []uint64 {
 	uniq := make(map[uint64]struct{})
 
 	for _, edge := range p.edges {
@@ -77,14 +106,29 @@ func generateConflictKeys(p *subMutation) []uint64 {
 			continue
 		}
 
-		uniq[0] = struct{}{}
 		uniq[posting.GetConflictKeys(pk, key, edge)] = struct{}{}
+		stt, _ := schema.State().Get(ctx, edge.Attr)
+		tokenizers := schema.State().Tokenizer(ctx, edge.Attr)
+		isReverse := schema.State().IsReversed(ctx, edge.Attr)
+
+		if stt.Count || isReverse {
+			uniq[0] = struct{}{}
+			continue
+		}
+
+		keys, err := generateTokenKeys(edge, tokenizers)
+		for _, i := range keys {
+			uniq[i] = struct{}{}
+		}
+		if err != nil {
+			glog.V(2).Info("Error in generating tokens", err)
+		}
 	}
 
+	keys := make([]uint64, 0)
 	for key := range uniq {
 		keys = append(keys, key)
 	}
-
 	return keys
 }
 
@@ -107,77 +151,77 @@ func newGraph() *graph {
 	return &graph{conflicts: make(map[uint64][]*mutation)}
 }
 
-func (e *executor) worker() {
+func (e *executor) worker(mut *mutation) {
 	writer := posting.NewTxnWriter(pstore)
-	for mut := range e.workerChan {
-		payload := mut.m
+	payload := mut.m
 
-		var esize int64
-		ptxn := posting.NewTxn(payload.startTs)
-		for _, edge := range payload.edges {
-			esize += int64(edge.Size())
-			for {
-				err := runMutation(payload.ctx, edge, ptxn)
-				if err == nil {
-					break
-				} else if err != posting.ErrRetry {
-					glog.Errorf("Error while mutating: %v", err)
-					break
-				}
+	var esize int64
+	ptxn := posting.NewTxn(payload.startTs)
+	for _, edge := range payload.edges {
+		esize += int64(edge.Size())
+		for {
+			err := runMutation(payload.ctx, edge, ptxn)
+			if err == nil {
+				break
+			} else if err != posting.ErrRetry {
+				glog.Errorf("Error while mutating: %v", err)
+				break
 			}
 		}
-
-		ptxn.Update()
-		if err := ptxn.CommitToDisk(writer, payload.startTs); err != nil {
-			glog.Errorf("Error while commiting to disk: %v", err)
-		}
-
-		if err := writer.Wait(); err != nil {
-			glog.Errorf("Error while waiting for writes: %v", err)
-		}
-
-		e.applied.Done(payload.index)
-		atomic.AddInt64(&e.pendingSize, -esize)
-		atomic.AddInt64(&e.smCount, -1)
-
-		mut.graph.Lock()
-
-		for _, dependent := range mut.outEdges {
-			dependent.inDeg -= 1
-			if dependent.inDeg == 0 {
-				e.workerChan <- dependent
-			}
-		}
-
-		for _, c := range mut.keys {
-			i := 0
-			arr := mut.graph.conflicts[c]
-
-			for _, x := range arr {
-				if x.m.startTs != mut.m.startTs {
-					arr[i] = x
-					i++
-				}
-			}
-
-			if i == 0 {
-				delete(mut.graph.conflicts, c)
-			} else {
-				mut.graph.conflicts[c] = arr[:i]
-			}
-		}
-
-		mut.graph.Unlock()
 	}
+
+	ptxn.Update()
+	if err := ptxn.CommitToDisk(writer, payload.startTs); err != nil {
+		glog.Errorf("Error while commiting to disk: %v", err)
+	}
+
+	if err := writer.Wait(); err != nil {
+		glog.Errorf("Error while waiting for writes: %v", err)
+	}
+
+	e.applied.Done(payload.index)
+	atomic.AddInt64(&e.pendingSize, -esize)
+	atomic.AddInt64(&e.smCount, -1)
+
+	mut.graph.Lock()
+
+	for _, dependent := range mut.outEdges {
+		dependent.inDeg -= 1
+		if dependent.inDeg == 0 {
+			go func(d *mutation) {
+				e.worker(d)
+			}(dependent)
+		}
+	}
+
+	for _, c := range mut.keys {
+		i := 0
+		arr := mut.graph.conflicts[c]
+
+		for _, x := range arr {
+			if x.m.startTs != mut.m.startTs {
+				arr[i] = x
+				i++
+			}
+		}
+
+		if i == 0 {
+			delete(mut.graph.conflicts, c)
+		} else {
+			mut.graph.conflicts[c] = arr[:i]
+		}
+	}
+
+	mut.graph.Unlock()
 }
 
-func (e *executor) processMutationCh(ch chan *subMutation) {
+func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) {
 	defer e.closer.Done()
 
 	g := newGraph()
 
 	for payload := range ch {
-		conflicts := generateConflictKeys(payload)
+		conflicts := generateConflictKeys(ctx, payload)
 		m := &mutation{
 			m:        payload,
 			keys:     conflicts,
@@ -208,7 +252,9 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 		g.Unlock()
 
 		if m.inDeg == 0 {
-			e.workerChan <- m
+			go func() {
+				e.worker(m)
+			}()
 		}
 	}
 }
@@ -223,7 +269,7 @@ func (e *executor) shutdown() {
 }
 
 // getChannel obtains the channel for the given pred. It must be called under e.Lock().
-func (e *executor) getChannel(pred string) (ch chan *subMutation) {
+func (e *executor) getChannel(ctx context.Context, pred string) (ch chan *subMutation) {
 	ch, ok := e.predChan[pred]
 	if ok {
 		return ch
@@ -231,7 +277,7 @@ func (e *executor) getChannel(pred string) (ch chan *subMutation) {
 	ch = make(chan *subMutation, 1000)
 	e.predChan[pred] = ch
 	e.closer.AddRunning(1)
-	go e.processMutationCh(ch)
+	go e.processMutationCh(ctx, ch)
 	return ch
 }
 
@@ -274,7 +320,7 @@ func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
 		for attr, payload := range payloadMap {
 			e.applied.Begin(index)
 			atomic.AddInt64(&e.smCount, 1)
-			e.getChannel(attr) <- payload
+			e.getChannel(ctx, attr) <- payload
 		}
 	}
 
