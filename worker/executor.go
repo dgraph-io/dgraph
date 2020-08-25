@@ -191,7 +191,7 @@ func (e *executor) worker(mut *mutation) {
 	for _, dependent := range mut.outEdges {
 		dependent.inDeg -= 1
 		if dependent.inDeg == 0 {
-			e.throttle.Do()
+			x.Check(e.throttle.Do())
 			go func(d *mutation) {
 				e.worker(d)
 			}(dependent)
@@ -256,7 +256,7 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 		g.Unlock()
 
 		if m.inDeg == 0 {
-			e.throttle.Do()
+			x.Check(e.throttle.Do())
 			go func() {
 				e.worker(m)
 			}()
