@@ -83,10 +83,8 @@ func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
 		// Settings for the write-ahead log.
 		badgerTables = Config.BadgerWalTables
 		badgerVlog = Config.BadgerWalVlog
-		// Disable cache and compression for WAL as it is supposed to be small and fast,
-		// Cache/compression makes it a little slow (Though we save some disk space but it is not
-		// worth the slowness).
-		opt.MaxCacheSize = 0
+		// Disable compression for WAL as it is supposed to be fast. Compression makes it a
+		// little slow (Though we save some disk space but it is not worth the slowness).
 		opt.Compression = options.None
 	} else {
 		// Settings for the data directory.
