@@ -118,7 +118,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 				sg.updateUidMatrix()
 			}
 
-			for mIdx, _ := range sg.SrcUIDs.Uids {
+			for mIdx := range sg.SrcUIDs.Uids {
 				if allowLoop {
 					for _, ul := range sg.uidMatrix {
 						numEdges += uint64(len(ul.Uids))
