@@ -44,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type reducer struct {
@@ -184,7 +185,7 @@ type mapIterator struct {
 
 type iteratorEntry struct {
 	partitionKey []byte
-	cbuf         *y.Buffer
+	cbuf         *z.Buffer
 }
 
 func (mi *mapIterator) release(ie *iteratorEntry) {
@@ -195,7 +196,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	var ie *iteratorEntry
 	prevKeyExist := false
 	var meBuf, key []byte
-	var cbuf *y.Buffer
+	var cbuf *z.Buffer
 	// readKey reads the next map entry key.
 	readMapEntry := func() error {
 		if prevKeyExist {
@@ -221,7 +222,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	}
 
 	for _, pKey := range partitionsKeys {
-		ie = &iteratorEntry{partitionKey: pKey, cbuf: y.NewBuffer(64)}
+		ie = &iteratorEntry{partitionKey: pKey, cbuf: z.NewBuffer(64)}
 		for {
 			err := readMapEntry()
 			if err == io.EOF {
@@ -244,7 +245,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	}
 
 	// Drain the last items.
-	cbuf = y.NewBuffer(64)
+	cbuf = z.NewBuffer(64)
 	for {
 		err := readMapEntry()
 		if err == io.EOF {
@@ -303,7 +304,7 @@ type countIndexEntry struct {
 }
 
 type encodeRequest struct {
-	cbuf      *y.Buffer
+	cbuf      *z.Buffer
 	countKeys []*countIndexEntry
 	wg        *sync.WaitGroup
 	list      *bpb.KVList
@@ -494,7 +495,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 
 	for i := 0; i < len(partitionKeys); i++ {
 		throttle()
-		cbuf := y.NewBuffer(4 << 20)
+		cbuf := z.NewBuffer(4 << 20)
 		for _, itr := range mapItrs {
 			res := itr.Next()
 			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
@@ -518,7 +519,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 
 	throttle()
 	fmt.Println("Draining the last batch")
-	cbuf := y.NewBuffer(1 << 20)
+	cbuf := z.NewBuffer(1 << 20)
 	for _, itr := range mapItrs {
 		res := itr.Next()
 		y.AssertTrue(res.partitionKey == nil)

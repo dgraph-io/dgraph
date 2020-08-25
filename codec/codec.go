@@ -22,7 +22,6 @@ import (
 	"sort"
 	"unsafe"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -55,7 +54,10 @@ var blockSize = int(unsafe.Sizeof(pb.UidBlock{}))
 // ReleaseBlock.
 func AllocateBlock() *pb.UidBlock {
 	// Allocate blocks manually.
-	b := z.Calloc(blockSize)
+	b := z.CallocNoRef(blockSize)
+	if len(b) == 0 {
+		return &pb.UidBlock{}
+	}
 	return (*pb.UidBlock)(unsafe.Pointer(&b[0]))
 }
 
@@ -89,7 +91,7 @@ func (e *Encoder) packBlock() {
 	last := e.uids[0]
 	e.uids = e.uids[1:]
 
-	var out y.Buffer
+	var out z.Buffer
 	// We are not releasing the allocated memory here. Instead, block.Deltas would need to be
 	// released at the end.
 
