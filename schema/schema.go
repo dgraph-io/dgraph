@@ -638,22 +638,30 @@ func CompleteInitialSchema() []*pb.SchemaUpdate {
 func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
 
-	initialSchema = append(initialSchema, &pb.SchemaUpdate{
-		Predicate: "dgraph.type",
-		ValueType: pb.Posting_STRING,
-		Directive: pb.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
-		List:      true,
-	}, &pb.SchemaUpdate{
-		Predicate: "dgraph.graphql.schema",
-		ValueType: pb.Posting_STRING,
-	}, &pb.SchemaUpdate{
-		Predicate: "dgraph.graphql.xid",
-		ValueType: pb.Posting_STRING,
-		Directive: pb.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
-		Upsert:    true,
-	})
+	initialSchema = append(initialSchema,
+		&pb.SchemaUpdate{
+			Predicate: "dgraph.cors",
+			ValueType: pb.Posting_STRING,
+			List:      true,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			Upsert:    true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.type",
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			List:      true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.schema",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.xid",
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			Upsert:    true,
+		})
 
 	if all || x.WorkerConfig.AclEnabled {
 		// propose the schema update for acl predicates

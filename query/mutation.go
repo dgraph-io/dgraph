@@ -192,19 +192,20 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 	}
 
 	for _, gmu := range gmuList {
-		for _, nq := range gmu.Set {
-			if err := facets.SortAndValidate(nq.Facets); err != nil {
-				return edges, err
-			}
-			if err := parse(nq, pb.DirectedEdge_SET); err != nil {
-				return edges, err
-			}
-		}
+		// We delete first and then we set. Order of the mutation is important.
 		for _, nq := range gmu.Del {
 			if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
 				return edges, errors.New("Predicate deletion should be called via alter")
 			}
 			if err := parse(nq, pb.DirectedEdge_DEL); err != nil {
+				return edges, err
+			}
+		}
+		for _, nq := range gmu.Set {
+			if err := facets.SortAndValidate(nq.Facets); err != nil {
+				return edges, err
+			}
+			if err := parse(nq, pb.DirectedEdge_SET); err != nil {
 				return edges, err
 			}
 		}

@@ -34,14 +34,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/dgraph/graphql/web"
-
+	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/graphql/admin"
+	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
@@ -710,7 +711,21 @@ func run() {
 		// and health check passes
 		edgraph.ResetAcl()
 		edgraph.RefreshAcls(aclCloser)
+		edgraph.ResetCors()
+		// Update the accepted cors origins.
+		for {
+			origins, err := edgraph.GetCorsOrigins(context.TODO())
+			if err != nil {
+				glog.Errorf("Error while retriving cors origins: %s", err.Error())
+				continue
+			}
+			x.UpdateCorsOrigins(origins)
+			break
+		}
 	}()
+	// Listen for any new cors origin update.
+	corsCloser := y.NewCloser(1)
+	go listenForCorsUpdate(corsCloser)
 
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we
 	// close alpha. This closer is for closing and waiting that subscription.
@@ -719,10 +734,49 @@ func run() {
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
 	aclCloser.SignalAndWait()
+	corsCloser.SignalAndWait()
 	worker.BlockingStop()
 	adminCloser.SignalAndWait()
 	glog.Info("Disposing server state.")
 	worker.State.Dispose()
 	x.RemoveCidFile()
 	glog.Infoln("Server shutdown. Bye!")
+}
+
+// listenForCorsUpdate listen for any cors change and update the accepeted cors.
+func listenForCorsUpdate(closer *y.Closer) {
+	prefix := x.DataKey("dgraph.cors", 0)
+	// Remove uid from the key, to get the correct prefix
+	prefix = prefix[:len(prefix)-8]
+	worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
+		// Last update contains the latest value. So, taking the last update.
+		lastIdx := len(kvs.GetKv()) - 1
+		kv := kvs.GetKv()[lastIdx]
+		glog.Infof("Updating cors from subscription.")
+		// Unmarshal the incoming posting list.
+		pl := &pb.PostingList{}
+		err := pl.Unmarshal(kv.GetValue())
+		if err != nil {
+			glog.Errorf("Unable to unmarshal the posting list for cors update %s", err)
+			return
+		}
+		// Skip if there is no posting. Our all upsert call contains atleast one
+		// posting.
+		if len(pl.Postings) == 0 {
+			return
+		}
+		origins := make([]string, 0)
+		for _, posting := range pl.Postings {
+			val := strings.TrimSpace(string(posting.Value))
+			if val == "_STAR_ALL" {
+				// If the posting list contains __STAR_ALL then it's a delete call.
+				// we usually do it before updating as part of upsert. So, let's
+				// ignore this update.
+				continue
+			}
+			origins = append(origins, val)
+		}
+		glog.Infof("Updating cors origins: %+v", origins)
+		x.UpdateCorsOrigins(origins)
+	}, 1, closer)
 }
