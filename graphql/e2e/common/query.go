@@ -1929,7 +1929,7 @@ func queryWithCascade(t *testing.T) {
 						reputation
 						name
 						posts @cascade(fields:["text"]) {
-                       		title
+							title
 							text
 						}
 					  }
