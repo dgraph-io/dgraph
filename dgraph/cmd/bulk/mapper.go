@@ -32,7 +32,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
@@ -42,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	farm "github.com/dgryski/go-farm"
 )
 
@@ -55,14 +55,14 @@ type mapper struct {
 type shardState struct {
 	// Buffer up map entries until we have a sufficient amount, then sort and
 	// write them to file.
-	cbuf *y.Buffer
+	cbuf *z.Buffer
 	mu   sync.Mutex // Allow only 1 write per shard at a time.
 }
 
 func newMapper(st *state) *mapper {
 	shards := make([]shardState, st.opt.MapShards)
 	for i := range shards {
-		shards[i].cbuf = y.NewBuffer(1 << 20)
+		shards[i].cbuf = z.NewBuffer(1 << 20)
 	}
 	return &mapper{
 		state:  st,
@@ -89,7 +89,7 @@ func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
 	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 }
 
-func (m *mapper) writeMapEntriesToFile(cbuf *y.Buffer, shardIdx int) {
+func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	defer m.shards[shardIdx].mu.Unlock() // Locked by caller.
 	defer cbuf.Release()
 
@@ -188,7 +188,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 				go m.writeMapEntriesToFile(sh.cbuf, i)
 				// Clear the entries and encodedSize for the next batch.
 				// Proactively allocate 32 slots to bootstrap the entries slice.
-				sh.cbuf = y.NewBuffer(1 << 20)
+				sh.cbuf = z.NewBuffer(1 << 20)
 			}
 		}
 	}
