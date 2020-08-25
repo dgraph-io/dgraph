@@ -27,7 +27,7 @@ import (
 )
 
 func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error {
-	// Note: Key format is - "attr|fromUID|toUID"
+	// Note: Key format is - "attr|toUID"
 	reachMap := make(map[string]struct{})
 	allowLoop := start.Params.RecurseArgs.AllowLoop
 	var numEdges uint64
@@ -118,15 +118,15 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 				sg.updateUidMatrix()
 			}
 
-			for mIdx, fromUID := range sg.SrcUIDs.Uids {
+			for mIdx, _ := range sg.SrcUIDs.Uids {
 				if allowLoop {
 					for _, ul := range sg.uidMatrix {
 						numEdges += uint64(len(ul.Uids))
 					}
 				} else {
 					algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {
-						key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, uid)
-						_, seen := reachMap[key] // Combine fromUID here.
+						key := fmt.Sprintf("%s|%d", sg.Attr, uid)
+						_, seen := reachMap[key]
 						if seen {
 							return false
 						}
