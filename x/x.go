@@ -34,6 +34,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -121,6 +122,9 @@ const (
 {"predicate":"dgraph.rule.predicate","type":"string","index":true,"tokenizer":["exact"],"upsert":true},
 {"predicate":"dgraph.rule.permission","type":"int"}
 `
+	// CorsPredicate is the json representation of the predicate reserved by dgraph for the use
+	//of cors
+	CorsPredicate = `{"predicate":"dgraph.cors","type":"string","list":true,"type":"string","index":true,"tokenizer":["exact"],"upsert":true}`
 
 	InitialTypes = `
 "types": [{
@@ -160,7 +164,26 @@ var (
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 	// Nilbyte is a nil byte slice. Used
 	Nilbyte []byte
+	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
+	AcceptedOrigins = atomic.Value{}
 )
+
+func init() {
+	AcceptedOrigins.Store(map[string]struct{}{})
+}
+
+// UpdateCorsOrigins updates the cors allowlist with the given origins.
+func UpdateCorsOrigins(origins []string) {
+	if len(origins) == 1 && origins[0] == "*" {
+		AcceptedOrigins.Store(map[string]struct{}{})
+		return
+	}
+	allowList := make(map[string]struct{}, len(origins))
+	for _, origin := range origins {
+		allowList[origin] = struct{}{}
+	}
+	AcceptedOrigins.Store(allowList)
+}
 
 // ShouldCrash returns true if the error should cause the process to crash.
 func ShouldCrash(err error) bool {

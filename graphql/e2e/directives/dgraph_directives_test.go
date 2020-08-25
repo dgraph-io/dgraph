@@ -111,6 +111,16 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 	}, {
 		"predicate": "dgraph.graphql.schema",
 		"type": "string"
+	},
+	{
+		"predicate": "dgraph.cors",
+		"type": "string",
+		"list": true,
+		"index": true,
+      	"tokenizer": [
+          "exact"
+      	],
+      	"upsert": true
 	}, {
 		"predicate": "dgraph.graphql.xid",
 		"type": "string",
