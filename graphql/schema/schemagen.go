@@ -206,7 +206,12 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 		return nil, gqlErrList
 	}
 
-	headers := getAllowedHeaders(sch, defns)
+	var authHeader string
+	if metaInfo != nil {
+		authHeader = metaInfo.Header
+	}
+
+	headers := getAllowedHeaders(sch, defns, authHeader)
 	dgSchema := genDgSchema(sch, typesToComplete)
 	completeSchema(sch, typesToComplete)
 
@@ -232,7 +237,7 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 	hc.Unlock()
 
 	if metaInfo != nil {
-		authorization.SetAuthMeta(*metaInfo)
+		authorization.SetAuthMeta(metaInfo)
 	}
 	return handler, nil
 }
@@ -252,7 +257,7 @@ var hc = headersConfig{
 	allowed: x.AccessControlAllowedHeaders,
 }
 
-func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
+func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string) string {
 	headers := make(map[string]struct{})
 
 	setHeaders := func(dir *ast.Directive) {
@@ -293,8 +298,8 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 	}
 
 	// Add Auth Header to allowed headers list
-	if authorization.GetHeader() != "" {
-		finalHeaders = append(finalHeaders, authorization.GetHeader())
+	if authHeader != "" {
+		finalHeaders = append(finalHeaders, authHeader)
 	}
 
 	allowed := x.AccessControlAllowedHeaders

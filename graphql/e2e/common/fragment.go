@@ -31,15 +31,16 @@ func fragmentInMutation(t *testing.T) {
 		}},
 	}
 
-	gqlResponse := addStarshipParams.ExecuteAsPost(t, GraphqlURL)
+	gqlResponse := addStarshipParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	addStarshipExpected := fmt.Sprintf(`{"addStarship":{
+	addStarshipExpected := `
+	{"addStarship":{
 		"starship":[{
 			"name":"Millennium Falcon",
 			"length":2
 		}]
-	}}`)
+	}}`
 
 	var expected, result struct {
 		AddStarship struct {
@@ -83,7 +84,7 @@ func fragmentInQuery(t *testing.T) {
 		},
 	}
 
-	gqlResponse := queryStarshipParams.ExecuteAsPost(t, GraphqlURL)
+	gqlResponse := queryStarshipParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	queryStarshipExpected := fmt.Sprintf(`
@@ -152,7 +153,7 @@ func fragmentInQueryOnInterface(t *testing.T) {
 		`,
 	}
 
-	gqlResponse := queryCharacterParams.ExecuteAsPost(t, GraphqlURL)
+	gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	queryCharacterExpected := fmt.Sprintf(`
@@ -227,7 +228,7 @@ func fragmentInQueryOnObject(t *testing.T) {
 		`,
 	}
 
-	gqlResponse := queryHumanParams.ExecuteAsPost(t, GraphqlURL)
+	gqlResponse := queryHumanParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	queryCharacterExpected := fmt.Sprintf(`

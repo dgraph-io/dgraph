@@ -330,8 +330,8 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 
 }
 
-// VerifyEmptySchema verifies that the schema is not set in the GraphQL server.
-func VerifyEmptySchema(t *testing.T) {
+// verifyEmptySchema verifies that the schema is not set in the GraphQL server.
+func verifyEmptySchema(t *testing.T) {
 	queryStudent := `
 	query {
 		queryStudent {
@@ -342,14 +342,14 @@ func VerifyEmptySchema(t *testing.T) {
 	queryParams := &common.GraphQLParams{
 		Query: queryStudent,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, groupOneServer)
 	require.Contains(t, gqlResponse.Errors.Error(), "There's no GraphQL schema in Dgraph")
 }
 
 func TestGQLSchemaValidate(t *testing.T) {
 	testCases := []struct {
 		schema string
-		error string
+		error []string
 		valid 	bool
 	}{
 		{
@@ -383,19 +383,19 @@ func TestGQLSchemaValidate(t *testing.T) {
 					f1: String! @dgraph(pred:"~movie")
 				}
 			`,
-			error: `input:3: Type X; Field id: has the @dgraph directive but fields of type ID can't have the @dgraph directive. input:7: Type Y; Field f1 is of type String, but reverse predicate in @dgraph directive only applies to fields with object types. `,
+			error: []string{"input:3: Type X; Field id: has the @dgraph directive but fields of type ID can't have the @dgraph directive.", "input:7: Type Y; Field f1 is of type String, but reverse predicate in @dgraph directive only applies to fields with object types."},
 			valid: false,
 		},
 	}
 
 	response :=  struct {
-		Status string
-		Error string
+		Valid string
+		Error []string
 	}{}
-	validateUrl := common.GraphqlAdminURL + "/schema/validate"
+	validateUrl := groupOneAdminServer + "/schema/validate"
 
 	for _, tcase := range testCases {
-		resp, err := http.Post(validateUrl, "application/json", bytes.NewBuffer([]byte(tcase.schema)))
+		resp, err := http.Post(validateUrl, "text/plain", bytes.NewBuffer([]byte(tcase.schema)))
 		require.NoError(t, err)
 
 		decoder := json.NewDecoder(resp.Body)
@@ -403,16 +403,16 @@ func TestGQLSchemaValidate(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify that we only validate the schema and not set it.
-		VerifyEmptySchema(t)
+		verifyEmptySchema(t)
 
 		if tcase.valid {
 			require.Equal(t, resp.StatusCode, http.StatusOK)
-			require.Equal(t, response.Status, "valid")
+			require.Equal(t, response.Valid, "true")
 			continue
 		}
 		require.Equal(t, resp.StatusCode, http.StatusBadRequest)
-		require.Equal(t, response.Status, "invalid")
-		require.Contains(t, response.Error, tcase.error)
+		require.Equal(t, response.Valid, "false")
+		require.Equal(t, response.Error, tcase.error)
 	}
 }
 

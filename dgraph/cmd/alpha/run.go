@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -500,24 +501,23 @@ func setupServer(closer *y.Closer) {
 	http.Handle("/admin/schema/validate", http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		schema := readRequest(w, r)
-		if schema == nil {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
 		w.Header().Set("Content-Type", "application/json")
 
 		err := admin.SchemaValidate(string(schema))
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			// There could be multiple errors, so replace the newline with whitespace since the newline is an
-			// invalid JSON character.
-			errStr := strings.ReplaceAll(err.Error(), "\n", " ")
-			x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"invalid", "error" : "%s"}`, errStr))))
+		if err == nil {
+			w.WriteHeader(http.StatusOK)
+			x.Check2(w.Write([]byte(`{"valid":"true"}`)))
 			return
 		}
-		w.WriteHeader(http.StatusOK)
-		x.Check2(w.Write([]byte(`{"status":"valid"}`)))
+
+		w.WriteHeader(http.StatusBadRequest)
+		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
+		stringsJson, err := json.Marshal(errs)
+		if err != nil {
+			x.Check2(w.Write([]byte(fmt.Sprintf(`{"valid":"false", "error" : %s}`, err))))
+			return
+		}
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"valid":"false", "error" : %s}`, stringsJson))))
 	}))
 
 	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},

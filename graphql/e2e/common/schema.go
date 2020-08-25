@@ -152,7 +152,7 @@ func graphQLDescriptions(t *testing.T) {
 				},
 			}
 
-			introspectionResult := introspect.ExecuteAsPost(t, GraphqlURL)
+			introspectionResult := introspect.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, introspectionResult.Errors)
 
 			require.JSONEq(t, tCase.expected, string(introspectionResult.Data))

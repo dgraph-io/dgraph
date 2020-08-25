@@ -504,6 +504,9 @@ func newAdminResolver(
 			Schema: string(pl.Postings[0].Value),
 		}
 
+		server.mux.Lock()
+		defer server.mux.Unlock()
+
 		var gqlSchema schema.Schema
 		// on drop_all, we will receive an empty string as the schema update
 		if newSchema.Schema != "" {
@@ -513,9 +516,6 @@ func newAdminResolver(
 				return
 			}
 		}
-
-		server.mux.Lock()
-		defer server.mux.Unlock()
 
 		server.schema = newSchema
 		server.resetSchema(gqlSchema)
