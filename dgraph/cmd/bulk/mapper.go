@@ -60,13 +60,17 @@ type shardState struct {
 }
 
 func newMapper(st *state) *mapper {
+	shards := make([]shardState, st.opt.MapShards)
+	for i := range shards {
+		shards[i].cbuf = y.NewBuffer(1 << 20)
+	}
 	return &mapper{
 		state:  st,
-		shards: make([]shardState, st.opt.MapShards),
+		shards: shards,
 	}
 }
 
-func less(lhs, rhs mapEntry) bool {
+func less(lhs, rhs MapEntry) bool {
 	if keyCmp := bytes.Compare(lhs.Key(), rhs.Key()); keyCmp != 0 {
 		return keyCmp < 0
 	}
@@ -92,8 +96,8 @@ func (m *mapper) writeMapEntriesToFile(cbuf *y.Buffer, shardIdx int) {
 	offsets := cbuf.SliceOffsets(nil)
 
 	sort.Slice(offsets, func(i, j int) bool {
-		lhs := mapEntry(cbuf.Slice(offsets[i]))
-		rhs := mapEntry(cbuf.Slice(offsets[j]))
+		lhs := MapEntry(cbuf.Slice(offsets[i]))
+		rhs := MapEntry(cbuf.Slice(offsets[j]))
 		return less(lhs, rhs)
 	})
 
@@ -124,7 +128,7 @@ func (m *mapper) writeMapEntriesToFile(cbuf *y.Buffer, shardIdx int) {
 			break
 		}
 		if (i+1)%shardPartitionNo == 0 {
-			me := mapEntry(cbuf.Slice(off))
+			me := MapEntry(cbuf.Slice(off))
 			header.PartitionKeys = append(header.PartitionKeys, me.Key())
 		}
 	}
@@ -194,6 +198,8 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 		if sh.cbuf.Len() > 0 {
 			sh.mu.Lock() // One write at a time.
 			m.writeMapEntriesToFile(sh.cbuf, i)
+		} else {
+			sh.cbuf.Release()
 		}
 		m.shards[i].mu.Lock() // Ensure that the last file write finishes.
 	}
