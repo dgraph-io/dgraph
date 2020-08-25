@@ -18,6 +18,7 @@ package bulk
 
 import (
 	"fmt"
+	"runtime"
 	"sync/atomic"
 	"time"
 
@@ -117,8 +118,12 @@ func (p *progress) reportOnce() {
 		if mapEdgeCount != 0 {
 			pct = fmt.Sprintf("%.2f%% ", 100*float64(reduceEdgeCount)/float64(mapEdgeCount))
 		}
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+		gomem := int64(ms.HeapInuse / (1 << 20))
+
 		fmt.Printf("[%s] REDUCE %s %sedge_count:%s edge_speed:%s/sec "+
-			"plist_count:%s plist_speed:%s/sec. Num Encoding MBs: %d. Num Allocs MBs: %d \n",
+			"plist_count:%s plist_speed:%s/sec. Num Encoding MBs: %d. GoMem: %d CMem: %d \n",
 			timestamp,
 			x.FixedDuration(now.Sub(p.start)),
 			pct,
@@ -127,7 +132,8 @@ func (p *progress) reportOnce() {
 			niceFloat(float64(reduceKeyCount)),
 			niceFloat(float64(reduceKeyCount)/elapsed.Seconds()),
 			atomic.LoadInt64(&p.numEncoding)/(1<<20),
-			atomic.LoadInt64(&z.NumAllocBytes)/(1<<20),
+			gomem,
+			z.NumAllocBytes()/(1<<20),
 		)
 	default:
 		x.AssertTruef(false, "invalid phase")

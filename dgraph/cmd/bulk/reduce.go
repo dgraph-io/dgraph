@@ -43,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type reducer struct {
