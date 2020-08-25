@@ -756,8 +756,7 @@ func (f *field) Cascade() []string {
 	}
 	fields := make([]string, 0, len(arg.Value.Children))
 	typ := f.Type()
-	var idField string
-	idField = typ.IDField().Name()
+	idField := typ.IDField().Name()
 
 	for _, child := range arg.Value.Children {
 		if idField == child.Value.Raw {
