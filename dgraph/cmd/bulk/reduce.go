@@ -43,7 +43,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 )
 
 type reducer struct {
@@ -352,18 +351,18 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 		req.countKeys = countKeys
 		req.wg.Done()
 
-		for {
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-			gomem := int64(ms.HeapInuse / (1 << 20))
-			cmem := z.NumAllocsMB()
-			if gomem+cmem < 16384 { // TODO: Make this a flag.
-				break
-			}
-			fmt.Printf("Sleeping to allow memory usage to reduce before processing more requests."+
-				" Gomem: %d Cmem: %d\n", gomem, cmem)
-			time.Sleep(15 * time.Second)
-		}
+		// for {
+		// 	var ms runtime.MemStats
+		// 	runtime.ReadMemStats(&ms)
+		// 	gomem := int64(ms.HeapInuse / (1 << 20))
+		// 	cmem := z.NumAllocsMB()
+		// 	if gomem+cmem < 16384 { // TODO: Make this a flag.
+		// 		break
+		// 	}
+		// 	fmt.Printf("Sleeping to allow memory usage to reduce before processing more requests."+
+		// 		" Gomem: %d Cmem: %d\n", gomem, cmem)
+		// 	time.Sleep(15 * time.Second)
+		// }
 	}
 }
 
@@ -484,7 +483,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	throttle := func() {
 		for {
 			sz := atomic.LoadInt64(&r.prog.numEncoding)
-			if sz < 4<<30 {
+			if sz < 512<<20 {
 				return
 			}
 			fmt.Printf("Not sending out more encoder load. Num Bytes being encoded: %d\n", sz)
@@ -501,7 +500,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			cbuf.Write(res.cbuf.Bytes())
 			itr.release(res)
 		}
-		if cbuf.Len() > 1<<30 {
+		if cbuf.Len() > 512<<20 {
 			fmt.Printf("Encoding a buffer of size: %d\n", cbuf.Len())
 		}
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
