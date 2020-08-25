@@ -2,6 +2,8 @@ module github.com/dgraph-io/dgraph
 
 go 1.12
 
+replace github.com/dgraph-io/badger/v2 => /home/ashish/projects/src/github.com/dgraph-io/badger
+
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
@@ -17,8 +19,9 @@ require (
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200718033852-37ee16d8ad1c
+	github.com/dgraph-io/dgo/v2 v2.2.0
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200401175452-e463f9234453
-	github.com/dgraph-io/ristretto v0.0.3-0.20200630154024-f66de99634de
+	github.com/dgraph-io/ristretto v0.0.4-0.20200820164438-623d8ef1614b
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
