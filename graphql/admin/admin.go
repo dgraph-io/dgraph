@@ -769,7 +769,7 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	mainHealthStore.updatingSchema()
 
 	var resolverFactory resolve.ResolverFactory
-	// If schema is nil (which becomes aftyer drop_all) then do not attach Resolver for
+	// If schema is nil (which becomes after drop_all) then do not attach Resolver for
 	// introspection operations, and set GQL schema to empty.
 	if gqlSchema == nil {
 		resolverFactory = resolverFactoryWithErrorMsg(errNoGraphQLSchema)
