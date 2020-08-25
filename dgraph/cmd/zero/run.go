@@ -108,7 +108,8 @@ instances to achieve high-availability.
 
 	// Add cache flags
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero")
-	flag.String("cache_percentage", "100:0", "Cache percentages for various caches (blockcache:indexCache)")
+	flag.String("cache_percentage", "100,0",
+		"Cache percentages for various caches (blockcache,indexCache)")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -228,7 +229,8 @@ func run() {
 	x.AssertTruef(opts.totalCache >= 0, "ERROR: Cache size must be non-negative")
 
 	glog.Info(opts.cachePercentage)
-	cachePercent := x.GetCachePercentages(opts.cachePercentage, "blockCache:indexCache")
+	cachePercent, err := x.GetCachePercentages(opts.cachePercentage, 2)
+	x.Check(err)
 	blockCache := (cachePercent[0] * (opts.totalCache << 20)) / 100
 	indexCache := (cachePercent[1] * (opts.totalCache << 20)) / 100
 

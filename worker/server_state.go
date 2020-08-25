@@ -142,6 +142,7 @@ func (s *ServerState) initStorage() {
 		opt := badger.LSMOnlyOptions(Config.WALDir)
 		opt = setBadgerOptions(opt, true)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
+		opt.BlockCacheSize = Config.WBlockCacheSize
 		opt.IndexCacheSize = Config.WIndexCacheSize
 
 		// Print the options w/o exposing key.

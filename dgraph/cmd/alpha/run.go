@@ -206,8 +206,8 @@ they form a Raft group and provide synchronous replication.
 
 	// Add cache flags
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha")
-	flag.String("cache_percentage", "30:30:20:20", `Cache percentages for various caches
-		(PstoreBlockCache:PstoreIndexCache:PstoreIndexCache:PostingListCache)`)
+	flag.String("cache_percentage", "0,65,25,0,10", `Cache percentages for various caches
+		(PostingListCache:PstoreBlockCache:PstoreIndexCache:WstoreBlockCache:WstoreIndexCache)`)
 }
 
 func setupCustomTokenizers() {
@@ -586,12 +586,13 @@ func run() {
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
 
 	cachePercentage := Alpha.Conf.GetString("cache_percentage")
-	cachePercent := x.GetCachePercentages(cachePercentage,
-		"PstoreBlockCache:PstoreIndexCache:PstoreIndexCache:PostingListCache")
-	pstoreBlockCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
-	pstoreIndexCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
-	wstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
-	postingListCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
+	cachePercent, err := x.GetCachePercentages(cachePercentage, 5)
+	x.Check(err)
+	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
+	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
+	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
+	wstoreBlockCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
+	wstoreIndexCacheSize := (cachePercent[4] * (totalCache << 20)) / 100
 
 	opts := worker.Options{
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
@@ -599,6 +600,7 @@ func run() {
 		WALDir:                 Alpha.Conf.GetString("wal"),
 		PBlockCacheSize:        pstoreBlockCacheSize,
 		PIndexCacheSize:        pstoreIndexCacheSize,
+		WBlockCacheSize:        wstoreBlockCacheSize,
 		WIndexCacheSize:        wstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
