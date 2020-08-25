@@ -152,6 +152,18 @@ func TestTermTokenizer(t *testing.T) {
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
 	require.Equal(t, []string{encodeToken("tokenizer", id), encodeToken("works", id)}, tokens)
+
+	// TEMPORARILY COMMENTED OUT AS THIS IS THE IDEAL BEHAVIOUR. WE ARE NOT THERE YET.
+	/*
+		tokens, err = BuildTokens("Barack Obama made Obamacare", tokenizer)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(tokens))
+		require.Equal(t, []string{
+			encodeToken("barack obama", id),
+			encodeToken("made", id),
+			encodeToken("obamacare", id),
+		})
+	*/
 }
 
 func TestTrigramTokenizer(t *testing.T) {

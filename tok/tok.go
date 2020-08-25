@@ -293,8 +293,6 @@ func (t TermTokenizer) Tokens(v interface{}) ([]string, error) {
 		// Chinese, Japanese, Thai, Lao, Burmese, Tibetan and Khmer (km, kxm) do not use spaces as delimiters. We simply split by space.
 		tokens := strings.Split(str, " ")
 		return x.RemoveDuplicates(tokens), nil
-	case "":
-		fallthrough
 	default:
 		tokens := termAnalyzer.Analyze([]byte(str))
 		return uniqueTerms(tokens), nil
