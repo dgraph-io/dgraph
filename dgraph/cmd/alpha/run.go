@@ -788,6 +788,11 @@ func listenForCorsUpdate(closer *y.Closer) {
 			glog.Errorf("Unable to unmarshal the posting list for cors update %s", err)
 			return
 		}
+		// Skip if there is no posting. Our all upsert call contains atleast one
+		// posting.
+		if len(pl.Postings) == 0 {
+			return
+		}
 		origins := make([]string, 0)
 		for _, posting := range pl.Postings {
 			val := strings.TrimSpace(string(posting.Value))

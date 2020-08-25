@@ -772,7 +772,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "replaceAllowedCORSOrigins": {
