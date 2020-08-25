@@ -501,9 +501,12 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			cbuf.Write(res.cbuf.Bytes())
 			itr.release(res)
 		}
-		if cbuf.Len() > 512<<20 {
-			fmt.Printf("Encoding a buffer of size: %d\n", cbuf.Len())
+		if cbuf.Len() < 1<<30 {
+			fmt.Printf("Skipping cbuf of length: %d\n", cbuf.Len())
+			cbuf.Release()
+			continue
 		}
+		fmt.Printf("Encoding a buffer of size: %d\n", cbuf.Len())
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
 
 		wg := new(sync.WaitGroup)
