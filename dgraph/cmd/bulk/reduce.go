@@ -45,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dustin/go-humanize"
 )
 
 type reducer struct {
@@ -493,6 +494,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		}
 	}
 
+	numSkipped := 0
 	for i := 0; i < len(partitionKeys); i++ {
 		throttle()
 		cbuf := z.NewBuffer(4 << 20)
@@ -502,12 +504,15 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			cbuf.Write(res.cbuf.Bytes())
 			itr.release(res)
 		}
-		if cbuf.Len() < 1<<30 {
-			fmt.Printf("Skipping cbuf of length: %d\n", cbuf.Len())
+		if cbuf.Len() < 2<<30 {
+			numSkipped++
+			if numSkipped%1000 == 999 {
+				fmt.Printf("Skipped %d buffers\n", numSkipped)
+			}
 			cbuf.Release()
 			continue
 		}
-		fmt.Printf("Encoding a buffer of size: %d\n", cbuf.Len())
+		fmt.Printf("Encoding a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
 
 		wg := new(sync.WaitGroup)
