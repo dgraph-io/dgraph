@@ -336,20 +336,6 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 	require.Equal(t, schema, getGQLSchemaRequireId(t, groupOneAdminServer))
 }
 
-// TestGQSchemaAfterDropAll checks for empty schema after drop_all
-func TestGQLSchemaAfterDropAll(t *testing.T) {
-	// First Do the drop_all operation
-	dg, err := testutil.DgraphClient(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-
-	// need to wait a bit
-	time.Sleep(time.Second)
-	// Query Schema and ensure that it should be empty
-	schema := getGQLSchemaRequireId(t, groupOneAdminServer)
-	require.Empty(t, schema)
-}
-
 // TestGQLSchemaAfterDropData checks whether if the schema still exists after drop_data
 func TestGQLSchemaAfterDropData(t *testing.T) {
 	schema := `
