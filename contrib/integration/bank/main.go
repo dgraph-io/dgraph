@@ -100,7 +100,11 @@ func (s *state) createAccounts(dg *dgo.Dgraph) {
 	mu.SetJson = data
 	resp, err := txn.Mutate(context.Background(), &mu)
 	if *verbose {
-		log.Printf("[StartTs: %v] Mutation: %s\n", resp.Txn.StartTs, mu.SetJson)
+		if resp.Txn == nil {
+			log.Printf("[resp.Txn: %+v] Mutation: %s\n", resp.Txn, mu.SetJson)
+		} else {
+			log.Printf("[StartTs: %v] Mutation: %s\n", resp.Txn.StartTs, mu.SetJson)
+		}
 	}
 	x.Check(err)
 	x.Check(txn.Commit(context.Background()))
