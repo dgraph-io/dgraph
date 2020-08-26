@@ -81,7 +81,6 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 			addError(validator.Message("%s", err))
 			return
 		}
-
 		if intVal <= math.MaxInt32 && intVal >= math.MinInt32 {
 			return
 		}
