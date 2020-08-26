@@ -79,7 +79,6 @@ func TestRecurseNestedError2(t *testing.T) {
 }
 
 func TestRecurseQuery(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) @recurse {
@@ -90,7 +89,7 @@ func TestRecurseQuery(t *testing.T) {
 		}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes", "friend":[{"name":"Michonne"}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea", "friend":[{"name":"Glenn Rhee"}]}]}]}}`, js)
+		`{"data": {"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes", "friend":[{"name":"Michonne"}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`, js)
 }
 
 func TestRecurseExpand(t *testing.T) {
@@ -132,7 +131,7 @@ func TestRecurseQueryOrder(t *testing.T) {
 		}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"dob":"1910-01-01T00:00:00Z","friend":[{"dob":"1910-01-02T00:00:00Z","friend":[{"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1901-01-15T00:00:00Z","friend":[{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"dob":"1910-01-01T00:00:00Z","friend":[{"dob":"1910-01-02T00:00:00Z","friend":[{"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1901-01-15T00:00:00Z","name":"Andrea"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -147,7 +146,7 @@ func TestRecurseQueryAllowLoop(t *testing.T) {
 			}
 		}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"friend":[{"friend":[{"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"friend":[{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"dob":"1901-01-15T00:00:00Z","name":"Andrea"}],"dob":"1910-01-01T00:00:00Z","name":"Michonne"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"friend":[{"friend":[{"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1901-01-15T00:00:00Z","name":"Andrea"}],"dob":"1910-01-01T00:00:00Z","name":"Michonne"}]}}`, js)
 }
 
 func TestRecurseQueryAllowLoop2(t *testing.T) {
