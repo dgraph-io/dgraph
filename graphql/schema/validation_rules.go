@@ -19,6 +19,8 @@ package schema
 import (
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/validator"
+	"math"
+	"strconv"
 )
 
 func listTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
@@ -61,5 +63,30 @@ func variableTypeCheck(observers *validator.Events, addError validator.AddErrFun
 		addError(validator.Message("Variable type provided %s is incompatible with expected type %s",
 			value.VariableDefinition.Type.String(),
 			value.ExpectedType.String()), validator.At(value.Position))
+	})
+}
+
+func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
+		if value.Definition == nil || value.ExpectedType == nil {
+			return
+		}
+
+		if value.Kind != ast.IntValue || value.Definition.Name != "Int" {
+			return
+		}
+
+		intVal, err := strconv.ParseInt(value.Raw, 10, 64)
+		if err != nil {
+			addError(validator.Message("%s", err))
+			return
+		}
+
+		if intVal <= math.MaxInt32 && intVal >= math.MinInt32 {
+			return
+		}
+
+		addError(validator.Message("Out of range value '%s', for Variable type `%s`",
+			value.Raw, value.Definition.Name), validator.At(value.Position))
 	})
 }

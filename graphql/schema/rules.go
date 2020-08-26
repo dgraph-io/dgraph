@@ -45,6 +45,7 @@ func init() {
 
 	validator.AddRule("Check variable type is correct", variableTypeCheck)
 	validator.AddRule("Check for list type value", listTypeCheck)
+	validator.AddRule("Check range for Int type", intRangeCheck)
 
 }
 

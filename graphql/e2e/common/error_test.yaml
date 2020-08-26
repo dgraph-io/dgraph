@@ -100,3 +100,25 @@
     [ { "message": "Cannot query field \"getAuthor\" on type \"Subscription\".",
         "locations": [ { "line": 2, "column": 3 } ] } ]
 
+-
+  name: "Out of range error for int type"
+  gqlrequest: |
+    mutation {
+      addPost:(input:[{title:"Dgraph",author:{name:"Bob"},numLikes:2147483648}]){
+        post{
+              title
+              numLikes
+              author{
+                name
+           }
+      }
+    }
+  gqlvariables:
+    { }
+  errors:
+    [ { "message": "Out of range value '2147483648',  for Variable type `Int`",
+        "locations": [ { "line": 2, "column": 3 } ] } ]
+
+
+
+
