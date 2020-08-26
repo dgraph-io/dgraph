@@ -3373,9 +3373,9 @@ func mutationInt64InputCoercing(t *testing.T) {
 			addpost1(input: [{title: "Dgraph", numLikes:9.223372036854775e+18 ,numViews:"9223372036854775000",numComments:9223372036854775000.0}]) {
 				post1 {
 					title
-                    numViews
+					numViews
 					numLikes
-                    numComments
+					numComments
 				}
 			}
 		}`,

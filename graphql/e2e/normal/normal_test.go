@@ -173,7 +173,7 @@ func TestSchema_Normal(t *testing.T) {
 			"index": true,
 			"tokenizer": ["trigram", "hash"],
 			"upsert": true
-        }, {
+		}, {
 			"predicate": "post1.numViews",
 			"type": "int"
 		}, {
