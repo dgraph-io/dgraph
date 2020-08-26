@@ -342,18 +342,8 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 
 // verifyEmptySchema verifies that the schema is not set in the GraphQL server.
 func verifyEmptySchema(t *testing.T) {
-	queryStudent := `
-	query {
-		queryStudent {
-			email
-		}
-	}`
-
-	queryParams := &common.GraphQLParams{
-		Query: queryStudent,
-	}
-	gqlResponse := queryParams.ExecuteAsPost(t, groupOneServer)
-	require.Contains(t, gqlResponse.Errors.Error(), "There's no GraphQL schema in Dgraph")
+	schema := getGQLSchema(t, groupOneAdminServer)
+	require.Empty(t, schema.Schema)
 }
 
 func TestGQLSchemaValidate(t *testing.T) {
@@ -402,8 +392,12 @@ func TestGQLSchemaValidate(t *testing.T) {
 		Valid bool
 		Error []string
 	}{}
-	validateUrl := groupOneAdminServer + "/schema/validate"
 
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+
+	validateUrl := groupOneAdminServer + "/schema/validate"
 	for _, tcase := range testCases {
 		resp, err := http.Post(validateUrl, "text/plain", bytes.NewBuffer([]byte(tcase.schema)))
 		require.NoError(t, err)
