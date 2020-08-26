@@ -3366,3 +3366,35 @@ func updateMutationWithoutSetRemove(t *testing.T) {
 	// cleanup
 	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
 }
+
+func mutationInt64InputCoercing(t *testing.T) {
+	addPost1Params := &GraphQLParams{
+		Query: `mutation {
+			addpost1(input: [{title: "Dgraph", numLikes:9.223372036854775e+18 ,numViews:"9223372036854775000",numComments:9223372036854775000.0}]) {
+				post1 {
+					title
+                    numViews
+					numLikes
+                    numComments
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addPost1Params.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addPost1Expected := `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"numViews": 9223372036854775000,
+				"numLikes": 9223372036854775000,
+				"numComments": 9223372036854775000
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addPost1Expected, string(gqlResponse.Data))
+	filter := map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}
+	deleteGqlType(t, "post1", filter, 1, nil)
+}

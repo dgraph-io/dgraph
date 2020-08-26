@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"errors"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/validator"
 	"math"
@@ -72,20 +73,31 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 			return
 		}
 
-		if value.Kind != ast.IntValue || value.Definition.Name != "Int" {
+		if value.Kind != ast.IntValue {
 			return
 		}
 
-		intVal, err := strconv.ParseInt(value.Raw, 10, 64)
+		var err error
+		var val int64
+		switch value.Definition.Name {
+		case "Int":
+			_, err = strconv.ParseInt(value.Raw, 10, 32)
+		case "Int64":
+			val, err = strconv.ParseInt(value.Raw, 10, 54)
+		default:
+			return
+
+		}
+		//Range of Json numbers is [-(2**53)+1, (2**53)-1] while of 54 bit integers is [-(2**53), (2**53)-1]
 		if err != nil {
-			addError(validator.Message("%s", err))
-			return
-		}
-		if intVal <= math.MaxInt32 && intVal >= math.MinInt32 {
+			if float64(val) == (-1)*math.Pow(2, 53) || errors.Is(err, strconv.ErrRange) {
+				addError(validator.Message("Out of range value '%s', for type `%s`",
+					value.Raw, value.Definition.Name), validator.At(value.Position))
+				return
+			}
+			addError(validator.Message("%s", err), validator.At(value.Position))
 			return
 		}
 
-		addError(validator.Message("Out of range value '%s', for Variable type `%s`",
-			value.Raw, value.Definition.Name), validator.At(value.Position))
 	})
 }

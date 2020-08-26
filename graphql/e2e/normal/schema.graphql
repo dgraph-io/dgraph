@@ -163,3 +163,11 @@ type ThingTwo implements Thing {
         color: String
         owner: String
 }
+
+type post1{
+        id:ID
+        title:String!  @id @search(by: [regexp])
+        numLikes:Int64
+        numViews:Int64
+        numComments:Int64
+}
