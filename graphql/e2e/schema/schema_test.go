@@ -285,6 +285,8 @@ func TestIntrospectionQueryAfterDropAll(t *testing.T) {
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	// wait for a bit
+	time.Sleep(time.Second)
 
 	introspectionQuery := `
 	query{
