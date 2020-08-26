@@ -44,7 +44,6 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dustin/go-humanize"
 )
 
 type reducer struct {
@@ -493,32 +492,40 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		}
 	}
 
-	numSkipped := 0
+	hd := z.NewHistogramData(z.HistogramBounds(1, 32))
 	for i := 0; i < len(partitionKeys); i++ {
 		throttle()
-		cbuf := z.NewBuffer(4 << 20)
+		// cbuf := z.NewBuffer(4 << 20)
+		sz := 0
 		for _, itr := range mapItrs {
 			res := itr.Next()
 			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
-			cbuf.Write(res.cbuf.Bytes())
+			// cbuf.Write(res.cbuf.Bytes())
+			sz += res.cbuf.Len()
 			itr.release(res)
 		}
-		if cbuf.Len() < 2<<30 {
-			numSkipped++
-			if numSkipped%1000 == 999 {
-				fmt.Printf("Skipped %d buffers\n", numSkipped)
-			}
-			cbuf.Release()
-			continue
+		hd.Update(int64(sz))
+		// if cbuf.Len() < 2<<30 {
+		// 	numSkipped++
+		// 	if numSkipped%1000 == 999 {
+		// 		fmt.Printf("Skipped %d buffers\n", numSkipped)
+		// 	}
+		// 	cbuf.Release()
+		// 	continue
+		// }
+		if i%1000 == 0 {
+			fmt.Printf("Histogram of buffers: %s\n", hd.String())
 		}
-		fmt.Printf("Encoding a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
-		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
+		continue
 
-		wg := new(sync.WaitGroup)
-		wg.Add(1)
-		req := &encodeRequest{cbuf: cbuf, wg: wg}
-		encoderCh <- req
-		writerCh <- req
+		// fmt.Printf("Encoding a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
+		// atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
+
+		// wg := new(sync.WaitGroup)
+		// wg.Add(1)
+		// req := &encodeRequest{cbuf: cbuf, wg: wg}
+		// encoderCh <- req
+		// writerCh <- req
 	}
 
 	throttle()
