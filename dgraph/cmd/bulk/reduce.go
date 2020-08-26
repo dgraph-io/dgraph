@@ -116,7 +116,7 @@ func (r *reducer) createBadger(i int) *badger.DB {
 
 	opt := badger.DefaultOptions(r.opt.shardOutputDirs[i]).WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
-		WithLogger(nil).WithMaxCacheSize(1 << 20).
+		WithLogger(nil).WithBlockCacheSize(1 << 20).
 		WithEncryptionKey(r.opt.EncryptionKey).WithCompression(bo.None)
 
 	// Overwrite badger options based on the options provided by the user.
