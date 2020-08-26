@@ -2306,7 +2306,17 @@
           "uid": "_:Comment110"
         }
       cond: "@if(eq(len(Comment110), 0))"
-    # Link comment1 and reply1 if reply exists but comment doesn't.
+    # Create reply1 if it doesn't exist.
+    - setjson: |
+        {
+          "Comment1.id": "reply1",
+          "dgraph.type": [
+            "Comment1"
+          ],
+          "uid": "_:Comment16"
+        }
+      cond: "@if(eq(len(Comment16), 0) AND eq(len(Comment110), 0))"
+    # Link comment2 and reply1 if reply exists but comment doesn't.
     - setjson: |
         {"uid":"_:Comment110", "Comment1.replies": [{"uid": "uid(Comment16)"}]}
       cond: "@if(eq(len(Comment16), 1) AND eq(len(Comment110), 0))"
