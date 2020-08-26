@@ -519,9 +519,12 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 				keys[z.MemHash(me.Key())]++
 			}
 			for k, num := range keys {
+				if num < 1000 {
+					continue
+				}
 				fmt.Printf("key=%d. Num Entries: %d\n", k, num)
 			}
-			fmt.Printf("Total keys: %d\n", len(keys))
+			fmt.Printf("Total keys: %d. Total entries: %d\n", len(keys), len(offsets))
 		}
 		cbuf.Reset()
 		continue
