@@ -1106,7 +1106,8 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 	cp := strings.Split(cpString, ",")
 	// Sanity checks
 	if len(cp) != numExpected {
-		return nil, errors.Errorf("ERROR: expected %d cache percentages, got %d", numExpected, len(cp))
+		return nil, errors.Errorf("ERROR: expected %d cache percentages, got %d",
+			numExpected, len(cp))
 	}
 
 	var cachePercent []int64
