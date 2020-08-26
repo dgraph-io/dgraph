@@ -514,6 +514,19 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		if i%1000 == 0 {
 			fmt.Printf("Histogram of buffers: %s\n", hd.String())
 		}
+		{
+			// Just check how many keys do we have in this giant buffer.
+			offsets := cbuf.SliceOffsets(nil)
+			keys := make(map[uint64]uint64)
+			for _, off := range offsets {
+				me := MapEntry(cbuf.Slice(off))
+				keys[z.MemHash(me.Key())]++
+			}
+			for k, num := range keys {
+				fmt.Printf("key=%d. Num Entries: %d\n", k, num)
+			}
+			fmt.Printf("Total keys: %d\n", len(keys))
+		}
 
 		fmt.Printf("Encoding a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
@@ -634,6 +647,9 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	appendToList := func() {
 		if len(currentBatch) == 0 {
 			return
+		}
+		if len(currentBatch) > 1e9 {
+			fmt.Printf("Got current batch of size: %d\n", len(currentBatch))
 		}
 
 		// Calculate count entries.
