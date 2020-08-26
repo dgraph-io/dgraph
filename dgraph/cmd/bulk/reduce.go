@@ -526,6 +526,8 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			}
 			fmt.Printf("Total keys: %d\n", len(keys))
 		}
+		cbuf.Reset()
+		continue
 
 		fmt.Printf("Encoding a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
