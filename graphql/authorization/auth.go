@@ -144,7 +144,7 @@ func ParseAuthMeta(schema string) (*AuthMeta, error) {
 	}
 
 	if metaInfo.Algo != RSA256 {
-		return nil, err
+		return metaInfo, nil
 	}
 
 	// The jwt library internally uses `bytes.IndexByte(data, '\n')` to fetch new line and fails

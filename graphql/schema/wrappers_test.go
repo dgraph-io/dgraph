@@ -22,7 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -1135,15 +1134,15 @@ func TestParseSecrets(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			s, _, err := parseSecrets(test.schemaStr)
+			s, authMeta, err := parseSecrets(test.schemaStr)
 			if test.err != nil || err != nil {
 				require.EqualError(t, err, test.err.Error())
 				return
 			}
-
 			require.Equal(t, test.expectedSecrets, s)
 			if test.expectedAuthHeader != "" {
-				require.Equal(t, test.expectedAuthHeader, authorization.GetHeader())
+				require.NotNil(t, authMeta)
+				require.Equal(t, test.expectedAuthHeader, authMeta.Header)
 			}
 		})
 	}
