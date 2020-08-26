@@ -19,7 +19,6 @@ package schema
 import (
 	"bytes"
 	"fmt"
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -220,10 +219,6 @@ type schema struct {
 	customDirectives map[string]map[string]*ast.Directive
 	// Map from typename to auth rules
 	authRules map[string]*TypeAuth
-	//
-	authMeta *authorization.AuthMeta
-	//
-	hc *headersConfig
 }
 
 type operation struct {

@@ -506,7 +506,7 @@ func setupServer(closer *y.Closer) {
 		err := admin.SchemaValidate(string(schema))
 		if err == nil {
 			w.WriteHeader(http.StatusOK)
-			x.Check2(w.Write([]byte(`{"valid":"true"}`)))
+			x.Check2(w.Write([]byte(`{"valid":true}`)))
 			return
 		}
 
@@ -516,7 +516,7 @@ func setupServer(closer *y.Closer) {
 		if err != nil {
 			errJson = []byte(err.Error())
 		}
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"valid":"false", "error" : %s}`, errJson))))
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"valid":false, "error" : %s}`, errJson))))
 	}))
 
 	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},

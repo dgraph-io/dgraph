@@ -389,7 +389,7 @@ func TestGQLSchemaValidate(t *testing.T) {
 	}
 
 	response :=  struct {
-		Valid string
+		Valid bool
 		Error []string
 	}{}
 	validateUrl := groupOneAdminServer + "/schema/validate"
@@ -407,11 +407,11 @@ func TestGQLSchemaValidate(t *testing.T) {
 
 		if tcase.valid {
 			require.Equal(t, resp.StatusCode, http.StatusOK)
-			require.Equal(t, response.Valid, "true")
+			require.Equal(t, response.Valid, true)
 			continue
 		}
 		require.Equal(t, resp.StatusCode, http.StatusBadRequest)
-		require.Equal(t, response.Valid, "false")
+		require.Equal(t, response.Valid, false)
 		require.Equal(t, response.Error, tcase.error)
 	}
 }
