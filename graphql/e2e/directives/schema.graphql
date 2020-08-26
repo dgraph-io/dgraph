@@ -163,3 +163,13 @@ type ThingTwo implements Thing {
 	color: String
 	owner: String
 }
+
+type Post1 {
+       id: String! @id
+       comments: [Comment1]
+}
+
+type Comment1 {
+      id: String! @id
+      replies: [Comment1]
+}
