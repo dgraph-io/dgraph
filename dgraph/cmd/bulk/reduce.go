@@ -507,14 +507,11 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			itr.release(res)
 		}
 		hd.Update(int64(sz))
-		if cbuf.Len() < 4<<30 {
-			cbuf.Reset()
-			continue
-		}
 		if i%1000 == 0 {
 			fmt.Printf("Histogram of buffers: %s\n", hd.String())
 		}
-		{
+		if cbuf.Len() > 1<<30 {
+			fmt.Printf("Found a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
 			// Just check how many keys do we have in this giant buffer.
 			offsets := cbuf.SliceOffsets(nil)
 			keys := make(map[uint64]uint64)
@@ -530,7 +527,6 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		cbuf.Reset()
 		continue
 
-		fmt.Printf("Encoding a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
 
 		wg := new(sync.WaitGroup)
