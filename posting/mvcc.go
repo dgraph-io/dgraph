@@ -52,14 +52,6 @@ var (
 	// an invalid key (e.g the key to a single part of a larger multi-part list).
 	ErrInvalidKey = errors.Errorf("cannot read posting list using multi-part list key")
 
-	// ErrBadgerClosed is returned when Badger is closed and then we try to
-	// read something from it.
-	ErrBadgerClosed = errors.Errorf("read after closing badger")
-
-	// BadgerClosed denotes if the badger store is closed. It should be accessed atomically.
-	// We set it to 1 just before closing badger DB.
-	BadgerClosed uint32
-
 	// IncrRollup is used to batch keys for rollup incrementally.
 	IncrRollup = &incrRollupi{
 		keysCh: make(chan *[][]byte),
@@ -360,9 +352,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 }
 
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
-	if atomic.LoadUint32(&BadgerClosed) == 1 {
-		return nil, ErrBadgerClosed
-	}
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
