@@ -63,3 +63,29 @@ func variableTypeCheck(observers *validator.Events, addError validator.AddErrFun
 			value.ExpectedType.String()), validator.At(value.Position))
 	})
 }
+
+func directiveArgumentsCheck(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnDirective(func(walker *validator.Walker, directive *ast.Directive) {
+
+		if directive.Name == cascadeDirective && len(directive.Arguments) == 1 {
+			if directive.ParentDefinition == nil {
+				addError(validator.Message("Schema is not set yet. Please try after sometime."))
+				return
+			}
+			if directive.Arguments.ForName(cascadeArg) == nil {
+				return
+			}
+			typFields := directive.ParentDefinition.Fields
+			for _, child := range directive.Arguments.ForName(cascadeArg).Value.Children {
+				if typFields.ForName(child.Value.Raw) == nil {
+					addError(validator.Message("Field `%s` is not present in type `%s`. You can only use fields which are in type `%s`",
+						child.Value.Raw, directive.ParentDefinition.Name, directive.ParentDefinition.Name))
+					return
+				}
+
+			}
+
+		}
+
+	})
+}
