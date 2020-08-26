@@ -635,7 +635,6 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	})
 
 	var currentKey []byte
-	var uids []uint64
 	pl := new(pb.PostingList)
 
 	userMeta := []byte{posting.BitCompletePosting}
@@ -665,20 +664,28 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 			return less(lhs, rhs)
 		})
 
+		enc := codec.Encoder{BlockSize: 256}
+		var lastUid uint64
 		for _, offset := range currentBatch {
 			me := MapEntry(cbuf.Slice(offset))
 			uid := me.Uid()
-			if len(uids) > 0 && uids[len(uids)-1] == uid {
+			if uid == lastUid {
 				continue
 			}
-			// TODO: Potentially could be doing codec.Encoding right here.
-			uids = append(uids, uid)
+			lastUid = uid
+
+			enc.Add(uid)
 			if pbuf := me.Plist(); len(pbuf) > 0 {
 				p := &pb.Posting{}
 				x.Check(p.Unmarshal(pbuf))
 				pl.Postings = append(pl.Postings, p)
 			}
 		}
+
+		// We should not do defer FreePack here, because we might be giving ownership of it away if
+		// we run Rollup.
+		pl.Pack = enc.Done()
+		numUids := codec.ExactLen(pl.Pack)
 
 		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
 
@@ -687,7 +694,8 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 		// list when the value is read by dgraph.  For a value posting list,
 		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
-		if len(uids) == 0 {
+		if numUids == 0 {
+			codec.FreePack(pl.Pack)
 			return
 		}
 
@@ -699,7 +707,7 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 		x.Check(err)
 		if parsedKey.IsData() {
 			schema := r.state.schema.getSchema(parsedKey.Attr)
-			if schema.GetValueType() == pb.Posting_UID && !schema.GetList() && len(uids) > 1 {
+			if schema.GetValueType() == pb.Posting_UID && !schema.GetList() && numUids > 1 {
 				fmt.Printf("Schema for pred %s specifies that this is not a list but more than  "+
 					"one UID has been found. Forcing the schema to be a list to avoid any "+
 					"data loss. Please fix the data to your specifications once Dgraph is up.\n",
@@ -707,10 +715,6 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 				r.state.schema.setSchemaAsList(parsedKey.Attr)
 			}
 		}
-
-		pl.Pack = codec.Encode(uids, 256)
-		// We should not do defer FreePack here, because we might be giving ownership of it away if
-		// we run Rollup.
 
 		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
@@ -734,7 +738,6 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 			list.Kv = append(list.Kv, kv)
 		}
 
-		uids = uids[:0]
 		pl.Reset()
 		// Reset the current batch.
 		currentBatch = currentBatch[:0]
