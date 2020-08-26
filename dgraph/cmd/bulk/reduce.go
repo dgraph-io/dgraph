@@ -696,10 +696,12 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 		}
 
 		pl.Pack = codec.Encode(uids, 256)
-		defer codec.FreePack(pl.Pack)
+		// We should not do defer FreePack here, because we might be giving ownership of it away if
+		// we run Rollup.
 
 		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
+			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup()
 			x.Check(err)
@@ -708,6 +710,8 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 		} else {
 			val, err := pl.Marshal()
 			x.Check(err)
+			codec.FreePack(pl.Pack)
+
 			kv := &bpb.KV{
 				Key:      y.Copy(currentKey),
 				Value:    val,
