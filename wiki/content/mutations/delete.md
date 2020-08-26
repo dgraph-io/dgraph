@@ -37,12 +37,12 @@ For a particular node `N`, all data for predicate `P` (and corresponding indexin
 }
 ```
 
-The pattern `S * *` deletes all known edges out of a node (the node itself may
-remain as the target of edges), any reverse edges corresponding to the removed
+The pattern `S * *` deletes all the known edges out of a node, any reverse edges corresponding to the removed
 edges and any indexing for the removed data. The predicates to delete are
 derived from the type information for that node (the value of the `dgraph.type`
-edges on that node and their corresponding definitions in the schema). If that
-information is missing, this operation will be a no-op.
+edges on that node and their corresponding definitions in the schema). If the type information
+for the node `S` is missing then the delete operation will not work.
+
 
 ```sh
 {
@@ -52,6 +52,9 @@ information is missing, this operation will be a no-op.
 }
 ```
 
+If the node `S` in the delete pattern `S * *` has only a few predicates as a part of `dgraph.type`,
+then only those predicates will be deleted which are part of `dgraph.type`. It implies that after a delete operation
+by this pattern, the node itself may still exist depending on if all the predicates are part of `dgraph.type` or not.
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
 

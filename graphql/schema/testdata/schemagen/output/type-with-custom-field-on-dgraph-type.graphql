@@ -189,8 +189,18 @@ type UpdateUserPayload {
 # Generated Enums
 #######################
 
+enum CarHasFilter {
+	name
+}
+
 enum CarOrderable {
 	name
+}
+
+enum UserHasFilter {
+	name
+	age
+	cars
 }
 
 enum UserOrderable {
@@ -212,6 +222,9 @@ input AddUserInput {
 
 input CarFilter {
 	id: [ID!]
+	has: CarHasFilter
+	and: CarFilter
+	or: CarFilter
 	not: CarFilter
 }
 
@@ -245,6 +258,7 @@ input UpdateUserInput {
 input UserFilter {
 	id: [ID!]
 	age: IntFilter
+	has: UserHasFilter
 	and: UserFilter
 	or: UserFilter
 	not: UserFilter

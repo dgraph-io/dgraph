@@ -93,10 +93,12 @@ query {
 ```
 
 There are following points to note while specifying the DQL query for such custom resolvers:
+
 * The name of the DQL query that you want to map to the GraphQL response, should be same as the name of the GraphQL query.
 * You must use proper aliases inside DQL queries to map them to the GraphQL response.
 * If you are using variables in DQL queries, their names should be same as the name of the arguments for the GrapqhQL query.
 * For variables, only scalar GraphQL arguments like Boolean, Int, Float etc are allowed. Lists and Object types are not allowed to be used as variables with DQL queries.
 * You would be able to query only those many levels with GraphQL which you have mapped with the DQL query. For instance, in the first custom query above, we haven't mapped an author's tweets to GraphQL alias, so, we won't be able to fetch author's tweets using that query.
+* If the custom GraphQL query returns an interface, and you want to use `__typename` in GraphQL query, then you should add `dgraph.type` as a field in DQL query without any alias. This is not required for types, only for interfaces.
 
 ---

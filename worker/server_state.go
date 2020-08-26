@@ -62,7 +62,7 @@ func InitServerState() {
 	x.WorkerConfig.ProposedGroupId = groupId
 }
 
-func setBadgerOptions(opt badger.Options) badger.Options {
+func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
 	opt = opt.WithSyncWrites(false).
 		WithTruncate(true).
 		WithLogger(&x.ToGlog{}).
@@ -86,8 +86,20 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 		opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
 	}
 
+	var badgerTables string
+	var badgerVlog string
+	if wal {
+		// Settings for the write-ahead log.
+		badgerTables = Config.BadgerWalTables
+		badgerVlog = Config.BadgerWalVlog
+	} else {
+		// Settings for the data directory.
+		badgerTables = Config.BadgerTables
+		badgerVlog = Config.BadgerVlog
+	}
+
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
-	switch Config.BadgerTables {
+	switch badgerTables {
 	case "mmap":
 		opt.TableLoadingMode = options.MemoryMap
 	case "ram":
@@ -99,7 +111,7 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	}
 
 	glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
-	switch Config.BadgerVlog {
+	switch badgerVlog {
 	case "mmap":
 		opt.ValueLogLoadingMode = options.MemoryMap
 	case "disk":
@@ -128,16 +140,9 @@ func (s *ServerState) initStorage() {
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
 		opt := badger.LSMOnlyOptions(Config.WALDir)
-		opt = setBadgerOptions(opt)
+		opt = setBadgerOptions(opt, true)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
 		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
-
-		// We should always force load LSM tables to memory, disregarding user settings, because
-		// Raft.Advance hits the WAL many times. If the tables are not in memory, retrieval slows
-		// down way too much, causing cluster membership issues. Because of prefix compression and
-		// value separation provided by Badger, this is still better than using the memory based WAL
-		// storage provided by the Raft library.
-		opt.TableLoadingMode = options.LoadToRAM
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
@@ -161,7 +166,7 @@ func (s *ServerState) initStorage() {
 			WithKeepBlockIndicesInCache(true).
 			WithKeepBlocksInCache(true).
 			WithMaxBfCacheSize(500 << 20) // 500 MB of bloom filter cache.
-		opt = setBadgerOptions(opt)
+		opt = setBadgerOptions(opt, false)
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.

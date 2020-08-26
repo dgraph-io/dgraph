@@ -108,7 +108,7 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			Data:       map[string]interface{}{query.Name(): nil},
+			Data:       map[string]interface{}{query.DgraphAlias(): nil},
 			Field:      query,
 			Err:        err,
 			Extensions: ext,

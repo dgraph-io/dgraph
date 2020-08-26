@@ -173,6 +173,12 @@ type UpdateProductPayload {
 # Generated Enums
 #######################
 
+enum ProductHasFilter {
+	price
+	name
+	name2
+}
+
 enum ProductOrderable {
 	price
 	name
@@ -194,6 +200,7 @@ input ProductFilter {
 	price: FloatFilter
 	name: StringTermFilter
 	name2: StringTermFilter
+	has: ProductHasFilter
 	and: ProductFilter
 	or: ProductFilter
 	not: ProductFilter
