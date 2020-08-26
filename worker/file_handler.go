@@ -145,6 +145,12 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 		return LoadResult{0, 0, err}
 	}
 
+	// Sort manifests in the ascending order of their BackupNum so that the first
+	// manifest corresponds to the first full backup and so on.
+	sort.Slice(manifests, func(i, j int) bool {
+		return manifests[i].BackupNum < manifests[j].BackupNum
+	})
+
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
