@@ -20,7 +20,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.2-0.20200826093841-7d288ecdc846
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200715131837-c0460019ead2
-	github.com/dgraph-io/ristretto v0.0.4-0.20200820164438-623d8ef1614b
+	github.com/dgraph-io/ristretto v0.0.3-0.20200630154024-f66de99634de
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
@@ -31,16 +31,15 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/protobuf v1.4.2
+	github.com/golang/protobuf v1.3.5
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
-	github.com/google/go-cmp v0.5.0
+	github.com/google/go-cmp v0.4.0
 	github.com/google/uuid v1.0.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
 	github.com/graph-gophers/graphql-transport-ws v0.0.0-20190611222414-40c048432299 // indirect
 	github.com/hashicorp/vault/api v1.0.4
-	github.com/kr/pretty v0.2.0 // indirect
 	github.com/minio/minio-go/v6 v6.0.55
 	github.com/mitchellh/panicwrap v1.0.0
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
@@ -48,6 +47,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.2.1
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
+	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
 	github.com/prometheus/common v0.4.1 // indirect
 	github.com/prometheus/procfs v0.0.0-20190517135640-51af30a78b0e // indirect
 	github.com/spf13/cast v1.3.0
@@ -61,13 +61,13 @@ require (
 	github.com/willf/bitset v0.0.0-20181014161241-71fa2377963f // indirect
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.21.0
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/net v0.0.0-20200822124328-c89045814202
+	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
-	golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8
+	golang.org/x/sys v0.0.0-20200515095857-1151b9dac4a9
 	golang.org/x/text v0.3.2
-	google.golang.org/grpc v1.27.0
-	google.golang.org/protobuf v1.25.0 // indirect
+	google.golang.org/genproto v0.0.0-20190516172635-bb713bdc0e52 // indirect
+	google.golang.org/grpc v1.23.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/ini.v1 v1.48.0 // indirect
 	gopkg.in/yaml.v2 v2.2.4
