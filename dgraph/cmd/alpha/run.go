@@ -204,10 +204,11 @@ they form a Raft group and provide synchronous replication.
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
 
-	// Add cache flags
+	// Cache flags
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha.")
-	flag.String("cache_percentage", "0,65,25,0,10", `Cache percentages for various caches
-		(PostingListCache:PstoreBlockCache:PstoreIndexCache:WstoreBlockCache:WstoreIndexCache).`)
+	flag.String("cache_percentage", "0,65,25,0,10",
+		`Cache percentages summing up to 100 for various caches (FORMAT:
+		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).`)
 }
 
 func setupCustomTokenizers() {

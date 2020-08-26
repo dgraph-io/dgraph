@@ -104,10 +104,10 @@ instances to achieve high-availability.
 	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 
-	// Add cache flags
+	// Cache flags
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
 	flag.String("cache_percentage", "100,0",
-		"Cache percentages for various caches (block cache,index cache).")
+		"Cache percentages summing up to 100 for various caches (FORMAT: blockCache,indexCache).")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
