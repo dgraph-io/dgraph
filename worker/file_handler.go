@@ -139,6 +139,11 @@ func (h *fileHandler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, 
 		return nil, err
 	}
 
+	// Sort manifests in the ascending order of their BackupNum so that the first
+	// manifest corresponds to the first full backup and so on.
+	sort.Slice(manifests, func(i, j int) bool {
+		return manifests[i].BackupNum < manifests[j].BackupNum
+	})
 	return manifests, nil
 }
 
