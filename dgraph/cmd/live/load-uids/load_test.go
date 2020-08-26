@@ -271,7 +271,7 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 	require.Nilf(t, resp.Errors, resp.Errors.Error())
 
 	// wait a bit to be sure export is complete
-	time.Sleep(time.Second)
+	time.Sleep(8 * time.Second)
 
 	// copy the export files from docker
 	exportId, groupId := copyExportToLocalFs(t)

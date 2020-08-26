@@ -89,7 +89,7 @@
     [ { "message": "must be defined",
       "path": [ "variable", "filter"] } ]
 -
-  name: "subscription on type without @withSubscription directive should retur error"
+  name: "subscription on type without @withSubscription directive should return error"
   gqlrequest: |
     subscription {
       getAuthor(id: "0x1") { name }
@@ -100,3 +100,33 @@
     [ { "message": "Cannot query field \"getAuthor\" on type \"Subscription\".",
         "locations": [ { "line": 2, "column": 3 } ] } ]
 
+-
+  name: "@cascade only accepts those fields as a argument, which are present in given type "
+  gqlrequest: |
+    query {
+      queryAuthor @cascade(fields:["title"]){
+        dob
+        reputation
+      }
+    }
+  gqlvariables:
+    { }
+  errors:
+    [ { "message": "Field `title` is not present in type `Author`. You can only use fields which are in type `Author`",
+    } ]
+
+-
+  name: "@cascade only accepts numUids or given type name as arguments for add or update payload "
+  gqlrequest: |
+    mutation {
+      addAuthor(input:[{name:"jatin"}]) @cascade(fields:["name"]) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables:
+    { }
+  errors:
+    [ { "message": "Field `name` is not present in type `AddAuthorPayload`. You can only use fields which are in type `AddAuthorPayload`",
+    } ]

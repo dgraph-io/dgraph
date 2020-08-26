@@ -2,16 +2,17 @@
 # Input Schema
 #######################
 
-type Post {
+interface I {
 	id: ID!
-	title: String!
-	text: String
-	author(filter: AuthorFilter): Author!
 }
 
-type Author {
+type T implements I {
 	id: ID!
-	name: String!
+	text: String
+}
+
+type B {
+	name: String
 }
 
 #######################
@@ -153,35 +154,30 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type AddBPayload {
+	b(order: BOrder, first: Int, offset: Int): [B]
 	numUids: Int
 }
 
-type AddPostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+type AddTPayload {
+	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 	numUids: Int
 }
 
-type DeleteAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type DeleteIPayload {
+	i(filter: IFilter, first: Int, offset: Int): [I]
 	msg: String
 	numUids: Int
 }
 
-type DeletePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+type DeleteTPayload {
+	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 	msg: String
 	numUids: Int
 }
 
-type UpdateAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
-	numUids: Int
-}
-
-type UpdatePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+type UpdateTPayload {
+	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 	numUids: Int
 }
 
@@ -189,22 +185,19 @@ type UpdatePostPayload {
 # Generated Enums
 #######################
 
-enum AuthorHasFilter {
+enum BHasFilter {
 	name
 }
 
-enum AuthorOrderable {
+enum BOrderable {
 	name
 }
 
-enum PostHasFilter {
-	title
+enum THasFilter {
 	text
-	author
 }
 
-enum PostOrderable {
-	title
+enum TOrderable {
 	text
 }
 
@@ -212,76 +205,67 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
-input AddAuthorInput {
-	name: String!
-}
-
-input AddPostInput {
-	title: String!
-	text: String
-	author: AuthorRef!
-}
-
-input AuthorFilter {
-	id: [ID!]
-	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
-	not: AuthorFilter
-}
-
-input AuthorOrder {
-	asc: AuthorOrderable
-	desc: AuthorOrderable
-	then: AuthorOrder
-}
-
-input AuthorPatch {
+input AddBInput {
 	name: String
 }
 
-input AuthorRef {
-	id: ID
+input AddTInput {
+	text: String
+}
+
+input BFilter {
+	has: BHasFilter
+	and: BFilter
+	or: BFilter
+	not: BFilter
+}
+
+input BOrder {
+	asc: BOrderable
+	desc: BOrderable
+	then: BOrder
+}
+
+input BRef {
 	name: String
 }
 
-input PostFilter {
+input IFilter {
 	id: [ID!]
-	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
-	not: PostFilter
+	not: IFilter
 }
 
-input PostOrder {
-	asc: PostOrderable
-	desc: PostOrderable
-	then: PostOrder
+input IRef {
+	id: ID!
 }
 
-input PostPatch {
-	title: String
+input TFilter {
+	id: [ID!]
+	has: THasFilter
+	and: TFilter
+	or: TFilter
+	not: TFilter
+}
+
+input TOrder {
+	asc: TOrderable
+	desc: TOrderable
+	then: TOrder
+}
+
+input TPatch {
 	text: String
-	author: AuthorRef
 }
 
-input PostRef {
+input TRef {
 	id: ID
-	title: String
 	text: String
-	author: AuthorRef
 }
 
-input UpdateAuthorInput {
-	filter: AuthorFilter!
-	set: AuthorPatch
-	remove: AuthorPatch
-}
-
-input UpdatePostInput {
-	filter: PostFilter!
-	set: PostPatch
-	remove: PostPatch
+input UpdateTInput {
+	filter: TFilter!
+	set: TPatch
+	remove: TPatch
 }
 
 #######################
@@ -289,10 +273,11 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	getPost(id: ID!): Post
-	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	getAuthor(id: ID!): Author
-	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getI(id: ID!): I
+	queryI(filter: IFilter, first: Int, offset: Int): [I]
+	getT(id: ID!): T
+	queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+	queryB(order: BOrder, first: Int, offset: Int): [B]
 }
 
 #######################
@@ -300,11 +285,10 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: [AddPostInput!]!): AddPostPayload
-	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(filter: PostFilter!): DeletePostPayload
-	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
-	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
-	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	deleteI(filter: IFilter!): DeleteIPayload
+	addT(input: [AddTInput!]!): AddTPayload
+	updateT(input: UpdateTInput!): UpdateTPayload
+	deleteT(filter: TFilter!): DeleteTPayload
+	addB(input: [AddBInput!]!): AddBPayload
 }
 

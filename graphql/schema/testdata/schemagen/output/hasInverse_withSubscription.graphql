@@ -87,7 +87,7 @@ directive @auth(
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
 
 input IntFilter {
 	eq: Int
@@ -184,6 +184,18 @@ type UpdatePostPayload {
 }
 
 #######################
+# Generated Enums
+#######################
+
+enum AuthorHasFilter {
+	posts
+}
+
+enum PostHasFilter {
+	author
+}
+
+#######################
 # Generated Inputs
 #######################
 
@@ -197,6 +209,9 @@ input AddPostInput {
 
 input AuthorFilter {
 	id: [ID!]
+	has: AuthorHasFilter
+	and: AuthorFilter
+	or: AuthorFilter
 	not: AuthorFilter
 }
 
@@ -211,6 +226,9 @@ input AuthorRef {
 
 input PostFilter {
 	id: [ID!]
+	has: PostHasFilter
+	and: PostFilter
+	or: PostFilter
 	not: PostFilter
 }
 

@@ -304,7 +304,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
-		return posting.DeleteData()
+		if err := posting.DeleteData(); err != nil {
+			return err
+		}
+
+		// Clear entire cache.
+		posting.ResetCache()
+		return nil
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_ALL {
@@ -315,6 +321,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		if err := posting.DeleteAll(); err != nil {
 			return err
 		}
+
+		// Clear entire cache.
+		posting.ResetCache()
 
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema()
@@ -378,6 +387,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
 			return err
+		}
+
+		// Clear the entire cache if there is a schema update because the index rebuild
+		// will invalidate the state.
+		if len(proposal.Mutations.Schema) > 0 {
+			posting.ResetCache()
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
@@ -767,6 +782,13 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
 		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 	}
+
+	// Clear all the cached lists that were touched by this transaction.
+	for _, status := range delta.Txns {
+		txn := posting.Oracle().GetTxn(status.StartTs)
+		txn.RemoveCachedKeys()
+	}
+	posting.WaitForCache()
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)

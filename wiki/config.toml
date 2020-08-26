@@ -23,3 +23,6 @@ startLevel = 2
 
 # set by build script: title, baseurl
 title = "Dgraph Documentation"
+
+[params]
+discourse = "https://discuss.dgraph.io/"

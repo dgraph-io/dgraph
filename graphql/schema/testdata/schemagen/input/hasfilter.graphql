@@ -1,0 +1,11 @@
+interface I {
+    id: ID!
+}
+
+type T implements I {
+    text: String
+}
+
+type B {
+    name: String
+}

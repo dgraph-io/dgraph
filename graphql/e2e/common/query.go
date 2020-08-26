@@ -378,6 +378,43 @@ func deepFilter(t *testing.T) {
 	}
 }
 
+func deepHasFilter(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+	newPost1 := addPostWithNullText(t, newAuthor.ID, newCountry.ID, postExecutor)
+	newPost2 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+	getAuthorParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Test Author" } }) {
+				name
+				posts(filter: {not :{ has : text } }) {
+					title
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := getAuthorParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.QueryAuthor))
+
+	expected := &author{
+		Name:  "Test Author",
+		Posts: []*post{{Title: "No text"}},
+	}
+
+	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost1, newPost2})
+}
+
 // manyQueries runs multiple queries in the one block.  Internally, the GraphQL
 // server should run those concurrently, but the results should be returned in the
 // requested order.  This makes sure those many test runs are reassembled correctly.
@@ -697,6 +734,22 @@ func int32Filters(t *testing.T) {
 			postTest(t, test.Filter, test.Expected)
 		})
 	}
+}
+
+func hasFilters(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+	newPost := addPostWithNullText(t, newAuthor.ID, newCountry.ID, postExecutor)
+
+	Filter := map[string]interface{}{"has": "text"}
+	Expected := []*post{
+		{Title: "GraphQL doco"},
+		{Title: "Introducing GraphQL in Dgraph"},
+		{Title: "Learning GraphQL in Dgraph"},
+		{Title: "Random post"}}
+
+	postTest(t, Filter, Expected)
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
 
 func int64Filters(t *testing.T) {
@@ -1690,7 +1743,7 @@ func DgraphDirectiveWithSpecialCharacters(t *testing.T) {
 }
 
 func queryWithCascade(t *testing.T) {
-	// for testing @cascade with get by ID and filter queries, also for testing @cascade on field
+	// for testing normal and parameterized @cascade with get by ID and filter queries on multiple levels
 	authors := addMultipleAuthorFromRef(t, []*author{
 		{
 			Name:       "George",
@@ -1699,15 +1752,20 @@ func queryWithCascade(t *testing.T) {
 		}, {
 			Name:       "Jerry",
 			Reputation: 4.6,
+			Country:    &country{Name: "outer Galaxy2"},
 			Posts:      []*post{{Title: "Outside", Tags: []string{}}},
 		}, {
-			Name:  "Kramer",
-			Posts: []*post{{Title: "Ha! Cosmo Kramer", Text: "Giddy up!", Tags: []string{}}},
+			Name:    "Kramer",
+			Country: &country{Name: "outer space2"},
+			Posts:   []*post{{Title: "Ha! Cosmo Kramer", Text: "Giddy up!", Tags: []string{}}},
 		},
 	}, postExecutor)
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
 	authorIds := []string{authors[0].ID, authors[1].ID, authors[2].ID}
 	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID,
 		authors[2].Posts[0].PostID}
+	countryIds := []string{authors[1].Country.ID, authors[2].Country.ID}
 	getAuthorByIdQuery := `query ($id: ID!) {
 							  getAuthor(id: $id) @cascade {
 								reputation
@@ -1828,6 +1886,182 @@ func queryWithCascade(t *testing.T) {
 							}]
 						}`,
 		},
+		{
+			name: "parameterized cascade with argument at outer level only",
+			query: `query ($ids: [ID!]) {
+						queryAuthor(filter: {id: $ids})  @cascade(fields:["name"]) {
+							reputation
+							name
+							country {
+								name
+							}
+						}
+					}`,
+			variables: map[string]interface{}{"ids": authorIds},
+			respData:`{
+						  "queryAuthor": [
+							{
+							  "reputation": 4.6,
+							  "name": "Jerry",
+							  "country": {
+								"name": "outer Galaxy2"
+							  }
+							},
+							{
+							  "name": "Kramer",
+							  "reputation": null,
+							  "country": {
+								"name": "outer space2"
+							  }
+							},
+							{
+							  "reputation": 4.5,
+							  "name": "George",
+							  "country": null
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "parameterized cascade only at inner level ",
+			query: `query ($ids: [ID!]) {
+						queryAuthor(filter: {id: $ids})  {
+							reputation
+							name
+							posts @cascade(fields:["text"]) {
+								title
+								text
+							}
+						}
+					}`,
+			variables: map[string]interface{}{"ids": authorIds},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "reputation": 4.5,
+							  "name": "George",
+							  "posts": [
+								{
+								  "title": "A show about nothing",
+								  "text": "Got ya!"
+								}
+							  ]
+							},
+							{
+							  "name": "Kramer",
+							  "reputation": null,
+							  "posts": [
+								{
+								  "title": "Ha! Cosmo Kramer",
+								  "text": "Giddy up!"
+								}
+							  ]
+							},
+							{
+							  "name": "Jerry",
+							  "reputation": 4.6,
+							  "posts": []
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "parameterized cascade at all levels ",
+			query: `query ($ids: [ID!]) {
+						queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","name"]) {
+							reputation
+							name
+							dob
+							posts @cascade(fields:["text"]) {
+								title
+								text
+							}
+						}
+					}`,
+			variables: map[string]interface{}{"ids": authorIds},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "reputation": 4.5,
+							  "name": "George",
+							  "dob": null,
+							  "posts": [
+								{
+								  "title": "A show about nothing",
+								  "text": "Got ya!"
+								}
+							  ]
+							},
+							{
+							  "dob": null,
+							  "name": "Jerry",
+							  "posts": [],
+							  "reputation": 4.6
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "parameterized cascade on ID type ",
+			query: `query ($ids: [ID!]) {
+						queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","id"]) {
+							reputation
+							name
+							dob
+						}
+					}`,
+			variables: map[string]interface{}{"ids": authorIds},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "reputation": 4.5,
+							  "name": "George",
+							  "dob": null
+							},
+							{
+							  "dob": null,
+							  "name": "Jerry",
+							  "reputation": 4.6
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "parameterized cascade on field of interface ",
+			query: `query  {
+						queryHuman() @cascade(fields:["name"]) {
+							name
+							totalCredits
+						}
+					}`,
+			respData: `{
+						  "queryHuman": [
+							{
+							  "name": "Han",
+							  "totalCredits": 10
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "parameterized cascade on interface ",
+			query: `query {
+						queryCharacter (filter: { appearsIn: { eq: [EMPIRE] } }) @cascade(fields:["appearsIn"]){	
+							name
+							appearsIn
+						} 
+					}`,
+			respData: `{
+						  "queryCharacter": [
+							{
+							  "name": "Han",
+							  "appearsIn": [
+								"EMPIRE"
+							  ]
+							}
+						  ]
+						}`,
+		},
 	}
 
 	for _, tcase := range tcases {
@@ -1844,7 +2078,9 @@ func queryWithCascade(t *testing.T) {
 
 	// cleanup
 	deleteAuthors(t, authorIds, nil)
+	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
 	deleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
 	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
 		nil)
+	cleanupStarwars(t, newStarship.ID, humanID, "")
 }

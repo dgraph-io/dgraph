@@ -90,7 +90,7 @@ directive @auth(
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
 
 input IntFilter {
 	eq: Int
@@ -185,8 +185,19 @@ type UpdateMessagePayload {
 # Generated Enums
 #######################
 
+enum AbstractHasFilter {
+	name
+}
+
 enum AbstractOrderable {
 	name
+}
+
+enum MessageHasFilter {
+	name
+	content
+	author
+	datePosted
 }
 
 enum MessageOrderable {
@@ -202,6 +213,9 @@ enum MessageOrderable {
 
 input AbstractFilter {
 	id: [ID!]
+	has: AbstractHasFilter
+	and: AbstractFilter
+	or: AbstractFilter
 	not: AbstractFilter
 }
 
@@ -228,6 +242,9 @@ input AddMessageInput {
 
 input MessageFilter {
 	id: [ID!]
+	has: MessageHasFilter
+	and: MessageFilter
+	or: MessageFilter
 	not: MessageFilter
 }
 

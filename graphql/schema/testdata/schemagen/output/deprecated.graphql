@@ -82,7 +82,7 @@ directive @auth(
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
 
 input IntFilter {
 	eq: Int
@@ -155,6 +155,11 @@ type AddAtypePayload {
 # Generated Enums
 #######################
 
+enum AtypeHasFilter {
+	iamDeprecated
+	soAmI
+}
+
 enum AtypeOrderable {
 	iamDeprecated
 	soAmI
@@ -167,6 +172,13 @@ enum AtypeOrderable {
 input AddAtypeInput {
 	iamDeprecated: String
 	soAmI: String!
+}
+
+input AtypeFilter {
+	has: AtypeHasFilter
+	and: AtypeFilter
+	or: AtypeFilter
+	not: AtypeFilter
 }
 
 input AtypeOrder {

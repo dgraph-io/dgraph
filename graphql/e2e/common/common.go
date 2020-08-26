@@ -243,11 +243,13 @@ func RunAll(t *testing.T) {
 	t.Run("multiple search indexes wrong field", multipleSearchIndexesWrongField)
 	t.Run("hash search", hashSearch)
 	t.Run("deep filter", deepFilter)
+	t.Run("deep has filter", deepHasFilter)
 	t.Run("many queries", manyQueries)
 	t.Run("query order at root", queryOrderAtRoot)
 	t.Run("queries with error", queriesWithError)
 	t.Run("date filters", dateFilters)
 	t.Run("float filters", floatFilters)
+	t.Run("has filters", hasFilters)
 	t.Run("Int filters", int32Filters)
 	t.Run("Int64 filters", int64Filters)
 	t.Run("boolean filters", booleanFilters)
@@ -317,6 +319,7 @@ func RunAll(t *testing.T) {
 	t.Run("alias works for mutations", mutationsWithAlias)
 	t.Run("three level deep", threeLevelDeepMutation)
 	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
+	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -329,7 +332,11 @@ func RunAll(t *testing.T) {
 	t.Run("fragment in query", fragmentInQuery)
 	t.Run("fragment in query on Interface", fragmentInQueryOnInterface)
 	t.Run("fragment in query on Object", fragmentInQueryOnObject)
+}
 
+// RunCorsTest test all cors related tests.
+func RunCorsTest(t *testing.T) {
+	testCors(t)
 }
 
 func gunzipData(data []byte) ([]byte, error) {
@@ -556,7 +563,7 @@ func (params *GraphQLParams) createApplicationGQLPost(url string) (*http.Request
 
 // runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
 func runGQLRequest(req *http.Request) ([]byte, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 50 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

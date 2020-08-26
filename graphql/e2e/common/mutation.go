@@ -1034,6 +1034,80 @@ func addPost(t *testing.T, authorID, countryID string,
 	return result.AddPost.Post[0]
 }
 
+func addPostWithNullText(t *testing.T, authorID, countryID string,
+	executeRequest requestExecutor) *post {
+
+	addPostParams := &GraphQLParams{
+		Query: `mutation addPost($post: AddPostInput!) {
+			addPost(input: [$post]) {
+			  post( filter : {not :{has : text} }){
+				postID
+				title
+				text
+				isPublished
+				tags
+				author(filter: {has:country}) {
+					id
+					name
+					country {
+						id
+						name
+					}
+				}
+			  }
+			}
+		}`,
+		Variables: map[string]interface{}{"post": map[string]interface{}{
+			"title":       "No text",
+			"isPublished": false,
+			"numLikes":    0,
+			"tags":        []string{"no text", "null"},
+			"author":      map[string]interface{}{"id": authorID},
+		}},
+	}
+
+	addPostExpected := fmt.Sprintf(`{ "addPost": {
+		"post": [{
+			"postID": "_UID_",
+			"title": "No text",
+			"text": null,
+			"isPublished": false,
+			"tags": ["null","no text"],
+			"numLikes": 0,
+			"author": {
+				"id": "%s",
+				"name": "Test Author",
+				"country": {
+					"id": "%s",
+					"name": "Testland"
+				}
+			}
+		}]
+	} }`, authorID, countryID)
+
+	gqlResponse := executeRequest(t, graphqlURL, addPostParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var expected, result struct {
+		AddPost struct {
+			Post []*post
+		}
+	}
+	err := json.Unmarshal([]byte(addPostExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddPost.Post[0].PostID)
+
+	opt := cmpopts.IgnoreFields(post{}, "PostID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	return result.AddPost.Post[0]
+}
+
 func requirePost(
 	t *testing.T,
 	postID string,
@@ -3545,4 +3619,33 @@ func updateMutationWithoutSetRemove(t *testing.T) {
 
 	// cleanup
 	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
+}
+
+func checkCascadeWithMutationWithoutIDField(t *testing.T) {
+	addStateParams := &GraphQLParams{
+		Query: `mutation {
+			addState(input: [{xcode: "S2", name: "State2"}]) @cascade(fields:["numUids"]) {
+				state @cascade(fields:["xcode"]) {
+					xcode
+					name
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addStateExpected := `{
+		"addState": {
+			"state": [{
+				"xcode": "S2",
+				"name": "State2"
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
+
+	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S2"}}
+	deleteState(t, filter, 1, nil)
 }
