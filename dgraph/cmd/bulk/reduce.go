@@ -45,7 +45,6 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dustin/go-humanize"
 )
 
 type reducer struct {
@@ -510,25 +509,28 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		if i%1000 == 0 {
 			fmt.Printf("Histogram of buffers: %s\n", hd.String())
 		}
-		if cbuf.Len() > 1<<30 {
-			fmt.Printf("Found a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
-			// Just check how many keys do we have in this giant buffer.
-			offsets := cbuf.SliceOffsets(nil)
-			keys := make(map[uint64]uint64)
-			for _, off := range offsets {
-				me := MapEntry(cbuf.Slice(off))
-				keys[z.MemHash(me.Key())]++
-			}
-			for k, num := range keys {
-				if num < 1000 {
-					continue
-				}
-				fmt.Printf("key=%d. Num Entries: %d\n", k, num)
-			}
-			fmt.Printf("Total keys: %d. Total entries: %d\n", len(keys), len(offsets))
+		if cbuf.Len() == 0 {
+			continue
 		}
-		cbuf.Reset()
-		continue
+		// if cbuf.Len() > 1<<30 {
+		// 	fmt.Printf("Found a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
+		// 	// Just check how many keys do we have in this giant buffer.
+		// 	offsets := cbuf.SliceOffsets(nil)
+		// 	keys := make(map[uint64]uint64)
+		// 	for _, off := range offsets {
+		// 		me := MapEntry(cbuf.Slice(off))
+		// 		keys[z.MemHash(me.Key())]++
+		// 	}
+		// 	for k, num := range keys {
+		// 		if num < 1000 {
+		// 			continue
+		// 		}
+		// 		fmt.Printf("key=%d. Num Entries: %d\n", k, num)
+		// 	}
+		// 	fmt.Printf("Total keys: %d. Total entries: %d\n", len(keys), len(offsets))
+		// }
+		// cbuf.Reset()
+		// continue
 
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
 
