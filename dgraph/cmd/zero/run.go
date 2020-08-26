@@ -18,8 +18,6 @@ package zero
 
 import (
 	"context"
-
-	//	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -107,9 +105,9 @@ instances to achieve high-availability.
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 
 	// Add cache flags
-	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero")
+	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
 	flag.String("cache_percentage", "100,0",
-		"Cache percentages for various caches (blockcache,indexCache)")
+		"Cache percentages for various caches (block cache,index cache).")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -226,14 +224,6 @@ func run() {
 			opts.rebalanceInterval)
 	}
 
-	x.AssertTruef(opts.totalCache >= 0, "ERROR: Cache size must be non-negative")
-
-	glog.Info(opts.cachePercentage)
-	cachePercent, err := x.GetCachePercentages(opts.cachePercentage, 2)
-	x.Check(err)
-	blockCache := (cachePercent[0] * (opts.totalCache << 20)) / 100
-	indexCache := (cachePercent[1] * (opts.totalCache << 20)) / 100
-
 	grpc.EnableTracing = false
 	otrace.ApplyConfig(otrace.Config{
 		DefaultSampler: otrace.ProbabilitySampler(Zero.Conf.GetFloat64("trace"))})
@@ -251,10 +241,22 @@ func run() {
 	httpListener, err := setupListener(addr, x.PortZeroHTTP+opts.portOffset, "http")
 	x.Check(err)
 
+	x.AssertTruef(opts.totalCache >= 0, "ERROR: Cache size must be non-negative")
+
+	cachePercent, err := x.GetCachePercentages(opts.cachePercentage, 2)
+	x.Check(err)
+	blockCacheSz := (cachePercent[0] * (opts.totalCache << 20)) / 100
+	indexCacheSz := (cachePercent[1] * (opts.totalCache << 20)) / 100
+
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
-		WithValueLogFileSize(64 << 20).WithBlockCacheSize(blockCache).WithIndexCacheSize(indexCache).WithLoadBloomsOnOpen(false)
+	kvOpt := badger.LSMOnlyOptions(opts.w).
+		WithSyncWrites(false).
+		WithTruncate(true).
+		WithValueLogFileSize(64 << 20).
+		WithBlockCacheSize(blockCacheSz).
+		WithIndexCacheSize(indexCacheSz).
+		WithLoadBloomsOnOpen(false)
 
 	kvOpt.ZSTDCompressionLevel = 3
 

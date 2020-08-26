@@ -142,11 +142,9 @@ func Init(ps *badger.DB, cacheSize int64) {
 	go updateMemoryMetrics(closer)
 
 	// Initialize cache.
-	// TODO(Ibrahim): Add flag to switch cache on and off. For now cache is disabled.
 	if cacheSize == 0 {
 		return
 	}
-	// TODO(Ibrahim): Replace hard-coded value with value from flag.
 
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
