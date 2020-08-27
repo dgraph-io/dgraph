@@ -203,7 +203,7 @@ they form a Raft group and provide synchronous replication.
 	flag.String("cache_percentage", "0,65,25,0,10",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).
-		PostingListCache should be 0 for now.
+		PostingListCache should be 0 for now and is a no-op.
 		`)
 }
 
