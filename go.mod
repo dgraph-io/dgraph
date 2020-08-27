@@ -16,7 +16,7 @@ require (
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v2 v2.2007.1
+	github.com/dgraph-io/badger/v2 v2.2007.2-0.20200827131741-d5a25b83fbf4
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200401175452-e463f9234453
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200715131837-c0460019ead2
 	github.com/dgraph-io/ristretto v0.0.3-0.20200630154024-f66de99634de
