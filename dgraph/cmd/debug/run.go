@@ -781,7 +781,8 @@ func run() {
 		db, err = badger.OpenManaged(bopts)
 	}
 	x.Check(err)
-	posting.Init(db)
+	// Not using posting list cache
+	posting.Init(db, 0)
 	defer db.Close()
 
 	if isWal {
