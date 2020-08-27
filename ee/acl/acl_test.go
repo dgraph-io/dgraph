@@ -1333,56 +1333,78 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 		descriptionNameAgePerm string
 		outputNameAgePerm      string
 	}{
-		{
-			`
-			{
-				q1(func: has(name), orderasc: name) {
-					n as name
-					a as age
-				}
-				q2(func: eq(val(n), "RandomGuy")) {
-					val(n)
-					val(a)
-				}
-			}
-			`,
-			"alice doesn't have access to name or age",
-			`{}`,
+		// {
+		// 	`
+		// 	{
+		// 		q1(func: has(name), orderasc: name) {
+		// 			n as name
+		// 			a as age
+		// 		}
+		// 		q2(func: eq(val(n), "RandomGuy")) {
+		// 			val(n)
+		// 			val(a)
+		// 		}
+		// 	}
+		// 	`,
+		// 	"alice doesn't have access to name or age",
+		// 	`{}`,
 
-			`alice has access to name`,
-			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"q2":[{"val(n)":"RandomGuy"}]}`,
+		// 	`alice has access to name`,
+		// 	`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"q2":[{"val(n)":"RandomGuy"}]}`,
 
-			"alice has access to name and age",
-			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(n)":"RandomGuy","val(a)":23}]}`,
-		},
-		{
-			`{
-				q1(func: has(name), orderasc: age) {
-					a as age
-				}
-				q2(func: has(name)) {
-					val(a)
-				}
-			}`,
-			"alice doesn't have access to name or age",
-			`{}`,
+		// 	"alice has access to name and age",
+		// 	`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(n)":"RandomGuy","val(a)":23}]}`,
+		// },
+		// {
+		// 	`{
+		// 		q1(func: has(name), orderasc: age) {
+		// 			a as age
+		// 		}
+		// 		q2(func: has(name)) {
+		// 			val(a)
+		// 		}
+		// 	}`,
+		// 	"alice doesn't have access to name or age",
+		// 	`{}`,
 
-			`alice has access to name`,
-			`{"q1":[],"q2":[]}`,
+		// 	`alice has access to name`,
+		// 	`{"q1":[],"q2":[]}`,
 
-			"alice has access to name and age",
-			`{"q1":[{"age":23},{"age":25}],"q2":[{"val(a)":23},{"val(a)":25}]}`,
-		},
+		// 	"alice has access to name and age",
+		// 	`{"q1":[{"age":23},{"age":25}],"q2":[{"val(a)":23},{"val(a)":25}]}`,
+		// },
+		// {
+		// 	`{
+		// 		f as q1(func: has(name), orderasc: name) {
+		// 			n as name
+		// 			a as age
+		// 		}
+		// 		q2(func: uid(f), orderdesc: val(a), orderasc: name) {
+		// 			name
+		// 			val(n)
+		// 			val(a)
+		// 		}
+		// 	}`,
+		// 	"alice doesn't have access to name or age",
+		// 	`{"q2":[]}`,
+
+		// 	`alice has access to name`,
+		// 	`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],
+		// 	"q2":[{"name":"RandomGuy","val(n)":"RandomGuy"},{"name":"RandomGuy2","val(n)":"RandomGuy2"}]}`,
+
+		// 	"alice has access to name and age",
+		// 	`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],
+		// 	"q2":[{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25},{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23}]}`,
+		// },
 		{
 			`{
 				f as q1(func: has(name), orderasc: name) {
-					n as name
-					a as age
-				}
-				q2(func: uid(f), orderdesc: val(a), orderasc: name) {
 					name
-					val(n)
-					val(a)
+					age
+				}
+				q2(func: uid(f), orderasc: name) {
+					name
+					age
 				}
 			}`,
 			"alice doesn't have access to name or age",
@@ -1390,11 +1412,11 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 
 			`alice has access to name`,
 			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],
-			"q2":[{"name":"RandomGuy","val(n)":"RandomGuy"},{"name":"RandomGuy2","val(n)":"RandomGuy2"}]}`,
+			"q2":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
 
 			"alice has access to name and age",
 			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],
-			"q2":[{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25},{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23}]}`,
+			"q2":[{"name":"RandomGuy2","age":25},{"name":"RandomGuy","age":23}]}`,
 		},
 	}
 
