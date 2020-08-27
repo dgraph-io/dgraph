@@ -180,17 +180,9 @@ func WrapPanics() {
 	if err != nil {
 		panic(err)
 	}
-
-	// Note: panicwrap.Wrap documentation states that exitStatus == -1
-	// should be used to determine whether the process is the child.
-	// However, this is not reliable. See https://github.com/mitchellh/panicwrap/issues/18
-	// we have found that exitStatus = -1 is returned even when
-	// the process is the parent. Likely due to panicwrap returning
-	// syscall.WaitStatus.ExitStatus() as the exitStatus, which _can_ be
-	// -1. Checking panicwrap.Wrapped(nil) is more reliable.
-	if !panicwrap.Wrapped(nil) {
-		// parent
+	// If exitStatus >= 0, then we're the parent process and the panicwrap
+	// re-executed ourselves and completed. Just exit with the proper status.
+	if exitStatus >= 0 {
 		os.Exit(exitStatus)
 	}
-	// child
 }
