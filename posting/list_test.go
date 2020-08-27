@@ -1346,8 +1346,7 @@ func TestMain(m *testing.M) {
 
 	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))
 	x.Check(err)
-	// Not using posting list cache
-	Init(ps, 0)
+	Init(ps)
 	schema.Init(ps)
 
 	r := m.Run()
