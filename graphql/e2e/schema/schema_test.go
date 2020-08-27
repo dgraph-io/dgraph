@@ -278,6 +278,35 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 	require.Equal(t, finalGraphQLSchema, resp.GqlSchema[0].Schema)
 }
 
+// TestIntrospectionQueryAfterDropAll make sure that Introspection query after drop_all doesn't give any internal error
+func TestIntrospectionQueryAfterDropAll(t *testing.T) {
+	// First Do the drop_all operation
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	// wait for a bit
+	time.Sleep(time.Second)
+
+	introspectionQuery := `
+	query{
+		__schema{
+		   types{
+			 name
+		   }
+		}
+	}`
+	introspect := &common.GraphQLParams{
+		Query: introspectionQuery,
+	}
+
+	// On doing Introspection Query Now, We should get the Expected Error Message, not the Internal Error.
+	introspectionResult := introspect.ExecuteAsPost(t, groupOneServer)
+	require.Len(t, introspectionResult.Errors, 1)
+	gotErrorMessage := introspectionResult.Errors[0].Message
+	expectedErrorMessage := "Not resolving __schema. There's no GraphQL schema in Dgraph.  Use the /admin API to add a GraphQL schema"
+	require.Equal(t, expectedErrorMessage, gotErrorMessage)
+}
+
 // TestUpdateGQLSchemaAfterDropAll makes sure that updating the GraphQL schema after drop_all works
 func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 	updateGQLSchemaRequireNoErrors(t, `
