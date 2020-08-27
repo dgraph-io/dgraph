@@ -125,6 +125,7 @@ type post struct {
 	Text        string    `json:"text,omitempty"`
 	Tags        []string  `json:"tags,omitempty"`
 	NumLikes    int       `json:"numLikes,omitempty"`
+	NumViews    int64     `json:"numViews,omitempty"`
 	IsPublished bool      `json:"isPublished,omitempty"`
 	PostType    string    `json:"postType,omitempty"`
 	Author      *author   `json:"author,omitempty"`
@@ -242,12 +243,15 @@ func RunAll(t *testing.T) {
 	t.Run("multiple search indexes wrong field", multipleSearchIndexesWrongField)
 	t.Run("hash search", hashSearch)
 	t.Run("deep filter", deepFilter)
+	t.Run("deep has filter", deepHasFilter)
 	t.Run("many queries", manyQueries)
 	t.Run("query order at root", queryOrderAtRoot)
 	t.Run("queries with error", queriesWithError)
 	t.Run("date filters", dateFilters)
 	t.Run("float filters", floatFilters)
-	t.Run("int filters", intFilters)
+	t.Run("has filters", hasFilters)
+	t.Run("Int filters", int32Filters)
+	t.Run("Int64 filters", int64Filters)
 	t.Run("boolean filters", booleanFilters)
 	t.Run("term filters", termFilters)
 	t.Run("full text filters", fullTextFilters)
@@ -301,6 +305,7 @@ func RunAll(t *testing.T) {
 	t.Run("deep mutations", deepMutations)
 	t.Run("add multiple mutations", testMultipleMutations)
 	t.Run("deep XID mutations", deepXIDMutations)
+	t.Run("three level xid", testThreeLevelXID)
 	t.Run("error in multiple mutations", addMultipleMutationWithOneError)
 	t.Run("dgraph directive with reverse edge adds data correctly",
 		addMutationWithReverseDgraphEdge)
@@ -313,6 +318,8 @@ func RunAll(t *testing.T) {
 	t.Run("mutations have extensions", mutationsHaveExtensions)
 	t.Run("alias works for mutations", mutationsWithAlias)
 	t.Run("three level deep", threeLevelDeepMutation)
+	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
+	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -325,7 +332,11 @@ func RunAll(t *testing.T) {
 	t.Run("fragment in query", fragmentInQuery)
 	t.Run("fragment in query on Interface", fragmentInQueryOnInterface)
 	t.Run("fragment in query on Object", fragmentInQueryOnObject)
+}
 
+// RunCorsTest test all cors related tests.
+func RunCorsTest(t *testing.T) {
+	testCors(t)
 }
 
 func gunzipData(data []byte) ([]byte, error) {
@@ -434,7 +445,7 @@ func getQueryEmptyVariable(t *testing.T) {
 
 // Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
 // and executes the request
-func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLResponse {
+func (params *GraphQLParams) Execute(t require.TestingT, req *http.Request) *GraphQLResponse {
 	for h := range params.Headers {
 		req.Header.Set(h, params.Headers.Get(h))
 	}
@@ -455,7 +466,7 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
 // and executes the request to url.
-func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
+func (params *GraphQLParams) ExecuteAsPost(t require.TestingT, url string) *GraphQLResponse {
 	req, err := params.createGQLPost(url)
 	require.NoError(t, err)
 
@@ -552,7 +563,7 @@ func (params *GraphQLParams) createApplicationGQLPost(url string) (*http.Request
 
 // runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
 func runGQLRequest(req *http.Request) ([]byte, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 50 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

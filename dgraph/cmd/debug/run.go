@@ -784,7 +784,8 @@ func run() {
 		db, err = badger.OpenManaged(bopts)
 	}
 	x.Check(err)
-	posting.Init(db)
+	// Not using posting list cache
+	posting.Init(db, 0)
 	defer db.Close()
 
 	if isWal {
@@ -797,8 +798,9 @@ func run() {
 		return
 	}
 
-	min, max := getMinMax(db, opt.readTs)
-	fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
+	// Commenting the following out because on large Badger DBs, this can take a LONG time.
+	// min, max := getMinMax(db, opt.readTs)
+	// fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
 
 	switch {
 	case len(opt.keyLookup) > 0:

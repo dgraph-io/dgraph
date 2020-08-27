@@ -241,7 +241,7 @@ func panicCatcher(t *testing.T) {
 		WithConventionResolvers(gqlSchema, fns)
 	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(&schemaEpoch, resolvers)
+	server := web.NewServer(&schemaEpoch, resolvers, true)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
@@ -253,7 +253,7 @@ func panicCatcher(t *testing.T) {
 			require.Equal(t, x.GqlErrorList{
 				{Message: fmt.Sprintf("Internal Server Error - a panic was trapped.  " +
 					"This indicates a bug in the GraphQL server.  A stack trace was logged.  " +
-					"Please let us know : https://github.com/dgraph-io/dgraph/issues.")}},
+					"Please let us know by filing an issue with the stack trace.")}},
 				gqlResponse.Errors)
 
 			require.Nil(t, gqlResponse.Data, string(gqlResponse.Data))
@@ -300,7 +300,7 @@ func clientInfoLogin(t *testing.T) {
 		WithConventionResolvers(gqlSchema, fns)
 	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(&schemaEpoch, resolvers)
+	server := web.NewServer(&schemaEpoch, resolvers, true)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()

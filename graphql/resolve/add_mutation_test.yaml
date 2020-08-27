@@ -127,7 +127,7 @@
         {
           "PostSecret.title": "ps1",
           "dgraph.type": [
-            "PostSecret" 
+            "PostSecret"
             ],
           "uid": "_:PostSecret4"
         }
@@ -136,7 +136,7 @@
         {
           "PostSecret.title": "ps2",
           "dgraph.type": [
-            "PostSecret" 
+            "PostSecret"
             ],
           "uid": "_:PostSecret7"
         }
@@ -145,7 +145,7 @@
         {
           "PostSecret.title": "ps3",
           "dgraph.type": [
-            "PostSecret" 
+            "PostSecret"
             ],
           "uid": "_:PostSecret10"
         }
@@ -154,7 +154,7 @@
         {
           "PostSecret.title": "ps4",
           "dgraph.type": [
-            "PostSecret" 
+            "PostSecret"
             ],
           "uid": "_:PostSecret13"
         }
@@ -163,7 +163,7 @@
         {
           "PostSecret.title": "ps5",
           "dgraph.type": [
-            "PostSecret" 
+            "PostSecret"
             ],
           "uid": "_:PostSecret16"
         }
@@ -172,7 +172,7 @@
         {
           "PostSecret.title": "ps6",
           "dgraph.type": [
-            "PostSecret" 
+            "PostSecret"
             ],
           "uid": "_:PostSecret19"
         }
@@ -181,7 +181,7 @@
         {
           "PostSecret.title": "ps7",
           "dgraph.type": [
-            "PostSecret" 
+            "PostSecret"
             ],
           "uid": "_:PostSecret22"
         }
@@ -190,7 +190,7 @@
         {
           "PostSecret.title": "ps8",
           "dgraph.type": [
-            "PostSecret" 
+            "PostSecret"
             ],
           "uid": "_:PostSecret25"
         }
@@ -392,7 +392,7 @@
   name: "Add Multiple Mutations with embedded value"
   gqlmutation: |
     mutation addAuthor {
-      addAuthor(input: [{ name: "A.N. Author", posts: []}, 
+      addAuthor(input: [{ name: "A.N. Author", posts: []},
                         { name: "Different Author", posts: []}]) {
         author {
           name
@@ -1564,19 +1564,19 @@
 # Additional Deletes
 #
 # If we have
-# 
+#
 # type Post { ... author: Author @hasInverse(field: posts) ... }
 # type Author { ... posts: [Post] ... }
 #
 # and existing edge
-# 
+#
 # Post1 --- author --> Author1
-# 
+#
 # there must also exist edge
-# 
+#
 # Author1 --- posts --> Post1
 #
-# So if we did an add Author2 and connect the author to Post1, that changes the 
+# So if we did an add Author2 and connect the author to Post1, that changes the
 # author of Post1 to Author2, we need to
 #  * add edge Post1 --- author --> Author2 (done by asIDReference/asXIDReference)
 #  * add edge Author2 --- posts --> Post1 (done by addInverseLink)
@@ -1597,7 +1597,7 @@
       }
     }
   gqlvariables: |
-    { 
+    {
       "auth": {
         "name": "A.N. Author",
         "posts": [ { "postID": "0x456" } ]
@@ -1605,7 +1605,7 @@
     }
   dgmutations:
     - setjson: |
-        { 
+        {
           "uid":"_:Author1",
           "dgraph.type":["Author"],
           "Author.name":"A.N. Author",
@@ -2060,7 +2060,7 @@
             code
             name
             cities {
-              name 
+              name
               district {
                 code
                 name
@@ -2071,7 +2071,7 @@
       }
     }
   gqlvariables: |
-    { 
+    {
       "city": {
         "name": "c1",
         "district":{
@@ -2150,10 +2150,10 @@
       }
     }
   gqlvariables: |
-    { 
+    {
       "auth": {
         "name": "A.N. Author",
-        "country": { 
+        "country": {
           "name": "A Country",
           "states": [ { "code": "abc", "name": "Alphabet" } ]
         }
@@ -2173,7 +2173,7 @@
 
   dgmutationssec:
     - setjson: |
-        { 
+        {
           "uid":"_:Author1",
           "dgraph.type":["Author"],
           "Author.name":"A.N. Author",
@@ -2213,3 +2213,203 @@
         uid
       }
     }
+
+- name: "Deep mutation three level xid"
+  gqlmutation: |
+    mutation($auth: [AddPost1Input!]!) {
+      addPost1(input: $auth) {
+        post1 {
+          id
+          comments {
+            id
+            replies {
+              id
+            }
+          }
+        }
+      }
+    }
+
+  gqlvariables: |
+    {
+      "auth": [{
+        "id": "post1",
+        "comments": [{
+          "id": "comment1",
+          "replies": [{
+            "id": "reply1"
+          }]
+        }]
+      },
+      {
+        "id": "post2",
+        "comments": [{
+          "id": "comment2",
+          "replies": [{
+            "id": "reply1"
+          }]
+        }]
+      }]
+    }
+  dgquery: |-
+    query {
+      Comment14 as Comment14(func: eq(Comment1.id, "comment1")) @filter(type(Comment1)) {
+        uid
+      }
+      Comment16 as Comment16(func: eq(Comment1.id, "reply1")) @filter(type(Comment1)) {
+        uid
+      }
+      Comment110 as Comment110(func: eq(Comment1.id, "comment2")) @filter(type(Comment1)) {
+        uid
+      }
+    }
+  dgmutations:
+    # Create comment1 if it doesn't exist.
+    - setjson: |
+        {
+          "Comment1.id": "comment1",
+          "dgraph.type": [
+            "Comment1"
+          ],
+          "uid": "_:Comment14"
+        }
+      cond: "@if(eq(len(Comment14), 0))"
+    # Create reply1 if it doesn't exist.
+    - setjson: |
+        {
+          "Comment1.id": "reply1",
+          "dgraph.type": [
+            "Comment1"
+          ],
+          "uid": "_:Comment16"
+        }
+      cond: "@if(eq(len(Comment16), 0) AND eq(len(Comment14), 0))"
+    # Link comment1 and reply1 if reply exists but comment doesn't.
+    - setjson: |
+        {"uid":"_:Comment14", "Comment1.replies": [{"uid": "uid(Comment16)"}]}
+      cond: "@if(eq(len(Comment16), 1) AND eq(len(Comment14), 0))"
+    # Link comment1 and reply1 if both don't exist.
+    - setjson: |
+        {"uid":"_:Comment14", "Comment1.replies": [{"uid": "_:Comment16"}]}
+      cond: "@if(eq(len(Comment16), 0) AND eq(len(Comment14), 0))"
+    # useless mutation which needs investigation
+    - setjson: |
+        {"uid":"uid(Comment16)"}
+      cond: "@if(eq(len(Comment16), 1) AND eq(len(Comment14), 0))"
+    # create comment2 if it doesn't exist
+    - setjson: |
+        {
+          "Comment1.id": "comment2",
+          "dgraph.type": [
+            "Comment1"
+          ],
+          "uid": "_:Comment110"
+        }
+      cond: "@if(eq(len(Comment110), 0))"
+    # Create reply1 if it doesn't exist.
+    - setjson: |
+        {
+          "Comment1.id": "reply1",
+          "dgraph.type": [
+            "Comment1"
+          ],
+          "uid": "_:Comment16"
+        }
+      cond: "@if(eq(len(Comment16), 0) AND eq(len(Comment110), 0))"
+    # Link comment2 and reply1 if reply exists but comment doesn't.
+    - setjson: |
+        {"uid":"_:Comment110", "Comment1.replies": [{"uid": "uid(Comment16)"}]}
+      cond: "@if(eq(len(Comment16), 1) AND eq(len(Comment110), 0))"
+    # Link comment2 and reply1 if both don't exist.
+    - setjson: |
+        {"uid":"_:Comment110", "Comment1.replies": [{"uid": "_:Comment16"}]}
+      cond: "@if(eq(len(Comment16), 0) AND eq(len(Comment110), 0))"
+    # useless mutation which needs investigation
+
+    - setjson: |
+        {"uid":"uid(Comment16)"}
+      cond: "@if(eq(len(Comment16), 1) AND eq(len(Comment110), 0))"
+  dgquerysec: |-
+    query {
+      Post12 as Post12(func: eq(Post1.id, "post1")) @filter(type(Post1)) {
+        uid
+      }
+      Comment14 as Comment14(func: eq(Comment1.id, "comment1")) @filter(type(Comment1)) {
+        uid
+      }
+      Post18 as Post18(func: eq(Post1.id, "post2")) @filter(type(Post1)) {
+        uid
+      }
+      Comment110 as Comment110(func: eq(Comment1.id, "comment2")) @filter(type(Comment1)) {
+        uid
+      }
+    }
+  dgmutationssec:
+    - setjson: |
+        {
+          "Post1.comments":
+            [{
+              "uid":"uid(Comment14)"
+            }],
+          "Post1.id":"post1",
+          "dgraph.type":["Post1"],
+          "uid":"_:Post12"
+        }
+      cond: "@if(eq(len(Post12), 0) AND eq(len(Comment14), 1))"
+    - setjson: |
+        {
+          "Post1.comments":
+            [{
+              "uid":"uid(Comment110)"
+            }],
+          "Post1.id":"post2",
+          "dgraph.type":["Post1"],
+          "uid":"_:Post18"
+        }
+      cond: "@if(eq(len(Post18), 0) AND eq(len(Comment110), 1))"
+
+-
+  name: "Add mutation error on @id field for empty value"
+  gqlmutation: |
+    mutation addState($input: AddStateInput!) {
+      addState(input: [$input]) {
+        state {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "code": "",
+        "name": "NSW",
+        "country": { "id": "0x12" }
+      }
+    }
+  explanation: "The add mutation should not be allowed since value of @id field is empty."
+  error:
+    { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }
+
+-
+  name: "Add mutation error on @id field for empty value (Nested)"
+  gqlmutation: |
+    mutation addCountry($input: AddCountryInput!) {
+      addCountry(input: [$input]) {
+        country {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "name": "Dgraph Land",
+        "states": [ {
+          "code": "",
+          "name": "Dgraph"
+        } ]
+      }
+    }
+  explanation: "The add mutation should not be allowed since value of @id field is empty."
+  error:
+    { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }

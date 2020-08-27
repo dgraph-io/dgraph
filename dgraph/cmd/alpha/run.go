@@ -34,14 +34,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/dgraph/graphql/web"
-
+	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/graphql/admin"
+	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
@@ -104,13 +105,17 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
-	flag.String("badger.tables", "mmap",
-		"[ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
-			"Option sequence consume most to least RAM while providing best to worst read "+
-			"performance respectively.")
-	flag.String("badger.vlog", "mmap",
-		"[mmap, disk] Specifies how Badger Value log is stored."+
-			" mmap consumes more RAM, but provides better performance.")
+	flag.String("badger.tables", "mmap,mmap",
+		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for the postings and "+
+			"write-ahead directory. Option sequence consume most to least RAM while providing "+
+			"best to worst read performance respectively. If you pass two values separated by a "+
+			"comma, the first value will be used for the postings directory and the second for "+
+			"the write-ahead log directory.")
+	flag.String("badger.vlog", "mmap,mmap",
+		"[mmap, disk] Specifies how Badger Value log is stored for the postings and write-ahead "+
+			"log directory. mmap consumes more RAM, but provides better performance. If you pass "+
+			"two values separated by a comma the first value will be used for the postings "+
+			"directory and the second for the w directory.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
 	enc.RegisterFlags(flag)
@@ -198,6 +203,12 @@ they form a Raft group and provide synchronous replication.
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
+
+	// Cache flags
+	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha.")
+	flag.String("cache_percentage", "0,65,25,0,10",
+		`Cache percentages summing up to 100 for various caches (FORMAT:
+		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).`)
 }
 
 func setupCustomTokenizers() {
@@ -572,16 +583,56 @@ func run() {
 	}
 	bindall = Alpha.Conf.GetBool("bindall")
 
+	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
+	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
+
+	cachePercentage := Alpha.Conf.GetString("cache_percentage")
+	cachePercent, err := x.GetCachePercentages(cachePercentage, 5)
+	x.Check(err)
+	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
+	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
+	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
+	wstoreBlockCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
+	wstoreIndexCacheSize := (cachePercent[4] * (totalCache << 20)) / 100
+
 	opts := worker.Options{
-		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
-		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
 		PostingDir:             Alpha.Conf.GetString("postings"),
 		WALDir:                 Alpha.Conf.GetString("wal"),
+		PBlockCacheSize:        pstoreBlockCacheSize,
+		PIndexCacheSize:        pstoreIndexCacheSize,
+		WBlockCacheSize:        wstoreBlockCacheSize,
+		WIndexCacheSize:        wstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+	}
+
+	badgerTables := strings.Split(Alpha.Conf.GetString("badger.tables"), ",")
+	if len(badgerTables) != 1 && len(badgerTables) != 2 {
+		glog.Fatalf("Unable to read badger.tables options. Expected single value or two "+
+			"comma-separated values. Got %s", Alpha.Conf.GetString("badger.tables"))
+	}
+	if len(badgerTables) == 1 {
+		opts.BadgerTables = badgerTables[0]
+		opts.BadgerWalTables = badgerTables[0]
+	} else {
+		opts.BadgerTables = badgerTables[0]
+		opts.BadgerWalTables = badgerTables[1]
+	}
+
+	badgerVlog := strings.Split(Alpha.Conf.GetString("badger.vlog"), ",")
+	if len(badgerVlog) != 1 && len(badgerVlog) != 2 {
+		glog.Fatalf("Unable to read badger.vlog options. Expected single value or two "+
+			"comma-separated values. Got %s", Alpha.Conf.GetString("badger.vlog"))
+	}
+	if len(badgerVlog) == 1 {
+		opts.BadgerVlog = badgerVlog[0]
+		opts.BadgerWalVlog = badgerVlog[0]
+	} else {
+		opts.BadgerVlog = badgerVlog[0]
+		opts.BadgerWalVlog = badgerVlog[1]
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -672,7 +723,7 @@ func run() {
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	schema.Init(worker.State.Pstore)
-	posting.Init(worker.State.Pstore)
+	posting.Init(worker.State.Pstore, postingListCacheSize)
 	defer posting.Cleanup()
 	worker.Init(worker.State.Pstore)
 
@@ -710,7 +761,21 @@ func run() {
 		// and health check passes
 		edgraph.ResetAcl()
 		edgraph.RefreshAcls(aclCloser)
+		edgraph.ResetCors()
+		// Update the accepted cors origins.
+		for {
+			origins, err := edgraph.GetCorsOrigins(context.TODO())
+			if err != nil {
+				glog.Errorf("Error while retriving cors origins: %s", err.Error())
+				continue
+			}
+			x.UpdateCorsOrigins(origins)
+			break
+		}
 	}()
+	// Listen for any new cors origin update.
+	corsCloser := y.NewCloser(1)
+	go listenForCorsUpdate(corsCloser)
 
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we
 	// close alpha. This closer is for closing and waiting that subscription.
@@ -719,10 +784,49 @@ func run() {
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
 	aclCloser.SignalAndWait()
+	corsCloser.SignalAndWait()
 	worker.BlockingStop()
 	adminCloser.SignalAndWait()
 	glog.Info("Disposing server state.")
 	worker.State.Dispose()
 	x.RemoveCidFile()
 	glog.Infoln("Server shutdown. Bye!")
+}
+
+// listenForCorsUpdate listen for any cors change and update the accepeted cors.
+func listenForCorsUpdate(closer *y.Closer) {
+	prefix := x.DataKey("dgraph.cors", 0)
+	// Remove uid from the key, to get the correct prefix
+	prefix = prefix[:len(prefix)-8]
+	worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
+		// Last update contains the latest value. So, taking the last update.
+		lastIdx := len(kvs.GetKv()) - 1
+		kv := kvs.GetKv()[lastIdx]
+		glog.Infof("Updating cors from subscription.")
+		// Unmarshal the incoming posting list.
+		pl := &pb.PostingList{}
+		err := pl.Unmarshal(kv.GetValue())
+		if err != nil {
+			glog.Errorf("Unable to unmarshal the posting list for cors update %s", err)
+			return
+		}
+		// Skip if there is no posting. Our all upsert call contains atleast one
+		// posting.
+		if len(pl.Postings) == 0 {
+			return
+		}
+		origins := make([]string, 0)
+		for _, posting := range pl.Postings {
+			val := strings.TrimSpace(string(posting.Value))
+			if val == "_STAR_ALL" {
+				// If the posting list contains __STAR_ALL then it's a delete call.
+				// we usually do it before updating as part of upsert. So, let's
+				// ignore this update.
+				continue
+			}
+			origins = append(origins, val)
+		}
+		glog.Infof("Updating cors origins: %+v", origins)
+		x.UpdateCorsOrigins(origins)
+	}, 1, closer)
 }

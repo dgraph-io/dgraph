@@ -120,6 +120,18 @@ type Student struct {
 	Email string `json:"email,omitempty"`
 }
 
+type Task struct {
+	Id          string            `json:"id,omitempty"`
+	Name        string            `json:"name,omitempty"`
+	Occurrences []*TaskOccurrence `json:"occurrences,omitempty"`
+}
+
+type TaskOccurrence struct {
+	Id string `json:"id,omitempty"`
+	Due string `json:"due,omitempty"`
+	Comp string `json:"comp,omitempty"`
+}
+
 type TestCase struct {
 	user      string
 	role      string
@@ -134,6 +146,22 @@ type uidResult struct {
 	Query []struct {
 		UID string
 	}
+}
+
+type Tasks []Task
+func (tasks Tasks) add(t *testing.T) {
+	getParams := &common.GraphQLParams{
+		Query: `
+		mutation AddTask($tasks : [AddTaskInput!]!) {
+		  addTask(input: $tasks) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"tasks": tasks},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
 }
 
 func (r *Region) add(t *testing.T, user, role string) {
@@ -399,6 +427,141 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
 		}
 	}
+}
+
+func TestOrderAndOffset(t *testing.T) {
+	tasks := Tasks{
+		Task{
+			Name:        "First Task four occurrence",
+			Occurrences: []*TaskOccurrence{
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+			},
+		},
+		Task{
+			Name:       "Second Task single occurrence",
+			Occurrences: []*TaskOccurrence{
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+			},
+		},
+		Task{
+			Name:        "Third Task no occurrence",
+			Occurrences: []*TaskOccurrence{},
+		},
+		Task{
+			Name:        "Fourth Task two occurrences",
+			Occurrences: []*TaskOccurrence{
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+			},
+		},
+	}
+	tasks.add(t)
+
+	query := `
+	query {
+	  queryTask(first: 4, order: {asc : name}) {
+		name
+		occurrences(first: 2) {
+		  due
+		  comp
+		}
+	  }
+	}
+	`
+	testCases := []TestCase{{
+		user: "user1",
+		role: "ADMIN",
+		result: `
+		{
+		"queryTask": [
+		  {
+			"name": "First Task four occurrence",
+			"occurrences": [
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  },
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  }
+			]
+		  },
+		  {
+			"name": "Fourth Task two occurrences",
+			"occurrences": [
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  },
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  }
+			]
+		  },
+		  {
+			"name": "Second Task single occurrence",
+			"occurrences": [
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  }
+			]
+		  },
+		  {
+			"name": "Third Task no occurrence",
+			"occurrences": []
+		  }
+		]
+	  }
+		`,
+	}}
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+
+	// Clean up `Task`
+	getParams := &common.GraphQLParams{
+		Query: `
+		mutation DelTask {
+		  deleteTask(filter: {}) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"tasks": tasks},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	// Clean up `TaskOccurrence`
+	getParams = &common.GraphQLParams{
+		Query: `
+		mutation DelTaskOccuerence {
+		  deleteTaskOccurrence(filter: {}) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"tasks": tasks},
+	}
+	gqlResponse = getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
 }
 
 func TestOrRBACFilter(t *testing.T) {

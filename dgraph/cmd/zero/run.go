@@ -18,7 +18,6 @@ package zero
 
 import (
 	"context"
-	//	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -55,6 +54,9 @@ type options struct {
 	w                 string
 	rebalanceInterval time.Duration
 	LudicrousMode     bool
+
+	totalCache      int64
+	cachePercentage string
 }
 
 var opts options
@@ -83,7 +85,7 @@ instances to achieve high-availability.
 		"addr:port of this server, so other Dgraph alphas can talk to this.")
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
-	flag.Uint64("idx", 1, "Unique node index for this server.")
+	flag.Uint64("idx", 1, "Unique node index for this server. idx cannot be 0.")
 	flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
@@ -101,6 +103,11 @@ instances to achieve high-availability.
 		" exporter does not support annotation logs and would discard them.")
 	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+
+	// Cache flags
+	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
+	flag.String("cache_percentage", "100,0",
+		"Cache percentages summing up to 100 for various caches (FORMAT: blockCache,indexCache).")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -183,8 +190,14 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
+		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
+		cachePercentage:   Zero.Conf.GetString("cache_percentage"),
 	}
 	glog.Infof("Setting Config to: %+v", opts)
+
+	if opts.nodeId == 0 {
+		log.Fatalf("ERROR: idx flag cannot be 0. Please try again with idx as a positive integer")
+	}
 
 	x.WorkerConfig = x.WorkerOptions{
 		LudicrousMode: Zero.Conf.GetBool("ludicrous_mode"),
@@ -228,10 +241,22 @@ func run() {
 	httpListener, err := setupListener(addr, x.PortZeroHTTP+opts.portOffset, "http")
 	x.Check(err)
 
+	x.AssertTruef(opts.totalCache >= 0, "ERROR: Cache size must be non-negative")
+
+	cachePercent, err := x.GetCachePercentages(opts.cachePercentage, 2)
+	x.Check(err)
+	blockCacheSz := (cachePercent[0] * (opts.totalCache << 20)) / 100
+	indexCacheSz := (cachePercent[1] * (opts.totalCache << 20)) / 100
+
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
-		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20).WithLoadBloomsOnOpen(false)
+	kvOpt := badger.LSMOnlyOptions(opts.w).
+		WithSyncWrites(false).
+		WithTruncate(true).
+		WithValueLogFileSize(64 << 20).
+		WithBlockCacheSize(blockCacheSz).
+		WithIndexCacheSize(indexCacheSz).
+		WithLoadBloomsOnOpen(false)
 
 	kvOpt.ZSTDCompressionLevel = 3
 

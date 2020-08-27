@@ -53,7 +53,7 @@ spec:
     matchLabels:
       monitor: alpha-dgraph-io
   endpoints:
-  - port: alpha-http
+  - port: http-alpha
     path: /debug/prometheus_metrics
 ---
 apiVersion: monitoring.coreos.com/v1
@@ -70,7 +70,7 @@ spec:
     matchLabels:
       monitor: zero.dgraph-io
   endpoints:
-  - port: zero-http
+  - port: http-zero
     path: /debug/prometheus_metrics
 ---
 apiVersion: monitoring.coreos.com/v1

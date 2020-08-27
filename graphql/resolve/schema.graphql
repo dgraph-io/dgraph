@@ -239,3 +239,46 @@ type Y implements X @auth(
 ){
   userRole: String @search(by: [hash])
 }
+
+type Post1 {
+  id: String! @id
+  content: String
+  comments: [Comment1]
+}
+
+type Person1 {
+  id: String! @id
+  name: String
+}
+
+type Comment1 {
+  id: String! @id
+  message: String
+  replies: [Comment1]
+}
+
+type Tweets {
+    id: String! @id
+    score: Int
+}
+
+"""
+This is used for fragment related testing
+"""
+interface Thing {
+    name: String # field to act as a common inherited field for both ThingOne and ThingTwo
+}
+
+type ThingOne implements Thing {
+    id: ID! # ID field with same name as the ID field in ThingTwo
+    color: String # field with same name as a field in ThingTwo
+    prop: String @dgraph(pred: "prop") # field with same name and same dgraph predicate as a field in ThingTwo
+    usedBy: String # field with different name than any field in ThingTwo
+}
+
+type ThingTwo implements Thing {
+    id: ID!
+    color: String
+    prop: String @dgraph(pred: "prop")
+    owner: String
+}

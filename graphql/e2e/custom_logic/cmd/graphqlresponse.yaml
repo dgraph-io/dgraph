@@ -437,24 +437,6 @@
       getPosts(input: [PostFilterInput]): [Post!]
     }
 
-- name: getPostswithLike
-  schema: |
-    input PostFilterInput{
-      id: ID!
-      text: String!
-      likes: Int
-    }
-
-    type Post {
-      id: ID!
-      text: String
-      comments: Post!
-    }
-
-    type Query{
-      getPosts(input: [PostFilterInput]): [Post!]
-    }
-
 - name: "carsschema"
   schema: |
     type Car {

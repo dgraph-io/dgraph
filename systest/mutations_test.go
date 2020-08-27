@@ -102,6 +102,7 @@ func TestSystem(t *testing.T) {
 	t.Run("overwrite uid predicates", wrap(OverwriteUidPredicates))
 	t.Run("overwrite uid predicates reverse index", wrap(OverwriteUidPredicatesReverse))
 	t.Run("delete and query same txn", wrap(DeleteAndQuerySameTxn))
+	t.Run("add and query zero datetime value", wrap(AddAndQueryZeroTimeValue))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -634,7 +635,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 
 	resp, err := c.NewTxn().Query(ctx, `schema{}`)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, asJson(`[`+
+	testutil.CompareJSON(t, asJson(`[`+x.CorsPredicate+","+
 		x.AclPredicates+","+x.GraphqlPredicates+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"married","type":"bool"},`+
@@ -657,7 +658,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	resp, err = c.NewTxn().Query(ctx, `schema{}`)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, asJson(`[`+
-		x.AclPredicates+","+
+		x.AclPredicates+","+x.CorsPredicate+","+
 		x.GraphqlPredicates+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"name","type":"default"},`+
@@ -2322,9 +2323,12 @@ func OverwriteUidPredicatesReverse(t *testing.T, c *dgo.Dgraph) {
 		string(resp.GetJson()))
 
 	// Delete the triples and verify the reverse edge is gone.
+	upsertQuery = `query {
+		alice as var(func: eq(name, Alice))
+		carol as var(func: eq(name, Carol)) }`
 	upsertMutation = &api.Mutation{
 		DelNquads: []byte(`
-		uid(alice) <best_friend> * .`),
+		uid(alice) <best_friend> uid(carol) .`),
 	}
 	req = &api.Request{
 		Query:     upsertQuery,
@@ -2339,6 +2343,10 @@ func OverwriteUidPredicatesReverse(t *testing.T, c *dgo.Dgraph) {
 	testutil.CompareJSON(t, `{"reverse":[]}`,
 		string(resp.GetJson()))
 
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice"}]}`,
+		string(resp.GetJson()))
 }
 
 func DeleteAndQuerySameTxn(t *testing.T, c *dgo.Dgraph) {
@@ -2387,4 +2395,38 @@ func DeleteAndQuerySameTxn(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"me":[{"name":"Alice"}]}`,
 		string(resp.GetJson()))
+}
+
+func AddAndQueryZeroTimeValue(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	op := &api.Operation{Schema: `val: datetime .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:value <val> "0000-01-01T00:00:00Z" .
+		`),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	const datetimeQuery = `
+	{
+		q(func: has(val)) {
+			val
+		}
+	}`
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx, datetimeQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{
+		"q": [
+		  {
+			"val": "0000-01-01T00:00:00Z"
+		  }
+		]
+	  }`, string(resp.Json))
 }

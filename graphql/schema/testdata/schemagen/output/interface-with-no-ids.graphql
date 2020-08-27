@@ -20,10 +20,18 @@ type User {
 # Extended Definitions
 #######################
 
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can currently represent values in range [-(2^53)+1, (2^53)-1] without any error.
+Values out of this range but representable by a signed 64-bit integer, may get coercion error.
+"""
+scalar Int64
+
 scalar DateTime
 
 enum DgraphIndex {
 	int
+	int64
 	float
 	bool
 	hash
@@ -81,9 +89,9 @@ directive @auth(
 	add: AuthRule,
 	update: AuthRule,
 	delete:AuthRule) on OBJECT
-directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
 
 input IntFilter {
 	eq: Int
@@ -91,6 +99,14 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+}
+
+input Int64Filter {
+	eq: Int64
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
 }
 
 input FloatFilter {
@@ -153,12 +169,26 @@ type AddUserPayload {
 # Generated Enums
 #######################
 
+enum MessageHasFilter {
+	text
+}
+
 enum MessageOrderable {
 	text
 }
 
+enum QuestionHasFilter {
+	text
+	askedBy
+}
+
 enum QuestionOrderable {
 	text
+}
+
+enum UserHasFilter {
+	name
+	messages
 }
 
 enum UserOrderable {
@@ -178,10 +208,24 @@ input AddUserInput {
 	name: String
 }
 
+input MessageFilter {
+	has: MessageHasFilter
+	and: MessageFilter
+	or: MessageFilter
+	not: MessageFilter
+}
+
 input MessageOrder {
 	asc: MessageOrderable
 	desc: MessageOrderable
 	then: MessageOrder
+}
+
+input QuestionFilter {
+	has: QuestionHasFilter
+	and: QuestionFilter
+	or: QuestionFilter
+	not: QuestionFilter
 }
 
 input QuestionOrder {
@@ -193,6 +237,13 @@ input QuestionOrder {
 input QuestionRef {
 	text: String
 	askedBy: UserRef
+}
+
+input UserFilter {
+	has: UserHasFilter
+	and: UserFilter
+	or: UserFilter
+	not: UserFilter
 }
 
 input UserOrder {

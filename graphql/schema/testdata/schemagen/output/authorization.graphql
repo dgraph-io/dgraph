@@ -22,10 +22,18 @@ type User @auth(update: {rule:"query($X_MyApp_User: String!) { \n    queryUser(f
 # Extended Definitions
 #######################
 
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can currently represent values in range [-(2^53)+1, (2^53)-1] without any error.
+Values out of this range but representable by a signed 64-bit integer, may get coercion error.
+"""
+scalar Int64
+
 scalar DateTime
 
 enum DgraphIndex {
 	int
+	int64
 	float
 	bool
 	hash
@@ -83,9 +91,9 @@ directive @auth(
 	add: AuthRule,
 	update: AuthRule,
 	delete:AuthRule) on OBJECT
-directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
 
 input IntFilter {
 	eq: Int
@@ -93,6 +101,14 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+}
+
+input Int64Filter {
+	eq: Int64
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
 }
 
 input FloatFilter {
@@ -177,11 +193,26 @@ type UpdateUserPayload {
 # Generated Enums
 #######################
 
+enum TodoHasFilter {
+	title
+	text
+	isPublic
+	dateCompleted
+	sharedWith
+	owner
+	somethingPrivate
+}
+
 enum TodoOrderable {
 	title
 	text
 	dateCompleted
 	somethingPrivate
+}
+
+enum UserHasFilter {
+	username
+	todos
 }
 
 enum UserOrderable {
@@ -211,6 +242,7 @@ input TodoFilter {
 	id: [ID!]
 	isPublic: Boolean
 	dateCompleted: StringTermFilter
+	has: TodoHasFilter
 	and: TodoFilter
 	or: TodoFilter
 	not: TodoFilter
@@ -257,6 +289,7 @@ input UpdateUserInput {
 
 input UserFilter {
 	username: StringHashFilter
+	has: UserHasFilter
 	and: UserFilter
 	or: UserFilter
 	not: UserFilter
