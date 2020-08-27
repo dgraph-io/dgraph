@@ -434,7 +434,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	return l.addMutationInternal(ctx, txn, t)
 }
 
-func GetConflictKeys(pk x.ParsedKey, key []byte, t *pb.DirectedEdge) uint64 {
+func GetConflictKey(pk x.ParsedKey, key []byte, t *pb.DirectedEdge) uint64 {
 	getKey := func(key []byte, uid uint64) uint64 {
 		// Instead of creating a string first and then doing a fingerprint, let's do a fingerprint
 		// here to save memory allocations.
@@ -525,7 +525,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
-	txn.addConflictKey(GetConflictKeys(pk, l.key, t))
+	txn.addConflictKey(GetConflictKey(pk, l.key, t))
 	return nil
 }
 

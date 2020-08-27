@@ -21,7 +21,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -56,12 +55,11 @@ type executor struct {
 }
 
 func newExecutor(applied *y.WaterMark) *executor {
-	runtime.SetBlockProfileRate(1)
 	ex := &executor{
 		predChan: make(map[string]chan *subMutation),
 		closer:   y.NewCloser(0),
 		applied:  applied,
-		throttle: y.NewThrottle(2000),
+		throttle: y.NewThrottle(2000), // Run 2000 mutations at a time.
 	}
 
 	go ex.shutdown()
@@ -69,7 +67,7 @@ func newExecutor(applied *y.WaterMark) *executor {
 }
 
 func generateTokenKeys(nq *pb.DirectedEdge, tokenizers []tok.Tokenizer) ([]uint64, error) {
-	keys := make([]uint64, len(tokenizers))
+	keys := make([]uint64, 0, len(tokenizers))
 	errs := make([]string, 0)
 	for _, token := range tokenizers {
 		storageVal := types.Val{
@@ -108,19 +106,18 @@ func generateConflictKeys(ctx context.Context, p *subMutation) []uint64 {
 			continue
 		}
 
-		uniq[posting.GetConflictKeys(pk, key, edge)] = struct{}{}
+		uniq[posting.GetConflictKey(pk, key, edge)] = struct{}{}
 		stt, _ := schema.State().Get(ctx, edge.Attr)
 		tokenizers := schema.State().Tokenizer(ctx, edge.Attr)
 		isReverse := schema.State().IsReversed(ctx, edge.Attr)
 
 		if stt.Count || isReverse {
 			uniq[0] = struct{}{}
-			continue
 		}
 
 		keys, err := generateTokenKeys(edge, tokenizers)
-		for _, i := range keys {
-			uniq[i] = struct{}{}
+		for _, key := range keys {
+			uniq[key] = struct{}{}
 		}
 		if err != nil {
 			glog.V(2).Info("Error in generating tokens", err)
@@ -135,13 +132,11 @@ func generateConflictKeys(ctx context.Context, p *subMutation) []uint64 {
 }
 
 type mutation struct {
-	m     *subMutation
-	keys  []uint64
-	inDeg int
-
-	outEdges map[uint64]*mutation
-
-	graph *graph
+	sm                 *subMutation
+	conflictKeys       []uint64
+	inDeg              int
+	dependentMutations map[uint64]*mutation
+	graph              *graph
 }
 
 type graph struct {
@@ -155,7 +150,7 @@ func newGraph() *graph {
 
 func (e *executor) worker(mut *mutation) {
 	writer := posting.NewTxnWriter(pstore)
-	payload := mut.m
+	payload := mut.sm
 
 	var esize int64
 	ptxn := posting.NewTxn(payload.startTs)
@@ -185,37 +180,36 @@ func (e *executor) worker(mut *mutation) {
 	atomic.AddInt64(&e.pendingSize, -esize)
 	atomic.AddInt64(&e.smCount, -1)
 
-	mut.graph.Lock()
 	e.throttle.Done(nil)
 
-	for _, dependent := range mut.outEdges {
+	mut.graph.Lock()
+	// Decrease inDeg of dependents. If this mutation unblocks them, queue them.
+	for _, dependent := range mut.dependentMutations {
 		dependent.inDeg -= 1
 		if dependent.inDeg == 0 {
 			x.Check(e.throttle.Do())
-			go func(d *mutation) {
-				e.worker(d)
-			}(dependent)
+			go e.worker(dependent)
 		}
 	}
 
-	for _, c := range mut.keys {
+	for _, key := range mut.conflictKeys {
+		// remove the transaction from each conflict key's entry in the conflict map.
 		i := 0
-		arr := mut.graph.conflicts[c]
-
+		arr := mut.graph.conflicts[key]
 		for _, x := range arr {
-			if x.m.startTs != mut.m.startTs {
+			if x.sm.startTs != mut.sm.startTs {
 				arr[i] = x
 				i++
 			}
 		}
 
 		if i == 0 {
-			delete(mut.graph.conflicts, c)
+			// if conflict key is now empty, delete it.
+			delete(mut.graph.conflicts, key)
 		} else {
-			mut.graph.conflicts[c] = arr[:i]
+			mut.graph.conflicts[key] = arr[:i]
 		}
 	}
-
 	mut.graph.Unlock()
 }
 
@@ -227,11 +221,11 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 	for payload := range ch {
 		conflicts := generateConflictKeys(ctx, payload)
 		m := &mutation{
-			m:        payload,
-			keys:     conflicts,
-			outEdges: make(map[uint64]*mutation),
-			graph:    g,
-			inDeg:    0,
+			sm:                 payload,
+			conflictKeys:       conflicts,
+			dependentMutations: make(map[uint64]*mutation),
+			graph:              g,
+			inDeg:              0,
 		}
 
 		g.Lock()
@@ -243,10 +237,10 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 			}
 
 			for _, dependent := range l {
-				_, ok := dependent.outEdges[m.m.startTs]
+				_, ok := dependent.dependentMutations[m.sm.startTs]
 				if !ok {
 					m.inDeg += 1
-					dependent.outEdges[m.m.startTs] = m
+					dependent.dependentMutations[m.sm.startTs] = m
 				}
 			}
 
@@ -257,9 +251,7 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 
 		if m.inDeg == 0 {
 			x.Check(e.throttle.Do())
-			go func() {
-				e.worker(m)
-			}()
+			go e.worker(m)
 		}
 	}
 }
