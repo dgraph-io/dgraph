@@ -3367,6 +3367,35 @@ func updateMutationWithoutSetRemove(t *testing.T) {
 	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
 }
 
+func checkCascadeWithMutationWithoutIDField(t *testing.T) {
+	addStateParams := &GraphQLParams{
+		Query: `mutation {
+			addState(input: [{xcode: "S2", name: "State2"}]) @cascade(fields:["numUids"]) {
+				state @cascade(fields:["xcode"]) {
+					xcode
+					name
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addStateExpected := `{
+		"addState": {
+			"state": [{
+				"xcode": "S2",
+				"name": "State2"
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
+
+	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S2"}}
+	deleteState(t, filter, 1, nil)
+}
+
 func mutationInt64InputCoercing(t *testing.T) {
 	addPost1Params := &GraphQLParams{
 		Query: `mutation {

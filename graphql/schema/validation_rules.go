@@ -18,10 +18,11 @@ package schema
 
 import (
 	"errors"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/validator"
 	"math"
 	"strconv"
+
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/validator"
 )
 
 func listTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
@@ -64,6 +65,32 @@ func variableTypeCheck(observers *validator.Events, addError validator.AddErrFun
 		addError(validator.Message("Variable type provided %s is incompatible with expected type %s",
 			value.VariableDefinition.Type.String(),
 			value.ExpectedType.String()), validator.At(value.Position))
+	})
+}
+
+func directiveArgumentsCheck(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnDirective(func(walker *validator.Walker, directive *ast.Directive) {
+
+		if directive.Name == cascadeDirective && len(directive.Arguments) == 1 {
+			if directive.ParentDefinition == nil {
+				addError(validator.Message("Schema is not set yet. Please try after sometime."))
+				return
+			}
+			if directive.Arguments.ForName(cascadeArg) == nil {
+				return
+			}
+			typFields := directive.ParentDefinition.Fields
+			for _, child := range directive.Arguments.ForName(cascadeArg).Value.Children {
+				if typFields.ForName(child.Value.Raw) == nil {
+					addError(validator.Message("Field `%s` is not present in type `%s`. You can only use fields which are in type `%s`",
+						child.Value.Raw, directive.ParentDefinition.Name, directive.ParentDefinition.Name))
+					return
+				}
+
+			}
+
+		}
+
 	})
 }
 
