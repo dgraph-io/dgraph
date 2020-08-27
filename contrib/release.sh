@@ -270,8 +270,8 @@ ls -alh $TMP
 
 set +o xtrace
 echo "To release:"
-echo
 if git show-ref -q --verify "refs/tags/$TAG"; then
+    echo
     echo "Push the git tag"
     echo "  git push origin $TAG"
 fi
