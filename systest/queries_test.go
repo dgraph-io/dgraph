@@ -1144,18 +1144,28 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 			out: `
 			{
 				"q": [
-				  {
-					"name": "Alice 1",
-					"age": "23"
-				  },
-				  {
-					"name": "Alice 2"
-				  },
-				  {
-					"name": "Alice 3",
-					"age": "32"
-				  }
-				]
+					{
+					  "name": "Alice 1",
+					  "age": "23",
+					  "friend": [
+						{
+						  "name": "Bob"
+						}
+					  ]
+					},
+					{
+					  "name": "Alice 2",
+					  "friend": [
+						{
+						  "name": "Chris"
+						}
+					  ]
+					},
+					{
+					  "name": "Alice 3",
+					  "age": "32"
+					}
+				  ]
 			}
 			`,
 		},

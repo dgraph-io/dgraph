@@ -550,9 +550,9 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			IsInternal:   gchild.IsInternal,
 		}
 
-		// If parent has @cascade (with or without params), inherit @cascade (with no params)
+		// Inherit from the parent.
 		if len(sg.Params.Cascade) > 0 {
-			args.Cascade = append(args.Cascade, "__all__")
+			args.Cascade = append(args.Cascade, sg.Params.Cascade...)
 		}
 		// Allow over-riding at this level.
 		if len(gchild.Cascade) > 0 {
