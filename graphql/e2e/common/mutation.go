@@ -2530,10 +2530,8 @@ func deleteGqlType(
 			require.Equal(t, "Deleted", deleteType["msg"], "while deleting %s (filter: %v)",
 				typeName, filter)
 		}
-	} else {
-		if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
-			t.Errorf("errors mismatch (-want +got):\n%s", diff)
-		}
+	} else if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
+		t.Errorf("errors mismatch (-want +got):\n%s", diff)
 	}
 }
 
