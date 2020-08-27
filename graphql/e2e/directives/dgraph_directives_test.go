@@ -207,6 +207,21 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"index": true,
 		"tokenizer": ["term"]
 	}, {
+		"predicate": "post1.numComments",
+		"type": "int"
+	}, {
+		"predicate": "post1.title",
+		"type": "string",
+		"index": true,
+		"tokenizer": ["trigram", "hash"],
+		"upsert": true
+	}, {
+		"predicate": "post1.numViews",
+		"type": "int"
+	}, {
+		"predicate": "post1.numLikes",
+		"type": "int"
+	}, {
 		"predicate": "text",
 		"type": "string",
 		"index": true,
@@ -365,6 +380,17 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 			"name": "myPost.category"
 		}],
 		"name": "myPost"
+	}, {
+		"fields": [{
+			"name": "post1.numComments"
+		}, {
+			"name": "post1.title"
+		}, {
+			"name": "post1.numViews"
+		}, {
+			"name": "post1.numLikes"
+		}],
+		"name": "post1"
 	}, {
 		"fields": [{
 			"name": "performance.character.name"
