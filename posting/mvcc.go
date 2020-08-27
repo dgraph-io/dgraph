@@ -417,6 +417,9 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		}
 	}
 
+	if pstore.IsClosed() {
+		return nil, badger.ErrDBClosed
+	}
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
