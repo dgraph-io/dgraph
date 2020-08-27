@@ -237,6 +237,121 @@ ADD_UPDATE_MUTATION:
         }
       }
 
+  -
+    name: "parameterized cascade directive on mutation payload"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION @cascade(fields:["post","numUids"]) {
+          post {
+            title
+            text
+            author {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) @cascade {
+          title : Post.title
+          text : Post.text
+          author : Post.author {
+            name : Author.name
+            dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "parametrized cascade directive on mutation query field"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION  {
+          post @cascade(fields:["title","text"]) {
+            title
+            text
+            author {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) @cascade(Post.title, Post.text) {
+          title : Post.title
+          text : Post.text
+          author : Post.author {
+            name : Author.name
+            dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "parameterized cascade directive inside mutation query"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            title
+            text
+            author @cascade(fields:["name","dob","id"]) {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) {
+          title : Post.title
+          text : Post.text
+          author : Post.author @cascade(Author.name, Author.dob, uid) {
+            name : Author.name
+            dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "parameterized cascade directive at multiple levels "
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION @cascade(fields:["post"]) {
+          post {
+            title
+            text
+            author @cascade(fields:["name","dob"]) {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) @cascade {
+          title : Post.title
+          text : Post.text
+          author : Post.author @cascade(Author.name, Author.dob) {
+            name : Author.name
+            dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
 UPDATE_MUTATION:
   -
     name: "filter update result"

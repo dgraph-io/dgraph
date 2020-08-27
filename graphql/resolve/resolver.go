@@ -1268,7 +1268,6 @@ func completeObject(
 	comma := ""
 
 	x.Check2(buf.WriteRune('{'))
-
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {

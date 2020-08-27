@@ -144,6 +144,8 @@ func (s *ServerState) initStorage() {
 		opt := badger.LSMOnlyOptions(Config.WALDir)
 		opt = setBadgerOptions(opt, true)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
+		opt.BlockCacheSize = Config.WBlockCacheSize
+		opt.IndexCacheSize = Config.WIndexCacheSize
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
@@ -163,10 +165,8 @@ func (s *ServerState) initStorage() {
 		opt := badger.DefaultOptions(Config.PostingDir).
 			WithValueThreshold(1 << 10 /* 1KB */).
 			WithNumVersionsToKeep(math.MaxInt32).
-			WithMaxCacheSize(1 << 30).
-			WithKeepBlockIndicesInCache(true).
-			WithKeepBlocksInCache(true).
-			WithMaxBfCacheSize(500 << 20) // 500 MB of bloom filter cache.
+			WithBlockCacheSize(Config.PBlockCacheSize).
+			WithIndexCacheSize(Config.PIndexCacheSize)
 		opt = setBadgerOptions(opt, false)
 
 		// Print the options w/o exposing key.

@@ -104,13 +104,15 @@ func TestSubscription(t *testing.T) {
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-
+	resp := make(map[string]interface{})
+	require.NoError(t, json.Unmarshal(addResult.Data, &resp))
+	productID := resp["addProduct"].(map[string]interface{})["product"].([]interface{})[0].(map[string]interface{})["productID"].(string)
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
-		Query: `subscription{
-			getProduct(productID: "0x2"){
+		Query: fmt.Sprintf(`subscription{
+			getProduct(productID: "%s"){
 			  name
 			}
-		  }`,
+		  }`, productID),
 	}, `{}`)
 	require.Nil(t, err)
 

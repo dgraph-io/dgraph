@@ -89,7 +89,7 @@ directive @auth(
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
 
 input IntFilter {
 	eq: Int
@@ -189,8 +189,18 @@ type UpdateMoviePayload {
 # Generated Enums
 #######################
 
+enum MovieDirectorHasFilter {
+	name
+	directed
+}
+
 enum MovieDirectorOrderable {
 	name
+}
+
+enum MovieHasFilter {
+	name
+	director
 }
 
 enum MovieOrderable {
@@ -212,6 +222,9 @@ input AddMovieInput {
 
 input MovieDirectorFilter {
 	id: [ID!]
+	has: MovieDirectorHasFilter
+	and: MovieDirectorFilter
+	or: MovieDirectorFilter
 	not: MovieDirectorFilter
 }
 
@@ -234,6 +247,9 @@ input MovieDirectorRef {
 
 input MovieFilter {
 	id: [ID!]
+	has: MovieHasFilter
+	and: MovieFilter
+	or: MovieFilter
 	not: MovieFilter
 }
 

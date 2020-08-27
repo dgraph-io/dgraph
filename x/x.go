@@ -34,6 +34,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -121,6 +122,9 @@ const (
 {"predicate":"dgraph.rule.predicate","type":"string","index":true,"tokenizer":["exact"],"upsert":true},
 {"predicate":"dgraph.rule.permission","type":"int"}
 `
+	// CorsPredicate is the json representation of the predicate reserved by dgraph for the use
+	//of cors
+	CorsPredicate = `{"predicate":"dgraph.cors","type":"string","list":true,"type":"string","index":true,"tokenizer":["exact"],"upsert":true}`
 
 	InitialTypes = `
 "types": [{
@@ -160,7 +164,26 @@ var (
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 	// Nilbyte is a nil byte slice. Used
 	Nilbyte []byte
+	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
+	AcceptedOrigins = atomic.Value{}
 )
+
+func init() {
+	AcceptedOrigins.Store(map[string]struct{}{})
+}
+
+// UpdateCorsOrigins updates the cors allowlist with the given origins.
+func UpdateCorsOrigins(origins []string) {
+	if len(origins) == 1 && origins[0] == "*" {
+		AcceptedOrigins.Store(map[string]struct{}{})
+		return
+	}
+	allowList := make(map[string]struct{}, len(origins))
+	for _, origin := range origins {
+		allowList[origin] = struct{}{}
+	}
+	AcceptedOrigins.Store(allowList)
+}
 
 // ShouldCrash returns true if the error should cause the process to crash.
 func ShouldCrash(err error) bool {
@@ -1075,4 +1098,36 @@ func DeepCopyJsonArray(a []interface{}) []interface{} {
 		}
 	}
 	return aCopy
+}
+
+// GetCachePercentages returns the slice of cache percentages given the "," (comma) separated
+// cache percentages(integers) string and expected number of caches.
+func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
+	cp := strings.Split(cpString, ",")
+	// Sanity checks
+	if len(cp) != numExpected {
+		return nil, errors.Errorf("ERROR: expected %d cache percentages, got %d",
+			numExpected, len(cp))
+	}
+
+	var cachePercent []int64
+	percentSum := 0
+	for _, percent := range cp {
+		x, err := strconv.Atoi(percent)
+		if err != nil {
+			return nil, errors.Errorf("ERROR: unable to parse cache percentage(%s)", percent)
+		}
+		if x < 0 {
+			return nil, errors.Errorf("ERROR: cache percentage(%s) cannot be negative", percent)
+		}
+		cachePercent = append(cachePercent, int64(x))
+		percentSum += x
+	}
+
+	if percentSum != 100 {
+		return nil, errors.Errorf("ERROR: cache percentages (%s) does not sum up to 100",
+			strings.Join(cp, "+"))
+	}
+
+	return cachePercent, nil
 }

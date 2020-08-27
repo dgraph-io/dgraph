@@ -98,7 +98,7 @@ directive @auth(
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
 
 input IntFilter {
 	eq: Int
@@ -182,8 +182,17 @@ type UpdateTPayload {
 # Generated Enums
 #######################
 
+enum IHasFilter {
+	s
+}
+
 enum IOrderable {
 	s
+}
+
+enum THasFilter {
+	s
+	i
 }
 
 enum TOrderable {
@@ -201,6 +210,13 @@ input AddTInput {
 	i: Int
 }
 
+input IFilter {
+	has: IHasFilter
+	and: IFilter
+	or: IFilter
+	not: IFilter
+}
+
 input IOrder {
 	asc: IOrderable
 	desc: IOrderable
@@ -209,6 +225,9 @@ input IOrder {
 
 input TFilter {
 	id: [ID!]
+	has: THasFilter
+	and: TFilter
+	or: TFilter
 	not: TFilter
 }
 

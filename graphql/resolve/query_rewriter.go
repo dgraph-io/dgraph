@@ -971,7 +971,6 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 
 	var ands []*gql.FilterTree
 	var or *gql.FilterTree
-
 	// Get a stable ordering so we generate the same thing each time.
 	var keys []string
 	for key := range filter {
@@ -1041,19 +1040,35 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					},
 				})
 			case interface{}:
+				// has: comments -> has(Post.comments)
+				// OR
 				// isPublished: true -> eq(Post.isPublished, true)
 				// OR an enum case
 				// postType: Question -> eq(Post.postType, "Question")
-				fn := "eq"
-				ands = append(ands, &gql.FilterTree{
-					Func: &gql.Function{
-						Name: fn,
-						Args: []gql.Arg{
-							{Value: typ.DgraphPredicate(field)},
-							{Value: fmt.Sprintf("%v", dgFunc)},
+				switch field {
+				case "has":
+					fieldName := fmt.Sprintf("%v", dgFunc)
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: field,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(fieldName)},
+							},
 						},
-					},
-				})
+					})
+
+				default:
+					fn := "eq"
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(field)},
+								{Value: fmt.Sprintf("%v", dgFunc)},
+							},
+						},
+					})
+				}
 			}
 		}
 	}

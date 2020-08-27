@@ -1935,7 +1935,17 @@ func TestSchemaQueryWithACL(t *testing.T) {
       "predicate": "dgraph.acl.rule",
       "type": "uid",
       "list": true
-    },
+	},
+	{
+		"predicate": "dgraph.cors",
+		"type": "string",
+		"list": true,
+		"index": true,
+      	"tokenizer": [
+          "exact"
+      	],
+      	"upsert": true
+	},
     {
       "predicate": "dgraph.graphql.schema",
       "type": "string"
