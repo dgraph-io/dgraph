@@ -1397,6 +1397,28 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],
 			"q2":[{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25},{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23}]}`,
 		},
+		{
+			`{
+				f as q1(func: has(name), orderasc: name) {
+					name
+					age
+				}
+				q2(func: uid(f), orderasc: name) {
+					name
+					age
+				}
+			}`,
+			"alice doesn't have access to name or age",
+			`{"q2":[]}`,
+
+			`alice has access to name`,
+			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],
+			"q2":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+
+			"alice has access to name and age",
+			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],
+			"q2":[{"name":"RandomGuy2","age":25},{"name":"RandomGuy","age":23}]}`,
+		},
 	}
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
