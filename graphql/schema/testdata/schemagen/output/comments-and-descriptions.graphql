@@ -98,7 +98,7 @@ directive @auth(
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
 
 input IntFilter {
 	eq: Int

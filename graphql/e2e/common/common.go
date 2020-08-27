@@ -305,6 +305,7 @@ func RunAll(t *testing.T) {
 	t.Run("deep mutations", deepMutations)
 	t.Run("add multiple mutations", testMultipleMutations)
 	t.Run("deep XID mutations", deepXIDMutations)
+	t.Run("three level xid", testThreeLevelXID)
 	t.Run("error in multiple mutations", addMultipleMutationWithOneError)
 	t.Run("dgraph directive with reverse edge adds data correctly",
 		addMutationWithReverseDgraphEdge)
@@ -318,6 +319,7 @@ func RunAll(t *testing.T) {
 	t.Run("alias works for mutations", mutationsWithAlias)
 	t.Run("three level deep", threeLevelDeepMutation)
 	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
+	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
