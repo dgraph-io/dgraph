@@ -240,6 +240,25 @@
             "upsert": true
         },
         {
+            "predicate": "post1.numComments",
+            "type": "int"
+        },
+        {
+            "predicate": "post1.title",
+            "type": "string",
+            "index": true,
+            "tokenizer": ["trigram", "hash"],
+            "upsert": true
+        },
+        {
+            "predicate": "post1.numViews",
+            "type": "int"
+        },
+        {
+            "predicate": "post1.numLikes",
+            "type": "int"
+        },
+        {
             "predicate": "Starship.length",
             "type": "float"
         },
@@ -553,25 +572,6 @@
                 }
             ],
             "name": "post1"
-        },
-        {
-            "predicate": "post1.numComments",
-            "type": "int"
-        },
-        {
-            "predicate": "post1.title",
-            "type": "string",
-            "index": true,
-            "tokenizer": ["trigram", "hash"],
-            "upsert": true
-        },
-        {
-            "predicate": "post1.numViews",
-            "type": "int"
-        },
-        {
-            "predicate": "post1.numLikes",
-            "type": "int"
         },
         {
             "fields": [
