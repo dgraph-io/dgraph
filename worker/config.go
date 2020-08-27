@@ -61,6 +61,15 @@ type Options struct {
 	// AllottedMemory is the estimated size taken by the LRU cache.
 	AllottedMemory float64
 
+	// PBlockCacheSize is the size of block cache for pstore
+	PBlockCacheSize int64
+	// PIndexCacheSize is the size of index cache for pstore
+	PIndexCacheSize int64
+	// WBlockCacheSize is the size of block cache for wstore
+	WBlockCacheSize int64
+	// WIndexCacheSize is the size of index cache for wstore
+	WIndexCacheSize int64
+
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
 	HmacSecret x.SensitiveByteSlice
 	// AccessJwtTtl is the TTL for the access JWT.
