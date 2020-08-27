@@ -1065,7 +1065,17 @@ func rewriteObject(
 	newObj["uid"] = myUID
 	frag := newFragment(newObj)
 	frag.newNodes[variable] = typ
+
 	results := &mutationRes{secondPass: []*mutationFragment{frag}}
+	if xid != nil && !atTopLevel && !xidEncounteredFirstTime && deepXID <= 2 {
+		// If this is an xid that has been encountered before, e.g. think add mutations with
+		// multiple objects as input. In that case we don't need to add the fragment to create this
+		// object, so we clear it out. We do need other fragments for linking this node to its
+		// parent which are added later.
+		// If deepXID > 2 then even if the xid has been encountered before we still keep it and
+		// build its mutation to cover all possible scenarios.
+		results.secondPass = results.secondPass[:0]
+	}
 
 	// if xidString != "", then we are adding with an xid.  In which case, we have to ensure
 	// as part of the upsert that the xid doesn't already exist.
@@ -1104,13 +1114,15 @@ func rewriteObject(
 	}
 
 	var childrenFirstPass []*mutationFragment
-
 	// we build the mutation to add object here. If XID != nil, we would then move it to
 	// firstPass from secondPass (frag).
 
 	// if this object has an xid, then we don't need to
 	// rewrite its children if we have encountered it earlier.
-	if xidString == "" || xidEncounteredFirstTime {
+
+	// For deepXIDs even if the xid has been encountered before, we should build the mutation for
+	// this object.
+	if xidString == "" || xidEncounteredFirstTime || deepXID > 2 {
 		var fields []string
 		for field := range obj {
 			fields = append(fields, field)
@@ -1209,11 +1221,6 @@ func rewriteObject(
 		results.firstPass = appendFragments(results.firstPass, []*mutationFragment{xidFrag})
 	} else if xidFrag != nil {
 		results.secondPass = appendFragments(results.secondPass, []*mutationFragment{xidFrag})
-	}
-
-	// if !xidEncounteredFirstTime, we have already seen the relevant fragments.
-	if xid != nil && !atTopLevel && !xidEncounteredFirstTime {
-		results.firstPass = []*mutationFragment{}
 	}
 
 	return results

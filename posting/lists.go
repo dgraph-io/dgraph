@@ -136,21 +136,21 @@ var (
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *badger.DB) {
+func Init(ps *badger.DB, cacheSize int64) {
 	pstore = ps
 	closer = y.NewCloser(1)
 	go updateMemoryMetrics(closer)
 
 	// Initialize cache.
-	// TODO(Ibrahim): Add flag to switch cache on and off. For now cache is disabled.
-	if true {
+	if cacheSize == 0 {
 		return
 	}
-	// TODO(Ibrahim): Replace hard-coded value with value from flag.
+
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
-		NumCounters: 200e6,
-		MaxCost:     int64(1000 * 1024 * 1024),
+		// Use 5% of cache memory for storing counters.
+		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
+		MaxCost:     int64(float64(cacheSize) * 0.95),
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
