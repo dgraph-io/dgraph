@@ -386,7 +386,8 @@ func TestMain(m *testing.M) {
 	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
 	pstore = ps
-	posting.Init(ps)
+	// Not using posting list cache
+	posting.Init(ps, 0)
 	Init(ps)
 
 	os.Exit(m.Run())
