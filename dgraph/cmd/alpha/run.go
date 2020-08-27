@@ -198,9 +198,13 @@ they form a Raft group and provide synchronous replication.
 
 	// Cache flags
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha.")
+	// TODO(Naman): The PostingListCache is a no-op for now. Once the posting list cache is
+	// enabled in release branch, use it.
 	flag.String("cache_percentage", "0,65,25,0,10",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
-		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).`)
+		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).
+		PostingListCache should be 0 for now.
+		`)
 }
 
 func setupCustomTokenizers() {
@@ -526,7 +530,9 @@ func run() {
 	cachePercentage := Alpha.Conf.GetString("cache_percentage")
 	cachePercent, err := x.GetCachePercentages(cachePercentage, 5)
 	x.Check(err)
-	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
+	// TODO(Naman): PostingListCache doesn't exist now.
+	PostingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
+	x.AssertTruef(PostingListCacheSize == 0, "ERROR: PostingListCacheSize should be 0.")
 	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
 	wstoreBlockCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
@@ -661,7 +667,7 @@ func run() {
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	schema.Init(worker.State.Pstore)
-	posting.Init(worker.State.Pstore, postingListCacheSize)
+	posting.Init(worker.State.Pstore)
 	defer posting.Cleanup()
 	worker.Init(worker.State.Pstore)
 
