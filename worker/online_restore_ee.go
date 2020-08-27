@@ -285,8 +285,17 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	return config, nil
 }
 
+func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
+	return &Credentials{
+		AccessKey:    req.AccessKey,
+		SecretKey:    req.SecretKey,
+		SessionToken: req.SessionToken,
+		Anonymous:    req.Anonymous,
+	}
+}
+
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
-	res := LoadBackup(req.Location, req.BackupId,
+	res := LoadBackup(req.Location, req.BackupId, getCredentialsFromRestoreRequest(req),
 		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
 			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
