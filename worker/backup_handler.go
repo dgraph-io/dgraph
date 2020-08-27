@@ -148,14 +148,13 @@ type loadFn func(reader io.Reader, groupId uint32, preds predicateSet) (uint64, 
 
 // LoadBackup will scan location l for backup files in the given backup series and load them
 // sequentially. Returns the maximum Since value on success, otherwise an error.
-func LoadBackup(location, backupId string, fn loadFn) LoadResult {
+func LoadBackup(location, backupId string, creds *Credentials, fn loadFn) LoadResult {
 	uri, err := url.Parse(location)
 	if err != nil {
 		return LoadResult{0, 0, err}
 	}
 
-	// TODO(martinmr): allow overriding credentials during restore.
-	h := getHandler(uri.Scheme, nil)
+	h := getHandler(uri.Scheme, creds)
 	if h == nil {
 		return LoadResult{0, 0, errors.Errorf("Unsupported URI: %v", uri)}
 	}
