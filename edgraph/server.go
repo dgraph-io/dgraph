@@ -1041,7 +1041,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		if !qc.req.ReadOnly {
 			return resp, errors.Errorf("A best effort query must be read-only.")
 		}
-		qc.req.StartTs = posting.Oracle().MaxAssigned()
+		if qc.req.StartTs == 0 {
+			qc.req.StartTs = posting.Oracle().MaxAssigned()
+		}
 		qr.Cache = worker.NoCache
 	}
 
