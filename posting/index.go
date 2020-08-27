@@ -533,7 +533,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt64).
 		WithCompression(options.None).
 		WithLogRotatesToFlush(10).
-		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
+		WithBlockCacheSize(50) // TODO(Aman): Disable cache altogether
 
 	// TODO(Ibrahim): Remove this once badger is updated.
 	dbOpts.ZSTDCompressionLevel = 1

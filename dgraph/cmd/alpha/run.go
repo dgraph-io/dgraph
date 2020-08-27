@@ -196,6 +196,15 @@ they form a Raft group and provide synchronous replication.
 
 	// flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
 
+	// Cache flags
+	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha.")
+	// TODO(Naman): The PostingListCache is a no-op for now. Once the posting list cache is
+	// enabled in release branch, use it.
+	flag.String("cache_percentage", "0,65,25,0,10",
+		`Cache percentages summing up to 100 for various caches (FORMAT:
+		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).
+		PostingListCache should be 0 for now and is a no-op.
+		`)
 }
 
 func setupCustomTokenizers() {
@@ -515,12 +524,29 @@ var shutdownCh chan struct{}
 func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
+	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
+	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
+
+	cachePercentage := Alpha.Conf.GetString("cache_percentage")
+	cachePercent, err := x.GetCachePercentages(cachePercentage, 5)
+	x.Check(err)
+	// TODO(Naman): PostingListCache doesn't exist now.
+	PostingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
+	x.AssertTruef(PostingListCacheSize == 0, "ERROR: PostingListCacheSize should be 0.")
+	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
+	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
+	wstoreBlockCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
+	wstoreIndexCacheSize := (cachePercent[4] * (totalCache << 20)) / 100
+
 	opts := worker.Options{
 		BadgerKeyFile:          Alpha.Conf.GetString("encryption_key_file"),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-
-		PostingDir: Alpha.Conf.GetString("postings"),
-		WALDir:     Alpha.Conf.GetString("wal"),
+		PostingDir:             Alpha.Conf.GetString("postings"),
+		WALDir:                 Alpha.Conf.GetString("wal"),
+		PBlockCacheSize:        pstoreBlockCacheSize,
+		PIndexCacheSize:        pstoreIndexCacheSize,
+		WBlockCacheSize:        wstoreBlockCacheSize,
+		WIndexCacheSize:        wstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
