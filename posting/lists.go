@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/ristretto"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -130,6 +131,7 @@ func updateMemoryMetrics(lc *y.Closer) {
 var (
 	pstore *badger.DB
 	closer *y.Closer
+	lCache *ristretto.Cache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
