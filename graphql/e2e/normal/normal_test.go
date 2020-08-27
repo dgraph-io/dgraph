@@ -368,14 +368,14 @@ func TestSchema_Normal(t *testing.T) {
 		}, {
 			 "fields": [{
 					"name": "post1.numComments"
-				}, {
+			}, {
 					"name": "post1.title"
-				}, {
+			}, {
 					"name": "post1.numViews"
-				}, {
+			}, {
 					"name": "post1.numLikes"
-			  }],
-			  "name": "post1"
+			}],
+			"name": "post1"
 		}, {
 			"fields": [{
 				"name": "Starship.name"

@@ -96,11 +96,7 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 
 func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
-		if value.Definition == nil || value.ExpectedType == nil {
-			return
-		}
-
-		if value.Kind != ast.IntValue {
+		if value.Definition == nil || value.ExpectedType == nil || value.Kind != ast.IntValue{
 			return
 		}
 
@@ -113,8 +109,8 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 			val, err = strconv.ParseInt(value.Raw, 10, 54)
 		default:
 			return
-
 		}
+
 		//Range of Json numbers is [-(2**53)+1, (2**53)-1] while of 54 bit integers is [-(2**53), (2**53)-1]
 		if err != nil {
 			if float64(val) == (-1)*math.Pow(2, 53) || errors.Is(err, strconv.ErrRange) {
