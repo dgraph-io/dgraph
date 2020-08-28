@@ -938,8 +938,8 @@ func TestNonExistentPath(t *testing.T) {
 
 	resp, err := client.Do(req)
 	require.NoError(t, err)
-	require.True(t, resp.StatusCode == 404)
-	require.True(t, resp.Status == "404 Not Found")
+	require.Equal(t, resp.StatusCode, 404)
+	require.Equal(t, resp.Status, "404 Not Found")
 }
 
 func TestUrl(t *testing.T) {
