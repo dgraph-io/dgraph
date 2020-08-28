@@ -98,6 +98,8 @@ type encoder struct {
 	metaSlice []uint64
 	// childrenMap contains mapping of fastJsonNode to its children.
 	childrenMap map[fastJsonNode][]fastJsonNode
+
+	uids map[uint64]struct{}
 }
 
 func newEncoder() *encoder {
@@ -114,6 +116,7 @@ func newEncoder() *encoder {
 		arena:       a,
 		metaSlice:   metaSlice,
 		childrenMap: make(map[fastJsonNode][]fastJsonNode),
+		uids:        make(map[uint64]struct{}),
 	}
 }
 
@@ -245,7 +248,7 @@ func (enc *encoder) appendAttrs(fj fastJsonNode, attrs ...fastJsonNode) {
 		fmt.Printf("Got a node %d, with %d children\n", fj, len(cs))
 	}
 	enc.childrenMap[fj] = cs
-	if len(enc.childrenMap)%10000 == 0 {
+	if len(enc.childrenMap)%1000000 == 0 {
 		glog.Infof("Children map is of size: %d\n", len(enc.childrenMap))
 	}
 }
@@ -329,6 +332,10 @@ func (enc *encoder) SetUID(fj fastJsonNode, uid uint64, attr uint16) error {
 		return err
 	}
 	enc.appendAttrs(fj, sn)
+	enc.uids[uid] = struct{}{}
+	if len(enc.uids)%1000000 == 0 {
+		glog.Infof("Number of uids: %d\n", len(enc.uids))
+	}
 	return nil
 }
 
