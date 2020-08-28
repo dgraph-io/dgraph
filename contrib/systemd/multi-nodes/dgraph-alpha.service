@@ -7,7 +7,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/var/lib/dgraph
 Restart=on-failure
-ExecStart=/bin/bash -c '/usr/local/bin/dgraph alpha --my=$(hostname):7080 --lru_mb 2048 --zero {{ zero0 }}:5080,{{ zero1 }}:5080,{{ zero2 }}:5080 --postings /var/lib/dgraph/p --wal /var/lib/dgraph/w'
+ExecStart=/bin/bash -c '/usr/local/bin/dgraph alpha --my={{ hostname }}:7080 --lru_mb 2048 --zero {{ zero0 }}:5080,{{ zero1 }}:5080,{{ zero2 }}:5080 --postings /var/lib/dgraph/p --wal /var/lib/dgraph/w'
 StandardOutput=journal
 StandardError=journal
 User=dgraph

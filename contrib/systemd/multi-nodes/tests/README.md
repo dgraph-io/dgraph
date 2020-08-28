@@ -21,7 +21,7 @@ vagrant up
 ```bash
 # test a zero virtual guest
 curl $(awk '/zero0/{ print $1 }' hosts):6080/health
-# test an alpna virtual guest
+# test an alpha virtual guest
 curl $(awk '/alpha0/{ print $1 }' hosts):8080/health
 ```
 
