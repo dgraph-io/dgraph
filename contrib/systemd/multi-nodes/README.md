@@ -33,7 +33,7 @@ chown --recursive dgraph:dgraph /var/{lib,log}/dgraph
 
 ### Configure First Zero Node
 
-Edit the file [dgraph-zero0.service](dgraph-zero0.service) as necessary.  There are three parameters and include the hostname:
+Edit the file [dgraph-zero-0.service](dgraph-zero-0.service) as necessary.  There are three parameters and include the hostname:
 
 * `--replicas` - total number of zeros
 * `--idx` - initial zero node will be `1`, and each zero node added afterward will have the `idx` increased by `1`
@@ -58,7 +58,7 @@ systemctl start dgraph-zero
 
 ### Configure Third Zero Node
 
-For the third zero nodes,  [dgraph-zero-2.service](dgraph-zero-2.service), this is configured in the same manner as the second zero node with the `idx` set to `3`
+For the third zero node,  [dgraph-zero-2.service](dgraph-zero-2.service), this is configured in the same manner as the second zero node with the `idx` set to `3`
 
 Copy the file to `/etc/systemd/system/dgraph-zero.service` and run the following:
 
@@ -144,7 +144,7 @@ firewall-cmd --reload
 
 Below are examples of checking the health of the nodes and cluster.
 
-> **NOTE** Replace mycompany.com to your domain or use the IP address.
+> **NOTE** Replace hostnames to your domain or use the IP address.
 
 ### Zero Nodes
 
