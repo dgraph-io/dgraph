@@ -897,14 +897,15 @@ type Extensions struct {
 	Metrics *api.Metrics    `json:"metrics,omitempty"`
 }
 
-func (sg *SubGraph) countUids() int {
+func (sg *SubGraph) countUids(level int) int {
 	count := 0
 	count += len(sg.SrcUIDs.GetUids())
 	for _, l := range sg.uidMatrix {
 		count += len(l.GetUids())
 	}
+	fmt.Printf("%s sg: %p . Count: %d\n", strings.Repeat("--", level), sg, count)
 	for _, child := range sg.Children {
-		count += child.countUids()
+		count += child.countUids(level + 1)
 	}
 	return count
 }
@@ -915,9 +916,8 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 		l.Json = time.Since(encodingStart)
 	}()
 
-	num := sg.countUids()
+	num := sg.countUids(0)
 	glog.Infof("toFastJSON. Num uids: %d\n", num)
-	return nil, nil
 
 	enc := newEncoder()
 	var err error
