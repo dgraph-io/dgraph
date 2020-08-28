@@ -245,6 +245,9 @@ func (enc *encoder) appendAttrs(fj fastJsonNode, attrs ...fastJsonNode) {
 		fmt.Printf("Got a node %d, with %d children\n", fj, len(cs))
 	}
 	enc.childrenMap[fj] = cs
+	if len(enc.childrenMap)%10000 == 0 {
+		glog.Infof("Children map is of size: %d\n", len(enc.childrenMap))
+	}
 }
 
 func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
