@@ -113,7 +113,7 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 
 func (b *rdfBuilder) writeRDF(subject uint64, predicate []byte, object []byte) {
 	// add subject
-	b.writeUidTriple(subject)
+	x.Check2(b.buf.Write(toHex(subject)))
 	x.Check(b.buf.WriteByte(' '))
 	// add predicate
 	b.writeTriple(predicate)
@@ -128,12 +128,6 @@ func (b *rdfBuilder) writeRDF(subject uint64, predicate []byte, object []byte) {
 func (b *rdfBuilder) writeTriple(val []byte) {
 	x.Check(b.buf.WriteByte('<'))
 	x.Check2(b.buf.Write(val))
-	x.Check(b.buf.WriteByte('>'))
-}
-
-func (b *rdfBuilder) writeUidTriple(uid uint64) {
-	x.Check2(b.buf.WriteString("<0x"))
-	x.Check2(b.buf.WriteString(strconv.FormatUint(uid, 16)))
 	x.Check(b.buf.WriteByte('>'))
 }
 
@@ -155,19 +149,14 @@ func (b *rdfBuilder) rdfForUIDList(subject uint64, list *pb.List, sg *SubGraph) 
 			continue
 		}
 		// Build object.
-		b.writeRDF(
-			subject,
-			[]byte(sg.fieldName()),
-			buildUidTriple(destUID))
+		b.writeRDF(subject, []byte(sg.fieldName()), toHex(destUID))
 	}
 }
 
 // rdfForValueList returns rdf for the value list.
 func (b *rdfBuilder) rdfForValueList(subject uint64, valueList *pb.ValueList, attr string) {
 	if attr == "uid" {
-		b.writeRDF(subject,
-			[]byte(attr),
-			buildUidTriple(subject))
+		b.writeRDF(subject, []byte(attr), toHex(subject))
 		return
 	}
 	for _, destValue := range valueList.Values {
@@ -210,15 +199,6 @@ func buildTriple(val []byte) []byte {
 	return buf
 }
 
-func buildUidTriple(uid uint64) []byte {
-	val := strconv.FormatUint(uid, 16)
-	buf := make([]byte, 0, 4+len(val))
-	buf = append(buf, '<', '0', 'x')
-	buf = append(buf, val...)
-	buf = append(buf, '>')
-	return buf
-}
-
 func validateSubGraphForRDF(sg *SubGraph) error {
 	if sg.IsGroupBy() {
 		return errors.New("groupby is not supported in rdf output format")
@@ -248,4 +228,17 @@ func quotedNumber(val []byte) []byte {
 	tmpVal = append(tmpVal, val...)
 	tmpVal = append(tmpVal, '"')
 	return tmpVal
+}
+
+func toHex(uid uint64) []byte {
+	var buf [16]byte
+	tmp := strconv.AppendUint(buf[:0], uid, 16)
+
+	out := make([]byte, len(tmp)+3+1)
+	out[0] = '<'
+	out[1] = '0'
+	out[2] = 'x'
+	n := copy(out[3:], tmp)
+	out[3+n] = '>'
+	return out
 }
