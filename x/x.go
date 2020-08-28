@@ -1131,3 +1131,16 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 
 	return cachePercent, nil
 }
+
+func ToHex(i uint64) []byte {
+	var b [16]byte
+	tmp := strconv.AppendUint(b[:0], i, 16)
+
+	out := make([]byte, len(tmp)+3+1)
+	out[0] = '"'
+	out[1] = '0'
+	out[2] = 'x'
+	n := copy(out[3:], tmp)
+	out[3+n] = '"'
+	return out
+}

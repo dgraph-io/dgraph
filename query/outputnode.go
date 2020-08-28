@@ -241,6 +241,9 @@ func (enc *encoder) appendAttrs(fj fastJsonNode, attrs ...fastJsonNode) {
 		cs = make([]fastJsonNode, 0, len(attrs))
 	}
 	cs = append(cs, attrs...)
+	if len(cs)%1000 == 0 {
+		fmt.Printf("Got a node %d, with %d children\n", fj, len(cs))
+	}
 	enc.childrenMap[fj] = cs
 }
 
@@ -318,7 +321,7 @@ func (enc *encoder) SetUID(fj fastJsonNode, uid uint64, attr uint16) error {
 		}
 	}
 
-	sn, err := enc.makeScalarNode(attr, []byte(fmt.Sprintf("\"%#x\"", uid)), false)
+	sn, err := enc.makeScalarNode(attr, x.ToHex(uid), false)
 	if err != nil {
 		return err
 	}
@@ -469,7 +472,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
 	case types.UidID:
-		return []byte(fmt.Sprintf("\"%#x\"", v.Value)), nil
+		return x.ToHex(v.Value.(uint64)), nil
 	case types.PasswordID:
 		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
 	default:
