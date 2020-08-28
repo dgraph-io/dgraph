@@ -99,7 +99,7 @@ type encoder struct {
 	// childrenMap contains mapping of fastJsonNode to its children.
 	childrenMap map[fastJsonNode][]fastJsonNode
 
-	uids map[uint64]struct{}
+	uids map[uint64]int
 }
 
 func newEncoder() *encoder {
@@ -116,7 +116,7 @@ func newEncoder() *encoder {
 		arena:       a,
 		metaSlice:   metaSlice,
 		childrenMap: make(map[fastJsonNode][]fastJsonNode),
-		uids:        make(map[uint64]struct{}),
+		uids:        make(map[uint64]int),
 	}
 }
 
@@ -332,9 +332,14 @@ func (enc *encoder) SetUID(fj fastJsonNode, uid uint64, attr uint16) error {
 		return err
 	}
 	enc.appendAttrs(fj, sn)
-	enc.uids[uid] = struct{}{}
+	enc.uids[uid] += 1
 	if len(enc.uids)%1000000 == 0 {
 		glog.Infof("Number of uids: %d\n", len(enc.uids))
+		for uid, num := range enc.uids {
+			if num > 1000000 {
+				glog.Infof("Uid: %d Num: %d\n", uid, num)
+			}
+		}
 	}
 	return nil
 }
@@ -854,7 +859,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 
 		n1 := enc.newNode(attrID)
 		enc.setAttr(n1, enc.idForAttr(sg.Params.Alias))
-		if err := sg.preTraverse(enc, uid, n1); err != nil {
+		if err := sg.preTraverse(enc, uid, n1, 1); err != nil {
 			if err.Error() == "_INV_" {
 				continue
 			}
@@ -1031,7 +1036,12 @@ func facetName(fieldName string, f *api.Facet) string {
 }
 
 // This method gets the values and children for a subprotos.
-func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) error {
+func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int) error {
+	if sg.numEntered%10000 == 0 {
+		glog.Infof("Entered %p subgraph. Level: %d. Attr: %s. uid: %d\n", sg, level, sg.Attr, uid)
+	}
+	sg.numEntered++
+
 	if sg.Params.IgnoreReflex {
 		if alreadySeen(sg.Params.ParentIds, uid) {
 			// A node can't have itself as the child at any level.
@@ -1119,7 +1129,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 					continue
 				}
 				uc := enc.newNode(fieldID)
-				if rerr := pc.preTraverse(enc, childUID, uc); rerr != nil {
+				if rerr := pc.preTraverse(enc, childUID, uc, level+1); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						if invalidUids == nil {
 							invalidUids = make(map[uint64]bool)
