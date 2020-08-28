@@ -43,6 +43,7 @@ import (
 var (
 	users      = flag.Int("users", 100, "Number of accounts.")
 	conc       = flag.Int("txns", 3, "Number of concurrent transactions per client.")
+	queryCheck = flag.Int("check_every", 5, "Check total accounts and balances after every N mutations.")
 	dur        = flag.String("dur", "1m", "How long to run the transactions.")
 	alpha      = flag.String("alpha", "localhost:9080", "Address of Dgraph alpha.")
 	verbose    = flag.Bool("verbose", true, "Output all logs in verbose mode.")
@@ -97,10 +98,14 @@ func (s *state) createAccounts(dg *dgo.Dgraph) {
 
 	var mu api.Mutation
 	mu.SetJson = data
+	resp, err := txn.Mutate(context.Background(), &mu)
 	if *verbose {
-		log.Printf("mutation: %s\n", mu.SetJson)
+		if resp.Txn == nil {
+			log.Printf("[resp.Txn: %+v] Mutation: %s\n", resp.Txn, mu.SetJson)
+		} else {
+			log.Printf("[StartTs: %v] Mutation: %s\n", resp.Txn.StartTs, mu.SetJson)
+		}
 	}
-	_, err = txn.Mutate(context.Background(), &mu)
 	x.Check(err)
 	x.Check(txn.Commit(context.Background()))
 }
@@ -140,7 +145,7 @@ func (s *state) runTotal(dg *dgo.Dgraph) error {
 		total += a.Bal
 	}
 	if *verbose {
-		log.Printf("Read: %v. Total: %d\n", accounts, total)
+		log.Printf("[StartTs: %v] Read: %v. Total: %d\n", resp.Txn.StartTs, accounts, total)
 	}
 	if len(accounts) > *users {
 		log.Fatalf("len(accounts) = %d", len(accounts))
@@ -163,12 +168,12 @@ func (s *state) findAccount(txn *dgo.Txn, key int) (account, error) {
 	}
 	accounts := m["q"]
 	if len(accounts) > 1 {
-		log.Printf("Query: %s. Response: %s\n", query, resp.Json)
+		log.Printf("[StartTs: %v] Query: %s. Response: %s\n", resp.Txn.StartTs, resp.Json)
 		log.Fatal("Found multiple accounts")
 	}
 	if len(accounts) == 0 {
 		if *verbose {
-			log.Printf("Unable to find account for K_%02d. JSON: %s\n", key, resp.Json)
+			log.Printf("[StartTs: %v] Unable to find account for K_%02d. JSON: %s\n", resp.Txn.StartTs, key, resp.Json)
 		}
 		return account{Key: key, Typ: "ba"}, nil
 	}
@@ -257,13 +262,13 @@ func (s *state) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 		return err
 	}
 	if len(assigned.GetUids()) > 0 {
-		fmt.Fprintf(w, "CREATED K_%02d: %+v for %+v\n", dst.Key, assigned.GetUids(), dst)
+		fmt.Fprintf(w, "[StartTs: %v] CREATED K_%02d: %+v for %+v\n", assigned.Txn.StartTs, dst.Key, assigned.GetUids(), dst)
 		for _, uid := range assigned.GetUids() {
 			dst.Uid = uid
 		}
 	}
-	fmt.Fprintf(w, "MOVED [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n",
-		amount, src.Key, dst.Key, src, dst)
+	fmt.Fprintf(w, "[StartTs: %v] MOVED [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n",
+		assigned.Txn.StartTs, amount, src.Key, dst.Key, src, dst)
 	return nil
 }
 
@@ -277,19 +282,18 @@ func (s *state) loop(dg *dgo.Dgraph, wg *sync.WaitGroup) {
 
 	var buf bytes.Buffer
 	for i := 0; ; i++ {
-		if i%5 == 0 {
+		if i%*queryCheck == 0 {
 			if err := s.runTotal(dg); err != nil {
 				log.Printf("Error while runTotal: %v", err)
 			}
-			continue
 		}
 
 		buf.Reset()
 		err := s.runTransaction(dg, &buf)
-		if *verbose {
-			log.Printf("Final error: %v. %s", err, buf.String())
-		}
 		if err != nil {
+			if *verbose {
+				log.Printf("Final error: %v. %s", err, buf.String())
+			}
 			atomic.AddInt32(&s.aborts, 1)
 		} else {
 			r := atomic.AddInt32(&s.runs, 1)
