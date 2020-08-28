@@ -113,7 +113,7 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 
 func (b *rdfBuilder) writeRDF(subject uint64, predicate []byte, object []byte) {
 	// add subject
-	b.writeTriple([]byte(fmt.Sprintf("%#x", subject)))
+	b.writeUidTriple(subject)
 	x.Check(b.buf.WriteByte(' '))
 	// add predicate
 	b.writeTriple(predicate)
@@ -128,6 +128,12 @@ func (b *rdfBuilder) writeRDF(subject uint64, predicate []byte, object []byte) {
 func (b *rdfBuilder) writeTriple(val []byte) {
 	x.Check(b.buf.WriteByte('<'))
 	x.Check2(b.buf.Write(val))
+	x.Check(b.buf.WriteByte('>'))
+}
+
+func (b *rdfBuilder) writeUidTriple(uid uint64) {
+	x.Check2(b.buf.WriteString("<0x"))
+	x.Check2(b.buf.WriteString(strconv.FormatUint(uid, 16)))
 	x.Check(b.buf.WriteByte('>'))
 }
 
@@ -152,7 +158,7 @@ func (b *rdfBuilder) rdfForUIDList(subject uint64, list *pb.List, sg *SubGraph) 
 		b.writeRDF(
 			subject,
 			[]byte(sg.fieldName()),
-			buildTriple([]byte(fmt.Sprintf("%#x", destUID))))
+			buildUidTriple(destUID))
 	}
 }
 
@@ -161,7 +167,7 @@ func (b *rdfBuilder) rdfForValueList(subject uint64, valueList *pb.ValueList, at
 	if attr == "uid" {
 		b.writeRDF(subject,
 			[]byte(attr),
-			buildTriple([]byte(fmt.Sprintf("%#x", subject))))
+			buildUidTriple(subject))
 		return
 	}
 	for _, destValue := range valueList.Values {
@@ -199,6 +205,15 @@ func getObjectVal(v types.Val) ([]byte, error) {
 func buildTriple(val []byte) []byte {
 	buf := make([]byte, 0, 2+len(val))
 	buf = append(buf, '<')
+	buf = append(buf, val...)
+	buf = append(buf, '>')
+	return buf
+}
+
+func buildUidTriple(uid uint64) []byte {
+	val := strconv.FormatUint(uid, 16)
+	buf := make([]byte, 0, 4+len(val))
+	buf = append(buf, '<', '0', 'x')
 	buf = append(buf, val...)
 	buf = append(buf, '>')
 	return buf
