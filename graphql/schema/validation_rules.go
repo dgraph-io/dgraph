@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"errors"
 	"strconv"
 
 	"github.com/vektah/gqlparser/v2/ast"
@@ -94,43 +93,34 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 
 func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
-		if value.Definition == nil || value.ExpectedType == nil || value.Kind!=ast.IntValue{
+		if value.Definition == nil || value.ExpectedType == nil {
 			return
 		}
-       
-		var err error
-		var val int64
+
 		switch value.Definition.Name {
 		case "Int":
-			_, err = strconv.ParseInt(value.Raw, 10, 32)
-		case "Int64":
-			val, err = strconv.ParseInt(value.Raw, 10, 54)
-			if val == -9007199254740992{
-				err=strconv.ErrRange
-		    }
-		default:
-			return
-		}
-
-		//Range of Json numbers is [-(2**53)+1, (2**53)-1] while of 54 bit integers is [-(2**53), (2**53)-1]
-		if err != nil {
-			 if errors.Is(err, strconv.ErrRange) {
+			v, err := strconv.ParseFloat(value.Raw, 64)
+			if err != nil {
+				addError(validator.Message("%s", err), validator.At(value.Position))
+			} else if v >= 2147483648 || v < -2147483648 {
 				addError(validator.Message("Out of range value '%s', for type `%s`",
 					value.Raw, value.Definition.Name), validator.At(value.Position))
-				return
 			}
-			addError(validator.Message("%s", err), validator.At(value.Position))
-			return
-		}
+		case "Int64":
+			if value.Kind == ast.IntValue {
+				value.Kind = ast.StringValue
+			} else if value.Kind == ast.FloatValue {
 
+			}
+		}
 	})
 }
 
-func intRangeCheck1(observers *validator.Events, addError validator.AddErrFunc){
-	observers.OnOperation(func(walker *validator.Walker, op *ast.OperationDefinition){
-    if op.Name=="a"{
+func intRangeCheck1(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnOperation(func(walker *validator.Walker, op *ast.OperationDefinition) {
+		if op.Name == "a" {
 
-	}
+		}
 
 	})
 

@@ -689,7 +689,9 @@ func completeDgraphResult(
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
 	// So we are only building object results.
 	var valToComplete map[string]interface{}
-	err := json.Unmarshal(dgResult, &valToComplete)
+	d := json.NewDecoder(bytes.NewBuffer(dgResult))
+	d.UseNumber()
+	err := d.Decode(&valToComplete)
 	if err != nil {
 		glog.Errorf("%+v \n Dgraph result :\n%s\n",
 			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
@@ -1563,6 +1565,14 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			} else {
 				return nil, valueCoercionError(v)
 			}
+		case json.Number:
+			i, err := strconv.ParseInt(v.String(), 10, 64)
+			// An error can be encountered if we had a value that can't be fit into
+			// a 64 bit floating point number.
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			val = i
 		default:
 			return nil, valueCoercionError(v)
 		}
