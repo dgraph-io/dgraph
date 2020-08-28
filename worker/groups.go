@@ -42,7 +42,6 @@ import (
 
 type groupi struct {
 	x.SafeMutex
-	// TODO: Is this context being used?
 	state        *pb.MembershipState
 	Node         *node
 	gid          uint32
