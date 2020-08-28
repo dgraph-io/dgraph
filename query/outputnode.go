@@ -903,7 +903,7 @@ func (sg *SubGraph) countUids(level int) int {
 	for _, l := range sg.uidMatrix {
 		count += len(l.GetUids())
 	}
-	fmt.Printf("%s sg: %p . Count: %d\n", strings.Repeat("--", level), sg, count)
+	fmt.Printf("%s sg: %p Attr: %s. Count: %d\n", strings.Repeat("--", level), sg, sg.Attr, count)
 	for _, child := range sg.Children {
 		count += child.countUids(level + 1)
 	}
