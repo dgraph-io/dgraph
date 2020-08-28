@@ -176,6 +176,7 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 					// compatibility. New backups are not affected because there was a change
 					// to roll up lists into a single one.
 					restoreVal, err := pl.Marshal()
+					codec.FreePack(pl.Pack)
 					if err != nil {
 						return 0, errors.Wrapf(err, "while converting backup posting list")
 					}
@@ -187,6 +188,7 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 				} else {
 					// This is a complete list. It should be rolled up to avoid writing
 					// a list that is too big to be read back from disk.
+					// Rollup will take ownership of the Pack and will free the memory.
 					l := posting.NewList(restoreKey, pl, kv.Version)
 					kvs, err := l.Rollup()
 					if err != nil {
