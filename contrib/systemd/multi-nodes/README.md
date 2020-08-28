@@ -1,4 +1,4 @@
-# Systemd configuration for HA Dgraph cluster
+# Systemd Configuration for a HA Dgraph Cluster
 
 This following document describes how to configure several nodes that are managed through [systemd](https://systemd.io/).
 

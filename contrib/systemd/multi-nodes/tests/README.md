@@ -1,4 +1,4 @@
-# SystemD Tests
+# Systemd Tests
 
 These are tests to both demonstrate and test functionality of systemd units to manage dgraph.
 
