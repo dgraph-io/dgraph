@@ -366,10 +366,8 @@ func SchemaValidate(sch string) error {
 		return err
 	}
 
-	if _, err := schema.FromString(schHandler.GQLSchema()); err != nil {
-		return err
-	}
-	return nil
+	_, err = schema.FromString(schHandler.GQLSchema())
+	return err
 }
 
 // GraphQLHealth is used to report the health status of a GraphQL server.

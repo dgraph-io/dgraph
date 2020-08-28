@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -517,17 +516,13 @@ func setupServer(closer *y.Closer) {
 		err := admin.SchemaValidate(string(schema))
 		if err == nil {
 			w.WriteHeader(http.StatusOK)
-			x.Check2(w.Write([]byte(`{"valid":true}`)))
+			x.SetStatus(w, "success", "msg")
 			return
 		}
 
 		w.WriteHeader(http.StatusBadRequest)
 		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
-		errJson, err := json.Marshal(errs)
-		if err != nil {
-			errJson = []byte(err.Error())
-		}
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"valid":false, "error" : %s}`, errJson))))
+		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
 	}))
 
 	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
