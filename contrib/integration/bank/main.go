@@ -290,10 +290,10 @@ func (s *state) loop(dg *dgo.Dgraph, wg *sync.WaitGroup) {
 
 		buf.Reset()
 		err := s.runTransaction(dg, &buf)
+		if *verbose {
+			log.Printf("Final error: %v. %s", err, buf.String())
+		}
 		if err != nil {
-			if *verbose {
-				log.Printf("Final error: %v. %s", err, buf.String())
-			}
 			atomic.AddInt32(&s.aborts, 1)
 		} else {
 			r := atomic.AddInt32(&s.runs, 1)
