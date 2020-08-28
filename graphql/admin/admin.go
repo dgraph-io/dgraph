@@ -70,6 +70,14 @@ const (
 	}
 
 	"""
+	SchemaHistory contains the schema and the time when the schema has been created.
+	"""
+	type SchemaHistory {
+		schema: String!
+		created_at: String!
+	}
+
+	"""
 	A NodeState is the state of an individual node in the Dgraph cluster.
 	"""
 	type NodeState {
@@ -269,7 +277,7 @@ const (
 		state: MembershipState
 		config: Config
 		getAllowedCORSOrigins: Cors
-
+		getSchemaHistory(offset: Int, limit: Int!): [SchemaHistory]
 		` + adminQueries + `
 	}
 
@@ -578,6 +586,12 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
 				})
+		}).
+		WithQueryResolver("getSchemaHistory", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(
+				func(ctx context.Context, query schema.Query) *resolve.Resolved {
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
+				})
 		})
 	for gqlMut, resolver := range adminMutationResolvers {
 		// gotta force go to evaluate the right function at each loop iteration
@@ -672,7 +686,9 @@ func (as *adminServer) addConnectedAdminResolvers() {
 
 	as.rf.WithMutationResolver("updateGQLSchema",
 		func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(resolveUpdateGQLSchema)
+			return &updateSchemaResolver{
+				admin: as,
+			}
 		}).
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
@@ -726,6 +742,9 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			}).
 		WithQueryResolver("getAllowedCORSOrigins", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveGetCors)
+		}).
+		WithQueryResolver("getSchemaHistory", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveGetSchemaHistory)
 		}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {

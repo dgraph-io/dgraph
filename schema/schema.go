@@ -566,6 +566,17 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 					ValueType: pb.Posting_STRING,
 				},
 			},
+		}, &pb.TypeUpdate{
+			TypeName: "dgraph.graphql.history",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.graphql.schema_history",
+					ValueType: pb.Posting_STRING,
+				}, {
+					Predicate: "dgraph.graphql.schema_created_at",
+					ValueType: pb.Posting_DATETIME,
+				},
+			},
 		})
 
 	if all || x.WorkerConfig.AclEnabled {
@@ -661,6 +672,12 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.schema_history",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.schema_created_at",
+			ValueType: pb.Posting_DATETIME,
 		})
 
 	if all || x.WorkerConfig.AclEnabled {

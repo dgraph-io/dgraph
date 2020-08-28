@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -28,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
@@ -41,7 +43,11 @@ type updateGQLSchemaInput struct {
 	Set gqlSchema `json:"set,omitempty"`
 }
 
-func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+type updateSchemaResolver struct {
+	admin *adminServer
+}
+
+func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got updateGQLSchema request")
 
 	input, err := getSchemaInput(m)
@@ -60,9 +66,19 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 	newGQLSchema := input.Set.Schema
 	newDgraphSchema := schHandler.DGSchema()
 
+	oldSchemaHash := farm.Fingerprint64([]byte(usr.admin.schema.Schema))
+	newSchemaHash := farm.Fingerprint64([]byte(newGQLSchema))
+	updateHistory := oldSchemaHash != newSchemaHash
+
 	resp, err := edgraph.UpdateGQLSchema(ctx, newGQLSchema, newDgraphSchema)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
+	}
+
+	if updateHistory {
+		if err := edgraph.UpdateSchemaHistory(ctx, newGQLSchema); err != nil {
+			glog.Errorf("error while updating schema history %s", err.Error())
+		}
 	}
 
 	return &resolve.Resolved{
@@ -144,4 +160,43 @@ func getSchemaInput(m schema.Mutation) (*updateGQLSchemaInput, error) {
 	var input updateGQLSchemaInput
 	err = json.Unmarshal(inputByts, &input)
 	return &input, schema.GQLWrapf(err, "couldn't get input argument")
+}
+
+// resolveGetSchemaHistory retrives graphql schema history from the database.
+func resolveGetSchemaHistory(ctx context.Context, q schema.Query) *resolve.Resolved {
+	// Parse the required arguments
+	var limit, offset int64
+	args := q.Arguments()
+	val, ok := args["limit"]
+	x.AssertTrue(ok)
+	limit = val.(int64)
+	val, ok = args["offset"]
+	if ok {
+		offset = val.(int64)
+	}
+	// Retrive all schema history from dgraph.
+	histories, err := edgraph.GetSchemaHistory(ctx, limit, offset)
+	if err != nil {
+		return resolve.EmptyResult(q, err)
+	}
+	// Build the output format.
+	output := make([]map[string]interface{}, 0, len(histories))
+	for _, history := range histories {
+		tmp := make(map[string]interface{})
+		for _, selection := range q.SelectionSet() {
+			if selection.Name() == "schema" {
+				tmp["schema"] = history.Schema
+				continue
+			}
+			tmp["created_at"] = history.CreatedAt
+		}
+		output = append(output, tmp)
+	}
+	fmt.Println(output)
+	return &resolve.Resolved{
+		Data: map[string]interface{}{
+			q.Name(): output,
+		},
+		Field: q,
+	}
 }
