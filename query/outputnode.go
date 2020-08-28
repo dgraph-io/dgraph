@@ -1038,7 +1038,7 @@ func facetName(fieldName string, f *api.Facet) string {
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int) error {
 	if sg.numEntered%10000 == 0 {
-		glog.Infof("Entered %p subgraph. Level: %d. Attr: %s. uid: %d\n", sg, level, sg.Attr, uid)
+		glog.Infof("Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d\n", sg, sg.numEntered, level, sg.Attr, uid)
 	}
 	sg.numEntered++
 
