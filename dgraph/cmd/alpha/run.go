@@ -754,23 +754,26 @@ func run() {
 	}()
 
 	// Setup external communication.
-	aclCloser := y.NewCloser(1)
+	aclCloser := y.NewCloser(3)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
-		edgraph.ResetAcl()
+		edgraph.ResetAcl(aclCloser)
 		edgraph.RefreshAcls(aclCloser)
-		edgraph.ResetCors()
+		edgraph.ResetCors(aclCloser)
 		// Update the accepted cors origins.
 		for {
-			origins, err := edgraph.GetCorsOrigins(context.TODO())
+			if aclCloser.Ctx().Err() != nil {
+				return
+			}
+			origins, err := edgraph.GetCorsOrigins(aclCloser.Ctx())
 			if err != nil {
 				glog.Errorf("Error while retriving cors origins: %s", err.Error())
 				continue
 			}
 			x.UpdateCorsOrigins(origins)
-			break
+			return
 		}
 	}()
 	// Listen for any new cors origin update.
@@ -783,13 +786,28 @@ func run() {
 
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
-	aclCloser.SignalAndWait()
-	corsCloser.SignalAndWait()
+
+	// These two might not close until group is given the signal to close. So, only signal here,
+	// wait for them after group is closed.
+	aclCloser.Signal()
+	corsCloser.Signal()
+
 	worker.BlockingStop()
+	glog.Infoln("worker stopped.")
+
 	adminCloser.SignalAndWait()
-	glog.Info("Disposing server state.")
+	glog.Infoln("adminCloser closed.")
+
 	worker.State.Dispose()
 	x.RemoveCidFile()
+	glog.Info("worker.State disposed.")
+
+	aclCloser.Wait()
+	glog.Infoln("aclCloser closed.")
+
+	corsCloser.Wait()
+	glog.Infoln("corsCloser closed.")
+
 	glog.Infoln("Server shutdown. Bye!")
 }
 
