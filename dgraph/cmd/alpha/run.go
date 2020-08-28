@@ -753,21 +753,17 @@ func run() {
 		}
 	}()
 
-	// Setup external communication.
-	aclCloser := y.NewCloser(3)
+	updaters := y.NewCloser(4)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
-		edgraph.ResetAcl(aclCloser)
-		edgraph.RefreshAcls(aclCloser)
-		edgraph.ResetCors(aclCloser)
+		edgraph.ResetAcl(updaters)
+		edgraph.RefreshAcls(updaters)
+		edgraph.ResetCors(updaters)
 		// Update the accepted cors origins.
-		for {
-			if aclCloser.Ctx().Err() != nil {
-				return
-			}
-			origins, err := edgraph.GetCorsOrigins(aclCloser.Ctx())
+		for updaters.Ctx().Err() == nil {
+			origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
 			if err != nil {
 				glog.Errorf("Error while retriving cors origins: %s", err.Error())
 				continue
@@ -777,8 +773,7 @@ func run() {
 		}
 	}()
 	// Listen for any new cors origin update.
-	corsCloser := y.NewCloser(1)
-	go listenForCorsUpdate(corsCloser)
+	go listenForCorsUpdate(updaters)
 
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we
 	// close alpha. This closer is for closing and waiting that subscription.
@@ -787,10 +782,9 @@ func run() {
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
 
-	// These two might not close until group is given the signal to close. So, only signal here,
-	// wait for them after group is closed.
-	aclCloser.Signal()
-	corsCloser.Signal()
+	// This might not close until group is given the signal to close. So, only signal here,
+	// wait for it after group is closed.
+	updaters.Signal()
 
 	worker.BlockingStop()
 	glog.Infoln("worker stopped.")
@@ -802,11 +796,8 @@ func run() {
 	x.RemoveCidFile()
 	glog.Info("worker.State disposed.")
 
-	aclCloser.Wait()
-	glog.Infoln("aclCloser closed.")
-
-	corsCloser.Wait()
-	glog.Infoln("corsCloser closed.")
+	updaters.Wait()
+	glog.Infoln("updaters closed.")
 
 	glog.Infoln("Server shutdown. Bye!")
 }
