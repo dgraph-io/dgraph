@@ -68,12 +68,12 @@ type graphqlHandler struct {
 }
 
 // NewServer returns a new IServeGraphQL that can serve the given resolvers
-func NewServer(schemaEpoch *uint64, resolver *resolve.RequestResolver) IServeGraphQL {
+func NewServer(schemaEpoch *uint64, resolver *resolve.RequestResolver, admin bool) IServeGraphQL {
 	gh := &graphqlHandler{
 		resolver: resolver,
 		poller:   subscription.NewPoller(schemaEpoch, resolver),
 	}
-	gh.handler = recoveryHandler(commonHeaders(gh.Handler()))
+	gh.handler = recoveryHandler(commonHeaders(admin, gh.Handler()))
 	return gh
 }
 
@@ -295,9 +295,14 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 	return gqlReq, nil
 }
 
-func commonHeaders(next http.Handler) http.Handler {
+func commonHeaders(admin bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		x.AddCorsHeaders(w)
+		if admin {
+			x.AddCorsHeaders(w)
+		} else {
+			// /graphql endpoint is protected by allow listed origins.
+			addDynamicHeaders(r.Header.Get("Origin"), w)
+		}
 		// Overwrite the allowed headers after also including headers which are part of
 		// forwardHeaders.
 		w.Header().Set("Access-Control-Allow-Headers", schema.AllowedHeaders())
@@ -319,4 +324,27 @@ func recoveryHandler(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// addCorsHeader checks the given origin is in allowlist or not. If it's in
+// allow list we'll let them access /graphql endpoint.
+func addDynamicHeaders(origin string, w http.ResponseWriter) {
+	w.Header().Set("Connection", "close")
+	allowList := x.AcceptedOrigins.Load().(map[string]struct{})
+	_, ok := allowList[origin]
+	// Given origin is not in the allow list so let's not
+	// add any cors headers.
+	if !ok && len(allowList) != 0 {
+		return
+	} else if ok && len(allowList) != 0 {
+		// Let's set the respective origin address in the allow origin.
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	} else if len(allowList) == 0 {
+		// Since there is no allowlist to restrict we'll allow everyone
+		// to access.
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	}
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", x.AccessControlAllowedHeaders)
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
 }

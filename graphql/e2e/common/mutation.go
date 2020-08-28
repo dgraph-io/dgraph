@@ -567,6 +567,260 @@ func deepXIDMutations(t *testing.T) {
 	deepXIDTest(t, postExecutor)
 }
 
+func addComments(t *testing.T, ids []string) {
+	input := []map[string]interface{}{}
+	for _, id := range ids {
+		input = append(input, map[string]interface{}{"id": id})
+	}
+
+	params := &GraphQLParams{
+		Query: `mutation($input: [AddComment1Input!]!) {
+			addComment1(input: $input) {
+			  comment1 {
+				id
+			  }
+			}
+		  }`,
+		Variables: map[string]interface{}{
+			"input": input,
+		},
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, params)
+	RequireNoGQLErrors(t, gqlResponse)
+}
+
+func testThreeLevelXID(t *testing.T) {
+
+	input := `{
+		"input": [
+			{
+				"id": "post1",
+				"comments": [
+					{
+						"id": "comment1",
+						"replies": [
+							{
+								"id": "reply1"
+							}
+						]
+					}
+				]
+			},
+			{
+				"id": "post2",
+				"comments": [
+					{
+						"id": "comment2",
+						"replies": [
+							{
+								"id": "reply1"
+							}
+						]
+					}
+				]
+			}
+		]
+	}`
+
+	qinput := make(map[string]interface{})
+	err := json.Unmarshal([]byte(input), &qinput)
+	require.NoError(t, err)
+
+	addPostParams := &GraphQLParams{
+		Query: ` mutation($input: [AddPost1Input!]!) {
+		addPost1(input: $input) {
+			post1(order: { asc: id }) {
+				id
+				comments {
+					id
+					replies {
+						id
+					}
+				}
+			}
+		}
+	}`,
+		Variables: qinput,
+	}
+
+	bothCommentsLinkedToReply := `{
+		"addPost1": {
+		  "post1": [
+			{
+			  "id": "post1",
+			  "comments": [
+				{
+				  "id": "comment1",
+				  "replies": [
+					{
+					  "id": "reply1"
+					}
+				  ]
+				}
+			  ]
+			},
+			{
+			  "id": "post2",
+			  "comments": [
+				{
+				  "id": "comment2",
+				  "replies": [
+					{
+					  "id": "reply1"
+					}
+				  ]
+				}
+			  ]
+			}
+		  ]
+		}
+	}`
+
+	firstCommentLinkedToReply := `{
+		"addPost1": {
+		  "post1": [
+			{
+			  "id": "post1",
+			  "comments": [
+				{
+				  "id": "comment1",
+				  "replies": [
+					{
+					  "id": "reply1"
+					}
+				  ]
+				}
+			  ]
+			},
+			{
+			  "id": "post2",
+			  "comments": [
+				{
+				  "id": "comment2",
+				  "replies": []
+				}
+			  ]
+			}
+		  ]
+		}
+	}`
+
+	secondCommentLinkedToReply := `{
+		"addPost1": {
+		  "post1": [
+			{
+			  "id": "post1",
+			  "comments": [
+				{
+				  "id": "comment1",
+				  "replies": []
+				}
+			  ]
+			},
+			{
+			  "id": "post2",
+			  "comments": [
+				{
+				  "id": "comment2",
+				  "replies": [
+					{
+					  "id": "reply1"
+					}
+				  ]
+				}
+			  ]
+			}
+		  ]
+		}
+	}`
+
+	noCommentsLinkedToReply := `{
+		"addPost1": {
+		  "post1": [
+			{
+			  "id": "post1",
+			  "comments": [
+				{
+				  "id": "comment1",
+				  "replies": []
+				}
+			  ]
+			},
+			{
+			  "id": "post2",
+			  "comments": [
+				{
+				  "id": "comment2",
+				  "replies": []
+				}
+			  ]
+			}
+		  ]
+		}
+	}`
+
+	cases := map[string]struct {
+		Comments                   []string
+		Expected                   string
+		ExpectedNumDeletedComments int
+	}{
+		"2nd level nodes don't exist but third level does": {
+			[]string{"reply1"},
+			bothCommentsLinkedToReply,
+			3,
+		},
+		"2nd level and third level nodes don't exist": {
+			[]string{},
+			bothCommentsLinkedToReply,
+			3,
+		},
+		"2nd level node exists but third level doesn't": {
+			[]string{"comment1", "comment2"},
+			noCommentsLinkedToReply,
+			2,
+		},
+		"2nd level and third level nodes exist": {
+			[]string{"comment1", "comment2", "reply1"},
+			noCommentsLinkedToReply,
+			3,
+		},
+		"one 2nd level node exists and third level node exists": {
+			[]string{"comment1", "reply1"},
+			secondCommentLinkedToReply,
+			3,
+		},
+		"the other 2nd level node exists and third level node exists": {
+			[]string{"comment2", "reply1"},
+			firstCommentLinkedToReply,
+			3,
+		},
+		"one 2nd level node exists and third level node doesn't exist": {
+			[]string{"comment1"},
+			secondCommentLinkedToReply,
+			3,
+		},
+		"other 2nd level node exists and third level node doesn't exist": {
+			[]string{"comment2", "reply1"},
+			firstCommentLinkedToReply,
+			3,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			addComments(t, tc.Comments)
+			gqlResponse := postExecutor(t, graphqlURL, addPostParams)
+			RequireNoGQLErrors(t, gqlResponse)
+			testutil.CompareJSON(t, tc.Expected, string(gqlResponse.Data))
+
+			deleteGqlType(t, "Post1", map[string]interface{}{}, 2, nil)
+			deleteGqlType(t, "Comment1", map[string]interface{}{}, tc.ExpectedNumDeletedComments,
+				nil)
+		})
+	}
+}
+
 func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 	newCountry := &country{
 		Name: "A Country",
@@ -3365,4 +3619,33 @@ func updateMutationWithoutSetRemove(t *testing.T) {
 
 	// cleanup
 	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
+}
+
+func checkCascadeWithMutationWithoutIDField(t *testing.T) {
+	addStateParams := &GraphQLParams{
+		Query: `mutation {
+			addState(input: [{xcode: "S2", name: "State2"}]) @cascade(fields:["numUids"]) {
+				state @cascade(fields:["xcode"]) {
+					xcode
+					name
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addStateExpected := `{
+		"addState": {
+			"state": [{
+				"xcode": "S2",
+				"name": "State2"
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
+
+	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S2"}}
+	deleteState(t, filter, 1, nil)
 }

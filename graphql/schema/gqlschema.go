@@ -43,6 +43,7 @@ const (
 	customDirective       = "custom"
 	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
 	cascadeDirective      = "cascade"
+	cascadeArg            = "fields"
 	SubscriptionDirective = "withSubscription"
 
 	// custom directive args and fields
@@ -132,7 +133,7 @@ directive @auth(
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
 
 input IntFilter {
 	eq: Int

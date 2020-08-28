@@ -721,8 +721,10 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) predsAndvars {
 	}
 	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
-		if _, found := varsMap[pred]; !found {
-			preds = append(preds, pred)
+		if len(pred) > 0 {
+			if _, found := varsMap[pred]; !found {
+				preds = append(preds, pred)
+			}
 		}
 	}
 

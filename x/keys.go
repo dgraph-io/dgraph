@@ -529,6 +529,7 @@ func Parse(key []byte) (ParsedKey, error) {
 // These predicates appear for queries that have * as predicate in them.
 var starAllPredicateMap = map[string]struct{}{
 	"dgraph.type": {},
+	"dgraph.cors": {},
 }
 
 var aclPredicateMap = map[string]struct{}{

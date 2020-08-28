@@ -746,11 +746,27 @@ func (f *field) Include() bool {
 }
 
 func (f *field) Cascade() []string {
-
-	if f.field.Directives.ForName(cascadeDirective) == nil {
+	dir := f.field.Directives.ForName(cascadeDirective)
+	if dir == nil {
 		return nil
 	}
-	return []string{"__all__"}
+	arg := dir.Arguments.ForName(cascadeArg)
+	if arg == nil || arg.Value == nil || len(arg.Value.Children) == 0 {
+		return []string{"__all__"}
+	}
+	fields := make([]string, 0, len(arg.Value.Children))
+	typ := f.Type()
+	idField := typ.IDField()
+
+	for _, child := range arg.Value.Children {
+		if idField != nil && idField.Name() == child.Value.Raw {
+			fields = append(fields, "uid")
+		} else {
+			fields = append(fields, typ.DgraphPredicate(child.Value.Raw))
+		}
+
+	}
+	return fields
 }
 
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
