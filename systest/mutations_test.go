@@ -98,6 +98,7 @@ func TestSystem(t *testing.T) {
 	t.Run("count index delete on non list predicate", wrap(CountIndexNonlistPredicateDelete))
 	t.Run("Reverse count index delete", wrap(ReverseCountIndexDelete))
 	t.Run("overwrite uid predicates", wrap(OverwriteUidPredicates))
+	t.Run("overwrite uid predicates reverse index", wrap(OverwriteUidPredicatesReverse))
 	t.Run("delete and query same txn", wrap(DeleteAndQuerySameTxn))
 }
 
@@ -2185,6 +2186,93 @@ func OverwriteUidPredicates(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Carol"}}]}`,
 		string(resp.GetJson()))
+}
+
+func OverwriteUidPredicatesReverse(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	op := &api.Operation{DropAll: true}
+	require.NoError(t, c.Alter(ctx, op))
+
+	op = &api.Operation{
+		Schema: `
+		best_friend: uid @reverse .
+		name: string @index(exact) .`,
+	}
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	txn := c.NewTxn()
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+		_:alice <name> "Alice" .
+		_:bob <name> "Bob" .
+		_:alice <best_friend> _:bob .`),
+	})
+	require.NoError(t, err)
+
+	q := `{
+  me(func: eq(name, Alice)) {
+	name
+	best_friend {
+		name
+	}
+  }
+}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Bob"}}]}`,
+		string(resp.GetJson()))
+
+	reverseQuery := `{
+		reverse(func: has(~best_friend)) {
+			name
+			~best_friend {
+				name
+			}
+		}}`
+	resp, err = c.NewReadOnlyTxn().Query(ctx, reverseQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"reverse":[{"name":"Bob","~best_friend": [{"name": "Alice"}]}]}`,
+		string(resp.GetJson()))
+
+	upsertQuery := `query { alice as var(func: eq(name, Alice)) }`
+	upsertMutation := &api.Mutation{
+		SetNquads: []byte(`
+		_:carol <name> "Carol" .
+		uid(alice) <best_friend> _:carol .`),
+	}
+	req := &api.Request{
+		Query:     upsertQuery,
+		Mutations: []*api.Mutation{upsertMutation},
+		CommitNow: true,
+	}
+	_, err = c.NewTxn().Do(ctx, req)
+	require.NoError(t, err)
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, reverseQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"reverse":[{"name":"Carol","~best_friend": [{"name": "Alice"}]}]}`,
+		string(resp.GetJson()))
+
+	// Delete the triples and verify the reverse edge is gone.
+	upsertMutation = &api.Mutation{
+		DelNquads: []byte(`
+		uid(alice) <best_friend> * .`),
+	}
+	req = &api.Request{
+		Query:     upsertQuery,
+		Mutations: []*api.Mutation{upsertMutation},
+		CommitNow: true,
+	}
+	_, err = c.NewTxn().Do(ctx, req)
+	require.NoError(t, err)
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, reverseQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"reverse":[]}`,
+		string(resp.GetJson()))
+
 }
 
 func DeleteAndQuerySameTxn(t *testing.T, c *dgo.Dgraph) {
