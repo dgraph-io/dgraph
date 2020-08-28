@@ -1083,40 +1083,48 @@ func askZeroForEE() bool {
 func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group uint32,
 	closer *y.Closer) {
 	defer closer.Done()
+	defer func() {
+		glog.Infoln("SubscribeForUpdates closing")
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-closer.HasBeenClosed()
+		cancel()
+	}()
+
+	listen := func() error {
+		// Connect to any of the group 1 nodes.
+		members := groups().AnyTwoServers(group)
+		// There may be a lag while starting so keep retrying.
+		if len(members) == 0 {
+			return fmt.Errorf("Unable to find any servers for group: %d", group)
+		}
+		pool := conn.GetPools().Connect(members[0])
+		client := pb.NewWorkerClient(pool.Get())
+
+		// Get Subscriber stream.
+		stream, err := client.Subscribe(ctx, &pb.SubscriptionRequest{Prefixes: prefixes})
+		if err != nil {
+			return errors.Wrapf(err, "error from client.subscribe")
+		}
+		for {
+			// Listen for updates.
+			kvs, err := stream.Recv()
+			if err != nil {
+				return errors.Wrapf(err, "while receiving from stream")
+			}
+			cb(kvs)
+		}
+	}
 
 	for {
-		select {
-		case <-closer.HasBeenClosed():
-			return
-		default:
-
-			// Connect to any of the group 1 nodes.
-			members := groups().AnyTwoServers(group)
-			// There may be a lag while starting so keep retrying.
-			if len(members) == 0 {
-				continue
-			}
-			pool := conn.GetPools().Connect(members[0])
-			client := pb.NewWorkerClient(pool.Get())
-
-			// Get Subscriber stream.
-			stream, err := client.Subscribe(context.Background(),
-				&pb.SubscriptionRequest{Prefixes: prefixes})
-			if err != nil {
-				glog.Errorf("Error from alpha client subscribe: %v", err)
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-		receiver:
-			for {
-				// Listen for updates.
-				kvs, err := stream.Recv()
-				if err != nil {
-					glog.Errorf("Error from worker subscribe stream: %v", err)
-					break receiver
-				}
-				cb(kvs)
-			}
+		if err := listen(); err != nil {
+			glog.Errorf("Error during SubscribeForUpdates: %v\n", err)
 		}
+		if ctx.Err() != nil {
+			return
+		}
+		time.Sleep(time.Second)
 	}
 }
