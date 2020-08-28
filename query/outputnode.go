@@ -897,11 +897,27 @@ type Extensions struct {
 	Metrics *api.Metrics    `json:"metrics,omitempty"`
 }
 
+func (sg *SubGraph) countUids() int {
+	count := 0
+	count += len(sg.SrcUIDs.GetUids())
+	for _, l := range sg.uidMatrix {
+		count += len(l.GetUids())
+	}
+	for _, child := range sg.Children {
+		count += child.countUids()
+	}
+	return count
+}
+
 func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	encodingStart := time.Now()
 	defer func() {
 		l.Json = time.Since(encodingStart)
 	}()
+
+	num := sg.countUids()
+	glog.Infof("toFastJSON. Num uids: %d\n", num)
+	return nil, nil
 
 	enc := newEncoder()
 	var err error
