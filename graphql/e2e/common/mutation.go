@@ -3648,15 +3648,16 @@ func checkCascadeWithMutationWithoutIDField(t *testing.T) {
 	deleteState(t, filter, 1, nil)
 }
 
-func mutationInt64InputCoercing(t *testing.T) {
+func int64BoundaryTesting(t *testing.T) {
+	//This test checks the range of Int64
+	//(2^63)=9223372036854775808
 	addPost1Params := &GraphQLParams{
 		Query: `mutation {
-			addpost1(input: [{title: "Dgraph", numLikes:9.223372036854775e+18 ,numViews:"9223372036854775000",numComments:9223372036854775000.0}]) {
+			addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 ,numViews: -9223372036854775808 }]) {
 				post1 {
 					title
-					numViews
 					numLikes
-					numComments
+					numViews
 				}
 			}
 		}`,
@@ -3669,9 +3670,9 @@ func mutationInt64InputCoercing(t *testing.T) {
 		"addpost1": {
 			"post1": [{
 				"title": "Dgraph",
-				"numViews": 9223372036854775000,
-				"numLikes": 9223372036854775000,
-				"numComments": 9223372036854775000
+				"numLikes": 9223372036854775808,
+				"numViews": -9223372036854775807
+				
 			}]
 		}
 	}`

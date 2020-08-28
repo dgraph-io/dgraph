@@ -47,7 +47,6 @@ func init() {
 	validator.AddRule("Check for list type value", listTypeCheck)
 	validator.AddRule("Check arguments of cascade directive", directiveArgumentsCheck)
 	validator.AddRule("Check range for Int type", intRangeCheck)
-	validator.AddRule("Check range for Int type", intRangeCheck1)
 
 }
 

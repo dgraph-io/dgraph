@@ -114,6 +114,7 @@
   errors:
     [ { "message": "Field `title` is not present in type `Author`. You can only use fields which are in type `Author`",
     } ]
+
 -
   name: "Out of range error for int32 type"
   gqlrequest: |
@@ -149,11 +150,12 @@
   errors:
     [ { "message": "Field `name` is not present in type `AddAuthorPayload`. You can only use fields which are in type `AddAuthorPayload`",
     } ]
+
 -
-  name: "value (2^54) out of range for  for int64 type"
+  name: "String value is Incompatible with Int64 type"
   gqlrequest: |
     mutation {
-      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:18014398509481984}]){
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:"180143985094"}]){
         post{
           title
           numLikes
@@ -166,17 +168,17 @@
   gqlvariables:
     { }
   errors:
-    [ { "message": "Out of range value '18014398509481984', for type `Int64`",
-        "locations": [ { "line": 2, "column": 63 } ] } ]
+    [ { "message": "Given input type mismatch, Expected Int64",
+        "locations": [ { "line": 2, "column": 64 } ] } ]
 
 -
-  name: "value (-(2^53)) out of range , boundary case for int64"
+  name: "Float value is Incompatible with Int64 type"
   gqlrequest: |
     mutation {
-      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews: -9007199254740992}]){
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:180143985094.0}]){
         post{
           title
-          numViews
+          numLikes
           author{
             name
           }
@@ -186,5 +188,5 @@
   gqlvariables:
     { }
   errors:
-    [ { "message": "Out of range value '-9007199254740992', for type `Int64`",
-        "locations": [ { "line": 2, "column": 64 } ] } ]
+    [ { "message": "Given input type mismatch, Expected Int64",
+        "locations": [ { "line": 2, "column": 63 } ] } ]

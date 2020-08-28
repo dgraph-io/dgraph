@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/vektah/gqlparser/v2/ast"
@@ -93,26 +94,29 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 
 func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
-		if value.Definition == nil || value.ExpectedType == nil {
+		if value.Definition == nil || value.ExpectedType == nil || value.Kind==ast.Variable {
 			return
 		}
 
 		switch value.Definition.Name {
 		case "Int":
-			v, err := strconv.ParseFloat(value.Raw, 64)
-			if err != nil {
-				addError(validator.Message("%s", err), validator.At(value.Position))
-			} else if v >= 2147483648 || v < -2147483648 {
+			_, err := strconv.ParseInt(value.Raw, 10,32)
+			if err!=nil {
+			if errors.Is(err, strconv.ErrRange) {
 				addError(validator.Message("Out of range value '%s', for type `%s`",
 					value.Raw, value.Definition.Name), validator.At(value.Position))
+			}else {
+				addError(validator.Message("%s", err), validator.At(value.Position))
 			}
+		}
 		case "Int64":
 			if value.Kind == ast.IntValue {
 				value.Kind = ast.StringValue
-			} else if value.Kind == ast.FloatValue {
-
+			} else {
+				addError(validator.Message("Given input type mismatch, Expected Int64"),
+					validator.At(value.Position))
+				}
 			}
-		}
 	})
 }
 
