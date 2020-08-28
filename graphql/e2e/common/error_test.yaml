@@ -153,7 +153,7 @@
   name: "value (2^54) out of range for  for int64 type"
   gqlrequest: |
     mutation {
-      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:18014399000000000}]){
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:18014398509481984}]){
         post{
           title
           numLikes
@@ -166,14 +166,14 @@
   gqlvariables:
     { }
   errors:
-    [ { "message": "Out of range value '18014399000000000', for type `Int64`",
+    [ { "message": "Out of range value '18014398509481984', for type `Int64`",
         "locations": [ { "line": 2, "column": 63 } ] } ]
 
 -
   name: "value (-(2^53)) out of range , boundary case for int64"
   gqlrequest: |
     mutation {
-      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:9007199300000000}]){
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews: -9007199254740992}]){
         post{
           title
           numViews
@@ -186,5 +186,5 @@
   gqlvariables:
     { }
   errors:
-    [ { "message": "Out of range value '9007199300000000', for type `Int64`",
-        "locations": [ { "line": 2, "column": 63 } ] } ]
+    [ { "message": "Out of range value '-9007199254740992', for type `Int64`",
+        "locations": [ { "line": 2, "column": 64 } ] } ]

@@ -18,7 +18,6 @@ package schema
 
 import (
 	"errors"
-	"math"
 	"strconv"
 
 	"github.com/vektah/gqlparser/v2/ast"
@@ -57,7 +56,6 @@ func variableTypeCheck(observers *validator.Events, addError validator.AddErrFun
 		if value.Kind != ast.Variable {
 			return
 		}
-
 		if value.VariableDefinition.Type.IsCompatible(value.ExpectedType) {
 			return
 		}
@@ -96,10 +94,10 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 
 func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
-		if value.Definition == nil || value.ExpectedType == nil || value.Kind != ast.IntValue{
+		if value.Definition == nil || value.ExpectedType == nil || value.Kind!=ast.IntValue{
 			return
 		}
-
+       
 		var err error
 		var val int64
 		switch value.Definition.Name {
@@ -107,13 +105,16 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 			_, err = strconv.ParseInt(value.Raw, 10, 32)
 		case "Int64":
 			val, err = strconv.ParseInt(value.Raw, 10, 54)
+			if val == -9007199254740992{
+				err=strconv.ErrRange
+		    }
 		default:
 			return
 		}
 
 		//Range of Json numbers is [-(2**53)+1, (2**53)-1] while of 54 bit integers is [-(2**53), (2**53)-1]
 		if err != nil {
-			if float64(val) == (-1)*math.Pow(2, 53) || errors.Is(err, strconv.ErrRange) {
+			 if errors.Is(err, strconv.ErrRange) {
 				addError(validator.Message("Out of range value '%s', for type `%s`",
 					value.Raw, value.Definition.Name), validator.At(value.Position))
 				return
@@ -123,4 +124,14 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 		}
 
 	})
+}
+
+func intRangeCheck1(observers *validator.Events, addError validator.AddErrFunc){
+	observers.OnOperation(func(walker *validator.Walker, op *ast.OperationDefinition){
+    if op.Name=="a"{
+
+	}
+
+	})
+
 }
