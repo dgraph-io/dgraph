@@ -59,7 +59,7 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 
 // We are capping maxEncoded size to 4GB, as grpc encoding fails
 // for a response size > math.MaxUint32.
-const maxEncodedSize = uint64(4 << 30)
+const maxEncodedSize = uint64(16 << 30)
 
 type encoder struct {
 	// attrMap has mapping of string predicates to uint16 ids.
