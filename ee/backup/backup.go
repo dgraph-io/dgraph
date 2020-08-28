@@ -291,6 +291,11 @@ func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList
 		if err != nil {
 			return nil, errors.Wrapf(err, "while reading posting list")
 		}
+		if l == nil {
+			// This is a part of a split list. Skip it since it will be backed up
+			// when the main list is added.
+			break
+		}
 
 		err = l.SingleListRollup(kv)
 		if err != nil {
