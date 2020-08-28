@@ -52,6 +52,9 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
+
+	totalCache      int64
+	cachePercentage string
 }
 
 var opts options
@@ -95,6 +98,11 @@ instances to achieve high-availability.
 	// about the status of supporting annotation logs through the datadog exporter
 	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
 		" exporter does not support annotation logs and would discard them.")
+
+	// Cache flags
+	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
+	flag.String("cache_percentage", "100,0",
+		"Cache percentages summing up to 100 for various caches (FORMAT: blockCache,indexCache).")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -168,6 +176,8 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
+		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
+		cachePercentage:   Zero.Conf.GetString("cache_percentage"),
 	}
 
 	if opts.nodeId == 0 {
@@ -211,10 +221,22 @@ func run() {
 		log.Fatal(err)
 	}
 
+	x.AssertTruef(opts.totalCache >= 0, "ERROR: Cache size must be non-negative")
+
+	cachePercent, err := x.GetCachePercentages(opts.cachePercentage, 2)
+	x.Check(err)
+	blockCacheSz := (cachePercent[0] * (opts.totalCache << 20)) / 100
+	indexCacheSz := (cachePercent[1] * (opts.totalCache << 20)) / 100
+
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
-		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20).WithLoadBloomsOnOpen(false)
+	kvOpt := badger.LSMOnlyOptions(opts.w).
+		WithSyncWrites(false).
+		WithTruncate(true).
+		WithValueLogFileSize(64 << 20).
+		WithBlockCacheSize(blockCacheSz).
+		WithIndexCacheSize(indexCacheSz).
+		WithLoadBloomsOnOpen(false)
 
 	kvOpt.ZSTDCompressionLevel = 3
 

@@ -894,6 +894,16 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 }
 
+func verifySplits(t *testing.T, splits []uint64) {
+	require.Equal(t, uint64(1), splits[0])
+	for i, uid := range splits {
+		if i == 0 {
+			continue
+		}
+		require.Greater(t, uid, splits[i-1])
+	}
+}
+
 func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
 	maxListSize = 5000
@@ -932,6 +942,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	ol, err = getNew(key, ps)
 	require.NoError(t, err)
 	require.True(t, len(ol.plist.Splits) > 0)
+	verifySplits(t, ol.plist.Splits)
 
 	return ol, commits
 }
@@ -965,6 +976,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		commits++
 	}
 	require.True(t, len(ol.plist.Splits) > 0)
+	verifySplits(t, ol.plist.Splits)
 
 	// Delete all the previously inserted entries from the list.
 	baseStartTs := uint64(size) + 1
