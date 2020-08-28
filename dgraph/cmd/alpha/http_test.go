@@ -233,6 +233,7 @@ type mutationResponse struct {
 	preds   []string
 	startTs uint64
 	data    json.RawMessage
+	cost    string
 }
 
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
@@ -249,10 +250,11 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	}
 
 	url := addr + "/mutate?" + strings.Join(params, "&")
-	_, body, err := runWithRetries("POST", t, url, m)
+	_, body, resp, err := runWithRetriesForResp("POST", t, url, m)
 	if err != nil {
 		return mr, err
 	}
+	mr.cost = resp.Header.Get(x.DgraphCostHeader)
 
 	var r res
 	if err := json.Unmarshal(body, &r); err != nil {
@@ -564,8 +566,9 @@ func TestTransactionForCost(t *testing.T) {
 	}
 	`
 
-	_, err = mutationWithTs(m1, "application/rdf", false, true, 0)
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
+	require.Equal(t, "5", mr.cost)
 
 	_, _, resp, err := queryWithTsForResp(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
