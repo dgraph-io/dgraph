@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v2"
+	bo "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -55,8 +56,9 @@ type options struct {
 	rebalanceInterval time.Duration
 	LudicrousMode     bool
 
-	totalCache      int64
-	cachePercentage string
+	totalCache       int64
+	cachePercentage  string
+	compressionLevel int
 }
 
 var opts options
@@ -108,6 +110,8 @@ instances to achieve high-availability.
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
 	flag.String("cache_percentage", "100,0",
 		"Cache percentages summing up to 100 for various caches (FORMAT: blockCache,indexCache).")
+	flag.Int("badger.compression_level", 3,
+		"The compression level for Badger. A higher value uses more resources.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -192,6 +196,7 @@ func run() {
 		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
 		cachePercentage:   Zero.Conf.GetString("cache_percentage"),
+		compressionLevel:  Zero.Conf.GetInt("badger.compression_level"),
 	}
 
 	if opts.nodeId == 0 {
@@ -257,7 +262,14 @@ func run() {
 		WithIndexCacheSize(indexCacheSz).
 		WithLoadBloomsOnOpen(false)
 
-	kvOpt.ZSTDCompressionLevel = 3
+	glog.Infof("Setting Badger Compression Level: %d", opts.compressionLevel)
+	// Default value of badgerCompressionLevel is 3 so compression will always
+	// be enabled, unless it is explicitly disabled by setting the value to 0.
+	if opts.compressionLevel != 0 {
+		// By default, compression is disabled in badger.
+		kvOpt.Compression = bo.ZSTD
+		kvOpt.ZSTDCompressionLevel = opts.compressionLevel
+	}
 
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
