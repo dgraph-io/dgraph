@@ -130,7 +130,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err := query.ApplyMutations(ctx, m)
 
 		// recreate the admin account after a drop all operation
-		ResetAcl()
+		ResetAcl(nil)
 		return empty, err
 	}
 
@@ -143,7 +143,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err := query.ApplyMutations(ctx, m)
 
 		// recreate the admin account after a drop data operation
-		ResetAcl()
+		ResetAcl(nil)
 		return empty, err
 	}
 
