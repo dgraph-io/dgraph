@@ -18,8 +18,8 @@ PUBLIC="${PUBLIC:-public}"
 LOOP="${LOOP:-true}"
 # Binary of hugo command to run.
 HUGO="${HUGO:-hugo}"
-OLD_THEME="old-theme"
-NEW_THEME="master"
+OLD_THEME="${OLD_THEME:-old-theme}"
+NEW_THEME="${NEW_THEME:-master}"
 
 # TODO - Maybe get list of released versions from Github API and filter
 # those which have docs.
@@ -86,8 +86,10 @@ rebuild() {
 	export CURRENT_VERSION=${2}
 	export VERSIONS=${VERSION_STRING}
 	export DGRAPH_ENDPOINT=${DGRAPH_ENDPOINT:-"https://play.dgraph.io/query?latency=true"}
+        export CANONICAL_PATH="$HOST"
 
 	HUGO_TITLE="Dgraph Doc ${2}"\
+		CANONICAL_PATH=${HOST}\
 		VERSIONS=${VERSION_STRING}\
 		CURRENT_BRANCH=${1}\
 		CURRENT_VERSION=${2} ${HUGO} \
