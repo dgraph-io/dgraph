@@ -881,6 +881,9 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	if q.Cache == UseTxnCache {
 		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
 	}
+	if qs.cache == nil {
+		qs.cache = posting.NoCache(q.ReadTs)
+	}
 	// For now, remove the query level cache. It is causing contention for queries with high
 	// fan-out.
 
