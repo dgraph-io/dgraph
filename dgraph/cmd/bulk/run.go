@@ -107,7 +107,7 @@ func init() {
 	flag.Int64("badger.cache_mb", 0, "Total size of cache (in MB) per shard.")
 	flag.String("badger.cache_percentage", "65,35",
 		"Cache percentages summing up to 100 for various caches"+
-			" (FORMAT: BlockCaheSize, IndexCacheSize).")
+			" (FORMAT: BlockCacheSize, IndexCacheSize).")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -147,7 +147,7 @@ func run() {
 		os.Exit(0)
 	}
 	if opt.BadgerCompressionLevel < 0 {
-		fmt.Printf("Invalid compression level: %d. It should be greater than zero",
+		fmt.Printf("Invalid compression level: %d. It should be non-negative",
 			opt.BadgerCompressionLevel)
 	}
 
