@@ -17,7 +17,10 @@ Connections between client and server can be secured with TLS. Password protecte
 
 ## Dgraph Certificate Management Tool
 
-The `dgraph cert` program creates and manages CA-signed certificates and private keys using a generated Dgraph Root CA. The `dgraph cert` command simplifies certificate management for you.
+The `dgraph cert` program creates and manages CA-signed certificates and private keys using a generated Dgraph Root CA. There are three types of these pairs:
+1. The Root CA certificate/key pair: It is used to sign and verify node and client certificates, if the root CA certificate is changed then you must regenerate all the certificates.
+2. Node certificate/key pair: It is shared by the alpha nodes for accepting TLS connections.
+3. Client certificate/key pair: It is used by the clients (like live loader, ratel etc) to communicate with the alpha server.
 
 ```sh
 # To see the available flags.
@@ -39,9 +42,9 @@ $ dgraph cert -n localhost -c dgraphuser
 $ dgraph cert ls
 ```
 
-### File naming conventions
+The default location where the _cert_ command stores certificates (and keys) is `tls` under the Dgraph working directory. The default dir path can be overridden using the `--dir` option. For example
 
-To enable TLS you must specify the directory path to find certificates and keys. The default location where the _cert_ command stores certificates (and keys) is `tls` under the Dgraph working directory; where the data files are found. The default dir path can be overridden using the `--dir` option.
+### File naming conventions
 
 ```sh
 $ dgraph cert --dir ~/mycerts
@@ -57,8 +60,6 @@ The following file naming conventions are used by Dgraph for proper TLS setup.
 | node.key | Dgraph node private key | Validate node certificate |
 | client._name_.crt | Dgraph client certificate | Authenticate a client _name_ |
 | client._name_.key | Dgraph client private key | Validate _name_ client certificate |
-
-The Root CA certificate is used for verifying node and client certificates, if changed you must regenerate all certificates.
 
 For client authentication, each client must have their own certificate and key. These are then used to connect to the Dgraph node(s).
 
@@ -197,14 +198,46 @@ The server will always **request** Client Authentication.  There are four differ
 
 Ratel UI (and any other JavaScript clients built on top of `dgraph-js-http`)
 connect to Dgraph servers via HTTP, when TLS is enabled servers begin to expect
-HTTPS requests only. Therefore some adjustments need to be made.
+HTTPS requests only.
 
-If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default):
+The first step would be to generate the certificate/key pairs. Generate these using the following commands.
+```sh
+# Create rootCA and node certificates/keys
+$ dgraph cert -n localhost
+```
 
-1. Change the connection URL from `http://` to `https://` (e.g. `https://127.0.0.1:8080`).
-2. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt`. Refer to the documentation of your OS / browser for instructions
-(e.g. on Mac OS this means adding `ca.crt` to the KeyChain and making it trusted
-for `Secure Socket Layer`).
+If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default), then client certificate is not mandatory. The steps required to achieve this are:
+
+1. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt` by following the below steps for your OS.
+##### Linux (Debian/Ubuntu)
+```sh
+# Copy the generated CA to the ca-certificates directory 
+$ cp /path/to/ca.crt /usr/local/share/ca-certificates/ca.crt
+# Update the CA store
+$ sudo update-ca-certificates`
+```
+##### Mac OS X
+```sh
+$ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain /path/to/ca.crt
+```
+##### Windows
+```sh
+$ certutil -addstore -f "ROOT" /path/to/ca.crt
+```
+
+2. Add the Dgraph CA certificate to the browser's list of trusted Certificate Authorities.
+
+##### Firefox
+
+* Goto Preferences -> Prvacy & Security -> View Certificates -> Authorities
+* Click on Import and import the `ca.crt`
+
+##### Chrome
+
+* Goto Settings -> Privacy and Security -> Security -> Manage Certificates -> Authorities
+* Click on Import and import the `ca.crt`
+
+3. Point ratel to the `https://` endpoint of alpha server instead of `http://` (e.g. `https://127.0.0.1:8080`).
 
 For `REQUIREANY` and `REQUIREANDVERIFY` you need to follow the steps above and
 also need to install client certificate on your OS / browser:
@@ -212,11 +245,19 @@ also need to install client certificate on your OS / browser:
 1. Generate a client certificate: `dgraph cert -c MyLaptop`.
 2. Convert it to a `.p12` file:
 `openssl pkcs12 -export -out MyLaptopCert.p12 -in tls/client.MyLaptop.crt -inkey tls/client.MyLaptop.key`. Use any password you like for export.
-3. Install the generated `MyLaptopCert.p12` file on the client system
-(on Mac OS this means simply double-click the file in Finder).
-4. Next time you use Ratel to connect to an alpha with Client authentication
-enabled the browser will prompt you for a client certificate to use. Select the
-certificate you've just installed in the step above and queries/mutations will
+3. Import the client certificate to your browser. 
+##### Firefox
+
+* Goto Preferences -> Prvacy & Security -> View Certificates -> Your Certificates
+* Click on Import and import the `MyLaptopCert.p12`
+
+##### Chrome
+* Goto Settings -> Privacy and Security -> Security -> Manage Certificates -> Your Certificates
+* Click on Import and import the `MyLaptopCert.p12`
+
+3. Next time you use Ratel to connect to an alpha with Client authentication
+enabled the browser will prompt you for a client certificate to use. Select the client's
+certificate you've imported in the step above and queries/mutations will
 succeed.
 
 ## Using Curl with Client authentication
