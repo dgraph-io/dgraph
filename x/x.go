@@ -935,3 +935,35 @@ func StoreSync(db DB, closer *y.Closer) {
 		}
 	}
 }
+
+// GetCachePercentages returns the slice of cache percentages given the "," (comma) separated
+// cache percentages(integers) string and expected number of caches.
+func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
+	cp := strings.Split(cpString, ",")
+	// Sanity checks
+	if len(cp) != numExpected {
+		return nil, errors.Errorf("ERROR: expected %d cache percentages, got %d",
+			numExpected, len(cp))
+	}
+
+	var cachePercent []int64
+	percentSum := 0
+	for _, percent := range cp {
+		x, err := strconv.Atoi(percent)
+		if err != nil {
+			return nil, errors.Errorf("ERROR: unable to parse cache percentage(%s)", percent)
+		}
+		if x < 0 {
+			return nil, errors.Errorf("ERROR: cache percentage(%s) cannot be negative", percent)
+		}
+		cachePercent = append(cachePercent, int64(x))
+		percentSum += x
+	}
+
+	if percentSum != 100 {
+		return nil, errors.Errorf("ERROR: cache percentages (%s) does not sum up to 100",
+			strings.Join(cp, "+"))
+	}
+
+	return cachePercent, nil
+}
