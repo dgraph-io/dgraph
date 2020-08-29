@@ -168,7 +168,7 @@ func (s *state) findAccount(txn *dgo.Txn, key int) (account, error) {
 	}
 	accounts := m["q"]
 	if len(accounts) > 1 {
-		log.Printf("[StartTs: %v] Query: %s. Response: %s\n", resp.Txn.StartTs, resp.Json)
+		log.Printf("[StartTs: %v] Query: %s. Response: %s\n", resp.Txn.StartTs, query, resp.Json)
 		log.Fatal("Found multiple accounts")
 	}
 	if len(accounts) == 0 {
