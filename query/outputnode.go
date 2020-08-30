@@ -53,8 +53,100 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 			sgr.Params.GetUid = true
 		}
 		sgr.Children = append(sgr.Children, sg)
+		clearLevelCount()
+		height, count := sg.countUIDs(1)
+		fmt.Println(sg.Params.Alias, " $$$$$$$$ ", height, count)
+		printLevelCount()
+		for _, uid := range sg.uidMatrix[0].Uids {
+			fmt.Println("############################################")
+			sg.nodeCount(uid, 1)
+		}
+		fmt.Println("!!!!!!!!!!! nodeCount done:", sg.Params.Alias)
 	}
 	return sgr.toFastJSON(l)
+}
+
+var lm = make(map[int]struct{})
+var uniqEdges = make(map[string]struct{})
+
+var nc uint64 = 0
+
+func (sg *SubGraph) nodeCount(uid uint64, level int) {
+	if _, ok := lm[level]; !ok {
+		fmt.Println("*************** level seen for the first time: ", level)
+		lm[level] = struct{}{}
+	}
+
+	nc++
+
+	if nc%10000000 == 0 {
+		fmt.Println("node count is: ", nc, " level: ", level)
+	}
+
+	edge := sg.Attr + fmt.Sprintf("%d", uid)
+	if _, ok := uniqEdges[edge]; !ok {
+		uniqEdges[edge] = struct{}{}
+	} else {
+		panic("Edge repeated")
+	}
+
+	for _, pc := range sg.Children {
+		idx := algo.IndexOf(pc.SrcUIDs, uid)
+		if idx < 0 {
+			continue
+		}
+
+		if level == 10 && len(pc.uidMatrix[idx].Uids) > 0 {
+			// fmt.Println("*************** ", uid, pc.Attr, len(pc.uidMatrix[idx].Uids), idx)
+		}
+		// if len(pc.uidMatrix[idx].Uids) > 1000 {
+		// 	fmt.Println("######## found uid with > 1000 node")
+		// }
+		for _, nuid := range pc.uidMatrix[idx].Uids {
+			pc.nodeCount(nuid, level+1)
+		}
+	}
+}
+
+var levelCount = make(map[int]int)
+
+func clearLevelCount() {
+	levelCount = make(map[int]int)
+	levelMap = make(map[int]struct{})
+	lm = make(map[int]struct{})
+	uniqEdges = make(map[string]struct{})
+}
+
+func printLevelCount() {
+	for level, count := range levelCount {
+		fmt.Println("Level: ", level, " Count: ", count)
+	}
+}
+
+func (sg *SubGraph) countUIDs(level int) (int, int) {
+	maxHeight := 0
+
+	count := 0
+	// if sg.SrcUIDs != nil {
+	// 	count += len(sg.SrcUIDs.Uids)
+	// }
+	for _, ulist := range sg.uidMatrix {
+		count += len(ulist.Uids)
+	}
+
+	levelCount[level] += count
+
+	// fmt.Println("level: ", level, " Attr: ", sg.Attr, " count uids: ", count)
+
+	for _, ch := range sg.Children {
+		hch, cch := ch.countUIDs(level + 1)
+		if hch > maxHeight {
+			maxHeight = hch
+		}
+		count += cch
+	}
+
+	return 1 + maxHeight, count
 }
 
 // We are capping maxEncoded size to 4GB, as grpc encoding fails
@@ -841,7 +933,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 
 		n1 := enc.newNode(attrID)
 		enc.setAttr(n1, enc.idForAttr(sg.Params.Alias))
-		if err := sg.preTraverse(enc, uid, n1); err != nil {
+		if err := sg.preTraverse(enc, uid, n1, 1); err != nil {
 			if err.Error() == "_INV_" {
 				continue
 			}
@@ -1001,8 +1093,15 @@ func facetName(fieldName string, f *api.Facet) string {
 	return fieldName + x.FacetDelimeter + f.Key
 }
 
+var levelMap = make(map[int]struct{})
+var countUids uint64 = 0
+
 // This method gets the values and children for a subprotos.
-func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) error {
+func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int) error {
+	if _, ok := levelMap[level]; !ok {
+		fmt.Println("########## level seen for first time: ", level)
+		levelMap[level] = struct{}{}
+	}
 	if sg.Params.IgnoreReflex {
 		if alreadySeen(sg.Params.ParentIds, uid) {
 			// A node can't have itself as the child at any level.
@@ -1044,6 +1143,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 		if idx < 0 {
 			continue
 		}
+
 		if pc.Params.IsGroupBy {
 			if len(pc.GroupbyRes) <= idx {
 				return errors.Errorf("Unexpected length while adding Groupby. Idx: [%v], len: [%v]",
@@ -1056,6 +1156,11 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 		}
 
 		fieldName := pc.fieldName()
+		// if level == 10 {
+		// 	fmt.Println("Before switch ****************** ", fieldName, uid, len(pc.uidMatrix[idx].Uids))
+		// 	// len(pc.uidMatrix[idx].Uids), len(pc.valueMatrix[idx].Values))
+		// }
+
 		switch {
 		case len(pc.counts) > 0:
 			if err := pc.addCount(enc, uint64(pc.counts[idx]), dst); err != nil {
@@ -1077,7 +1182,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				pc.Params.ParentIds = sg.Params.ParentIds
 			}
 
-			// calculate it once to avoid mutliple call to idToAttr()
+			// calculate it once to avoid multiple call to idToAttr()
 			fieldID := enc.idForAttr(fieldName)
 			// Add len of fieldName to enc.curSize.
 			enc.curSize += uint64(len(fieldName))
@@ -1090,7 +1195,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 					continue
 				}
 				uc := enc.newNode(fieldID)
-				if rerr := pc.preTraverse(enc, childUID, uc); rerr != nil {
+				if rerr := pc.preTraverse(enc, childUID, uc, level+1); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						if invalidUids == nil {
 							invalidUids = make(map[uint64]bool)
@@ -1155,7 +1260,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 							// 		}
 							// 	}
 							// }
-							// boss should be of list type because there can be mutliple friends of
+							// boss should be of list type because there can be multiple friends of
 							// boss.
 							node := enc.newNode(fieldID)
 							enc.appendAttrs(node, c...)
@@ -1181,7 +1286,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
 
-			// calculate it once to avoid mutliple call to idToAttr()
+			// calculate it once to avoid multiple call to idToAttr()
 			fieldID := enc.idForAttr(fieldName)
 			// Add len of fieldName to enc.curSize.
 			enc.curSize += uint64(len(fieldName))
@@ -1256,7 +1361,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 		sg.Params.ParentIds = (sg.Params.ParentIds)[:len(sg.Params.ParentIds)-1]
 	}
 
-	// Only for shortest path query we wan't to return uid always if there is
+	// Only for shortest path query we wasn't to return uid always if there is
 	// nothing else at that level.
 	if (sg.Params.GetUid && !enc.IsEmpty(dst)) || sg.Params.Shortest {
 		if err := enc.SetUID(dst, uid, enc.idForAttr("uid")); err != nil {
