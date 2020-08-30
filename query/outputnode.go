@@ -66,7 +66,7 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	return sgr.toFastJSON(l)
 }
 
-var lm = make(map[int]struct{})
+var lm = make(map[int]int)
 var uniqEdges = make(map[string]struct{})
 
 var nc uint64 = 0
@@ -74,35 +74,54 @@ var nc uint64 = 0
 func (sg *SubGraph) nodeCount(uid uint64, level int) {
 	if _, ok := lm[level]; !ok {
 		fmt.Println("*************** level seen for the first time: ", level)
-		lm[level] = struct{}{}
+		lm[level] = 1
+	} else {
+		lm[level]++
 	}
+
+	if level == 11 && lm[level]%10000 == 0 {
+		fmt.Println("level count: ", lm[level])
+	}
+
+	// edge := sg.Attr + fmt.Sprintf("%d", uid)
+	// if _, ok := uniqEdges[edge]; !ok {
+	// 	uniqEdges[edge] = struct{}{}
+	// } else {
+	// 	panic("Edge repeated")
+	// }
 
 	nc++
-
-	if nc%10000000 == 0 {
-		fmt.Println("node count is: ", nc, " level: ", level)
-	}
-
-	edge := sg.Attr + fmt.Sprintf("%d", uid)
-	if _, ok := uniqEdges[edge]; !ok {
-		uniqEdges[edge] = struct{}{}
-	} else {
-		panic("Edge repeated")
-	}
+	// if nc%10000000 == 0 {
+	// 	fmt.Println("nc is: ", nc)
+	// }
 
 	for _, pc := range sg.Children {
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
+
+		// if level == 11 {
+		// 	fmt.Println("*************** ", uid, idx, pc.Attr)
+		// }
+
 		if idx < 0 {
 			continue
 		}
 
-		if level == 10 && len(pc.uidMatrix[idx].Uids) > 0 {
-			// fmt.Println("*************** ", uid, pc.Attr, len(pc.uidMatrix[idx].Uids), idx)
-		}
-		// if len(pc.uidMatrix[idx].Uids) > 1000 {
-		// 	fmt.Println("######## found uid with > 1000 node")
+		// if level == 10 && len(pc.uidMatrix[idx].Uids) > 0 {
+		// 	// fmt.Println("*************** ", uid, pc.Attr, len(pc.uidMatrix[idx].Uids), idx)
 		// }
+
 		for _, nuid := range pc.uidMatrix[idx].Uids {
+			// key := fmt.Sprintf("%s|%d|%d", sg.Attr, uid, nuid)
+			// if _, ok := uniqEdges[key]; !ok {
+			// 	uniqEdges[key] = struct{}{}
+			// 	nc++
+			// 	if nc%10000 == 0 {
+			// 		fmt.Println("******** edge count is: ", nc)
+			// 	}
+			// } else {
+			// 	continue
+			// 	// panic("edge repeated " + key)
+			// }
 			pc.nodeCount(nuid, level+1)
 		}
 	}
@@ -113,7 +132,7 @@ var levelCount = make(map[int]int)
 func clearLevelCount() {
 	levelCount = make(map[int]int)
 	levelMap = make(map[int]struct{})
-	lm = make(map[int]struct{})
+	lm = make(map[int]int)
 	uniqEdges = make(map[string]struct{})
 }
 
