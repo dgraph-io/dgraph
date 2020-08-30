@@ -23,7 +23,6 @@ import (
 	"math"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	otrace "go.opencensus.io/trace"
@@ -45,10 +44,6 @@ type node struct {
 	server *Server
 	ctx    context.Context
 	closer *y.Closer // to stop Run.
-
-	// The last timestamp when this Zero was able to reach quorum.
-	mu         sync.RWMutex
-	lastQuorum time.Time
 }
 
 func (n *node) AmLeader() bool {
@@ -56,17 +51,7 @@ func (n *node) AmLeader() bool {
 		return false
 	}
 	r := n.Raft()
-	if r.Status().Lead != r.Status().ID {
-		return false
-	}
-
-	// This node must be the leader, but must also be an active member of the cluster, and not
-	// hidden behind a partition. Basically, if this node was the leader and goes behind a
-	// partition, it would still think that it is indeed the leader for the duration mentioned
-	// below.
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-	return time.Since(n.lastQuorum) <= 5*time.Second
+	return r.Status().Lead == r.Status().ID
 }
 
 func (n *node) uniqueKey() string {
@@ -599,44 +584,6 @@ func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 
 var startOption = otrace.WithSampler(otrace.ProbabilitySampler(0.01))
 
-func (n *node) checkQuorum(closer *y.Closer) {
-	defer closer.Done()
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	quorum := func() {
-		// Make this timeout 1.5x the timeout on RunReadIndexLoop.
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-
-		ctx, span := otrace.StartSpan(ctx, "Zero.checkQuorum", startOption)
-		defer span.End()
-		span.Annotatef(nil, "Node id: %d", n.Id)
-
-		if state, err := n.server.latestMembershipState(ctx); err == nil {
-			n.mu.Lock()
-			n.lastQuorum = time.Now()
-			n.mu.Unlock()
-			// Also do some connection cleanup.
-			conn.GetPools().RemoveInvalid(state)
-			span.Annotate(nil, "Updated lastQuorum")
-
-		} else if glog.V(1) {
-			span.Annotatef(nil, "Got error: %v", err)
-			glog.Warningf("Zero node: %#x unable to reach quorum. Error: %v", n.Id, err)
-		}
-	}
-
-	for {
-		select {
-		case <-ticker.C:
-			quorum()
-		case <-closer.HasBeenClosed():
-			return
-		}
-	}
-}
-
 func (n *node) snapshotPeriodically(closer *y.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(10 * time.Second)
@@ -679,7 +626,7 @@ func (n *node) Run() {
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	readStateCh := make(chan raft.ReadState, 100)
-	closer := y.NewCloser(5)
+	closer := y.NewCloser(4)
 	defer func() {
 		closer.SignalAndWait()
 		n.closer.Done()
@@ -689,7 +636,6 @@ func (n *node) Run() {
 	go n.snapshotPeriodically(closer)
 	go n.updateEnterpriseState(closer)
 	go n.updateZeroMembershipPeriodically(closer)
-	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)
 	if opts.LudicrousMode {
 		closer.AddRunning(1)

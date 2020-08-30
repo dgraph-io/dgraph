@@ -130,6 +130,10 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 			// snapshot.
 			Applied: snap.Metadata.Index,
 
+			// CheckQuorum specifies if the leader should check quorum activity. Leader
+			// steps down when quorum is not active for an electionTimeout.
+			CheckQuorum: true,
+
 			Logger: &x.ToGlog{},
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
