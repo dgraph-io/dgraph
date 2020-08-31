@@ -221,5 +221,9 @@ func recurse(ctx context.Context, sg *SubGraph) error {
 		}
 	}
 
-	return sg.expandRecurse(ctx, depth)
+	if err := sg.expandRecurse(ctx, depth); err != nil {
+		return err
+	}
+	cleanup(sg, 1, sg.Params.RecurseArgs.Depth)
+	return nil
 }

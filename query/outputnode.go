@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -76,24 +75,25 @@ var uniqEdges = make(map[string]struct{})
 var nc uint64 = 0
 
 func (sg *SubGraph) nodeCount(uid uint64, level int, path []string, uniqPaths map[string]int) {
-	glog.Infof("%s Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v\n",
-		strings.Repeat(" .", level), sg, sg.numEntered, level, sg.Attr, uid, path[:level])
+	// if level == 3 {
+	// glog.Infof("%s Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v, SrcUids: %v\n",
+	// strings.Repeat(" .", level), sg, sg.numEntered, level, sg.fieldName(), uid, path[:level], sg.SrcUIDs)
 	// }
 	sg.numEntered++
 
 	hash := strings.Join(path[:level], " ")
 	uniqPaths[hash]++
 	if num := uniqPaths[hash]; num > 1 {
-		debug.PrintStack()
-		glog.Errorf("----> The same path is being repeated %d times: %s \n", num, hash)
+		// debug.PrintStack()
+		// glog.Errorf("----> The same path is being repeated %d times: %s \n", num, hash)
 	}
 
-	if _, ok := lm[level]; !ok {
-		fmt.Println("*************** level seen for the first time: ", level)
-		lm[level] = 1
-	} else {
-		lm[level]++
-	}
+	// if _, ok := lm[level]; !ok {
+	// 	fmt.Println("*************** level seen for the first time: ", level)
+	// 	lm[level] = 1
+	// } else {
+	// 	lm[level]++
+	// }
 
 	nc++
 
@@ -103,6 +103,9 @@ func (sg *SubGraph) nodeCount(uid uint64, level int, path []string, uniqPaths ma
 			continue
 		}
 
+		if pc.uidMatrix == nil {
+			continue
+		}
 		for _, nuid := range pc.uidMatrix[idx].Uids {
 			path[level+1] = pc.fieldName() + strconv.FormatUint(nuid, 16)
 			pc.nodeCount(nuid, level+1, path, uniqPaths)
@@ -126,6 +129,27 @@ func printLevelCount() {
 }
 
 func (sg *SubGraph) countUIDs(level int) (int, int) {
+	// glog.Infof("%s level: %d, Attr: %s\n", strings.Repeat(".. ", level), level, sg.fieldName())
+
+	destUids := []string{}
+	for _, u := range sg.DestUIDs.GetUids() {
+		destUids = append(destUids, strconv.FormatUint(u, 16))
+	}
+	// dst := strings.Join(destUids, ", ")
+	for idx, uid := range sg.SrcUIDs.GetUids() {
+		uidList := []string{}
+		if sg.uidMatrix == nil {
+			glog.Infof("%s srcUid: %s, uidList: [nil]", strings.Repeat(".. ", level),
+				strconv.FormatUint(uid, 16))
+			continue
+		}
+		for _, u := range sg.uidMatrix[idx].GetUids() {
+			uidList = append(uidList, strconv.FormatUint(u, 16))
+		}
+
+		// glog.Infof("%s srcUid: %s, destUids: %s, uidList: [%v]", strings.Repeat(".. ", level),
+		// 	strconv.FormatUint(uid, 16), dst, strings.Join(uidList, ", "))
+	}
 	maxHeight := 0
 
 	count := 0

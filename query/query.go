@@ -2632,6 +2632,23 @@ type Request struct {
 	Vars map[string]varValue
 }
 
+func cleanup(sg *SubGraph, currentLevel, maxLevel uint64) {
+	idx := 0
+	if currentLevel > maxLevel {
+		sg.Children = nil
+		return
+	}
+	for _, child := range sg.Children {
+		if currentLevel == maxLevel && child.fieldName() != "uid" {
+			continue
+		}
+		sg.Children[idx] = child
+		idx++
+		cleanup(child, currentLevel+1, maxLevel)
+	}
+	sg.Children = sg.Children[:idx]
+}
+
 // ProcessQuery processes query part of the request (without mutations).
 // Fills Subgraphs and Vars.
 // It can process multiple query blocks that are part of the query..
@@ -2756,6 +2773,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := req.Subgraphs[idx]
+			// cleanup(sg)
 
 			var sgPath []*SubGraph
 			if err := sg.populateVarMap(req.Vars, sgPath); err != nil {
