@@ -290,6 +290,7 @@ type SubGraph struct {
 	pathMeta *pathMetadata
 
 	numEntered int
+	uniqPaths  map[string]int
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
