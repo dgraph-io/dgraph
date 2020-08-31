@@ -367,5 +367,10 @@ func run() {
 
 	glog.Infoln("Running Dgraph Zero...")
 	st.zero.closer.Wait()
-	glog.Infoln("All done.")
+	glog.Infoln("Closer closed.")
+
+	err = kv.Close()
+	glog.Infof("Badger closed with err: %v\n", err)
+
+	glog.Infoln("All done. Goodbye!")
 }
