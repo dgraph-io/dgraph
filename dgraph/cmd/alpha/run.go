@@ -203,6 +203,12 @@ they form a Raft group and provide synchronous replication.
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
+
+	// Cache flags
+	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha.")
+	flag.String("cache_percentage", "0,65,25,0,10",
+		`Cache percentages summing up to 100 for various caches (FORMAT:
+		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).`)
 }
 
 func setupCustomTokenizers() {
@@ -577,10 +583,26 @@ func run() {
 	}
 	bindall = Alpha.Conf.GetBool("bindall")
 
+	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
+	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
+
+	cachePercentage := Alpha.Conf.GetString("cache_percentage")
+	cachePercent, err := x.GetCachePercentages(cachePercentage, 5)
+	x.Check(err)
+	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
+	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
+	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
+	wstoreBlockCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
+	wstoreIndexCacheSize := (cachePercent[4] * (totalCache << 20)) / 100
+
 	opts := worker.Options{
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
 		PostingDir:             Alpha.Conf.GetString("postings"),
 		WALDir:                 Alpha.Conf.GetString("wal"),
+		PBlockCacheSize:        pstoreBlockCacheSize,
+		PIndexCacheSize:        pstoreIndexCacheSize,
+		WBlockCacheSize:        wstoreBlockCacheSize,
+		WIndexCacheSize:        wstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
@@ -701,7 +723,7 @@ func run() {
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	schema.Init(worker.State.Pstore)
-	posting.Init(worker.State.Pstore)
+	posting.Init(worker.State.Pstore, postingListCacheSize)
 	defer posting.Cleanup()
 	worker.Init(worker.State.Pstore)
 
@@ -731,29 +753,27 @@ func run() {
 		}
 	}()
 
-	// Setup external communication.
-	aclCloser := y.NewCloser(1)
+	updaters := y.NewCloser(4)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
-		edgraph.ResetAcl()
-		edgraph.RefreshAcls(aclCloser)
-		edgraph.ResetCors()
+		edgraph.ResetAcl(updaters)
+		edgraph.RefreshAcls(updaters)
+		edgraph.ResetCors(updaters)
 		// Update the accepted cors origins.
-		for {
-			origins, err := edgraph.GetCorsOrigins(context.TODO())
+		for updaters.Ctx().Err() == nil {
+			origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
 			if err != nil {
 				glog.Errorf("Error while retriving cors origins: %s", err.Error())
 				continue
 			}
 			x.UpdateCorsOrigins(origins)
-			break
+			return
 		}
 	}()
 	// Listen for any new cors origin update.
-	corsCloser := y.NewCloser(1)
-	go listenForCorsUpdate(corsCloser)
+	go listenForCorsUpdate(updaters)
 
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we
 	// close alpha. This closer is for closing and waiting that subscription.
@@ -761,13 +781,24 @@ func run() {
 
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
-	aclCloser.SignalAndWait()
-	corsCloser.SignalAndWait()
+
+	// This might not close until group is given the signal to close. So, only signal here,
+	// wait for it after group is closed.
+	updaters.Signal()
+
 	worker.BlockingStop()
+	glog.Infoln("worker stopped.")
+
 	adminCloser.SignalAndWait()
-	glog.Info("Disposing server state.")
+	glog.Infoln("adminCloser closed.")
+
 	worker.State.Dispose()
 	x.RemoveCidFile()
+	glog.Info("worker.State disposed.")
+
+	updaters.Wait()
+	glog.Infoln("updaters closed.")
+
 	glog.Infoln("Server shutdown. Bye!")
 }
 

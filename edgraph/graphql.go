@@ -23,13 +23,19 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/golang/glog"
 )
 
 // ResetCors make the dgraph to accept all the origins if no origins were given
 // by the users.
-func ResetCors() {
+func ResetCors(closer *y.Closer) {
+	defer func() {
+		glog.Infof("ResetCors closed")
+		closer.Done()
+	}()
+
 	req := &api.Request{
 		Query: `query{
 			cors as var(func: has(dgraph.cors))
@@ -49,8 +55,8 @@ func ResetCors() {
 		CommitNow: true,
 	}
 
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		if _, err := (&Server{}).doQuery(ctx, req, CorsMutationAllowed); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
@@ -111,9 +117,8 @@ func GetCorsOrigins(ctx context.Context) ([]string, error) {
 	if err = json.Unmarshal(res.Json, corsRes); err != nil {
 		return nil, err
 	}
-	if len(corsRes.Me) > 1 {
-		glog.Errorf("Something went wrong in cors predicate, expected 1 predicate but got %d",
-			len(corsRes.Me))
+	if len(corsRes.Me) != 1 {
+		return []string{}, fmt.Errorf("GetCorsOrigins returned %d results", len(corsRes.Me))
 	}
 	return corsRes.Me[0].DgraphCors, nil
 }

@@ -77,25 +77,27 @@ func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
 	// saved by disabling it.
 	opt.DetectConflicts = false
 
-	glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
-	// Default value of badgerCompressionLevel is 3 so compression will always
-	// be enabled, unless it is explicitly disabled by setting the value to 0.
-	if Config.BadgerCompressionLevel != 0 {
-		// By default, compression is disabled in badger.
-		opt.Compression = options.ZSTD
-		opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
-	}
-
 	var badgerTables string
 	var badgerVlog string
 	if wal {
 		// Settings for the write-ahead log.
 		badgerTables = Config.BadgerWalTables
 		badgerVlog = Config.BadgerWalVlog
+		// Disable compression for WAL as it is supposed to be fast. Compression makes it a
+		// little slow (Though we save some disk space but it is not worth the slowness).
+		opt.Compression = options.None
 	} else {
 		// Settings for the data directory.
 		badgerTables = Config.BadgerTables
 		badgerVlog = Config.BadgerVlog
+		glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
+		// Default value of badgerCompressionLevel is 3 so compression will always
+		// be enabled, unless it is explicitly disabled by setting the value to 0.
+		if Config.BadgerCompressionLevel != 0 {
+			// By default, compression is disabled in badger.
+			opt.Compression = options.ZSTD
+			opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
+		}
 	}
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
@@ -142,7 +144,8 @@ func (s *ServerState) initStorage() {
 		opt := badger.LSMOnlyOptions(Config.WALDir)
 		opt = setBadgerOptions(opt, true)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
-		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
+		opt.BlockCacheSize = Config.WBlockCacheSize
+		opt.IndexCacheSize = Config.WIndexCacheSize
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
@@ -162,10 +165,8 @@ func (s *ServerState) initStorage() {
 		opt := badger.DefaultOptions(Config.PostingDir).
 			WithValueThreshold(1 << 10 /* 1KB */).
 			WithNumVersionsToKeep(math.MaxInt32).
-			WithMaxCacheSize(1 << 30).
-			WithKeepBlockIndicesInCache(true).
-			WithKeepBlocksInCache(true).
-			WithMaxBfCacheSize(500 << 20) // 500 MB of bloom filter cache.
+			WithBlockCacheSize(Config.PBlockCacheSize).
+			WithIndexCacheSize(Config.PIndexCacheSize)
 		opt = setBadgerOptions(opt, false)
 
 		// Print the options w/o exposing key.
@@ -210,20 +211,28 @@ func (s *ServerState) fillTimestampRequests() {
 		maxDelay  = time.Second
 	)
 
+	defer func() {
+		glog.Infoln("Exiting fillTimestampRequests")
+	}()
+
 	var reqs []tsReq
 	for {
 		// Reset variables.
 		reqs = reqs[:0]
 		delay := initDelay
 
-		req := <-s.needTs
-	slurpLoop:
-		for {
-			reqs = append(reqs, req)
-			select {
-			case req = <-s.needTs:
-			default:
-				break slurpLoop
+		select {
+		case <-s.gcCloser.HasBeenClosed():
+			return
+		case req := <-s.needTs:
+		slurpLoop:
+			for {
+				reqs = append(reqs, req)
+				select {
+				case req = <-s.needTs:
+				default:
+					break slurpLoop
+				}
 			}
 		}
 
@@ -239,7 +248,10 @@ func (s *ServerState) fillTimestampRequests() {
 
 		// Execute the request with infinite retries.
 	retry:
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if s.gcCloser.Ctx().Err() != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(s.gcCloser.Ctx(), 10*time.Second)
 		ts, err := Timestamps(ctx, num)
 		cancel()
 		if err != nil {

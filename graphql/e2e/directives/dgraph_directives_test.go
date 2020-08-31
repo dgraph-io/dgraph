@@ -23,6 +23,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRunAll_WithDgraphDirectives(t *testing.T) {
@@ -32,6 +33,7 @@ func TestRunAll_WithDgraphDirectives(t *testing.T) {
 }
 
 func TestSchema_WithDgraphDirectives(t *testing.T) {
+<<<<<<< HEAD
 	expectedDgraphSchema := `
 {
 	"schema": [{
@@ -459,9 +461,13 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		}]
 }
 	`
+=======
+	b, err := ioutil.ReadFile("schema_response.json")
+	require.NoError(t, err)
+>>>>>>> 2de4675be0ba627e2b6475897b972ba2dfb4e1ba
 
 	t.Run("graphql schema", func(t *testing.T) {
-		common.SchemaTest(t, expectedDgraphSchema)
+		common.SchemaTest(t, string(b))
 	})
 }
 

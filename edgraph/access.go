@@ -42,7 +42,7 @@ func (s *Server) Login(ctx context.Context,
 }
 
 // ResetAcl is an empty method since ACL is only supported in the enterprise version.
-func ResetAcl() {
+func ResetAcl(closer *y.Closer) {
 	// do nothing
 }
 

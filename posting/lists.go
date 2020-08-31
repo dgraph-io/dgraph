@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -136,21 +135,21 @@ var (
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *badger.DB) {
+func Init(ps *badger.DB, cacheSize int64) {
 	pstore = ps
 	closer = y.NewCloser(1)
 	go updateMemoryMetrics(closer)
 
 	// Initialize cache.
-	// TODO(Ibrahim): Add flag to switch cache on and off. For now cache is disabled.
-	if true {
+	if cacheSize == 0 {
 		return
 	}
-	// TODO(Ibrahim): Replace hard-coded value with value from flag.
+
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
-		NumCounters: 200e6,
-		MaxCost:     int64(1000 * 1024 * 1024),
+		// Use 5% of cache memory for storing counters.
+		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
+		MaxCost:     int64(float64(cacheSize) * 0.95),
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
@@ -212,6 +211,12 @@ func NewLocalCache(startTs uint64) *LocalCache {
 	}
 }
 
+// NoCache returns a new LocalCache instance, which won't cache anything. Useful to pass startTs
+// around.
+func NoCache(startTs uint64) *LocalCache {
+	return &LocalCache{startTs: startTs}
+}
+
 func (lc *LocalCache) getNoStore(key string) *List {
 	lc.RLock()
 	defer lc.RUnlock()
@@ -236,8 +241,8 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
-	if lc == nil {
-		return getNew(key, pstore, math.MaxUint64)
+	if lc.plists == nil {
+		return getNew(key, pstore, lc.startTs)
 	}
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {
