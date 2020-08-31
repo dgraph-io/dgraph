@@ -47,8 +47,7 @@ func TestUidPack(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
 	// Some edge case tests.
-	pack := Encode([]uint64{}, 128)
-	FreePack(pack)
+	Encode([]uint64{}, 128)
 	require.Equal(t, 0, ApproxLen(&pb.UidPack{}))
 	require.Equal(t, 0, len(Decode(&pb.UidPack{}, 0)))
 
@@ -64,7 +63,6 @@ func TestUidPack(t *testing.T) {
 		require.Equal(t, len(expected), ExactLen(pack))
 		actual := Decode(pack, 0)
 		require.Equal(t, expected, actual)
-		FreePack(pack)
 	}
 }
 
@@ -75,7 +73,6 @@ func TestSeek(t *testing.T) {
 		enc.Add(uint64(i))
 	}
 	pack := enc.Done()
-	defer FreePack(pack)
 	dec := Decoder{Pack: pack}
 
 	tests := []struct {
@@ -124,7 +121,6 @@ func TestLinearSeek(t *testing.T) {
 		enc.Add(uint64(i))
 	}
 	pack := enc.Done()
-	defer FreePack(pack)
 	dec := Decoder{Pack: pack}
 
 	for i := 0; i < 2*N; i += 10 {
@@ -154,7 +150,6 @@ func TestDecoder(t *testing.T) {
 		expected = append(expected, uint64(i))
 	}
 	pack := enc.Done()
-	defer FreePack(pack)
 
 	dec := Decoder{Pack: pack}
 	for i := 3; i < N; i += 3 {
@@ -220,7 +215,6 @@ func benchmarkUidPackEncode(b *testing.B, blockSize int) {
 	for i := 0; i < b.N; i++ {
 		pack := Encode(uids, blockSize)
 		out, err := pack.Marshal()
-		FreePack(pack)
 		if err != nil {
 			b.Fatalf("Error marshaling uid pack: %s", err.Error())
 		}
@@ -255,7 +249,6 @@ func benchmarkUidPackDecode(b *testing.B, blockSize int) {
 
 	pack := Encode(uids, blockSize)
 	data, err := pack.Marshal()
-	defer FreePack(pack)
 	x.Check(err)
 	b.Logf("Output size: %s. Compression: %.2f",
 		humanize.Bytes(uint64(len(data))),
@@ -308,7 +301,6 @@ func newUidPack(data []uint64) *pb.UidPack {
 
 func TestCopyUidPack(t *testing.T) {
 	pack := newUidPack([]uint64{1, 2, 3, 4, 5})
-	defer FreePack(pack)
 	copy := CopyUidPack(pack)
 	require.Equal(t, Decode(pack, 0), Decode(copy, 0))
 }

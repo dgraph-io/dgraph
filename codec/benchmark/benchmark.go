@@ -121,8 +121,7 @@ func benchmarkPack(trials int, chunks *chunks) int {
 	for i := range times {
 		start := time.Now()
 		for _, c := range chunks.data {
-			pack := codec.Encode(c, 256)
-			codec.FreePack(pack)
+			codec.Encode(c, 256)
 			// bp128.DeltaPack(c)
 		}
 		times[i] = int(time.Since(start).Nanoseconds())
