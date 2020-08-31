@@ -1043,12 +1043,13 @@ func facetName(fieldName string, f *api.Facet) string {
 func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int, path []uint64, uniqPaths map[string]int) error {
 	x.AssertTrue(path[level] == uid)
 	if sg.numEntered%10000 == 0 {
-		glog.Infof("Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v\n", sg, sg.numEntered, level, sg.Attr, uid, path)
+		glog.Infof("Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v\n",
+			sg, sg.numEntered, level, sg.Attr, uid, path[:level])
 	}
 	sg.numEntered++
 
 	var hash string
-	for _, p := range path {
+	for _, p := range path[:level] {
 		hash += strconv.FormatUint(p, 16) + " "
 	}
 	uniqPaths[hash]++
