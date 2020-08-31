@@ -44,11 +44,11 @@ $ dgraph cert ls
 
 The default location where the _cert_ command stores certificates (and keys) is `tls` under the Dgraph working directory. The default dir path can be overridden using the `--dir` option. For example
 
-### File naming conventions
-
 ```sh
 $ dgraph cert --dir ~/mycerts
 ```
+
+### File naming conventions
 
 The following file naming conventions are used by Dgraph for proper TLS setup.
 
@@ -211,7 +211,7 @@ If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default
 1. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt` by following the below steps for your OS.
 ##### Linux (Debian/Ubuntu)
 ```sh
-# Copy the generated CA to the ca-certificates directory 
+# Copy the generated CA to the ca-certificates directory
 $ cp /path/to/ca.crt /usr/local/share/ca-certificates/ca.crt
 # Update the CA store
 $ sudo update-ca-certificates`
@@ -245,7 +245,7 @@ also need to install client certificate on your OS / browser:
 1. Generate a client certificate: `dgraph cert -c MyLaptop`.
 2. Convert it to a `.p12` file:
 `openssl pkcs12 -export -out MyLaptopCert.p12 -in tls/client.MyLaptop.crt -inkey tls/client.MyLaptop.key`. Use any password you like for export.
-3. Import the client certificate to your browser. 
+3. Import the client certificate to your browser.
 ##### Firefox
 
 * Goto Preferences -> Prvacy & Security -> View Certificates -> Your Certificates
