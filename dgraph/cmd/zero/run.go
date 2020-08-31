@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v2"
+	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -108,6 +109,9 @@ instances to achieve high-availability.
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
 	flag.String("cache_percentage", "100,0",
 		"Cache percentages summing up to 100 for various caches (FORMAT: blockCache,indexCache).")
+
+	flag.Int("badger.compression_level", 3,
+		"The compression level for Badger. A higher value uses more resources.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -258,7 +262,12 @@ func run() {
 		WithIndexCacheSize(indexCacheSz).
 		WithLoadBloomsOnOpen(false)
 
-	kvOpt.ZSTDCompressionLevel = 3
+	compression_level := Zero.Conf.GetInt("badger.compression_level")
+	if compression_level > 0 {
+		// By default, compression is disabled in badger.
+		kvOpt.Compression = bopt.ZSTD
+		kvOpt.ZSTDCompressionLevel = compression_level
+	}
 
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
