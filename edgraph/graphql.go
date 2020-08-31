@@ -159,7 +159,7 @@ type SchemaHistory struct {
 }
 
 // GetSchemaHistory retives graphql schema history from the database.
-func GetSchemaHistory(ctx context.Context, limit int64, offset int64) ([]SchemaHistory, error) {
+func GetSchemaHistory(ctx context.Context, limit, offset int64) ([]SchemaHistory, error) {
 	req := &api.Request{
 		Query: fmt.Sprintf(`{
 			me(func: type(dgraph.graphql.history), orderdesc:dgraph.graphql.schema_created_at, first:%d, offset: %d) {
