@@ -691,7 +691,7 @@ func checkAddUpdateCase(
 
 	// -- Assert --
 	// most cases are built into the authExecutor
-	if tcase.Error != nil || resolved.Err != nil {
+	if tcase.Error != nil {
 		require.Equal(t, tcase.Error.Error(), resolved.Err.Error())
 	}
 }

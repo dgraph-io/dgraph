@@ -200,6 +200,7 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
+	flag.Bool("graphql_debug", false, "Enable debug_off mode in GraphQL")
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
@@ -464,7 +465,7 @@ func setupServer(closer *y.Closer) {
 	http.HandleFunc("/state", stateHandler)
 
 	// TODO: Figure out what this is for?
-	http.HandleFunc("/debug/store", storeStatsHandler)
+	http.HandleFunc("/debug_off/store", storeStatsHandler)
 
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 
@@ -701,6 +702,7 @@ func run() {
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
+	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
