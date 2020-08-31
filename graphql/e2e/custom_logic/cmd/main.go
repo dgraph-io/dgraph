@@ -188,7 +188,8 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 	}
 	bStr := string(b)
 	if bStr != expectedRequest.body {
-		return getError("Unexpected value for request body", bStr)
+		return getError("Unexpected value for request body", fmt.Sprintf("expected: %s, got: %s",
+			expectedRequest.body, bStr))
 	}
 
 	return compareHeaders(expectedRequest.headers, r.Header)
