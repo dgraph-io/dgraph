@@ -1326,6 +1326,7 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
 
+	// delete S * * (user now has permission to name and age)
 	txn = userClient.NewTxn()
 	mutString := fmt.Sprintf("<%s> * * .", nodeUID)
 	mutation = &api.Mutation{
@@ -1346,6 +1347,33 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err, "Error while querying data")
 	// Only name and age predicates got deleted via user - alice
 	testutil.CompareJSON(t, `{"q1":[{"nickname": "RG"},{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
+		string(resp.GetJson()))
+
+	// Give write access of <name> <dgraph.type> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Write.Code}, {"age", Write.Code}, {"dgraph.type", Write.Code}})
+	time.Sleep(6 * time.Second)
+
+	// delete S * * (user now has permission to name, age and dgraph.type)
+	txn = userClient.NewTxn()
+	mutString = fmt.Sprintf("<%s> * * .", nodeUID)
+	mutation = &api.Mutation{
+		DelNquads: []byte(mutString),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	resp, err = dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	// Because alise had permission to dgraph.type the node reference has been deleted
+	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
 		string(resp.GetJson()))
 
 }

@@ -69,6 +69,7 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 				return nil, err
 			}
 			preds = append(preds, getPredicatesFromTypes(types)...)
+			preds = append(preds, x.StarAllPredicates()...)
 			// AllowedPreds are used only with ACL. Do not delete all predicates but
 			// delete predicates to which the mutation has access
 			if edge.AllowedPreds != nil {
@@ -84,8 +85,6 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 					}
 				}
 				preds = intersectPreds
-			} else {
-				preds = append(preds, x.StarAllPredicates()...)
 			}
 		}
 
