@@ -22,6 +22,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/ee/backup"
@@ -60,6 +61,8 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`)))
 }
 
+var backupLock sync.Mutex
+
 func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	destination := r.FormValue("destination")
 	if destination == "" {
@@ -76,6 +79,10 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
 		return err
 	}
+
+	// Grab the lock here to avoid more than one request to be processed at the same time.
+	backupLock.Lock()
+	defer backupLock.Unlock()
 
 	ts, err := worker.Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {
