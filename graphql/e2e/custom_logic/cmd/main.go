@@ -186,8 +186,9 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 	if err != nil {
 		return getError("Unable to read request body", err.Error())
 	}
-	if string(b) != expectedRequest.body {
-		return getError("Unexpected value for request body", string(b))
+	bStr := string(b)
+	if bStr != expectedRequest.body {
+		return getError("Unexpected value for request body", bStr)
 	}
 
 	return compareHeaders(expectedRequest.headers, r.Header)
@@ -317,11 +318,11 @@ func verifyCustomNameHeadersHandler(w http.ResponseWriter, r *http.Request) {
 		urlSuffix: "/verifyCustomNameHeaders",
 		body:      "",
 		headers: map[string][]string{
-			"X-App-Token":      {"app-token"},
-			"X-User-Id":        {"123"},
-			"Authorization": {"random-fake-token"},
-			"Accept-Encoding":  nil,
-			"User-Agent":       nil,
+			"X-App-Token":     {"app-token"},
+			"X-User-Id":       {"123"},
+			"Authorization":   {"random-fake-token"},
+			"Accept-Encoding": nil,
+			"User-Agent":      nil,
 		},
 	})
 	if err != nil {
