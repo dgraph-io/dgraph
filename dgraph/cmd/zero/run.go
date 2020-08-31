@@ -289,7 +289,7 @@ func run() {
 	default:
 		x.Fatalf("Invalid Badger Value log options")
 	}
-	glog.Infof("Opening WAL store BadgerDB with options: %+v\n", kvOpt)
+	glog.Infof("Opening zero BadgerDB with options: %+v\n", kvOpt)
 
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
