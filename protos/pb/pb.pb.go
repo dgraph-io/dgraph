@@ -7,6 +7,10 @@ import (
 	context "context"
 	encoding_binary "encoding/binary"
 	fmt "fmt"
+	io "io"
+	math "math"
+	math_bits "math/bits"
+
 	pb "github.com/dgraph-io/badger/v2/pb"
 	api "github.com/dgraph-io/dgo/v200/protos/api"
 	_ "github.com/gogo/protobuf/gogoproto"
@@ -14,9 +18,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	io "io"
-	math "math"
-	math_bits "math/bits"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -1800,6 +1801,7 @@ type DirectedEdge struct {
 	Lang                 string          `protobuf:"bytes,7,opt,name=lang,proto3" json:"lang,omitempty"`
 	Op                   DirectedEdge_Op `protobuf:"varint,8,opt,name=op,proto3,enum=pb.DirectedEdge_Op" json:"op,omitempty"`
 	Facets               []*api.Facet    `protobuf:"bytes,9,rep,name=facets,proto3" json:"facets,omitempty"`
+	AllowedPreds         []string        `protobuf:"bytes,10,rep,name=allowed_preds,proto3" json:"allowed_preds,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
