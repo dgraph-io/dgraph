@@ -213,6 +213,14 @@ func TestSchema_Normal(t *testing.T) {
 			"type": "string"
 		},
 		{
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
+            "type": "string"
+		},
+		{
 			"predicate": "dgraph.cors",
 			"type": "string",
 			"list": true,
@@ -437,7 +445,17 @@ func TestSchema_Normal(t *testing.T) {
 				"name": "dgraph.graphql.xid"
 			}],
 			"name": "dgraph.graphql"
-		}]
+		},
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
+        }]
 	}
 	`
 

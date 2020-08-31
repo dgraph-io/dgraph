@@ -216,9 +216,17 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
       		  "exact"
       		],
       		"upsert": true
-        },
-        {
+		},
+		{
             "predicate": "dgraph.graphql.schema",
+            "type": "string"
+		},
+		{
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
             "type": "string"
 		},
         {
@@ -258,6 +266,16 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         }
     ]
 }`, tcases[lastSuccessTcaseIdx].dgraphSchema)
@@ -343,7 +361,7 @@ func TestSchemaHistory(t *testing.T) {
 	// Drop all to remove all the previous schema history.
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
-	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA}))
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA, RunInBackground: false}))
 
 	// Let's get the schema. It should return empty results.
 	get := &common.GraphQLParams{
@@ -366,17 +384,21 @@ func TestSchemaHistory(t *testing.T) {
 	type A {
 		b: String!
 	}`, groupOneAdminServer)
+	time.Sleep(time.Second)
 
 	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
 	require.Nil(t, getResult.Errors)
-	require.JSONEq(t, `{
-		"getSchemaHistory": [
-		  {
-			"schema": "type A {\n\t\t\t\tb: String!\n\t\t\t}",
-			"created_at": "2020-08-31T12:25:40+05:30"
-		  }
-		]
-	  }`, string(getResult.Data))
+	type History struct {
+		Schema    string `json:"schema"`
+		CreatedAt string `json:"created_at"`
+	}
+	type schemaHistory struct {
+		GetSchemaHistory []History `json:"getSchemaHistory"`
+	}
+	history := schemaHistory{}
+	require.NoError(t, json.Unmarshal(getResult.Data, &history))
+	require.Equal(t, int(1), len(history.GetSchemaHistory))
+	require.Equal(t, history.GetSchemaHistory[0].Schema, "\n\ttype A {\n\t\tb: String!\n\t}")
 
 	// Let's update the same schema. But we should not get the 2 history because, we
 	// are updating the same schema.
@@ -384,37 +406,29 @@ func TestSchemaHistory(t *testing.T) {
 	type A {
 		b: String!
 	}`, groupOneAdminServer)
+	time.Sleep(time.Second)
 
 	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
 	require.Nil(t, getResult.Errors)
-	require.JSONEq(t, `{
-		"getSchemaHistory": [
-		  {
-			"schema": "type A {\n\t\t\t\tb: String!\n\t\t\t}",
-			"created_at": "2020-08-31T12:25:40+05:30"
-		  }
-		]
-	  }`, string(getResult.Data))
+	history = schemaHistory{}
+	require.NoError(t, json.Unmarshal(getResult.Data, &history))
+	require.Equal(t, int(1), len(history.GetSchemaHistory))
+	require.Equal(t, history.GetSchemaHistory[0].Schema, "\n\ttype A {\n\t\tb: String!\n\t}")
 
 	// Let's update a new schema and check the history.
 	updateGQLSchemaRequireNoErrors(t, `
 	type B {
 		b: String!
 	}`, groupOneAdminServer)
+	time.Sleep(time.Second)
+
 	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
 	require.Nil(t, getResult.Errors)
-	require.JSONEq(t, `{
-		"getSchemaHistory": [
-		  {
-			"schema": "type B {\n\t\t\t\tb: String!\n\t\t\t}",
-			"created_at": "2020-08-31T12:30:24+05:30"
-		  },
-		  {
-			"schema": "type A {\n\t\t\t\tb: String!\n\t\t\t}",
-			"created_at": "2020-08-31T12:25:40+05:30"
-		  }
-		]
-	  }`, string(getResult.Data))
+	history = schemaHistory{}
+	require.NoError(t, json.Unmarshal(getResult.Data, &history))
+	require.Equal(t, int(2), len(history.GetSchemaHistory))
+	require.Equal(t, history.GetSchemaHistory[0].Schema, "\n\ttype B {\n\t\tb: String!\n\t}")
+	require.Equal(t, history.GetSchemaHistory[1].Schema, "\n\ttype A {\n\t\tb: String!\n\t}")
 
 	// Check offset working properly or not.
 	get = &common.GraphQLParams{
@@ -427,17 +441,15 @@ func TestSchemaHistory(t *testing.T) {
 	}
 	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
 	require.Nil(t, getResult.Errors)
-	require.JSONEq(t, `{
-		"getSchemaHistory": [
-		  {
-			"schema": "type A {\n\t\t\t\tb: String!\n\t\t\t}",
-			"created_at": "2020-08-31T12:25:40+05:30"
-		  }
-		]
-	  }`, string(getResult.Data))
+	history = schemaHistory{}
+	require.NoError(t, json.Unmarshal(getResult.Data, &history))
+	require.Equal(t, int(1), len(history.GetSchemaHistory))
+	require.Equal(t, history.GetSchemaHistory[0].Schema, "\n\ttype A {\n\t\tb: String!\n\t}")
 
 	// Let's drop eveything and see whether we getting empty results are not.
-	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA}))
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA, RunInBackground: false}))
+	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
 	require.JSONEq(t, `{
 		"getSchemaHistory": []
 	  }`, string(getResult.Data))
