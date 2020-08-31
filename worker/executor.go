@@ -103,6 +103,7 @@ func generateConflictKeys(ctx context.Context, p *subMutation) map[uint64]struct
 		key := x.DataKey(edge.Attr, edge.Entity)
 		pk, err := x.Parse(key)
 		if err != nil {
+			glog.V(2).Info("Error in generating conflic keys", err)
 			continue
 		}
 
@@ -120,7 +121,7 @@ func generateConflictKeys(ctx context.Context, p *subMutation) map[uint64]struct
 			keys[token] = struct{}{}
 		}
 		if err != nil {
-			glog.V(2).Info("Error in generating tokens", err)
+			glog.V(2).Info("Error in generating token keys", err)
 		}
 	}
 
@@ -179,6 +180,8 @@ func (e *executor) worker(mut *mutation) {
 	e.throttle.Done(nil)
 
 	mut.graph.Lock()
+	defer mut.graph.Unlock()
+
 	// Decrease inDeg of dependents. If this mutation unblocks them, queue them.
 	for _, dependent := range mut.dependentMutations {
 		dependent.inDeg -= 1
@@ -206,7 +209,6 @@ func (e *executor) worker(mut *mutation) {
 			mut.graph.conflicts[key] = arr[:i]
 		}
 	}
-	mut.graph.Unlock()
 }
 
 func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) {
