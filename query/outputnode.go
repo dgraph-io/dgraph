@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -1042,10 +1043,10 @@ func facetName(fieldName string, f *api.Facet) string {
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int, path []uint64, uniqPaths map[string]int) error {
 	x.AssertTrue(path[level] == uid)
-	if sg.numEntered%10000 == 0 {
-		glog.Infof("Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v\n",
-			sg, sg.numEntered, level, sg.Attr, uid, path[:level])
-	}
+	// if sg.numEntered%10000 == 0 {
+	glog.Infof("%s Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v\n",
+		strings.Repeat(" .", level), sg, sg.numEntered, level, sg.Attr, uid, path[:level])
+	// }
 	sg.numEntered++
 
 	var hash string
@@ -1054,6 +1055,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, leve
 	}
 	uniqPaths[hash]++
 	if num := uniqPaths[hash]; num > 1 {
+		debug.PrintStack()
 		glog.Errorf("----> The same path is being repeated %d times: %s \n", num, hash)
 	}
 
