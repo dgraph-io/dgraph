@@ -338,6 +338,111 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 
 }
 
+// TestSchemaHistory checks the admin schema history API working properly or not.
+func TestSchemaHistory(t *testing.T) {
+	// Drop all to remove all the previous schema history.
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA}))
+
+	// Let's get the schema. It should return empty results.
+	get := &common.GraphQLParams{
+		Query: `query{
+			getSchemaHistory(limit:10){
+			  schema
+			  created_at
+			}
+		  }`,
+	}
+	getResult := get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
+
+	require.JSONEq(t, `{
+		"getSchemaHistory": []
+	  }`, string(getResult.Data))
+
+	// Let's add an schema and expect the history in the history api.
+	updateGQLSchemaRequireNoErrors(t, `
+	type A {
+		b: String!
+	}`, groupOneAdminServer)
+
+	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
+	require.JSONEq(t, `{
+		"getSchemaHistory": [
+		  {
+			"schema": "type A {\n\t\t\t\tb: String!\n\t\t\t}",
+			"created_at": "2020-08-31T12:25:40+05:30"
+		  }
+		]
+	  }`, string(getResult.Data))
+
+	// Let's update the same schema. But we should not get the 2 history because, we
+	// are updating the same schema.
+	updateGQLSchemaRequireNoErrors(t, `
+	type A {
+		b: String!
+	}`, groupOneAdminServer)
+
+	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
+	require.JSONEq(t, `{
+		"getSchemaHistory": [
+		  {
+			"schema": "type A {\n\t\t\t\tb: String!\n\t\t\t}",
+			"created_at": "2020-08-31T12:25:40+05:30"
+		  }
+		]
+	  }`, string(getResult.Data))
+
+	// Let's update a new schema and check the history.
+	updateGQLSchemaRequireNoErrors(t, `
+	type B {
+		b: String!
+	}`, groupOneAdminServer)
+	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
+	require.JSONEq(t, `{
+		"getSchemaHistory": [
+		  {
+			"schema": "type B {\n\t\t\t\tb: String!\n\t\t\t}",
+			"created_at": "2020-08-31T12:30:24+05:30"
+		  },
+		  {
+			"schema": "type A {\n\t\t\t\tb: String!\n\t\t\t}",
+			"created_at": "2020-08-31T12:25:40+05:30"
+		  }
+		]
+	  }`, string(getResult.Data))
+
+	// Check offset working properly or not.
+	get = &common.GraphQLParams{
+		Query: `query{
+			getSchemaHistory(limit:10, offset:1){
+			  schema
+			  created_at
+			}
+		  }`,
+	}
+	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
+	require.JSONEq(t, `{
+		"getSchemaHistory": [
+		  {
+			"schema": "type A {\n\t\t\t\tb: String!\n\t\t\t}",
+			"created_at": "2020-08-31T12:25:40+05:30"
+		  }
+		]
+	  }`, string(getResult.Data))
+
+	// Let's drop eveything and see whether we getting empty results are not.
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA}))
+	require.JSONEq(t, `{
+		"getSchemaHistory": []
+	  }`, string(getResult.Data))
+}
+
 func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {
 	req := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {

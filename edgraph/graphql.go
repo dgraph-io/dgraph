@@ -172,6 +172,7 @@ func GetSchemaHistory(ctx context.Context, limit int64, offset int64) ([]SchemaH
 	type HistoryResponse struct {
 		Me []SchemaHistory `json:"me"`
 	}
+	hr := HistoryResponse{}
 	if err = json.Unmarshal(res.Json, &hr); err != nil {
 		return nil, err
 	}
