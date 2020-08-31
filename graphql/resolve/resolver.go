@@ -1806,7 +1806,10 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	if hrc.RemoteGqlQueryName == "" {
 		var result interface{}
 		if err := json.Unmarshal(b, &result); err != nil {
-			return emptyResult(jsonUnmarshalError(err, field))
+			return emptyResult(x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
+				" result of external request failed (with error: %s) for field: %s within "+
+				"type: %s. The input bytes were: %s", err, field.Name(), field.GetObjectName(),
+				string(b)).WithLocations(field.Location()))
 		}
 		return &Resolved{
 			Data:  map[string]interface{}{field.Name(): result},
