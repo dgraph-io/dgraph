@@ -532,11 +532,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithSyncWrites(false).
 		WithNumVersionsToKeep(math.MaxInt64).
 		WithCompression(options.None).
-		WithLogRotatesToFlush(10).
-		WithBlockCacheSize(50) // TODO(Aman): Disable cache altogether
-
-	// TODO(Ibrahim): Remove this once badger is updated.
-	dbOpts.ZSTDCompressionLevel = 1
+		WithLogRotatesToFlush(10)
 
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
