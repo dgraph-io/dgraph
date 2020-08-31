@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -57,9 +58,12 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 		height, count := sg.countUIDs(1)
 		fmt.Println(sg.Params.Alias, " $$$$$$$$ ", height, count)
 		printLevelCount()
+		uniqPaths := make(map[string]int)
+		path := make([]string, 100)
 		for _, uid := range sg.uidMatrix[0].Uids {
+			path[1] = sg.Params.Alias + strconv.FormatUint(uid, 16)
 			fmt.Println("############################################")
-			sg.nodeCount(uid, 1)
+			sg.nodeCount(uid, 1, path, uniqPaths)
 		}
 		fmt.Println("!!!!!!!!!!! nodeCount done:", sg.Params.Alias)
 	}
@@ -71,7 +75,19 @@ var uniqEdges = make(map[string]struct{})
 
 var nc uint64 = 0
 
-func (sg *SubGraph) nodeCount(uid uint64, level int) {
+func (sg *SubGraph) nodeCount(uid uint64, level int, path []string, uniqPaths map[string]int) {
+	glog.Infof("%s Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v\n",
+		strings.Repeat(" .", level), sg, sg.numEntered, level, sg.Attr, uid, path[:level])
+	// }
+	sg.numEntered++
+
+	hash := strings.Join(path[:level], " ")
+	uniqPaths[hash]++
+	if num := uniqPaths[hash]; num > 1 {
+		debug.PrintStack()
+		glog.Errorf("----> The same path is being repeated %d times: %s \n", num, hash)
+	}
+
 	if _, ok := lm[level]; !ok {
 		fmt.Println("*************** level seen for the first time: ", level)
 		lm[level] = 1
@@ -79,50 +95,17 @@ func (sg *SubGraph) nodeCount(uid uint64, level int) {
 		lm[level]++
 	}
 
-	if level == 11 && lm[level]%10000 == 0 {
-		fmt.Println("level count: ", lm[level])
-	}
-
-	// edge := sg.Attr + fmt.Sprintf("%d", uid)
-	// if _, ok := uniqEdges[edge]; !ok {
-	// 	uniqEdges[edge] = struct{}{}
-	// } else {
-	// 	panic("Edge repeated")
-	// }
-
 	nc++
-	// if nc%10000000 == 0 {
-	// 	fmt.Println("nc is: ", nc)
-	// }
 
 	for _, pc := range sg.Children {
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
-
-		// if level == 11 {
-		// 	fmt.Println("*************** ", uid, idx, pc.Attr)
-		// }
-
 		if idx < 0 {
 			continue
 		}
 
-		// if level == 10 && len(pc.uidMatrix[idx].Uids) > 0 {
-		// 	// fmt.Println("*************** ", uid, pc.Attr, len(pc.uidMatrix[idx].Uids), idx)
-		// }
-
 		for _, nuid := range pc.uidMatrix[idx].Uids {
-			// key := fmt.Sprintf("%s|%d|%d", sg.Attr, uid, nuid)
-			// if _, ok := uniqEdges[key]; !ok {
-			// 	uniqEdges[key] = struct{}{}
-			// 	nc++
-			// 	if nc%10000 == 0 {
-			// 		fmt.Println("******** edge count is: ", nc)
-			// 	}
-			// } else {
-			// 	continue
-			// 	// panic("edge repeated " + key)
-			// }
-			pc.nodeCount(nuid, level+1)
+			path[level+1] = pc.fieldName() + strconv.FormatUint(nuid, 16)
+			pc.nodeCount(nuid, level+1, path, uniqPaths)
 		}
 	}
 }

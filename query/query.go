@@ -242,6 +242,7 @@ type Function struct {
 //       uidMatrix: [[]]
 //       valueMatrix: [["Foo"]]
 type SubGraph struct {
+	numEntered  uint64
 	ReadTs      uint64
 	Cache       int
 	Attr        string
