@@ -853,7 +853,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 	uniqPaths := make(map[string]int)
 
 	lenList := len(sg.uidMatrix[0].Uids)
-	path := make([]uint64, 100)
+	path := make([]string, 100)
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
 		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
@@ -863,7 +863,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 
 		n1 := enc.newNode(attrID)
 		enc.setAttr(n1, enc.idForAttr(sg.Params.Alias))
-		path[1] = uid
+		path[1] = sg.Params.Alias + strconv.FormatUint(uid, 16)
 		if err := sg.preTraverse(enc, uid, n1, 1, path, uniqPaths); err != nil {
 			if err.Error() == "_INV_" {
 				continue
@@ -1041,18 +1041,14 @@ func facetName(fieldName string, f *api.Facet) string {
 }
 
 // This method gets the values and children for a subprotos.
-func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int, path []uint64, uniqPaths map[string]int) error {
-	x.AssertTrue(path[level] == uid)
+func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int, path []string, uniqPaths map[string]int) error {
 	// if sg.numEntered%10000 == 0 {
 	glog.Infof("%s Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v\n",
 		strings.Repeat(" .", level), sg, sg.numEntered, level, sg.Attr, uid, path[:level])
 	// }
 	sg.numEntered++
 
-	var hash string
-	for _, p := range path[:level] {
-		hash += strconv.FormatUint(p, 16) + " "
-	}
+	hash := strings.Join(path[:level], " ")
 	uniqPaths[hash]++
 	if num := uniqPaths[hash]; num > 1 {
 		debug.PrintStack()
@@ -1146,7 +1142,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, leve
 					continue
 				}
 				uc := enc.newNode(fieldID)
-				path[level+1] = childUID
+				path[level+1] = fieldName + strconv.FormatUint(childUID, 16)
 				if rerr := pc.preTraverse(enc, childUID, uc, level+1, path, uniqPaths); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						if invalidUids == nil {
