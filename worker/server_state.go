@@ -77,25 +77,27 @@ func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
 	// saved by disabling it.
 	opt.DetectConflicts = false
 
-	glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
-	// Default value of badgerCompressionLevel is 3 so compression will always
-	// be enabled, unless it is explicitly disabled by setting the value to 0.
-	if Config.BadgerCompressionLevel != 0 {
-		// By default, compression is disabled in badger.
-		opt.Compression = options.ZSTD
-		opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
-	}
-
 	var badgerTables string
 	var badgerVlog string
 	if wal {
 		// Settings for the write-ahead log.
 		badgerTables = Config.BadgerWalTables
 		badgerVlog = Config.BadgerWalVlog
+		// Disable compression for WAL as it is supposed to be fast. Compression makes it a
+		// little slow (Though we save some disk space but it is not worth the slowness).
+		opt.Compression = options.None
 	} else {
 		// Settings for the data directory.
 		badgerTables = Config.BadgerTables
 		badgerVlog = Config.BadgerVlog
+		glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
+		// Default value of badgerCompressionLevel is 3 so compression will always
+		// be enabled, unless it is explicitly disabled by setting the value to 0.
+		if Config.BadgerCompressionLevel != 0 {
+			// By default, compression is disabled in badger.
+			opt.Compression = options.ZSTD
+			opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
+		}
 	}
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
@@ -209,20 +211,28 @@ func (s *ServerState) fillTimestampRequests() {
 		maxDelay  = time.Second
 	)
 
+	defer func() {
+		glog.Infoln("Exiting fillTimestampRequests")
+	}()
+
 	var reqs []tsReq
 	for {
 		// Reset variables.
 		reqs = reqs[:0]
 		delay := initDelay
 
-		req := <-s.needTs
-	slurpLoop:
-		for {
-			reqs = append(reqs, req)
-			select {
-			case req = <-s.needTs:
-			default:
-				break slurpLoop
+		select {
+		case <-s.gcCloser.HasBeenClosed():
+			return
+		case req := <-s.needTs:
+		slurpLoop:
+			for {
+				reqs = append(reqs, req)
+				select {
+				case req = <-s.needTs:
+				default:
+					break slurpLoop
+				}
 			}
 		}
 
@@ -238,7 +248,10 @@ func (s *ServerState) fillTimestampRequests() {
 
 		// Execute the request with infinite retries.
 	retry:
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if s.gcCloser.Ctx().Err() != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(s.gcCloser.Ctx(), 10*time.Second)
 		ts, err := Timestamps(ctx, num)
 		cancel()
 		if err != nil {
