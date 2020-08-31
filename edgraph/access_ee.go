@@ -676,7 +676,6 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to mutate following predicates: %s\n", msg.String())
 		}
-		fmt.Println("Allowed Preds: ", allowedPreds)
 		gmu.AllowedPreds = allowedPreds
 		return nil
 	}
