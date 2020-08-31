@@ -202,9 +202,6 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 		if err != nil {
 			return errors.Wrap(err, "")
 		}
-		// if nq.AllowedPreds != nil {
-		// 	edge.AllowedPreds = nq.AllowedPreds
-		// }
 		edge.Op = op
 		edges = append(edges, edge)
 		return nil
