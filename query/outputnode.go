@@ -849,6 +849,8 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		return sg.addGroupby(enc, fj, sg.GroupbyRes[0], sg.Params.Alias)
 	}
 
+	uniqPaths := make(map[string]int)
+
 	lenList := len(sg.uidMatrix[0].Uids)
 	path := make([]uint64, 100)
 	for i := 0; i < lenList; i++ {
@@ -861,7 +863,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		n1 := enc.newNode(attrID)
 		enc.setAttr(n1, enc.idForAttr(sg.Params.Alias))
 		path[1] = uid
-		if err := sg.preTraverse(enc, uid, n1, 1, path); err != nil {
+		if err := sg.preTraverse(enc, uid, n1, 1, path, uniqPaths); err != nil {
 			if err.Error() == "_INV_" {
 				continue
 			}
@@ -1038,7 +1040,7 @@ func facetName(fieldName string, f *api.Facet) string {
 }
 
 // This method gets the values and children for a subprotos.
-func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int, path []uint64) error {
+func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int, path []uint64, uniqPaths map[string]int) error {
 	x.AssertTrue(path[level] == uid)
 	if sg.numEntered%10000 == 0 {
 		glog.Infof("Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v\n", sg, sg.numEntered, level, sg.Attr, uid, path)
@@ -1049,8 +1051,8 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, leve
 	for _, p := range path {
 		hash += strconv.FormatUint(p, 16) + " "
 	}
-	sg.uniqPaths[hash]++
-	if num := sg.uniqPaths[hash]; num > 1 {
+	uniqPaths[hash]++
+	if num := uniqPaths[hash]; num > 1 {
 		glog.Errorf("----> The same path is being repeated %d times: %s \n", num, hash)
 	}
 
@@ -1142,7 +1144,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, leve
 				}
 				uc := enc.newNode(fieldID)
 				path[level+1] = childUID
-				if rerr := pc.preTraverse(enc, childUID, uc, level+1, path); rerr != nil {
+				if rerr := pc.preTraverse(enc, childUID, uc, level+1, path, uniqPaths); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						if invalidUids == nil {
 							invalidUids = make(map[uint64]bool)
