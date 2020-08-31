@@ -1255,6 +1255,100 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 		string(resp.GetJson()))
 
 }
+func TestDeleteQueryWithACLPermissions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+		age 	 : int .
+		type Person {
+			name: string
+			nickname: string
+			age: int
+		}
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	createGroup(t, accessJwt, devGroup)
+
+	addToGroup(t, accessJwt, userid, devGroup)
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "Person" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "Person" .
+		`),
+		CommitNow: true,
+	}
+	resp, err := txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	nodeUID := resp.Uids["a"]
+	query := `{q1(func: type(Person)){
+		expand(_all_)
+    }}`
+
+	// Test that groot has access to all the predicates
+	resp, err = dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy","age":23, "nickname": "RG"},{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
+		string(resp.GetJson()))
+
+	// Give Write Access to alice for name and age predicate
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Write.Code}, {"age", Write.Code}})
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	txn = userClient.NewTxn()
+	mutString := fmt.Sprintf("<%s> * * .", nodeUID)
+	mutation = &api.Mutation{
+		DelNquads: []byte(mutString),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	resp, err = dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	// Only name and age predicates got deleted via user - alice
+	testutil.CompareJSON(t, `{"q1":[{"nickname": "RG"},{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
+		string(resp.GetJson()))
+
+}
 
 func TestValQueryWithACLPermissions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
