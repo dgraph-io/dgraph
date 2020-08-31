@@ -51,22 +51,25 @@ type node struct {
 	lastQuorum time.Time
 }
 
-func (n *node) AmLeader() bool {
+func (n *node) amLeader() bool {
 	if n.Raft() == nil {
 		return false
 	}
 	r := n.Raft()
-	if r.Status().Lead != r.Status().ID {
-		return false
-	}
+	return r.Status().Lead == r.Status().ID
+}
 
-	// This node must be the leader, but must also be an active member of the cluster, and not
-	// hidden behind a partition. Basically, if this node was the leader and goes behind a
-	// partition, it would still think that it is indeed the leader for the duration mentioned
-	// below.
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-	return time.Since(n.lastQuorum) <= 5*time.Second
+func (n *node) AmLeader() bool {
+	// Return false if the node is not the leader. Otherwise, check the lastQuorum as well.
+	return n.amLeader() && func() bool {
+		// This node must be the leader, but must also be an active member of
+		// the cluster, and not hidden behind a partition. Basically, if this
+		// node was the leader and goes behind a partition, it would still
+		// think that it is indeed the leader for the duration mentioned below.
+		n.mu.RLock()
+		defer n.mu.RUnlock()
+		return time.Since(n.lastQuorum) <= 5*time.Second
+	}()
 }
 
 func (n *node) uniqueKey() string {
@@ -630,7 +633,11 @@ func (n *node) checkQuorum(closer *y.Closer) {
 	for {
 		select {
 		case <-ticker.C:
-			quorum()
+			// Only the leader needs to check for the quorum. The quorum is
+			// used by a leader to identify if it is behind a network partition.
+			if n.amLeader() {
+				quorum()
+			}
 		case <-closer.HasBeenClosed():
 			return
 		}
