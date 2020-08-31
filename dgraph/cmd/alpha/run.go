@@ -465,7 +465,7 @@ func setupServer(closer *y.Closer) {
 	http.HandleFunc("/state", stateHandler)
 
 	// TODO: Figure out what this is for?
-	http.HandleFunc("/debug_off/store", storeStatsHandler)
+	http.HandleFunc("/debug/store", storeStatsHandler)
 
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 
