@@ -53,18 +53,9 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 			sgr.Params.GetUid = true
 		}
 		sgr.Children = append(sgr.Children, sg)
-		clearLevelCount()
-		height, count := sg.countUIDs(1)
-		fmt.Println(sg.Params.Alias, " $$$$$$$$ ", height, count)
-		printLevelCount()
-		uniqPaths := make(map[string]int)
-		path := make([]string, 100)
-		for _, uid := range sg.uidMatrix[0].Uids {
-			path[1] = sg.Params.Alias + strconv.FormatUint(uid, 16)
-			fmt.Println("############################################")
-			sg.nodeCount(uid, 1, path, uniqPaths)
-		}
-		fmt.Println("!!!!!!!!!!! nodeCount done:", sg.Params.Alias)
+		levelCount := make(map[int]int)
+		sg.countUIDs(1, map[uint64]int{}, levelCount)
+		printLevelCount(levelCount)
 	}
 	return sgr.toFastJSON(l)
 }
@@ -75,25 +66,18 @@ var uniqEdges = make(map[string]struct{})
 var nc uint64 = 0
 
 func (sg *SubGraph) nodeCount(uid uint64, level int, path []string, uniqPaths map[string]int) {
-	// if level == 3 {
-	// glog.Infof("%s Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v, SrcUids: %v\n",
-	// strings.Repeat(" .", level), sg, sg.numEntered, level, sg.fieldName(), uid, path[:level], sg.SrcUIDs)
-	// }
+	lm[level]++
 	sg.numEntered++
-
-	hash := strings.Join(path[:level], " ")
-	uniqPaths[hash]++
-	if num := uniqPaths[hash]; num > 1 {
-		// debug.PrintStack()
-		// glog.Errorf("----> The same path is being repeated %d times: %s \n", num, hash)
-	}
-
-	// if _, ok := lm[level]; !ok {
-	// 	fmt.Println("*************** level seen for the first time: ", level)
-	// 	lm[level] = 1
-	// } else {
-	// 	lm[level]++
+	// hash := strings.Join(path[:level], " ")
+	// uniqPaths[hash]++
+	// if num := uniqPaths[hash]; num > 1 {
+	// 	// debug.PrintStack()
+	// 	glog.Errorf("----> The same path is being repeated %d times: %s \n", num, hash)
 	// }
+
+	if lm[level]%1000 == 0 {
+		glog.Infof("level: %d, lm: %d\n", level, lm[level])
+	}
 
 	nc++
 
@@ -103,39 +87,46 @@ func (sg *SubGraph) nodeCount(uid uint64, level int, path []string, uniqPaths ma
 			continue
 		}
 
-		if pc.uidMatrix == nil {
+		if level == 6 {
+			path[level+1] = sg.fieldName() + "|" + strconv.FormatUint(uid, 16)
+			// fmt.Printf("path: %v\n", path[:level+1])
+			// glog.Infof("%s Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v, SrcUids: %v, UidMatrix: %v\n",
+			// 	strings.Repeat(" .", level), pc, pc.numEntered, level, pc.fieldName(), uid, path[:level+1], pc.SrcUIDs, pc.uidMatrix)
+			hash := strings.Join(path[:level+1], " ")
+			uniqPaths[hash]++
+			if num := uniqPaths[hash]; num > 1 {
+				// debug.PrintStack()
+				glog.Errorf("----> The same path is being repeated %d times: %s \n", num, hash)
+			}
 			continue
 		}
 		for _, nuid := range pc.uidMatrix[idx].Uids {
-			path[level+1] = pc.fieldName() + strconv.FormatUint(nuid, 16)
+			path[level+1] = pc.fieldName() + "|" + strconv.FormatUint(nuid, 16)
 			pc.nodeCount(nuid, level+1, path, uniqPaths)
 		}
 	}
 }
 
-var levelCount = make(map[int]int)
-
 func clearLevelCount() {
-	levelCount = make(map[int]int)
 	levelMap = make(map[int]struct{})
 	lm = make(map[int]int)
 	uniqEdges = make(map[string]struct{})
 }
 
-func printLevelCount() {
-	for level, count := range levelCount {
-		fmt.Println("Level: ", level, " Count: ", count)
+func printLevelCount(levelCount map[int]int) {
+	maxLevel := 0
+	for level := range levelCount {
+		if level > maxLevel {
+			maxLevel = level
+		}
+	}
+	for i := 1; i <= maxLevel; i++ {
+		fmt.Println("Level: ", i, " Count: ", levelCount[i])
 	}
 }
 
-func (sg *SubGraph) countUIDs(level int) (int, int) {
-	// glog.Infof("%s level: %d, Attr: %s\n", strings.Repeat(".. ", level), level, sg.fieldName())
-
-	destUids := []string{}
-	for _, u := range sg.DestUIDs.GetUids() {
-		destUids = append(destUids, strconv.FormatUint(u, 16))
-	}
-	// dst := strings.Join(destUids, ", ")
+func (sg *SubGraph) countUIDs(level int, parentUIDMap map[uint64]int, levelCount map[int]int) (int, int) {
+	count := 0
 	for idx, uid := range sg.SrcUIDs.GetUids() {
 		uidList := []string{}
 		if sg.uidMatrix == nil {
@@ -147,25 +138,22 @@ func (sg *SubGraph) countUIDs(level int) (int, int) {
 			uidList = append(uidList, strconv.FormatUint(u, 16))
 		}
 
+		count += len(sg.uidMatrix[idx].GetUids()) * parentUIDMap[uid]
 		// glog.Infof("%s srcUid: %s, destUids: %s, uidList: [%v]", strings.Repeat(".. ", level),
 		// 	strconv.FormatUint(uid, 16), dst, strings.Join(uidList, ", "))
 	}
+	levelCount[level] += count
 	maxHeight := 0
 
-	count := 0
-	// if sg.SrcUIDs != nil {
-	// 	count += len(sg.SrcUIDs.Uids)
-	// }
+	uidMap := make(map[uint64]int)
 	for _, ulist := range sg.uidMatrix {
-		count += len(ulist.Uids)
+		for _, uid := range ulist.GetUids() {
+			uidMap[uid]++
+		}
 	}
 
-	levelCount[level] += count
-
-	// fmt.Println("level: ", level, " Attr: ", sg.Attr, " count uids: ", count)
-
 	for _, ch := range sg.Children {
-		hch, cch := ch.countUIDs(level + 1)
+		hch, cch := ch.countUIDs(level+1, uidMap, levelCount)
 		if hch > maxHeight {
 			maxHeight = hch
 		}
@@ -1125,7 +1113,7 @@ var countUids uint64 = 0
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int) error {
 	if _, ok := levelMap[level]; !ok {
-		fmt.Println("########## level seen for first time: ", level)
+		// fmt.Println("########## level seen for first time: ", level)
 		levelMap[level] = struct{}{}
 	}
 	if sg.Params.IgnoreReflex {

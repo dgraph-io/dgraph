@@ -289,6 +289,8 @@ type SubGraph struct {
 	List     bool // whether predicate is of list type
 
 	pathMeta *pathMetadata
+
+	preCount map[string]int
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
