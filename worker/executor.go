@@ -54,12 +54,12 @@ type executor struct {
 	throttle *y.Throttle
 }
 
-func newExecutor(applied *y.WaterMark) *executor {
+func newExecutor(applied *y.WaterMark, conc int) *executor {
 	ex := &executor{
 		predChan: make(map[string]chan *subMutation),
 		closer:   y.NewCloser(0),
 		applied:  applied,
-		throttle: y.NewThrottle(2000), // Run 2000 mutations at a time.
+		throttle: y.NewThrottle(conc), // Run conc threads mutations at a time.
 	}
 
 	go ex.shutdown()
@@ -96,8 +96,8 @@ func generateTokenKeys(nq *pb.DirectedEdge, tokenizers []tok.Tokenizer) ([]uint6
 	return keys, nil
 }
 
-func generateConflictKeys(ctx context.Context, p *subMutation) []uint64 {
-	uniq := make(map[uint64]struct{})
+func generateConflictKeys(ctx context.Context, p *subMutation) map[uint64]struct{} {
+	keys := make(map[uint64]struct{})
 
 	for _, edge := range p.edges {
 		key := x.DataKey(edge.Attr, edge.Entity)
@@ -106,34 +106,30 @@ func generateConflictKeys(ctx context.Context, p *subMutation) []uint64 {
 			continue
 		}
 
-		uniq[posting.GetConflictKey(pk, key, edge)] = struct{}{}
+		keys[posting.GetConflictKey(pk, key, edge)] = struct{}{}
 		stt, _ := schema.State().Get(ctx, edge.Attr)
 		tokenizers := schema.State().Tokenizer(ctx, edge.Attr)
 		isReverse := schema.State().IsReversed(ctx, edge.Attr)
 
 		if stt.Count || isReverse {
-			uniq[0] = struct{}{}
+			keys[0] = struct{}{}
 		}
 
-		keys, err := generateTokenKeys(edge, tokenizers)
-		for _, key := range keys {
-			uniq[key] = struct{}{}
+		tokens, err := generateTokenKeys(edge, tokenizers)
+		for _, token := range tokens {
+			keys[token] = struct{}{}
 		}
 		if err != nil {
 			glog.V(2).Info("Error in generating tokens", err)
 		}
 	}
 
-	keys := make([]uint64, 0)
-	for key := range uniq {
-		keys = append(keys, key)
-	}
 	return keys
 }
 
 type mutation struct {
 	sm                 *subMutation
-	conflictKeys       []uint64
+	conflictKeys       map[uint64]struct{}
 	inDeg              int
 	dependentMutations map[uint64]*mutation
 	graph              *graph
@@ -192,7 +188,7 @@ func (e *executor) worker(mut *mutation) {
 		}
 	}
 
-	for _, key := range mut.conflictKeys {
+	for key := range mut.conflictKeys {
 		// remove the transaction from each conflict key's entry in the conflict map.
 		i := 0
 		arr := mut.graph.conflicts[key]
@@ -229,7 +225,7 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 		}
 
 		g.Lock()
-		for _, c := range conflicts {
+		for c := range conflicts {
 			l, ok := g.conflicts[c]
 			if !ok {
 				g.conflicts[c] = []*mutation{m}
