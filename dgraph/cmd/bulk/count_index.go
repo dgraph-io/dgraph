@@ -138,7 +138,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	}
 
 	var pl pb.PostingList
-	encoder := codec.Encoder{BlockSize: 256}
+	encoder := codec.Encoder{BlockSize: 256, ManualAlloc: true}
 
 	encode := func() {
 		pl.Pack = encoder.Done()

@@ -956,7 +956,7 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 	// Method to properly initialize the variables above
 	// when a multi-part list boundary is crossed.
 	initializeSplit := func() {
-		enc = codec.Encoder{BlockSize: blockSize}
+		enc = codec.Encoder{BlockSize: blockSize, ManualAlloc: true}
 
 		// Load the corresponding part and set endUid to correctly detect the end of the list.
 		startUid = l.plist.Splits[splitIdx]
@@ -1587,7 +1587,7 @@ func FromBackupPostingList(bl *pb.BackupPostingList) *pb.PostingList {
 		return &l
 	}
 
-	l.Pack = codec.Encode(bl.Uids, blockSize)
+	l.Pack = codec.EncodeAlloc(bl.Uids, blockSize)
 	l.Postings = bl.Postings
 	l.CommitTs = bl.CommitTs
 	l.Splits = bl.Splits

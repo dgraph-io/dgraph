@@ -330,8 +330,6 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 		if j < len(dst2.Uids) {
 			b.Errorf("Unexpected error in intersection")
 		}
-
-		codec.FreePack(compressedUids)
 	}
 
 	randomTests(10240, 0.3)
@@ -397,8 +395,6 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			if j < len(dst2.Uids) {
 				b.Errorf("Unexpected error in intersection")
 			}
-
-			codec.FreePack(compressedUids)
 		}
 	}
 
@@ -468,7 +464,6 @@ func TestIntersectCompressedWithLinJump(t *testing.T) {
 			actual := make([]uint64, 0)
 			IntersectCompressedWithLinJump(&dec, otherNums, &actual)
 			require.Equal(t, commonNums, actual)
-			codec.FreePack(pack)
 		}
 	}
 }
@@ -493,7 +488,6 @@ func TestIntersectCompressedWithBin(t *testing.T) {
 			actual := make([]uint64, 0)
 			IntersectCompressedWithBin(&dec, otherNums, &actual)
 			require.Equal(t, commonNums, actual)
-			codec.FreePack(pack)
 		}
 	}
 }
@@ -519,7 +513,6 @@ func TestIntersectCompressedWithBinMissingSize(t *testing.T) {
 			actual := make([]uint64, 0)
 			IntersectCompressedWithBin(&dec, otherNums, &actual)
 			require.Equal(t, commonNums, actual)
-			codec.FreePack(pack)
 		}
 	}
 }
