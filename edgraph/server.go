@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
@@ -328,8 +329,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// reset their in-memory GraphQL schema
 		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
-		ResetAcl()
-		ResetCors()
+		ResetAcl(nil)
+		ResetCors(nil)
 		return empty, err
 	}
 
@@ -353,8 +354,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
 		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
 		// recreate the admin account after a drop data operation
-		ResetAcl()
-		ResetCors()
+		ResetAcl(nil)
+		ResetCors(nil)
 		return empty, err
 	}
 
@@ -1541,7 +1542,12 @@ func isDropAll(op *api.Operation) bool {
 
 // ResetCors make the dgraph to accept all the origins if no origins were given
 // by the users.
-func ResetCors() {
+func ResetCors(closer *y.Closer) {
+	defer func() {
+		glog.Infof("ResetCors closed")
+		closer.Done()
+	}()
+
 	req := &api.Request{
 		Query: `query{
 			cors as var(func: has(dgraph.cors))
@@ -1561,8 +1567,8 @@ func ResetCors() {
 		CommitNow: true,
 	}
 
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		if _, err := (&Server{}).doQuery(ctx, req, CorsMutationAllowed); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
@@ -1623,9 +1629,8 @@ func GetCorsOrigins(ctx context.Context) ([]string, error) {
 	if err = json.Unmarshal(res.Json, corsRes); err != nil {
 		return nil, err
 	}
-	if len(corsRes.Me) > 1 {
-		glog.Errorf("Something went wrong in cors predicate, expected 1 predicate but got %d",
-			len(corsRes.Me))
+	if len(corsRes.Me) != 1 {
+		return []string{}, fmt.Errorf("GetCorsOrigins returned %d results", len(corsRes.Me))
 	}
 	return corsRes.Me[0].DgraphCors, nil
 }
