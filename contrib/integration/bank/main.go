@@ -168,7 +168,7 @@ func (s *state) findAccount(txn *dgo.Txn, key int) (account, error) {
 	}
 	accounts := m["q"]
 	if len(accounts) > 1 {
-		log.Printf("[StartTs: %v] Query: %s. Response: %s\n", resp.Txn.StartTs, resp.Json)
+		log.Printf("[StartTs: %v] Query: %s. Response: %s\n", resp.Txn.StartTs, query, resp.Json)
 		log.Fatal("Found multiple accounts")
 	}
 	if len(accounts) == 0 {
@@ -290,10 +290,10 @@ func (s *state) loop(dg *dgo.Dgraph, wg *sync.WaitGroup) {
 
 		buf.Reset()
 		err := s.runTransaction(dg, &buf)
+		if *verbose {
+			log.Printf("Final error: %v. %s", err, buf.String())
+		}
 		if err != nil {
-			if *verbose {
-				log.Printf("Final error: %v. %s", err, buf.String())
-			}
 			atomic.AddInt32(&s.aborts, 1)
 		} else {
 			r := atomic.AddInt32(&s.runs, 1)
