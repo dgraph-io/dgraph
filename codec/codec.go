@@ -18,6 +18,7 @@ package codec
 
 import (
 	"bytes"
+	"io"
 	"math"
 	"sort"
 	"unsafe"
@@ -40,6 +41,22 @@ const (
 var (
 	bitMask uint64 = 0xffffffff00000000
 )
+
+// EncoderAlloc is like Encoder but uses manaully allocated memory.
+type EncoderAlloc struct {
+	Encoder
+}
+
+// Add takes an uid and adds it to the list of UIDs to be encoded.
+func (e *EncoderAlloc) Add(uid uint64) {
+	e.add(uid, true)
+}
+
+// Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
+func (e *EncoderAlloc) Done() *pb.UidPack {
+	e.packBlock(true)
+	return e.pack
+}
 
 // Encoder is used to convert a list of UIDs into a pb.UidPack object.
 type Encoder struct {
@@ -77,13 +94,18 @@ func FreePack(pack *pb.UidPack) {
 	}
 }
 
-func (e *Encoder) packBlock() {
+func (e *Encoder) packBlock(calloc bool) {
 	if len(e.uids) == 0 {
 		return
 	}
 
+	var block *pb.UidBlock
 	// Allocate blocks manually.
-	block := AllocateBlock()
+	if calloc {
+		block = AllocateBlock()
+	} else {
+		block = &pb.UidBlock{}
+	}
 	block.Base = e.uids[0]
 	block.NumUids = uint32(len(e.uids))
 
@@ -91,9 +113,17 @@ func (e *Encoder) packBlock() {
 	last := e.uids[0]
 	e.uids = e.uids[1:]
 
-	var out z.Buffer
-	// We are not releasing the allocated memory here. Instead, block.Deltas would need to be
-	// released at the end.
+	var out interface {
+		io.Writer
+		Bytes() []byte
+	}
+	if calloc {
+		out = &z.Buffer{}
+	} else {
+		// We are not releasing the allocated memory in this function. Instead,
+		// block.Deltas would need to be released at the end.
+		out = &bytes.Buffer{}
+	}
 
 	buf := make([]byte, 17)
 	tmpUids := make([]uint32, 4)
@@ -125,26 +155,29 @@ func (e *Encoder) packBlock() {
 
 // Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {
+	e.add(uid, false)
+}
+func (e *Encoder) add(uid uint64, alloc bool) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
 	}
 
 	size := len(e.uids)
 	if size > 0 && !match32MSB(e.uids[size-1], uid) {
-		e.packBlock()
+		e.packBlock(alloc)
 		e.uids = e.uids[:0]
 	}
 
 	e.uids = append(e.uids, uid)
 	if len(e.uids) >= e.BlockSize {
-		e.packBlock()
+		e.packBlock(alloc)
 		e.uids = e.uids[:0]
 	}
 }
 
-// Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
+// Done returns the final output of the encoder.
 func (e *Encoder) Done() *pb.UidPack {
-	e.packBlock()
+	e.packBlock(false)
 	return e.pack
 }
 
@@ -341,11 +374,23 @@ func (d *Decoder) BlockIdx() int {
 // bytes. Our benchmarks on artificial data show compressed size to be 13% of the original. This
 // mechanism is a LOT simpler to understand and if needed, debug.
 func Encode(uids []uint64, blockSize int) *pb.UidPack {
+	return encode(uids, blockSize, false)
+}
+
+func encode(uids []uint64, blockSize int, calloc bool) *pb.UidPack {
 	enc := Encoder{BlockSize: blockSize}
 	for _, uid := range uids {
-		enc.Add(uid)
+		enc.add(uid, calloc)
 	}
 	return enc.Done()
+}
+
+// EncodeAlloc is same as Encode. The only difference is that EncodeAlloc uses
+// manually allocated memory while Encode uses go runtime allocated memory. The
+// UidPack returned by EncodeAlloc should be FREED up by calling FreePack
+// function.
+func EncodeAlloc(uids []uint64, blockSize int) *pb.UidPack {
+	return encode(uids, blockSize, true)
 }
 
 // ApproxLen would indicate the total number of UIDs in the pack. Can be used for int slice

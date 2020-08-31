@@ -667,7 +667,9 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 			return less(lhs, rhs)
 		})
 
-		enc := codec.Encoder{BlockSize: 256}
+		// Use a manually allocated block.
+		enc := codec.EncoderAlloc{}
+		enc.BlockSize = 256
 		var lastUid uint64
 		for _, offset := range currentBatch {
 			me := MapEntry(cbuf.Slice(offset))

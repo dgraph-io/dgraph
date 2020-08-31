@@ -91,7 +91,7 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
 
 		var pl pb.PostingList
-		pl.Pack = codec.Encode(uids, 256)
+		pl.Pack = codec.EncodeAlloc(uids, 256)
 		data, err := pl.Marshal()
 		x.Check(err)
 		codec.FreePack(pl.Pack)
