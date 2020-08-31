@@ -84,10 +84,10 @@ func (r *reducer) run() error {
 			splitWriter := tmpDb.NewManagedWriteBatch()
 
 			ci := &countIndexer{
-				reducer: r,
-				writer: writer,
+				reducer:     r,
+				writer:      writer,
 				splitWriter: splitWriter,
-				tmpDb: tmpDb,
+				tmpDb:       tmpDb,
 			}
 			sort.Slice(partitionKeys, func(i, j int) bool {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
@@ -130,7 +130,7 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 
 	opt := badger.DefaultOptions(dir).WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
-		WithLogger(nil).WithMaxCacheSize(1 << 20).
+		WithLogger(nil).WithBlockCacheSize(1 << 20).
 		WithEncryptionKey(r.opt.EncryptionKey).WithCompression(bo.None)
 
 	// Overwrite badger options based on the options provided by the user.
