@@ -1602,6 +1602,7 @@ func queryWithAlias(t *testing.T) {
 		Query: `query {
 			post : queryPost (filter: {title : { anyofterms : "Introducing" }} ) {
 				type : __typename
+				title
 				postTitle : title
 				postAuthor : author {
 					theName : name
@@ -1616,6 +1617,7 @@ func queryWithAlias(t *testing.T) {
 		`{
 			"post": [ {
 				"type": "Post",
+				"title": "Introducing GraphQL in Dgraph",
 				"postTitle": "Introducing GraphQL in Dgraph",
 				"postAuthor": { "theName": "Ann Author" }}]}`,
 		string(gqlResponse.Data))
