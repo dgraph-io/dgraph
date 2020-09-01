@@ -18,9 +18,11 @@ package query
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"strconv"
 	"strings"
@@ -61,7 +63,7 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 
 // We are capping maxEncoded size to 4GB, as grpc encoding fails
 // for a response size > math.MaxUint32.
-const maxEncodedSize = uint64(4 << 30)
+const maxEncodedSize = uint64(16 << 30)
 
 type encoder struct {
 	// attrMap has mapping of string predicates to uint16 ids.
@@ -137,6 +139,9 @@ func newEncoder() *encoder {
 }
 
 func (enc *encoder) idForAttr(attr string) uint16 {
+	if attr == "uid" {
+		return enc.uidAttr
+	}
 	if id, ok := enc.attrMap[attr]; ok {
 		return id
 	}
@@ -215,7 +220,7 @@ func (a *Allocator) Allocate(sz int) []byte {
 	cb := a.buffers[a.curBuf]
 	if len(cb) < a.curIdx+sz {
 		a.pageSize *= 2
-		const maxAlloc int = 64 << 20
+		const maxAlloc int = 1 << 30
 		if a.pageSize > maxAlloc {
 			a.pageSize = maxAlloc
 		}
@@ -302,10 +307,12 @@ func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) error {
 	enc.curSize += uint64(len(sv))
 
 	// check if it exceeds threshold size.
-	if enc.curSize > maxEncodedSize {
-		return fmt.Errorf("encoded response size: %d is bigger than threshold: %d",
-			enc.curSize, maxEncodedSize)
-	}
+	// TODO: Do we need to do this?
+	//
+	// if enc.curSize > maxEncodedSize {
+	// 	return fmt.Errorf("encoded response size: %d is bigger than threshold: %d",
+	// 		enc.curSize, maxEncodedSize)
+	// }
 
 	return nil
 }
@@ -605,18 +612,19 @@ func (n nodeSlice) Swap(i, j int) {
 	n.nodes[i], n.nodes[j] = n.nodes[j], n.nodes[i]
 }
 
-func (enc *encoder) writeKey(fj fastJsonNode, out *bytes.Buffer) error {
-	if _, err := out.WriteRune('"'); err != nil {
+func (enc *encoder) writeKey(fj fastJsonNode, out io.Writer) error {
+	// TODO: Optimize this to avoid allocations.
+	if _, err := out.Write([]byte{'"'}); err != nil {
 		return err
 	}
 	attrID := enc.getAttr(fj)
-	if _, err := out.WriteString(enc.attrForID(attrID)); err != nil {
+	if _, err := out.Write([]byte(enc.attrForID(attrID))); err != nil {
 		return err
 	}
-	if _, err := out.WriteRune('"'); err != nil {
+	if _, err := out.Write([]byte{'"'}); err != nil {
 		return err
 	}
-	if _, err := out.WriteRune(':'); err != nil {
+	if _, err := out.Write([]byte{':'}); err != nil {
 		return err
 	}
 	return nil
@@ -652,7 +660,7 @@ func (enc *encoder) attachFacets(fj fastJsonNode, fieldName string, isList bool,
 	return nil
 }
 
-func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
+func (enc *encoder) encode(fj fastJsonNode, out io.Writer) error {
 	fjAttrs := enc.getAttrs(fj)
 	// This is a scalar value.
 	if fjAttrs == nil {
@@ -665,7 +673,7 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 	}
 
 	// This is an internal node.
-	if _, err := out.WriteRune('{'); err != nil {
+	if _, err := writeRune(out, '{'); err != nil {
 		return err
 	}
 	cnt := 0
@@ -684,7 +692,7 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 				if err := enc.writeKey(cur, out); err != nil {
 					return err
 				}
-				if _, err := out.WriteRune('['); err != nil {
+				if _, err := writeRune(out, '['); err != nil {
 					return err
 				}
 			}
@@ -697,7 +705,7 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 					return err
 				}
 				if enc.getList(cur) {
-					if _, err := out.WriteRune('['); err != nil {
+					if _, err := writeRune(out, '['); err != nil {
 						return err
 					}
 				}
@@ -706,7 +714,7 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 				return err
 			}
 			if cnt > 1 || enc.getList(cur) {
-				if _, err := out.WriteRune(']'); err != nil {
+				if _, err := writeRune(out, ']'); err != nil {
 					return err
 				}
 			}
@@ -714,18 +722,22 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 		}
 		// We need to print comma except for the last attribute.
 		if fjAttrs.next != nil {
-			if _, err := out.WriteRune(','); err != nil {
+			if _, err := writeRune(out, ','); err != nil {
 				return err
 			}
 		}
 
 		fjAttrs = fjAttrs.next
 	}
-	if _, err := out.WriteRune('}'); err != nil {
+	if _, err := writeRune(out, '}'); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func writeRune(out io.Writer, r byte) (n int, err error) {
+	return out.Write([]byte{r})
 }
 
 func merge(parent, child [][]fastJsonNode) ([][]fastJsonNode, error) {
@@ -1014,25 +1026,43 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	// level keys. Hence we send server_latency under extensions key.
 	// https://facebook.github.io/graphql/#sec-Response-Format
 
-	var bufw bytes.Buffer
+	glog.Infof("Done with encoding. Now writing...")
+
+	bufw := &bytes.Buffer{}
+	var w io.Writer
+	var gw *gzip.Writer
+	if enc.curSize > 1<<30 {
+		gw = gzip.NewWriter(bufw)
+		w = gw
+	} else {
+		w = bufw
+	}
+
 	if n.child == nil {
-		if _, err := bufw.WriteString(`{}`); err != nil {
+		if _, err := writeRune(w, '{'); err != nil {
+			return nil, err
+		}
+		if _, err := writeRune(w, '}'); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := enc.encode(n, &bufw); err != nil {
+		if err := enc.encode(n, w); err != nil {
 			return nil, err
 		}
 	}
 
 	// Return error if encoded buffer size exceeds than a threshold size.
 	if uint64(bufw.Len()) > maxEncodedSize {
-		return nil, fmt.Errorf("encoded response size: %d is bigger than threshold: %d",
+		return nil, fmt.Errorf("while writing to buffer. Encoded response size: %d is bigger than threshold: %d",
 			bufw.Len(), maxEncodedSize)
+	}
+	if gw != nil {
+		gw.Close()
 	}
 
 	// Put encoder's arena back to arena pool.
 	arenaPool.Put(enc.arena)
+	glog.Infof("Size of buffer: %d\n", len(bufw.Bytes()))
 	return bufw.Bytes(), nil
 }
 
@@ -1111,6 +1141,18 @@ func facetName(fieldName string, f *api.Facet) string {
 	return fieldName + x.FacetDelimeter + f.Key
 }
 
+func (sg *SubGraph) getIndex(uid uint64) int {
+	if sg.srcUidIndex == nil {
+		sg.srcUidIndex = make(map[uint64]int)
+	}
+	if idx, ok := sg.srcUidIndex[uid]; ok {
+		return idx
+	}
+	idx := algo.IndexOf(sg.SrcUIDs, uid)
+	sg.srcUidIndex[uid] = idx
+	return idx
+}
+
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) error {
 	if sg.Params.IgnoreReflex {
@@ -1150,7 +1192,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				len(pc.facetsMatrix), len(pc.uidMatrix))
 		}
 
-		idx := algo.IndexOf(pc.SrcUIDs, uid)
+		idx := pc.getIndex(uid)
 		if idx < 0 {
 			continue
 		}

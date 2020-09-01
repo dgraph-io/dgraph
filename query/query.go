@@ -272,7 +272,9 @@ type SubGraph struct {
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
-	SrcUIDs *pb.List
+	SrcUIDs     *pb.List
+	srcUidIndex map[uint64]int // Cache to calculate index.
+
 	// SrcFunc specified using func. Should only be non-nil at root. At other levels,
 	// filters are used.
 	SrcFunc *Function
