@@ -42,40 +42,28 @@ var (
 	bitMask uint64 = 0xffffffff00000000
 )
 
-// EncoderAlloc is like Encoder but uses manaully allocated memory.
-type EncoderAlloc struct {
-	Encoder
-}
-
-// Add takes an uid and adds it to the list of UIDs to be encoded.
-func (e *EncoderAlloc) Add(uid uint64) {
-	e.add(uid, true)
-}
-
-// Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
-func (e *EncoderAlloc) Done() *pb.UidPack {
-	e.packBlock(true)
-	return e.pack
-}
-
 // Encoder is used to convert a list of UIDs into a pb.UidPack object.
 type Encoder struct {
-	BlockSize int
-	pack      *pb.UidPack
-	uids      []uint64
+	BlockSize   int
+	pack        *pb.UidPack
+	uids        []uint64
+	ManualAlloc bool // denotes if the packs should be manually allocated.
 }
 
 var blockSize = int(unsafe.Sizeof(pb.UidBlock{}))
 
-// AllocateBlock would allocate a block via Calloc. This block must be released via a call to
-// ReleaseBlock.
-func AllocateBlock() *pb.UidBlock {
-	// Allocate blocks manually.
-	b := z.CallocNoRef(blockSize)
-	if len(b) == 0 {
-		return &pb.UidBlock{}
+// allocateBlock would allocate a block via Calloc if the manualAlloc is set to true.
+// This manually allocated block must be released via a call to ReleaseBlock.
+func allocateBlock(manualAlloc bool) *pb.UidBlock {
+	if manualAlloc {
+		// Allocate blocks manually.
+		b := z.CallocNoRef(blockSize)
+		if len(b) == 0 {
+			return &pb.UidBlock{}
+		}
+		return (*pb.UidBlock)(unsafe.Pointer(&b[0]))
 	}
-	return (*pb.UidBlock)(unsafe.Pointer(&b[0]))
+	return &pb.UidBlock{}
 }
 
 // FreeBlock releases a previously manually allocated UidBlock.
@@ -94,18 +82,12 @@ func FreePack(pack *pb.UidPack) {
 	}
 }
 
-func (e *Encoder) packBlock(calloc bool) {
+func (e *Encoder) packBlock() {
 	if len(e.uids) == 0 {
 		return
 	}
 
-	var block *pb.UidBlock
-	// Allocate blocks manually.
-	if calloc {
-		block = AllocateBlock()
-	} else {
-		block = &pb.UidBlock{}
-	}
+	block := allocateBlock(e.ManualAlloc)
 	block.Base = e.uids[0]
 	block.NumUids = uint32(len(e.uids))
 
@@ -117,11 +99,11 @@ func (e *Encoder) packBlock(calloc bool) {
 		io.Writer
 		Bytes() []byte
 	}
-	if calloc {
-		out = &z.Buffer{}
-	} else {
+	if e.ManualAlloc {
 		// We are not releasing the allocated memory in this function. Instead,
 		// block.Deltas would need to be released at the end.
+		out = &z.Buffer{}
+	} else {
 		out = &bytes.Buffer{}
 	}
 
@@ -155,29 +137,27 @@ func (e *Encoder) packBlock(calloc bool) {
 
 // Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {
-	e.add(uid, false)
-}
-func (e *Encoder) add(uid uint64, alloc bool) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
 	}
 
 	size := len(e.uids)
 	if size > 0 && !match32MSB(e.uids[size-1], uid) {
-		e.packBlock(alloc)
+		e.packBlock()
 		e.uids = e.uids[:0]
 	}
 
 	e.uids = append(e.uids, uid)
 	if len(e.uids) >= e.BlockSize {
-		e.packBlock(alloc)
+		e.packBlock()
 		e.uids = e.uids[:0]
 	}
 }
 
-// Done returns the final output of the encoder.
+// Done returns the final output of the encoder. If the encoder was running
+// with manualAlloc, the returned UidPack MUST BE FREED via a call to FreePack.
 func (e *Encoder) Done() *pb.UidPack {
-	e.packBlock(false)
+	e.packBlock()
 	return e.pack
 }
 
@@ -374,13 +354,9 @@ func (d *Decoder) BlockIdx() int {
 // bytes. Our benchmarks on artificial data show compressed size to be 13% of the original. This
 // mechanism is a LOT simpler to understand and if needed, debug.
 func Encode(uids []uint64, blockSize int) *pb.UidPack {
-	return encode(uids, blockSize, false)
-}
-
-func encode(uids []uint64, blockSize int, calloc bool) *pb.UidPack {
-	enc := Encoder{BlockSize: blockSize}
+	enc := Encoder{BlockSize: blockSize, ManualAlloc: false}
 	for _, uid := range uids {
-		enc.add(uid, calloc)
+		enc.Add(uid)
 	}
 	return enc.Done()
 }
@@ -388,9 +364,13 @@ func encode(uids []uint64, blockSize int, calloc bool) *pb.UidPack {
 // EncodeAlloc is same as Encode. The only difference is that EncodeAlloc uses
 // manually allocated memory while Encode uses go runtime allocated memory. The
 // UidPack returned by EncodeAlloc should be FREED up by calling FreePack
-// function.
+// function. The returned UidPack MUST BE FREED via a call to FreePack.
 func EncodeAlloc(uids []uint64, blockSize int) *pb.UidPack {
-	return encode(uids, blockSize, true)
+	enc := Encoder{BlockSize: blockSize, ManualAlloc: true}
+	for _, uid := range uids {
+		enc.Add(uid)
+	}
+	return enc.Done()
 }
 
 // ApproxLen would indicate the total number of UIDs in the pack. Can be used for int slice

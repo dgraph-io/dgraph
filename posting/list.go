@@ -1578,7 +1578,7 @@ func FromBackupPostingList(bl *pb.BackupPostingList) *pb.PostingList {
 		return &l
 	}
 
-	l.Pack = codec.Encode(bl.Uids, blockSize)
+	l.Pack = codec.EncodeAlloc(bl.Uids, blockSize)
 	l.Postings = bl.Postings
 	l.CommitTs = bl.CommitTs
 	l.Splits = bl.Splits

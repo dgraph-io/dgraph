@@ -28,6 +28,7 @@ import (
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -169,6 +170,7 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, err
 					// compatibility. New backups are not affected because there was a change
 					// to roll up lists into a single one.
 					restoreVal, err := pl.Marshal()
+					codec.FreePack(pl.Pack)
 					if err != nil {
 						return 0, errors.Wrapf(err, "while converting backup posting list")
 					}
@@ -180,6 +182,7 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, err
 				} else {
 					// This is a complete list. It should be rolled up to avoid writing
 					// a list that is too big to be read back from disk.
+					// Rollup will take ownership of the Pack and will free the memory.
 					l := posting.NewList(restoreKey, pl, kv.Version)
 					kvs, err := l.Rollup()
 					if err != nil {
