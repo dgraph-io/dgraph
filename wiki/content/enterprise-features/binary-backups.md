@@ -211,14 +211,14 @@ mutation {
 
 ### Automating Backups
 
-You can use the provided endpoint to automate backups. There are however a few
+You can use the provided endpoint to automate backups, however, there are a few
 things to keep in mind.
 
 - The requests should go to a single alpha. The alpha that receives the request
 is responsible for looking up the location and determining from which point the
 backup should resume.
 
-- Versions of Dgraph starting with 20.07.1, 20.03.5, and 1.2.7 have a way to
+- Versions of Dgraph starting with v20.07.1, v20.03.5, and v1.2.7 have a way to
 block multiple backup requests going to the same alpha. For previous versions,
 keep this in mind and avoid sending multiple requests at once. This is for the
 same reason as the point above.
