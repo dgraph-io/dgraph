@@ -99,6 +99,9 @@ type encoder struct {
 	// metaSlice []uint64
 	// // childrenMap contains mapping of fastJsonNode to its children.
 	// childrenMap map[fastJsonNode][]fastJsonNode
+
+	// Allocator for nodes.
+	alloc *Allocator
 }
 
 type node struct {
@@ -121,6 +124,7 @@ func newEncoder() *encoder {
 		attrMap: make(map[string]uint16),
 		idSlice: idSlice,
 		arena:   a,
+		alloc:   NewAllocator(4 << 10),
 		// metaSlice:   metaSlice,
 		// childrenMap: make(map[fastJsonNode][]fastJsonNode),
 	}
@@ -169,6 +173,49 @@ const (
 	setBytes4321 = 0x00000000FFFFFFFF
 )
 
+type Allocator struct {
+	pageSize int
+	curBuf   int
+	curIdx   int
+	buffers  [][]byte
+}
+
+func NewAllocator(sz int) *Allocator {
+	return &Allocator{pageSize: sz}
+}
+
+func (a *Allocator) Allocate(sz int) []byte {
+	if len(a.buffers) == 0 {
+		buf := z.Calloc(a.pageSize)
+		a.buffers = append(a.buffers, buf)
+	}
+
+	cb := a.buffers[a.curBuf]
+	if len(cb) < a.curIdx+sz {
+		a.pageSize *= 2
+		const maxAlloc int = 64 << 20
+		if a.pageSize > maxAlloc {
+			a.pageSize = maxAlloc
+		}
+
+		buf := z.Calloc(a.pageSize)
+		a.buffers = append(a.buffers, buf)
+		a.curBuf++
+		a.curIdx = 0
+		cb = a.buffers[a.curBuf]
+	}
+
+	slice := cb[a.curIdx : a.curIdx+sz]
+	a.curIdx += sz
+	return slice
+}
+
+func (a *Allocator) Release() {
+	for _, b := range a.buffers {
+		z.Free(b)
+	}
+}
+
 // fastJsonNode represents node of a tree, which is formed to convert a subgraph into json response
 // for a query. A fastJsonNode has following meta data:
 // 1. Attr => predicate associated with this node.
@@ -198,7 +245,7 @@ type fastJsonNode *node
 // newNode returns a fastJsonNode with its attr set to attr,
 // and all other meta set to their default value.
 func (enc *encoder) newNode(attr uint16) fastJsonNode {
-	b := z.Calloc(nodeSize)
+	b := enc.alloc.Allocate(nodeSize)
 	n := (*node)(unsafe.Pointer(&b[0]))
 	enc.setAttr(n, attr)
 	return n
@@ -247,7 +294,7 @@ func (enc *encoder) setList(fj fastJsonNode, list bool) {
 	}
 }
 
-func (enc *encoder) setFacetsParent(fj *node) {
+func (enc *encoder) setFacetsParent(fj fastJsonNode) {
 	fj.meta |= secondMsbBit
 }
 
@@ -261,14 +308,14 @@ func (enc *encoder) appendAttrs(fj fastJsonNode, children fastJsonNode) {
 
 	// TODO:
 	// We're inserting the node in between. This would need to be fixed later.
-	// fc.next, child.next = child, fc.next
+	fc.next, children.next = children, fc.next
 
-	temp := fc
-	for temp.next != nil {
-		temp = temp.next
-	}
+	// 	temp := fc
+	// 	for temp.next != nil {
+	// 		temp = temp.next
+	// 	}
 
-	temp.next = children
+	// 	temp.next = children
 }
 
 func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
@@ -921,6 +968,10 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	}()
 
 	enc := newEncoder()
+	defer func() {
+		enc.alloc.Release()
+	}()
+
 	var err error
 	n := enc.newNode(enc.idForAttr("_root_"))
 	for _, sg := range sg.Children {
