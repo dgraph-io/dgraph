@@ -219,6 +219,7 @@ message DirectedEdge {
 	}
 	Op op = 8;
 	repeated api.Facet facets = 9;
+	repeated string allowedPreds = 10;
 }
 
 message Mutations {
