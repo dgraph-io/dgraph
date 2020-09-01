@@ -670,8 +670,10 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	return dgQuery
 }
 
-// We need to delete the node with ^^ and then any reference we know about (via @hasInverse) into this node.
-func RemoveNodeReference(m schema.Mutation, authRw *authRewriter, qry *gql.GraphQuery) []interface{} {
+// We need to delete the node with ^^ and then any reference we know about (via @hasInverse)
+// into this node.
+func RemoveNodeReference(m schema.Mutation, authRw *authRewriter,
+	qry *gql.GraphQuery) []interface{} {
 	var deletes []interface{}
 	for _, fld := range m.MutatedType().Fields() {
 		invField := fld.Inverse()
