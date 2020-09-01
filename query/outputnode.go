@@ -335,16 +335,29 @@ func (enc *encoder) appendAttrs(fj fastJsonNode, children fastJsonNode) {
 	}
 	fc := fj.child
 
-	// TODO:
-	// We're inserting the node in between. This would need to be fixed later.
+	// We're inserting the node in between. This would need to be fixed later via fixOrder.
 	fc.next, children.next = children, fc.next
+}
 
-	// 	temp := fc
-	// 	for temp.next != nil {
-	// 		temp = temp.next
-	// 	}
+// fixOrder would fix the ordering issue caused by appendAttrs.
+func (enc *encoder) fixOrder(fj fastJsonNode) {
+	// TODO: If you call this again on the same fastJsonNode, then this would become wrong.  Due to
+	// getAttrs being copied over, the same node can be referenced by multiple nodes, thus the node
+	// would be visited again, hence it would be fixed multiple times, causing ordering issue.
+	// Maybe use meta bit to track visited already.
+	if fj.child == nil {
+		return
+	}
+	child := fj.child
 
-	// 	temp.next = children
+	ptr1 := child
+	ptr2 := child.next
+	for ptr2 != nil {
+		next := ptr2.next       // right of ptr2.
+		ptr2.next = ptr1        // ptr2 now points left to ptr1.
+		ptr1, ptr2 = ptr2, next // Advance both pointers.
+	}
+	child.next = ptr1 // Child next is now pointed to the last node. Hence, correcting the order.
 }
 
 func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
