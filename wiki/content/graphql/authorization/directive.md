@@ -31,7 +31,7 @@ type Todo @auth(
 }
 ```
 
-In addition to above schema, details of authentication provider should be given in the last line of schema, as discussed in last chapter.
+In addition to it, details of the authentication provider should be given in the last line of the schema, as discussed in section  [authorization-overview](/graphql/authorization/authorization-overview).
 
 Here we define a type `Todo`, that's got an `id`, the `text` of the todo and the username of the `owner` of the todo.  What todos can a user query?  Any `Todo` that the `query` rule would also return.
 
