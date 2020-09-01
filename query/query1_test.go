@@ -694,7 +694,7 @@ func TestHasFuncAtRootWithAfterOnUIDsOtherThanRoot(t *testing.T) {
 			uids as uid
 		}
 		me(func: uid(uids), first: 2, after: 0x5) {
-			@filter(uid(uids), after: 0x5) {
+			@filter(uid(uids)) {
 				uid
 			}
 		}
