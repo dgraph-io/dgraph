@@ -1093,11 +1093,7 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 
-		authMeta, err := authorization.Parse(string(authSchema))
-		if err != nil {
-			panic(err)
-		}
-
+		authMeta := testutil.SetAuthMeta(string(authSchema))
 		metaInfo = &testutil.AuthMeta{
 			PublicKey: authMeta.VerificationKey,
 			Namespace: authMeta.Namespace,
