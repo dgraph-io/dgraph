@@ -80,6 +80,8 @@ var (
 
 	// need this here to refer it in admin_backup.go
 	adminServer web.IServeGraphQL
+
+	initDone uint32
 )
 
 func init() {
@@ -569,6 +571,7 @@ func setupServer(closer *y.Closer) {
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 
+	atomic.AddUint32(&initDone, 1)
 	admin.ServerCloser.Wait()
 }
 
@@ -746,7 +749,13 @@ func run() {
 			}
 			numShutDownSig++
 			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
-			if numShutDownSig == 3 {
+
+			switch {
+			case atomic.LoadUint32(&initDone) < 2:
+				// Forcefully kill alpha if we haven't finish server initialization.
+				glog.Infoln("Stopped before initialization completed")
+				os.Exit(1)
+			case numShutDownSig == 3:
 				glog.Infoln("Signaled thrice. Aborting!")
 				os.Exit(1)
 			}
@@ -771,6 +780,7 @@ func run() {
 			x.UpdateCorsOrigins(origins)
 			return
 		}
+		atomic.AddUint32(&initDone, 1)
 	}()
 	// Listen for any new cors origin update.
 	go listenForCorsUpdate(updaters)
