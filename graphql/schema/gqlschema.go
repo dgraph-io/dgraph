@@ -574,10 +574,13 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 }
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
-	schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
-		Kind:   ast.InputObject,
-		Name:   "Add" + defn.Name + "Input",
-		Fields: getFieldsWithoutIDType(schema, defn),
+	field:=getFieldsWithoutIDType(schema, defn)
+	if len(field)!=0 {
+		schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
+			Kind:   ast.InputObject,
+			Name:   "Add" + defn.Name + "Input",
+			Fields: field,
+		}
 	}
 }
 
