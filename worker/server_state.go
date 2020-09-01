@@ -24,7 +24,6 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -66,20 +65,19 @@ func InitServerState() {
 }
 
 func setBadgerOptions(opt badger.Options) badger.Options {
-	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).
-		WithEncryptionKey(enc.ReadEncryptionKeyFile(Config.BadgerKeyFile))
+	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{})
 
 	// Do not load bloom filters on DB open.
-	opt.LoadBloomsOnOpen = false
+	opt.LoadBloomsOnOpen = true
 
 	glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
 	// Default value of badgerCompressionLevel is 3 so compression will always
 	// be enabled, unless it is explicitly disabled by setting the value to 0.
-	if Config.BadgerCompressionLevel != 0 {
-		// By default, compression is disabled in badger.
-		opt.Compression = options.ZSTD
-		opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
-	}
+	// if Config.BadgerCompressionLevel != 0 {
+	// By default, compression is disabled in badger.
+	// opt.Compression = options.ZSTD
+	// opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
+	// }
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
@@ -125,7 +123,7 @@ func (s *ServerState) initStorage() {
 		opt := badger.LSMOnlyOptions(Config.WALDir)
 		opt = setBadgerOptions(opt)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
-		opt.MaxCacheSize = 10 << 20    // 10 mb of cache size for WAL.
+		// opt.MaxCacheSize = 500 << 20   // 10 mb of cache size for WAL.
 
 		// We should always force load LSM tables to memory, disregarding user settings, because
 		// Raft.Advance hits the WAL many times. If the tables are not in memory, retrieval slows
@@ -136,10 +134,10 @@ func (s *ServerState) initStorage() {
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
-		key := opt.EncryptionKey
-		opt.EncryptionKey = nil
+		// key := opt.EncryptionKey
+		// opt.EncryptionKey = nil
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
-		opt.EncryptionKey = key
+		// opt.EncryptionKey = key
 
 		s.WALstore, err = badger.Open(opt)
 		x.Checkf(err, "Error while creating badger KV WAL store")
@@ -151,18 +149,18 @@ func (s *ServerState) initStorage() {
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
 		opt := badger.DefaultOptions(Config.PostingDir).
 			WithValueThreshold(1 << 10 /* 1KB */).
-			WithNumVersionsToKeep(math.MaxInt32).
-			WithMaxCacheSize(1 << 30).
-			WithKeepBlockIndicesInCache(true).
-			WithKeepBlocksInCache(true)
+			WithNumVersionsToKeep(math.MaxInt32)
+			// WithMaxCacheSize(3 << 30).
+			// WithKeepBlockIndicesInCache(true).
+			// WithKeepBlocksInCache(true)
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
-		key := opt.EncryptionKey
-		opt.EncryptionKey = nil
-		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
-		opt.EncryptionKey = key
+		// key := opt.EncryptionKey
+		// opt.EncryptionKey = nil
+		// glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
+		// opt.EncryptionKey = key
 
 		s.Pstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV posting store")
