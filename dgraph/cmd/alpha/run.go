@@ -516,7 +516,7 @@ func setupServer(closer *y.Closer) {
 		err := admin.SchemaValidate(string(schema))
 		if err == nil {
 			w.WriteHeader(http.StatusOK)
-			x.SetStatus(w, "success", "msg")
+			x.SetStatus(w, "success", "Schema is valid")
 			return
 		}
 
