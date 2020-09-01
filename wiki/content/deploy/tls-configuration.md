@@ -200,15 +200,15 @@ Ratel UI (and any other JavaScript clients built on top of `dgraph-js-http`)
 connect to Dgraph servers via HTTP, when TLS is enabled servers begin to expect
 HTTPS requests only.
 
-The first step would be to generate the certificate/key pairs. Generate these using the following commands.
+If you haven't already created the CA certificate and the node certificate for alpha servers from the earlier instructions (see [Dgraph Certificata Management Tool](#dgraph-certificate-management-tool)), the first step would be to generate these certificates, it can be done by the following command:
 ```sh
 # Create rootCA and node certificates/keys
 $ dgraph cert -n localhost
 ```
 
-If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default), then client certificate is not mandatory. The steps required to achieve this are:
+If `--tls_client_auth` option in dgraph alpha is set to `REQUEST` or `VERIFYIFGIVEN` (default), then client certificate is not mandatory. The steps after generating CA/node certificate are as follows:
 
-1. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt` by following the below steps for your OS.
+### Step 1. Install Dgraph Root CA into System CA
 ##### Linux (Debian/Ubuntu)
 ```sh
 # Copy the generated CA to the ca-certificates directory
@@ -225,7 +225,7 @@ $ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.ke
 $ certutil -addstore -f "ROOT" /path/to/ca.crt
 ```
 
-2. Add the Dgraph CA certificate to the browser's list of trusted Certificate Authorities.
+### Step 2. Install Dgraph Root CA into Web Browsers Trusted CA List
 
 ##### Firefox
 
@@ -237,25 +237,34 @@ $ certutil -addstore -f "ROOT" /path/to/ca.crt
 * Goto Settings -> Privacy and Security -> Security -> Manage Certificates -> Authorities
 * Click on Import and import the `ca.crt`
 
-3. Point ratel to the `https://` endpoint of alpha server instead of `http://` (e.g. `https://127.0.0.1:8080`).
+### Step 3. Point ratel to the `https://` endpoint of alpha server.
 
-For `REQUIREANY` and `REQUIREANDVERIFY` you need to follow the steps above and
-also need to install client certificate on your OS / browser:
+* Change the Dgraph's alpha server address to `https://` instead of `http://`, for example `https://localhost:8080`.
 
-1. Generate a client certificate: `dgraph cert -c MyLaptop`.
+For `REQUIREANY` and `REQUIREANDVERIFY` as `--tls_client_auth` option of alpha, you need to follow the steps above and you
+also need to install client certificate on your browser:
+
+1. Generate a client certificate: `dgraph cert -c laptopuser`.
 2. Convert it to a `.p12` file:
-`openssl pkcs12 -export -out MyLaptopCert.p12 -in tls/client.MyLaptop.crt -inkey tls/client.MyLaptop.key`. Use any password you like for export.
-3. Import the client certificate to your browser.
+```sh
+openssl pkcs12 -export \
+   -out laptopuser.p12 \
+   -in tls/client.laptopuser.crt \
+   -inkey tls/client.laptopuser.key
+```
+Use any password you like for export, it is used to encrypt the p12 file.
+
+3. Import the client certificate to your browser. It can be done as follows:
 ##### Firefox
 
 * Goto Preferences -> Prvacy & Security -> View Certificates -> Your Certificates
-* Click on Import and import the `MyLaptopCert.p12`
+* Click on Import and import the `laptopuser.p12`
 
 ##### Chrome
 * Goto Settings -> Privacy and Security -> Security -> Manage Certificates -> Your Certificates
-* Click on Import and import the `MyLaptopCert.p12`
+* Click on Import and import the `laptopuser.p12`
 
-3. Next time you use Ratel to connect to an alpha with Client authentication
+Next time you use Ratel to connect to an alpha with Client authentication
 enabled the browser will prompt you for a client certificate to use. Select the client's
 certificate you've imported in the step above and queries/mutations will
 succeed.
