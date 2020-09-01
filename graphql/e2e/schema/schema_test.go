@@ -20,17 +20,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
-
-	"github.com/dgraph-io/dgraph/worker"
-
 	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/stretchr/testify/require"
 )
 
@@ -336,6 +335,45 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 	// we should still get the schema we inserted earlier
 	require.Equal(t, schema, getGQLSchemaRequireId(t, groupOneAdminServer))
 
+}
+
+func TestUpdateGQLSchemaFields(t *testing.T) {
+	schema := `
+	type Author {
+		id: ID!
+		name: String!
+	}`
+
+	generatedSchema, err := ioutil.ReadFile("generatedSchema.graphql")
+	require.NoError(t, err)
+
+	req := &common.GraphQLParams{
+		Query: `mutation updateGQLSchema($sch: String!) {
+			updateGQLSchema(input: { set: { schema: $sch }}) {
+				gqlSchema {
+					schema
+					generatedSchema
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": schema},
+	}
+	resp := req.ExecuteAsPost(t, groupOneAdminServer)
+	require.NotNil(t, resp)
+	require.Nilf(t, resp.Errors, "%s", resp.Errors)
+
+	var updateResp struct {
+		UpdateGQLSchema struct {
+			GQLSchema struct {
+				Schema          string
+				GeneratedSchema string
+			}
+		}
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &updateResp))
+
+	require.Equal(t, schema, updateResp.UpdateGQLSchema.GQLSchema.Schema)
+	require.Equal(t, string(generatedSchema), updateResp.UpdateGQLSchema.GQLSchema.GeneratedSchema)
 }
 
 func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {
