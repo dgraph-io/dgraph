@@ -627,6 +627,7 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 	case n.requestCh <- linReadReq{indexCh: indexCh}:
 		span.Annotate(nil, "Pushed to requestCh")
 	case <-ctx.Done():
+		glog.Infoln("Context expired while pushing to request channel")
 		span.Annotate(nil, "Context expired")
 		return ctx.Err()
 	}
@@ -641,6 +642,8 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 		span.Annotatef(nil, "Error from Applied.WaitForMark: %v", err)
 		return err
 	case <-ctx.Done():
+		// this should be causing the timeout
+		glog.Infoln("Context expired while reading from index channel")
 		span.Annotate(nil, "Context expired")
 		return ctx.Err()
 	}
@@ -666,7 +669,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			return 0, errors.New("Closer has been called")
 		case rs := <-readStateCh:
 			if !bytes.Equal(activeRctx, rs.RequestCtx) {
-				glog.V(3).Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx)
+				glog.Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx)
 				goto again
 			}
 			return rs.Index, nil

@@ -550,6 +550,7 @@ func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 
 var startOption = otrace.WithSampler(otrace.ProbabilitySampler(0.01))
 
+// checkQuorum
 func (n *node) checkQuorum(closer *y.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(time.Second)
@@ -666,6 +667,7 @@ func (n *node) Run() {
 				// empty.
 				readStateCh <- rs
 			}
+			glog.Infoln("Pushed readstates :", len(rd.ReadStates))
 			span.Annotatef(nil, "Pushed %d readstates", len(rd.ReadStates))
 
 			if rd.SoftState != nil {
