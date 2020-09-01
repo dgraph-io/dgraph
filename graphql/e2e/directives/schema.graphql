@@ -174,9 +174,7 @@ type Comment1 {
       replies: [Comment1]
 }
 type post1{
-    id:ID
-    title:String!  @id @search(by: [regexp])
-    numLikes:Int64
-    numViews:Int64
-    numComments:Int64
+    id: ID
+    title: String! @id @search(by: [regexp])
+    numLikes: Int64
 }

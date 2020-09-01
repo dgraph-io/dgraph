@@ -83,19 +83,11 @@
             "upsert": true
         },
         {
-            "predicate": "post1.numComments",
-            "type": "int"
-        },
-        {
             "predicate": "post1.title",
             "type": "string",
             "index": true,
             "tokenizer": ["trigram", "hash"],
             "upsert": true
-        },
-        {
-            "predicate": "post1.numViews",
-            "type": "int"
         },
         {
             "predicate": "post1.numLikes",
@@ -471,13 +463,7 @@
         {
             "fields": [
                 {
-                    "name": "post1.numComments"
-                },
-                {
                     "name": "post1.title"
-                },
-                {
-                    "name": "post1.numViews"
                 },
                 {
                     "name": "post1.numLikes"

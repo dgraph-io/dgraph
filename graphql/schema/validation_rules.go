@@ -94,38 +94,30 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 
 func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
-		if value.Definition == nil || value.ExpectedType == nil || value.Kind==ast.Variable {
+		if value.Definition == nil || value.ExpectedType == nil || value.Kind == ast.Variable {
 			return
 		}
 
 		switch value.Definition.Name {
 		case "Int":
-			_, err := strconv.ParseInt(value.Raw, 10,32)
-			if err!=nil {
-			if errors.Is(err, strconv.ErrRange) {
-				addError(validator.Message("Out of range value '%s', for type `%s`",
-					value.Raw, value.Definition.Name), validator.At(value.Position))
-			}else {
-				addError(validator.Message("%s", err), validator.At(value.Position))
+			_, err := strconv.ParseInt(value.Raw, 10, 32)
+			if err != nil {
+				if errors.Is(err, strconv.ErrRange) {
+					addError(validator.Message("Out of range value '%s', for type `%s`",
+						value.Raw, value.Definition.Name), validator.At(value.Position))
+				} else {
+					addError(validator.Message("%s", err), validator.At(value.Position))
+				}
 			}
-		}
 		case "Int64":
 			if value.Kind == ast.IntValue {
 				value.Kind = ast.StringValue
-			} else {
-				addError(validator.Message("Given input type mismatch, Expected Int64"),
+			} else if value.Kind == ast.StringValue {
+				addError(validator.Message("Type mismatched for Value `\"%s\"`, Expected type Int64", value.Raw), validator.At(value.Position))
+			} else if value.Kind == ast.FloatValue {
+				addError(validator.Message("Type mismatched for Value `%s`, Expected type Int64", value.Raw),
 					validator.At(value.Position))
-				}
 			}
-	})
-}
-
-func intRangeCheck1(observers *validator.Events, addError validator.AddErrFunc) {
-	observers.OnOperation(func(walker *validator.Walker, op *ast.OperationDefinition) {
-		if op.Name == "a" {
-
 		}
-
 	})
-
 }

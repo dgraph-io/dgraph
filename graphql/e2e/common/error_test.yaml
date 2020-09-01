@@ -168,7 +168,7 @@
   gqlvariables:
     { }
   errors:
-    [ { "message": "Given input type mismatch, Expected Int64",
+    [ { "message": "Type mismatched for Value `\"180143985094\"`, Expected type Int64",
         "locations": [ { "line": 2, "column": 64 } ] } ]
 
 -
@@ -188,5 +188,5 @@
   gqlvariables:
     { }
   errors:
-    [ { "message": "Given input type mismatch, Expected Int64",
+    [ { "message": "Type mismatched for Value `180143985094.0`, Expected type Int64",
         "locations": [ { "line": 2, "column": 63 } ] } ]

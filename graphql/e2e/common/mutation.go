@@ -3653,11 +3653,10 @@ func int64BoundaryTesting(t *testing.T) {
 	//(2^63)=9223372036854775808
 	addPost1Params := &GraphQLParams{
 		Query: `mutation {
-			addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 ,numViews: -9223372036854775808 }]) {
+			addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },{title: "Dgraph1", numLikes: -9223372036854775807 }]) {
 				post1 {
 					title
 					numLikes
-					numViews
 				}
 			}
 		}`,
@@ -3670,13 +3669,15 @@ func int64BoundaryTesting(t *testing.T) {
 		"addpost1": {
 			"post1": [{
 				"title": "Dgraph",
-				"numLikes": 9223372036854775808,
-				"numViews": -9223372036854775807
+				"numLikes": 9223372036854775808
 				
+			},{
+				"title": "Dgraph1",
+				"numLikes": -9223372036854775808
 			}]
 		}
 	}`
 	testutil.CompareJSON(t, addPost1Expected, string(gqlResponse.Data))
-	filter := map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}
-	deleteGqlType(t, "post1", filter, 1, nil)
+	filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
+	deleteGqlType(t, "post1", filter, 2, nil)
 }
