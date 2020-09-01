@@ -671,7 +671,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			}
 			return rs.Index, nil
 		case <-ctx.Done():
-			glog.Warningf("[%#x] Read index context timed out\n", n.Id)
+			glog.V(3).Info("[%#x] Read index context timed out\n", n.Id)
 			return 0, errInternalRetry
 		}
 	} // end of readIndex func
