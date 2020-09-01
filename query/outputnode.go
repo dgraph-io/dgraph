@@ -18,6 +18,7 @@ package query
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -102,6 +103,9 @@ type encoder struct {
 
 	// Allocator for nodes.
 	alloc *Allocator
+
+	// Cache uid attribute, which is very commonly used.
+	uidAttr uint16
 }
 
 type node struct {
@@ -120,7 +124,7 @@ func newEncoder() *encoder {
 	a := (arenaPool.Get()).(*arena)
 	a.reset()
 
-	return &encoder{
+	e := &encoder{
 		attrMap: make(map[string]uint16),
 		idSlice: idSlice,
 		arena:   a,
@@ -128,6 +132,8 @@ func newEncoder() *encoder {
 		// metaSlice:   metaSlice,
 		// childrenMap: make(map[fastJsonNode][]fastJsonNode),
 	}
+	e.uidAttr = e.idForAttr("uid")
+	return e
 }
 
 func (enc *encoder) idForAttr(attr string) uint16 {
@@ -160,11 +166,27 @@ func (enc *encoder) makeScalarNode(attr uint16, val []byte, list bool) (*node, e
 	return fj, nil
 }
 
+func (enc *encoder) makeUidNode(attr uint16, uid uint64) (*node, error) {
+	fj := enc.newNode(attr)
+	fj.meta |= uidNodeBit
+
+	var tmp [8]byte
+	binary.BigEndian.PutUint64(tmp[:], uid)
+
+	if err := enc.setScalarVal(fj, tmp[:]); err != nil {
+		return nil, err
+	}
+	return fj, nil
+}
+
 const (
 	// Value with most significant bit set to 1.
-	msbBit = 0x8000000000000000
+	listBit = 1 << 63
 	// Value with second most significant bit set to 1.
-	secondMsbBit = 0x4000000000000000
+	facetsBit = 1 << 62
+	// Value with third most significant bit set to 1.
+	uidNodeBit = 1 << 61
+
 	// Value with all bits set to 1 for bytes 7 and 6.
 	setBytes76 = uint64(0x00FFFF0000000000)
 	// Compliment value of setBytes76.
@@ -290,12 +312,12 @@ func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) error {
 
 func (enc *encoder) setList(fj fastJsonNode, list bool) {
 	if list {
-		fj.meta |= msbBit
+		fj.meta |= listBit
 	}
 }
 
 func (enc *encoder) setFacetsParent(fj fastJsonNode) {
-	fj.meta |= secondMsbBit
+	fj.meta |= facetsBit
 }
 
 // appendAttrs appends attrs to existing fj's attrs.
@@ -324,15 +346,23 @@ func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
 
 func (enc *encoder) getScalarVal(fj fastJsonNode) ([]byte, error) {
 	offset := uint32(fj.meta & setBytes4321)
-	return enc.arena.get(offset)
+	data, err := enc.arena.get(offset)
+	if err != nil {
+		return nil, err
+	}
+	if (fj.meta & uidNodeBit) > 0 {
+		uid := binary.BigEndian.Uint64(data)
+		return x.ToHex(uid), nil
+	}
+	return data, nil
 }
 
 func (enc *encoder) getList(fj fastJsonNode) bool {
-	return (fj.meta & msbBit) > 0
+	return (fj.meta & listBit) > 0
 }
 
 func (enc *encoder) getFacetsParent(fj fastJsonNode) bool {
-	return (fj.meta & secondMsbBit) > 0
+	return (fj.meta & facetsBit) > 0
 }
 
 func (enc *encoder) getAttrs(fj fastJsonNode) fastJsonNode {
@@ -382,8 +412,7 @@ func (enc *encoder) AddListChild(fj, child fastJsonNode) {
 
 func (enc *encoder) SetUID(fj fastJsonNode, uid uint64, attr uint16) error {
 	// if we're in debug mode, uid may be added second time, skip this
-	uidAttrID := enc.idForAttr("uid")
-	if attr == uidAttrID {
+	if attr == enc.uidAttr {
 		fjAttrs := enc.getAttrs(fj)
 		for fjAttrs != nil {
 			if enc.getAttr(fjAttrs) == attr {
@@ -393,11 +422,11 @@ func (enc *encoder) SetUID(fj fastJsonNode, uid uint64, attr uint16) error {
 		}
 	}
 
-	sn, err := enc.makeScalarNode(attr, []byte(fmt.Sprintf("\"%#x\"", uid)), false)
+	un, err := enc.makeUidNode(attr, uid)
 	if err != nil {
 		return err
 	}
-	enc.appendAttrs(fj, sn)
+	enc.appendAttrs(fj, un)
 	return nil
 }
 
@@ -1187,7 +1216,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 
 				if !enc.IsEmpty(uc) {
 					if sg.Params.GetUid {
-						if err := enc.SetUID(uc, childUID, enc.idForAttr("uid")); err != nil {
+						if err := enc.SetUID(uc, childUID, enc.uidAttr); err != nil {
 							return err
 						}
 					}
@@ -1343,7 +1372,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 	// Only for shortest path query we wan't to return uid always if there is
 	// nothing else at that level.
 	if (sg.Params.GetUid && !enc.IsEmpty(dst)) || sg.Params.Shortest {
-		if err := enc.SetUID(dst, uid, enc.idForAttr("uid")); err != nil {
+		if err := enc.SetUID(dst, uid, enc.uidAttr); err != nil {
 			return err
 		}
 	}
