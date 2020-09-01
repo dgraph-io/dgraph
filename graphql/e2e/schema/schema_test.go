@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"sync"
 	"testing"
@@ -444,6 +445,45 @@ func TestGQLSchemaValidate(t *testing.T) {
 			require.Equal(t, err.Message, tcase.errors[idx].Message)
 		}
 	}
+}
+
+func TestUpdateGQLSchemaFields(t *testing.T) {
+	schema := `
+	type Author {
+		id: ID!
+		name: String!
+	}`
+
+	generatedSchema, err := ioutil.ReadFile("generatedSchema.graphql")
+	require.NoError(t, err)
+
+	req := &common.GraphQLParams{
+		Query: `mutation updateGQLSchema($sch: String!) {
+			updateGQLSchema(input: { set: { schema: $sch }}) {
+				gqlSchema {
+					schema
+					generatedSchema
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": schema},
+	}
+	resp := req.ExecuteAsPost(t, groupOneAdminServer)
+	require.NotNil(t, resp)
+	require.Nilf(t, resp.Errors, "%s", resp.Errors)
+
+	var updateResp struct {
+		UpdateGQLSchema struct {
+			GQLSchema struct {
+				Schema          string
+				GeneratedSchema string
+			}
+		}
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &updateResp))
+
+	require.Equal(t, schema, updateResp.UpdateGQLSchema.GQLSchema.Schema)
+	require.Equal(t, string(generatedSchema), updateResp.UpdateGQLSchema.GQLSchema.GeneratedSchema)
 }
 
 func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {
