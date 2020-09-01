@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -54,8 +53,62 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 			sgr.Params.GetUid = true
 		}
 		sgr.Children = append(sgr.Children, sg)
+		levelCount := make(map[int]int)
+		sg.countUIDs(1, map[uint64]int{}, levelCount)
+		printLevelCount(levelCount)
 	}
+	glog.Infof("Running toFastJSON")
 	return sgr.toFastJSON(l)
+}
+
+func printLevelCount(levelCount map[int]int) {
+	maxLevel := 0
+	for level := range levelCount {
+		if level > maxLevel {
+			maxLevel = level
+		}
+	}
+	for i := 1; i <= maxLevel; i++ {
+		glog.Infof("Level: %d  Count: %d\n", i, levelCount[i])
+	}
+}
+
+func (sg *SubGraph) countUIDs(level int, parentUIDMap map[uint64]int, levelCount map[int]int) (int, int) {
+	count := 0
+	for idx, uid := range sg.SrcUIDs.GetUids() {
+		// uidList := []string{}
+		if sg.uidMatrix == nil {
+			glog.Infof("%s srcUid: %s, uidList: [nil]", strings.Repeat(".. ", level),
+				strconv.FormatUint(uid, 16))
+			continue
+		}
+		// for _, u := range sg.uidMatrix[idx].GetUids() {
+		// 	uidList = append(uidList, strconv.FormatUint(u, 16))
+		// }
+
+		count += len(sg.uidMatrix[idx].GetUids()) * parentUIDMap[uid]
+		// glog.Infof("%s srcUid: %s, destUids: %s, uidList: [%v]", strings.Repeat(".. ", level),
+		// 	strconv.FormatUint(uid, 16), dst, strings.Join(uidList, ", "))
+	}
+	levelCount[level] += count
+	maxHeight := 0
+
+	uidMap := make(map[uint64]int)
+	for _, ulist := range sg.uidMatrix {
+		for _, uid := range ulist.GetUids() {
+			uidMap[uid]++
+		}
+	}
+
+	for _, ch := range sg.Children {
+		hch, cch := ch.countUIDs(level+1, uidMap, levelCount)
+		if hch > maxHeight {
+			maxHeight = hch
+		}
+		count += cch
+	}
+
+	return 1 + maxHeight, count
 }
 
 // We are capping maxEncoded size to 4GB, as grpc encoding fails
@@ -245,9 +298,9 @@ func (enc *encoder) appendAttrs(fj fastJsonNode, attrs ...fastJsonNode) {
 		cs = make([]fastJsonNode, 0, len(attrs))
 	}
 	cs = append(cs, attrs...)
-	if len(cs)%1000 == 0 {
-		fmt.Printf("Got a node %d, with %d children\n", fj, len(cs))
-	}
+	// if len(cs)%1000 == 0 {
+	// 	fmt.Printf("Got a node %d, with %d children\n", fj, len(cs))
+	// }
 	enc.childrenMap[fj] = cs
 	if len(enc.childrenMap)%1000000 == 0 {
 		glog.Infof("Children map is of size: %d\n", len(enc.childrenMap))
@@ -328,6 +381,7 @@ func (enc *encoder) SetUID(fj fastJsonNode, uid uint64, attr uint16) error {
 		}
 	}
 
+	// TODO: This can be made more efficient. We don't need to store the entire string upfront.
 	sn, err := enc.makeScalarNode(attr, x.ToHex(uid), false)
 	if err != nil {
 		return err
@@ -851,7 +905,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 	}
 
 	lenList := len(sg.uidMatrix[0].Uids)
-	path := make([]string, 100)
+	// path := make([]string, 100)
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
 		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
@@ -861,8 +915,8 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 
 		n1 := enc.newNode(attrID)
 		enc.setAttr(n1, enc.idForAttr(sg.Params.Alias))
-		path[1] = sg.Params.Alias + strconv.FormatUint(uid, 16)
-		if err := sg.preTraverse(enc, uid, n1, 1, path); err != nil {
+		// path[1] = sg.Params.Alias + strconv.FormatUint(uid, 16)
+		if err := sg.preTraverse(enc, uid, n1, 1, nil); err != nil {
 			if err.Error() == "_INV_" {
 				continue
 			}
@@ -905,18 +959,18 @@ type Extensions struct {
 	Metrics *api.Metrics    `json:"metrics,omitempty"`
 }
 
-func (sg *SubGraph) countUids(level int) int {
-	count := 0
-	count += len(sg.SrcUIDs.GetUids())
-	for _, l := range sg.uidMatrix {
-		count += len(l.GetUids())
-	}
-	fmt.Printf("%s sg: %p Attr: %s. Count: %d\n", strings.Repeat("--", level), sg, sg.Attr, count)
-	for _, child := range sg.Children {
-		count += child.countUids(level + 1)
-	}
-	return count
-}
+// func (sg *SubGraph) countUids(level int) int {
+// 	count := 0
+// 	count += len(sg.SrcUIDs.GetUids())
+// 	for _, l := range sg.uidMatrix {
+// 		count += len(l.GetUids())
+// 	}
+// 	fmt.Printf("%s sg: %p Attr: %s. Count: %d\n", strings.Repeat("--", level), sg, sg.Attr, count)
+// 	for _, child := range sg.Children {
+// 		count += child.countUids(level + 1)
+// 	}
+// 	return count
+// }
 
 func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	encodingStart := time.Now()
@@ -924,8 +978,8 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 		l.Json = time.Since(encodingStart)
 	}()
 
-	num := sg.countUids(0)
-	glog.Infof("toFastJSON. Num uids: %d\n", num)
+	// num := sg.countUids(0)
+	// glog.Infof("toFastJSON. Num uids: %d\n", num)
 
 	enc := newEncoder()
 	var err error
@@ -1039,22 +1093,22 @@ func facetName(fieldName string, f *api.Facet) string {
 }
 
 // This method gets the values and children for a subprotos.
-func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int, path []string) error {
+func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, level int, _ []string) error {
 	// if sg.numEntered%10000 == 0 {
-	glog.Infof("%s Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v\n",
-		strings.Repeat(" .", level), sg, sg.numEntered, level, sg.Attr, uid, path[:level])
+	// glog.Infof("%s Entered %p subgraph. numEntered: %d. Level: %d. Attr: %s. uid: %d. Path: %v\n",
+	// 	strings.Repeat(" .", level), sg, sg.numEntered, level, sg.Attr, uid, path[:level])
 	// }
 	sg.numEntered++
 
-	hash := strings.Join(path[:level], " ")
-	if sg.uniqPaths == nil {
-		sg.uniqPaths = make(map[string]int)
-	}
-	sg.uniqPaths[hash]++
-	if num := sg.uniqPaths[hash]; num > 1 {
-		debug.PrintStack()
-		glog.Errorf("----> The same path is being repeated %d times: %s \n", num, hash)
-	}
+	// hash := strings.Join(path[:level], " ")
+	// if sg.uniqPaths == nil {
+	// 	sg.uniqPaths = make(map[string]int)
+	// }
+	// sg.uniqPaths[hash]++
+	// if num := sg.uniqPaths[hash]; num > 1 {
+	// 	// debug.PrintStack()
+	// 	// glog.Errorf("----> The same path is being repeated %d times: %s \n", num, hash)
+	// }
 
 	if sg.Params.IgnoreReflex {
 		if alreadySeen(sg.Params.ParentIds, uid) {
@@ -1143,8 +1197,8 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode, leve
 					continue
 				}
 				uc := enc.newNode(fieldID)
-				path[level+1] = fieldName + strconv.FormatUint(childUID, 16)
-				if rerr := pc.preTraverse(enc, childUID, uc, level+1, path); rerr != nil {
+				// path[level+1] = fieldName + strconv.FormatUint(childUID, 16)
+				if rerr := pc.preTraverse(enc, childUID, uc, level+1, nil); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						if invalidUids == nil {
 							invalidUids = make(map[uint64]bool)
