@@ -262,7 +262,7 @@ Use any password you like for export, it is used to encrypt the p12 file.
 
 ##### Chrome
 * Goto Settings -> Privacy and Security -> Security -> Manage Certificates -> Your Certificates
-* Click on Import and import the `laptopuser.p12`
+* Click on Import and import the `laptopuser.p12`. For mac OS, this process returns back to KeyChain, and under the area "My Certificates" select `laptopuser.p12`.
 
 Next time you use Ratel to connect to an alpha with Client authentication
 enabled the browser will prompt you for a client certificate to use. Select the client's
