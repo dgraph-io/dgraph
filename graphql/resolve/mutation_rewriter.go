@@ -670,6 +670,42 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	return dgQuery
 }
 
+// We need to delete the node with ^^ and then any reference we know about (via @hasInverse) into this node.
+func RemoveNodeReference(m schema.Mutation, authRw *authRewriter, qry *gql.GraphQuery) []interface{} {
+	var deletes []interface{}
+	for _, fld := range m.MutatedType().Fields() {
+		invField := fld.Inverse()
+		if invField == nil {
+			// This field be a reverse edge, in that case we need to delete the incoming connections
+			// to this node via its forward edges.
+			invField = fld.ForwardEdge()
+			if invField == nil {
+				continue
+			}
+		}
+		varName := authRw.varGen.Next(fld.Type(), "", "", false)
+
+		qry.Children = append(qry.Children,
+			&gql.GraphQuery{
+				Var:  varName,
+				Attr: invField.Type().DgraphPredicate(fld.Name()),
+			})
+
+		delFldName := fld.Type().DgraphPredicate(invField.Name())
+		del := map[string]interface{}{"uid": MutationQueryVarUID}
+		if invField.Type().ListType() == nil {
+			deletes = append(deletes, map[string]interface{}{
+				"uid":      fmt.Sprintf("uid(%s)", varName),
+				delFldName: del})
+		} else {
+			deletes = append(deletes, map[string]interface{}{
+				"uid":      fmt.Sprintf("uid(%s)", varName),
+				delFldName: []interface{}{del}})
+		}
+	}
+	return deletes
+}
+
 func (drw *deleteRewriter) Rewrite(
 	ctx context.Context,
 	m schema.Mutation) ([]*UpsertMutation, error) {
@@ -703,44 +739,12 @@ func (drw *deleteRewriter) Rewrite(
 	}
 
 	deletes := []interface{}{map[string]interface{}{"uid": "uid(x)"}}
-
-	// we need to delete this node with ^^ and then any reference we know about
-	// (via @hasInverse) into this node.
-	for _, fld := range m.MutatedType().Fields() {
-		invField := fld.Inverse()
-		if invField == nil {
-			// This field be a reverse edge, in that case we need to delete the incoming connections
-			// to this node via its forward edges.
-			invField = fld.ForwardEdge()
-			if invField == nil {
-				continue
-			}
-		}
-		varName := varGen.Next(fld.Type(), "", "", false)
-
-		qry.Children = append(qry.Children,
-			&gql.GraphQuery{
-				Var:  varName,
-				Attr: invField.Type().DgraphPredicate(fld.Name()),
-			})
-
-		delFldName := fld.Type().DgraphPredicate(invField.Name())
-		del := map[string]interface{}{"uid": MutationQueryVarUID}
-		if invField.Type().ListType() == nil {
-			deletes = append(deletes,
-				map[string]interface{}{
-					"uid":      fmt.Sprintf("uid(%s)", varName),
-					delFldName: del})
-		} else {
-			deletes = append(deletes,
-				map[string]interface{}{
-					"uid":      fmt.Sprintf("uid(%s)", varName),
-					delFldName: []interface{}{del}})
-		}
+	// We need to remove node reference only if auth rule succeeds.
+	if qry.Attr != m.ResponseName()+"()" {
+		deletes = append(deletes, RemoveNodeReference(m, authRw, qry))
 	}
 
 	b, err := json.Marshal(deletes)
-
 	var finalQry *gql.GraphQuery
 	// This rewrites the Upsert mutation so we can query the nodes before deletion. The query result
 	// is later added to delete mutation result.
