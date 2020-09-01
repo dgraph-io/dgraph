@@ -37,7 +37,7 @@ var ErrBlockDoesNotExist = errors.New("block does not exist")
 // ErrInvalidSignature is returned when trying to validate a vote message with an invalid signature
 var ErrInvalidSignature = errors.New("signature is not valid")
 
-// ErrSetIDMismatch is returned when trying to validate a vote message with an invalid voter set ID
+// ErrSetIDMismatch is returned when trying to validate a vote message with an invalid voter set ID, or when receiving a catch up message with a different set ID
 var ErrSetIDMismatch = errors.New("set IDs do not match")
 
 // ErrRoundMismatch is returned when trying to validate a vote message that isn't for the current round
@@ -77,3 +77,12 @@ var ErrMinVotesNotMet = errors.New("minimum number of votes not met in a Justifi
 
 // ErrInvalidCatchUpRound is returned when a catch-up message is received with an invalid round
 var ErrInvalidCatchUpRound = errors.New("catch up request is for future round")
+
+// ErrInvalidCatchUpResponseRound is returned when a catch-up response is received with an invalid round
+var ErrInvalidCatchUpResponseRound = errors.New("catch up response is not for previous round")
+
+// ErrGHOSTlessCatchUp is returned when a catch up response does not contain a valid grandpa-GHOST (ie. finalized block)
+var ErrGHOSTlessCatchUp = errors.New("catch up response does not contain grandpa-GHOST")
+
+// ErrCatchUpResponseNotCompletable is returned when the round represented by the catch up response is not completable
+var ErrCatchUpResponseNotCompletable = errors.New("catch up response is not completable")

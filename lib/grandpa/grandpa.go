@@ -114,7 +114,7 @@ func NewService(cfg *Config) (*Service, error) {
 		logger:             logger,
 		ctx:                ctx,
 		cancel:             cancel,
-		state:              NewState(cfg.Voters, cfg.SetID, 0),
+		state:              NewState(cfg.Voters, cfg.SetID, 0), // TODO: determine current round
 		blockState:         cfg.BlockState,
 		digestHandler:      cfg.DigestHandler,
 		keypair:            cfg.Keypair,
@@ -138,6 +138,8 @@ func NewService(cfg *Config) (*Service, error) {
 
 // Start begins the GRANDPA finality service
 func (s *Service) Start() error {
+	// TODO: determine if we need to send a catch-up request
+
 	go func() {
 		err := s.initiate()
 		if err != nil {

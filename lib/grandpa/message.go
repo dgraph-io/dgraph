@@ -216,5 +216,13 @@ func (r *catchUpResponse) Type() byte {
 
 // ToConsensusMessage converts the catchUpResponse into a network-level consensus message
 func (r *catchUpResponse) ToConsensusMessage() (*ConsensusMessage, error) {
-	return nil, nil
+	enc, err := scale.Encode(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ConsensusMessage{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              append([]byte{catchUpResponseType}, enc...),
+	}, nil
 }
