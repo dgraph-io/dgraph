@@ -162,6 +162,7 @@ func TestStringCustomClaim(t *testing.T) {
 	require.NoError(t, err)
 
 	test.LoadSchemaFromString(t, string(authSchema))
+	testutil.SetAuthMeta(string(authSchema))
 
 	// Token with string custom claim
 	// "https://xyz.io/jwt/claims": "{\"USER\": \"50950b40-262f-4b26-88a7-cbbb780b2176\", \"ROLE\": \"ADMIN\"}",
@@ -187,6 +188,7 @@ func TestAudienceClaim(t *testing.T) {
 	require.NoError(t, err)
 
 	test.LoadSchemaFromString(t, string(authSchema))
+	testutil.SetAuthMeta(string(authSchema))
 
 	// Verify that authorization information is set correctly.
 	metainfo := authorization.GetAuthMeta()
@@ -250,6 +252,7 @@ func TestJWTExpiry(t *testing.T) {
 	require.NoError(t, err)
 
 	test.LoadSchemaFromString(t, string(authSchema))
+	testutil.SetAuthMeta(string(authSchema))
 
 	// Verify that authorization information is set correctly.
 	metainfo := authorization.GetAuthMeta()
@@ -708,6 +711,8 @@ func TestAuthQueryRewriting(t *testing.T) {
 		strSchema := string(result)
 
 		authMeta, err := authorization.Parse(strSchema)
+		authorization.SetAuthMeta(authMeta)
+
 		metaInfo := &testutil.AuthMeta{
 			PublicKey: authMeta.VerificationKey,
 			Namespace: authMeta.Namespace,

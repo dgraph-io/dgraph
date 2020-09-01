@@ -929,3 +929,26 @@ func TestOptionsForUiKeywords(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resp.StatusCode >= 200 && resp.StatusCode < 300)
 }
+
+func TestNonExistentPath(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/non-existent-url", addr), nil)
+	require.NoError(t, err)
+
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, resp.StatusCode, 404)
+	require.Equal(t, resp.Status, "404 Not Found")
+}
+
+func TestUrl(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, addr, nil)
+	require.NoError(t, err)
+
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	require.True(t, resp.StatusCode >= 200 && resp.StatusCode < 300)
+}
