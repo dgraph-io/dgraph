@@ -103,7 +103,7 @@ func generateConflictKeys(ctx context.Context, p *subMutation) map[uint64]struct
 		key := x.DataKey(edge.Attr, edge.Entity)
 		pk, err := x.Parse(key)
 		if err != nil {
-			glog.V(2).Info("Error in generating conflic keys", err)
+			glog.V(2).Info("Error in generating conflict keys", err)
 			continue
 		}
 
