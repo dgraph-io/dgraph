@@ -50,7 +50,8 @@ func fragmentInMutation(t *testing.T) {
 	gqlResponse := addStarshipParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	addStarshipExpected := `{"addStarship":{
+	addStarshipExpected := `
+	{"addStarship":{
 		"starship":[{
 			"name":"Millennium Falcon",
 			"length":2

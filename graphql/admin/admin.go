@@ -360,6 +360,16 @@ var (
 	mainHealthStore = &GraphQLHealthStore{}
 )
 
+func SchemaValidate(sch string) error {
+	schHandler, err := schema.NewHandler(sch, true)
+	if err != nil {
+		return err
+	}
+
+	_, err = schema.FromString(schHandler.GQLSchema())
+	return err
+}
+
 // GraphQLHealth is used to report the health status of a GraphQL server.
 // It is required for kubernetes probing.
 type GraphQLHealth struct {
@@ -602,7 +612,7 @@ func getCurrentGraphQLSchema() (*gqlSchema, error) {
 }
 
 func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
-	schHandler, err := schema.NewHandler(sch.Schema)
+	schHandler, err := schema.NewHandler(sch.Schema, false)
 	if err != nil {
 		return nil, err
 	}
