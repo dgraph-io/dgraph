@@ -6,10 +6,6 @@ services:
     image: dgraph/dgraph:latest
     container_name: alpha1
     working_dir: /data/alpha1
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
     labels:
       cluster: test
     ports:
@@ -26,10 +22,6 @@ services:
     image: dgraph/dgraph:latest
     container_name: zero1
     working_dir: /data/zero1
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
     labels:
       cluster: test
     ports:
