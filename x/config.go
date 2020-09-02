@@ -34,7 +34,7 @@ type Options struct {
 	PollInterval time.Duration
 	// GraphqlExtension will be set to see extensions in graphql results
 	GraphqlExtension bool
-	// GraphqlDebug will enable debug_off mode in GraphQL
+	// GraphqlDebug will enable debug mode in GraphQL
 	GraphqlDebug bool
 }
 

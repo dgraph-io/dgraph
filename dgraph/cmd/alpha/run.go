@@ -200,7 +200,7 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
-	flag.Bool("graphql_debug", false, "Enable debug_off mode in GraphQL")
+	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. This returns auth errors to clients. We do not recommend turning it on for production.")
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
