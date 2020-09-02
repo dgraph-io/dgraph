@@ -553,9 +553,9 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			IsInternal:   gchild.IsInternal,
 		}
 
-		// If parent has @cascade (with or without params), inherit @cascade (with no params)
+		// Inherit from the parent.
 		if len(sg.Params.Cascade) > 0 {
-			args.Cascade = append(args.Cascade, "__all__")
+			args.Cascade = append(args.Cascade, sg.Params.Cascade...)
 		}
 		// Allow over-riding at this level.
 		if len(gchild.Cascade) > 0 {
@@ -2010,6 +2010,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
 			})
 		}
+		if sg.Params.AfterUID > 0 {
+			i := sort.Search(len(sg.DestUIDs.Uids), func(i int) bool { return sg.DestUIDs.Uids[i] > sg.Params.AfterUID })
+			sg.DestUIDs.Uids = sg.DestUIDs.Uids[i:]
+		}
+
 	case sg.Attr == "":
 		// This is when we have uid function in children.
 		if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid" {

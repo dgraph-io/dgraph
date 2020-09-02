@@ -200,7 +200,9 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
+	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. This returns auth errors to clients. We do not recommend turning it on for production.")
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
+	flag.Int("ludicrous_concurrency", 2000, "Number of concurrent threads in ludicrous mode")
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
 
@@ -508,6 +510,23 @@ func setupServer(closer *y.Closer) {
 		adminSchemaHandler(w, r, adminServer)
 	})))
 
+	http.Handle("/admin/schema/validate", http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		schema := readRequest(w, r)
+		w.Header().Set("Content-Type", "application/json")
+
+		err := admin.SchemaValidate(string(schema))
+		if err == nil {
+			w.WriteHeader(http.StatusOK)
+			x.SetStatus(w, "success", "Schema is valid")
+			return
+		}
+
+		w.WriteHeader(http.StatusBadRequest)
+		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
+		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
+	}))
+
 	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			shutDownHandler(w, r, adminServer)
@@ -674,20 +693,21 @@ func run() {
 	x.Check(err)
 
 	x.WorkerConfig = x.WorkerOptions{
-		ExportPath:          Alpha.Conf.GetString("export"),
-		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
-		Tracing:             Alpha.Conf.GetFloat64("trace"),
-		MyAddr:              Alpha.Conf.GetString("my"),
-		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
-		RaftId:              cast.ToUint64(Alpha.Conf.GetString("idx")),
-		WhiteListedIPRanges: ips,
-		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
-		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
-		AclEnabled:          secretFile != "",
-		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
-		AbortOlderThan:      abortDur,
-		StartTime:           startTime,
-		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
+		ExportPath:           Alpha.Conf.GetString("export"),
+		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
+		Tracing:              Alpha.Conf.GetFloat64("trace"),
+		MyAddr:               Alpha.Conf.GetString("my"),
+		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
+		RaftId:               cast.ToUint64(Alpha.Conf.GetString("idx")),
+		WhiteListedIPRanges:  ips,
+		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
+		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
+		AclEnabled:           secretFile != "",
+		SnapshotAfter:        Alpha.Conf.GetInt("snapshot_after"),
+		AbortOlderThan:       abortDur,
+		StartTime:            startTime,
+		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
+		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
 	}
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
@@ -701,6 +721,7 @@ func run() {
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
+	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
@@ -753,29 +774,27 @@ func run() {
 		}
 	}()
 
-	// Setup external communication.
-	aclCloser := y.NewCloser(1)
+	updaters := y.NewCloser(4)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
-		edgraph.ResetAcl()
-		edgraph.RefreshAcls(aclCloser)
-		edgraph.ResetCors()
+		edgraph.ResetAcl(updaters)
+		edgraph.RefreshAcls(updaters)
+		edgraph.ResetCors(updaters)
 		// Update the accepted cors origins.
-		for {
-			origins, err := edgraph.GetCorsOrigins(context.TODO())
+		for updaters.Ctx().Err() == nil {
+			origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
 			if err != nil {
 				glog.Errorf("Error while retriving cors origins: %s", err.Error())
 				continue
 			}
 			x.UpdateCorsOrigins(origins)
-			break
+			return
 		}
 	}()
 	// Listen for any new cors origin update.
-	corsCloser := y.NewCloser(1)
-	go listenForCorsUpdate(corsCloser)
+	go listenForCorsUpdate(updaters)
 
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we
 	// close alpha. This closer is for closing and waiting that subscription.
@@ -783,13 +802,24 @@ func run() {
 
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
-	aclCloser.SignalAndWait()
-	corsCloser.SignalAndWait()
+
+	// This might not close until group is given the signal to close. So, only signal here,
+	// wait for it after group is closed.
+	updaters.Signal()
+
 	worker.BlockingStop()
+	glog.Infoln("worker stopped.")
+
 	adminCloser.SignalAndWait()
-	glog.Info("Disposing server state.")
+	glog.Infoln("adminCloser closed.")
+
 	worker.State.Dispose()
 	x.RemoveCidFile()
+	glog.Info("worker.State disposed.")
+
+	updaters.Wait()
+	glog.Infoln("updaters closed.")
+
 	glog.Infoln("Server shutdown. Bye!")
 }
 
