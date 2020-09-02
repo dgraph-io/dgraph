@@ -24,12 +24,11 @@ type Todo @auth(
             } 
         }"""
     }
-){{
+){
     id: ID!
     text: String!
     owner: User
 }
-
 type User {
     username: String! @id
     todos: [Todo]
@@ -58,7 +57,7 @@ type Todo @auth(
         },
         { rule:  "{$ROLE: { eq: \"ADMIN\" } }"}
     ]}
-){{
+){
     id: ID!
     text: String! @search(by: [term])
     owner: User
