@@ -309,8 +309,16 @@ func (enc *encoder) setList(fj fastJsonNode, list bool) {
 	}
 }
 
+func (enc *encoder) normalize(fj fastJsonNode) ([]byte, error) {
+	return nil, nil
+}
+
 func (enc *encoder) setFacetsParent(fj fastJsonNode) {
 	fj.meta |= facetsBit
+}
+
+func (enc *encoder) appendAttrs(fj fastJsonNode, child fastJsonNode) {
+	enc.addChildren(fj, child)
 }
 
 // addChildren appends attrs to existing fj's attrs.
@@ -389,6 +397,10 @@ func (enc *encoder) fixOrder(fj fastJsonNode) {
 		left, right = right, next // Advance both pointers.
 	}
 	child.next = left // Child next is now pointed to the last node. Hence, correcting the order.
+}
+
+func (enc *encoder) getAttrs(fj fastJsonNode) uint16 {
+	return uint16((fj.meta & setBytes76) >> 40)
 }
 
 func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
