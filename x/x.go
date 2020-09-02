@@ -331,6 +331,22 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	}
 }
 
+func SetStatusWithErrors(w http.ResponseWriter, code string, errs []string) {
+	var qr queryRes
+	ext := make(map[string]interface{})
+	ext["code"] = code
+	for _, err := range errs {
+		qr.Errors = append(qr.Errors, &GqlError{Message: err, Extensions: ext})
+	}
+	if js, err := json.Marshal(qr); err == nil {
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
+	} else {
+		Panic(errors.Errorf("Unable to marshal: %+v", qr))
+	}
+}
+
 // SetHttpStatus is similar to SetStatus but sets a proper HTTP status code
 // in the response instead of always returning HTTP 200 (OK).
 func SetHttpStatus(w http.ResponseWriter, code int, msg string) {

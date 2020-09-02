@@ -17,20 +17,22 @@
 package schema
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
-
-	"github.com/dgraph-io/dgraph/worker"
-
 	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -482,6 +484,123 @@ func TestSchemaHistory(t *testing.T) {
 	require.JSONEq(t, `{
 		"getSchemaHistory": []
 	  }`, string(getResult.Data))
+}
+
+// verifyEmptySchema verifies that the schema is not set in the GraphQL server.
+func verifyEmptySchema(t *testing.T) {
+	schema := getGQLSchema(t, groupOneAdminServer)
+	require.Empty(t, schema.Schema)
+}
+
+func TestGQLSchemaValidate(t *testing.T) {
+	testCases := []struct {
+		schema string
+		errors x.GqlErrorList
+		valid  bool
+	}{
+		{
+			schema: `
+				type Task @auth(
+					query: { rule: "{$USERROLE: { eq: \"USER\"}}" }
+				) {
+					id: ID!
+					name: String!
+					occurrences: [TaskOccurrence] @hasInverse(field: task)
+				}
+				
+				type TaskOccurrence @auth(
+					query: { rule: "query { queryTaskOccurrence { task { id } } }" }
+				) {
+					id: ID!
+					due: DateTime
+					comp: DateTime
+					task: Task @hasInverse(field: occurrences)
+				}
+			`,
+			valid: true,
+		},
+		{
+			schema: `
+				type X {
+					id: ID @dgraph(pred: "X.id")
+					name: String
+				}
+				type Y {
+					f1: String! @dgraph(pred:"~movie")
+				}
+			`,
+			errors: x.GqlErrorList{{Message: "input:3: Type X; Field id: has the @dgraph directive but fields of type ID can't have the @dgraph directive."}, {Message: "input:7: Type Y; Field f1 is of type String, but reverse predicate in @dgraph directive only applies to fields with object types."}},
+			valid:  false,
+		},
+	}
+
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+
+	validateUrl := groupOneAdminServer + "/schema/validate"
+	var response x.QueryResWithData
+	for _, tcase := range testCases {
+		resp, err := http.Post(validateUrl, "text/plain", bytes.NewBuffer([]byte(tcase.schema)))
+		require.NoError(t, err)
+
+		decoder := json.NewDecoder(resp.Body)
+		err = decoder.Decode(&response)
+		require.NoError(t, err)
+
+		// Verify that we only validate the schema and not set it.
+		verifyEmptySchema(t)
+
+		if tcase.valid {
+			require.Equal(t, resp.StatusCode, http.StatusOK)
+			continue
+		}
+		require.Equal(t, resp.StatusCode, http.StatusBadRequest)
+		require.NotNil(t, response.Errors)
+		require.Equal(t, len(response.Errors), len(tcase.errors))
+		for idx, err := range response.Errors {
+			require.Equal(t, err.Message, tcase.errors[idx].Message)
+		}
+	}
+}
+
+func TestUpdateGQLSchemaFields(t *testing.T) {
+	schema := `
+	type Author {
+		id: ID!
+		name: String!
+	}`
+
+	generatedSchema, err := ioutil.ReadFile("generatedSchema.graphql")
+	require.NoError(t, err)
+
+	req := &common.GraphQLParams{
+		Query: `mutation updateGQLSchema($sch: String!) {
+			updateGQLSchema(input: { set: { schema: $sch }}) {
+				gqlSchema {
+					schema
+					generatedSchema
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": schema},
+	}
+	resp := req.ExecuteAsPost(t, groupOneAdminServer)
+	require.NotNil(t, resp)
+	require.Nilf(t, resp.Errors, "%s", resp.Errors)
+
+	var updateResp struct {
+		UpdateGQLSchema struct {
+			GQLSchema struct {
+				Schema          string
+				GeneratedSchema string
+			}
+		}
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &updateResp))
+
+	require.Equal(t, schema, updateResp.UpdateGQLSchema.GQLSchema.Schema)
+	require.Equal(t, string(generatedSchema), updateResp.UpdateGQLSchema.GQLSchema.GeneratedSchema)
 }
 
 func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {

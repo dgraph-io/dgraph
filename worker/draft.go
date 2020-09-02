@@ -243,7 +243,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		ops:     make(map[op]*y.Closer),
 	}
 	if x.WorkerConfig.LudicrousMode {
-		n.ex = newExecutor(&m.Applied)
+		n.ex = newExecutor(&m.Applied, x.WorkerConfig.LudicrousConcurrency)
 	}
 	return n
 }
