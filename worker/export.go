@@ -694,7 +694,7 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 					if !ok {
 						return nil, errors.Errorf("cannot read value of dgraph.type entry")
 					}
-					if string(val) == "dgraph.graphql" || string(val) == "dgraph.graphql.history" {
+					if string(val) == "dgraph.graphql" {
 						return nil, nil
 					}
 				}
