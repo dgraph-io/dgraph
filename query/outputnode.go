@@ -87,24 +87,6 @@ type encoder struct {
 	// for simplicity. curSize can be made more accurate by adding these fields.
 	curSize uint64
 
-	// metaSlice has meta data for all fastJsonNodes.
-	// meta stores meta information for a fastJsonNode in an uint64. Layout is as follows.
-	// Bytes 4-1 contains offset(uint32) for Arena.
-	// Bytes 7-6 contains attr.
-	// Bit MSB(first bit in Byte-8) contains list field value.
-	// Bit SecondMSB(second bit in Byte-8) contains facetsParent field value.
-	// Byte-5 is not getting used as of now.
-	// |-----------------------------------------------------------------------|
-	// |    8        |    7   |    6   |    5   |    4   |    3   |    2   |    1   |
-	// |-----------------------------------------------------------------------|
-	// | MSB - list  |                 | Unused |                                   |
-	// | SecondMSB - |     Attr ID     | For    |        Offset inside Arena        |
-	// | facetsParent|                 | Now    |                                   |
-	// |-----------------------------------------------------------------------|
-	// metaSlice []uint64
-	// // childrenMap contains mapping of fastJsonNode to its children.
-	// childrenMap map[fastJsonNode][]fastJsonNode
-
 	// Allocator for nodes.
 	alloc *Allocator
 
@@ -113,7 +95,21 @@ type encoder struct {
 }
 
 type node struct {
-	meta  uint64
+	// meta stores meta information for a fastJsonNode in an uint64. Layout is as follows.
+	// Bytes 4-1 contains offset(uint32) for Arena.
+	// Bytes 7-6 contains attr.
+	// Bit MSB(first bit in Byte-8) contains list field value.
+	// Bit SecondMSB(second bit in Byte-8) contains facetsParent field value.
+	// Byte-5 is not getting used as of now.
+	// |--------------------------------------------------------------|
+	// |    8        |    7   |    6   |    5   |  4  |  3  |  2 |  1 |
+	// |--------------------------------------------------------------|
+	// | MSB - list  |                 | Unused |                     |
+	// | SecondMSB - |     Attr ID     | For    | Offset inside Arena |
+	// | facetsParent|                 | Now    |                     |
+	// |--------------------------------------------------------------|
+	meta uint64
+
 	next  *node
 	child *node
 }
@@ -205,10 +201,21 @@ type Allocator struct {
 	curBuf   int
 	curIdx   int
 	buffers  [][]byte
+	size     uint64
 }
 
 func NewAllocator(sz int) *Allocator {
 	return &Allocator{pageSize: sz}
+}
+
+func (a *Allocator) Size() uint64 {
+	return a.size
+}
+
+func (a *Allocator) Release() {
+	for _, b := range a.buffers {
+		z.Free(b)
+	}
 }
 
 func (a *Allocator) Allocate(sz int) []byte {
@@ -234,13 +241,8 @@ func (a *Allocator) Allocate(sz int) []byte {
 
 	slice := cb[a.curIdx : a.curIdx+sz]
 	a.curIdx += sz
+	a.size += uint64(sz)
 	return slice
-}
-
-func (a *Allocator) Release() {
-	for _, b := range a.buffers {
-		z.Free(b)
-	}
 }
 
 // fastJsonNode represents node of a tree, which is formed to convert a subgraph into json response
@@ -294,9 +296,9 @@ func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) error {
 
 	// Also increase curSize.
 	enc.curSize += uint64(len(sv))
-	if enc.curSize > maxEncodedSize {
+	if size := enc.alloc.Size() + enc.curSize; size > maxEncodedSize {
 		return fmt.Errorf("estimated response size: %d is bigger than threshold: %d",
-			enc.curSize, maxEncodedSize)
+			size, maxEncodedSize)
 	}
 	return nil
 }
@@ -1071,8 +1073,8 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 
 	// Return error if encoded buffer size exceeds than a threshold size.
 	if uint64(bufw.Len()) > maxEncodedSize {
-		return nil, fmt.Errorf("while writing to buffer. Encoded response size: %d is bigger than threshold: %d",
-			bufw.Len(), maxEncodedSize)
+		return nil, fmt.Errorf("while writing to buffer. Encoded response size: %d"+
+			" is bigger than threshold: %d", bufw.Len(), maxEncodedSize)
 	}
 
 	// Put encoder's arena back to arena pool.

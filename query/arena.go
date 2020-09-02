@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/dgraph-io/ristretto/z"
@@ -70,7 +71,7 @@ func (a *arena) put(b []byte) (uint32, error) {
 	var sizeBuf [binary.MaxVarintLen64]byte
 	w := binary.PutVarint(sizeBuf[:], int64(len(b)))
 	offset := len(a.buf)
-	if uint64(len(a.buf)+w+len(b)) > maxEncodedSize {
+	if uint64(len(a.buf)+w+len(b)) > math.MaxUint32 {
 		msg := fmt.Sprintf("errNotEnoughSpaceArena, curSize: %d, maxSize: %d, bufSize: %d",
 			len(a.buf), maxEncodedSize, w+len(b))
 		return 0, errors.New(msg)
