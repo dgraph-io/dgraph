@@ -1502,7 +1502,9 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case string:
 			i, err := strconv.ParseFloat(v, 64)
 			// An error can be encountered if we had a value that can't be fit into
-			// a 32 bit int.
+			// a 32 bit floating point number..
+			// Lets try to see if this number could be converted to int32 without losing
+			// information, otherwise return error.
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
@@ -1555,7 +1557,7 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			val = i
 		case json.Number:
 			// To use whole 64-bit range for int64 without any coercing,
-			// We pass int64 values as string to dgraph and parse as integer here
+			// We pass int64 values as string to dgraph and parse it as integer here
 			i, err := strconv.ParseInt(v.String(), 10, 64)
 			if err != nil {
 				return nil, valueCoercionError(v)

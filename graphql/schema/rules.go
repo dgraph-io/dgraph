@@ -49,33 +49,6 @@ func init() {
 	validator.AddRule("Check range for Int type", intRangeCheck)
 
 }
-func ValueKindToString(valKind ast.ValueKind) string {
-	var valueKind string
-	switch valKind {
-	case ast.Variable:
-		valueKind = "Variable"
-	case ast.StringValue:
-		valueKind = "String"
-	case ast.IntValue:
-		valueKind = "Int"
-	case ast.FloatValue:
-		valueKind = "Float"
-	case ast.BlockValue:
-		valueKind = "Block"
-	case ast.BooleanValue:
-		valueKind = "Boolean"
-	case ast.NullValue:
-		valueKind = "Null"
-	case ast.EnumValue:
-		valueKind = "Enum"
-	case ast.ListValue:
-		valueKind = "List"
-	case ast.ObjectValue:
-		valueKind = "Object"
-
-	}
-	return valueKind
-}
 
 func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string) gqlerror.List {
 	var errs []*gqlerror.Error

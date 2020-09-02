@@ -131,3 +131,29 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 		}
 	})
 }
+
+func ValueKindToString(valKind ast.ValueKind) string {
+	switch valKind {
+	case ast.Variable:
+		return "Variable"
+	case ast.StringValue:
+		return "String"
+	case ast.IntValue:
+		return "Int"
+	case ast.FloatValue:
+		return "Float"
+	case ast.BlockValue:
+		return "Block"
+	case ast.BooleanValue:
+		return "Boolean"
+	case ast.NullValue:
+		return "Null"
+	case ast.EnumValue:
+		return "Enum"
+	case ast.ListValue:
+		return "List"
+	case ast.ObjectValue:
+		return "Object"
+	}
+	return ""
+}
