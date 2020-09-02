@@ -1190,7 +1190,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				len(pc.facetsMatrix), len(pc.uidMatrix))
 		}
 
-		idx := algo.IndexOf(sg.SrcUIDs, uid)
+		idx := algo.IndexOf(pc.SrcUIDs, uid)
 		if idx < 0 {
 			continue
 		}
