@@ -1142,9 +1142,11 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		hasChild = true
 		if !sg.Params.Normalize {
 			enc.AddListChild(fj, n1)
+			enc.fixOrder(n1)
 			continue
 		}
 
+		enc.fixOrder(n1)
 		// Lets normalize the response now.
 		normalized, err := enc.normalize(n1)
 		if err != nil {
@@ -1190,6 +1192,7 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 			return nil, err
 		}
 	}
+	enc.fixOrder(n)
 
 	// According to GraphQL spec response should only contain data, errors and extensions as top
 	// level keys. Hence we send server_latency under extensions key.
@@ -1415,12 +1418,12 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 						// the expectation is that its children have
 						// already been normalized.
 
-						var normAttrs []*node
+						enc.fixOrder(uc)
 						// TODO: fix this.
-						// normAttrs, err := enc.normalize(uc)
-						// if err != nil {
-						// 	return err
-						// }
+						normAttrs, err := enc.normalize(uc)
+						if err != nil {
+							return err
+						}
 
 						for _, c := range normAttrs {
 							// Adding as list child irrespective of the type of pc
@@ -1458,8 +1461,9 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 					if pc.List {
 						enc.AddListChild(dst, uc)
 					} else {
-						// enc.AddMapChild(dst, uc)
+						enc.AddMapChild(dst, uc)
 					}
+					enc.fixOrder(uc)
 				}
 			}
 
