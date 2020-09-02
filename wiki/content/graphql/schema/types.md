@@ -132,7 +132,7 @@ type Comment implements Post {
 
 ### Password type
 
-A password for an entity is set with setting the schema for the attribute to be of type `password`.  Passwords cannot be queried directly, only checked for a match using the `checkAuthorPassword` function.
+A password for an entity is set with setting the schema for the attribute to be of type `password`.  Passwords cannot be queried directly, only checked for a match using the `checkTypePassword` function where `Type` is the node type.
 The passwords are encrypted using [bcrypt](https://en.wikipedia.org/wiki/Bcrypt).
 
 For example: to set a password, first set schema:

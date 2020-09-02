@@ -45,7 +45,7 @@ Reference: [Subscriptions](/graphql/subscriptions)
 
 ### @secret
 
-`@secret`directive used to store secret information, it gets encrypted and the stored in the Database
+`@secret` directive is used to store secret information, it gets encrypted and the stored in the Database
 
 Reference: [Password Type](/graphql/schema/#password-type)
 
