@@ -975,6 +975,7 @@ func (sg *SubGraph) addGroupby(enc *encoder, fj fastJsonNode,
 		}
 		enc.AddListChild(g, uc)
 	}
+	enc.fixOrder(g)
 	enc.AddListChild(fj, g)
 	return nil
 }
