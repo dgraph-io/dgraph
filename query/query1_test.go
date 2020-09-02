@@ -673,12 +673,12 @@ func TestHasFuncAtRootWithAfterOnUIDs(t *testing.T) {
 
 	query := `
 	{
-			var(func: has(name)) {
-					uids as uid
-			}
-			me(func: uid(uids), first: 2, after: 0x5) {
-					uid
-			}
+		var(func: has(name)) {
+			uids as uid
+		}
+		me(func: uid(uids), first: 2, after: 0x5) {
+			uid
+		}
 	}
 	`
 
@@ -690,14 +690,14 @@ func TestHasFuncAtRootWithAfterOnUIDsOtherThanRoot(t *testing.T) {
 
 	query := `
 	{
-			var(func: has(name)) {
-					uids as uid
+		var(func: has(name)) {
+			uids as uid
+		}
+		me(func: has(name), first: 2, after: 0x5) {
+			uid @filter(uid(uids)) {
+				uid
 			}
-			me(func: uid(uids), first: 2, after: 0x5) {
-					@filter(uid(uids)) {
-							uid
-					}
-			}
+		}
 	}
 	`
 
