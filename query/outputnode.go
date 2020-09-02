@@ -349,6 +349,10 @@ func (enc *encoder) addChildren(fj fastJsonNode, child fastJsonNode) {
 
 	fc.next, child.next = child.next, fc.next // 1 -> 13 (13 -> 11 above) 11 -> 5
 
+	// 1 -> 2 -> 3
+	// 11 -> 12 -> 13
+	// 1 -> 12
+
 	// The above logic should also work for:
 	// addChildren(11 (child) -> 13 -> 12 (clast))
 	// Child 1 -> 5 -> 4 -> 3 -> 2
@@ -774,107 +778,239 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 	return nil
 }
 
-func merge(parent, child [][]fastJsonNode) ([][]fastJsonNode, error) {
+// TODO: should we do deep copy.
+func (enc *encoder) copyFastJsonNode(fj fastJsonNode) (fastJsonNode, int) {
+	if fj == nil {
+		return fj, 0
+	}
+
+	var start, cur fastJsonNode
+	nodeCount := 0
+
+	for fj != nil {
+		nodeCount++
+		nn := enc.newNode(enc.getAttr(fj))
+		nn.meta = fj.meta
+		nn.next = nil
+		nn.child = fj.child
+		if cur == nil {
+			cur = nn
+			start = nn
+			continue
+		}
+		cur.next = nn
+		cur = nn
+
+		fj = fj.next
+	}
+
+	return start, nodeCount
+}
+
+func (enc *encoder) copySingleNode(fj fastJsonNode) fastJsonNode {
+	if fj == nil {
+		return fj
+	}
+
+	nn := enc.newNode(enc.getAttr(fj))
+	nn.meta = fj.meta
+	nn.child = fj.child
+	nn.next = nil
+
+	return nn
+}
+
+func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) {
 	if len(parent) == 0 {
 		return child, nil
 	}
 
 	// Here we merge two slices of maps.
-	mergedList := make([][]fastJsonNode, 0, len(parent)*len(child))
+	mergedList := make([]fastJsonNode, 0)
 	cnt := 0
 	for _, pa := range parent {
 		for _, ca := range child {
-			cnt += len(pa) + len(ca)
+			// cnt += len(pa) + len(ca)
+			// if cnt > x.Config.NormalizeNodeLimit {
+			// 	return nil, errors.Errorf(
+			// 		"Couldn't evaluate @normalize directive - too many results")
+			// }
+			// list := make([]fastJsonNode, 0, len(pa)+len(ca))
+			// list = append(list, pa...)
+			// list = append(list, ca...)
+
+			paCopy, paNodeCount := enc.copyFastJsonNode(pa)
+			caCopy, caNodeCount := enc.copyFastJsonNode(ca)
+
+			temp := paCopy
+			for temp.next != nil {
+				temp = temp.next
+			}
+			temp.next = caCopy
+
+			cnt += paNodeCount + caNodeCount
 			if cnt > x.Config.NormalizeNodeLimit {
 				return nil, errors.Errorf(
 					"Couldn't evaluate @normalize directive - too many results")
 			}
-			list := make([]fastJsonNode, 0, len(pa)+len(ca))
-			list = append(list, pa...)
-			list = append(list, ca...)
-			mergedList = append(mergedList, list)
+
+			mergedList = append(mergedList, paCopy)
 		}
 	}
 	return mergedList, nil
 }
 
 // normalize returns all attributes of fj and its children (if any).
-// func (enc *encoder) normalize(fj fastJsonNode) ([][]fastJsonNode, error) {
-// 	cnt := 0
-// 	fjAttrs := enc.children(fj)
-// 	for _, a := range fjAttrs {
-// 		// Here we are counting all non-scalar attributes of fj. If there are any such
-// 		// attributes, we will flatten it, otherwise we will return all attributes.
-// 		// We should only consider those nodes for flattening which have children and are not
-// 		// facetsParent.
-// 		if len(enc.children(a)) > 0 && !enc.getFacetsParent(a) {
-// 			cnt++
-// 		}
-// 	}
+func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
+	cnt := 0
+	fjAttrs := enc.children(fj)
+	for fjAttrs != nil {
+		// Here we are counting all non-scalar attributes of fj. If there are any such
+		// attributes, we will flatten it, otherwise we will return all attributes.
+		// We should only consider those nodes for flattening which have children and are not
+		// facetsParent.
+		if enc.children(fjAttrs) != nil && !enc.getFacetsParent(fjAttrs) {
+			cnt++
+		}
+		fjAttrs = fjAttrs.next
+	}
 
-// 	if cnt == 0 {
-// 		// Recursion base case
-// 		// There are no children, we can just return slice with fj.attrs map.
-// 		return [][]fastJsonNode{fjAttrs}, nil
-// 	}
+	if cnt == 0 {
+		// Recursion base case
+		// There are no children, we can just return slice with fj.attrs map.
+		return []fastJsonNode{enc.children(fj)}, nil
+	}
 
-// 	parentSlice := make([][]fastJsonNode, 0, 5)
-// 	// If the parents has attrs, lets add them to the slice so that it can be
-// 	// merged with children later.
-// 	attrs := make([]fastJsonNode, 0, len(fjAttrs)-cnt)
-// 	for _, a := range fjAttrs {
-// 		// Here, add all nodes which have either no children or they are facetsParent.
-// 		if len(enc.children(a)) == 0 || enc.getFacetsParent(a) {
-// 			attrs = append(attrs, a)
-// 		}
-// 	}
-// 	parentSlice = append(parentSlice, attrs)
+	parentSlice := make([]fastJsonNode, 0, 5)
+	// If the parents has attrs, lets add them to the slice so that it can be
+	// merged with children later.
+	// attrs := make([]fastJsonNode, 0) // TODO: preallocate.
+	var attrs fastJsonNode
+	var attrCur fastJsonNode
+	fjAttrs = enc.children(fj)
+	for fjAttrs != nil {
+		// Here, add all nodes which have either no children or they are facetsParent.
+		if enc.children(fjAttrs) == nil || enc.getFacetsParent(fjAttrs) {
+			// attrs = append(attrs, fjAttrs)
+			if attrCur == nil {
+				attrCur = enc.copySingleNode(fjAttrs)
+				attrs = attrCur
+				continue
+			}
+			attrCur.next = enc.copySingleNode(fjAttrs)
+			attrCur = attrCur.next
+		}
+		fjAttrs = fjAttrs.next
+	}
 
-// 	for ci := 0; ci < len(fjAttrs); {
-// 		childNode := fjAttrs[ci]
-// 		// Here, exclude all nodes which have either no children or they are facetsParent.
-// 		if len(enc.children(childNode)) == 0 || enc.getFacetsParent(childNode) {
-// 			ci++
-// 			continue
-// 		}
-// 		childSlice := make([][]fastJsonNode, 0, 5)
-// 		for ci < len(fjAttrs) && enc.getAttr(childNode) == enc.getAttr(fjAttrs[ci]) {
-// 			childSlice = append(childSlice, enc.children(fjAttrs[ci]))
-// 			ci++
-// 		}
-// 		// Merging with parent.
-// 		var err error
-// 		parentSlice, err = merge(parentSlice, childSlice)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
+	parentSlice = append(parentSlice, attrs)
 
-// 	uidAttrID := enc.idForAttr("uid")
-// 	for i, slice := range parentSlice {
-// 		sort.Sort(nodeSlice{nodes: slice, enc: enc})
+	fjAttrs = enc.children(fj)
+	for fjAttrs != nil {
+		childNode := fjAttrs
+		// Here, exclude all nodes which have either no children or they are facetsParent.
+		if enc.children(childNode) == nil || enc.getFacetsParent(childNode) {
+			fjAttrs = fjAttrs.next
+			continue
+		}
 
-// 		first := -1
-// 		last := 0
-// 		for i := range slice {
-// 			if enc.getAttr(slice[i]) == uidAttrID {
-// 				if first == -1 {
-// 					first = i
-// 				}
-// 				last = i
-// 			}
-// 		}
-// 		if first != -1 && first != last {
-// 			if first == 0 {
-// 				parentSlice[i] = slice[last:]
-// 			} else {
-// 				parentSlice[i] = append(slice[:first], slice[last:]...)
-// 			}
-// 		}
-// 	}
+		childSlice := make([]fastJsonNode, 0, 5)
 
-// 	return parentSlice, nil
-// }
+		for fjAttrs != nil && enc.getAttr(childNode) == enc.getAttr(fjAttrs) {
+			childSlice = append(childSlice, enc.children(fjAttrs))
+			fjAttrs = fjAttrs.next
+		}
+		// Merging with parent.
+		var err error
+		parentSlice, err = enc.merge(parentSlice, childSlice)
+		if err != nil {
+			return nil, err
+		}
+		if fjAttrs != nil {
+			fjAttrs = fjAttrs.next
+		}
+	}
+
+	uidAttrID := enc.idForAttr("uid")
+	var newParentSlice []fastJsonNode
+	for _, slice := range parentSlice {
+		// sort.Sort(nodeSlice{nodes: slice, enc: enc})
+		slice = mergeSort(slice, enc)
+
+		var prev, first, cur, last fastJsonNode
+		cur = slice
+		for cur != nil {
+			if enc.getAttr(cur) == uidAttrID {
+				if first == nil {
+					first = prev
+				}
+				last = cur
+			}
+			prev = cur
+		}
+
+		if last != nil {
+			first.next = last.next
+		}
+
+		newParentSlice = append(newParentSlice, slice)
+	}
+
+	return newParentSlice, nil
+}
+
+func mergeSort(fj fastJsonNode, enc *encoder) fastJsonNode {
+	if (fj == nil) || (fj.next == nil) {
+		return fj
+	}
+
+	a, b := frontBackSplit(fj)
+
+	a = mergeSort(a, enc)
+	b = mergeSort(b, enc)
+
+	return sortedMerge(a, b, enc)
+}
+
+func frontBackSplit(source fastJsonNode) (fastJsonNode, fastJsonNode) {
+	slow := source
+	fast := source.next
+
+	for fast != nil {
+		fast = fast.next
+		if fast != nil {
+			slow = slow.next
+			fast = fast.next
+		}
+	}
+
+	temp := slow.next
+	slow.next = nil
+	return source, temp
+}
+
+func sortedMerge(a, b fastJsonNode, enc *encoder) fastJsonNode {
+	var result fastJsonNode
+
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+
+	attri := enc.getAttr(a)
+	attrj := enc.getAttr(b)
+	cmp := strings.Compare(enc.attrForID(attri), enc.attrForID(attrj))
+	if cmp < 0 {
+		result = a
+		result.next = sortedMerge(a.next, b, enc)
+	} else {
+		result = b
+		result.next = sortedMerge(a, b.next, enc)
+	}
+	return result
+}
 
 func (sg *SubGraph) addGroupby(enc *encoder, fj fastJsonNode,
 	res *groupResults, fname string) error {
@@ -1009,17 +1145,16 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 			continue
 		}
 
-		// TODO: fix normalize
 		// Lets normalize the response now.
-		// normalized, err := enc.normalize(n1)
-		// if err != nil {
-		// 	return err
-		// }
-		// for _, c := range normalized {
-		// 	node := enc.newNode(attrID)
-		// 	enc.addChildren(node, c)
-		// 	enc.AddListChild(fj, node)
-		// }
+		normalized, err := enc.normalize(n1)
+		if err != nil {
+			return err
+		}
+		for _, c := range normalized {
+			node := enc.newNode(attrID)
+			enc.addChildren(node, c)
+			enc.AddListChild(fj, node)
+		}
 	}
 
 	if !hasChild {
