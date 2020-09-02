@@ -139,6 +139,9 @@ const (
 },{
 	"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],
 	"name": "dgraph.type.Rule"
+}, {
+	"fields": [{"name": "dgraph.graphql.schema_history"},{"name": "dgraph.graphql.schema_created_at"}],
+	"name": "dgraph.graphql.history"
 }]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which

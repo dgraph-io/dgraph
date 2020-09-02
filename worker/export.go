@@ -649,7 +649,10 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 			// Ignore this predicate.
 		case pk.Attr == "dgraph.cors":
 			// Ignore this predicate.
-
+		case pk.Attr == "dgraph.graphql.schema_created_at":
+			// Ignore this predicate.
+		case pk.Attr == "dgraph.graphql.schema_history":
+			// Ignore this predicate.
 		case pk.IsData() && pk.Attr == "dgraph.graphql.schema":
 			// Export the graphql schema.
 			pl, err := posting.ReadPostingList(key, itr)
@@ -691,7 +694,7 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 					if !ok {
 						return nil, errors.Errorf("cannot read value of dgraph.type entry")
 					}
-					if string(val) == "dgraph.graphql" {
+					if string(val) == "dgraph.graphql" || string(val) == "dgraph.graphql.history" {
 						return nil, nil
 					}
 				}
