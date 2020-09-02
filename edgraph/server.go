@@ -495,6 +495,9 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if x.WorkerConfig.LudicrousMode {
 		// Mutations are automatically committed in case of ludicrous mode, so we don't
 		// need to manually commit.
+		if resp.Txn == nil {
+			return errors.Wrapf(err, "Txn Context is nil")
+		}
 		resp.Txn.Keys = resp.Txn.Keys[:0]
 		resp.Txn.CommitTs = qc.req.StartTs
 		return err
