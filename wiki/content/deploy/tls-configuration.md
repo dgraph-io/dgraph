@@ -192,7 +192,7 @@ The server will always **request** Client Authentication.  There are four differ
 | `VERIFYIFGIVEN`    | optional        | Client certificate is VERIFIED if provided (default) |
 | `REQUIREANDVERIFY` | required        | Client certificate is always VERIFIED (most secure) |
 
-{{% notice "note" %}}REQUIREANDVERIFY is the most secure but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
+{{% notice "note" %}} `REQUIREANDVERIFY` is the most secure but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
 
 ## Using Ratel UI with Client authentication
 
@@ -200,7 +200,7 @@ Ratel UI (and any other JavaScript clients built on top of `dgraph-js-http`)
 connect to Dgraph servers via HTTP, when TLS is enabled servers begin to expect
 HTTPS requests only.
 
-If you haven't already created the CA certificate and the node certificate for alpha servers from the earlier instructions (see [Dgraph Certificata Management Tool](#dgraph-certificate-management-tool)), the first step would be to generate these certificates, it can be done by the following command:
+If you haven't already created the CA certificate and the node certificate for alpha servers from the earlier instructions (see [Dgraph Certificate Management Tool](#dgraph-certificate-management-tool)), the first step would be to generate these certificates, it can be done by the following command:
 ```sh
 # Create rootCA and node certificates/keys
 $ dgraph cert -n localhost
@@ -246,23 +246,27 @@ also need to install client certificate on your browser:
 
 1. Generate a client certificate: `dgraph cert -c laptopuser`.
 2. Convert it to a `.p12` file:
-```sh
-openssl pkcs12 -export \
-   -out laptopuser.p12 \
-   -in tls/client.laptopuser.crt \
-   -inkey tls/client.laptopuser.key
-```
-Use any password you like for export, it is used to encrypt the p12 file.
+   ```sh
+   openssl pkcs12 -export \
+      -out laptopuser.p12 \
+      -in tls/client.laptopuser.crt \
+      -inkey tls/client.laptopuser.key
+   ```
+   Use any password you like for export, it is used to encrypt the p12 file.
 
 3. Import the client certificate to your browser. It can be done as follows:
-##### Firefox
 
-* Goto Preferences -> Prvacy & Security -> View Certificates -> Your Certificates
-* Click on Import and import the `laptopuser.p12`
+   ##### Chrome
+   * Goto Settings -> Privacy and Security -> Security -> Manage Certificates -> Your Certificates
+   * Click on Import and import the `laptopuser.p12`. For mac OS, this process returns back to KeyChain, and under the area "My Certificates" select `laptopuser.p12`.
 
-##### Chrome
-* Goto Settings -> Privacy and Security -> Security -> Manage Certificates -> Your Certificates
-* Click on Import and import the `laptopuser.p12`. For mac OS, this process returns back to KeyChain, and under the area "My Certificates" select `laptopuser.p12`.
+   {{% notice "note" %}}
+   Under macOS you can alternatively import the `.p12` file via command line by `security import ./laptopuser.p12 -P secretPassword`.
+   {{% /notice %}}
+   {{% notice "note" %}}
+   Mutual TLS may not work in Firefox because Firefox is unable to send privately-signed client certificates, this issue is filed [here](https://bugzilla.mozilla.org/show_bug.cgi?id=1662607).
+   {{% /notice %}}
+
 
 Next time you use Ratel to connect to an alpha with Client authentication
 enabled the browser will prompt you for a client certificate to use. Select the client's
@@ -274,7 +278,7 @@ succeed.
 When TLS is enabled, `curl` requests to Dgraph will need some specific options to work.  For instance (for an export request):
 
 ```
-curl --silent --cacert ./tls/ca.crt https://localhost:8080/admin/export
+curl --silent https://localhost:8080/admin/export
 ```
 
 If you are using `curl` with [Client Authentication](#client-authentication-options) set to `REQUIREANY` or `REQUIREANDVERIFY`, you will need to provide the client certificate and private key.  For instance (for an export request):
