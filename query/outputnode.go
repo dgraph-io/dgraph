@@ -56,7 +56,11 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}
-	return sgr.toFastJSON(l)
+	data, err := sgr.toFastJSON(l)
+	if err != nil {
+		glog.Errorf("while running ToJson: %v\n", err)
+	}
+	return data, errors.Wrapf(err, "while running ToJson")
 }
 
 // We are capping maxEncoded size to 4GB, as grpc encoding fails
@@ -1249,8 +1253,6 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 						invalidUids[childUID] = true
 						continue // next UID.
 					}
-					// Some other error.
-					glog.Errorf("Error while traversal: %v", rerr)
 					return rerr
 				}
 
