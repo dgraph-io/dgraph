@@ -41,6 +41,7 @@ enum PostType {
 
 """
 The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can represent values between -(2^63) and 2^63 - 1.
 """
 scalar Int64
 

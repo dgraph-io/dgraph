@@ -1463,17 +1463,12 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			val = strconv.FormatBool(v)
 		case string:
 		case json.Number:
-			valFloat, _ := v.Float64()
-			val = strconv.FormatFloat(valFloat, 'f', -1, 64)
+			val = v.String()
 		default:
 			return nil, valueCoercionError(v)
 		}
 	case "Boolean":
 		switch v := val.(type) {
-		case float64:
-			val = v != 0
-		case int64:
-			val = v != 0
 		case string:
 			val = len(v) > 0
 		case bool:
@@ -1505,7 +1500,7 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				val = 0
 			}
 		case string:
-			i, err := strconv.ParseFloat(v, 32)
+			i, err := strconv.ParseFloat(v, 64)
 			// An error can be encountered if we had a value that can't be fit into
 			// a 32 bit int.
 			if err != nil {
@@ -1517,19 +1512,19 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			} else {
 				return nil, valueCoercionError(v)
 			}
-			val = i
-		case int: // numUids are added as int, so we need special handling for that.
+		case int64:
 			if v > math.MaxInt32 || v < math.MinInt32 {
 				return nil, valueCoercionError(v)
 			}
-		case int64:
+		case int:
+			// numUids are added as int, so we need special handling for that.
 			if v > math.MaxInt32 || v < math.MinInt32 {
 				return nil, valueCoercionError(v)
 			}
 		case json.Number:
 			// We have already checked range for int32 at input validation time.
 			// So now just parse and check errors.
-			i, err := strconv.ParseFloat(v.String(), 32)
+			i, err := strconv.ParseFloat(v.String(), 64)
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
@@ -1539,25 +1534,11 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			} else {
 				return nil, valueCoercionError(v)
 			}
-			val = i
 		default:
 			return nil, valueCoercionError(v)
 		}
 	case "Int64":
 		switch v := val.(type) {
-		case float64:
-			// The spec says that we can coerce a Float value to Int, if we don't lose information.
-			// See: https: //spec.graphql.org/June2018/#sec-Float
-			// Lets try to see if this number could be converted to int64 without losing
-			// information, otherwise return error.
-			// See: https://github.com/golang/go/issues/19405 to understand why the comparison
-			// should be done after double conversion.
-			i64Val := int64(v)
-			if v == float64(i64Val) {
-				val = i64Val
-			} else {
-				return nil, valueCoercionError(v)
-			}
 		case bool:
 			if v {
 				val = 1
@@ -1615,18 +1596,6 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			if _, err := types.ParseTime(v); err != nil {
 				return nil, valueCoercionError(v)
 			}
-		case float64:
-			truncated := math.Trunc(v)
-			if truncated == v {
-				// Lets interpret int values as unix timestamp.
-				t := time.Unix(int64(truncated), 0).UTC()
-				val = t.Format(time.RFC3339)
-			} else {
-				return nil, valueCoercionError(v)
-			}
-		case int64:
-			t := time.Unix(v, 0).UTC()
-			val = t.Format(time.RFC3339)
 		case json.Number:
 			valFloat, _ := v.Float64()
 			truncated := math.Trunc(valFloat)

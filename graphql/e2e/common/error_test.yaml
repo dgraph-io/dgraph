@@ -136,6 +136,26 @@
         "locations": [ { "line": 2, "column": 63 } ] } ]
 
 -
+  name: "Out of range error for int64 type"
+  gqlrequest: |
+    mutation {
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:9223372036854775808}]){
+        post{
+          title
+          numViews
+          author{
+            name
+          }
+        }
+      }
+    }
+  gqlvariables:
+    { }
+  errors:
+    [ { "message": "Out of range value '9223372036854775808', for type `Int64`",
+        "locations": [ { "line": 2, "column": 63 } ] } ]
+
+-
   name: "@cascade only accepts numUids or given type name as arguments for add or update payload "
   gqlrequest: |
     mutation {
@@ -168,7 +188,7 @@
   gqlvariables:
     { }
   errors:
-    [ { "message": "Type mismatched for Value `\"180143985094\"`, Expected type Int64",
+    [ { "message": "Type mismatched for Value `180143985094`, expected: Int64, got: 'String'",
         "locations": [ { "line": 2, "column": 64 } ] } ]
 
 -
@@ -188,5 +208,5 @@
   gqlvariables:
     { }
   errors:
-    [ { "message": "Type mismatched for Value `180143985094.0`, Expected type Int64",
+    [ { "message": "Type mismatched for Value `180143985094.0`, expected: Int64, got: 'Float'",
         "locations": [ { "line": 2, "column": 63 } ] } ]

@@ -100,6 +100,9 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 
 		switch value.Definition.Name {
 		case "Int":
+			if value.Kind == ast.NullValue {
+				return
+			}
 			_, err := strconv.ParseInt(value.Raw, 10, 32)
 			if err != nil {
 				if errors.Is(err, strconv.ErrRange) {
@@ -111,12 +114,19 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 			}
 		case "Int64":
 			if value.Kind == ast.IntValue {
+				_, err := strconv.ParseInt(value.Raw, 10, 64)
+				if err != nil {
+					if errors.Is(err, strconv.ErrRange) {
+						addError(validator.Message("Out of range value '%s', for type `%s`",
+							value.Raw, value.Definition.Name), validator.At(value.Position))
+					} else {
+						addError(validator.Message("%s", err), validator.At(value.Position))
+					}
+				}
 				value.Kind = ast.StringValue
-			} else if value.Kind == ast.StringValue {
-				addError(validator.Message("Type mismatched for Value `\"%s\"`, Expected type Int64", value.Raw), validator.At(value.Position))
-			} else if value.Kind == ast.FloatValue {
-				addError(validator.Message("Type mismatched for Value `%s`, Expected type Int64", value.Raw),
-					validator.At(value.Position))
+			} else {
+				addError(validator.Message("Type mismatched for Value `%s`, expected: Int64, got: '%s'", value.Raw,
+					ValueKindToString(value.Kind)), validator.At(value.Position))
 			}
 		}
 	})

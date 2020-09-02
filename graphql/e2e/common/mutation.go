@@ -3653,7 +3653,7 @@ func int64BoundaryTesting(t *testing.T) {
 	//(2^63)=9223372036854775808
 	addPost1Params := &GraphQLParams{
 		Query: `mutation {
-			addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },{title: "Dgraph1", numLikes: -9223372036854775807 }]) {
+			addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },{title: "Dgraph1", numLikes: -9223372036854775808 }]) {
 				post1 {
 					title
 					numLikes
@@ -3669,7 +3669,7 @@ func int64BoundaryTesting(t *testing.T) {
 		"addpost1": {
 			"post1": [{
 				"title": "Dgraph",
-				"numLikes": 9223372036854775808
+				"numLikes": 9223372036854775807
 				
 			},{
 				"title": "Dgraph1",
