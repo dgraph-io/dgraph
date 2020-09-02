@@ -116,7 +116,7 @@ func TestBackupMinio(t *testing.T) {
 	// TODO: refactor tests so that minio and filesystem tests share most of their logic.
 	preds := []string{"dgraph.graphql.schema", "dgraph.cors", "dgraph.graphql.xid", "dgraph.type", "movie",
 		"dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at"}
-	types := []string{"Node", "dgraph.graphql", "dgraph.graphq.history"}
+	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.history"}
 	testutil.CheckSchema(t, preds, types)
 
 	checks := []struct {
