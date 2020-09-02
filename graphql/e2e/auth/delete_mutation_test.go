@@ -371,7 +371,7 @@ func TestDeleteRBACRuleInverseField(t *testing.T) {
     }
 	`
 
-	getUserParams := &common.GraphQLParams{
+	addTweetsParams := &common.GraphQLParams{
 		Headers: getJWT(t, "foo", ""),
 		Query:   mutation,
 		Variables: map[string]interface{}{"tweet": Tweets{
@@ -384,7 +384,7 @@ func TestDeleteRBACRuleInverseField(t *testing.T) {
 		}},
 	}
 
-	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addTweetsParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
 	testCases := []TestCase{
@@ -414,12 +414,12 @@ func TestDeleteRBACRuleInverseField(t *testing.T) {
 
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
-			getUserParams := &common.GraphQLParams{
+			deleteTweetsParams := &common.GraphQLParams{
 				Headers: getJWT(t, tcase.user, tcase.role),
 				Query:   mutation,
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := deleteTweetsParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
