@@ -703,7 +703,7 @@ func TestHasFuncAtRootWithAfterOnUIDsOtherThanRoot(t *testing.T) {
 	`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"uid":"0x1","friend":[{"uid": "0x17"},{"uid": "0x18"}]},{"uid": "0x1f","friend": [{"uid": "0x18"}]}]}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"uid":"0x1","friend":[{"uid": "0x17"},{"uid": "0x18"}]},{"uid": "0x1f","friend": [{"uid": "0x18"}]}]}}`, js)
 }
 
 func TestHasFuncAtRootFilter(t *testing.T) {
