@@ -32,8 +32,10 @@ type Options struct {
 	NormalizeNodeLimit int
 	// PollInterval is the polling interval for graphql subscription.
 	PollInterval time.Duration
-	//GraphqlExtension wiil be set to see extensions in graphql results
+	// GraphqlExtension will be set to see extensions in graphql results
 	GraphqlExtension bool
+	// GraphqlDebug will enable debug mode in GraphQL
+	GraphqlDebug bool
 }
 
 // Config stores the global instance of this package's options.
