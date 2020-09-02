@@ -13,7 +13,7 @@ Dgraph GraphQL comes with the standard GraphQL scalars: `Int`, `Float`, `String`
 
 Scalars `Int`, `Float`, `String` and `DateTime` can be used in lists.  All scalars may be nullable or non-nullable.
 
-The `ID` type is special.  IDs are auto-generated, immutable, and can be treated as strings.  Fields of type `ID` can be listed as nullable in a schema, but Dgraph will never return null. 
+The `ID` type is special.  IDs are auto-generated, immutable, and can be treated as strings.  Fields of type `ID` can be listed as nullable in a schema, but Dgraph will never return null.
 
 * *Schema rule*: `ID` lists aren't allowed - e.g. `tags: [String]` is valid, but `ids: [ID]` is not.
 * *Schema rule*: Each type you define can have at most one field with type `ID`.  That includes IDs implemented through interfaces.
@@ -53,7 +53,7 @@ type Post {
 }
 ```
 
-### Types 
+### Types
 
 From the built-in scalars and the enums you add, you can generate types in the usual way for GraphQL.  For example:
 
@@ -127,5 +127,79 @@ type Comment implements Post {
     text: String
     datePublished: DateTime
     commentsOn: Post!
+}
+```
+
+### Password type
+
+A password for an entity is set with setting the schema for the attribute to be of type `password`.  Passwords cannot be queried directly, only checked for a match using the `checkpwd` function.
+The passwords are encrypted using [bcrypt](https://en.wikipedia.org/wiki/Bcrypt).
+
+For example: to set a password, first set schema:
+
+1. Cut-and-paste the following schema into a file called `schema.graphql`
+```
+type Author @secret(field: "pwd") {
+	name: String! @id
+}
+```
+
+2. Run the following curl request:
+```
+curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
+```
+
+3. Set the password by pointing to the `graphql` endpoint (http://localhost:8080/graphql):
+```
+mutation {
+  addAuthor(input:[{name:"myname", pwd:"mypassword"}]){
+    author {
+      name
+    }
+  }
+}
+```
+
+The output should look like:
+```
+{
+  "data": {
+    "addAuthor": {
+      "author": [
+        {
+          "name": "myname"
+        }
+      ]
+    }
+  }
+}
+```
+
+You can check a password:
+```
+query {
+  checkAuthorPassword(name: "myname", pwd: "mypassword") {
+   name
+  }
+}
+```
+
+output:
+```
+{
+  "data": {
+    "checkAuthorPassword": {
+      "name": "myname"
+    }
+  }
+}
+```
+
+If the password is wrong you will get the following response:
+```
+{
+  "data": {
+    "checkAuthorPassword": null
+  }
 }
 ```
