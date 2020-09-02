@@ -458,7 +458,7 @@ func (n *node) proposeNewCID() {
 	}
 
 	// Apply trial license only if not already licensed.
-	if n.server.license() == nil {
+	if n.server.license() == nil && Zero.Conf.GetString("enterprise_license") == "" {
 		if err := n.proposeTrialLicense(); err != nil {
 			glog.Errorf("while proposing trial license to cluster: %v", err)
 		}
