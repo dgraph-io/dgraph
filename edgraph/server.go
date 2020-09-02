@@ -499,7 +499,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 			resp.Txn.Keys = resp.Txn.Keys[:0]
 			resp.Txn.CommitTs = qc.req.StartTs
 		} else {
-			errors.Wrapf(err, "Txn Context is nil")
+			return errors.Wrapf(err, "Txn Context is nil")
 		}
 		return err
 	}
