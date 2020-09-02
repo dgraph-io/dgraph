@@ -907,7 +907,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 	return s.doQuery(ctx, req, NoAuthorize)
 }
 
-// TODO: Accept a writer for response.
 func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
 	resp *api.Response, rerr error) {
 	if bool(glog.V(3)) || worker.LogRequestEnabled() {
@@ -1017,7 +1016,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	return resp, nil
 }
 
-// TODO: Accept a writer.
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
 	resp := &api.Response{}
 	if len(qc.req.Query) == 0 {
@@ -1095,13 +1093,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 			respMap["types"] = formatTypes(er.Types)
 		}
 		resp.Json, err = json.Marshal(respMap)
-
 	} else if qc.req.RespFormat == api.Request_RDF {
 		resp.Rdf, err = query.ToRDF(qc.latency, er.Subgraphs)
-
 	} else {
-		// TODO: Accept a writer.
-		// Would not return a resp.Json. Only an error.
 		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs)
 	}
 	if err != nil {

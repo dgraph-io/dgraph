@@ -63,7 +63,7 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 
 // We are capping maxEncoded size to 4GB, as grpc encoding fails
 // for a response size > math.MaxUint32.
-const maxEncodedSize = uint64(16 << 30)
+const maxEncodedSize = uint64(4 << 30)
 
 type encoder struct {
 	// attrMap has mapping of string predicates to uint16 ids.
@@ -119,8 +119,6 @@ type node struct {
 var nodeSize = int(unsafe.Sizeof(node{}))
 
 func newEncoder() *encoder {
-	// Append dummy entry, to avoid getting meta for a fastJsonNode with default value(0).
-	// metaSlice := make([]uint64, 1)
 	idSlice := make([]string, 1)
 
 	a := (arenaPool.Get()).(*arena)
@@ -131,15 +129,13 @@ func newEncoder() *encoder {
 		idSlice: idSlice,
 		arena:   a,
 		alloc:   NewAllocator(4 << 10),
-		// metaSlice:   metaSlice,
-		// childrenMap: make(map[fastJsonNode][]fastJsonNode),
 	}
 	e.uidAttr = e.idForAttr("uid")
 	return e
 }
 
 func (enc *encoder) idForAttr(attr string) uint16 {
-	if attr == "uid" {
+	if attr == "uid" && enc.uidAttr > 0 {
 		return enc.uidAttr
 	}
 	if id, ok := enc.attrMap[attr]; ok {
@@ -161,7 +157,7 @@ func (enc *encoder) attrForID(id uint16) string {
 }
 
 // makeScalarNode returns a fastJsonNode with all of its meta data, scalarVal populated.
-func (enc *encoder) makeScalarNode(attr uint16, val []byte, list bool) (*node, error) {
+func (enc *encoder) makeScalarNode(attr uint16, val []byte, list bool) (fastJsonNode, error) {
 	fj := enc.newNode(attr)
 	if err := enc.setScalarVal(fj, val); err != nil {
 		return nil, err
@@ -278,16 +274,6 @@ func (enc *encoder) newNode(attr uint16) fastJsonNode {
 	return n
 }
 
-// func (enc *encoder) newNode(attr uint16) fastJsonNode {
-// 	enc.metaSlice = append(enc.metaSlice, 0)
-// 	nn := fastJsonNode(len(enc.metaSlice) - 1)
-// 	enc.setAttr(nn, attr)
-// 	return nn
-// }
-
-func deleteNode(n *node) {
-}
-
 func (enc *encoder) setAttr(fj fastJsonNode, attr uint16) {
 	// There can be some cases where we change name of attr for fastJsoNode and
 	// hence first clear the existing attr, then store new one.
@@ -301,19 +287,13 @@ func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) error {
 		return err
 	}
 	fj.meta |= uint64(offset)
-	// enc.metaSlice[fj] |= uint64(offset)
 
 	// Also increase curSize.
 	enc.curSize += uint64(len(sv))
-
-	// check if it exceeds threshold size.
-	// TODO: Do we need to do this?
-	//
-	// if enc.curSize > maxEncodedSize {
-	// 	return fmt.Errorf("encoded response size: %d is bigger than threshold: %d",
-	// 		enc.curSize, maxEncodedSize)
-	// }
-
+	if enc.curSize > maxEncodedSize {
+		return fmt.Errorf("estimated response size: %d is bigger than threshold: %d",
+			enc.curSize, maxEncodedSize)
+	}
 	return nil
 }
 
@@ -336,28 +316,39 @@ func (enc *encoder) appendAttrs(fj fastJsonNode, children fastJsonNode) {
 	fc := fj.child
 
 	// We're inserting the node in between. This would need to be fixed later via fixOrder.
+	// Child 1
+	// Child 1 -> 2
+	// Child 1 -> 3 -> 2
+	// Child 1 -> 4 -> 3 -> 2
+	// Child 1 -> 5 -> 4 -> 3 -> 2
 	fc.next, children.next = children, fc.next
 }
 
 // fixOrder would fix the ordering issue caused by appendAttrs.
+// fixOrder would fix the order from
+// 1 -> 5 -> 4 -> 3 -> 2 to
+// 1 -> 2 -> 3 -> 4 -> 5
 func (enc *encoder) fixOrder(fj fastJsonNode) {
-	// TODO: If you call this again on the same fastJsonNode, then this would become wrong.  Due to
-	// getAttrs being copied over, the same node can be referenced by multiple nodes, thus the node
-	// would be visited again, hence it would be fixed multiple times, causing ordering issue.
-	// Maybe use meta bit to track visited already.
-	if fj.child == nil {
+	// If you call this again on the same fastJsonNode, then this would become wrong.  Due to
+	// getAttrs being copied over, the same node can be referenced by multiple nodes. Thus, the node
+	// would be visited again, it would be fixed multiple times, causing ordering issue.
+	// To avoid this, we keep track of the node by marking it with bitVisited.
+	// TODO(Ashish) Do above.
+
+	child := fj.child
+	// Edge cases: Child is nil, or only child, or only two children (1 -> 2).
+	if child == nil || child.next == nil || child.next.next == nil {
 		return
 	}
-	child := fj.child
 
-	ptr1 := child
-	ptr2 := child.next
-	for ptr2 != nil {
-		next := ptr2.next       // right of ptr2.
-		ptr2.next = ptr1        // ptr2 now points left to ptr1.
-		ptr1, ptr2 = ptr2, next // Advance both pointers.
+	left, right := child.next, child.next.next
+	left.next = nil // Make left the last child.
+	for right != nil {
+		next := right.next        // right of ptr2.
+		right.next = left         // ptr2 now points left to ptr1.
+		left, right = right, next // Advance both pointers.
 	}
-	child.next = ptr1 // Child next is now pointed to the last node. Hence, correcting the order.
+	child.next = left // Child next is now pointed to the last node. Hence, correcting the order.
 }
 
 func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
