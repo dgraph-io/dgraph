@@ -665,9 +665,10 @@ func (n *node) Run() {
 			for _, rs := range rd.ReadStates {
 				// No need to use select-case-default on pushing to readStateCh. It is typically
 				// empty.
+				glog.Infof("Pushing readstate with context %x", rs.RequestCtx)
 				readStateCh <- rs
 			}
-			glog.Infoln("Pushed readstates :", len(rd.ReadStates))
+
 			span.Annotatef(nil, "Pushed %d readstates", len(rd.ReadStates))
 
 			if rd.SoftState != nil {

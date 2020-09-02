@@ -657,7 +657,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 		// so have a timeout.
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-
+		glog.Infof("Active request context: %x", activeRctx)
 		if err := n.Raft().ReadIndex(ctx, activeRctx); err != nil {
 			glog.Errorf("Error while trying to call ReadIndex: %v\n", err)
 			return 0, err
