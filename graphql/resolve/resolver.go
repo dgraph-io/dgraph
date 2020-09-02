@@ -1462,6 +1462,9 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case bool:
 			val = strconv.FormatBool(v)
 		case string:
+		case json.Number:
+			valFloat, _ := v.Float64()
+			val = strconv.FormatFloat(valFloat, 'f', -1, 64)
 		default:
 			return nil, valueCoercionError(v)
 		}
@@ -1474,6 +1477,9 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case string:
 			val = len(v) > 0
 		case bool:
+		case json.Number:
+			valFloat, _ := v.Float64()
+			val = valFloat != 0
 		default:
 			return nil, valueCoercionError(v)
 		}
@@ -1499,10 +1505,16 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				val = 0
 			}
 		case string:
-			i, err := strconv.ParseInt(v, 10, 32)
+			i, err := strconv.ParseFloat(v, 32)
 			// An error can be encountered if we had a value that can't be fit into
 			// a 32 bit int.
 			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			i32Val := int32(i)
+			if i == float64(i32Val) {
+				val = i32Val
+			} else {
 				return nil, valueCoercionError(v)
 			}
 			val = i
@@ -1517,8 +1529,14 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case json.Number:
 			// We have already checked range for int32 at input validation time.
 			// So now just parse and check errors.
-			i, err := strconv.ParseInt(v.String(), 10, 32)
+			i, err := strconv.ParseFloat(v.String(), 32)
 			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			i32Val := int32(i)
+			if i == float64(i32Val) {
+				val = i32Val
+			} else {
 				return nil, valueCoercionError(v)
 			}
 			val = i
@@ -1609,6 +1627,16 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case int64:
 			t := time.Unix(v, 0).UTC()
 			val = t.Format(time.RFC3339)
+		case json.Number:
+			valFloat, _ := v.Float64()
+			truncated := math.Trunc(valFloat)
+			if truncated == valFloat {
+				// Lets interpret int values as unix timestamp.
+				t := time.Unix(int64(truncated), 0).UTC()
+				val = t.Format(time.RFC3339)
+			} else {
+				return nil, valueCoercionError(v)
+			}
 		default:
 			return nil, valueCoercionError(v)
 		}
