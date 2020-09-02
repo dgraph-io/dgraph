@@ -922,90 +922,35 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 		if err != nil {
 			return nil, err
 		}
-		if fjAttrs != nil {
-			fjAttrs = fjAttrs.next
-		}
 	}
 
 	uidAttrID := enc.idForAttr("uid")
 	var newParentSlice []fastJsonNode
 	for _, slice := range parentSlice {
-		slice = mergeSort(slice, enc)
-
-		var prev, first, cur, last fastJsonNode
+		var prev, cur fastJsonNode
 		cur = slice
+
 		for cur != nil {
 			if enc.getAttr(cur) == uidAttrID {
-				if first == nil {
-					first = prev
+				if prev == nil {
+					slice = cur
+					cur = cur.next
+					continue
+				} else {
+					prev.next = cur.next
 				}
-				last = cur
 			}
 			prev = cur
 			cur = cur.next
 		}
-
-		if last != nil {
-			first.next = last.next
+		if prev == nil {
+			slice = nil
 		}
 
 		newParentSlice = append(newParentSlice, slice)
 	}
 
 	return newParentSlice, nil
-}
-
-func mergeSort(fj fastJsonNode, enc *encoder) fastJsonNode {
-	if (fj == nil) || (fj.next == nil) {
-		return fj
-	}
-
-	a, b := frontBackSplit(fj)
-
-	mergeSort(a, enc)
-	mergeSort(b, enc)
-
-	return sortedMerge(a, b, enc)
-}
-
-func frontBackSplit(source fastJsonNode) (fastJsonNode, fastJsonNode) {
-	slow := source
-	fast := source.next
-
-	for fast != nil {
-		fast = fast.next
-		if fast != nil {
-			slow = slow.next
-			fast = fast.next
-		}
-	}
-
-	temp := slow.next
-	slow.next = nil
-	return source, temp
-}
-
-func sortedMerge(a, b fastJsonNode, enc *encoder) fastJsonNode {
-	var result fastJsonNode
-
-	if a == nil {
-		return b
-	}
-	if b == nil {
-		return a
-	}
-
-	attri := enc.getAttr(a)
-	attrj := enc.getAttr(b)
-	cmp := strings.Compare(enc.attrForID(attri), enc.attrForID(attrj))
-	if cmp < 0 {
-		result = a
-		result.next = sortedMerge(a.next, b, enc)
-	} else {
-		result = b
-		result.next = sortedMerge(a, b.next, enc)
-	}
-	return result
 }
 
 func (sg *SubGraph) addGroupby(enc *encoder, fj fastJsonNode,
@@ -1134,15 +1079,14 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		if enc.IsEmpty(n1) {
 			continue
 		}
+		enc.fixOrder(n1)
 
 		hasChild = true
 		if !sg.Params.Normalize {
 			enc.AddListChild(fj, n1)
-			enc.fixOrder(n1)
 			continue
 		}
 
-		enc.fixOrder(n1)
 		// Lets normalize the response now.
 		normalized, err := enc.normalize(n1)
 		if err != nil {
@@ -1415,7 +1359,6 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 						// already been normalized.
 
 						enc.fixOrder(uc)
-						// TODO: fix this.
 						normAttrs, err := enc.normalize(uc)
 						if err != nil {
 							return err
