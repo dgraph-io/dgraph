@@ -309,10 +309,6 @@ func (enc *encoder) setList(fj fastJsonNode, list bool) {
 	}
 }
 
-func (enc *encoder) normalize(fj fastJsonNode) ([]byte, error) {
-	return nil, nil
-}
-
 func (enc *encoder) setFacetsParent(fj fastJsonNode) {
 	fj.meta |= facetsBit
 }
@@ -907,6 +903,7 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 			if attrCur == nil {
 				attrCur = enc.copySingleNode(fjAttrs)
 				attrs = attrCur
+				fjAttrs = fjAttrs.next
 				continue
 			}
 			attrCur.next = enc.copySingleNode(fjAttrs)
@@ -959,6 +956,7 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 				last = cur
 			}
 			prev = cur
+			cur = cur.next
 		}
 
 		if last != nil {
