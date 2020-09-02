@@ -690,19 +690,20 @@ func TestHasFuncAtRootWithAfterOnUIDsOtherThanRoot(t *testing.T) {
 
 	query := `
 	{
-			var(func: has(name)) {
-					uids as uid
+		var(func: has(name)) {
+			uids as uid
+		}
+		me(func: uid(0x1, 0x1f)) {
+				uid
+				friend(first:2, after:0x5) @filter(uid(uids)) {
+					uid
 			}
-			me(func: has(name), first: 2, after: 0x5) {
-					uid @filter(uid(uids)) {
-							uid
-					}
-			}
+		}
 	}
 	`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"uid":"0x6"},{"uid":"0x7"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"uid":"0x1","friend":[{"uid": "0x17"},{"uid": "0x18"}]},{"uid": "0x1f","friend": [{"uid": "0x18"}]}]}`, js)
 }
 
 func TestHasFuncAtRootFilter(t *testing.T) {
