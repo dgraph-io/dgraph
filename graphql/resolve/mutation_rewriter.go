@@ -670,9 +670,8 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	return dgQuery
 }
 
-// We need to delete the node with ^^ and then any reference we know about (via @hasInverse)
-// into this node.
-func RemoveNodeReference(m schema.Mutation, authRw *authRewriter,
+// removeNodeReference removes any reference we know about (via @hasInverse) into a node.
+func removeNodeReference(m schema.Mutation, authRw *authRewriter,
 	qry *gql.GraphQuery) []interface{} {
 	var deletes []interface{}
 	for _, fld := range m.MutatedType().Fields() {
@@ -743,7 +742,9 @@ func (drw *deleteRewriter) Rewrite(
 	deletes := []interface{}{map[string]interface{}{"uid": "uid(x)"}}
 	// We need to remove node reference only if auth rule succeeds.
 	if qry.Attr != m.ResponseName()+"()" {
-		deletes = append(deletes, RemoveNodeReference(m, authRw, qry))
+		// We need to delete the node and then any reference we know about (via @hasInverse)
+		// into this node.
+		deletes = append(deletes, removeNodeReference(m, authRw, qry)...)
 	}
 
 	b, err := json.Marshal(deletes)
