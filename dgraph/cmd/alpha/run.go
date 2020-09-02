@@ -770,6 +770,7 @@ func run() {
 		edgraph.ResetAcl(updaters)
 		edgraph.RefreshAcls(updaters)
 		edgraph.ResetCors(updaters)
+		atomic.AddUint32(&initDone, 1)
 		// Update the accepted cors origins.
 		for updaters.Ctx().Err() == nil {
 			origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
@@ -780,7 +781,6 @@ func run() {
 			x.UpdateCorsOrigins(origins)
 			return
 		}
-		atomic.AddUint32(&initDone, 1)
 	}()
 	// Listen for any new cors origin update.
 	go listenForCorsUpdate(updaters)
