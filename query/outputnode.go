@@ -395,10 +395,6 @@ func (enc *encoder) fixOrder(fj fastJsonNode) {
 	child.next = left // Child next is now pointed to the last node. Hence, correcting the order.
 }
 
-func (enc *encoder) getAttrs(fj fastJsonNode) uint16 {
-	return uint16((fj.meta & setBytes76) >> 40)
-}
-
 func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
 	return uint16((fj.meta & setBytes76) >> 40)
 }
@@ -703,7 +699,7 @@ func (enc *encoder) attachFacets(fj fastJsonNode, fieldName string, isList bool,
 			}
 			// Mark this node as facetsParent.
 			enc.setFacetsParent(facetNode)
-			// enc.AddMapChild(fj, facetNode)
+			enc.AddMapChild(fj, facetNode)
 		}
 	}
 
@@ -799,11 +795,11 @@ func (enc *encoder) copyFastJsonNode(fj fastJsonNode) (fastJsonNode, int) {
 		nodeCount++
 		nn := enc.newNode(enc.getAttr(fj))
 		nn.meta = fj.meta
-		nn.next = nil
 		nn.child = fj.child
 		if cur == nil {
 			cur = nn
 			start = nn
+			fj = fj.next
 			continue
 		}
 		cur.next = nn
@@ -838,15 +834,6 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 	cnt := 0
 	for _, pa := range parent {
 		for _, ca := range child {
-			// cnt += len(pa) + len(ca)
-			// if cnt > x.Config.NormalizeNodeLimit {
-			// 	return nil, errors.Errorf(
-			// 		"Couldn't evaluate @normalize directive - too many results")
-			// }
-			// list := make([]fastJsonNode, 0, len(pa)+len(ca))
-			// list = append(list, pa...)
-			// list = append(list, ca...)
-
 			paCopy, paNodeCount := enc.copyFastJsonNode(pa)
 			caCopy, caNodeCount := enc.copyFastJsonNode(ca)
 
@@ -943,7 +930,6 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 	uidAttrID := enc.idForAttr("uid")
 	var newParentSlice []fastJsonNode
 	for _, slice := range parentSlice {
-		// sort.Sort(nodeSlice{nodes: slice, enc: enc})
 		slice = mergeSort(slice, enc)
 
 		var prev, first, cur, last fastJsonNode
@@ -976,8 +962,8 @@ func mergeSort(fj fastJsonNode, enc *encoder) fastJsonNode {
 
 	a, b := frontBackSplit(fj)
 
-	a = mergeSort(a, enc)
-	b = mergeSort(b, enc)
+	mergeSort(a, enc)
+	mergeSort(b, enc)
 
 	return sortedMerge(a, b, enc)
 }
