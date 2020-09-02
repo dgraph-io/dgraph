@@ -68,7 +68,9 @@ Int64 can currently represent values in range [-(2^53)+1, (2^53)-1] without any 
 Values out of this range but representable by a signed 64-bit integer, may get coercion error.
 """
 scalar Int64
-
+"""
+The DateTime scalar type represent Date and time as a string in RFC3339 format.
+"""
 scalar DateTime
 
 enum DgraphIndex {
