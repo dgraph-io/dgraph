@@ -18,11 +18,9 @@ package query
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"strconv"
 	"strings"
@@ -187,6 +185,8 @@ const (
 	facetsBit = 1 << 62
 	// Value with third most significant bit set to 1.
 	uidNodeBit = 1 << 61
+	// Node has been visited.
+	visitedBit = 1 << 60
 
 	// Value with all bits set to 1 for bytes 7 and 6.
 	setBytes76 = uint64(0x00FFFF0000000000)
@@ -307,33 +307,63 @@ func (enc *encoder) setFacetsParent(fj fastJsonNode) {
 	fj.meta |= facetsBit
 }
 
-// appendAttrs appends attrs to existing fj's attrs.
-func (enc *encoder) appendAttrs(fj fastJsonNode, children fastJsonNode) {
+// addChildren appends attrs to existing fj's attrs.
+func (enc *encoder) addChildren(fj fastJsonNode, child fastJsonNode) {
 	if fj.child == nil {
-		fj.child = children
+		fj.child = child
 		return
 	}
 	fc := fj.child
 
-	// We're inserting the node in between. This would need to be fixed later via fixOrder.
-	// Child 1
-	// Child 1 -> 2
-	// Child 1 -> 3 -> 2
-	// Child 1 -> 4 -> 3 -> 2
+	if child.next == nil { // Only one child.
+		// We're inserting the node in between. This would need to be fixed later via fixOrder.
+		// Single child additions:
+		// Child 1
+		// Child 1 -> 2
+		// Child 1 -> 3 -> 2
+		// Child 1 -> 4 -> 3 -> 2
+		// Child 1 -> 5 -> 4 -> 3 -> 2
+		fc.next, child.next = child, fc.next
+		return
+	}
+
+	// If child has siblings, then it could look like this.
+	// addChildren(11 (child) -> 13)
 	// Child 1 -> 5 -> 4 -> 3 -> 2
-	fc.next, children.next = children, fc.next
+	//
+	// What we want:
+	// 1 -> 13 -> 11 -> 5 -> 4 -> 3 -> 2
+	last := child
+	for last.next != nil {
+		last = last.next
+	}
+	// clast points to the last child in the input.
+	// If child has siblings, then it could look like this.
+	last.next = child // 13 -> 11 (child). Also, 11 -> 13
+
+	fc.next, child.next = child.next, fc.next // 1 -> 13 (13 -> 11 above) 11 -> 5
+
+	// The above logic should also work for:
+	// addChildren(11 (child) -> 13 -> 12 (clast))
+	// Child 1 -> 5 -> 4 -> 3 -> 2
+	//
+	// What we want:
+	// 1 -> 13 -> 12 -> 11 -> 5 -> 4 -> 3 -> 2
 }
 
-// fixOrder would fix the ordering issue caused by appendAttrs.
+// fixOrder would fix the ordering issue caused by addChildren.
 // fixOrder would fix the order from
 // 1 -> 5 -> 4 -> 3 -> 2 to
 // 1 -> 2 -> 3 -> 4 -> 5
 func (enc *encoder) fixOrder(fj fastJsonNode) {
 	// If you call this again on the same fastJsonNode, then this would become wrong.  Due to
-	// getAttrs being copied over, the same node can be referenced by multiple nodes. Thus, the node
+	// children being copied over, the same node can be referenced by multiple nodes. Thus, the node
 	// would be visited again, it would be fixed multiple times, causing ordering issue.
-	// To avoid this, we keep track of the node by marking it with bitVisited.
-	// TODO(Ashish) Do above.
+	// To avoid this, we keep track of the node by marking it.
+	if fj.meta&visitedBit > 0 {
+		return
+	}
+	fj.meta |= visitedBit
 
 	child := fj.child
 	// Edge cases: Child is nil, or only child, or only two children (1 -> 2).
@@ -376,7 +406,7 @@ func (enc *encoder) getFacetsParent(fj fastJsonNode) bool {
 	return (fj.meta & facetsBit) > 0
 }
 
-func (enc *encoder) getAttrs(fj fastJsonNode) fastJsonNode {
+func (enc *encoder) children(fj fastJsonNode) fastJsonNode {
 	// Return nil if no attrs are found.
 	return fj.child
 }
@@ -394,37 +424,37 @@ func (enc *encoder) AddListValue(fj fastJsonNode, attr uint16, v types.Val, list
 	if err != nil {
 		return err
 	}
-	enc.appendAttrs(fj, sn)
+	enc.addChildren(fj, sn)
 	return nil
 }
 
 func (enc *encoder) AddMapChild(fj, val fastJsonNode) {
 	var childNode fastJsonNode
-	fjAttrs := enc.getAttrs(fj)
-	for fjAttrs != nil {
-		if enc.getAttr(fjAttrs) == enc.getAttr(val) {
-			childNode = fjAttrs
+	child := enc.children(fj)
+	for child != nil {
+		if enc.getAttr(child) == enc.getAttr(val) {
+			childNode = child
 			break
 		}
-		fjAttrs = fjAttrs.next
+		child = child.next
 	}
 
 	if childNode == nil {
-		enc.appendAttrs(fj, val)
+		enc.addChildren(fj, val)
 	} else {
-		enc.appendAttrs(childNode, enc.getAttrs(val))
+		enc.addChildren(childNode, enc.children(val))
 	}
 }
 
 func (enc *encoder) AddListChild(fj, child fastJsonNode) {
 	enc.setList(child, true)
-	enc.appendAttrs(fj, child)
+	enc.addChildren(fj, child)
 }
 
 func (enc *encoder) SetUID(fj fastJsonNode, uid uint64, attr uint16) error {
 	// if we're in debug mode, uid may be added second time, skip this
 	if attr == enc.uidAttr {
-		fjAttrs := enc.getAttrs(fj)
+		fjAttrs := enc.children(fj)
 		for fjAttrs != nil {
 			if enc.getAttr(fjAttrs) == attr {
 				return nil
@@ -437,13 +467,12 @@ func (enc *encoder) SetUID(fj fastJsonNode, uid uint64, attr uint16) error {
 	if err != nil {
 		return err
 	}
-	enc.appendAttrs(fj, un)
+	enc.addChildren(fj, un)
 	return nil
 }
 
 func (enc *encoder) IsEmpty(fj fastJsonNode) bool {
 	return fj.child == nil
-	// return len(enc.getAttrs(fj)) == 0
 }
 
 var (
@@ -616,19 +645,18 @@ func (n nodeSlice) Swap(i, j int) {
 	n.nodes[i], n.nodes[j] = n.nodes[j], n.nodes[i]
 }
 
-func (enc *encoder) writeKey(fj fastJsonNode, out io.Writer) error {
-	// TODO: Optimize this to avoid allocations.
-	if _, err := out.Write([]byte{'"'}); err != nil {
+func (enc *encoder) writeKey(fj fastJsonNode, out *bytes.Buffer) error {
+	if _, err := out.WriteRune('"'); err != nil {
 		return err
 	}
 	attrID := enc.getAttr(fj)
-	if _, err := out.Write([]byte(enc.attrForID(attrID))); err != nil {
+	if _, err := out.WriteString(enc.attrForID(attrID)); err != nil {
 		return err
 	}
-	if _, err := out.Write([]byte{'"'}); err != nil {
+	if _, err := out.WriteRune('"'); err != nil {
 		return err
 	}
-	if _, err := out.Write([]byte{':'}); err != nil {
+	if _, err := out.WriteRune(':'); err != nil {
 		return err
 	}
 	return nil
@@ -664,10 +692,10 @@ func (enc *encoder) attachFacets(fj fastJsonNode, fieldName string, isList bool,
 	return nil
 }
 
-func (enc *encoder) encode(fj fastJsonNode, out io.Writer) error {
-	fjAttrs := enc.getAttrs(fj)
+func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
+	child := enc.children(fj)
 	// This is a scalar value.
-	if fjAttrs == nil {
+	if child == nil {
 		val, err := enc.getScalarVal(fj)
 		if err != nil {
 			return err
@@ -677,15 +705,15 @@ func (enc *encoder) encode(fj fastJsonNode, out io.Writer) error {
 	}
 
 	// This is an internal node.
-	if _, err := writeRune(out, '{'); err != nil {
+	if _, err := out.WriteRune('{'); err != nil {
 		return err
 	}
 	cnt := 0
 	var cur, next fastJsonNode
-	for fjAttrs != nil {
+	for child != nil {
 		cnt++
 		validNext := false
-		cur = fjAttrs
+		cur = child
 		if cur.next != nil {
 			next = cur.next
 			validNext = true
@@ -696,7 +724,7 @@ func (enc *encoder) encode(fj fastJsonNode, out io.Writer) error {
 				if err := enc.writeKey(cur, out); err != nil {
 					return err
 				}
-				if _, err := writeRune(out, '['); err != nil {
+				if _, err := out.WriteRune('['); err != nil {
 					return err
 				}
 			}
@@ -709,7 +737,7 @@ func (enc *encoder) encode(fj fastJsonNode, out io.Writer) error {
 					return err
 				}
 				if enc.getList(cur) {
-					if _, err := writeRune(out, '['); err != nil {
+					if _, err := out.WriteRune('['); err != nil {
 						return err
 					}
 				}
@@ -718,30 +746,26 @@ func (enc *encoder) encode(fj fastJsonNode, out io.Writer) error {
 				return err
 			}
 			if cnt > 1 || enc.getList(cur) {
-				if _, err := writeRune(out, ']'); err != nil {
+				if _, err := out.WriteRune(']'); err != nil {
 					return err
 				}
 			}
 			cnt = 0 // Reset the count.
 		}
 		// We need to print comma except for the last attribute.
-		if fjAttrs.next != nil {
-			if _, err := writeRune(out, ','); err != nil {
+		if child.next != nil {
+			if _, err := out.WriteRune(','); err != nil {
 				return err
 			}
 		}
 
-		fjAttrs = fjAttrs.next
+		child = child.next
 	}
-	if _, err := writeRune(out, '}'); err != nil {
+	if _, err := out.WriteRune('}'); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func writeRune(out io.Writer, r byte) (n int, err error) {
-	return out.Write([]byte{r})
 }
 
 func merge(parent, child [][]fastJsonNode) ([][]fastJsonNode, error) {
@@ -771,13 +795,13 @@ func merge(parent, child [][]fastJsonNode) ([][]fastJsonNode, error) {
 // normalize returns all attributes of fj and its children (if any).
 // func (enc *encoder) normalize(fj fastJsonNode) ([][]fastJsonNode, error) {
 // 	cnt := 0
-// 	fjAttrs := enc.getAttrs(fj)
+// 	fjAttrs := enc.children(fj)
 // 	for _, a := range fjAttrs {
 // 		// Here we are counting all non-scalar attributes of fj. If there are any such
 // 		// attributes, we will flatten it, otherwise we will return all attributes.
 // 		// We should only consider those nodes for flattening which have children and are not
 // 		// facetsParent.
-// 		if len(enc.getAttrs(a)) > 0 && !enc.getFacetsParent(a) {
+// 		if len(enc.children(a)) > 0 && !enc.getFacetsParent(a) {
 // 			cnt++
 // 		}
 // 	}
@@ -794,7 +818,7 @@ func merge(parent, child [][]fastJsonNode) ([][]fastJsonNode, error) {
 // 	attrs := make([]fastJsonNode, 0, len(fjAttrs)-cnt)
 // 	for _, a := range fjAttrs {
 // 		// Here, add all nodes which have either no children or they are facetsParent.
-// 		if len(enc.getAttrs(a)) == 0 || enc.getFacetsParent(a) {
+// 		if len(enc.children(a)) == 0 || enc.getFacetsParent(a) {
 // 			attrs = append(attrs, a)
 // 		}
 // 	}
@@ -803,13 +827,13 @@ func merge(parent, child [][]fastJsonNode) ([][]fastJsonNode, error) {
 // 	for ci := 0; ci < len(fjAttrs); {
 // 		childNode := fjAttrs[ci]
 // 		// Here, exclude all nodes which have either no children or they are facetsParent.
-// 		if len(enc.getAttrs(childNode)) == 0 || enc.getFacetsParent(childNode) {
+// 		if len(enc.children(childNode)) == 0 || enc.getFacetsParent(childNode) {
 // 			ci++
 // 			continue
 // 		}
 // 		childSlice := make([][]fastJsonNode, 0, 5)
 // 		for ci < len(fjAttrs) && enc.getAttr(childNode) == enc.getAttr(fjAttrs[ci]) {
-// 			childSlice = append(childSlice, enc.getAttrs(fjAttrs[ci]))
+// 			childSlice = append(childSlice, enc.children(fjAttrs[ci]))
 // 			ci++
 // 		}
 // 		// Merging with parent.
@@ -987,7 +1011,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		// }
 		// for _, c := range normalized {
 		// 	node := enc.newNode(attrID)
-		// 	enc.appendAttrs(node, c)
+		// 	enc.addChildren(node, c)
 		// 	enc.AddListChild(fj, node)
 		// }
 	}
@@ -1030,27 +1054,13 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	// level keys. Hence we send server_latency under extensions key.
 	// https://facebook.github.io/graphql/#sec-Response-Format
 
-	glog.Infof("Done with encoding. Now writing...")
-
-	bufw := &bytes.Buffer{}
-	var w io.Writer
-	var gw *gzip.Writer
-	if enc.curSize > 1<<30 {
-		gw = gzip.NewWriter(bufw)
-		w = gw
-	} else {
-		w = bufw
-	}
-
-	if n.child == nil {
-		if _, err := writeRune(w, '{'); err != nil {
-			return nil, err
-		}
-		if _, err := writeRune(w, '}'); err != nil {
+	var bufw bytes.Buffer
+	if enc.children(n) == nil {
+		if _, err := bufw.WriteString(`{}`); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := enc.encode(n, w); err != nil {
+		if err := enc.encode(n, &bufw); err != nil {
 			return nil, err
 		}
 	}
@@ -1060,13 +1070,9 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 		return nil, fmt.Errorf("while writing to buffer. Encoded response size: %d is bigger than threshold: %d",
 			bufw.Len(), maxEncodedSize)
 	}
-	if gw != nil {
-		gw.Close()
-	}
 
 	// Put encoder's arena back to arena pool.
 	arenaPool.Put(enc.arena)
-	glog.Infof("Size of buffer: %d\n", len(bufw.Bytes()))
 	return bufw.Bytes(), nil
 }
 
@@ -1145,18 +1151,6 @@ func facetName(fieldName string, f *api.Facet) string {
 	return fieldName + x.FacetDelimeter + f.Key
 }
 
-func (sg *SubGraph) getIndex(uid uint64) int {
-	if sg.srcUidIndex == nil {
-		sg.srcUidIndex = make(map[uint64]int)
-	}
-	if idx, ok := sg.srcUidIndex[uid]; ok {
-		return idx
-	}
-	idx := algo.IndexOf(sg.SrcUIDs, uid)
-	sg.srcUidIndex[uid] = idx
-	return idx
-}
-
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) error {
 	if sg.Params.IgnoreReflex {
@@ -1196,7 +1190,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				len(pc.facetsMatrix), len(pc.uidMatrix))
 		}
 
-		idx := pc.getIndex(uid)
+		idx := algo.IndexOf(sg.SrcUIDs, uid)
 		if idx < 0 {
 			continue
 		}
@@ -1317,7 +1311,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 							// boss should be of list type because there can be mutliple friends of
 							// boss.
 							node := enc.newNode(fieldID)
-							enc.appendAttrs(node, c)
+							enc.addChildren(node, c)
 							enc.AddListChild(dst, node)
 						}
 						continue
