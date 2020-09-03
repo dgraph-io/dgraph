@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"encoding/hex"
+	"log"
 	"math"
 	"strconv"
 	"sync"
@@ -80,7 +81,25 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 			glog.V(2).Infof("Rolled up %d keys", count)
 		}
 	}
-	return writer.Write(&bpb.KVList{Kv: kvs})
+
+	var keys [][]byte
+	for _, kv := range kvs {
+		keys = append(keys, kv.Key)
+	}
+
+	err = writer.Write(&bpb.KVList{Kv: kvs})
+	err = writer.Flush()
+	if err == nil && len(keys) != 0 {
+		for _, key := range keys {
+			txn := pstore.NewTransactionAt(math.MaxUint64, false)
+			_, dbErr := txn.Get(key)
+			if dbErr != nil {
+				log.Panic("Error while reading split keys")
+			}
+		}
+	}
+
+	return err
 }
 
 func (ir *incrRollupi) addKeyToBatch(key []byte) {

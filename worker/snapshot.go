@@ -18,6 +18,8 @@ package worker
 
 import (
 	"context"
+	"log"
+	"math"
 	"sync/atomic"
 	"time"
 
@@ -79,9 +81,13 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
+	var keys [][]byte
 	var done *pb.KVS
 	for {
 		kvs, err := stream.Recv()
+		for _, kv := range kvs.Kv {
+			keys = append(keys, kv.Key)
+		}
 		if err != nil {
 			return count, err
 		}
@@ -104,6 +110,16 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	}
 	if err := writer.Flush(); err != nil {
 		return 0, err
+	}
+
+	if len(keys) != 0 {
+		for _, key := range keys {
+			txn := pstore.NewTransactionAt(math.MaxUint64, false)
+			_, dbErr := txn.Get(key)
+			if dbErr != nil {
+				log.Panic("Error while reading split keys")
+			}
+		}
 	}
 
 	if err := deleteStalePreds(ctx, done); err != nil {
