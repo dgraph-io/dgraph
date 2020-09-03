@@ -97,6 +97,7 @@ func (r *reducer) run() error {
 				writer:      writer,
 				splitWriter: splitWriter,
 				tmpDb:       tmpDb,
+				splitCh:     make(chan *bpb.KVList, 2*runtime.NumCPU()),
 			}
 
 			partitionKeys := make([][]byte, len(partitions))
@@ -319,8 +320,8 @@ type encodeRequest struct {
 	cbuf      *z.Buffer
 	countKeys []*countIndexEntry
 	wg        *sync.WaitGroup
-	list      *bpb.KVList
-	splitList *bpb.KVList
+	listCh    chan *bpb.KVList
+	splitCh   chan *bpb.KVList
 	offsets   []int
 }
 
@@ -344,47 +345,23 @@ func (r *reducer) streamIdFor(pred string) uint32 {
 func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
 
-	// Create a slice of offsets.
-	// var offset []int
-	// var sortedOffsets []int
-	var offsets []int
+	var offsets []int // Use this to avoid allocating too much memory.
 	for req := range entryCh {
 		req.offsets = offsets
-		req.list = &bpb.KVList{}
-		req.splitList = &bpb.KVList{}
 
 		countKeys := r.toList(req)
-		offsets = req.offsets
+		offsets = req.offsets // We might have allocated a bigger slice, so set offsets to that.
 
-		for _, kv := range req.list.Kv {
-			pk, err := x.Parse(kv.Key)
-			x.Check(err)
-			x.AssertTrue(len(pk.Attr) > 0)
-			kv.StreamId = r.streamIdFor(pk.Attr)
-		}
 		req.countKeys = countKeys
 		req.wg.Done()
-
-		// for {
-		// 	var ms runtime.MemStats
-		// 	runtime.ReadMemStats(&ms)
-		// 	gomem := int64(ms.HeapInuse / (1 << 20))
-		// 	cmem := z.NumAllocsMB()
-		// 	if gomem+cmem < 16384 { // TODO: Make this a flag.
-		// 		break
-		// 	}
-		// 	fmt.Printf("Sleeping to allow memory usage to reduce before processing more requests."+
-		// 		" Gomem: %d Cmem: %d\n", gomem, cmem)
-		// 	time.Sleep(15 * time.Second)
-		// }
 	}
 }
 
-func (r *reducer) writeTmpSplits(ci *countIndexer, kvsCh chan *bpb.KVList, wg *sync.WaitGroup) {
+func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 	defer wg.Done()
 	splitBatchLen := 0
 
-	for kvs := range kvsCh {
+	for kvs := range ci.splitCh {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			continue
 		}
@@ -417,10 +394,16 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	// Concurrently write split lists to a temporary badger.
 	tmpWg := new(sync.WaitGroup)
 	tmpWg.Add(1)
-	splitCh := make(chan *bpb.KVList, 2*runtime.NumCPU())
-	go r.writeTmpSplits(ci, splitCh, tmpWg)
+	go r.writeTmpSplits(ci, tmpWg)
 
 	for req := range writerCh {
+		req.wg.Add(1) // One for finishing the writes.
+		go func() {
+			defer req.wg.Done()
+			for kvlist := range req.listCh {
+				x.Check(ci.writer.Write(kvlist))
+			}
+		}()
 		req.wg.Wait()
 
 		for _, countKey := range req.countKeys {
@@ -429,11 +412,6 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		// Wait for it to be encoded.
 		start := time.Now()
 
-		x.Check(ci.writer.Write(req.list))
-		if req.splitList != nil && len(req.splitList.Kv) > 0 {
-			splitCh <- req.splitList
-		}
-
 		if dur := time.Since(start).Round(time.Millisecond); dur > time.Second {
 			fmt.Printf("writeCh: Time taken to write req: %v\n",
 				time.Since(start).Round(time.Millisecond))
@@ -441,7 +419,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	}
 
 	// Wait for split lists to be written to the temporary badger.
-	close(splitCh)
+	close(ci.splitCh)
 	tmpWg.Wait()
 }
 
@@ -508,7 +486,12 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	sendReq := func(zbuf *z.Buffer) {
 		wg := new(sync.WaitGroup)
 		wg.Add(1)
-		req := &encodeRequest{cbuf: zbuf, wg: wg}
+		req := &encodeRequest{
+			cbuf:    zbuf,
+			wg:      wg,
+			listCh:  make(chan *bpb.KVList, 3),
+			splitCh: ci.splitCh,
+		}
 		encoderCh <- req
 		writerCh <- req
 	}
@@ -645,8 +628,6 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 		cbuf.Release()
 	}()
 
-	list := req.list
-	splitList := req.splitList
 	req.offsets = cbuf.SliceOffsets(req.offsets[:0])
 
 	sortOffsets(cbuf, req.offsets)
@@ -659,6 +640,7 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 
 	countEntries := []*countIndexEntry{}
 	var currentBatch []int
+	kvList := &bpb.KVList{}
 
 	appendToList := func() {
 		if len(currentBatch) == 0 {
@@ -729,14 +711,24 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 			}
 		}
 
+		pk, err := x.Parse(currentKey)
+		x.Check(err)
+		x.AssertTrue(len(pk.Attr) > 0)
+
 		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup()
 			x.Check(err)
-			list.Kv = append(list.Kv, kvs[0])
-			splitList.Kv = append(splitList.Kv, kvs[1:]...)
+
+			for _, kv := range kvs {
+				kv.StreamId = r.streamIdFor(pk.Attr)
+			}
+			kvList.Kv = append(kvList.Kv, kvs[0])
+			if splits := kvs[1:]; len(splits) > 0 {
+				req.splitCh <- &bpb.KVList{Kv: splits}
+			}
 		} else {
 			val, err := pl.Marshal()
 			x.Check(err)
@@ -748,7 +740,8 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 				UserMeta: userMeta,
 				Version:  writeVersionTs,
 			}
-			list.Kv = append(list.Kv, kv)
+			kv.StreamId = r.streamIdFor(pk.Attr)
+			kvList.Kv = append(kvList.Kv, kv)
 		}
 
 		pl.Reset()
@@ -756,6 +749,7 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 		currentBatch = currentBatch[:0]
 	}
 
+	var sz int
 	for _, offset := range req.offsets {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 		entry := MapEntry(cbuf.Slice(offset))
@@ -763,6 +757,12 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 
 		if !bytes.Equal(entryKey, currentKey) && currentKey != nil {
 			appendToList()
+			sz += kvList.Kv[len(kvList.Kv)-1].Size()
+			if sz > 256<<20 {
+				req.listCh <- kvList
+				kvList = &bpb.KVList{}
+				sz = 0
+			}
 		}
 
 		currentKey = append(currentKey[:0], entryKey...)
@@ -770,5 +770,9 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	}
 
 	appendToList()
+	if len(kvList.Kv) > 0 {
+		req.listCh <- kvList
+	}
+	close(req.listCh)
 	return countEntries
 }

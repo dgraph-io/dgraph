@@ -42,6 +42,7 @@ type countIndexer struct {
 	*reducer
 	writer      *badger.StreamWriter
 	splitWriter *badger.WriteBatch
+	splitCh     chan *badger.KVList
 	tmpDb       *badger.DB
 	cur         current
 	counts      map[int][]uint64
