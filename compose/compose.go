@@ -491,6 +491,9 @@ func main() {
 	if opts.Acl {
 		err = ioutil.WriteFile("acl-secret", []byte("12345678901234567890123456789012"), 0644)
 		x.Check2(fmt.Fprintf(os.Stdout, "Writing file: %s\n", "acl-secret"))
+		if err != nil {
+			fatal(errors.Errorf("unable to write file: %v", err))
+		}
 	}
 
 	yml, err := yaml.Marshal(cfg)
