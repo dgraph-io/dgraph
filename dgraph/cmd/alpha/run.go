@@ -765,12 +765,13 @@ func run() {
 	updaters := y.NewCloser(4)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
+		atomic.AddUint32(&initDone, 1)
+
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
 		edgraph.ResetAcl(updaters)
 		edgraph.RefreshAcls(updaters)
 		edgraph.ResetCors(updaters)
-		atomic.AddUint32(&initDone, 1)
 		// Update the accepted cors origins.
 		for updaters.Ctx().Err() == nil {
 			origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
