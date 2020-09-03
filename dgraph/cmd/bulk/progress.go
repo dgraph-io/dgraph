@@ -89,6 +89,11 @@ func (p *progress) report() {
 func (p *progress) reportOnce() {
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
 	timestamp := time.Now().Format("15:04:05Z0700")
+
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	gomem := int64(ms.HeapInuse / (1 << 20))
+
 	switch phase(atomic.LoadInt32((*int32)(&p.phase))) {
 	case nothing:
 	case mapPhase:
@@ -96,7 +101,7 @@ func (p *progress) reportOnce() {
 		errCount := atomic.LoadInt64(&p.errCount)
 		elapsed := time.Since(p.start)
 		fmt.Printf("[%s] MAP %s nquad_count:%s err_count:%s nquad_speed:%s/sec "+
-			"edge_count:%s edge_speed:%s/sec\n",
+			"edge_count:%s edge_speed:%s/sec GoMem: %d CMem: %d \n",
 			timestamp,
 			x.FixedDuration(elapsed),
 			niceFloat(float64(rdfCount)),
@@ -104,6 +109,8 @@ func (p *progress) reportOnce() {
 			niceFloat(float64(rdfCount)/elapsed.Seconds()),
 			niceFloat(float64(mapEdgeCount)),
 			niceFloat(float64(mapEdgeCount)/elapsed.Seconds()),
+			gomem,
+			z.NumAllocBytes()/(1<<20),
 		)
 	case reducePhase:
 		now := time.Now()
@@ -118,10 +125,6 @@ func (p *progress) reportOnce() {
 		if mapEdgeCount != 0 {
 			pct = fmt.Sprintf("%.2f%% ", 100*float64(reduceEdgeCount)/float64(mapEdgeCount))
 		}
-		var ms runtime.MemStats
-		runtime.ReadMemStats(&ms)
-		gomem := int64(ms.HeapInuse / (1 << 20))
-
 		fmt.Printf("[%s] REDUCE %s %sedge_count:%s edge_speed:%s/sec "+
 			"plist_count:%s plist_speed:%s/sec. Num Encoding MBs: %d. GoMem: %d CMem: %d \n",
 			timestamp,
