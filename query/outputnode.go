@@ -357,14 +357,19 @@ func (enc *encoder) fixOrder(fj fastJsonNode) {
 	// children being copied over, the same node can be referenced by multiple nodes. Thus, the node
 	// would be visited again, it would be fixed multiple times, causing ordering issue.
 	// To avoid this, we keep track of the node by marking it.
-	if fj.meta&visitedBit > 0 {
+	if (fj.meta & visitedBit) > 0 {
 		return
 	}
 	fj.meta |= visitedBit
 
 	tail := fj.child // This is node 5 in the chain mentioned above.
 	// Edge cases: Child is nil, or only child.
-	if tail == nil || tail.next == nil {
+	if tail == nil {
+		return
+	}
+
+	if tail.next == nil {
+		enc.fixOrder(tail)
 		return
 	}
 
@@ -966,7 +971,6 @@ func (sg *SubGraph) addGroupby(enc *encoder, fj fastJsonNode,
 		}
 		enc.AddListChild(g, uc)
 	}
-	enc.fixOrder(g)
 	enc.AddListChild(fj, g)
 	return nil
 }
@@ -1071,7 +1075,6 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		if enc.IsEmpty(n1) {
 			continue
 		}
-		enc.fixOrder(n1)
 
 		hasChild = true
 		if !sg.Params.Normalize {
@@ -1079,6 +1082,9 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 			continue
 		}
 
+		// TODO(Ashish): normalize is not working correctly if we don't call fixOrder() first.
+		// Remove this if possible.
+		enc.fixOrder(n1)
 		// Lets normalize the response now.
 		normalized, err := enc.normalize(n1)
 		if err != nil {
@@ -1350,6 +1356,8 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 						// the expectation is that its children have
 						// already been normalized.
 
+						// TODO(Ashish): normalize is not working correctly if we don't call
+						// fixOrder() first. Remove this if possible.
 						enc.fixOrder(uc)
 						normAttrs, err := enc.normalize(uc)
 						if err != nil {
@@ -1394,7 +1402,6 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 					} else {
 						enc.AddMapChild(dst, uc)
 					}
-					enc.fixOrder(uc)
 				}
 			}
 

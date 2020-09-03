@@ -254,7 +254,7 @@ func TestChildrenOrder(t *testing.T) {
 
 	child := root.child
 	for i := 1; i <= 21; i++ {
-		require.Equal(t, uint64(i), child.meta)
+		require.Equal(t, uint64(i), child.meta&^visitedBit)
 		child = child.next
 	}
 	require.Nil(t, child)
