@@ -318,56 +318,36 @@ func (enc *encoder) appendAttrs(fj fastJsonNode, child fastJsonNode) {
 }
 
 // addChildren appends attrs to existing fj's attrs.
-func (enc *encoder) addChildren(fj fastJsonNode, child fastJsonNode) {
+func (enc *encoder) addChildren(fj fastJsonNode, head fastJsonNode) {
 	if fj.child == nil {
-		fj.child = child
-		return
-	}
-	fc := fj.child
-
-	if child.next == nil { // Only one child.
-		// We're inserting the node in between. This would need to be fixed later via fixOrder.
-		// Single child additions:
-		// Child 1
-		// Child 1 -> 2
-		// Child 1 -> 3 -> 2
-		// Child 1 -> 4 -> 3 -> 2
-		// Child 1 -> 5 -> 4 -> 3 -> 2
-		fc.next, child.next = child, fc.next
+		fj.child = head
 		return
 	}
 
-	// If child has siblings, then it could look like this.
-	// addChildren(11 (child) -> 13)
-	// Child 1 -> 5 -> 4 -> 3 -> 2
-	//
-	// What we want:
-	// 1 -> 13 -> 11 -> 5 -> 4 -> 3 -> 2
-	last := child
-	for last.next != nil {
-		last = last.next
+	tail := head
+	for tail.next != nil {
+		tail = tail.next
 	}
-	// clast points to the last child in the input.
+	// We're inserting the node in between. This would need to be fixed later via fixOrder.
+	// Single child additions:
+	// Child 1
+	// Child 2 -> 1
+	// Child 3 -> 2 -> 1
+	// Child 4 -> 3 -> 2 -> 1
+	// Child 5 -> 4 -> 3 -> 2 -> 1
+	//
 	// If child has siblings, then it could look like this.
-	last.next = child // 13 -> 11 (child). Also, 11 -> 13
-
-	fc.next, child.next = child.next, fc.next // 1 -> 13 (13 -> 11 above) 11 -> 5
-
-	// 1 -> 2 -> 3
-	// 11 -> 12 -> 13
-	// 1 -> 12
-
-	// The above logic should also work for:
-	// addChildren(11 (child) -> 13 -> 12 (clast))
-	// Child 1 -> 5 -> 4 -> 3 -> 2
+	// addChildren(13 -> 12 -> 11)
+	// Child 5 -> 4 -> 3 -> 2 -> 1
 	//
 	// What we want:
-	// 1 -> 13 -> 12 -> 11 -> 5 -> 4 -> 3 -> 2
+	// 13 -> 12 -> 11 -> 5 -> 4 -> 3 -> 2 -> 1
+	fj.child, tail.next = head, fj.child
 }
 
 // fixOrder would fix the ordering issue caused by addChildren.
 // fixOrder would fix the order from
-// 1 -> 5 -> 4 -> 3 -> 2 to
+// 5 -> 4 -> 3 -> 2 -> 1 to
 // 1 -> 2 -> 3 -> 4 -> 5
 func (enc *encoder) fixOrder(fj fastJsonNode) {
 	// If you call this again on the same fastJsonNode, then this would become wrong.  Due to
@@ -379,20 +359,21 @@ func (enc *encoder) fixOrder(fj fastJsonNode) {
 	}
 	fj.meta |= visitedBit
 
-	child := fj.child
-	// Edge cases: Child is nil, or only child, or only two children (1 -> 2).
-	if child == nil || child.next == nil || child.next.next == nil {
+	tail := fj.child // This is node 5 in the chain mentioned above.
+	// Edge cases: Child is nil, or only child.
+	if tail == nil || tail.next == nil {
 		return
 	}
 
-	left, right := child.next, child.next.next
-	left.next = nil // Make left the last child.
+	left, right := tail, tail.next // Left is 5, right is 4.
+	left.next = nil                // Make left the last child.
 	for right != nil {
-		next := right.next        // right of ptr2.
-		right.next = left         // ptr2 now points left to ptr1.
-		left, right = right, next // Advance both pointers.
+		next := right.next        // right of ptr2 (points to 3)
+		right.next = left         // ptr2 now points left to ptr1 (4 -> 5)
+		left, right = right, next // Advance both pointers (left = 4, right = 3 and so on)
 	}
-	child.next = left // Child next is now pointed to the last node. Hence, correcting the order.
+	// left is now pointing to 1.
+	fj.child = left // Chid is now pointed to the last node, i.e. 1.
 }
 
 func (enc *encoder) getAttr(fj fastJsonNode) uint16 {

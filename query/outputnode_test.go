@@ -220,3 +220,42 @@ func BenchmarkFastJsonNode2Chilren(b *testing.B) {
 		buildTestTree(b, enc, 1, 20, root)
 	}
 }
+
+func TestChildrenOrder(t *testing.T) {
+	enc := newEncoder()
+	root := enc.newNode(1)
+	root.meta = 0
+	for i := 1; i <= 10; i++ {
+		n := enc.newNode(1)
+		n.meta = uint64(i)
+		enc.addChildren(root, n)
+	}
+
+	stepMom := enc.newNode(1)
+	stepMom.meta = 100
+	for i := 11; i <= 20; i++ {
+		n := enc.newNode(1)
+		n.meta = uint64(i)
+		enc.addChildren(stepMom, n)
+	}
+	enc.addChildren(root, stepMom.child)
+
+	stepDad := enc.newNode(1)
+	stepDad.meta = 101
+	{
+		n := enc.newNode(1)
+		n.meta = uint64(21)
+		enc.addChildren(stepDad, n)
+	}
+	enc.addChildren(root, stepDad.child)
+
+	enc.fixOrder(root)
+	enc.fixOrder(root) // Another time just to ensure it still works.
+
+	child := root.child
+	for i := 1; i <= 21; i++ {
+		require.Equal(t, uint64(i), child.meta)
+		child = child.next
+	}
+	require.Nil(t, child)
+}

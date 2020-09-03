@@ -2066,7 +2066,7 @@ func TestGroupByGeoCrash(t *testing.T) {
 	}
 	`
 	js := processQueryNoErr(t, query)
-	require.Contains(t, js, `{"loc":{"type":"Point","coordinates":[1.1,2]},"count":2}`)
+	require.Contains(t, js, `{"count":2,"loc":{"type":"Point","coordinates":[1.1,2]}}`)
 }
 
 func TestPasswordError(t *testing.T) {
