@@ -88,13 +88,15 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	}
 
 	err = writer.Write(&bpb.KVList{Kv: kvs})
+	x.Check(err)
 	err = writer.Flush()
 	if err == nil && len(keys) != 0 {
+		txn := pstore.NewTransactionAt(math.MaxUint64, false)
+		defer txn.Discard()
 		for _, key := range keys {
-			txn := pstore.NewTransactionAt(math.MaxUint64, false)
 			_, dbErr := txn.Get(key)
 			if dbErr != nil {
-				log.Panic("Error while reading split keys")
+				log.Panic("Error while reading split key ", key)
 			}
 		}
 	}

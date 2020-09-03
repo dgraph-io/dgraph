@@ -113,11 +113,12 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	}
 
 	if len(keys) != 0 {
+		txn := pstore.NewTransactionAt(math.MaxUint64, false)
+		defer txn.Discard()
 		for _, key := range keys {
-			txn := pstore.NewTransactionAt(math.MaxUint64, false)
 			_, dbErr := txn.Get(key)
 			if dbErr != nil {
-				log.Panic("Error while reading split keys")
+				log.Panic("Error while reading split key ", key)
 			}
 		}
 	}
