@@ -126,13 +126,13 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 				value.Kind = ast.StringValue
 			} else {
 				addError(validator.Message("Type mismatched for Value `%s`, expected: Int64, got: '%s'", value.Raw,
-					ValueKindToString(value.Kind)), validator.At(value.Position))
+					valueKindToString(value.Kind)), validator.At(value.Position))
 			}
 		}
 	})
 }
 
-func ValueKindToString(valKind ast.ValueKind) string {
+func valueKindToString(valKind ast.ValueKind) string {
 	switch valKind {
 	case ast.Variable:
 		return "Variable"
