@@ -347,7 +347,8 @@ func (enc *encoder) addChildren(fj fastJsonNode, head fastJsonNode) {
 	fj.child, tail.next = head, fj.child
 }
 
-// fixOrder would fix the ordering issue caused by addChildren.
+// fixOrder would recursively fix the ordering issue caused by addChildren, across the entire
+// tree.
 // fixOrder would fix the order from
 // 5 -> 4 -> 3 -> 2 -> 1 to
 // 1 -> 2 -> 3 -> 4 -> 5
@@ -375,7 +376,14 @@ func (enc *encoder) fixOrder(fj fastJsonNode) {
 		left, right = right, next // Advance both pointers (left = 4, right = 3 and so on)
 	}
 	// left is now pointing to 1.
-	fj.child = left // Chid is now pointed to the last node, i.e. 1.
+	fj.child = left // Child is now pointed to 1.
+
+	// Now recurse to fix up all children.
+	child := fj.child
+	for child != nil {
+		enc.fixOrder(child)
+		child = child.next
+	}
 }
 
 func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
