@@ -83,6 +83,17 @@
             "upsert": true
         },
         {
+            "predicate": "post1.title",
+            "type": "string",
+            "index": true,
+            "tokenizer": ["trigram", "hash"],
+            "upsert": true
+        },
+        {
+            "predicate": "post1.numLikes",
+            "type": "int"
+        },
+        {
             "predicate": "State.capital",
             "type": "string"
         },
@@ -448,6 +459,17 @@
                 }
             ],
             "name": "Post1"
+        },
+        {
+            "fields": [
+                {
+                    "name": "post1.title"
+                },
+                {
+                    "name": "post1.numLikes"
+                }
+            ],
+            "name": "post1"
         },
         {
             "fields": [

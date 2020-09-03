@@ -173,3 +173,9 @@ type Comment1 {
       id: String! @id
       replies: [Comment1]
 }
+
+type post1{
+        id: ID
+        title: String! @id @search(by: [regexp])
+        numLikes: Int64
+}

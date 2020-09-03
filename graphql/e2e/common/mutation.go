@@ -2784,10 +2784,8 @@ func deleteGqlType(
 			require.Equal(t, "Deleted", deleteType["msg"], "while deleting %s (filter: %v)",
 				typeName, filter)
 		}
-	} else {
-		if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
-			t.Errorf("errors mismatch (-want +got):\n%s", diff)
-		}
+	} else if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
+		t.Errorf("errors mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -3648,4 +3646,38 @@ func checkCascadeWithMutationWithoutIDField(t *testing.T) {
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S2"}}
 	deleteState(t, filter, 1, nil)
+}
+
+func int64BoundaryTesting(t *testing.T) {
+	//This test checks the range of Int64
+	//(2^63)=9223372036854775808
+	addPost1Params := &GraphQLParams{
+		Query: `mutation {	
+			addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },{title: "Dgraph1", numLikes: -9223372036854775808 }]) {	
+				post1 {	
+					title	
+					numLikes	
+				}	
+			}	
+		}`,
+	}
+
+	gqlResponse := addPost1Params.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addPost1Expected := `{	
+		"addpost1": {	
+			"post1": [{	
+				"title": "Dgraph",	
+				"numLikes": 9223372036854775807	
+					
+			},{	
+				"title": "Dgraph1",	
+				"numLikes": -9223372036854775808	
+			}]	
+		}	
+	}`
+	testutil.CompareJSON(t, addPost1Expected, string(gqlResponse.Data))
+	filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
+	deleteGqlType(t, "post1", filter, 2, nil)
 }
