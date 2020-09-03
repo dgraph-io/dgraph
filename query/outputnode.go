@@ -306,6 +306,8 @@ func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) error {
 func (enc *encoder) setList(fj fastJsonNode, list bool) {
 	if list {
 		fj.meta |= listBit
+	} else {
+		fj.meta &^= listBit
 	}
 }
 
