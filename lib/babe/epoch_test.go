@@ -64,7 +64,8 @@ func TestEpochRandomness(t *testing.T) {
 	bs := createTestService(t, nil)
 	parent := genesisHeader
 
-	buf := append(bs.randomness[:], []byte{2, 0, 0, 0, 0, 0, 0, 0}...)
+	epoch := 3
+	buf := append(bs.randomness[:], []byte{byte(epoch), 0, 0, 0, 0, 0, 0, 0}...)
 
 	for i := 1; i < int(testEpochLength*2+1); i++ {
 		block, _ := createTestBlock(t, bs, parent, nil, uint64(i))
@@ -80,7 +81,7 @@ func TestEpochRandomness(t *testing.T) {
 		parent = block.Header
 	}
 
-	rand, err := bs.epochRandomness(2)
+	rand, err := bs.epochRandomness(uint64(epoch))
 	require.NoError(t, err)
 	expected, err := common.Blake2bHash(buf)
 	require.NoError(t, err)
@@ -99,13 +100,13 @@ func TestIncrementEpoch(t *testing.T) {
 	bs := createTestService(t, nil)
 	next, err := bs.incrementEpoch()
 	require.NoError(t, err)
-	require.Equal(t, uint64(1), next)
+	require.Equal(t, uint64(2), next)
 
 	next, err = bs.incrementEpoch()
 	require.NoError(t, err)
-	require.Equal(t, uint64(2), next)
+	require.Equal(t, uint64(3), next)
 
 	epoch, err := bs.epochState.GetCurrentEpoch()
 	require.NoError(t, err)
-	require.Equal(t, uint64(2), epoch)
+	require.Equal(t, uint64(3), epoch)
 }

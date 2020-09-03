@@ -212,8 +212,8 @@ func TestSync_Bench(t *testing.T) {
 		}
 	}
 
-	maxTime := time.Second * 8
-	minBPS := float64(34)
+	maxTime := time.Second * 12
+	minBPS := float64(22)
 	totalTime := end.Sub(start)
 	bps := float64(numBlocks) / end.Sub(start).Seconds()
 	t.Log("total sync time:", totalTime)

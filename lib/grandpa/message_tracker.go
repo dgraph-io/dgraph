@@ -36,7 +36,7 @@ type tracker struct {
 }
 
 func newTracker(bs BlockState, out chan<- FinalityMessage) (*tracker, error) {
-	in := make(chan *types.Block)
+	in := make(chan *types.Block, 16)
 	id, err := bs.RegisterImportedChannel(in)
 	if err != nil {
 		return nil, err

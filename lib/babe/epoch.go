@@ -29,7 +29,7 @@ import (
 // initiateEpoch sets the randomness for the given epoch, runs the lottery for the slots in the epoch,
 // and stores updated EpochInfo in the database
 func (b *Service) initiateEpoch(epoch, startSlot uint64) error {
-	if epoch > 1 {
+	if epoch > 2 {
 		var err error
 		b.randomness, err = b.epochRandomness(epoch)
 		if err != nil {
@@ -37,10 +37,14 @@ func (b *Service) initiateEpoch(epoch, startSlot uint64) error {
 		}
 	}
 
-	if epoch > 0 {
+	if epoch > 1 {
 		first, err := b.blockState.BestBlockNumber()
 		if err != nil {
 			return err
+		}
+
+		if first.Uint64() == 0 {
+			first = big.NewInt(1) // first epoch starts at block 1, not block 0
 		}
 
 		// Duration may only change when the runtime is updated. This call happens in SetRuntime()

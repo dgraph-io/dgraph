@@ -57,12 +57,12 @@ func TestDevControl_Babe(t *testing.T) {
 	err := m.Control(nil, &[]string{"babe", "stop"}, &res)
 	require.NoError(t, err)
 	require.Equal(t, blockProducerStoppedMsg, res)
-	require.True(t, bs.IsStopped())
+	require.True(t, bs.IsPaused())
 
 	err = m.Control(nil, &[]string{"babe", "start"}, &res)
 	require.NoError(t, err)
 	require.Equal(t, blockProducerStartedMsg, res)
-	require.False(t, bs.IsStopped())
+	require.False(t, bs.IsPaused())
 }
 
 func TestDevControl_Network(t *testing.T) {

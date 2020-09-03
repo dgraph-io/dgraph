@@ -18,13 +18,13 @@ package babe
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/types"
@@ -43,6 +43,9 @@ var (
 // Service contains the VRF keys for the validator, as well as BABE configuation data
 type Service struct {
 	logger log.Logger
+	ctx    context.Context
+	cancel context.CancelFunc
+	paused bool
 
 	// Storage interfaces
 	blockState       BlockState
@@ -69,8 +72,8 @@ type Service struct {
 	blockChan chan types.Block // send blocks to core service
 
 	// State variables
-	lock    sync.Mutex
-	started atomic.Value
+	lock  sync.Mutex
+	pause chan struct{}
 }
 
 // ServiceConfig represents a BABE configuration
@@ -111,8 +114,12 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 	h = log.CallerFileHandler(h)
 	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	babeService := &Service{
 		logger:           logger,
+		ctx:              ctx,
+		cancel:           cancel,
 		blockState:       cfg.BlockState,
 		storageState:     cfg.StorageState,
 		epochState:       cfg.EpochState,
@@ -124,9 +131,8 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		authorityData:    cfg.AuthData,
 		epochThreshold:   cfg.EpochThreshold,
 		startSlot:        cfg.StartSlot,
+		pause:            make(chan struct{}),
 	}
-
-	babeService.started.Store(false)
 
 	var err error
 	babeService.config, err = babeService.rt.BabeConfiguration()
@@ -161,8 +167,6 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 
 // Start starts BABE block authoring
 func (b *Service) Start() error {
-	b.started.Store(true)
-
 	if b.epochThreshold == nil {
 		err := b.setEpochThreshold()
 		if err != nil {
@@ -172,11 +176,13 @@ func (b *Service) Start() error {
 
 	epoch, err := b.epochState.GetCurrentEpoch()
 	if err != nil {
+		b.logger.Error("failed to get current epoch", "error", err)
 		return err
 	}
 
 	err = b.initiateEpoch(epoch, b.startSlot)
 	if err != nil {
+		b.logger.Error("failed to initiate epoch", "error", err)
 		return err
 	}
 
@@ -186,15 +192,28 @@ func (b *Service) Start() error {
 
 // Pause pauses the service ie. halts block production
 func (b *Service) Pause() error {
-	b.started.Store(false)
-	b.logger.Info("service paused")
+	if b.paused {
+		return errors.New("service already paused")
+	}
+
+	select {
+	case b.pause <- struct{}{}:
+		b.logger.Info("service paused")
+	default:
+	}
+
+	b.paused = true
 	return nil
 }
 
 // Resume resumes the service ie. resumes block production
 func (b *Service) Resume() error {
-	b.started.Store(true)
+	if !b.paused {
+		return errors.New("service not paused")
+	}
+
 	go b.initiate()
+	b.paused = false
 	b.logger.Info("service resumed")
 	return nil
 }
@@ -204,11 +223,12 @@ func (b *Service) Stop() error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	if b.started.Load().(bool) {
-		b.started.Store(false)
-		close(b.blockChan)
+	if b.ctx.Err() != nil {
+		return errors.New("service already stopped")
 	}
 
+	b.cancel()
+	close(b.blockChan)
 	return nil
 }
 
@@ -271,15 +291,28 @@ func (b *Service) SetRandomness(a [types.RandomnessLength]byte) {
 
 // IsStopped returns true if the service is stopped (ie not producing blocks)
 func (b *Service) IsStopped() bool {
-	return !b.started.Load().(bool)
+	return b.ctx.Err() != nil
+}
+
+// IsPaused returns if the service is paused or not (ie. producing blocks)
+func (b *Service) IsPaused() bool {
+	return b.paused
 }
 
 func (b *Service) safeSend(msg types.Block) error {
+	defer func() {
+		if err := recover(); err != nil {
+			b.logger.Error("recovered from panic", "error", err)
+		}
+	}()
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
-	if !b.started.Load().(bool) {
+
+	if b.IsStopped() {
 		return errors.New("Service has been stopped")
 	}
+
 	b.blockChan <- msg
 	return nil
 }
@@ -346,26 +379,48 @@ func (b *Service) initiate() {
 		}
 	}
 
-	b.logger.Debug("[babe]", "calculated slot", slotNum)
+	b.logger.Debug("calculated slot", "number", slotNum)
 	b.invokeBlockAuthoring(slotNum)
 }
 
 func (b *Service) invokeBlockAuthoring(startSlot uint64) {
-	nextStartSlot := startSlot + b.config.EpochLength
+	currEpoch, err := b.epochState.GetCurrentEpoch()
+	if err != nil {
+		b.logger.Error("failed to get current epoch", "error", err)
+		return
+	}
 
-	for slotNum := startSlot; slotNum < nextStartSlot; slotNum++ {
-		start := time.Now()
+	// get start slot for current epoch
+	epochStart, err := b.epochState.GetStartSlotForEpoch(0)
+	if err != nil {
+		b.logger.Error("failed to get start slot for current epoch", "epoch", currEpoch, "error", err)
+		return
+	}
 
-		if time.Since(start) <= b.slotDuration() {
-			if b.IsStopped() { // TODO: change this to select case between stopped chan and time.After
-				return
+	intoEpoch := startSlot - epochStart
+	b.logger.Info("current epoch", "epoch", currEpoch, "slots into epoch", intoEpoch)
+
+	// starting slot for next epoch
+	nextStartSlot := startSlot + b.config.EpochLength - intoEpoch
+
+	slotDone := make([]<-chan time.Time, b.config.EpochLength-intoEpoch)
+	for i := 0; i < int(b.config.EpochLength-intoEpoch); i++ {
+		slotDone[i] = time.After(b.slotDuration() * time.Duration(i))
+	}
+
+	for i := 0; i < int(b.config.EpochLength-intoEpoch); i++ {
+		select {
+		case <-b.ctx.Done():
+			return
+		case <-b.pause:
+			return
+		case <-slotDone[i]:
+			slotNum := startSlot + uint64(i)
+			err = b.handleSlot(slotNum)
+			if err != nil {
+				b.logger.Warn("failed to handle slot", "slot", slotNum, "error", err)
+				continue
 			}
-
-			b.handleSlot(slotNum)
-
-			// sleep until the slot ends
-			until := time.Until(start.Add(b.slotDuration()))
-			time.Sleep(until)
 		}
 	}
 
@@ -376,6 +431,8 @@ func (b *Service) invokeBlockAuthoring(startSlot uint64) {
 		return
 	}
 
+	b.logger.Info("initiating epoch", "number", next, "start slot", nextStartSlot)
+
 	err = b.initiateEpoch(next, nextStartSlot)
 	if err != nil {
 		b.logger.Error("failed to initiate epoch", "epoch", next, "error", err)
@@ -385,18 +442,18 @@ func (b *Service) invokeBlockAuthoring(startSlot uint64) {
 	b.invokeBlockAuthoring(nextStartSlot)
 }
 
-func (b *Service) handleSlot(slotNum uint64) {
+func (b *Service) handleSlot(slotNum uint64) error {
 	if b.slotToProof[slotNum] == nil {
 		// if we don't have a proof already set, re-run lottery.
 		proof, err := b.runLottery(slotNum)
 		if err != nil {
 			b.logger.Warn("failed to run lottery", "slot", slotNum)
-			return
+			return errors.New("failed to run lottery")
 		}
 
 		if proof == nil {
 			b.logger.Debug("not authorized to produce block", "slot", slotNum)
-			return
+			return ErrNotAuthorized
 		}
 
 		b.slotToProof[slotNum] = proof
@@ -404,13 +461,13 @@ func (b *Service) handleSlot(slotNum uint64) {
 
 	parentHeader, err := b.blockState.BestBlockHeader()
 	if err != nil {
-		b.logger.Error("block authoring", "error", "parent header is nil")
-		return
+		b.logger.Error("block authoring", "error", err)
+		return err
 	}
 
 	if parentHeader == nil {
 		b.logger.Error("block authoring", "error", "parent header is nil")
-		return
+		return err
 	}
 
 	// there is a chance that the best block header may change in the course of building the block,
@@ -423,25 +480,24 @@ func (b *Service) handleSlot(slotNum uint64) {
 		number:   slotNum,
 	}
 
-	// TODO: move block authorization check here
 	b.logger.Debug("going to build block", "parent", parent)
 
 	block, err := b.buildBlock(parent, currentSlot)
 	if err != nil {
 		b.logger.Debug("block authoring", "error", err)
-	} else {
-		// TODO: loop until slot is done, attempt to produce multiple blocks
-
-		hash := block.Header.Hash()
-		b.logger.Info("[babe]", "built block", hash.String(), "number", block.Header.Number, "slot", slotNum)
-		b.logger.Debug("built block", "header", block.Header, "body", block.Body, "parent", parent)
-
-		err = b.safeSend(*block)
-		if err != nil {
-			b.logger.Error("Failed to send block to core", "error", err)
-			return
-		}
+		return nil
 	}
+
+	hash := block.Header.Hash()
+	b.logger.Info("built block", "hash", hash.String(), "number", block.Header.Number, "slot", slotNum)
+	b.logger.Debug("built block", "header", block.Header, "body", block.Body, "parent", parent.Hash())
+
+	err = b.safeSend(*block)
+	if err != nil {
+		b.logger.Error("failed to send block to core", "error", err)
+		return err
+	}
+	return nil
 }
 
 func (b *Service) vrfSign(input []byte) (out []byte, proof []byte, err error) {

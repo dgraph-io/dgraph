@@ -45,18 +45,18 @@ func TestEpochState_CurrentEpoch(t *testing.T) {
 	s := newEpochStateFromGenesis(t)
 	epoch, err := s.GetCurrentEpoch()
 	require.NoError(t, err)
-	require.Equal(t, uint64(0), epoch)
+	require.Equal(t, uint64(1), epoch)
 
-	err = s.SetCurrentEpoch(1)
+	err = s.SetCurrentEpoch(2)
 	require.NoError(t, err)
 	epoch, err = s.GetCurrentEpoch()
 	require.NoError(t, err)
-	require.Equal(t, uint64(1), epoch)
+	require.Equal(t, uint64(2), epoch)
 }
 
 func TestEpochState_EpochInfo(t *testing.T) {
 	s := newEpochStateFromGenesis(t)
-	has, err := s.HasEpochInfo(0)
+	has, err := s.HasEpochInfo(1)
 	require.NoError(t, err)
 	require.True(t, has)
 
@@ -66,9 +66,61 @@ func TestEpochState_EpochInfo(t *testing.T) {
 		Randomness: [32]byte{77},
 	}
 
-	err = s.SetEpochInfo(1, info)
+	err = s.SetEpochInfo(2, info)
 	require.NoError(t, err)
-	res, err := s.GetEpochInfo(1)
+	res, err := s.GetEpochInfo(2)
 	require.NoError(t, err)
 	require.Equal(t, info, res)
+}
+
+func TestEpochState_GetStartSlotForEpoch(t *testing.T) {
+	s := newEpochStateFromGenesis(t)
+
+	info := &types.EpochInfo{
+		Duration:   200,
+		FirstBlock: 400,
+		Randomness: [32]byte{77},
+	}
+
+	err := s.SetEpochInfo(2, info)
+	require.NoError(t, err)
+
+	info = &types.EpochInfo{
+		Duration:   100,
+		FirstBlock: 600,
+		Randomness: [32]byte{77},
+	}
+
+	err = s.SetEpochInfo(3, info)
+	require.NoError(t, err)
+
+	start, err := s.GetStartSlotForEpoch(0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), start)
+
+	start, err = s.GetStartSlotForEpoch(1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), start)
+
+	err = s.SetCurrentEpoch(3)
+	require.NoError(t, err)
+
+	start, err = s.GetStartSlotForEpoch(2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(201), start)
+
+	start, err = s.GetStartSlotForEpoch(3)
+	require.NoError(t, err)
+	require.Equal(t, uint64(401), start)
+
+	err = s.SetCurrentEpoch(4)
+	require.NoError(t, err)
+
+	start, err = s.GetStartSlotForEpoch(0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(501), start)
+
+	start, err = s.GetStartSlotForEpoch(4)
+	require.NoError(t, err)
+	require.Equal(t, uint64(501), start)
 }

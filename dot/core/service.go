@@ -261,6 +261,11 @@ func (s *Service) handleBlocks(ctx context.Context) {
 			if err != nil {
 				log.Warn("failed to handle runtime change for block", "block", block.Header.Hash())
 			}
+
+			err = s.storageState.StoreInDB()
+			if err != nil {
+				log.Warn("failed to storage storage root in database", "error", err)
+			}
 		case <-ctx.Done():
 			return
 		}

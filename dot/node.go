@@ -105,7 +105,7 @@ func InitNode(cfg *Config) error {
 
 		genEpochInfo = &types.EpochInfo{
 			Duration:   babeCfg.EpochLength,
-			FirstBlock: 0,
+			FirstBlock: 1,
 			Randomness: babeCfg.Randomness,
 		}
 
@@ -243,7 +243,6 @@ func NewNode(cfg *Config, ks *keystore.Keystore, stopFunc func()) (*Node, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create state service: %s", err)
 	}
-	nodeSrvcs = append(nodeSrvcs, stateSrvc)
 
 	// create runtime
 	rt, err := createRuntime(cfg, stateSrvc, ks)
@@ -345,6 +344,9 @@ func NewNode(cfg *Config, ks *keystore.Keystore, stopFunc func()) (*Node, error)
 		logger.Debug("rpc service disabled by default", "rpc", enabled)
 
 	}
+
+	// close state service last
+	nodeSrvcs = append(nodeSrvcs, stateSrvc)
 
 	node := &Node{
 		Name:     cfg.Global.Name,

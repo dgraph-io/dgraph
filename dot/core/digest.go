@@ -82,8 +82,8 @@ type resume struct {
 
 // NewDigestHandler returns a new DigestHandler
 func NewDigestHandler(blockState BlockState, babe BlockProducer, grandpa FinalityGadget, verifier Verifier) (*DigestHandler, error) {
-	imported := make(chan *types.Block)
-	finalized := make(chan *types.Header)
+	imported := make(chan *types.Block, 16)
+	finalized := make(chan *types.Header, 16)
 	iid, err := blockState.RegisterImportedChannel(imported)
 	if err != nil {
 		return nil, err

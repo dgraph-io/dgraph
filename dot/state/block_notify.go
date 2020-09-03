@@ -104,7 +104,10 @@ func (bs *BlockState) notifyImported(block *types.Block) {
 
 	for _, ch := range bs.imported {
 		go func(ch chan<- *types.Block) {
-			ch <- block
+			select {
+			case ch <- block:
+			default:
+			}
 		}(ch)
 	}
 }
@@ -127,7 +130,10 @@ func (bs *BlockState) notifyFinalized(hash common.Hash) {
 
 	for _, ch := range bs.finalized {
 		go func(ch chan<- *types.Header) {
-			ch <- header
+			select {
+			case ch <- header:
+			default:
+			}
 		}(ch)
 	}
 }

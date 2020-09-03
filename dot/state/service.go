@@ -251,13 +251,12 @@ func (s *Service) Start() error {
 
 	// create epoch state
 	s.Epoch = NewEpochState(db)
-
 	return nil
 }
 
 // Stop closes each state database
 func (s *Service) Stop() error {
-	err := s.storeHash()
+	err := StoreLatestStorageHash(s.db, s.Storage.trie)
 	if err != nil {
 		return err
 	}
@@ -278,17 +277,11 @@ func (s *Service) Stop() error {
 		return err
 	}
 
-	err = s.storeHash()
+	thash, err := s.Storage.trie.Hash()
 	if err != nil {
 		return err
 	}
 
-	logger.Debug("stop", "best block hash", hash)
-
+	logger.Debug("stop", "best block hash", hash, "latest state root", thash)
 	return s.db.Close()
-}
-
-// StoreHash stores the current root hash in the database at LatestStorageHashKey
-func (s *Service) storeHash() error {
-	return StoreLatestStorageHash(s.db, s.Storage.trie)
 }
