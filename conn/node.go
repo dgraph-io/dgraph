@@ -649,15 +649,18 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 // RunReadIndexLoop runs the RAFT index in a loop.
 func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
 	defer closer.Done()
-	readIndex := func(activeRctx []byte) (uint64, error) {
+	readIndex := func(activeRctx []byte, isRetry bool) (uint64, error) {
 		// Read Request can get rejected then we would wait indefinitely on the channel
 		// so have a timeout.
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		if err := n.Raft().ReadIndex(ctx, activeRctx); err != nil {
-			glog.Errorf("Error while trying to call ReadIndex: %v\n", err)
-			return 0, err
+		// in case of a retry, ReadIndex we would end up pushing request ctx twice to read state channel
+		if !isRetry {
+			if err := n.Raft().ReadIndex(ctx, activeRctx); err != nil {
+				glog.Errorf("Error while trying to call ReadIndex: %v\n", err)
+				return 0, err
+			}
 		}
 
 	again:
@@ -702,11 +705,14 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			activeRctx := make([]byte, 8)
 			x.Check2(n.Rand.Read(activeRctx))
 			glog.V(3).Infof("Request readctx: %#x", activeRctx)
+			isRetry := false
 			for {
-				index, err := readIndex(activeRctx)
+				index, err := readIndex(activeRctx, isRetry)
 				if err == errInternalRetry {
+					isRetry = true
 					continue
 				}
+				isRetry = false
 				if err != nil {
 					index = 0
 					glog.Errorf("[%#x] While trying to do lin read index: %v", n.Id, err)
