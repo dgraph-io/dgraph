@@ -1502,7 +1502,7 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case string:
 			i, err := strconv.ParseFloat(v, 64)
 			// An error can be encountered if we had a value that can't be fit into
-			// a 32 bit floating point number..
+			// a 64 bit floating point number..
 			// Lets try to see if this number could be converted to int32 without losing
 			// information, otherwise return error.
 			if err != nil {
