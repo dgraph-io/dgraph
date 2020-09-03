@@ -673,7 +673,15 @@ func (f *field) DgraphAlias() string {
 	// if this field is repeated, then it should be aliased using its dgraph predicate which will be
 	// unique across repeated fields
 	if f.op.inSchema.repeatedFieldNames[f.Name()] {
-		return f.DgraphPredicate()
+		dgraphAlias := f.DgraphPredicate()
+		// there won't be any dgraph predicate for fields in introspection queries, as they are not
+		// stored in dgraph. So we identify those fields using this condition, and just let the
+		// field name get returned for introspection query fields, because the raw data response is
+		// prepared for them using only the field name, so that is what should be used to pick them
+		// back up from that raw data response before completion is performed.
+		if dgraphAlias != "" {
+			return dgraphAlias
+		}
 	}
 	// if not repeated, alias it using its name
 	return f.Name()
