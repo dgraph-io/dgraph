@@ -200,7 +200,9 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
+	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. This returns auth errors to clients. We do not recommend turning it on for production.")
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
+	flag.Int("ludicrous_concurrency", 2000, "Number of concurrent threads in ludicrous mode")
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
 
@@ -508,6 +510,23 @@ func setupServer(closer *y.Closer) {
 		adminSchemaHandler(w, r, adminServer)
 	})))
 
+	http.Handle("/admin/schema/validate", http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		schema := readRequest(w, r)
+		w.Header().Set("Content-Type", "application/json")
+
+		err := admin.SchemaValidate(string(schema))
+		if err == nil {
+			w.WriteHeader(http.StatusOK)
+			x.SetStatus(w, "success", "Schema is valid")
+			return
+		}
+
+		w.WriteHeader(http.StatusBadRequest)
+		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
+		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
+	}))
+
 	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			shutDownHandler(w, r, adminServer)
@@ -674,20 +693,21 @@ func run() {
 	x.Check(err)
 
 	x.WorkerConfig = x.WorkerOptions{
-		ExportPath:          Alpha.Conf.GetString("export"),
-		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
-		Tracing:             Alpha.Conf.GetFloat64("trace"),
-		MyAddr:              Alpha.Conf.GetString("my"),
-		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
-		RaftId:              cast.ToUint64(Alpha.Conf.GetString("idx")),
-		WhiteListedIPRanges: ips,
-		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
-		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
-		AclEnabled:          secretFile != "",
-		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
-		AbortOlderThan:      abortDur,
-		StartTime:           startTime,
-		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
+		ExportPath:           Alpha.Conf.GetString("export"),
+		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
+		Tracing:              Alpha.Conf.GetFloat64("trace"),
+		MyAddr:               Alpha.Conf.GetString("my"),
+		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
+		RaftId:               cast.ToUint64(Alpha.Conf.GetString("idx")),
+		WhiteListedIPRanges:  ips,
+		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
+		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
+		AclEnabled:           secretFile != "",
+		SnapshotAfter:        Alpha.Conf.GetInt("snapshot_after"),
+		AbortOlderThan:       abortDur,
+		StartTime:            startTime,
+		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
+		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
 	}
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
@@ -701,6 +721,7 @@ func run() {
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
+	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

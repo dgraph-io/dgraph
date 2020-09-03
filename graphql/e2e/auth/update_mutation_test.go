@@ -42,7 +42,7 @@ func getAllProjects(t *testing.T, users, roles []string) []string {
 	ids := make(map[string]struct{})
 	for _, user := range users {
 		for _, role := range roles {
-			getParams.Headers = getJWT(t, user, role)
+			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
@@ -88,7 +88,7 @@ func getAllColumns(t *testing.T, users, roles []string) ([]*Column, []string) {
 	var columns []*Column
 	for _, user := range users {
 		for _, role := range roles {
-			getParams.Headers = getJWT(t, user, role)
+			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
@@ -137,7 +137,7 @@ func getAllIssues(t *testing.T, users, roles []string) ([]*Issue, []string) {
 	var issues []*Issue
 	for _, user := range users {
 		for _, role := range roles {
-			getParams.Headers = getJWT(t, user, role)
+			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
@@ -186,7 +186,7 @@ func getAllMovies(t *testing.T, users, roles []string) ([]*Movie, []string) {
 	var movies []*Movie
 	for _, user := range users {
 		for _, role := range roles {
-			getParams.Headers = getJWT(t, user, role)
+			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
@@ -232,7 +232,7 @@ func getAllLogs(t *testing.T, users, roles []string) ([]*Log, []string) {
 	var logs []*Log
 	for _, user := range users {
 		for _, role := range roles {
-			getParams.Headers = getJWT(t, user, role)
+			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
@@ -288,7 +288,7 @@ func TestUpdateOrRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"projs": ids},
 			}
@@ -330,7 +330,7 @@ func TestUpdateRootFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"cols": ids},
 			}
@@ -363,7 +363,7 @@ func TestUpdateRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"ids": ids},
 			}
@@ -406,7 +406,7 @@ func TestUpdateAndRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"ids": ids},
 			}
@@ -445,7 +445,7 @@ func TestUpdateNestedFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"ids": ids},
 			}

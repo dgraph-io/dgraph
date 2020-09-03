@@ -118,6 +118,8 @@ instances to achieve high-availability.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored for the write-ahead log directory "+
 			"log directory. mmap consumes more RAM, but provides better performance.")
+	flag.Int("badger.compression_level", 3,
+		"The compression level for Badger. A higher value uses more resources.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -268,7 +270,12 @@ func run() {
 		WithIndexCacheSize(indexCacheSz).
 		WithLoadBloomsOnOpen(false)
 
-	kvOpt.ZSTDCompressionLevel = 3
+	compression_level := Zero.Conf.GetInt("badger.compression_level")
+	if compression_level > 0 {
+		// By default, compression is disabled in badger.
+		kvOpt.Compression = bopt.ZSTD
+		kvOpt.ZSTDCompressionLevel = compression_level
+	}
 
 	// Set loading mode options.
 	switch Zero.Conf.GetString("badger.tables") {
