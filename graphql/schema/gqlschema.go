@@ -603,10 +603,12 @@ func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
 		}
 	}
 
-	schema.Types[defn.Name+"Ref"] = &ast.Definition{
-		Kind:   ast.InputObject,
-		Name:   defn.Name + "Ref",
-		Fields: flds,
+	if len(flds) != 0 {
+		schema.Types[defn.Name+"Ref"] = &ast.Definition{
+			Kind:   ast.InputObject,
+			Name:   defn.Name + "Ref",
+			Fields: flds,
+		}
 	}
 }
 
@@ -722,6 +724,9 @@ func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 // addTypeHasFilter adds `enum TypeHasFilter {...}` to the Schema
 // if the object/interface has a field other than the ID field
 func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
+	if schema.Types["Add"+defn.Name+"Input"]==nil{
+		return
+	}
 	filterName := defn.Name + "HasFilter"
 	filter := &ast.Definition{
 		Kind: ast.Enum,
@@ -828,6 +833,9 @@ func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName str
 //   ...
 // }
 func addFilterType(schema *ast.Schema, defn *ast.Definition) {
+	if schema.Types["Add"+defn.Name+"Input"]==nil{
+		return
+	}
 	filterName := defn.Name + "Filter"
 	filter := &ast.Definition{
 		Kind: ast.InputObject,
@@ -1039,11 +1047,12 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	addFilterArgument(schema, qry)
 	addOrderArgument(schema, qry)
 	addPaginationArguments(qry)
-
-	schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
-		Kind:   ast.Object,
-		Name:   "Add" + defn.Name + "Payload",
-		Fields: []*ast.FieldDefinition{qry, numUids},
+	if schema.Types["Add"+defn.Name+"Input"] != nil {
+		schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
+			Kind:   ast.Object,
+			Name:   "Add" + defn.Name + "Payload",
+			Fields: []*ast.FieldDefinition{qry, numUids},
+		}
 	}
 }
 
@@ -1387,7 +1396,6 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			(!hasID(schema.Types[fld.Type.Name()]) && !hasXID(schema.Types[fld.Type.Name()])) {
 			continue
 		}
-
 		fldList = append(fldList, createField(schema, fld))
 	}
 
