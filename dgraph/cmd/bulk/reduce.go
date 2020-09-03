@@ -550,7 +550,6 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
 
 	sendReq(cbuf)
-
 	// Close the encodes.
 	close(encoderCh)
 	encoderCloser.SignalAndWait()
@@ -613,14 +612,6 @@ func (me MapEntry) Plist() []byte {
 	return me[start : start+sz]
 }
 
-func sortOffsets(cbuf *z.Buffer, offsets []int) {
-	sort.Slice(offsets, func(i, j int) bool {
-		lhs := MapEntry(cbuf.Slice(offsets[i]))
-		rhs := MapEntry(cbuf.Slice(offsets[j]))
-		return bytes.Compare(lhs.Key(), rhs.Key()) < 0
-	})
-}
-
 func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	cbuf := req.cbuf
 	defer func() {
@@ -629,8 +620,11 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	}()
 
 	req.offsets = cbuf.SliceOffsets(req.offsets[:0])
-
-	sortOffsets(cbuf, req.offsets)
+	sort.Slice(req.offsets, func(i, j int) bool {
+		lhs := MapEntry(cbuf.Slice(req.offsets[i]))
+		rhs := MapEntry(cbuf.Slice(req.offsets[j]))
+		return bytes.Compare(lhs.Key(), rhs.Key()) < 0
+	})
 
 	var currentKey []byte
 	pl := new(pb.PostingList)
@@ -657,7 +651,11 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 		})
 
 		// Now make a list and write it to badger.
-		sortOffsets(cbuf, currentBatch)
+		sort.Slice(currentBatch, func(i, j int) bool {
+			lhs := MapEntry(cbuf.Slice(currentBatch[i]))
+			rhs := MapEntry(cbuf.Slice(currentBatch[j]))
+			return less(lhs, rhs)
+		})
 
 		enc := codec.Encoder{BlockSize: 256}
 		var lastUid uint64
