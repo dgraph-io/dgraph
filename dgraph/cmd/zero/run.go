@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v2"
+	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -108,6 +109,17 @@ instances to achieve high-availability.
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
 	flag.String("cache_percentage", "100,0",
 		"Cache percentages summing up to 100 for various caches (FORMAT: blockCache,indexCache).")
+
+	// Badger flags
+	flag.String("badger.tables", "mmap",
+		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for write-ahead log directory "+
+			"write-ahead directory. Option sequence consume most to least RAM while providing "+
+			"best to worst read performance respectively")
+	flag.String("badger.vlog", "mmap",
+		"[mmap, disk] Specifies how Badger Value log is stored for the write-ahead log directory "+
+			"log directory. mmap consumes more RAM, but provides better performance.")
+	flag.Int("badger.compression_level", 3,
+		"The compression level for Badger. A higher value uses more resources.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -257,7 +269,33 @@ func run() {
 		WithIndexCacheSize(indexCacheSz).
 		WithLoadBloomsOnOpen(false)
 
-	kvOpt.ZSTDCompressionLevel = 3
+	compression_level := Zero.Conf.GetInt("badger.compression_level")
+	if compression_level > 0 {
+		// By default, compression is disabled in badger.
+		kvOpt.Compression = bopt.ZSTD
+		kvOpt.ZSTDCompressionLevel = compression_level
+	}
+
+	// Set loading mode options.
+	switch Zero.Conf.GetString("badger.tables") {
+	case "mmap":
+		kvOpt.TableLoadingMode = bopt.MemoryMap
+	case "ram":
+		kvOpt.TableLoadingMode = bopt.LoadToRAM
+	case "disk":
+		kvOpt.TableLoadingMode = bopt.FileIO
+	default:
+		x.Fatalf("Invalid Badger Tables options")
+	}
+	switch Zero.Conf.GetString("badger.vlog") {
+	case "mmap":
+		kvOpt.ValueLogLoadingMode = bopt.MemoryMap
+	case "disk":
+		kvOpt.ValueLogLoadingMode = bopt.FileIO
+	default:
+		x.Fatalf("Invalid Badger Value log options")
+	}
+	glog.Infof("Opening zero BadgerDB with options: %+v\n", kvOpt)
 
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
