@@ -49,8 +49,7 @@ const partitionKeyShard = 10
 
 type mapper struct {
 	*state
-	shards     []shardState // shard is based on predicate
-	numPending chan struct{}
+	shards []shardState // shard is based on predicate
 }
 
 type shardState struct {
@@ -66,9 +65,8 @@ func newMapper(st *state) *mapper {
 		shards[i].cbuf = z.NewBuffer(1 << 20)
 	}
 	return &mapper{
-		state:      st,
-		shards:     shards,
-		numPending: make(chan struct{}, 2),
+		state:  st,
+		shards: shards,
 	}
 }
 
@@ -95,7 +93,6 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	defer func() {
 		m.shards[shardIdx].mu.Unlock() // Locked by caller.
 		cbuf.Release()
-		<-m.numPending
 	}()
 
 	offsets := cbuf.SliceOffsets(nil)
@@ -195,7 +192,6 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 			sh := &m.shards[i]
 			if uint64(sh.cbuf.Len()) >= m.opt.MapBufSize {
 				sh.mu.Lock() // One write at a time.
-				m.numPending <- struct{}{}
 				go m.writeMapEntriesToFile(sh.cbuf, i)
 				// Clear the entries and encodedSize for the next batch.
 				// Proactively allocate 32 slots to bootstrap the entries slice.
@@ -208,7 +204,6 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 		sh := &m.shards[i]
 		if sh.cbuf.Len() > 0 {
 			sh.mu.Lock() // One write at a time.
-			m.numPending <- struct{}{}
 			m.writeMapEntriesToFile(sh.cbuf, i)
 		} else {
 			sh.cbuf.Release()
