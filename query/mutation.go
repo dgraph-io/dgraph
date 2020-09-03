@@ -230,14 +230,6 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 				return edges, err
 			}
 		}
-		for _, nq := range gmu.Del {
-			if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-				return edges, errors.New("Predicate deletion should be called via alter")
-			}
-			if err := parse(nq, pb.DirectedEdge_DEL); err != nil {
-				return edges, err
-			}
-		}
 	}
 
 	return edges, nil
