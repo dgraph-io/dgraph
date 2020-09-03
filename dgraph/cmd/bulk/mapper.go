@@ -129,6 +129,11 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 		}
 		if (i+1)%shardPartitionNo == 0 {
 			me := MapEntry(cbuf.Slice(off))
+			sz := len(header.PartitionKeys)
+			if sz > 0 && bytes.Equal(me.Key(), header.PartitionKeys[sz-1]) {
+				// We already have this key.
+				continue
+			}
 			header.PartitionKeys = append(header.PartitionKeys, me.Key())
 		}
 	}
