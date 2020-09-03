@@ -574,8 +574,8 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 }
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
-	field:=getFieldsWithoutIDType(schema, defn)
-	if len(field)!=0 {
+	field := getFieldsWithoutIDType(schema, defn)
+	if len(field) != 0 {
 		schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
 			Kind:   ast.InputObject,
 			Name:   "Add" + defn.Name + "Input",
@@ -1233,7 +1233,10 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			},
 		},
 	}
-	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
+	if schema.Types["Add"+defn.Name+"Input"] != nil {
+		schema.Mutation.Fields = append(schema.Mutation.Fields, add)
+	}
+
 }
 
 func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
