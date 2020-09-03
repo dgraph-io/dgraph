@@ -506,6 +506,14 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		}
 	}
 
+	sendReq := func(zbuf *z.Buffer) {
+		wg := new(sync.WaitGroup)
+		wg.Add(1)
+		req := &encodeRequest{cbuf: zbuf, wg: wg}
+		encoderCh <- req
+		writerCh <- req
+	}
+
 	hd := z.NewHistogramData(z.HistogramBounds(1, 32))
 	cbuf := z.NewBuffer(4 << 20)
 	for i := 0; i < len(partitionKeys); i++ {
@@ -544,11 +552,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
 
-		wg := new(sync.WaitGroup)
-		wg.Add(1)
-		req := &encodeRequest{cbuf: cbuf, wg: wg}
-		encoderCh <- req
-		writerCh <- req
+		sendReq(cbuf)
 		cbuf = z.NewBuffer(4 << 20)
 	}
 
@@ -563,11 +567,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	}
 	atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
 
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
-	req := &encodeRequest{cbuf: cbuf, wg: wg}
-	encoderCh <- req
-	writerCh <- req
+	sendReq(cbuf)
 
 	// Close the encodes.
 	close(encoderCh)
@@ -631,6 +631,14 @@ func (me MapEntry) Plist() []byte {
 	return me[start : start+sz]
 }
 
+func sortOffsets(cbuf *z.Buffer, offsets []int) {
+	sort.Slice(offsets, func(i, j int) bool {
+		lhs := MapEntry(cbuf.Slice(offsets[i]))
+		rhs := MapEntry(cbuf.Slice(offsets[j]))
+		return bytes.Compare(lhs.Key(), rhs.Key()) < 0
+	})
+}
+
 func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	cbuf := req.cbuf
 	defer func() {
@@ -641,11 +649,8 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	list := req.list
 	splitList := req.splitList
 	req.offsets = cbuf.SliceOffsets(req.offsets[:0])
-	sort.Slice(req.offsets, func(i, j int) bool {
-		lhs := MapEntry(cbuf.Slice(req.offsets[i]))
-		rhs := MapEntry(cbuf.Slice(req.offsets[j]))
-		return bytes.Compare(lhs.Key(), rhs.Key()) < 0
-	})
+
+	sortOffsets(cbuf, req.offsets)
 
 	var currentKey []byte
 	pl := new(pb.PostingList)
@@ -671,11 +676,7 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 		})
 
 		// Now make a list and write it to badger.
-		sort.Slice(currentBatch, func(i, j int) bool {
-			lhs := MapEntry(cbuf.Slice(currentBatch[i]))
-			rhs := MapEntry(cbuf.Slice(currentBatch[j]))
-			return less(lhs, rhs)
-		})
+		sortOffsets(cbuf, currentBatch)
 
 		enc := codec.Encoder{BlockSize: 256}
 		var lastUid uint64
