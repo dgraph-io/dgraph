@@ -124,3 +124,42 @@ func TestDeepCopyBlock(t *testing.T) {
 	bc.Header.ParentHash = common.Hash{}
 	require.NotEqual(t, block.Header.ParentHash, bc.Header.ParentHash)
 }
+
+func TestMustEncodeBlock(t *testing.T) {
+	h1, err := NewHeader(common.Hash{}, big.NewInt(0), common.Hash{}, common.Hash{}, [][]byte{{}})
+	require.NoError(t, err)
+	b1 := NewBlock(h1, NewBody([]byte{}))
+	enc, err := b1.Encode()
+	require.NoError(t, err)
+
+	h2, err := NewHeader(common.Hash{0x1, 0x2}, big.NewInt(0), common.Hash{}, common.Hash{}, [][]byte{{}})
+	require.NoError(t, err)
+	b2 := NewBlock(h2, NewBody([]byte{0xa, 0xb}))
+	enc2, err := b2.Encode()
+	require.NoError(t, err)
+
+	tests := []struct {
+		name string
+		take *Block
+		want []byte
+	}{
+		{
+			name: "correct",
+			take: b1,
+			want: enc,
+		},
+		{
+			name: "correct2",
+			take: b2,
+			want: enc2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.take.MustEncode(); !bytes.Equal(got, tt.want) {
+				t.Errorf("MustEncode() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

@@ -65,6 +65,15 @@ func (b *Block) Encode() ([]byte, error) {
 	return append(enc, encBody...), nil
 }
 
+// MustEncode returns the SCALE encoded block and panics if it fails to encode
+func (b *Block) MustEncode() []byte {
+	enc, err := b.Encode()
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
 // Decode decodes the SCALE encoded input into this block
 func (b *Block) Decode(r io.Reader) error {
 	sd := scale.Decoder{Reader: r}

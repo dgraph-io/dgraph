@@ -40,3 +40,40 @@ func TestDecodeHeader(t *testing.T) {
 	dec.Hash()
 	require.Equal(t, header, dec)
 }
+
+func TestMustEncodeHeader(t *testing.T) {
+	bh1, err := NewHeader(common.Hash{}, big.NewInt(0), common.Hash{}, common.Hash{}, [][]byte{{}})
+	require.NoError(t, err)
+	enc, err := bh1.Encode()
+	require.NoError(t, err)
+
+	bh2, err := NewHeader(common.Hash{}, big.NewInt(0), common.Hash{}, common.Hash{}, [][]byte{{0, 0}, {1, 2}, {2, 4}, {3, 6}, {4, 8}})
+	require.NoError(t, err)
+	enc2, err := bh2.Encode()
+	require.NoError(t, err)
+
+	tests := []struct {
+		name string
+		take *Header
+		want []byte
+	}{
+		{
+			name: "correct",
+			take: bh1,
+			want: enc,
+		},
+		{
+			name: "correct2",
+			take: bh2,
+			want: enc2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.take.MustEncode(); !bytes.Equal(got, tt.want) {
+				t.Errorf("MustEncode() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
