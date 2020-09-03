@@ -372,7 +372,7 @@ func TestDeleteRBACRuleInverseField(t *testing.T) {
 	`
 
 	addTweetsParams := &common.GraphQLParams{
-		Headers: getJWT(t, "foo", ""),
+		Headers: common.GetJWT(t, "foo", "", metaInfo),
 		Query:   mutation,
 		Variables: map[string]interface{}{"tweet": Tweets{
 			Id:        "tweet1",
@@ -415,7 +415,7 @@ func TestDeleteRBACRuleInverseField(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			deleteTweetsParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   mutation,
 			}
 

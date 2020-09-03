@@ -138,3 +138,7 @@ In order to configure Ratel, please do the following:
 You may now queries and mutation via Ratel, and see visualizations of your data.
 
 However, please note that certain functionality will not work, such as running Backups, modifying ACL or attempting to remove nodes from the cluster.
+
+### Switching Backend Modes
+
+For those who are interested in using DQL/GraphQL+- as their primary mode of interaction with the backend, it is possible to switch your backend to flexible mode. Please see [Backend Modes](/slash-graphql/admin/backend-modes)
