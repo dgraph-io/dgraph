@@ -502,7 +502,7 @@ func TestIntrospection(t *testing.T) {
 		name: String
 	}`
 	updateGQLSchemaRequireNoErrors(t, schema, groupOneAdminServer)
-	query, err := ioutil.ReadFile("introspection.graphql")
+	query, err := ioutil.ReadFile("../../schema/testdata/introspection/input/full_query.graphql")
 	require.NoError(t, err)
 
 	introspectionParams := &common.GraphQLParams{Query: string(query)}
