@@ -34,6 +34,7 @@ GOPATH        ?= $(shell go env GOPATH)
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
 export GO111MODULE := on
+export CGO_ENABLED=0
 
 # Build-time Go variables
 dgraphVersion   = github.com/dgraph-io/dgraph/x.dgraphVersion
@@ -42,7 +43,7 @@ gitBranch       = github.com/dgraph-io/dgraph/x.gitBranch
 lastCommitSHA   = github.com/dgraph-io/dgraph/x.lastCommitSHA
 lastCommitTime  = github.com/dgraph-io/dgraph/x.lastCommitTime
 
-BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}${MODIFIED}" -X ${gitBranch}=${BUILD_BRANCH}'
+BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}${MODIFIED}" -X ${gitBranch}=${BUILD_BRANCH}' -tags netgo
 
 # Insert build tags if specified
 ifneq ($(strip $(BUILD_TAGS)),)

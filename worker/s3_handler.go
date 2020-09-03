@@ -214,11 +214,19 @@ func (h *s3Handler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, er
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Since value on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
+func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
 	manifests, err := h.GetManifests(uri, backupId)
 	if err != nil {
 		return LoadResult{0, 0, errors.Wrapf(err, "while retrieving manifests")}
 	}
+	if backupNum > 0 {
+		if len(manifests) < int(backupNum) {
+			return LoadResult{0, 0, errors.Errorf(
+				"not enough backups to restore manifest with backupNum %d", backupNum)}
+		}
+		manifests = manifests[:backupNum]
+	}
+	glog.Infof("manifests %+v", manifests)
 
 	mc, err := h.setup(uri)
 	if err != nil {
@@ -275,17 +283,12 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 
 // Verify performs basic checks to decide whether the specified backup can be restored
 // to a live cluster.
-func (h *s3Handler) Verify(uri *url.URL, backupId string, currentGroups []uint32) error {
-	manifests, err := h.GetManifests(uri, backupId)
+func (h *s3Handler) Verify(uri *url.URL, req *pb.RestoreRequest, currentGroups []uint32) error {
+	manifests, err := h.GetManifests(uri, req.GetBackupId())
 	if err != nil {
 		return errors.Wrapf(err, "while retrieving manifests")
 	}
-
-	if len(manifests) == 0 {
-		return errors.Errorf("No backups with the specified backup ID %s", backupId)
-	}
-
-	return verifyGroupsInBackup(manifests, currentGroups)
+	return verifyRequest(req, manifests, currentGroups)
 }
 
 // ListManifests loads the manifests in the locations and returns them.

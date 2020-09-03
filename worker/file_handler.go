@@ -149,10 +149,17 @@ func (h *fileHandler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, 
 
 // Load uses tries to load any backup files found.
 // Returns the maximum value of Since on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
+func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
 	manifests, err := h.GetManifests(uri, backupId)
 	if err != nil {
 		return LoadResult{0, 0, errors.Wrapf(err, "cannot retrieve manifests")}
+	}
+	if backupNum > 0 {
+		if len(manifests) < int(backupNum) {
+			return LoadResult{0, 0, errors.Errorf(
+				"not enough backups to restore manifest with backupNum %d", backupNum)}
+		}
+		manifests = manifests[:backupNum]
 	}
 
 	// Process each manifest, first check that they are valid and then confirm the
@@ -194,17 +201,12 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 
 // Verify performs basic checks to decide whether the specified backup can be restored
 // to a live cluster.
-func (h *fileHandler) Verify(uri *url.URL, backupId string, currentGroups []uint32) error {
-	manifests, err := h.GetManifests(uri, backupId)
+func (h *fileHandler) Verify(uri *url.URL, req *pb.RestoreRequest, currentGroups []uint32) error {
+	manifests, err := h.GetManifests(uri, req.GetBackupId())
 	if err != nil {
 		return errors.Wrapf(err, "while retrieving manifests")
 	}
-
-	if len(manifests) == 0 {
-		return errors.Errorf("No backups with the specified backup ID %s", backupId)
-	}
-
-	return verifyGroupsInBackup(manifests, currentGroups)
+	return verifyRequest(req, manifests, currentGroups)
 }
 
 // ListManifests loads the manifests in the locations and returns them.

@@ -288,7 +288,7 @@ message RestoreRequest {
 	string vault_field = 14;
 	string vault_format = 15;
 
-  uint32 backup_num = 16;
+  uint64 backup_num = 16;
 }
 
 message Proposal {
