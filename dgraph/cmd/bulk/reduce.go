@@ -74,10 +74,17 @@ func (r *reducer) run() error {
 
 			mapFiles := filenamesInTree(dirs[shardId])
 			var mapItrs []*mapIterator
-			partitionKeys := [][]byte{}
+
+			// Dedup the partition keys.
+			partitions := make(map[string]struct{})
 			for _, mapFile := range mapFiles {
 				header, itr := newMapIterator(mapFile)
-				partitionKeys = append(partitionKeys, header.PartitionKeys...)
+				for _, k := range header.PartitionKeys {
+					if len(k) == 0 {
+						continue
+					}
+					partitions[string(k)] = struct{}{}
+				}
 				mapItrs = append(mapItrs, itr)
 			}
 
@@ -91,6 +98,11 @@ func (r *reducer) run() error {
 				writer:      writer,
 				splitWriter: splitWriter,
 				tmpDb:       tmpDb,
+			}
+
+			partitionKeys := make([][]byte, len(partitions))
+			for k := range partitions {
+				partitionKeys = append(partitionKeys, []byte(k))
 			}
 			sort.Slice(partitionKeys, func(i, j int) bool {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
@@ -517,18 +529,17 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			fmt.Printf("Found a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
 			// Just check how many keys do we have in this giant buffer.
 			offsets := cbuf.SliceOffsets(nil)
-			keys := make(map[string]uint64)
+			keys := make(map[string]int64)
 			for _, off := range offsets {
 				me := MapEntry(cbuf.Slice(off))
 				keys[string(me.Key())]++
 			}
-			for k, num := range keys {
-				if num < 1000 {
-					continue
-				}
-				fmt.Printf("key=%s. Num Entries: %d\n", k, num)
+			keyHist := z.NewHistogramData(z.HistogramBounds(1, 32))
+			for _, num := range keys {
+				keyHist.Update(num)
 			}
-			fmt.Printf("Total keys: %d. Total entries: %d\n", len(keys), len(offsets))
+			fmt.Printf("Histogram of number of entries per key. Total keys: %d\n %s\n",
+				len(keys), keyHist.String())
 		}
 
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
