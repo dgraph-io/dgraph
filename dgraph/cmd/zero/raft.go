@@ -61,15 +61,16 @@ func (n *node) amLeader() bool {
 
 func (n *node) AmLeader() bool {
 	// Return false if the node is not the leader. Otherwise, check the lastQuorum as well.
-	return n.amLeader() && func() bool {
-		// This node must be the leader, but must also be an active member of
-		// the cluster, and not hidden behind a partition. Basically, if this
-		// node was the leader and goes behind a partition, it would still
-		// think that it is indeed the leader for the duration mentioned below.
-		n.mu.RLock()
-		defer n.mu.RUnlock()
-		return time.Since(n.lastQuorum) <= 5*time.Second
-	}()
+	if !n.amLeader() {
+		return false
+	}
+	// This node must be the leader, but must also be an active member of
+	// the cluster, and not hidden behind a partition. Basically, if this
+	// node was the leader and goes behind a partition, it would still
+	// think that it is indeed the leader for the duration mentioned below.
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return time.Since(n.lastQuorum) <= 5*time.Second
 }
 
 func (n *node) uniqueKey() string {
