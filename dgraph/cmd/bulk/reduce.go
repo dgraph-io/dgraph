@@ -520,10 +520,11 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			fmt.Printf("Found a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
 			// Just check how many keys do we have in this giant buffer.
 			offsets := cbuf.SliceOffsets(nil)
-			keys := make(map[string]int64)
+			fmt.Printf("Number of offsets: %d\n", len(offsets))
+			keys := make(map[uint64]int64)
 			for _, off := range offsets {
 				me := MapEntry(cbuf.Slice(off))
-				keys[string(me.Key())]++
+				keys[z.MemHash(me.Key())]++
 			}
 			keyHist := z.NewHistogramData(z.HistogramBounds(1, 32))
 			for _, num := range keys {
