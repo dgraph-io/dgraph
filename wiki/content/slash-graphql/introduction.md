@@ -18,7 +18,8 @@ Please see the following topics:
   - [Switching Backend Modes](/slash-graphql/admin/backend-modes) will guide you through changing Slash GraphQL backend mode.
 - [Advanced Queries With GraphQL+-](/slash-graphql/advanced-queries) speaks about how to interact with your database via the gRPC endpoint.
 - [One-click Deploy](/slash-graphql/one-click-deploy) speaks about how to deploy sample apps in a fresh instance of backend to start working with them.
-  You might also be interested in:
+
+You might also be interested in:
 
 - [Dgraph GraphQL Schema Reference](/graphql/schema/schema-overview), which lists all the types and directives supported by Dgraph
 - [Dgraph GraphQL API Reference](/graphql/api/api-overview), which serves as a guide to using your new `/graphql` endpoint
