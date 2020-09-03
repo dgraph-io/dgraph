@@ -854,65 +854,63 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 // normalize returns all attributes of fj and its children (if any).
 func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 	cnt := 0
-	fjAttrs := enc.children(fj)
-	for fjAttrs != nil {
-		// Here we are counting all non-scalar attributes of fj. If there are any such
-		// attributes, we will flatten it, otherwise we will return all attributes.
-		// We should only consider those nodes for flattening which have children and are not
-		// facetsParent.
-		if enc.children(fjAttrs) != nil && !enc.getFacetsParent(fjAttrs) {
+	chead := enc.children(fj)
+	for chead != nil {
+		// Here we are counting all non-scalar children of fj. If there are any such
+		// children, we will flatten them, otherwise we will return all children.
+		// We should only consider those children(of fj) for flattening which have
+		// children and are not facetsParent.
+		if enc.children(chead) != nil && !enc.getFacetsParent(chead) {
 			cnt++
 		}
-		fjAttrs = fjAttrs.next
+		chead = chead.next
 	}
 
 	if cnt == 0 {
 		// Recursion base case
-		// There are no children, we can just return slice with fj.attrs map.
+		// There are no children, we can just return slice with fj.child.
 		return []fastJsonNode{enc.children(fj)}, nil
 	}
 
 	parentSlice := make([]fastJsonNode, 0, 5)
-	// If the parents has attrs, lets add them to the slice so that it can be
-	// merged with children later.
-	// attrs := make([]fastJsonNode, 0) // TODO: preallocate.
-	var attrs fastJsonNode
-	var attrCur fastJsonNode
-	fjAttrs = enc.children(fj)
-	for fjAttrs != nil {
-		// Here, add all nodes which have either no children or they are facetsParent.
-		if enc.children(fjAttrs) == nil || enc.getFacetsParent(fjAttrs) {
-			// attrs = append(attrs, fjAttrs)
-			if attrCur == nil {
-				attrCur = enc.copySingleNode(fjAttrs)
-				attrs = attrCur
-				fjAttrs = fjAttrs.next
-				continue
-			}
-			attrCur.next = enc.copySingleNode(fjAttrs)
-			attrCur = attrCur.next
+
+	// First separate children of fj which are scalar.
+	var shead, curScalar fastJsonNode
+	chead = enc.children(fj)
+	for chead != nil {
+		if enc.children(chead) != nil && enc.getFacetsParent(chead) == false {
+			chead = chead.next
+			continue
 		}
-		fjAttrs = fjAttrs.next
+
+		// Here, add all nodes which have either no children or they are facetsParent.
+		copyNode := enc.copySingleNode(chead)
+		if curScalar == nil {
+			shead, curScalar = copyNode, copyNode
+		} else {
+			curScalar.next = copyNode
+			curScalar = copyNode
+		}
+
+		chead = chead.next
 	}
 
-	parentSlice = append(parentSlice, attrs)
-
-	fjAttrs = enc.children(fj)
-	for fjAttrs != nil {
-		childNode := fjAttrs
+	parentSlice = append(parentSlice, shead)
+	chead = enc.children(fj)
+	for chead != nil {
+		childNode := chead
 		// Here, exclude all nodes which have either no children or they are facetsParent.
 		if enc.children(childNode) == nil || enc.getFacetsParent(childNode) {
-			fjAttrs = fjAttrs.next
+			chead = chead.next
 			continue
 		}
 
 		childSlice := make([]fastJsonNode, 0, 5)
-
-		for fjAttrs != nil && enc.getAttr(childNode) == enc.getAttr(fjAttrs) {
-			childSlice = append(childSlice, enc.children(fjAttrs))
-			fjAttrs = fjAttrs.next
+		for chead != nil && enc.getAttr(childNode) == enc.getAttr(chead) {
+			childSlice = append(childSlice, enc.children(chead))
+			chead = chead.next
 		}
-		// Merging with parent.
+
 		var err error
 		parentSlice, err = enc.merge(parentSlice, childSlice)
 		if err != nil {
@@ -920,14 +918,12 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 		}
 	}
 
-	uidAttrID := enc.idForAttr("uid")
-	var newParentSlice []fastJsonNode
 	for _, slice := range parentSlice {
+		// From every slice we need to remove node with attribute "uid".
 		var prev, cur fastJsonNode
 		cur = slice
-
 		for cur != nil {
-			if enc.getAttr(cur) == uidAttrID {
+			if enc.getAttr(cur) == enc.uidAttr {
 				if prev == nil {
 					slice = cur
 					cur = cur.next
@@ -942,11 +938,9 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 		if prev == nil {
 			slice = nil
 		}
-
-		newParentSlice = append(newParentSlice, slice)
 	}
 
-	return newParentSlice, nil
+	return parentSlice, nil
 }
 
 func (sg *SubGraph) addGroupby(enc *encoder, fj fastJsonNode,
