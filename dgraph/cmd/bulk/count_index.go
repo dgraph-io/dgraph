@@ -68,7 +68,8 @@ func (c *countIndexer) addCountEntry(ce countEntry) {
 		c.cur.track = c.schema.getSchema(string(ce.Attr())).GetCount()
 	}
 	if c.cur.track {
-		x.Check2(c.countBuf.Write(ce))
+		dst := c.countBuf.SliceAllocate(len(ce))
+		copy(dst, ce)
 	}
 }
 
@@ -129,5 +130,11 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 }
 
 func (c *countIndexer) wait() {
+	if c.countBuf.Len() > 0 {
+		c.wg.Add(1)
+		go c.writeIndex(c.countBuf)
+	} else {
+		c.countBuf.Release()
+	}
 	c.wg.Wait()
 }
