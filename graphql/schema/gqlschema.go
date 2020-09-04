@@ -955,7 +955,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if orderable[fld.Type.Name()] {
+		if fld.Type.NamedType != "" && orderable[fld.Type.NamedType] {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}
