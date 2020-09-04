@@ -33,7 +33,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/backup"
@@ -43,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -699,7 +699,7 @@ func run() {
 	}()
 
 	// Setup external communication.
-	aclCloser := y.NewCloser(1)
+	aclCloser := z.NewCloser(1)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
 		// initialization of the admin account can only be done after raft nodes are running

@@ -23,10 +23,10 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
@@ -38,7 +38,7 @@ type ServerState struct {
 
 	Pstore   *badger.DB
 	WALstore *badger.DB
-	gcCloser *y.Closer // closer for valueLogGC
+	gcCloser *z.Closer // closer for valueLogGC
 
 	needTs chan tsReq
 }
@@ -184,7 +184,7 @@ func (s *ServerState) initStorage() {
 		opt.EncryptionKey = nil
 	}
 
-	s.gcCloser = y.NewCloser(2)
+	s.gcCloser = z.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
 	go x.RunVlogGC(s.WALstore, s.gcCloser)
 }

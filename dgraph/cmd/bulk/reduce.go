@@ -39,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/gogo/protobuf/proto"
 )
 
@@ -162,7 +163,7 @@ func newMapIterator(filename string) *mapIterator {
 }
 
 func (r *reducer) encodeAndWrite(
-	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, closer *y.Closer) {
+	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, closer *z.Closer) {
 	defer closer.Done()
 
 	var listSize int
@@ -229,7 +230,7 @@ func (r *reducer) encodeAndWrite(
 
 func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	entryCh := make(chan []*pb.MapEntry, 100)
-	closer := y.NewCloser(1)
+	closer := z.NewCloser(1)
 	defer closer.SignalAndWait()
 
 	var ph postingHeap
