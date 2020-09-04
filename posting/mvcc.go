@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math"
 	"strconv"
@@ -90,13 +91,16 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	err = writer.Write(&bpb.KVList{Kv: kvs})
 	x.Check(err)
 	err = writer.Flush()
+	time.Sleep(2 * time.Second)
 	if err == nil && len(keys) != 0 {
-		txn := pstore.NewTransactionAt(math.MaxUint64, false)
+		txn := pstore.NewTransactionAt(kvs[0].Version, false)
 		defer txn.Discard()
 		for _, key := range keys {
 			_, dbErr := txn.Get(key)
 			if dbErr != nil {
-				log.Panic("Error while reading split key ", key)
+				log.Panic(dbErr.Error(), "Error while reading split key ", key)
+			} else {
+				fmt.Println("Got key", key)
 			}
 		}
 	}
