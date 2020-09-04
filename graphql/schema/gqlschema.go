@@ -501,6 +501,15 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 	return errs
 }
 
+func filterDefnations() {
+// start from a defination
+// scan it , ignore unnecessary fields
+//explore all the refrences recursively, if a reference is on same path delete it
+//if refrence is empty delete it
+//if this type itself become empty , delete it
+
+}
+
 // completeSchema generates all the required types and fields for
 // query/mutation/update for all the types mentioned in the schema.
 func completeSchema(sch *ast.Schema, definitions []string) {
@@ -533,7 +542,6 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		Name:   "Subscription",
 		Fields: make([]*ast.FieldDefinition, 0),
 	}
-
 	for _, key := range definitions {
 		if isQueryOrMutation(key) {
 			continue
@@ -685,6 +693,9 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 //   }
 // }
 func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
+	if schema.Types["Add"+defn.Name+"Input"]==nil{
+		return
+	}
 	for _, fld := range defn.Fields {
 		custom := fld.Directives.ForName(customDirective)
 		// Filtering and ordering for fields with @custom directive is handled by the remote
@@ -1221,6 +1232,9 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
+	if schema.Types["Add"+defn.Name+"Input"]==nil{
+		return
+	}
 	addGetQuery(schema, defn)
 	addPasswordQuery(schema, defn)
 	addFilterQuery(schema, defn)
@@ -1242,9 +1256,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			},
 		},
 	}
-	if schema.Types["Add"+defn.Name+"Input"] != nil {
-		schema.Mutation.Fields = append(schema.Mutation.Fields, add)
-	}
+	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
 
 }
 
@@ -1296,6 +1308,9 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addMutations(schema *ast.Schema, defn *ast.Definition) {
+	if schema.Types["Add"+defn.Name+"Input"]==nil{
+		return
+	}
 	addAddMutation(schema, defn)
 	addUpdateMutation(schema, defn)
 	addDeleteMutation(schema, defn)
