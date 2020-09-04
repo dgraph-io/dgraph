@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -572,6 +573,7 @@ func (w *DiskStorage) NumEntries() (int, error) {
 func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
 	_, span := otrace.StartSpan(context.Background(), "raftwal.AllEntries")
 	defer span.End()
+
 	err := w.db.View(func(txn *badger.Txn) error {
 		if hi-lo == 1 { // We only need one entry.
 			item, err := txn.Get(w.EntryKey(lo))
@@ -635,6 +637,8 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rer
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
 func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
+	var timer x.Timer
+	timer.Start()
 	w.elog.Printf("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
 	defer w.elog.Printf("Done")
 	first, err := w.FirstIndex()
@@ -652,8 +656,13 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 	if hi > last+1 {
 		return nil, raft.ErrUnavailable
 	}
-
-	return w.allEntries(lo, hi, maxSize)
+	timer.Record("got_indices")
+	entries, err := w.allEntries(lo, hi, maxSize)
+	timer.Record("allEntriesRead")
+	if timer.Total() > 200*time.Millisecond {
+		glog.Warningf("Reading entries took too long: %s.", timer.String())
+	}
+	return entries, err
 }
 
 // CreateSnapshot generates a snapshot with the given ConfState and data and writes it to disk.
