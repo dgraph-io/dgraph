@@ -84,9 +84,9 @@ const (
 	// NoAuthorize is used to indicate that authorization needs to be skipped.
 	// Used when ACL needs to query information for performing the authorization check.
 	NoAuthorize
-	// CorsMutationAllowed is used to indicate that the given request is authorized to do
-	// cors mutation.
-	CorsMutationAllowed
+	// AuthorizeGraphqlPredicate is used to indicate that the given request is authorized to do
+	// mutation on reserved graphql predicates.
+	AuthorizeGraphqlPredicate
 )
 
 var (
@@ -979,8 +979,8 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		}
 	}
 
-	if doAuth != CorsMutationAllowed {
-		if rerr = validateCorsInMutation(ctx, qc); rerr != nil {
+	if doAuth != AuthorizeGraphqlPredicate {
+		if rerr = validateGraphqlInternalInMutation(ctx, qc); rerr != nil {
 			return
 		}
 	}
@@ -1221,15 +1221,17 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
-// validateCorsInMutation check whether mutation contains cors predication. If it's contain cors
-// predicate, we'll throw an error.
-func validateCorsInMutation(ctx context.Context, qc *queryContext) error {
+// validateGraphqlInternalInMutation check whether mutation contains graphql reserved predicates.
+// If it's contain those predicate, we'll throw an error.
+func validateGraphqlInternalInMutation(ctx context.Context, qc *queryContext) error {
 	validateNquad := func(nquads []*api.NQuad) error {
 		for _, nquad := range nquads {
-			if nquad.Predicate != "dgraph.cors" {
+			_, ok := x.GraphqlReservedPredicate[nquad.Predicate]
+			if !ok {
 				continue
 			}
-			return errors.New("Mutations are not allowed for the predicate dgraph.cors")
+			return fmt.Errorf("Mutations are not allowed for the internal predicate %s",
+				nquad.Predicate)
 		}
 		return nil
 	}

@@ -58,7 +58,7 @@ func ResetCors(closer *y.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
-		if _, err := (&Server{}).doQuery(ctx, req, CorsMutationAllowed); err != nil {
+		if _, err := (&Server{}).doQuery(ctx, req, AuthorizeGraphqlPredicate); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -89,7 +89,7 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 		},
 		CommitNow: true,
 	}
-	_, err := (&Server{}).doQuery(ctx, req, CorsMutationAllowed)
+	_, err := (&Server{}).doQuery(ctx, req, AuthorizeGraphqlPredicate)
 	return err
 }
 
@@ -125,7 +125,6 @@ func GetCorsOrigins(ctx context.Context) ([]string, error) {
 
 // UpdateSchemaHistory updates graphql schema history.
 func UpdateSchemaHistory(ctx context.Context, schema string) error {
-	glog.Info("Updating schema history")
 	req := &api.Request{
 		Mutations: []*api.Mutation{
 			{
@@ -148,38 +147,6 @@ func UpdateSchemaHistory(ctx context.Context, schema string) error {
 		},
 		CommitNow: true,
 	}
-	_, err := (&Server{}).doQuery(ctx, req, CorsMutationAllowed)
+	_, err := (&Server{}).doQuery(ctx, req, AuthorizeGraphqlPredicate)
 	return err
-}
-
-// SchemaHistory contains the schema and created_at
-type SchemaHistory struct {
-	Schema    string `json:"dgraph.graphql.schema_history"`
-	CreatedAt string `json:"dgraph.graphql.schema_created_at"`
-}
-
-// GetSchemaHistory retives graphql schema history from the database.
-func GetSchemaHistory(ctx context.Context, limit, offset int64) ([]SchemaHistory, error) {
-	req := &api.Request{
-		Query: fmt.Sprintf(`{
-			me(func: type(dgraph.graphql.history), orderdesc:dgraph.graphql.schema_created_at, first:%d, offset: %d) {
-			  dgraph.graphql.schema_history
-			  dgraph.graphql.schema_created_at
-			}
-		  }`, limit, offset),
-		ReadOnly: true,
-	}
-	res, err := (&Server{}).doQuery(ctx, req, CorsMutationAllowed)
-	if err != nil {
-		return nil, err
-	}
-
-	type HistoryResponse struct {
-		Me []SchemaHistory `json:"me"`
-	}
-	hr := HistoryResponse{}
-	if err = json.Unmarshal(res.Json, &hr); err != nil {
-		return nil, err
-	}
-	return hr.Me, nil
 }

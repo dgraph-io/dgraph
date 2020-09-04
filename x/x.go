@@ -171,6 +171,10 @@ var (
 	Nilbyte []byte
 	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
+	// GraphqlReservedPredicate contains graphql reserved predicates.
+	GraphqlReservedPredicate = map[string]struct{}{"dgraph.cors": struct{}{},
+		"dgraph.graphql.schema_history":    struct{}{},
+		"dgraph.graphql.schema_created_at": struct{}{}}
 )
 
 func init() {

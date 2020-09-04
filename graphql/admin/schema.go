@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -160,43 +159,4 @@ func getSchemaInput(m schema.Mutation) (*updateGQLSchemaInput, error) {
 	var input updateGQLSchemaInput
 	err = json.Unmarshal(inputByts, &input)
 	return &input, schema.GQLWrapf(err, "couldn't get input argument")
-}
-
-// resolveGetSchemaHistory retrives graphql schema history from the database.
-func resolveGetSchemaHistory(ctx context.Context, q schema.Query) *resolve.Resolved {
-	// Parse the required arguments
-	var limit, offset int64
-	args := q.Arguments()
-	val, ok := args["limit"]
-	x.AssertTrue(ok)
-	limit = val.(int64)
-	val, ok = args["offset"]
-	if ok {
-		offset = val.(int64)
-	}
-	// Retrive all schema history from dgraph.
-	histories, err := edgraph.GetSchemaHistory(ctx, limit, offset)
-	if err != nil {
-		return resolve.EmptyResult(q, err)
-	}
-	// Build the output format.
-	output := make([]map[string]interface{}, 0, len(histories))
-	for _, history := range histories {
-		tmp := make(map[string]interface{})
-		for _, selection := range q.SelectionSet() {
-			if selection.Name() == "schema" {
-				tmp["schema"] = history.Schema
-				continue
-			}
-			tmp["created_at"] = history.CreatedAt
-		}
-		output = append(output, tmp)
-	}
-	fmt.Println(output)
-	return &resolve.Resolved{
-		Data: map[string]interface{}{
-			q.Name(): output,
-		},
-		Field: q,
-	}
 }
