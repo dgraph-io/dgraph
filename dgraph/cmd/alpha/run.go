@@ -711,7 +711,7 @@ func run() {
 		}
 	}()
 
-	updaters := y.NewCloser(2)
+	updaters := z.NewCloser(2)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
 		// initialization of the admin account can only be done after raft nodes are running
