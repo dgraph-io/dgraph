@@ -367,7 +367,7 @@ const queryAcls = `
 `
 
 // ResetAcl clears the aclCachePtr and upserts the Groot account.
-func ResetAcl(closer *y.Closer) {
+func ResetAcl(closer *z.Closer) {
 	defer func() {
 		glog.Infof("ResetAcl closed")
 		closer.Done()
