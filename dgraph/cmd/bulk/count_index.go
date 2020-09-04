@@ -18,6 +18,8 @@ package bulk
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -52,7 +54,7 @@ type countIndexer struct {
 // required by the schema. This method expects keys to be passed into it in
 // sorted order.
 func (c *countIndexer) addCountEntry(ce countEntry) {
-	sameIndexKey := bytes.Equal(ce.Attr(), c.cur.pred) && ce.Reverse() == c.cur.rev
+	sameIndexKey := bytes.Equal(ce.Attr(), c.cur.pred) && (ce.Reverse() == c.cur.rev)
 	if sameIndexKey && !c.cur.track {
 		return
 	}
@@ -85,10 +87,16 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	streamId := atomic.AddUint32(&c.streamId, 1)
 	list := &bpb.KVList{}
 
+	offsets := buf.SliceOffsets(nil)
+	sort.Slice(offsets, func(i, j int) bool {
+		left := countEntry(buf.Slice(offsets[i]))
+		right := countEntry(buf.Slice(offsets[j]))
+		return left.less(right)
+	})
+
 	var pl pb.PostingList
 	encoder := codec.Encoder{BlockSize: 256}
-	lastCe := countEntry(buf.Slice(0))
-	offset := 0
+	lastCe := countEntry(buf.Slice(offsets[0]))
 
 	encode := func() {
 		pl.Pack = encoder.Done()
@@ -111,9 +119,8 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		pl.Reset()
 	}
 
-	for offset < buf.Len() {
+	for _, offset := range offsets {
 		ce := countEntry(buf.Slice(offset))
-		offset += 4 + len(ce)
 
 		// Sanity checks.
 		x.AssertTrue(bytes.Equal(ce.Attr(), lastCe.Attr()))
@@ -130,6 +137,9 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	sort.Slice(list.Kv, func(i, j int) bool {
 		return bytes.Compare(list.Kv[i].Key, list.Kv[j].Key) < 0
 	})
+	for _, kv := range list.Kv {
+		fmt.Printf("Writing key count index: %s\n", hex.Dump(kv.Key))
+	}
 	if err := c.writer.Write(list); err != nil {
 		x.Check(err)
 	}
