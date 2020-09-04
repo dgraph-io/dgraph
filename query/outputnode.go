@@ -100,6 +100,7 @@ type node struct {
 	// Bytes 7-6 contains attr.
 	// Bit MSB(first bit in Byte-8) contains list field value.
 	// Bit SecondMSB(second bit in Byte-8) contains facetsParent field value.
+	// Bit ThirdMSB(third bit in Byte-8) stores if the order of node's children has been fixed.
 	// Byte-5 is not getting used as of now.
 	// |--------------------------------------------------------------|
 	// |    8        |    7   |    6   |    5   |  4  |  3  |  2 |  1 |
@@ -107,6 +108,8 @@ type node struct {
 	// | MSB - list  |                 | Unused |                     |
 	// | SecondMSB - |     Attr ID     | For    | Offset inside Arena |
 	// | facetsParent|                 | Now    |                     |
+	// | ThirdMSB -  |                 |        |                     |
+	// | Order Info  |                 |        |                     |
 	// |--------------------------------------------------------------|
 	meta uint64
 
@@ -185,7 +188,7 @@ const (
 	facetsBit = 1 << 62
 	// Value with third most significant bit set to 1.
 	uidNodeBit = 1 << 61
-	// Node has been visited.
+	// Node has been visited for fixing the children order.
 	visitedBit = 1 << 60
 
 	// Value with all bits set to 1 for bytes 7 and 6.
@@ -261,14 +264,13 @@ func (a *Allocator) Allocate(sz int) []byte {
 //		}
 //	  }
 // 5. Children(Attrs) => List of all children.
+// 6. Visited => Stores boolen values, true if node has been visited for fixing children's order.
 //
 // All of the data for fastJsonNode tree is stored in encoder to optimise memory usage. fastJsonNode
-// type only stores one uint32(can be thought of id for this node). A fastJsonNode is created in
-// below steps:
-// 1. Default meta(0) is appened to metaSlice of encoder and index of this meta
-// 	becomes fastJsonNode value(id).
-// 2. Now any meta for this node can be updated using setXXX functions.
-// 3. Children for this node are store in encoder's children map.
+// struct is pointer to node object. node object stores below information.
+// 1. meta information.
+// 2. Pointer to its first child.
+// 3. Pointer to its sibling.
 type fastJsonNode *node
 
 // newNode returns a fastJsonNode with its attr set to attr,
@@ -632,29 +634,6 @@ func valToBytes(v types.Val) ([]byte, error) {
 	}
 }
 
-// nodeSlice is a slice of fastJsonNodes, mostly used for sorting of fastJsonNodes based on attrs.
-// To get string representation of attr while comparing, we also need encoder here.
-type nodeSlice struct {
-	nodes []fastJsonNode
-	enc   *encoder
-}
-
-func (n nodeSlice) Len() int {
-	return len(n.nodes)
-}
-
-func (n nodeSlice) Less(i, j int) bool {
-	enc := n.enc
-	attri := enc.getAttr(n.nodes[i])
-	attrj := enc.getAttr(n.nodes[j])
-	cmp := strings.Compare(enc.attrForID(attri), enc.attrForID(attrj))
-	return cmp < 0
-}
-
-func (n nodeSlice) Swap(i, j int) {
-	n.nodes[i], n.nodes[j] = n.nodes[j], n.nodes[i]
-}
-
 func (enc *encoder) writeKey(fj fastJsonNode, out *bytes.Buffer) error {
 	if _, err := out.WriteRune('"'); err != nil {
 		return err
@@ -778,8 +757,7 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 	return nil
 }
 
-// TODO: should we do deep copy.
-func (enc *encoder) copyFastJsonNode(fj fastJsonNode) (fastJsonNode, int) {
+func (enc *encoder) copyFastJsonList(fj fastJsonNode) (fastJsonNode, int) {
 	if fj == nil {
 		return fj, 0
 	}
@@ -830,20 +808,20 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 	cnt := 0
 	for _, pa := range parent {
 		for _, ca := range child {
-			paCopy, paNodeCount := enc.copyFastJsonNode(pa)
-			caCopy, caNodeCount := enc.copyFastJsonNode(ca)
-
-			temp := paCopy
-			for temp.next != nil {
-				temp = temp.next
-			}
-			temp.next = caCopy
+			paCopy, paNodeCount := enc.copyFastJsonList(pa)
+			caCopy, caNodeCount := enc.copyFastJsonList(ca)
 
 			cnt += paNodeCount + caNodeCount
 			if cnt > x.Config.NormalizeNodeLimit {
 				return nil, errors.Errorf(
 					"Couldn't evaluate @normalize directive - too many results")
 			}
+
+			temp := paCopy
+			for temp.next != nil {
+				temp = temp.next
+			}
+			temp.next = caCopy
 
 			mergedList = append(mergedList, paCopy)
 		}
@@ -1303,7 +1281,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				pc.Params.ParentIds = sg.Params.ParentIds
 			}
 
-			// calculate it once to avoid mutliple call to idToAttr()
+			// calculate it once to avoid multiple call to idToAttr()
 			fieldID := enc.idForAttr(fieldName)
 			// Add len of fieldName to enc.curSize.
 			enc.curSize += uint64(len(fieldName))
@@ -1383,7 +1361,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 							// 		}
 							// 	}
 							// }
-							// boss should be of list type because there can be mutliple friends of
+							// boss should be of list type because there can be multiple friends of
 							// boss.
 							node := enc.newNode(fieldID)
 							enc.addChildren(node, c)
@@ -1409,7 +1387,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
 
-			// calculate it once to avoid mutliple call to idToAttr()
+			// calculate it once to avoid multiple call to idToAttr()
 			fieldID := enc.idForAttr(fieldName)
 			// Add len of fieldName to enc.curSize.
 			enc.curSize += uint64(len(fieldName))
@@ -1484,7 +1462,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 		sg.Params.ParentIds = (sg.Params.ParentIds)[:len(sg.Params.ParentIds)-1]
 	}
 
-	// Only for shortest path query we wan't to return uid always if there is
+	// Only for shortest path query we want to return uid always if there is
 	// nothing else at that level.
 	if (sg.Params.GetUid && !enc.IsEmpty(dst)) || sg.Params.Shortest {
 		if err := enc.SetUID(dst, uid, enc.uidAttr); err != nil {
