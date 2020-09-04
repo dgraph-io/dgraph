@@ -674,8 +674,6 @@ func (n *node) trySnapshot(skip uint64) {
 func (n *node) Run() {
 	var leader bool
 	licenseApplied := false
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
 
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
@@ -696,6 +694,22 @@ func (n *node) Run() {
 		closer.AddRunning(1)
 		go x.StoreSync(n.Store, closer)
 	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				n.Raft().Tick()
+			case <-n.closer.HasBeenClosed():
+				return
+			}
+		}
+	}()
 
 	// var readNum uint64
 	// getRead := func() {
@@ -722,10 +736,11 @@ func (n *node) Run() {
 	for {
 		select {
 		case <-n.closer.HasBeenClosed():
+			wg.Wait() // Wait to stop ticking.
 			n.Raft().Stop()
 			return
-		case <-ticker.C:
-			n.Raft().Tick()
+		// case <-ticker.C:
+		// 	n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
 			num++
 			if num%1000 == 0 {
