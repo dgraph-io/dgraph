@@ -350,6 +350,9 @@ func (ci countEntry) Attr() []byte {
 	return ci[17 : 17+sz]
 }
 func (ci countEntry) less(oe countEntry) bool {
+	if cmp := bytes.Compare(ci.Attr(), oe.Attr()); cmp != 0 {
+		return cmp < 0
+	}
 	if left, right := ci.Count(), oe.Count(); left != right {
 		return left < right
 	}

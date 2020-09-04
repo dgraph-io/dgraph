@@ -87,23 +87,14 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 
 	var pl pb.PostingList
 	encoder := codec.Encoder{BlockSize: 256}
-
 	lastCe := countEntry(buf.Slice(0))
 	offset := 0
-	for offset < buf.Len() {
-		ce := countEntry(buf.Slice(offset))
-		offset += 4 + len(ce)
 
-		// Sanity checks.
-		x.AssertTrue(bytes.Equal(ce.Attr(), lastCe.Attr()))
-		x.AssertTrue(ce.Reverse() == lastCe.Reverse())
-
-		if ce.Count() == lastCe.Count() {
-			encoder.Add(ce.Uid())
-			continue
-		}
-
+	encode := func() {
 		pl.Pack = encoder.Done()
+		if codec.ExactLen(pl.Pack) == 0 {
+			return
+		}
 		data, err := pl.Marshal()
 		x.Check(err)
 		codec.FreePack(pl.Pack)
@@ -118,8 +109,23 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		})
 		encoder = codec.Encoder{BlockSize: 256}
 		pl.Reset()
+	}
+
+	for offset < buf.Len() {
+		ce := countEntry(buf.Slice(offset))
+		offset += 4 + len(ce)
+
+		// Sanity checks.
+		x.AssertTrue(bytes.Equal(ce.Attr(), lastCe.Attr()))
+		x.AssertTrue(ce.Reverse() == lastCe.Reverse())
+
+		if ce.Count() != lastCe.Count() {
+			encode()
+		}
+		encoder.Add(ce.Uid())
 		lastCe = ce
 	}
+	encode()
 
 	sort.Slice(list.Kv, func(i, j int) bool {
 		return bytes.Compare(list.Kv[i].Key, list.Kv[j].Key) < 0
