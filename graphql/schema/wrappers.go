@@ -521,8 +521,8 @@ func mutatedTypeMapping(s *schema,
 		// the type from the definition of an object. We use Delete and not Update or Add here because
 		// Interfaces can't have Add and if there is no non Id field then Update also will not be there.
 		var def *ast.Definition
-		if def = s.schema.Types["Delete"+mutatedTypeName+"Payload"]; def == nil {
-			def = s.schema.Types["Add"+mutatedTypeName+"Payload"]
+		if def = s.schema.Types["Add"+mutatedTypeName+"Payload"]; def == nil {
+			def = s.schema.Types["Delete"+mutatedTypeName+"Payload"]
 		}
 
 		if def == nil {
