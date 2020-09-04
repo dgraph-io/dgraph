@@ -2987,3 +2987,95 @@ func TestCrossGroupPermission(t *testing.T) {
 		dgAlter(userClient, i&1 == 0, "user"+userIdx)
 	}
 }
+
+func TestMutationWithValueVar(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	err = dg.Alter(ctx, &api.Operation{
+		Schema: `
+			name	: string @index(exact) .
+			nickname: string .
+		`,
+	})
+	require.NoError(t, err)
+
+	data := &api.Mutation{
+		SetNquads: []byte(`
+			_:u1 <name> "RandomGuy" .
+			_:u1 <nickname> "r1" .
+		`),
+		CommitNow: true,
+	}
+	_, err = dg.NewTxn().Mutate(ctx, data)
+	require.NoError(t, err)
+
+	resetUser(t)
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err)
+	createUser(t, accessJwt, userid, userpassword)
+	createGroup(t, accessJwt, devGroup)
+	addToGroup(t, accessJwt, userid, devGroup)
+	addRulesToGroup(t, accessJwt, devGroup, []rule{
+		{
+			Predicate:  "name",
+			Permission: Read.Code | Write.Code,
+		},
+		{
+			Predicate:  "nickname",
+			Permission: Read.Code | Write.Code,
+		},
+	})
+	time.Sleep(6 * time.Second)
+
+	query := `
+		{
+			u1 as var(func: has(name)) {
+				nick1 as nickname
+				name1 as name
+			}
+		}
+	`
+
+	mutation1 := &api.Mutation{
+		SetNquads: []byte(`
+			uid(u1) <nickname> val(name1) .
+			uid(u1) <name> val(nick1) .
+		`),
+		CommitNow: true,
+	}
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	_, err = userClient.NewTxn().Do(ctx, &api.Request{
+		Query:     query,
+		Mutations: []*api.Mutation{mutation1},
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	query = `
+		{
+			me(func: has(name)) {
+				nickname
+				name
+			}
+		}
+	`
+
+	resp, err := userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+
+	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"RandomGuy"}]}`, string(resp.GetJson()))
+}
