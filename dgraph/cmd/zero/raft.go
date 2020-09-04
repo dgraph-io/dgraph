@@ -579,6 +579,7 @@ func (n *node) initAndStartNode() error {
 
 	go n.Run()
 	go n.BatchAndSendMessages()
+	go n.ReportRaftComms()
 	return nil
 }
 
