@@ -243,10 +243,10 @@ func run() {
 
 	x.AssertTruef(opts.totalCache >= 0, "ERROR: Cache size must be non-negative")
 
-	cachePercent, err := x.GetCachePercentages(opts.cachePercentage, 2)
+	//cachePercent, err := x.GetCachePercentages(opts.cachePercentage, 2)
 	x.Check(err)
-	blockCacheSz := (cachePercent[0] * (opts.totalCache << 20)) / 100
-	indexCacheSz := (cachePercent[1] * (opts.totalCache << 20)) / 100
+	//blockCacheSz := (cachePercent[0] * (opts.totalCache << 20)) / 100
+	//indexCacheSz := (cachePercent[1] * (opts.totalCache << 20)) / 100
 
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
@@ -254,11 +254,11 @@ func run() {
 		WithSyncWrites(false).
 		WithTruncate(true).
 		WithValueLogFileSize(64 << 20).
-		WithBlockCacheSize(blockCacheSz).
-		WithIndexCacheSize(indexCacheSz).
+		WithBlockCacheSize(0).
+		WithIndexCacheSize(0).
 		WithLoadBloomsOnOpen(false)
 
-	kvOpt.ZSTDCompressionLevel = 3
+	kvOpt.Compression = 0
 
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
