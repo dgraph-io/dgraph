@@ -35,12 +35,12 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bopt "github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 )
@@ -151,7 +151,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	m.Cfg.DisableProposalForwarding = true
 	st.rs = conn.NewRaftServer(m)
 
-	st.node = &node{Node: m, ctx: context.Background(), closer: y.NewCloser(1)}
+	st.node = &node{Node: m, ctx: context.Background(), closer: z.NewCloser(1)}
 	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node}
 	st.zero.Init()
 	st.node.server = st.zero
@@ -301,7 +301,7 @@ func run() {
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
 
-	gcCloser := y.NewCloser(1) // closer for vLogGC
+	gcCloser := z.NewCloser(1) // closer for vLogGC
 	go x.RunVlogGC(kv, gcCloser)
 	defer gcCloser.SignalAndWait()
 

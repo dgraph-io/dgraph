@@ -33,7 +33,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -43,7 +42,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
@@ -429,7 +428,7 @@ func serveHTTP(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	}
 }
 
-func setupServer(closer *y.Closer) {
+func setupServer(closer *z.Closer) {
 	go worker.RunServer(bindall) // For pb.communication.
 
 	laddr := "localhost"
@@ -723,7 +722,7 @@ func run() {
 
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we
 	// close alpha. This closer is for closing and waiting that subscription.
-	adminCloser := y.NewCloser(1)
+	adminCloser := z.NewCloser(1)
 
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")

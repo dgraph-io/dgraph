@@ -29,13 +29,13 @@ import (
 	"github.com/pkg/errors"
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
@@ -298,7 +298,7 @@ type adminServer struct {
 
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
-func NewServers(withIntrospection bool, closer *y.Closer) (web.IServeGraphQL, web.IServeGraphQL) {
+func NewServers(withIntrospection bool, closer *z.Closer) (web.IServeGraphQL, web.IServeGraphQL) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
 		x.Panic(err)
@@ -325,7 +325,7 @@ func newAdminResolver(
 	gqlServer web.IServeGraphQL,
 	fns *resolve.ResolverFns,
 	withIntrospection bool,
-	closer *y.Closer) *resolve.RequestResolver {
+	closer *z.Closer) *resolve.RequestResolver {
 
 	adminSchema, err := schema.FromString(graphqlAdminSchema)
 	if err != nil {

@@ -44,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type reducer struct {
@@ -334,7 +335,7 @@ func (r *reducer) streamIdFor(pred string) uint32 {
 	return streamId
 }
 
-func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
+func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
 	for req := range entryCh {
 
@@ -384,7 +385,7 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, kvsCh chan *bpb.KVList, wg *s
 	x.Check(ci.splitWriter.Flush())
 }
 
-func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *y.Closer) {
+func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
 
 	// Concurrently write split lists to a temporary badger.
@@ -457,14 +458,14 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	fmt.Printf("Num CPUs: %d\n", cpu)
 	encoderCh := make(chan *encodeRequest, 2*cpu)
 	writerCh := make(chan *encodeRequest, 2*cpu)
-	encoderCloser := y.NewCloser(cpu)
+	encoderCloser := z.NewCloser(cpu)
 	for i := 0; i < cpu; i++ {
 		// Start listening to encode entries
 		// For time being let's lease 100 stream id for each encoder.
 		go r.encode(encoderCh, encoderCloser)
 	}
 	// Start listening to write the badger list.
-	writerCloser := y.NewCloser(1)
+	writerCloser := z.NewCloser(1)
 	go r.startWriting(ci, writerCh, writerCloser)
 
 	for i := 0; i < len(partitionKeys); i++ {

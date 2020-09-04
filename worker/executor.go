@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
@@ -42,14 +43,14 @@ type executor struct {
 
 	sync.RWMutex
 	predChan map[string]chan *subMutation
-	closer   *y.Closer
+	closer   *z.Closer
 	applied  *y.WaterMark
 }
 
 func newExecutor(applied *y.WaterMark) *executor {
 	ex := &executor{
 		predChan: make(map[string]chan *subMutation),
-		closer:   y.NewCloser(0),
+		closer:   z.NewCloser(0),
 		applied:  applied,
 	}
 	go ex.shutdown()
