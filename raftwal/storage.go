@@ -568,6 +568,8 @@ func (w *DiskStorage) NumEntries() (int, error) {
 }
 
 func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
+	w.elog.Printf("AllEntries")
+	defer w.elog.Printf("Done")
 	err := w.db.View(func(txn *badger.Txn) error {
 		if hi-lo == 1 { // We only need one entry.
 			item, err := txn.Get(w.EntryKey(lo))
