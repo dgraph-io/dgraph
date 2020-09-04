@@ -18,7 +18,7 @@ require (
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200828220306-806a325a0462
 	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191127085444-c7a02678e8a6
-	github.com/dgraph-io/ristretto v0.0.4-0.20200820164438-623d8ef1614b
+	github.com/dgraph-io/ristretto v0.0.4-0.20200904131139-4dec2770af66
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1

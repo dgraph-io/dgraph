@@ -21,14 +21,14 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/v2/y"
-
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
+
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -296,7 +296,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 }
 
 // RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
-func RefreshAcls(closer *y.Closer) {
+func RefreshAcls(closer *z.Closer) {
 	defer func() {
 		glog.Infoln("RefreshAcls closed")
 		closer.Done()
@@ -353,7 +353,7 @@ const queryAcls = `
 `
 
 // ResetAcl clears the aclCachePtr and upserts the Groot account.
-func ResetAcl(closer *y.Closer) {
+func ResetAcl(closer *z.Closer) {
 	defer func() {
 		glog.Infof("ResetAcl closed")
 		closer.Done()
