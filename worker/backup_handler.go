@@ -301,7 +301,7 @@ func verifyRequest(req *pb.RestoreRequest, manifests []*Manifest, currentGroups 
 }
 
 func getManifests(manifests []*Manifest, backupId string,
-	backupNum uint64) ([]*Manifest, error){
+	backupNum uint64) ([]*Manifest, error) {
 
 	manifests, err := filterManifests(manifests, backupId)
 	if err != nil {
