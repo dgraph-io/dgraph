@@ -21,10 +21,11 @@ package edgraph
 import (
 	"context"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
+
 	"github.com/golang/glog"
 )
 
@@ -46,7 +47,7 @@ func ResetAcl() {
 }
 
 // ResetAcls is an empty method since ACL is only supported in the enterprise version.
-func RefreshAcls(closer *y.Closer) {
+func RefreshAcls(closer *z.Closer) {
 	// do nothing
 	<-closer.HasBeenClosed()
 	closer.Done()
