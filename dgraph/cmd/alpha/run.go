@@ -29,6 +29,7 @@ import (
 	_ "net/http/pprof" // http profiler
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -118,8 +119,11 @@ they form a Raft group and provide synchronous replication.
 			"log directory. mmap consumes more RAM, but provides better performance. If you pass "+
 			"two values separated by a comma the first value will be used for the postings "+
 			"directory and the second for the w directory.")
-	flag.Int("badger.compression_level", 3,
-		"The compression level for Badger. A higher value uses more resources.")
+	flag.String("badger.compression_level", "3,0",
+		"The compression level for Badger. A higher value uses more resources. If a single "+
+			"value is given it will be used for both the p and w directories. If two "+
+			"comma-separated values are given, they will be used for the p and w directories "+
+			"respectively. A value <= 0 means the data will be uncompressed.")
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -618,17 +622,44 @@ func run() {
 	wstoreIndexCacheSize := (cachePercent[4] * (totalCache << 20)) / 100
 
 	opts := worker.Options{
-		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-		PostingDir:             Alpha.Conf.GetString("postings"),
-		WALDir:                 Alpha.Conf.GetString("wal"),
-		PBlockCacheSize:        pstoreBlockCacheSize,
-		PIndexCacheSize:        pstoreIndexCacheSize,
-		WBlockCacheSize:        wstoreBlockCacheSize,
-		WIndexCacheSize:        wstoreIndexCacheSize,
+		PostingDir:      Alpha.Conf.GetString("postings"),
+		WALDir:          Alpha.Conf.GetString("wal"),
+		PBlockCacheSize: pstoreBlockCacheSize,
+		PIndexCacheSize: pstoreIndexCacheSize,
+		WBlockCacheSize: wstoreBlockCacheSize,
+		WIndexCacheSize: wstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+	}
+
+	compressionLevels := strings.Split(Alpha.Conf.GetString("badger.compression_level"), ",")
+	if len(compressionLevels) != 1 && len(compressionLevels) != 2 {
+		glog.Fatalf("Unable to read badger.compression_level options. Expected single value or two "+
+			"comma-separated values. Got %s", Alpha.Conf.GetString("badger.compression_level"))
+	}
+	if len(compressionLevels) == 1 {
+		compressionLevel, err := strconv.ParseInt(compressionLevels[0], 10, 64)
+		if err != nil {
+			glog.Fatalf("Invalid value for badger.compression_level flag. Expected a number but got %s.",
+				compressionLevels[0])
+		}
+		opts.BadgerCompressionLevel = int(compressionLevel)
+		opts.BadgerWalCompressionLevel = int(compressionLevel)
+	} else {
+		compressionLevel, err := strconv.ParseInt(compressionLevels[0], 10, 64)
+		if err != nil {
+			glog.Fatalf("Invalid value for badger.compression_level flag. Expected a number but got %s.",
+				compressionLevels[0])
+		}
+		walCompressionLevel, err := strconv.ParseInt(compressionLevels[1], 10, 64)
+		if err != nil {
+			glog.Fatalf("Invalid value for badger.compression_level flag. Expected a number but got %s.",
+				compressionLevels[1])
+		}
+		opts.BadgerCompressionLevel = int(compressionLevel)
+		opts.BadgerWalCompressionLevel = int(walCompressionLevel)
 	}
 
 	badgerTables := strings.Split(Alpha.Conf.GetString("badger.tables"), ",")
