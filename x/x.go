@@ -1147,3 +1147,47 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 
 	return cachePercent, nil
 }
+
+// ParseCompressionLevel returns compression level(int) given the compression level(string)
+func ParseCompressionLevel(compressionLevel string) (int, error) {
+	x, err := strconv.Atoi(compressionLevel)
+	if err != nil {
+		return 0, errors.Errorf("ERROR: unable to parse compression level(%s)", compressionLevel)
+	}
+	if x < 0 {
+		return 0, errors.Errorf("ERROR: compression level(%s) cannot be negative", compressionLevel)
+	}
+	return x, nil
+}
+
+// GetCompressionLevels returns the slice of compression levels given the "," (comma) separated
+// compression levels(integers) string.
+func GetCompressionLevels(compressionLevelsString string) ([]int, error) {
+	compressionLevels := strings.Split(compressionLevelsString, ",")
+	// Validity checks
+	if len(compressionLevels) != 1 && len(compressionLevels) != 2 {
+		return nil, errors.Errorf("ERROR: expected single integer or two comma separated integers")
+	}
+	var compressionLevelsInt []int
+	if len(compressionLevels) == 1 {
+		x, err := ParseCompressionLevel(compressionLevels[0])
+		if err != nil {
+			return nil, err
+		}
+		// Appending twice. One for PostingsDir, other for WALDir
+		compressionLevelsInt = append(compressionLevelsInt, x)
+		compressionLevelsInt = append(compressionLevelsInt, x)
+	} else {
+		x, err := ParseCompressionLevel(compressionLevels[0])
+		if err != nil {
+			return nil, err
+		}
+		compressionLevelsInt = append(compressionLevelsInt, x)
+		x, err = ParseCompressionLevel(compressionLevels[1])
+		if err != nil {
+			return nil, err
+		}
+		compressionLevelsInt = append(compressionLevelsInt, x)
+	}
+	return compressionLevelsInt, nil
+}
