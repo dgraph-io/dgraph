@@ -217,15 +217,6 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Errorf("no backup manifests found at location %s", req.Location)
 	}
 
-	// If backupNum > 0, use the manifest with that backupNum as the last manifest.
-	backupNum := int(req.BackupNum)
-	if backupNum > 0 {
-		if len(manifests) < backupNum {
-			return errors.Errorf("not enough backups to restore manifest with backupNum %d", backupNum)
-		}
-		manifests = manifests[:backupNum]
-	}
-
 	lastManifest := manifests[len(manifests)-1]
 	preds, ok := lastManifest.Groups[req.GroupId]
 	if !ok {
