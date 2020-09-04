@@ -118,8 +118,8 @@ func TestHandleRuntimeChanges(t *testing.T) {
 	kp, err := sr25519.GenerateKeypair()
 	require.Nil(t, err)
 
-	ks := keystore.NewKeystore()
-	ks.Insert(kp)
+	ks := keystore.NewGlobalKeystore()
+	ks.Acco.Insert(kp)
 
 	cfg := &Config{
 		Runtime:          rt,
@@ -144,33 +144,33 @@ func TestHandleRuntimeChanges(t *testing.T) {
 }
 
 func TestService_HasKey(t *testing.T) {
-	ks := keystore.NewKeystore()
+	ks := keystore.NewGlobalKeystore()
 	kr, err := keystore.NewSr25519Keyring()
 	require.NoError(t, err)
-	ks.Insert(kr.Alice)
+	ks.Acco.Insert(kr.Alice())
 
 	cfg := &Config{
 		Keystore: ks,
 	}
 	svc := NewTestService(t, cfg)
 
-	res, err := svc.HasKey(kr.Alice.Public().Hex(), "babe")
+	res, err := svc.HasKey(kr.Alice().Public().Hex(), "babe")
 	require.NoError(t, err)
 	require.True(t, res)
 }
 
 func TestService_HasKey_UnknownType(t *testing.T) {
-	ks := keystore.NewKeystore()
+	ks := keystore.NewGlobalKeystore()
 	kr, err := keystore.NewSr25519Keyring()
 	require.NoError(t, err)
-	ks.Insert(kr.Alice)
+	ks.Acco.Insert(kr.Alice())
 
 	cfg := &Config{
 		Keystore: ks,
 	}
 	svc := NewTestService(t, cfg)
 
-	res, err := svc.HasKey(kr.Alice.Public().Hex(), "xxxx")
+	res, err := svc.HasKey(kr.Alice().Public().Hex(), "xxxx")
 	require.EqualError(t, err, "unknown key type: xxxx")
 	require.False(t, res)
 }

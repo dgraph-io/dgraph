@@ -161,6 +161,11 @@ func NewPublicKey(in []byte) (*PublicKey, error) {
 	return &PublicKey{key: sr25519.NewPublicKey(buf)}, nil
 }
 
+// Type returns Sr25519Type
+func (kp *Keypair) Type() crypto.KeyType {
+	return crypto.Sr25519Type
+}
+
 // Sign uses the keypair to sign the message using the sr25519 signature algorithm
 func (kp *Keypair) Sign(msg []byte) ([]byte, error) {
 	return kp.private.Sign(msg)

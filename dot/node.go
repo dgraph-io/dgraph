@@ -209,15 +209,15 @@ func NodeInitialized(basepath string, expected bool) bool {
 }
 
 // NewNode creates a new dot node from a dot node configuration
-func NewNode(cfg *Config, ks *keystore.Keystore, stopFunc func()) (*Node, error) {
+func NewNode(cfg *Config, ks *keystore.GlobalKeystore, stopFunc func()) (*Node, error) {
 	err := setupLogger(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	// if authority node, should have at least 1 key in keystore
-	if cfg.Core.Authority && ks.NumSr25519Keys() == 0 {
-		return nil, fmt.Errorf("no keys provided for authority node")
+	if cfg.Core.Authority && (ks.Babe.Size() == 0 || ks.Gran.Size() == 0) {
+		return nil, ErrNoKeysProvided
 	}
 
 	// Node Services
@@ -245,7 +245,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore, stopFunc func()) (*Node, error)
 	}
 
 	// create runtime
-	rt, err := createRuntime(cfg, stateSrvc, ks)
+	rt, err := createRuntime(cfg, stateSrvc, ks.Acco.(*keystore.GenericKeystore))
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore, stopFunc func()) (*Node, error)
 
 	if cfg.Core.BabeAuthority {
 		// create BABE service
-		bp, err = createBABEService(cfg, rt, stateSrvc, ks)
+		bp, err = createBABEService(cfg, rt, stateSrvc, ks.Babe)
 		if err != nil {
 			return nil, err
 		}
@@ -275,7 +275,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore, stopFunc func()) (*Node, error)
 
 	if cfg.Core.GrandpaAuthority {
 		// create GRANDPA service
-		fg, err = createGRANDPAService(cfg, rt, stateSrvc, dh, ks)
+		fg, err = createGRANDPAService(cfg, rt, stateSrvc, dh, ks.Gran)
 		if err != nil {
 			return nil, err
 		}

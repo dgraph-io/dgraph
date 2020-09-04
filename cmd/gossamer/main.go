@@ -163,13 +163,38 @@ func gossamerAction(ctx *cli.Context) error {
 		return err
 	}
 
-	ks, err := keystore.LoadKeystore(cfg.Account.Key)
+	ks := keystore.NewGlobalKeystore()
+	err = keystore.LoadKeystore(cfg.Account.Key, ks.Acco)
 	if err != nil {
-		logger.Error("failed to load keystore", "error", err)
+		logger.Error("failed to load account keystore", "error", err)
 		return err
 	}
 
-	err = unlockKeystore(ks, cfg.Global.BasePath, cfg.Account.Unlock, ctx.String(PasswordFlag.Name))
+	err = keystore.LoadKeystore(cfg.Account.Key, ks.Babe)
+	if err != nil {
+		logger.Error("failed to load BABE keystore", "error", err)
+		return err
+	}
+
+	err = keystore.LoadKeystore(cfg.Account.Key, ks.Gran)
+	if err != nil {
+		logger.Error("failed to load grandpa keystore", "error", err)
+		return err
+	}
+
+	err = unlockKeystore(ks.Acco, cfg.Global.BasePath, cfg.Account.Unlock, ctx.String(PasswordFlag.Name))
+	if err != nil {
+		logger.Error("failed to unlock keystore", "error", err)
+		return err
+	}
+
+	err = unlockKeystore(ks.Babe, cfg.Global.BasePath, cfg.Account.Unlock, ctx.String(PasswordFlag.Name))
+	if err != nil {
+		logger.Error("failed to unlock keystore", "error", err)
+		return err
+	}
+
+	err = unlockKeystore(ks.Gran, cfg.Global.BasePath, cfg.Account.Unlock, ctx.String(PasswordFlag.Name))
 	if err != nil {
 		logger.Error("failed to unlock keystore", "error", err)
 		return err

@@ -35,8 +35,12 @@ const Sr25519Type KeyType = "sr25519"
 //Secp256k1Type secp256k1
 const Secp256k1Type KeyType = "secp256k1"
 
+// UnknownType is used by the GenericKeystore
+const UnknownType KeyType = "unknown"
+
 // Keypair interface
 type Keypair interface {
+	Type() KeyType
 	Sign(msg []byte) ([]byte, error)
 	Public() PublicKey
 	Private() PrivateKey

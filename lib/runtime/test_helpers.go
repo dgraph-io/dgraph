@@ -57,7 +57,7 @@ func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie, l
 
 	cfg := &Config{
 		Storage:  rs,
-		Keystore: keystore.NewKeystore(),
+		Keystore: keystore.NewGenericKeystore("test"),
 		Imports:  importsFunc,
 		LogLvl:   lvl,
 	}

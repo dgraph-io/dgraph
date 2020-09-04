@@ -39,7 +39,7 @@ var testTransFunc *Function
 
 func TestCreateUncheckedExtrinsic(t *testing.T) {
 	var nonce uint64 = 0
-	signer := kr.Alice
+	signer := kr.Alice()
 	genesisHash := common.Hash{}
 	additional := struct {
 		SpecVersion      uint32
@@ -63,7 +63,7 @@ func TestCreateUncheckedExtrinsicUnsigned(t *testing.T) {
 
 func TestUncheckedExtrinsic_Encode(t *testing.T) {
 	var nonce uint64 = 0
-	signer := kr.Alice
+	signer := kr.Alice()
 	genesisHash := common.Hash{}
 	additional := struct {
 		SpecVersion      uint32

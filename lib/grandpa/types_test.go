@@ -28,12 +28,12 @@ import (
 )
 
 func TestPubkeyToVoter(t *testing.T) {
-	voters := newTestVoters(t)
+	voters := newTestVoters()
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
 	state := NewState(voters, 0, 0)
-	voter, err := state.pubkeyToVoter(kr.Alice.Public().(*ed25519.PublicKey))
+	voter, err := state.pubkeyToVoter(kr.Alice().Public().(*ed25519.PublicKey))
 	require.NoError(t, err)
 	require.Equal(t, voters[0], voter)
 }

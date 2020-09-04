@@ -41,7 +41,7 @@ func TestService_ProcessBlockAnnounceMessage(t *testing.T) {
 
 	cfg := &Config{
 		MsgSend:         msgSend,
-		Keystore:        keystore.NewKeystore(),
+		Keystore:        keystore.NewGlobalKeystore(),
 		NewBlocks:       newBlocks,
 		IsBlockProducer: false,
 	}
@@ -89,8 +89,8 @@ func TestService_ProcessTransactionMessage(t *testing.T) {
 
 	// TODO: load BABE authority key
 
-	ks := keystore.NewKeystore()
-	ks.Insert(kp)
+	ks := keystore.NewGlobalKeystore()
+	ks.Acco.Insert(kp)
 
 	cfg := &Config{
 		Runtime:          rt,

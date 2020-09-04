@@ -211,8 +211,8 @@ func TestValidateTransaction_AuthoritiesChange(t *testing.T) {
 	// TODO: update AuthoritiesChange to need to be signed by an authority
 	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
 
-	alice := kr.Alice.Public().Encode()
-	bob := kr.Bob.Public().Encode()
+	alice := kr.Alice().Public().Encode()
+	bob := kr.Bob().Public().Encode()
 
 	aliceb := [32]byte{}
 	copy(aliceb[:], alice)
@@ -286,8 +286,8 @@ func TestValidateTransaction_StorageChange(t *testing.T) {
 func TestValidateTransaction_Transfer(t *testing.T) {
 	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
 
-	alice := kr.Alice.Public().Encode()
-	bob := kr.Bob.Public().Encode()
+	alice := kr.Alice().Public().Encode()
+	bob := kr.Bob().Public().Encode()
 
 	aliceb := [32]byte{}
 	copy(aliceb[:], alice)
@@ -296,7 +296,7 @@ func TestValidateTransaction_Transfer(t *testing.T) {
 	copy(bobb[:], bob)
 
 	transfer := extrinsic.NewTransfer(aliceb, bobb, 1000, 1)
-	ext, err := transfer.AsSignedExtrinsic(kr.Alice.Private().(*sr25519.PrivateKey))
+	ext, err := transfer.AsSignedExtrinsic(kr.Alice().Private().(*sr25519.PrivateKey))
 	require.NoError(t, err)
 	tx, err := ext.Encode()
 	require.NoError(t, err)
@@ -320,8 +320,8 @@ func TestApplyExtrinsic_AuthoritiesChange(t *testing.T) {
 	// TODO: update AuthoritiesChange to need to be signed by an authority
 	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
 
-	alice := kr.Alice.Public().Encode()
-	bob := kr.Bob.Public().Encode()
+	alice := kr.Alice().Public().Encode()
+	bob := kr.Bob().Public().Encode()
 
 	aliceb := [32]byte{}
 	copy(aliceb[:], alice)
@@ -438,8 +438,8 @@ func TestApplyExtrinsic_Transfer_NoBalance(t *testing.T) {
 		Number: big.NewInt(77),
 	}
 
-	alice := kr.Alice.Public().Encode()
-	bob := kr.Bob.Public().Encode()
+	alice := kr.Alice().Public().Encode()
+	bob := kr.Bob().Public().Encode()
 
 	ab := [32]byte{}
 	copy(ab[:], alice)
@@ -448,7 +448,7 @@ func TestApplyExtrinsic_Transfer_NoBalance(t *testing.T) {
 	copy(bb[:], bob)
 
 	transfer := extrinsic.NewTransfer(ab, bb, 1000, 0)
-	ext, err := transfer.AsSignedExtrinsic(kr.Alice.Private().(*sr25519.PrivateKey))
+	ext, err := transfer.AsSignedExtrinsic(kr.Alice().Private().(*sr25519.PrivateKey))
 	require.NoError(t, err)
 	tx, err := ext.Encode()
 	require.NoError(t, err)
@@ -470,8 +470,8 @@ func TestApplyExtrinsic_Transfer_WithBalance(t *testing.T) {
 		Number: big.NewInt(77),
 	}
 
-	alice := kr.Alice.Public().Encode()
-	bob := kr.Bob.Public().Encode()
+	alice := kr.Alice().Public().Encode()
+	bob := kr.Bob().Public().Encode()
 
 	ab := [32]byte{}
 	copy(ab[:], alice)
@@ -482,7 +482,7 @@ func TestApplyExtrinsic_Transfer_WithBalance(t *testing.T) {
 	rt.storage.SetBalance(ab, 2000)
 
 	transfer := extrinsic.NewTransfer(ab, bb, 1000, 0)
-	ext, err := transfer.AsSignedExtrinsic(kr.Alice.Private().(*sr25519.PrivateKey))
+	ext, err := transfer.AsSignedExtrinsic(kr.Alice().Private().(*sr25519.PrivateKey))
 	require.NoError(t, err)
 	tx, err := ext.Encode()
 	require.NoError(t, err)

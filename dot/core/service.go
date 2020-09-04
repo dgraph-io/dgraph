@@ -65,7 +65,7 @@ type Service struct {
 	verifier Verifier
 
 	// Keystore
-	keys *keystore.Keystore
+	keys *keystore.GlobalKeystore
 
 	// Channels for inter-process communication
 	msgRec  <-chan network.Message // receive messages from network service
@@ -85,7 +85,7 @@ type Config struct {
 	BlockState              BlockState
 	StorageState            StorageState
 	TransactionQueue        TransactionQueue
-	Keystore                *keystore.Keystore
+	Keystore                *keystore.GlobalKeystore
 	Runtime                 *runtime.Runtime
 	BlockProducer           BlockProducer
 	IsBlockProducer         bool
@@ -379,7 +379,7 @@ func (s *Service) handleRuntimeChanges(header *types.Header) error {
 
 		cfg := &runtime.Config{
 			Storage:  s.storageState,
-			Keystore: s.keys,
+			Keystore: s.keys.Acco.(*keystore.GenericKeystore),
 			Imports:  runtime.RegisterImports_NodeRuntime,
 			LogLvl:   -1, // don't change runtime package log level
 		}
@@ -405,15 +405,16 @@ func (s *Service) handleRuntimeChanges(header *types.Header) error {
 	return nil
 }
 
-// InsertKey inserts keypair into keystore
+// InsertKey inserts keypair into the account keystore
+// TODO: define which keystores need to be updated and create separate insert funcs for each
 func (s *Service) InsertKey(kp crypto.Keypair) {
-	s.keys.Insert(kp)
+	s.keys.Acco.Insert(kp)
 }
 
 // HasKey returns true if given hex encoded public key string is found in keystore, false otherwise, error if there
 //  are issues decoding string
 func (s *Service) HasKey(pubKeyStr string, keyType string) (bool, error) {
-	return keystore.HasKey(pubKeyStr, keyType, s.keys)
+	return keystore.HasKey(pubKeyStr, keyType, s.keys.Acco)
 }
 
 // GetRuntimeVersion gets the current RuntimeVersion

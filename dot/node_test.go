@@ -100,9 +100,9 @@ func TestNewNode(t *testing.T) {
 	err := InitNode(cfg)
 	require.Nil(t, err)
 
-	ks, err := keystore.LoadKeystore("alice")
+	ks := keystore.NewGlobalKeystore()
+	err = keystore.LoadKeystore("alice", ks.Gran)
 	require.Nil(t, err)
-	require.NotNil(t, ks)
 
 	// TODO: improve dot tests #687
 	cfg.Core.Authority = false
@@ -133,9 +133,13 @@ func TestNewNode_Authority(t *testing.T) {
 	err := InitNode(cfg)
 	require.Nil(t, err)
 
-	ks, err := keystore.LoadKeystore("alice")
+	ks := keystore.NewGlobalKeystore()
+	err = keystore.LoadKeystore("alice", ks.Gran)
 	require.Nil(t, err)
-	require.NotNil(t, ks)
+	require.Equal(t, 1, ks.Gran.Size())
+	err = keystore.LoadKeystore("alice", ks.Babe)
+	require.Nil(t, err)
+	require.Equal(t, 1, ks.Babe.Size())
 
 	// TODO: improve dot tests #687
 	cfg.Core.Authority = true
@@ -165,9 +169,9 @@ func TestStartNode(t *testing.T) {
 	err := InitNode(cfg)
 	require.Nil(t, err)
 
-	ks, err := keystore.LoadKeystore("alice")
+	ks := keystore.NewGlobalKeystore()
+	err = keystore.LoadKeystore("alice", ks.Gran)
 	require.Nil(t, err)
-	require.NotNil(t, ks)
 
 	// TODO: improve dot tests #687
 	cfg.Core.Authority = false
@@ -284,9 +288,7 @@ func TestInitNode_LoadStorageRoot(t *testing.T) {
 	err = InitNode(cfg)
 	require.Nil(t, err)
 
-	ks := keystore.NewKeystore()
-	require.NotNil(t, ks)
-
+	ks := keystore.NewGlobalKeystore()
 	node, err := NewNode(cfg, ks, nil)
 	require.Nil(t, err)
 
@@ -340,9 +342,7 @@ func TestInitNode_LoadBalances(t *testing.T) {
 	err := InitNode(cfg)
 	require.Nil(t, err)
 
-	ks := keystore.NewKeystore()
-	require.NotNil(t, ks)
-
+	ks := keystore.NewGlobalKeystore()
 	node, err := NewNode(cfg, ks, nil)
 	require.Nil(t, err)
 
@@ -364,7 +364,7 @@ func TestInitNode_LoadBalances(t *testing.T) {
 	}
 
 	kr, _ := keystore.NewSr25519Keyring()
-	alice := kr.Alice.Public().(*sr25519.PublicKey).AsBytes()
+	alice := kr.Alice().Public().(*sr25519.PublicKey).AsBytes()
 
 	bal, err := stateSrv.Storage.GetBalance(alice)
 	require.NoError(t, err)

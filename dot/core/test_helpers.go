@@ -172,12 +172,12 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 	}
 
 	if cfg.Keystore == nil {
-		cfg.Keystore = keystore.NewKeystore()
+		cfg.Keystore = keystore.NewGlobalKeystore()
 		kp, err := sr25519.GenerateKeypair()
 		if err != nil {
 			t.Fatal(err)
 		}
-		cfg.Keystore.Insert(kp)
+		cfg.Keystore.Acco.Insert(kp)
 	}
 
 	if cfg.NewBlocks == nil {

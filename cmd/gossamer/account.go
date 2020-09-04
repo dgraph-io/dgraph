@@ -118,7 +118,7 @@ func getKeystorePassword(ctx *cli.Context) []byte {
 // unlockKeystore compares the length of passwords to the length of accounts,
 // prompts the user for a password if no password is provided, and then unlocks
 // the accounts within the provided keystore
-func unlockKeystore(ks *keystore.Keystore, basepath string, unlock string, password string) error {
+func unlockKeystore(ks keystore.Keystore, basepath string, unlock string, password string) error {
 	var passwords []string
 
 	if password != "" {

@@ -110,6 +110,11 @@ func GenerateKeypair() (*Keypair, error) {
 	return NewKeypair(*priv), nil
 }
 
+// Type returns Secp256k1Type
+func (kp *Keypair) Type() crypto.KeyType {
+	return crypto.Secp256k1Type
+}
+
 // Sign will sign
 func (kp *Keypair) Sign(msg []byte) ([]byte, error) {
 	if len(msg) != MessageLength {

@@ -8,6 +8,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/trie"
@@ -40,7 +41,7 @@ func newBABEService(t *testing.T) *babe.Service {
 	cfg := &babe.ServiceConfig{
 		BlockState: bs,
 		EpochState: es,
-		Keypair:    kr.Alice,
+		Keypair:    kr.Alice().(*sr25519.Keypair),
 		Runtime:    rt,
 	}
 

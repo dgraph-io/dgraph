@@ -22,6 +22,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 
 	"github.com/stretchr/testify/require"
@@ -29,7 +30,7 @@ import (
 
 func TestCheckForEquivocation_NoEquivocation(t *testing.T) {
 	st := newTestState(t)
-	voters := newTestVoters(t)
+	voters := newTestVoters()
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -38,7 +39,7 @@ func TestCheckForEquivocation_NoEquivocation(t *testing.T) {
 		BlockState:    st.Block,
 		DigestHandler: &mockDigestHandler{},
 		Voters:        voters,
-		Keypair:       kr.Bob,
+		Keypair:       kr.Bob().(*ed25519.Keypair),
 	}
 
 	gs, err := NewService(cfg)
@@ -63,7 +64,7 @@ func TestCheckForEquivocation_WithEquivocation(t *testing.T) {
 	}
 
 	st := newTestState(t)
-	voters := newTestVoters(t)
+	voters := newTestVoters()
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -72,7 +73,7 @@ func TestCheckForEquivocation_WithEquivocation(t *testing.T) {
 		BlockState:    st.Block,
 		DigestHandler: &mockDigestHandler{},
 		Voters:        voters,
-		Keypair:       kr.Bob,
+		Keypair:       kr.Bob().(*ed25519.Keypair),
 	}
 
 	gs, err := NewService(cfg)
@@ -106,7 +107,7 @@ func TestCheckForEquivocation_WithEquivocation(t *testing.T) {
 
 func TestCheckForEquivocation_WithExistingEquivocation(t *testing.T) {
 	st := newTestState(t)
-	voters := newTestVoters(t)
+	voters := newTestVoters()
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -115,7 +116,7 @@ func TestCheckForEquivocation_WithExistingEquivocation(t *testing.T) {
 		BlockState:    st.Block,
 		DigestHandler: &mockDigestHandler{},
 		Voters:        voters,
-		Keypair:       kr.Bob,
+		Keypair:       kr.Bob().(*ed25519.Keypair),
 	}
 
 	gs, err := NewService(cfg)
@@ -161,7 +162,7 @@ func TestCheckForEquivocation_WithExistingEquivocation(t *testing.T) {
 
 func TestValidateMessage_Valid(t *testing.T) {
 	st := newTestState(t)
-	voters := newTestVoters(t)
+	voters := newTestVoters()
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -170,7 +171,7 @@ func TestValidateMessage_Valid(t *testing.T) {
 		BlockState:    st.Block,
 		DigestHandler: &mockDigestHandler{},
 		Voters:        voters,
-		Keypair:       kr.Bob,
+		Keypair:       kr.Bob().(*ed25519.Keypair),
 	}
 
 	gs, err := NewService(cfg)
@@ -180,7 +181,7 @@ func TestValidateMessage_Valid(t *testing.T) {
 	h, err := st.Block.BestBlockHeader()
 	require.NoError(t, err)
 
-	msg, err := gs.createVoteMessage(NewVoteFromHeader(h), prevote, kr.Alice)
+	msg, err := gs.createVoteMessage(NewVoteFromHeader(h), prevote, kr.Alice())
 	require.NoError(t, err)
 
 	vote, err := gs.validateMessage(msg)
@@ -190,7 +191,7 @@ func TestValidateMessage_Valid(t *testing.T) {
 
 func TestValidateMessage_InvalidSignature(t *testing.T) {
 	st := newTestState(t)
-	voters := newTestVoters(t)
+	voters := newTestVoters()
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -199,7 +200,7 @@ func TestValidateMessage_InvalidSignature(t *testing.T) {
 		BlockState:    st.Block,
 		DigestHandler: &mockDigestHandler{},
 		Voters:        voters,
-		Keypair:       kr.Bob,
+		Keypair:       kr.Bob().(*ed25519.Keypair),
 	}
 
 	gs, err := NewService(cfg)
@@ -209,7 +210,7 @@ func TestValidateMessage_InvalidSignature(t *testing.T) {
 	h, err := st.Block.BestBlockHeader()
 	require.NoError(t, err)
 
-	msg, err := gs.createVoteMessage(NewVoteFromHeader(h), prevote, kr.Alice)
+	msg, err := gs.createVoteMessage(NewVoteFromHeader(h), prevote, kr.Alice())
 	require.NoError(t, err)
 
 	msg.Message.Signature[63] = 0
@@ -227,7 +228,7 @@ func TestValidateMessage_SetIDMismatch(t *testing.T) {
 	cfg := &Config{
 		BlockState:    st.Block,
 		DigestHandler: &mockDigestHandler{},
-		Keypair:       kr.Bob,
+		Keypair:       kr.Bob().(*ed25519.Keypair),
 	}
 
 	gs, err := NewService(cfg)
@@ -237,7 +238,7 @@ func TestValidateMessage_SetIDMismatch(t *testing.T) {
 	h, err := st.Block.BestBlockHeader()
 	require.NoError(t, err)
 
-	msg, err := gs.createVoteMessage(NewVoteFromHeader(h), prevote, kr.Alice)
+	msg, err := gs.createVoteMessage(NewVoteFromHeader(h), prevote, kr.Alice())
 	require.NoError(t, err)
 
 	gs.state.setID = 1
@@ -248,7 +249,7 @@ func TestValidateMessage_SetIDMismatch(t *testing.T) {
 
 func TestValidateMessage_Equivocation(t *testing.T) {
 	st := newTestState(t)
-	voters := newTestVoters(t)
+	voters := newTestVoters()
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -257,7 +258,7 @@ func TestValidateMessage_Equivocation(t *testing.T) {
 		BlockState:    st.Block,
 		DigestHandler: &mockDigestHandler{},
 		Voters:        voters,
-		Keypair:       kr.Bob,
+		Keypair:       kr.Bob().(*ed25519.Keypair),
 	}
 
 	gs, err := NewService(cfg)
@@ -281,7 +282,7 @@ func TestValidateMessage_Equivocation(t *testing.T) {
 
 	gs.prevotes[voter.key.AsBytes()] = vote
 
-	msg, err := gs.createVoteMessage(NewVoteFromHeader(branches[0]), prevote, kr.Alice)
+	msg, err := gs.createVoteMessage(NewVoteFromHeader(branches[0]), prevote, kr.Alice())
 	require.NoError(t, err)
 
 	_, err = gs.validateMessage(msg)
@@ -290,7 +291,7 @@ func TestValidateMessage_Equivocation(t *testing.T) {
 
 func TestValidateMessage_BlockDoesNotExist(t *testing.T) {
 	st := newTestState(t)
-	voters := newTestVoters(t)
+	voters := newTestVoters()
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -299,7 +300,7 @@ func TestValidateMessage_BlockDoesNotExist(t *testing.T) {
 		BlockState:    st.Block,
 		DigestHandler: &mockDigestHandler{},
 		Voters:        voters,
-		Keypair:       kr.Bob,
+		Keypair:       kr.Bob().(*ed25519.Keypair),
 	}
 
 	gs, err := NewService(cfg)
@@ -312,7 +313,7 @@ func TestValidateMessage_BlockDoesNotExist(t *testing.T) {
 		Number: big.NewInt(77),
 	}
 
-	msg, err := gs.createVoteMessage(NewVoteFromHeader(fake), prevote, kr.Alice)
+	msg, err := gs.createVoteMessage(NewVoteFromHeader(fake), prevote, kr.Alice())
 	require.NoError(t, err)
 
 	_, err = gs.validateMessage(msg)
@@ -321,7 +322,7 @@ func TestValidateMessage_BlockDoesNotExist(t *testing.T) {
 
 func TestValidateMessage_IsNotDescendant(t *testing.T) {
 	st := newTestState(t)
-	voters := newTestVoters(t)
+	voters := newTestVoters()
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -330,7 +331,7 @@ func TestValidateMessage_IsNotDescendant(t *testing.T) {
 		BlockState:    st.Block,
 		DigestHandler: &mockDigestHandler{},
 		Voters:        voters,
-		Keypair:       kr.Bob,
+		Keypair:       kr.Bob().(*ed25519.Keypair),
 	}
 
 	gs, err := NewService(cfg)
@@ -348,7 +349,7 @@ func TestValidateMessage_IsNotDescendant(t *testing.T) {
 	require.NoError(t, err)
 	gs.head = h
 
-	msg, err := gs.createVoteMessage(NewVoteFromHeader(branches[0]), prevote, kr.Alice)
+	msg, err := gs.createVoteMessage(NewVoteFromHeader(branches[0]), prevote, kr.Alice())
 	require.NoError(t, err)
 
 	_, err = gs.validateMessage(msg)

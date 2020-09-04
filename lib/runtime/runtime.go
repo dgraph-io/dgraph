@@ -34,13 +34,13 @@ var logger = log.New("pkg", "runtime")
 type Ctx struct {
 	storage   Storage
 	allocator *FreeingBumpHeapAllocator
-	keystore  *keystore.Keystore
+	keystore  *keystore.GenericKeystore
 }
 
 // Config represents a runtime configuration
 type Config struct {
 	Storage  Storage
-	Keystore *keystore.Keystore
+	Keystore *keystore.GenericKeystore
 	Imports  func() (*wasm.Imports, error)
 	LogLvl   log.Lvl
 }
@@ -49,7 +49,7 @@ type Config struct {
 type Runtime struct {
 	vm        wasm.Instance
 	storage   Storage
-	keystore  *keystore.Keystore
+	keystore  *keystore.GenericKeystore
 	mutex     sync.Mutex
 	allocator *FreeingBumpHeapAllocator
 }

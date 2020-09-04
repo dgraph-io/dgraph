@@ -42,7 +42,7 @@ type Service struct {
 	cancel        context.CancelFunc
 	blockState    BlockState
 	digestHandler DigestHandler
-	keypair       *ed25519.Keypair
+	keypair       *ed25519.Keypair // TODO: change to grandpa keystore
 	mapLock       sync.Mutex
 	chanLock      sync.Mutex
 

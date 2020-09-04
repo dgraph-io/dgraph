@@ -52,7 +52,7 @@ func onSameChain(blockState BlockState, a, b common.Hash) bool {
 
 func setupGrandpa(t *testing.T, kp *ed25519.Keypair) (*Service, chan FinalityMessage, chan FinalityMessage, chan FinalityMessage) {
 	st := newTestState(t)
-	voters := newTestVoters(t)
+	voters := newTestVoters()
 
 	cfg := &Config{
 		BlockState:    st.Block,

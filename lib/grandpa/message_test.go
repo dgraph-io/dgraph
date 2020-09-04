@@ -7,7 +7,6 @@ import (
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/scale"
 
 	"github.com/stretchr/testify/require"
@@ -27,20 +26,7 @@ var testSignature = [64]byte{1, 2, 3, 4}
 var testAuthorityID = [32]byte{5, 6, 7, 8}
 
 func TestVoteMessageToConsensusMessage(t *testing.T) {
-	st := newTestState(t)
-	voters := newTestVoters(t)
-	kr, err := keystore.NewEd25519Keyring()
-	require.NoError(t, err)
-
-	cfg := &Config{
-		BlockState:    st.Block,
-		DigestHandler: &mockDigestHandler{},
-		Voters:        voters,
-		Keypair:       kr.Alice,
-	}
-
-	gs, err := NewService(cfg)
-	require.NoError(t, err)
+	gs, st := newTestService(t)
 
 	v, err := NewVoteFromHash(st.Block.BestBlockHash(), st.Block)
 	require.NoError(t, err)
@@ -79,21 +65,7 @@ func TestVoteMessageToConsensusMessage(t *testing.T) {
 }
 
 func TestFinalizationMessageToConsensusMessage(t *testing.T) {
-	st := newTestState(t)
-	voters := newTestVoters(t)
-	kr, err := keystore.NewEd25519Keyring()
-	require.NoError(t, err)
-
-	cfg := &Config{
-		BlockState:    st.Block,
-		DigestHandler: &mockDigestHandler{},
-		Voters:        voters,
-		Keypair:       kr.Alice,
-	}
-
-	gs, err := NewService(cfg)
-	require.NoError(t, err)
-
+	gs, _ := newTestService(t)
 	gs.justification[77] = []*Justification{
 		{
 			Vote:        testVote,
@@ -115,20 +87,7 @@ func TestFinalizationMessageToConsensusMessage(t *testing.T) {
 }
 
 func TestNewCatchUpResponse(t *testing.T) {
-	st := newTestState(t)
-	voters := newTestVoters(t)
-	kr, err := keystore.NewEd25519Keyring()
-	require.NoError(t, err)
-
-	cfg := &Config{
-		BlockState:    st.Block,
-		DigestHandler: &mockDigestHandler{},
-		Voters:        voters,
-		Keypair:       kr.Alice,
-	}
-
-	gs, err := NewService(cfg)
-	require.NoError(t, err)
+	gs, _ := newTestService(t)
 
 	round := uint64(1)
 	setID := uint64(1)
@@ -142,7 +101,7 @@ func TestNewCatchUpResponse(t *testing.T) {
 		number: 1,
 	}
 
-	err = gs.blockState.SetFinalizedHash(testHeader.Hash(), round, setID)
+	err := gs.blockState.SetFinalizedHash(testHeader.Hash(), round, setID)
 	require.NoError(t, err)
 	err = gs.blockState.(*state.BlockState).SetHeader(testHeader)
 	require.NoError(t, err)

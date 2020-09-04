@@ -791,7 +791,7 @@ func TestExt_sr25519_generate(t *testing.T) {
 	pubkey, err := sr25519.NewPublicKey(pubkeyData)
 	require.Nil(t, err)
 
-	kp := runtime.keystore.Get(pubkey.Address())
+	kp := runtime.keystore.GetKeypair(pubkey)
 	if kp == nil {
 		t.Fatal("Fail: keypair was not saved in keystore")
 	}
@@ -829,7 +829,7 @@ func TestExt_ed25519_generate(t *testing.T) {
 	pubkey, err := ed25519.NewPublicKey(pubkeyData)
 	require.Nil(t, err)
 
-	kp := runtime.keystore.Get(pubkey.Address())
+	kp := runtime.keystore.GetKeypair(pubkey)
 	if kp == nil {
 		t.Fatal("Fail: keypair was not saved in keystore")
 	}

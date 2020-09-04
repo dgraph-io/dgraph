@@ -154,6 +154,11 @@ func Verify(pub *PublicKey, msg, sig []byte) (bool, error) {
 	return ed25519.Verify(ed25519.PublicKey(*pub), msg, sig), nil
 }
 
+// Type returns Ed25519Type
+func (kp *Keypair) Type() crypto.KeyType {
+	return crypto.Ed25519Type
+}
+
 // Sign uses the keypair to sign the message using the ed25519 signature algorithm
 func (kp *Keypair) Sign(msg []byte) ([]byte, error) {
 	return ed25519.Sign(ed25519.PrivateKey(*kp.private), msg), nil

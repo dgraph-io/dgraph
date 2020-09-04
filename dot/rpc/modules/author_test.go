@@ -211,7 +211,7 @@ func TestAuthorModule_HasKey(t *testing.T) {
 	require.Nil(t, err)
 
 	var res bool
-	req := []string{kr.Alice.Public().Hex(), "babe"}
+	req := []string{kr.Alice().Public().Hex(), "babe"}
 	err = auth.HasKey(nil, &req, &res)
 	require.NoError(t, err)
 	require.True(t, res)
@@ -223,7 +223,7 @@ func TestAuthorModule_HasKey_NotFound(t *testing.T) {
 	require.Nil(t, err)
 
 	var res bool
-	req := []string{kr.Bob.Public().Hex(), "babe"}
+	req := []string{kr.Bob().Public().Hex(), "babe"}
 	err = auth.HasKey(nil, &req, &res)
 	require.NoError(t, err)
 	require.False(t, res)
@@ -245,7 +245,7 @@ func TestAuthorModule_HasKey_InvalidKeyType(t *testing.T) {
 	require.Nil(t, err)
 
 	var res bool
-	req := []string{kr.Alice.Public().Hex(), "xxxx"}
+	req := []string{kr.Alice().Public().Hex(), "xxxx"}
 	err = auth.HasKey(nil, &req, &res)
 	require.EqualError(t, err, "unknown key type: xxxx")
 	require.False(t, res)
@@ -255,12 +255,12 @@ func newCoreService(t *testing.T) *core.Service {
 	// setup service
 	tt := trie.NewEmptyTrie()
 	rt := runtime.NewTestRuntimeWithTrie(t, runtime.NODE_RUNTIME, tt, log.LvlInfo)
-	ks := keystore.NewKeystore()
+	ks := keystore.NewGlobalKeystore()
 
 	// insert alice key for testing
 	kr, err := keystore.NewSr25519Keyring()
 	require.NoError(t, err)
-	ks.Insert(kr.Alice)
+	ks.Acco.Insert(kr.Alice())
 
 	cfg := &core.Config{
 		Runtime:          rt,

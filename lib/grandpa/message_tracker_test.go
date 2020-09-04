@@ -33,7 +33,7 @@ func TestMessageTracker_ValidateMessage(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, _, _, _ := setupGrandpa(t, kr.Bob)
+	gs, _, _, _ := setupGrandpa(t, kr.Bob().(*ed25519.Keypair))
 	state.AddBlocksToState(t, gs.blockState.(*state.BlockState), 3)
 	gs.tracker, err = newTracker(gs.blockState, gs.in)
 	require.NoError(t, err)
@@ -43,7 +43,7 @@ func TestMessageTracker_ValidateMessage(t *testing.T) {
 		Number: big.NewInt(77),
 	}
 
-	msg, err := gs.createVoteMessage(NewVoteFromHeader(fake), prevote, kr.Alice)
+	msg, err := gs.createVoteMessage(NewVoteFromHeader(fake), prevote, kr.Alice())
 	require.NoError(t, err)
 
 	_, err = gs.validateMessage(msg)
@@ -55,7 +55,7 @@ func TestMessageTracker_SendMessage(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, in, _, _ := setupGrandpa(t, kr.Bob)
+	gs, in, _, _ := setupGrandpa(t, kr.Bob().(*ed25519.Keypair))
 	state.AddBlocksToState(t, gs.blockState.(*state.BlockState), 3)
 	gs.tracker, err = newTracker(gs.blockState, gs.in)
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestMessageTracker_SendMessage(t *testing.T) {
 		Number:     big.NewInt(4),
 	}
 
-	msg, err := gs.createVoteMessage(NewVoteFromHeader(next), prevote, kr.Alice)
+	msg, err := gs.createVoteMessage(NewVoteFromHeader(next), prevote, kr.Alice())
 	require.NoError(t, err)
 
 	_, err = gs.validateMessage(msg)
@@ -94,7 +94,7 @@ func TestMessageTracker_ProcessMessage(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, _, _, _ := setupGrandpa(t, kr.Bob)
+	gs, _, _, _ := setupGrandpa(t, kr.Bob().(*ed25519.Keypair))
 	state.AddBlocksToState(t, gs.blockState.(*state.BlockState), 3)
 	gs.Start()
 	time.Sleep(time.Second) // wait for round to initiate
@@ -107,7 +107,7 @@ func TestMessageTracker_ProcessMessage(t *testing.T) {
 		Number:     big.NewInt(4),
 	}
 
-	msg, err := gs.createVoteMessage(NewVoteFromHeader(next), prevote, kr.Alice)
+	msg, err := gs.createVoteMessage(NewVoteFromHeader(next), prevote, kr.Alice())
 	require.NoError(t, err)
 
 	_, err = gs.validateMessage(msg)
@@ -125,5 +125,5 @@ func TestMessageTracker_ProcessMessage(t *testing.T) {
 		hash:   msg.Message.Hash,
 		number: msg.Message.Number,
 	}
-	require.Equal(t, expected, gs.prevotes[kr.Alice.Public().(*ed25519.PublicKey).AsBytes()], gs.tracker.messages)
+	require.Equal(t, expected, gs.prevotes[kr.Alice().Public().(*ed25519.PublicKey).AsBytes()], gs.tracker.messages)
 }

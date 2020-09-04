@@ -47,7 +47,7 @@ func TestTransfer_AsSignedExtrinsic(t *testing.T) {
 	require.NoError(t, err)
 
 	transfer := NewTransfer(alice, bob, 1000, 1)
-	_, err = transfer.AsSignedExtrinsic(kr.Alice.Private().(*sr25519.PrivateKey))
+	_, err = transfer.AsSignedExtrinsic(kr.Alice().Private().(*sr25519.PrivateKey))
 	require.NoError(t, err)
 }
 

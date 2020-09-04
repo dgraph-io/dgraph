@@ -28,7 +28,7 @@ func TestGrandpaAuthorityData_ToRaw(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	ad := NewGrandpaAuthorityData(kr.Alice.Public().(*ed25519.PublicKey), 77)
+	ad := NewGrandpaAuthorityData(kr.Alice().Public().(*ed25519.PublicKey), 77)
 	raw := ad.ToRaw()
 
 	res := new(GrandpaAuthorityData)

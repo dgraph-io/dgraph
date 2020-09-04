@@ -28,27 +28,8 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 )
 
-var testPassword = []byte("1234")
-
-func TestKeystore(t *testing.T) {
-	ks := NewKeystore()
-
-	kp, err := sr25519.GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	addr := kp.Public().Address()
-	ks.Insert(kp)
-	kp2 := ks.Get(addr)
-
-	if !reflect.DeepEqual(kp, kp2) {
-		t.Fatalf("Fail: got %v expected %v", kp2, kp)
-	}
-}
-
 func TestGetSr25519PublicKeys(t *testing.T) {
-	ks := NewKeystore()
+	ks := NewGenericKeystore("test")
 
 	expectedPubkeys := []crypto.PublicKey{}
 	numKps := 12
@@ -84,7 +65,7 @@ func TestGetSr25519PublicKeys(t *testing.T) {
 }
 
 func TestGetEd25519PublicKeys(t *testing.T) {
-	ks := NewKeystore()
+	ks := NewGenericKeystore("test")
 
 	expectedPubkeys := []crypto.PublicKey{}
 	numKps := 10
@@ -120,7 +101,7 @@ func TestGetEd25519PublicKeys(t *testing.T) {
 }
 
 func TestGetSecp256k1PublicKeys(t *testing.T) {
-	ks := NewKeystore()
+	ks := NewGenericKeystore("test")
 
 	expectedPubkeys := []crypto.PublicKey{}
 	numKps := 10
