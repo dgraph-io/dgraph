@@ -3000,6 +3000,7 @@ func TestMutationWithValueVar(t *testing.T) {
 		Schema: `
 			name	: string @index(exact) .
 			nickname: string .
+			age     : int .
 		`,
 	})
 	require.NoError(t, err)
@@ -3031,7 +3032,11 @@ func TestMutationWithValueVar(t *testing.T) {
 		},
 		{
 			Predicate:  "nickname",
-			Permission: Read.Code | Write.Code,
+			Permission: Read.Code,
+		},
+		{
+			Predicate:  "age",
+			Permission: Write.Code,
 		},
 	})
 	time.Sleep(6 * time.Second)
@@ -3040,15 +3045,15 @@ func TestMutationWithValueVar(t *testing.T) {
 		{
 			u1 as var(func: has(name)) {
 				nick1 as nickname
-				name1 as name
+				age1 as age
 			}
 		}
 	`
 
 	mutation1 := &api.Mutation{
 		SetNquads: []byte(`
-			uid(u1) <nickname> val(name1) .
 			uid(u1) <name> val(nick1) .
+			uid(u1) <name> val(age1) .
 		`),
 		CommitNow: true,
 	}
@@ -3070,6 +3075,7 @@ func TestMutationWithValueVar(t *testing.T) {
 			me(func: has(name)) {
 				nickname
 				name
+				age
 			}
 		}
 	`
@@ -3077,5 +3083,5 @@ func TestMutationWithValueVar(t *testing.T) {
 	resp, err := userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 
-	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"RandomGuy"}]}`, string(resp.GetJson()))
+	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson()))
 }
