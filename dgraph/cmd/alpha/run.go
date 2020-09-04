@@ -35,7 +35,6 @@ import (
 	"time"
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -47,6 +46,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
@@ -389,7 +389,7 @@ func setupListener(addr string, port int) (net.Listener, error) {
 	return net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
 }
 
-func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
+func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	defer closer.Done()
 
 	x.RegisterExporters(Alpha.Conf, "dgraph.alpha")
@@ -412,7 +412,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
 	s.Stop()
 }
 
-func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
+func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	defer closer.Done()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
@@ -435,7 +435,7 @@ func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
 	}
 }
 
-func setupServer(closer *y.Closer) {
+func setupServer(closer *z.Closer) {
 	go worker.RunServer(bindall) // For pb.communication.
 
 	laddr := "localhost"
@@ -564,7 +564,7 @@ func setupServer(closer *y.Closer) {
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initialize the servers.
-	admin.ServerCloser = y.NewCloser(3)
+	admin.ServerCloser = z.NewCloser(3)
 	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
 	go serveHTTP(httpListener, tlsCfg, admin.ServerCloser)
 
@@ -783,7 +783,7 @@ func run() {
 		}
 	}()
 
-	updaters := y.NewCloser(4)
+	updaters := z.NewCloser(4)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
 		atomic.AddUint32(&initDone, 1)
@@ -809,7 +809,7 @@ func run() {
 
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we
 	// close alpha. This closer is for closing and waiting that subscription.
-	adminCloser := y.NewCloser(1)
+	adminCloser := z.NewCloser(1)
 
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
@@ -835,7 +835,7 @@ func run() {
 }
 
 // listenForCorsUpdate listen for any cors change and update the accepeted cors.
-func listenForCorsUpdate(closer *y.Closer) {
+func listenForCorsUpdate(closer *z.Closer) {
 	prefix := x.DataKey("dgraph.cors", 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
