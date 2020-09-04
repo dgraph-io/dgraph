@@ -2,6 +2,7 @@ package debugoff
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -87,6 +88,41 @@ func TestAddGQL(t *testing.T) {
 			i.Delete(t, tcase.user, tcase.role, metaInfo)
 		}
 	}
+}
+
+func TestAddMutationWithXid(t *testing.T) {
+	mutation := `
+	mutation addTweets($tweet: AddTweetsInput!){
+      addTweets(input: [$tweet]) {
+        numUids
+      }
+    }
+	`
+
+	tweet := common.Tweets{
+		Id:        "tweet1",
+		Text:      "abc",
+		Timestamp: "2020-10-10",
+	}
+	user := "foo"
+	addTweetsParams := &common.GraphQLParams{
+		Headers:   common.GetJWT(t, user, "", metaInfo),
+		Query:     mutation,
+		Variables: map[string]interface{}{"tweet": tweet},
+	}
+
+	// Add the tweet for the first time.
+	gqlResponse := addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	// Re-adding the tweet should fail.
+	gqlResponse = addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Error(t, gqlResponse.Errors)
+	require.Equal(t, len(gqlResponse.Errors), 1)
+	require.Contains(t, gqlResponse.Errors[0].Error(), fmt.Sprintf("id %s already exists for type Tweets", tweet.Id))
+
+	// Clear the tweet.
+	tweet.DeleteByID(t, user, metaInfo)
 }
 
 func TestMain(m *testing.M) {

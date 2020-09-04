@@ -1095,9 +1095,13 @@ func rewriteObject(
 			xidMetadata.queryExists[variable] = true
 		}
 		frag.conditions = []string{fmt.Sprintf("eq(len(%s), 0)", variable)}
-		frag.check = checkQueryResult(variable,
-			x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name()),
-			nil)
+		var err error
+		if x.Config.GraphqlDebug || addAuthSelector(typ) == nil {
+			err = x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
+		} else {
+			err = x.GqlErrorf("id already exists for type %s", typ.Name())
+		}
+		frag.check = checkQueryResult(variable, err, nil)
 	}
 
 	if xid != nil && !atTopLevel {
