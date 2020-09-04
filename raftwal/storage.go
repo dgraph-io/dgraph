@@ -18,6 +18,7 @@ package raftwal
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"math"
 	"sync"
@@ -31,6 +32,7 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/trace"
 )
 
@@ -39,6 +41,7 @@ type DiskStorage struct {
 	db   *badger.DB
 	id   uint64
 	gid  uint32
+	span *otrace.Span
 	elog trace.EventLog
 
 	cache          *sync.Map
@@ -66,6 +69,7 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	go w.processIndexRange()
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
+	w.span = otrace.FromContext(context.Background())
 
 	snap, err := w.Snapshot()
 	x.Check(err)
@@ -568,8 +572,8 @@ func (w *DiskStorage) NumEntries() (int, error) {
 }
 
 func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
-	w.elog.Printf("AllEntries")
-	defer w.elog.Printf("Done")
+	w.span.Annotatef(nil, "Started allEntries")
+	defer w.span.Annotatef(nil, "Done allEntries")
 	err := w.db.View(func(txn *badger.Txn) error {
 		if hi-lo == 1 { // We only need one entry.
 			item, err := txn.Get(w.EntryKey(lo))
