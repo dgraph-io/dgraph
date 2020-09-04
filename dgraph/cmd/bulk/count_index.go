@@ -18,8 +18,6 @@ package bulk
 
 import (
 	"bytes"
-	"encoding/hex"
-	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -30,10 +28,11 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type current struct {
-	pred  string
+	pred  []byte
 	rev   bool
 	track bool
 }
@@ -45,66 +44,82 @@ type countIndexer struct {
 	splitCh     chan *badger.KVList
 	tmpDb       *badger.DB
 	cur         current
-	counts      map[int][]uint64
+	countBuf    *z.Buffer
 	wg          sync.WaitGroup
 }
 
 // addUid adds the uid from rawKey to a count index if a count index is
 // required by the schema. This method expects keys to be passed into it in
 // sorted order.
-func (c *countIndexer) addUid(rawKey []byte, count int) {
-	key, err := x.Parse(rawKey)
-	if err != nil {
-		fmt.Printf("Error while parsing key %s: %v\n", hex.Dump(rawKey), err)
-		return
-	}
-	if !key.IsData() && !key.IsReverse() {
-		return
-	}
-	sameIndexKey := key.Attr == c.cur.pred && key.IsReverse() == c.cur.rev
+func (c *countIndexer) addCountEntry(ce countEntry) {
+	sameIndexKey := bytes.Equal(ce.Attr(), c.cur.pred) && ce.Reverse() == c.cur.rev
 	if sameIndexKey && !c.cur.track {
 		return
 	}
 
 	if !sameIndexKey {
-		if len(c.counts) > 0 {
+		if c.countBuf.Len() > 0 {
 			c.wg.Add(1)
-			go c.writeIndex(c.cur.pred, c.cur.rev, c.counts)
+			go c.writeIndex(c.countBuf)
 		}
-		if len(c.counts) > 0 || c.counts == nil {
-			c.counts = make(map[int][]uint64)
-		}
-		c.cur.pred = key.Attr
-		c.cur.rev = key.IsReverse()
-		c.cur.track = c.schema.getSchema(key.Attr).GetCount()
+		c.countBuf = z.NewBuffer(1 << 10)
+		c.cur.pred = append(c.cur.pred[:0], ce.Attr()...)
+		c.cur.rev = ce.Reverse()
+		c.cur.track = c.schema.getSchema(string(ce.Attr())).GetCount()
 	}
 	if c.cur.track {
-		c.counts[count] = append(c.counts[count], key.Uid)
+		x.Check2(c.countBuf.Write(ce))
 	}
 }
 
-func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64) {
-	defer c.wg.Done()
+func (c *countIndexer) writeIndex(buf *z.Buffer) {
+	defer func() {
+		c.wg.Done()
+		buf.Release()
+	}()
+	if buf.Len() == 0 {
+		return
+	}
 
 	streamId := atomic.AddUint32(&c.streamId, 1)
 	list := &bpb.KVList{}
-	for count, uids := range counts {
-		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
 
-		var pl pb.PostingList
-		pl.Pack = codec.Encode(uids, 256)
+	var pl pb.PostingList
+	encoder := codec.Encoder{BlockSize: 256}
+
+	lastCe := countEntry(buf.Slice(0))
+	offset := 0
+	for offset < buf.Len() {
+		ce := countEntry(buf.Slice(offset))
+		offset += 4 + len(ce)
+
+		// Sanity checks.
+		x.AssertTrue(bytes.Equal(ce.Attr(), lastCe.Attr()))
+		x.AssertTrue(ce.Reverse() == lastCe.Reverse())
+
+		if ce.Count() == lastCe.Count() {
+			encoder.Add(ce.Uid())
+			continue
+		}
+
+		pl.Pack = encoder.Done()
 		data, err := pl.Marshal()
 		x.Check(err)
 		codec.FreePack(pl.Pack)
 
+		key := x.CountKey(string(lastCe.Attr()), lastCe.Count(), lastCe.Reverse())
 		list.Kv = append(list.Kv, &bpb.KV{
-			Key:      x.CountKey(pred, uint32(count), rev),
+			Key:      key,
 			Value:    data,
 			UserMeta: []byte{posting.BitCompletePosting},
 			Version:  c.state.writeTs,
 			StreamId: streamId,
 		})
+		encoder = codec.Encoder{BlockSize: 256}
+		pl.Reset()
+		lastCe = ce
 	}
+
 	sort.Slice(list.Kv, func(i, j int) bool {
 		return bytes.Compare(list.Kv[i].Key, list.Kv[j].Key) < 0
 	})

@@ -311,18 +311,56 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 	return header, itr
 }
 
-type countIndexEntry struct {
-	key   []byte
-	count int
+// type countIndexEntry struct {
+//  reverse byte
+// 	count int
+// 	Attr []byte
+// }
+
+type countEntry []byte
+
+var reverseByte = byte(1)
+
+func countEntrySize(attr []byte) int {
+	return 4 + 8 + 1 + 4 + len(attr)
+}
+func marshalCountEntry(dst []byte, pk x.ParsedKey, count int) {
+	binary.BigEndian.PutUint32(dst[0:4], uint32(count))
+	binary.BigEndian.PutUint64(dst[4:12], pk.Uid)
+	if pk.IsReverse() {
+		dst[12] = reverseByte
+	}
+	binary.BigEndian.PutUint32(dst[13:17], uint32(len(pk.Attr)))
+	n := copy(dst[17:], pk.Attr)
+	x.AssertTrue(len(dst) == n+17)
+}
+func (ci countEntry) Count() uint32 {
+	return binary.BigEndian.Uint32(ci[0:4])
+}
+func (ci countEntry) Uid() uint64 {
+	return binary.BigEndian.Uint64(ci[4:12])
+}
+func (ci countEntry) Reverse() bool {
+	return ci[12]&reverseByte > 0
+}
+func (ci countEntry) Attr() []byte {
+	sz := binary.BigEndian.Uint32(ci[13:17])
+	return ci[17 : 17+sz]
+}
+func (ci countEntry) less(oe countEntry) bool {
+	if left, right := ci.Count(), oe.Count(); left != right {
+		return left < right
+	}
+	return ci.Uid() < oe.Uid()
 }
 
 type encodeRequest struct {
-	cbuf      *z.Buffer
-	countKeys []*countIndexEntry
-	wg        *sync.WaitGroup
-	listCh    chan *bpb.KVList
-	splitCh   chan *bpb.KVList
-	offsets   []int
+	cbuf     *z.Buffer
+	countBuf *z.Buffer
+	wg       *sync.WaitGroup
+	listCh   chan *bpb.KVList
+	splitCh  chan *bpb.KVList
+	offsets  []int
 }
 
 func (r *reducer) streamIdFor(pred string) uint32 {
@@ -349,10 +387,9 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	for req := range entryCh {
 		req.offsets = offsets
 
-		countKeys := r.toList(req)
+		r.toList(req)
 		offsets = req.offsets // We might have allocated a bigger slice, so set offsets to that.
 
-		req.countKeys = countKeys
 		req.wg.Done()
 	}
 }
@@ -396,6 +433,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	tmpWg.Add(1)
 	go r.writeTmpSplits(ci, tmpWg)
 
+	var offsets []int
 	for req := range writerCh {
 		req.wg.Add(1) // One for finishing the writes.
 		go func() {
@@ -406,9 +444,19 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		}()
 		req.wg.Wait()
 
-		for _, countKey := range req.countKeys {
-			ci.addUid(countKey.key, countKey.count)
+		// Go through the countBuf.
+		offsets = req.countBuf.SliceOffsets(offsets[:0])
+		sort.Slice(offsets, func(i, j int) bool {
+			left := countEntry(req.countBuf.Slice(offsets[i]))
+			right := countEntry(req.countBuf.Slice(offsets[j]))
+			return left.less(right)
+		})
+		for _, offset := range offsets {
+			ce := countEntry(req.countBuf.Slice(offset))
+			ci.addCountEntry(ce)
 		}
+		req.countBuf.Release()
+
 		// Wait for it to be encoded.
 		start := time.Now()
 
@@ -487,10 +535,11 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		wg := new(sync.WaitGroup)
 		wg.Add(1)
 		req := &encodeRequest{
-			cbuf:    zbuf,
-			wg:      wg,
-			listCh:  make(chan *bpb.KVList, 3),
-			splitCh: ci.splitCh,
+			cbuf:     zbuf,
+			wg:       wg,
+			listCh:   make(chan *bpb.KVList, 3),
+			splitCh:  ci.splitCh,
+			countBuf: z.NewBuffer(1 << 10),
 		}
 		encoderCh <- req
 		writerCh <- req
@@ -560,60 +609,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser.SignalAndWait()
 }
 
-type MapEntry []byte
-
-// type mapEntry struct {
-// 	uid   uint64 // if plist is filled, then corresponds to plist's uid.
-// 	key   []byte
-// 	plist []byte
-// }
-
-func mapEntrySize(key []byte, p *pb.Posting) int {
-	return 8 + 4 + 4 + len(key) + p.Size()
-}
-
-func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
-	if p != nil {
-		uid = p.Uid
-	}
-	binary.BigEndian.PutUint64(dst[0:8], uid)
-	binary.BigEndian.PutUint32(dst[8:12], uint32(len(key)))
-
-	psz := p.Size()
-	binary.BigEndian.PutUint32(dst[12:16], uint32(psz))
-
-	n := copy(dst[16:], key)
-
-	if psz > 0 {
-		pbuf := dst[16+n:]
-		_, err := p.MarshalToSizedBuffer(pbuf[:psz])
-		x.Check(err)
-	}
-
-	x.AssertTrue(len(dst) == 16+n+psz)
-}
-
-func (me MapEntry) Size() int {
-	return len(me)
-}
-
-func (me MapEntry) Uid() uint64 {
-	return binary.BigEndian.Uint64(me[0:8])
-}
-
-func (me MapEntry) Key() []byte {
-	sz := binary.BigEndian.Uint32(me[8:12])
-	return me[16 : 16+sz]
-}
-
-func (me MapEntry) Plist() []byte {
-	ksz := binary.BigEndian.Uint32(me[8:12])
-	sz := binary.BigEndian.Uint32(me[12:16])
-	start := 16 + ksz
-	return me[start : start+sz]
-}
-
-func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
+func (r *reducer) toList(req *encodeRequest) {
 	cbuf := req.cbuf
 	defer func() {
 		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.Len()))
@@ -633,9 +629,9 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 	userMeta := []byte{posting.BitCompletePosting}
 	writeVersionTs := r.state.writeTs
 
-	countEntries := []*countIndexEntry{}
 	var currentBatch []int
 	kvList := &bpb.KVList{}
+	trackCountIndex := make(map[string]bool)
 
 	appendToList := func() {
 		if len(currentBatch) == 0 {
@@ -645,11 +641,23 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 			fmt.Printf("Got current batch of size: %d\n", len(currentBatch))
 		}
 
-		// Calculate count entries.
-		countEntries = append(countEntries, &countIndexEntry{
-			key:   y.Copy(currentKey),
-			count: len(currentBatch),
-		})
+		pk, err := x.Parse(currentKey)
+		x.Check(err)
+		x.AssertTrue(len(pk.Attr) > 0)
+
+		// We might not need to track count index every time.
+		if pk.IsData() || pk.IsReverse() {
+			doCount, ok := trackCountIndex[pk.Attr]
+			if !ok {
+				doCount = r.schema.getSchema(pk.Attr).GetCount()
+				trackCountIndex[pk.Attr] = doCount
+			}
+			if doCount {
+				// Calculate count entries.
+				dst := req.countBuf.SliceAllocate(countEntrySize(currentKey))
+				marshalCountEntry(dst, pk, len(currentBatch))
+			}
+		}
 
 		// Now make a list and write it to badger.
 		sort.Slice(currentBatch, func(i, j int) bool {
@@ -710,10 +718,6 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 			}
 		}
 
-		pk, err := x.Parse(currentKey)
-		x.Check(err)
-		x.AssertTrue(len(pk.Attr) > 0)
-
 		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
@@ -773,5 +777,4 @@ func (r *reducer) toList(req *encodeRequest) []*countIndexEntry {
 		req.listCh <- kvList
 	}
 	close(req.listCh)
-	return countEntries
 }
