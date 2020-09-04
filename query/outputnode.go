@@ -817,12 +817,15 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 					"Couldn't evaluate @normalize directive - too many results")
 			}
 
-			temp := paCopy
-			for temp.next != nil {
-				temp = temp.next
+			if paCopy == nil {
+				paCopy = caCopy
+			} else {
+				temp := paCopy
+				for temp.next != nil {
+					temp = temp.next
+				}
+				temp.next = caCopy
 			}
-			temp.next = caCopy
-
 			mergedList = append(mergedList, paCopy)
 		}
 	}
