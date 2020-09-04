@@ -32,12 +32,12 @@ import (
 	ostats "go.opencensus.io/stats"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/golang/glog"
-
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
+
+	"github.com/golang/glog"
 )
 
 const (
@@ -90,7 +90,7 @@ func getMemUsage() int {
 	return rss * os.Getpagesize()
 }
 
-func updateMemoryMetrics(lc *y.Closer) {
+func updateMemoryMetrics(lc *z.Closer) {
 	defer lc.Done()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -130,13 +130,13 @@ func updateMemoryMetrics(lc *y.Closer) {
 
 var (
 	pstore *badger.DB
-	closer *y.Closer
+	closer *z.Closer
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB) {
 	pstore = ps
-	closer = y.NewCloser(1)
+	closer = z.NewCloser(1)
 	go updateMemoryMetrics(closer)
 }
 

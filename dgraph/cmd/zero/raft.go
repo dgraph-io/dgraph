@@ -28,10 +28,10 @@ import (
 
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
@@ -44,7 +44,7 @@ type node struct {
 	*conn.Node
 	server *Server
 	ctx    context.Context
-	closer *y.Closer // to stop Run.
+	closer *z.Closer // to stop Run.
 
 	// The last timestamp when this Zero was able to reach quorum.
 	mu         sync.RWMutex
@@ -533,7 +533,7 @@ func (n *node) initAndStartNode() error {
 	return nil
 }
 
-func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
+func (n *node) updateZeroMembershipPeriodically(closer *z.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -550,7 +550,7 @@ func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 
 var startOption = otrace.WithSampler(otrace.ProbabilitySampler(0.01))
 
-func (n *node) checkQuorum(closer *y.Closer) {
+func (n *node) checkQuorum(closer *z.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -588,7 +588,7 @@ func (n *node) checkQuorum(closer *y.Closer) {
 	}
 }
 
-func (n *node) snapshotPeriodically(closer *y.Closer) {
+func (n *node) snapshotPeriodically(closer *z.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -630,7 +630,7 @@ func (n *node) Run() {
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	readStateCh := make(chan raft.ReadState, 100)
-	closer := y.NewCloser(5)
+	closer := z.NewCloser(5)
 	defer func() {
 		closer.SignalAndWait()
 		n.closer.Done()

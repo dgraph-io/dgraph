@@ -20,12 +20,11 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/query"
 
 	"github.com/pkg/errors"
-
-	"github.com/dgraph-io/badger/v2/y"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
@@ -305,7 +304,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 }
 
 // RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
-func RefreshAcls(closer *y.Closer) {
+func RefreshAcls(closer *z.Closer) {
 	defer closer.Done()
 	if len(worker.Config.HmacSecret) == 0 {
 		// the acl feature is not turned on
