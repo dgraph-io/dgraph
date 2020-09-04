@@ -137,8 +137,9 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 			log.Panic("First split UID is not 1")
 		}
 		for _, uid := range plist.Splits {
-			sKey := x.SplitKey(key, uid)
-			newTxn := badger.NewTransactionAt(math.MaxUint64, false)
+			sKey, kErr := x.SplitKey(k, uid)
+			x.Check(kErr)
+			newTxn := pstore.NewTransactionAt(math.MaxUint64, false)
 			_, dbErr := newTxn.Get(sKey)
 			if dbErr != nil {
 				log.Panic("Unable to find splitKey: ", sKey, " in badger")
