@@ -14,7 +14,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Allow case insensitive auth header for graphql subscriptions. ([#6179][])
 - Add retry for schema update ([#6098][]) 
 - Queue keys for rollup during mutation. ([#6151][]) 
-- Update Badger to (v2.2007.2). ([#6294][]) 
 
 ### Added
 
@@ -70,7 +69,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6355]: https://github.com/dgraph-io/dgraph/issues/6355
 [#6342]: https://github.com/dgraph-io/dgraph/issues/6342
 [#6286]: https://github.com/dgraph-io/dgraph/issues/6286
-[#6294]: https://github.com/dgraph-io/dgraph/issues/6294
 [#6201]: https://github.com/dgraph-io/dgraph/issues/6201
 [#6203]: https://github.com/dgraph-io/dgraph/issues/6203
 [#6196]: https://github.com/dgraph-io/dgraph/issues/6196
@@ -111,7 +109,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 - Add retry for schema update. ([#6097][]) 
 - Queue keys for rollup during mutation. ([#6150][]) 
-- Update Badger to (v2.2007.2). ([#6293][]) 
 
 ### Added
 
@@ -158,7 +155,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6375]: https://github.com/dgraph-io/dgraph/issues/6375
 [#6287]: https://github.com/dgraph-io/dgraph/issues/6287
 [#6356]: https://github.com/dgraph-io/dgraph/issues/6356
-[#6293]: https://github.com/dgraph-io/dgraph/issues/6293
 [#5988]: https://github.com/dgraph-io/dgraph/issues/5988
 [#6097]: https://github.com/dgraph-io/dgraph/issues/6097
 [#6094]: https://github.com/dgraph-io/dgraph/issues/6094
@@ -171,10 +167,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ## [1.2.7] - Unreleased
 [1.2.7]: https://github.com/dgraph-io/dgraph/compare/v1.2.6...v1.2.7
-
-### Changed
-
-- Update Badger to (v2.2007.2). ([#6292][])
 
 ### Added
 
@@ -206,7 +198,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6288]: https://github.com/dgraph-io/dgraph/issues/6288
 [#6357]: https://github.com/dgraph-io/dgraph/issues/6357
 [#6344]: https://github.com/dgraph-io/dgraph/issues/6344
-[#6292]: https://github.com/dgraph-io/dgraph/issues/6292
 [#5987]: https://github.com/dgraph-io/dgraph/issues/5987
 [#6193]: https://github.com/dgraph-io/dgraph/issues/6193
 
