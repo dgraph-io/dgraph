@@ -18,6 +18,8 @@ package worker
 
 import (
 	"context"
+	"log"
+	"math"
 	"sync/atomic"
 	"time"
 
@@ -115,6 +117,35 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
 		return 0, err
 	}
+
+	iOpt := badger.DefaultIteratorOptions
+	iOpt.AllVersions = true
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+	it := txn.NewIterator(iOpt)
+	for it.Rewind(); it.Valid(); it.Next() {
+		i := it.Item()
+		k := i.Key()
+		v, vErr := i.ValueCopy(nil)
+		x.Check(vErr)
+		plist := &pb.PostingList{}
+		err := plist.Unmarshal(v)
+		x.Check(err)
+		if len(plist.Splits) == 0 {
+			continue
+		}
+		if plist.Splits[0] != uint64(1) {
+			log.Panic("First split UID is not 1")
+		}
+		for _, uid := range plist.Splits {
+			sKey := x.SplitKey(key, uid)
+			newTxn := badger.NewTransactionAt(math.MaxUint64, false)
+			_, dbErr := newTxn.Get(sKey)
+			if dbErr != nil {
+				log.Panic("Unable to find splitKey: ", sKey, " in badger")
+			}
+		}
+	}
+
 	glog.Infof("Populated snapshot with %d keys.\n", count)
 	return count, nil
 }
