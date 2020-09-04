@@ -41,9 +41,9 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -317,6 +317,22 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	ext := make(map[string]interface{})
 	ext["code"] = code
 	qr.Errors = append(qr.Errors, &GqlError{Message: msg, Extensions: ext})
+	if js, err := json.Marshal(qr); err == nil {
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
+	} else {
+		Panic(errors.Errorf("Unable to marshal: %+v", qr))
+	}
+}
+
+func SetStatusWithErrors(w http.ResponseWriter, code string, errs []string) {
+	var qr queryRes
+	ext := make(map[string]interface{})
+	ext["code"] = code
+	for _, err := range errs {
+		qr.Errors = append(qr.Errors, &GqlError{Message: err, Extensions: ext})
+	}
 	if js, err := json.Marshal(qr); err == nil {
 		if _, err := w.Write(js); err != nil {
 			glog.Errorf("Error while writing: %+v", err)
@@ -1000,7 +1016,7 @@ func IsGuardian(groups []string) bool {
 
 // RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
 // Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
-func RunVlogGC(store *badger.DB, closer *y.Closer) {
+func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 	// Get initial size on start.
 	_, lastVlogSize := store.Size()
@@ -1041,7 +1057,7 @@ type DB interface {
 	Sync() error
 }
 
-func StoreSync(db DB, closer *y.Closer) {
+func StoreSync(db DB, closer *z.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(1 * time.Second)
 	for {

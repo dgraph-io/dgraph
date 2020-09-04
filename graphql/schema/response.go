@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -67,6 +68,14 @@ func (r *Response) GetExtensions() *Extensions {
 
 // WithError generates GraphQL errors from err and records those in r.
 func (r *Response) WithError(err error) {
+	if err == nil {
+		return
+	}
+
+	if !x.Config.GraphqlDebug && strings.Contains(err.Error(), "authorization failed") {
+		return
+	}
+
 	r.Errors = append(r.Errors, AsGQLErrors(err)...)
 }
 

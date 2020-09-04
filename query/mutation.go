@@ -70,6 +70,22 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			}
 			preds = append(preds, getPredicatesFromTypes(types)...)
 			preds = append(preds, x.StarAllPredicates()...)
+			// AllowedPreds are used only with ACL. Do not delete all predicates but
+			// delete predicates to which the mutation has access
+			if edge.AllowedPreds != nil {
+				// Take intersection of preds and AllowedPreds
+				intersectPreds := make([]string, 0)
+				hashMap := make(map[string]bool)
+				for _, allowedPred := range edge.AllowedPreds {
+					hashMap[allowedPred] = true
+				}
+				for _, pred := range preds {
+					if _, found := hashMap[pred]; found {
+						intersectPreds = append(intersectPreds, pred)
+					}
+				}
+				preds = intersectPreds
+			}
 		}
 
 		for _, pred := range preds {
@@ -199,6 +215,11 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 			}
 			if err := parse(nq, pb.DirectedEdge_DEL); err != nil {
 				return edges, err
+			}
+			if gmu.AllowedPreds != nil {
+				for _, e := range edges {
+					e.AllowedPreds = gmu.AllowedPreds
+				}
 			}
 		}
 		for _, nq := range gmu.Set {

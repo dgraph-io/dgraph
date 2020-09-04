@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -43,7 +43,7 @@ type DiskStorage struct {
 	elog trace.EventLog
 
 	cache          *sync.Map
-	Closer         *y.Closer
+	Closer         *z.Closer
 	indexRangeChan chan indexRange
 }
 
@@ -58,7 +58,7 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 		id:             id,
 		gid:            gid,
 		cache:          new(sync.Map),
-		Closer:         y.NewCloser(1),
+		Closer:         z.NewCloser(1),
 		indexRangeChan: make(chan indexRange, 16),
 	}
 	if prev, err := RaftId(db); err != nil || prev != id {

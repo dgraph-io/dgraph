@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -145,11 +146,12 @@ func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
 }
 
 type AuthMeta struct {
-	PublicKey string
-	Namespace string
-	Algo      string
-	Header    string
-	AuthVars  map[string]interface{}
+	PublicKey      string
+	Namespace      string
+	Algo           string
+	Header         string
+	AuthVars       map[string]interface{}
+	PrivateKeyPath string
 }
 
 func (a *AuthMeta) GetSignedToken(privateKeyFile string,
@@ -221,4 +223,13 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
 	authInfo := `# Dgraph.Authorization {"VerificationKey":"` + string(keyData) + `","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"RS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}`
 	return append(schema, []byte(authInfo)...), nil
+}
+
+func SetAuthMeta(strSchema string) *authorization.AuthMeta {
+	authMeta, err := authorization.Parse(strSchema)
+	if err != nil {
+		panic(err)
+	}
+	authorization.SetAuthMeta(authMeta)
+	return authMeta
 }
