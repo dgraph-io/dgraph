@@ -207,20 +207,28 @@ func (s *ServerState) fillTimestampRequests() {
 		maxDelay  = time.Second
 	)
 
+	defer func() {
+		glog.Infoln("Exiting fillTimestampRequests")
+	}()
+
 	var reqs []tsReq
 	for {
 		// Reset variables.
 		reqs = reqs[:0]
 		delay := initDelay
 
-		req := <-s.needTs
-	slurpLoop:
-		for {
-			reqs = append(reqs, req)
-			select {
-			case req = <-s.needTs:
-			default:
-				break slurpLoop
+		select {
+		case <-s.gcCloser.HasBeenClosed():
+			return
+		case req := <-s.needTs:
+		slurpLoop:
+			for {
+				reqs = append(reqs, req)
+				select {
+				case req = <-s.needTs:
+				default:
+					break slurpLoop
+				}
 			}
 		}
 
@@ -236,7 +244,10 @@ func (s *ServerState) fillTimestampRequests() {
 
 		// Execute the request with infinite retries.
 	retry:
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if s.gcCloser.Ctx().Err() != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(s.gcCloser.Ctx(), 10*time.Second)
 		ts, err := Timestamps(ctx, num)
 		cancel()
 		if err != nil {
