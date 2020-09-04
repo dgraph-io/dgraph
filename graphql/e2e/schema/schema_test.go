@@ -397,7 +397,7 @@ func TestSchemaHistory(t *testing.T) {
 	// Let's get the schema. It should return empty results.
 	get := &common.GraphQLParams{
 		Query: `query{
-			querySchemaHistory(limit:10){
+			querySchemaHistory(first:10){
 			  schema
 			  created_at
 			}
@@ -464,7 +464,7 @@ func TestSchemaHistory(t *testing.T) {
 	// Check offset working properly or not.
 	get = &common.GraphQLParams{
 		Query: `query{
-			querySchemaHistory(limit:10, offset:1){
+			querySchemaHistory(first:10, offset:1){
 			  schema
 			  created_at
 			}
