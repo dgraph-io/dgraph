@@ -2,7 +2,6 @@ package debugoff
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -119,7 +118,7 @@ func TestAddMutationWithXid(t *testing.T) {
 	gqlResponse = addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Error(t, gqlResponse.Errors)
 	require.Equal(t, len(gqlResponse.Errors), 1)
-	require.Contains(t, gqlResponse.Errors[0].Error(), fmt.Sprintf("id already exists for type Tweets"))
+	require.Contains(t, gqlResponse.Errors[0].Error(), "id already exists for type Tweets")
 
 	// Clear the tweet.
 	tweet.DeleteByID(t, user, metaInfo)

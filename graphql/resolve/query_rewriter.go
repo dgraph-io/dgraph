@@ -67,20 +67,6 @@ func hasAuthRules(field schema.Field, authRw *authRewriter) bool {
 	return false
 }
 
-func hasAuthRuless(field schema.Field, selector func(t schema.Type) *schema.RuleNode) bool {
-	rn := selector(field.Type())
-	if rn != nil {
-		return true
-	}
-
-	for _, childField := range field.SelectionSet() {
-		if authRules := hasAuthRuless(childField, selector); authRules {
-			return true
-		}
-	}
-	return false
-}
-
 // Rewrite rewrites a GraphQL query into a Dgraph GraphQuery.
 func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
