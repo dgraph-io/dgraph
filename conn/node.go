@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -647,7 +648,7 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 }
 
 // RunReadIndexLoop runs the RAFT index in a loop.
-func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
+func (n *Node) RunReadIndexLoop(closer *z.Closer, readStateCh <-chan raft.ReadState) {
 	defer closer.Done()
 	readIndex := func(activeRctx []byte) (uint64, error) {
 		// Read Request can get rejected then we would wait indefinitely on the channel

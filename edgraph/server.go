@@ -42,7 +42,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
@@ -59,6 +58,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
@@ -1551,7 +1551,7 @@ func isDropAll(op *api.Operation) bool {
 
 // ResetCors make the dgraph to accept all the origins if no origins were given
 // by the users.
-func ResetCors(closer *y.Closer) {
+func ResetCors(closer *z.Closer) {
 	defer func() {
 		glog.Infof("ResetCors closed")
 		closer.Done()
