@@ -42,6 +42,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
@@ -178,7 +179,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err := query.ApplyMutations(ctx, m)
 
 		// recreate the admin account after a drop all operation
-		ResetAcl()
+		ResetAcl(nil)
 		return empty, err
 	}
 
@@ -191,7 +192,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err := query.ApplyMutations(ctx, m)
 
 		// recreate the admin account after a drop data operation
-		ResetAcl()
+		ResetAcl(nil)
 		return empty, err
 	}
 
