@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
@@ -130,7 +131,7 @@ type adminServer struct {
 
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
-func NewServers(withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
+func NewServers(withIntrospection bool, closer *z.Closer) (web.IServeGraphQL, web.IServeGraphQL) {
 
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
@@ -146,7 +147,7 @@ func NewServers(withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
 		Urw: resolve.NewUpdateRewriter,
 		Drw: resolve.NewDeleteRewriter(),
 	}
-	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection)
+	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, closer)
 	adminServer := web.NewServer(adminResolvers)
 
 	return mainServer, adminServer
@@ -156,7 +157,8 @@ func NewServers(withIntrospection bool) (web.IServeGraphQL, web.IServeGraphQL) {
 func newAdminResolver(
 	gqlServer web.IServeGraphQL,
 	fns *resolve.ResolverFns,
-	withIntrospection bool) *resolve.RequestResolver {
+	withIntrospection bool,
+	closer *z.Closer) *resolve.RequestResolver {
 
 	adminSchema, err := schema.FromString(graphqlAdminSchema)
 	if err != nil {
@@ -230,7 +232,7 @@ func newAdminResolver(
 		server.schema = newSchema
 		server.status = healthy
 		server.resetSchema(gqlSchema)
-	}, 1)
+	}, 1, closer)
 
 	go server.initServer()
 
