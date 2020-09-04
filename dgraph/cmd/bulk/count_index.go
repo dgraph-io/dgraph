@@ -61,8 +61,8 @@ func (c *countIndexer) addCountEntry(ce countEntry) {
 		if c.countBuf.Len() > 0 {
 			c.wg.Add(1)
 			go c.writeIndex(c.countBuf)
+			c.countBuf = z.NewBuffer(1 << 10)
 		}
-		c.countBuf = z.NewBuffer(1 << 10)
 		c.cur.pred = append(c.cur.pred[:0], ce.Attr()...)
 		c.cur.rev = ce.Reverse()
 		c.cur.track = c.schema.getSchema(string(ce.Attr())).GetCount()
