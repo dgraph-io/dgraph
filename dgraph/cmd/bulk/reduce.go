@@ -98,6 +98,7 @@ func (r *reducer) run() error {
 				splitWriter: splitWriter,
 				tmpDb:       tmpDb,
 				splitCh:     make(chan *bpb.KVList, 2*runtime.NumCPU()),
+				countBuf:    z.NewBuffer(1024),
 			}
 
 			partitionKeys := make([][]byte, len(partitions))
@@ -321,7 +322,7 @@ type countEntry []byte
 
 var reverseByte = byte(1)
 
-func countEntrySize(attr []byte) int {
+func countEntrySize(attr string) int {
 	return 4 + 8 + 1 + 4 + len(attr)
 }
 func marshalCountEntry(dst []byte, pk x.ParsedKey, count int) {
@@ -451,6 +452,9 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 			right := countEntry(req.countBuf.Slice(offsets[j]))
 			return left.less(right)
 		})
+		if sz := req.countBuf.Len(); sz > 0 {
+			ci.countBuf.Grow(sz)
+		}
 		for _, offset := range offsets {
 			ce := countEntry(req.countBuf.Slice(offset))
 			ci.addCountEntry(ce)
@@ -654,7 +658,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 			if doCount {
 				// Calculate count entries.
-				dst := req.countBuf.SliceAllocate(countEntrySize(currentKey))
+				dst := req.countBuf.SliceAllocate(countEntrySize(pk.Attr))
 				marshalCountEntry(dst, pk, len(currentBatch))
 			}
 		}
