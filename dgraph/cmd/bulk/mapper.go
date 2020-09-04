@@ -45,8 +45,6 @@ import (
 	farm "github.com/dgryski/go-farm"
 )
 
-const partitionKeyShard = 10
-
 type mapper struct {
 	*state
 	shards []shardState // shard is based on predicate
@@ -176,7 +174,9 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	header := &pb.MapHeader{
 		PartitionKeys: [][]byte{},
 	}
-	shardPartitionNo := len(offsets) / partitionKeyShard
+
+	shardPartitionNo := int((uint64(len(offsets)) * (4 << 20)) / (m.opt.MapBufSize))
+
 	for i, off := range offsets {
 		if shardPartitionNo == 0 {
 			// we have very few entries so no need for partition keys.
