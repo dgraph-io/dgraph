@@ -70,6 +70,59 @@ func newMapper(st *state) *mapper {
 	}
 }
 
+type MapEntry []byte
+
+// type mapEntry struct {
+// 	uid   uint64 // if plist is filled, then corresponds to plist's uid.
+// 	key   []byte
+// 	plist []byte
+// }
+
+func mapEntrySize(key []byte, p *pb.Posting) int {
+	return 8 + 4 + 4 + len(key) + p.Size()
+}
+
+func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
+	if p != nil {
+		uid = p.Uid
+	}
+	binary.BigEndian.PutUint64(dst[0:8], uid)
+	binary.BigEndian.PutUint32(dst[8:12], uint32(len(key)))
+
+	psz := p.Size()
+	binary.BigEndian.PutUint32(dst[12:16], uint32(psz))
+
+	n := copy(dst[16:], key)
+
+	if psz > 0 {
+		pbuf := dst[16+n:]
+		_, err := p.MarshalToSizedBuffer(pbuf[:psz])
+		x.Check(err)
+	}
+
+	x.AssertTrue(len(dst) == 16+n+psz)
+}
+
+func (me MapEntry) Size() int {
+	return len(me)
+}
+
+func (me MapEntry) Uid() uint64 {
+	return binary.BigEndian.Uint64(me[0:8])
+}
+
+func (me MapEntry) Key() []byte {
+	sz := binary.BigEndian.Uint32(me[8:12])
+	return me[16 : 16+sz]
+}
+
+func (me MapEntry) Plist() []byte {
+	ksz := binary.BigEndian.Uint32(me[8:12])
+	sz := binary.BigEndian.Uint32(me[12:16])
+	start := 16 + ksz
+	return me[start : start+sz]
+}
+
 func less(lhs, rhs MapEntry) bool {
 	if keyCmp := bytes.Compare(lhs.Key(), rhs.Key()); keyCmp != 0 {
 		return keyCmp < 0
