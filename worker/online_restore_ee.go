@@ -209,7 +209,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(err, "cannot create backup handler")
 	}
 
-	manifests, err := handler.GetManifests(uri, req.BackupId)
+	manifests, err := handler.GetManifests(uri, req.BackupId, req.BackupNum)
 	if err != nil {
 		return errors.Wrapf(err, "cannot get backup manifests")
 	}

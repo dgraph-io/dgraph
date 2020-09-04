@@ -254,6 +254,65 @@ func TestRestoreBackupNum(t *testing.T) {
 	runMutations(t, dg)
 }
 
+func TestRestoreBackupNumInvalid(t *testing.T) {
+	disableDraining(t)
+
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	runQueries(t, dg, true)
+
+	// Send a request with a backupNum greater than the number of manifests.
+	adminUrl := "http://localhost:8180/admin"
+	restoreRequest := fmt.Sprintf(`mutation restore() {
+		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
+		 	encryptionKeyFile: "/data/keys/enc_key"}) {
+			code
+			message
+			restoreId
+		}
+	}`, "youthful_rhodes3", 1000)
+
+	params := testutil.GraphQLParams{
+		Query: restoreRequest,
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	buf, err := ioutil.ReadAll(resp.Body)
+	bufString := string(buf)
+	require.NoError(t, err)
+	require.Contains(t, bufString, "not enough backups")
+
+	// Send a request with a negative backupNum value.
+	restoreRequest = fmt.Sprintf(`mutation restore() {
+		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
+		 	encryptionKeyFile: "/data/keys/enc_key"}) {
+			code
+			message
+			restoreId
+		}
+	}`, "youthful_rhodes3", -1)
+
+	params = testutil.GraphQLParams{
+		Query: restoreRequest,
+	}
+	b, err = json.Marshal(params)
+	require.NoError(t, err)
+
+	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	buf, err = ioutil.ReadAll(resp.Body)
+	bufString = string(buf)
+	require.NoError(t, err)
+	require.Contains(t, bufString, "backupNum value should be equal or greater than zero")
+}
+
 func TestMoveTablets(t *testing.T) {
 	disableDraining(t)
 

@@ -166,7 +166,8 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 	return json.NewDecoder(reader).Decode(m)
 }
 
-func (h *s3Handler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, error) {
+func (h *s3Handler) GetManifests(uri *url.URL, backupId string,
+	backupNum uint64) ([]*Manifest, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
 		return nil, err
@@ -198,35 +199,18 @@ func (h *s3Handler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, er
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
-	manifests, err = filterManifests(manifests, backupId)
-	if err != nil {
-		return nil, err
-	}
 
-	// Sort manifests in the ascending order of their BackupNum so that the first
-	// manifest corresponds to the first full backup and so on.
-	sort.Slice(manifests, func(i, j int) bool {
-		return manifests[i].BackupNum < manifests[j].BackupNum
-	})
-	return manifests, nil
+	return getManifests(manifests, backupId, backupNum)
 }
 
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Since value on success, error otherwise.
 func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
-	manifests, err := h.GetManifests(uri, backupId)
+	manifests, err := h.GetManifests(uri, backupId, backupNum)
 	if err != nil {
 		return LoadResult{0, 0, errors.Wrapf(err, "while retrieving manifests")}
 	}
-	if backupNum > 0 {
-		if len(manifests) < int(backupNum) {
-			return LoadResult{0, 0, errors.Errorf(
-				"not enough backups to restore manifest with backupNum %d", backupNum)}
-		}
-		manifests = manifests[:backupNum]
-	}
-	glog.Infof("manifests %+v", manifests)
 
 	mc, err := h.setup(uri)
 	if err != nil {
@@ -284,7 +268,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 // Verify performs basic checks to decide whether the specified backup can be restored
 // to a live cluster.
 func (h *s3Handler) Verify(uri *url.URL, req *pb.RestoreRequest, currentGroups []uint32) error {
-	manifests, err := h.GetManifests(uri, req.GetBackupId())
+	manifests, err := h.GetManifests(uri, req.GetBackupId(), req.GetBackupNum())
 	if err != nil {
 		return errors.Wrapf(err, "while retrieving manifests")
 	}

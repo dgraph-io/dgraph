@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 
@@ -60,8 +61,9 @@ type UriHandler interface {
 	io.WriteCloser
 
 	// GetManfiest returns the list of manfiests for the given backup series ID
-	// at the specified location.
-	GetManifests(*url.URL, string) ([]*Manifest, error)
+	// and backup number at the specified location. If backupNum is set to zero,
+	// all the manifests for the backup series will be returned.
+	GetManifests(*url.URL, string, uint64) ([]*Manifest, error)
 
 	// GetLatestManifest reads the manifests at the given URL and returns the
 	// latest manifest.
@@ -281,22 +283,11 @@ func verifyRequest(req *pb.RestoreRequest, manifests []*Manifest, currentGroups 
 		return errors.Errorf("No backups with the specified backup ID %s", req.GetBackupId())
 	}
 
-	backupNum := int(req.GetBackupNum())
-	if backupNum > 0 && len(manifests) < backupNum {
-		return errors.Errorf("not enough backups to restore manifest with backupNum %d", backupNum)
-	}
-
 	if err := verifyManifests(manifests); err != nil {
 		return err
 	}
 
-	var lastManifest *Manifest
-	if backupNum > 0 {
-		lastManifest = manifests[backupNum-1]
-	} else {
-		lastManifest = manifests[len(manifests)-1]
-	}
-
+	lastManifest := manifests[len(manifests)-1]
 	if len(currentGroups) != len(lastManifest.Groups) {
 		return errors.Errorf("groups in cluster and latest backup manifest differ")
 	}
@@ -307,4 +298,28 @@ func verifyRequest(req *pb.RestoreRequest, manifests []*Manifest, currentGroups 
 		}
 	}
 	return nil
+}
+
+func getManifests(manifests []*Manifest, backupId string,
+	backupNum uint64) ([]*Manifest, error){
+
+	manifests, err := filterManifests(manifests, backupId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort manifests in the ascending order of their BackupNum so that the first
+	// manifest corresponds to the first full backup and so on.
+	sort.Slice(manifests, func(i, j int) bool {
+		return manifests[i].BackupNum < manifests[j].BackupNum
+	})
+
+	if backupNum > 0 {
+		if len(manifests) < int(backupNum) {
+			return nil, errors.Errorf("not enough backups to restore manifest with backupNum %d",
+				backupNum)
+		}
+		manifests = manifests[:backupNum]
+	}
+	return manifests, nil
 }
