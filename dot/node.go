@@ -24,7 +24,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/ChainSafe/gossamer/dot/core"
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
@@ -256,7 +255,6 @@ func NewNode(cfg *Config, ks *keystore.GlobalKeystore, stopFunc func()) (*Node, 
 	}
 
 	var bp BlockProducer
-	var fg core.FinalityGadget
 
 	if cfg.Core.BabeAuthority {
 		// create BABE service
@@ -268,20 +266,17 @@ func NewNode(cfg *Config, ks *keystore.GlobalKeystore, stopFunc func()) (*Node, 
 		nodeSrvcs = append(nodeSrvcs, bp)
 	}
 
-	dh, err := createDigestHandler(stateSrvc, bp, fg, ver)
+	dh, err := createDigestHandler(stateSrvc, bp, ver)
 	if err != nil {
 		return nil, err
 	}
 
-	if cfg.Core.GrandpaAuthority {
-		// create GRANDPA service
-		fg, err = createGRANDPAService(cfg, rt, stateSrvc, dh, ks.Gran)
-		if err != nil {
-			return nil, err
-		}
-		nodeSrvcs = append(nodeSrvcs, fg)
+	// create GRANDPA service
+	fg, err := createGRANDPAService(cfg, rt, stateSrvc, dh, ks.Gran)
+	if err != nil {
+		return nil, err
 	}
-
+	nodeSrvcs = append(nodeSrvcs, fg)
 	dh.SetFinalityGadget(fg)
 
 	// Syncer

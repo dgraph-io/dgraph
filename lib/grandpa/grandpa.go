@@ -45,6 +45,7 @@ type Service struct {
 	keypair       *ed25519.Keypair // TODO: change to grandpa keystore
 	mapLock       sync.Mutex
 	chanLock      sync.Mutex
+	authority     bool // run the service as an authority (ie participate in voting)
 
 	// current state information
 	state            *State                             // current state
@@ -77,6 +78,7 @@ type Config struct {
 	Voters        []*Voter
 	SetID         uint64
 	Keypair       *ed25519.Keypair
+	Authority     bool
 }
 
 // NewService returns a new GRANDPA Service instance.
@@ -90,7 +92,7 @@ func NewService(cfg *Config) (*Service, error) {
 		return nil, ErrNilDigestHandler
 	}
 
-	if cfg.Keypair == nil {
+	if cfg.Keypair == nil && cfg.Authority {
 		return nil, ErrNilKeypair
 	}
 
@@ -118,6 +120,7 @@ func NewService(cfg *Config) (*Service, error) {
 		blockState:         cfg.BlockState,
 		digestHandler:      cfg.DigestHandler,
 		keypair:            cfg.Keypair,
+		authority:          cfg.Authority,
 		prevotes:           make(map[ed25519.PublicKeyBytes]*Vote),
 		precommits:         make(map[ed25519.PublicKeyBytes]*Vote),
 		pvJustifications:   make(map[common.Hash][]*Justification),
@@ -157,6 +160,11 @@ func (s *Service) Stop() error {
 
 	s.cancel()
 	close(s.out)
+
+	if !s.authority {
+		return nil
+	}
+
 	s.tracker.stop()
 	return nil
 }
@@ -216,23 +224,27 @@ func (s *Service) initiate() error {
 	}
 
 	s.state.round++
+	s.logger.Trace("incrementing grandpa round", "next round", s.state.round)
 	if s.tracker != nil {
 		s.tracker.stop()
 	}
 
-	var err error
-	s.prevotes = make(map[ed25519.PublicKeyBytes]*Vote)
-	s.precommits = make(map[ed25519.PublicKeyBytes]*Vote)
-	s.pcJustifications = make(map[common.Hash][]*Justification)
-	s.pvEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
-	s.pcEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
-	s.justification = make(map[uint64][]*Justification)
-	s.tracker, err = newTracker(s.blockState, s.in)
-	if err != nil {
-		return err
+	if s.authority {
+		var err error
+		s.prevotes = make(map[ed25519.PublicKeyBytes]*Vote)
+		s.precommits = make(map[ed25519.PublicKeyBytes]*Vote)
+		s.pcJustifications = make(map[common.Hash][]*Justification)
+		s.pvEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
+		s.pcEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
+		s.justification = make(map[uint64][]*Justification)
+
+		s.tracker, err = newTracker(s.blockState, s.in)
+		if err != nil {
+			return err
+		}
+		s.tracker.start()
+		s.logger.Trace("started message tracker")
 	}
-	s.tracker.start()
-	s.logger.Trace("[grandpa] started message tracker")
 
 	// don't begin grandpa until we are at block 1
 	h, err := s.blockState.BestBlockHeader()
@@ -241,16 +253,24 @@ func (s *Service) initiate() error {
 	}
 
 	if h != nil && h.Number.Int64() == 0 {
-		err := s.waitForFirstBlock()
+		err = s.waitForFirstBlock()
 		if err != nil {
 			return err
 		}
 	}
 
 	for {
-		err := s.playGrandpaRound()
-		if err != nil {
-			return err
+		if s.authority {
+			err = s.playGrandpaRound()
+			if err != nil {
+				return err
+			}
+		} else {
+			// if not a grandpa authority, wait for a block to be finalized in the current round
+			err = s.waitForFinalizedBlock()
+			if err != nil {
+				return err
+			}
 		}
 
 		if s.ctx.Err() != nil {
@@ -262,6 +282,36 @@ func (s *Service) initiate() error {
 			return err
 		}
 	}
+}
+
+func (s *Service) waitForFinalizedBlock() error {
+	ch := make(chan *types.Header)
+	id, err := s.blockState.RegisterFinalizedChannel(ch)
+	if err != nil {
+		return err
+	}
+
+	defer s.blockState.UnregisterFinalizedChannel(id)
+
+	for {
+		done := false
+
+		select {
+		case header := <-ch:
+			if header != nil && header.Number.Int64() >= s.head.Number.Int64() {
+				s.head = header
+				done = true
+			}
+		case <-s.ctx.Done():
+			return nil
+		}
+
+		if done {
+			break
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) waitForFirstBlock() error {

@@ -116,7 +116,7 @@ func TestNewNode(t *testing.T) {
 	bp := node.Services.Get(&babe.Service{})
 	require.Nil(t, bp)
 	fg := node.Services.Get(&grandpa.Service{})
-	require.Nil(t, fg)
+	require.NotNil(t, fg)
 }
 
 func TestNewNode_Authority(t *testing.T) {
@@ -289,6 +289,8 @@ func TestInitNode_LoadStorageRoot(t *testing.T) {
 	require.Nil(t, err)
 
 	ks := keystore.NewGlobalKeystore()
+	ed25519Keyring, _ := keystore.NewEd25519Keyring()
+	ks.Gran.Insert(ed25519Keyring.Alice())
 	node, err := NewNode(cfg, ks, nil)
 	require.Nil(t, err)
 
@@ -343,6 +345,9 @@ func TestInitNode_LoadBalances(t *testing.T) {
 	require.Nil(t, err)
 
 	ks := keystore.NewGlobalKeystore()
+	ed25519Keyring, _ := keystore.NewEd25519Keyring()
+	ks.Gran.Insert(ed25519Keyring.Alice())
+
 	node, err := NewNode(cfg, ks, nil)
 	require.Nil(t, err)
 

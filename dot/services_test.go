@@ -76,13 +76,22 @@ func TestCreateCoreService(t *testing.T) {
 
 	ks := keystore.NewGlobalKeystore()
 	require.NotNil(t, ks)
+	ed25519Keyring, _ := keystore.NewEd25519Keyring()
+	ks.Gran.Insert(ed25519Keyring.Alice())
+
 	rt, err := createRuntime(cfg, stateSrvc, ks.Acco.(*keystore.GenericKeystore))
 	require.NoError(t, err)
 
 	coreMsgs := make(chan network.Message)
 	networkMsgs := make(chan network.Message)
 
-	coreSrvc, err := createCoreService(cfg, nil, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
+	dh, err := createDigestHandler(stateSrvc, nil, nil)
+	require.NoError(t, err)
+
+	gs, err := createGRANDPAService(cfg, rt, stateSrvc, dh, ks.Gran)
+	require.NoError(t, err)
+
+	coreSrvc, err := createCoreService(cfg, nil, gs, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
 	require.Nil(t, err)
 
 	// TODO: improve dot tests #687
@@ -200,10 +209,19 @@ func TestCreateRPCService(t *testing.T) {
 	networkMsgs := make(chan network.Message)
 
 	ks := keystore.NewGlobalKeystore()
+	ed25519Keyring, _ := keystore.NewEd25519Keyring()
+	ks.Gran.Insert(ed25519Keyring.Alice())
+
 	rt, err := createRuntime(cfg, stateSrvc, ks.Acco.(*keystore.GenericKeystore))
 	require.NoError(t, err)
 
-	coreSrvc, err := createCoreService(cfg, nil, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
+	dh, err := createDigestHandler(stateSrvc, nil, nil)
+	require.NoError(t, err)
+
+	gs, err := createGRANDPAService(cfg, rt, stateSrvc, dh, ks.Gran)
+	require.NoError(t, err)
+
+	coreSrvc, err := createCoreService(cfg, nil, gs, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
 	require.Nil(t, err)
 
 	networkSrvc := &network.Service{} // TODO: rpc service without network service
@@ -276,7 +294,7 @@ func TestCreateGrandpaService(t *testing.T) {
 	rt, err := createRuntime(cfg, stateSrvc, ks.Acco.(*keystore.GenericKeystore))
 	require.NoError(t, err)
 
-	dh, err := createDigestHandler(stateSrvc, nil, nil, nil)
+	dh, err := createDigestHandler(stateSrvc, nil, nil)
 	require.NoError(t, err)
 
 	gs, err := createGRANDPAService(cfg, rt, stateSrvc, dh, ks.Gran)
@@ -322,10 +340,18 @@ func TestNewWebSocketServer(t *testing.T) {
 	networkMsgs := make(chan network.Message)
 
 	ks := keystore.NewGlobalKeystore()
+	ed25519Keyring, _ := keystore.NewEd25519Keyring()
+	ks.Gran.Insert(ed25519Keyring.Alice())
 	rt, err := createRuntime(cfg, stateSrvc, ks.Acco.(*keystore.GenericKeystore))
 	require.NoError(t, err)
 
-	coreSrvc, err := createCoreService(cfg, nil, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
+	dh, err := createDigestHandler(stateSrvc, nil, nil)
+	require.NoError(t, err)
+
+	gs, err := createGRANDPAService(cfg, rt, stateSrvc, dh, ks.Gran)
+	require.NoError(t, err)
+
+	coreSrvc, err := createCoreService(cfg, nil, gs, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
 	require.Nil(t, err)
 
 	networkSrvc := &network.Service{}
