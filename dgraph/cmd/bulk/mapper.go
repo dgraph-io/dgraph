@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"math"
@@ -188,8 +187,6 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 			// We already have this key.
 			continue
 		}
-		fmt.Printf("Picking a partition key bufSize: %d. Num: %d Key: %s\n",
-			bufSize, sz, hex.Dump(me.Key()))
 		header.PartitionKeys = append(header.PartitionKeys, me.Key())
 		bufSize = 0
 	}
