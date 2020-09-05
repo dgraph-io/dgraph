@@ -542,7 +542,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
-	hd := z.NewHistogramData(z.HistogramBounds(1, 32))
+	hd := z.NewHistogramData(z.HistogramBounds(20, 40)) // 1 MB onwards.
 	cbuf := z.NewBuffer(4 << 20)
 	for i := 0; i < len(partitionKeys); i++ {
 		throttle()
@@ -562,7 +562,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			continue
 		}
 		if cbuf.Len() > 1<<30 {
-			fmt.Printf("Found a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
+			fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.Len())))
 
 			// Just check how many keys do we have in this giant buffer.
 			keys := make(map[uint64]int64)
@@ -574,7 +574,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 				offset += 4 + len(me)
 				numEntries++
 			}
-			keyHist := z.NewHistogramData(z.HistogramBounds(1, 32))
+			keyHist := z.NewHistogramData(z.HistogramBounds(10, 32))
 			for _, num := range keys {
 				keyHist.Update(num)
 			}
