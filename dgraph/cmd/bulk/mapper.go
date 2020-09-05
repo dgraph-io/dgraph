@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math"
@@ -175,22 +176,22 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 		PartitionKeys: [][]byte{},
 	}
 
-	shardPartitionNo := int((uint64(len(offsets)) * (4 << 20)) / (m.opt.MapBufSize))
-
-	for i, off := range offsets {
-		if shardPartitionNo == 0 {
-			// we have very few entries so no need for partition keys.
-			break
+	var bufSize int64
+	for _, off := range offsets {
+		me := MapEntry(cbuf.Slice(off))
+		bufSize += int64(4 + len(me))
+		if bufSize < m.opt.PartitionBufSize {
+			continue
 		}
-		if (i+1)%shardPartitionNo == 0 {
-			me := MapEntry(cbuf.Slice(off))
-			sz := len(header.PartitionKeys)
-			if sz > 0 && bytes.Equal(me.Key(), header.PartitionKeys[sz-1]) {
-				// We already have this key.
-				continue
-			}
-			header.PartitionKeys = append(header.PartitionKeys, me.Key())
+		sz := len(header.PartitionKeys)
+		if sz > 0 && bytes.Equal(me.Key(), header.PartitionKeys[sz-1]) {
+			// We already have this key.
+			continue
 		}
+		fmt.Printf("Picking a partition key bufSize: %d. Num: %d Key: %s\n",
+			bufSize, sz, hex.Dump(me.Key()))
+		header.PartitionKeys = append(header.PartitionKeys, me.Key())
+		bufSize = 0
 	}
 	// Write the header to the map file.
 	headerBuf, err := header.Marshal()
