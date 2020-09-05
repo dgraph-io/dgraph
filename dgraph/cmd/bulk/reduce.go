@@ -314,50 +314,33 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 }
 
 // type countIndexEntry struct {
-//  reverse byte
-// 	count int
-// 	Attr []byte
+// uid uint64
+// key []byte
 // }
 
 type countEntry []byte
 
-var reverseByte = byte(1)
+func countEntrySize(key []byte) int {
+	return 8 + 4 + len(key)
+}
+func marshalCountEntry(dst []byte, key []byte, uid uint64) {
+	binary.BigEndian.PutUint64(dst[0:8], uid)
 
-func countEntrySize(attr string) int {
-	return 4 + 8 + 1 + 4 + len(attr)
-}
-func marshalCountEntry(dst []byte, pk x.ParsedKey, count int) {
-	binary.BigEndian.PutUint32(dst[0:4], uint32(count))
-	binary.BigEndian.PutUint64(dst[4:12], pk.Uid)
-	if pk.IsReverse() {
-		dst[12] = reverseByte
-	}
-	binary.BigEndian.PutUint32(dst[13:17], uint32(len(pk.Attr)))
-	n := copy(dst[17:], pk.Attr)
-	x.AssertTrue(len(dst) == n+17)
-}
-func (ci countEntry) Count() uint32 {
-	return binary.BigEndian.Uint32(ci[0:4])
+	binary.BigEndian.PutUint32(dst[8:12], uint32(len(key)))
+	n := copy(dst[12:], key)
+	x.AssertTrue(len(dst) == n+12)
 }
 func (ci countEntry) Uid() uint64 {
-	return binary.BigEndian.Uint64(ci[4:12])
+	return binary.BigEndian.Uint64(ci[0:8])
 }
-func (ci countEntry) Reverse() bool {
-	return ci[12]&reverseByte > 0
-}
-func (ci countEntry) Attr() []byte {
-	sz := binary.BigEndian.Uint32(ci[13:17])
-	return ci[17 : 17+sz]
+func (ci countEntry) Key() []byte {
+	sz := binary.BigEndian.Uint32(ci[8:12])
+	return ci[12 : 12+sz]
 }
 func (ci countEntry) less(oe countEntry) bool {
-	if cmp := bytes.Compare(ci.Attr(), oe.Attr()); cmp != 0 {
+	lk, rk := ci.Key(), oe.Key()
+	if cmp := bytes.Compare(lk, rk); cmp != 0 {
 		return cmp < 0
-	}
-	if ci.Reverse() != oe.Reverse() {
-		return ci.Reverse()
-	}
-	if left, right := ci.Count(), oe.Count(); left != right {
-		return left < right
 	}
 	return ci.Uid() < oe.Uid()
 }
@@ -577,20 +560,23 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		}
 		if cbuf.Len() > 1<<30 {
 			fmt.Printf("Found a buffer of size: %s\n", humanize.Bytes(uint64(cbuf.Len())))
+
 			// Just check how many keys do we have in this giant buffer.
-			offsets := cbuf.SliceOffsets(nil)
-			fmt.Printf("Number of offsets: %d\n", len(offsets))
 			keys := make(map[uint64]int64)
-			for _, off := range offsets {
-				me := MapEntry(cbuf.Slice(off))
+			var offset, numEntries int
+			for offset < cbuf.Len() {
+				me := MapEntry(cbuf.Slice(offset))
 				keys[z.MemHash(me.Key())]++
+
+				offset += 4 + len(me)
+				numEntries++
 			}
 			keyHist := z.NewHistogramData(z.HistogramBounds(1, 32))
 			for _, num := range keys {
 				keyHist.Update(num)
 			}
-			fmt.Printf("Histogram of number of entries per key. Total keys: %d\n %s\n",
-				len(keys), keyHist.String())
+			fmt.Printf("Num Entries: %d. Total keys: %d\n Histogram: %s\n",
+				numEntries, len(keys), keyHist.String())
 		}
 
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
@@ -665,12 +651,12 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 			if doCount {
 				// Calculate count entries.
-				dst := req.countBuf.SliceAllocate(countEntrySize(pk.Attr))
-				marshalCountEntry(dst, pk, len(currentBatch))
+				ck := x.CountKey(pk.Attr, uint32(len(currentBatch)), pk.IsReverse())
+				dst := req.countBuf.SliceAllocate(countEntrySize(ck))
+				marshalCountEntry(dst, ck, pk.Uid)
 			}
 		}
 
-		// Now make a list and write it to badger.
 		sort.Slice(currentBatch, func(i, j int) bool {
 			lhs := MapEntry(cbuf.Slice(currentBatch[i]))
 			rhs := MapEntry(cbuf.Slice(currentBatch[j]))

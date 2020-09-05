@@ -18,7 +18,6 @@ package bulk
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"sort"
 	"sync"
@@ -34,7 +33,7 @@ import (
 )
 
 type current struct {
-	pred  []byte
+	pred  string
 	rev   bool
 	track bool
 }
@@ -54,7 +53,10 @@ type countIndexer struct {
 // required by the schema. This method expects keys to be passed into it in
 // sorted order.
 func (c *countIndexer) addCountEntry(ce countEntry) {
-	sameIndexKey := bytes.Equal(ce.Attr(), c.cur.pred) && (ce.Reverse() == c.cur.rev)
+	pk, err := x.Parse(ce.Key())
+	x.Check(err)
+
+	sameIndexKey := pk.Attr == c.cur.pred && pk.IsReverse() == c.cur.rev
 	if sameIndexKey && !c.cur.track {
 		return
 	}
@@ -65,9 +67,9 @@ func (c *countIndexer) addCountEntry(ce countEntry) {
 			go c.writeIndex(c.countBuf)
 			c.countBuf = z.NewBuffer(1 << 10)
 		}
-		c.cur.pred = append(c.cur.pred[:0], ce.Attr()...)
-		c.cur.rev = ce.Reverse()
-		c.cur.track = c.schema.getSchema(string(ce.Attr())).GetCount()
+		c.cur.pred = pk.Attr
+		c.cur.rev = pk.IsReverse()
+		c.cur.track = c.schema.getSchema(pk.Attr).GetCount()
 	}
 	if c.cur.track {
 		dst := c.countBuf.SliceAllocate(len(ce))
@@ -86,6 +88,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 
 	streamId := atomic.AddUint32(&c.streamId, 1)
 	list := &bpb.KVList{}
+	var listSz int
 
 	offsets := buf.SliceOffsets(nil)
 	sort.Slice(offsets, func(i, j int) bool {
@@ -94,9 +97,15 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		return left.less(right)
 	})
 
+	lastCe := countEntry(buf.Slice(offsets[0]))
+	{
+		pk, err := x.Parse(lastCe.Key())
+		x.Check(err)
+		fmt.Printf("Writing count index for %q rev=%v\n", pk.Attr, pk.IsReverse())
+	}
+
 	var pl pb.PostingList
 	encoder := codec.Encoder{BlockSize: 256}
-	lastCe := countEntry(buf.Slice(offsets[0]))
 
 	encode := func() {
 		pl.Pack = encoder.Done()
@@ -107,42 +116,36 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		x.Check(err)
 		codec.FreePack(pl.Pack)
 
-		key := x.CountKey(string(lastCe.Attr()), lastCe.Count(), lastCe.Reverse())
-		list.Kv = append(list.Kv, &bpb.KV{
-			Key:      key,
+		kv := &bpb.KV{
+			Key:      append([]byte{}, lastCe.Key()...),
 			Value:    data,
 			UserMeta: []byte{posting.BitCompletePosting},
 			Version:  c.state.writeTs,
 			StreamId: streamId,
-		})
+		}
+		list.Kv = append(list.Kv, kv)
+		listSz += kv.Size()
 		encoder = codec.Encoder{BlockSize: 256}
 		pl.Reset()
+
+		// Flush out the buffer.
+		if listSz > 4<<20 {
+			x.Check(c.writer.Write(list))
+			listSz = 0
+			list = &bpb.KVList{}
+		}
 	}
 
 	for _, offset := range offsets {
 		ce := countEntry(buf.Slice(offset))
-
-		// Sanity checks.
-		x.AssertTrue(bytes.Equal(ce.Attr(), lastCe.Attr()))
-		x.AssertTrue(ce.Reverse() == lastCe.Reverse())
-
-		if ce.Count() != lastCe.Count() {
+		if !bytes.Equal(lastCe.Key(), ce.Key()) {
 			encode()
 		}
 		encoder.Add(ce.Uid())
 		lastCe = ce
 	}
 	encode()
-
-	sort.Slice(list.Kv, func(i, j int) bool {
-		return bytes.Compare(list.Kv[i].Key, list.Kv[j].Key) < 0
-	})
-	for _, kv := range list.Kv {
-		fmt.Printf("Writing key count index: %s\n", hex.Dump(kv.Key))
-	}
-	if err := c.writer.Write(list); err != nil {
-		x.Check(err)
-	}
+	x.Check(c.writer.Write(list))
 }
 
 func (c *countIndexer) wait() {
