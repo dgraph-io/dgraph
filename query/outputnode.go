@@ -325,12 +325,12 @@ func (enc *encoder) setFacetsParent(fj fastJsonNode) {
 	fj.meta |= facetsBit
 }
 
-func (enc *encoder) appendAttrs(fj fastJsonNode, child fastJsonNode) {
+func (enc *encoder) appendAttrs(fj, child fastJsonNode) {
 	enc.addChildren(fj, child)
 }
 
 // addChildren appends attrs to existing fj's attrs.
-func (enc *encoder) addChildren(fj fastJsonNode, head fastJsonNode) {
+func (enc *encoder) addChildren(fj, head fastJsonNode) {
 	if fj.child == nil {
 		fj.child = head
 		return
