@@ -2207,8 +2207,8 @@ func TestFacetValuePredicateWithNormalize(t *testing.T) {
 							"1":true
 						},
 						"alt_name":[
-							"Michelin",
-							"Michelle"
+							"Michelle",
+							"Michelin"
 						]
 					},
 					{

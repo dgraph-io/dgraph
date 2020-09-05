@@ -313,6 +313,14 @@ func (enc *encoder) setList(fj fastJsonNode, list bool) {
 	}
 }
 
+func (enc *encoder) setVisited(fj fastJsonNode, visited bool) {
+	if visited {
+		fj.meta |= visitedBit
+	} else {
+		fj.meta &^= visitedBit
+	}
+}
+
 func (enc *encoder) setFacetsParent(fj fastJsonNode) {
 	fj.meta |= facetsBit
 }
@@ -332,6 +340,7 @@ func (enc *encoder) addChildren(fj fastJsonNode, head fastJsonNode) {
 	for tail.next != nil {
 		tail = tail.next
 	}
+
 	// We're inserting the node in between. This would need to be fixed later via fixOrder.
 	// Single child additions:
 	// Child 1
@@ -362,6 +371,7 @@ func (enc *encoder) fixOrder(fj fastJsonNode) {
 	if (fj.meta & visitedBit) > 0 {
 		return
 	}
+
 	fj.meta |= visitedBit
 
 	tail := fj.child // This is node 5 in the chain mentioned above.
@@ -436,6 +446,7 @@ func (enc *encoder) AddListValue(fj fastJsonNode, attr uint16, v types.Val, list
 	if err != nil {
 		return err
 	}
+
 	enc.addChildren(fj, sn)
 	return nil
 }
@@ -1057,8 +1068,11 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 			continue
 		}
 
-		// TODO(Ashish): normalize is not working correctly if we don't call fixOrder() first.
-		// Remove this if possible.
+		// With the new changes we store children in reverse order(check addChildren method). This
+		// leads to change of order of field responses for existing Normalize test cases. To
+		// minimize the changes of existing tests case we are fixing order of node children before
+		// calling normalize() on it. Also once we have fixed order for children, we don't need to
+		// fix its order again. Hence mark the newly created node visited immediately.
 		enc.fixOrder(n1)
 		// Lets normalize the response now.
 		normalized, err := enc.normalize(n1)
@@ -1067,6 +1081,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		}
 		for _, c := range normalized {
 			node := enc.newNode(attrID)
+			enc.setVisited(node, true)
 			enc.addChildren(node, c)
 			enc.AddListChild(fj, node)
 		}
@@ -1331,8 +1346,8 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 						// the expectation is that its children have
 						// already been normalized.
 
-						// TODO(Ashish): normalize is not working correctly if we don't call
-						// fixOrder() first. Remove this if possible.
+						// Check reason for calling fixOrder() here in processNodeUids(), just
+						// before calling normalize().
 						enc.fixOrder(uc)
 						normAttrs, err := enc.normalize(uc)
 						if err != nil {
@@ -1367,6 +1382,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 							// boss should be of list type because there can be multiple friends of
 							// boss.
 							node := enc.newNode(fieldID)
+							enc.setVisited(node, true)
 							enc.addChildren(node, c)
 							enc.AddListChild(dst, node)
 						}
