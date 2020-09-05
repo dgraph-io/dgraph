@@ -539,21 +539,24 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		writerCh <- req
 	}
 
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
 	hd := z.NewHistogramData(z.HistogramBounds(1, 32))
 	cbuf := z.NewBuffer(4 << 20)
 	for i := 0; i < len(partitionKeys); i++ {
 		throttle()
-		sz := 0
 		for _, itr := range mapItrs {
 			res := itr.Next()
 			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
 			cbuf.Write(res.cbuf.Bytes())
-			sz += res.cbuf.Len()
 			itr.release(res)
 		}
-		hd.Update(int64(sz))
-		if i%1000 == 0 {
-			fmt.Printf("Histogram of buffers: %s\n", hd.String())
+		hd.Update(int64(cbuf.Len()))
+		select {
+		case <-ticker.C:
+			fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
+		default:
 		}
 		if cbuf.Len() == 0 {
 			continue
@@ -595,6 +598,8 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		itr.release(res)
 	}
 	atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
+	hd.Update(int64(cbuf.Len()))
+	fmt.Printf("Final Histogram of buffer sizes: %s\n", hd.String())
 
 	sendReq(cbuf)
 	// Close the encodes.
