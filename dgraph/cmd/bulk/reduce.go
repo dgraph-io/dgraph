@@ -516,7 +516,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	throttle := func() {
 		for {
 			sz := atomic.LoadInt64(&r.prog.numEncoding)
-			if sz < 512<<20 {
+			if sz < 1<<30 {
 				return
 			}
 			fmt.Printf("Not sending out more encoder load. Num Bytes being encoded: %d\n", sz)
@@ -582,7 +582,6 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		}
 
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
-
 		sendReq(cbuf)
 		cbuf = z.NewBuffer(4 << 20)
 	}
