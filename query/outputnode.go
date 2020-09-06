@@ -88,7 +88,7 @@ type encoder struct {
 	curSize uint64
 
 	// Allocator for nodes.
-	alloc *Allocator
+	alloc *z.Allocator
 
 	// Cache uid attribute, which is very commonly used.
 	uidAttr uint16
@@ -129,7 +129,7 @@ func newEncoder() *encoder {
 		attrMap: make(map[string]uint16),
 		idSlice: idSlice,
 		arena:   a,
-		alloc:   NewAllocator(4 << 10),
+		alloc:   z.NewAllocator(4 << 10),
 	}
 	e.uidAttr = e.idForAttr("uid")
 	return e
@@ -198,55 +198,6 @@ const (
 	// Value with all bits set to 1 for bytes 4 to 1.
 	setBytes4321 = 0x00000000FFFFFFFF
 )
-
-type Allocator struct {
-	pageSize int
-	curBuf   int
-	curIdx   int
-	buffers  [][]byte
-	size     uint64
-}
-
-func NewAllocator(sz int) *Allocator {
-	return &Allocator{pageSize: sz}
-}
-
-func (a *Allocator) Size() uint64 {
-	return a.size
-}
-
-func (a *Allocator) Release() {
-	for _, b := range a.buffers {
-		z.Free(b)
-	}
-}
-
-func (a *Allocator) Allocate(sz int) []byte {
-	if len(a.buffers) == 0 {
-		buf := z.Calloc(a.pageSize)
-		a.buffers = append(a.buffers, buf)
-	}
-
-	cb := a.buffers[a.curBuf]
-	if len(cb) < a.curIdx+sz {
-		a.pageSize *= 2
-		const maxAlloc int = 1 << 30
-		if a.pageSize > maxAlloc {
-			a.pageSize = maxAlloc
-		}
-
-		buf := z.Calloc(a.pageSize)
-		a.buffers = append(a.buffers, buf)
-		a.curBuf++
-		a.curIdx = 0
-		cb = a.buffers[a.curBuf]
-	}
-
-	slice := cb[a.curIdx : a.curIdx+sz]
-	a.curIdx += sz
-	a.size += uint64(sz)
-	return slice
-}
 
 // fastJsonNode represents node of a tree, which is formed to convert a subgraph into json response
 // for a query. A fastJsonNode has following meta data:
