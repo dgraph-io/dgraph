@@ -187,10 +187,9 @@ func (r *reducer) setBadgerOptions(opt *badger.Options, compression bool) {
 }
 
 type mapIterator struct {
-	fd       *os.File
-	reader   *bufio.Reader
-	batchCh  chan *iteratorEntry
-	freelist chan *iteratorEntry
+	fd      *os.File
+	reader  *bufio.Reader
+	batchCh chan *iteratorEntry
 }
 
 type iteratorEntry struct {
@@ -300,10 +299,9 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 	x.Check(err)
 
 	itr := &mapIterator{
-		fd:       fd,
-		reader:   reader,
-		batchCh:  make(chan *iteratorEntry, 3),
-		freelist: make(chan *iteratorEntry, 64),
+		fd:      fd,
+		reader:  reader,
+		batchCh: make(chan *iteratorEntry, 3),
 	}
 	return header, itr
 }
@@ -415,14 +413,6 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 			ci.addCountEntry(ce)
 		}
 		req.countBuf.Release()
-
-		// Wait for it to be encoded.
-		start := time.Now()
-
-		if dur := time.Since(start).Round(time.Millisecond); dur > time.Second {
-			fmt.Printf("writeCh: Time taken to write req: %v\n",
-				time.Since(start).Round(time.Millisecond))
-		}
 	}
 
 	// Wait for split lists to be written to the temporary badger.
