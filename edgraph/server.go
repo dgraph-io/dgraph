@@ -42,7 +42,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
@@ -59,6 +58,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
@@ -502,8 +502,14 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		resp.Txn.CommitTs = qc.req.StartTs
 		return err
 	}
-
+	// calculateMutationMetrics calculate cost for the mutation.
+	calculateMutationMetrics := func() {
+		cost := uint64(len(newUids) + len(edges))
+		resp.Metrics.NumUids["mutation_cost"] = cost
+		resp.Metrics.NumUids["_total"] = resp.Metrics.NumUids["_total"] + cost
+	}
 	if !qc.req.CommitNow {
+		calculateMutationMetrics()
 		if err == zero.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
 		}
@@ -548,7 +554,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	// CommitNow was true, no need to send keys.
 	resp.Txn.Keys = resp.Txn.Keys[:0]
 	resp.Txn.CommitTs = cts
-
+	calculateMutationMetrics()
 	return nil
 }
 
@@ -1545,7 +1551,7 @@ func isDropAll(op *api.Operation) bool {
 
 // ResetCors make the dgraph to accept all the origins if no origins were given
 // by the users.
-func ResetCors(closer *y.Closer) {
+func ResetCors(closer *z.Closer) {
 	defer func() {
 		glog.Infof("ResetCors closed")
 		closer.Done()

@@ -17,6 +17,7 @@
 package bulk
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -70,8 +71,9 @@ func init() {
 
 	flag.IntP("num_go_routines", "j", int(math.Ceil(float64(runtime.NumCPU())/4.0)),
 		"Number of worker threads to use. MORE THREADS LEAD TO HIGHER RAM USAGE.")
-	flag.Int64("mapoutput_mb", 64,
+	flag.Int64("mapoutput_mb", 2048,
 		"The estimated size of each map file output. Increasing this increases memory usage.")
+	flag.Int64("partition_mb", 4, "Pick a partition key every N megabytes of data.")
 	flag.Bool("skip_map_phase", false,
 		"Skip the map phase (assumes that map output files already exist).")
 	flag.Bool("cleanup_tmp", true,
@@ -122,6 +124,7 @@ func run() {
 		TmpDir:                 Bulk.Conf.GetString("tmp"),
 		NumGoroutines:          Bulk.Conf.GetInt("num_go_routines"),
 		MapBufSize:             uint64(Bulk.Conf.GetInt("mapoutput_mb")),
+		PartitionBufSize:       int64(Bulk.Conf.GetInt("partition_mb")),
 		SkipMapPhase:           Bulk.Conf.GetBool("skip_map_phase"),
 		CleanupTmp:             Bulk.Conf.GetBool("cleanup_tmp"),
 		NumReducers:            Bulk.Conf.GetInt("reducers"),
@@ -185,8 +188,19 @@ func run() {
 			tok.LoadCustomTokenizer(soFile)
 		}
 	}
+	if opt.MapBufSize <= 0 || opt.PartitionBufSize <= 0 {
+		fmt.Fprintf(os.Stderr, "mapoutput_mb: %d and partition_mb: %d must be greater than zero\n",
+			opt.MapBufSize, opt.PartitionBufSize)
+		os.Exit(1)
+	}
 
-	opt.MapBufSize <<= 20 // Convert from MB to B.
+	opt.MapBufSize <<= 20       // Convert from MB to B.
+	opt.PartitionBufSize <<= 20 // Convert from MB to B.
+
+	optBuf, err := json.MarshalIndent(&opt, "", "\t")
+	x.Check(err)
+	fmt.Println(string(optBuf))
+
 	maxOpenFilesWarning()
 
 	go func() {
