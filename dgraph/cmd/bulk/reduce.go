@@ -211,8 +211,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	prevKeyExist := false
 	var meBuf, key []byte
 	var cbuf *z.Buffer
-	// readKey reads the next map entry key.
-	// TODO: Consider using slice allocate for this. Seems like a lot of code here for small gains.
+
 	readMapEntry := func() error {
 		if prevKeyExist {
 			return nil
