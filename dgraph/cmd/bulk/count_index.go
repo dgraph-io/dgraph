@@ -90,7 +90,6 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	list := &bpb.KVList{}
 	var listSz int
 
-	// TODO: Do we need to do this again?
 	offsets := buf.SliceOffsets(nil)
 	sort.Slice(offsets, func(i, j int) bool {
 		left := countEntry(buf.Slice(offsets[i]))
