@@ -54,7 +54,8 @@ var blockSize = int(unsafe.Sizeof(pb.UidBlock{}))
 // ReleaseBlock.
 func AllocateBlock() *pb.UidBlock {
 	// Allocate blocks manually.
-	// TODO: Avoid calling z.Calloc repeatedly. Instead use the allocator.
+	// TODO: Avoid calling z.Calloc repeatedly. Instead use the allocator. The tricky question here
+	// is how would FreePack call be able to trace the allocator.
 	b := z.CallocNoRef(blockSize)
 	if len(b) == 0 {
 		return &pb.UidBlock{}
