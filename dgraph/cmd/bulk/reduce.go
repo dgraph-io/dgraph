@@ -212,6 +212,7 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	var meBuf, key []byte
 	var cbuf *z.Buffer
 	// readKey reads the next map entry key.
+	// TODO: Consider using slice allocate for this. Seems like a lot of code here for small gains.
 	readMapEntry := func() error {
 		if prevKeyExist {
 			return nil
@@ -464,6 +465,8 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	tmpWg.Wait()
 }
 
+// TODO(martinmr): This should be done via the stream framework.
+// Also, do we delete the tmpDb?
 func (r *reducer) writeSplitLists(db, tmpDb *badger.DB) {
 	txn := tmpDb.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()

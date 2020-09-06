@@ -54,6 +54,7 @@ var blockSize = int(unsafe.Sizeof(pb.UidBlock{}))
 // ReleaseBlock.
 func AllocateBlock() *pb.UidBlock {
 	// Allocate blocks manually.
+	// TODO: Avoid calling z.Calloc repeatedly. Instead use the allocator.
 	b := z.CallocNoRef(blockSize)
 	if len(b) == 0 {
 		return &pb.UidBlock{}
@@ -119,6 +120,7 @@ func (e *Encoder) packBlock() {
 		e.uids = e.uids[4:]
 	}
 
+	// TODO: Instead of one z.Buffer for every delta, allocate one big one.
 	block.Deltas = out.Bytes()
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
