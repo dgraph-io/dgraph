@@ -54,10 +54,6 @@ type reducer struct {
 	streamIds map[string]uint32
 }
 
-const batchSize = 10000
-const maxSplitBatchLen = 1000
-const batchAlloc = batchSize * 11 / 10
-
 func (r *reducer) run() error {
 	dirs := readShardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
 	x.AssertTrue(len(dirs) == r.opt.ReduceShards)
@@ -312,38 +308,6 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 	return header, itr
 }
 
-// type countIndexEntry struct {
-// uid uint64
-// key []byte
-// }
-
-type countEntry []byte
-
-func countEntrySize(key []byte) int {
-	return 8 + 4 + len(key)
-}
-func marshalCountEntry(dst []byte, key []byte, uid uint64) {
-	binary.BigEndian.PutUint64(dst[0:8], uid)
-
-	binary.BigEndian.PutUint32(dst[8:12], uint32(len(key)))
-	n := copy(dst[12:], key)
-	x.AssertTrue(len(dst) == n+12)
-}
-func (ci countEntry) Uid() uint64 {
-	return binary.BigEndian.Uint64(ci[0:8])
-}
-func (ci countEntry) Key() []byte {
-	sz := binary.BigEndian.Uint32(ci[8:12])
-	return ci[12 : 12+sz]
-}
-func (ci countEntry) less(oe countEntry) bool {
-	lk, rk := ci.Key(), oe.Key()
-	if cmp := bytes.Compare(lk, rk); cmp != 0 {
-		return cmp < 0
-	}
-	return ci.Uid() < oe.Uid()
-}
-
 type encodeRequest struct {
 	cbuf     *z.Buffer
 	countBuf *z.Buffer
@@ -383,6 +347,8 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 		req.wg.Done()
 	}
 }
+
+const maxSplitBatchLen = 1000
 
 func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 	defer wg.Done()
