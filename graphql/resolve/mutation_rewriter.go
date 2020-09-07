@@ -1095,11 +1095,15 @@ func rewriteObject(
 			xidMetadata.queryExists[variable] = true
 		}
 		frag.conditions = []string{fmt.Sprintf("eq(len(%s), 0)", variable)}
+
+		// We need to conceal the error because we might be leaking information to the user if it
+		// tries to add duplicate data to the field with @id.
 		var err error
-		if x.Config.GraphqlDebug || addAuthSelector(typ) == nil {
+		if queryAuthSelector(typ) == nil {
 			err = x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
 		} else {
-			err = x.GqlErrorf("id already exists for type %s", typ.Name())
+			// This error will only be reported in debug mode.
+			err = x.GqlErrorf("GraphQL debug: id already exists for type %s", typ.Name())
 		}
 		frag.check = checkQueryResult(variable, err, nil)
 	}

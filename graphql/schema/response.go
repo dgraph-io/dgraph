@@ -76,6 +76,10 @@ func (r *Response) WithError(err error) {
 		return
 	}
 
+	if !x.Config.GraphqlDebug && strings.Contains(err.Error(), "GraphQL debug:") {
+		return
+	}
+
 	r.Errors = append(r.Errors, AsGQLErrors(err)...)
 }
 

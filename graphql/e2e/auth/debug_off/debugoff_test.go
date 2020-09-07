@@ -116,9 +116,7 @@ func TestAddMutationWithXid(t *testing.T) {
 
 	// Re-adding the tweet should fail.
 	gqlResponse = addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Error(t, gqlResponse.Errors)
-	require.Equal(t, len(gqlResponse.Errors), 1)
-	require.Contains(t, gqlResponse.Errors[0].Error(), "id already exists for type Tweets")
+	require.Nil(t, gqlResponse.Errors)
 
 	// Clear the tweet.
 	tweet.DeleteByID(t, user, metaInfo)
