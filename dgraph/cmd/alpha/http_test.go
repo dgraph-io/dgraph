@@ -955,3 +955,17 @@ func TestUrl(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resp.StatusCode >= 200 && resp.StatusCode < 300)
 }
+
+func TestContentTypeCharset(t *testing.T) {
+	_, _, err := queryWithGz(`{"query": "schema {}"}`, "application/json; charset=utf-8", "false", "", false, false)
+	require.NoError(t, err)
+
+	_, _, err = queryWithGz(`{"query": "schema {}"}`, "application/json; charset=latin1", "false", "", false, false)
+	require.True(t, err != nil && strings.Contains(err.Error(), "Unsupported charset"))
+
+	_, err = mutationWithTs(`{}`, "application/rdf; charset=utf-8", false, true, 0)
+	require.NoError(t, err)
+
+	_, err = mutationWithTs(`{}`, "application/rdf; charset=latin1", false, true, 0)
+	require.True(t, err != nil && strings.Contains(err.Error(), "Unsupported charset"))
+}
