@@ -244,7 +244,7 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 	}
 	f := strings.ToLower(name)
 	switch f {
-	case "le", "ge", "lt", "gt", "eq":
+	case "le", "ge", "lt", "gt", "eq", "between":
 		return compareAttrFn, f
 	case "min", "max", "sum", "avg":
 		return aggregatorFn, f
@@ -1201,113 +1201,141 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 	// Only if the tokenizer that we used IsLossy
 	// then we need to fetch and compare the actual values.
 	span.Annotatef(nil, "Tokenizer: %s, Lossy: %t", tokenizer.Name(), tokenizer.IsLossy())
-	if tokenizer.IsLossy() {
-		// Need to evaluate inequality for entries in the first bucket.
-		typ, err := schema.State().TypeOf(attr)
-		if err != nil || !typ.IsScalar() {
-			return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
+
+	if !tokenizer.IsLossy() {
+		return nil
+	}
+
+	// Need to evaluate inequality for entries in the first bucket.
+	typ, err := schema.State().TypeOf(attr)
+	if err != nil || !typ.IsScalar() {
+		return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
+	}
+
+	x.AssertTrue(len(arg.out.UidMatrix) > 0)
+
+	isList := schema.State().IsList(attr)
+	lang := langForFunc(arg.q.Langs)
+
+	filterRow := func(row int, eqToken types.Val) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
 		}
-
-		x.AssertTrue(len(arg.out.UidMatrix) > 0)
-		rowsToFilter := 0
-		switch {
-		case arg.srcFn.fname == eq:
-			// If fn is eq, we could have multiple arguments and hence multiple rows to filter.
-			rowsToFilter = len(arg.srcFn.tokens)
-		case arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken:
-			// If operation is not eq and ineqValueToken equals first token,
-			// then we need to filter first row.
-			rowsToFilter = 1
+		compareFuncName := arg.q.SrcFunc.Name
+		if compareFuncName == between && row == 0 {
+			compareFuncName = "ge"
+		} else if compareFuncName == between && row == len(arg.out.UidMatrix)-1 {
+			compareFuncName = "le"
 		}
-		isList := schema.State().IsList(attr)
-		lang := langForFunc(arg.q.Langs)
-		for row := 0; row < rowsToFilter; row++ {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-			var filterErr error
-			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
-				switch lang {
-				case "":
-					if isList {
-						pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
-						if err != nil {
-							filterErr = err
-							return false
-						}
-						svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
-						if err != nil {
-							if err != posting.ErrNoValue {
-								filterErr = err
-							}
-							return false
-						}
-						for _, sv := range svs {
-							dst, err := types.Convert(sv, typ)
-							if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst,
-								arg.srcFn.eqTokens[row]) {
-								return true
-							}
-						}
-
-						return false
-					}
-
+		var filterErr error
+		algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
+			switch lang {
+			case "":
+				if isList {
 					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 					if err != nil {
 						filterErr = err
 						return false
 					}
-					sv, err := pl.Value(arg.q.ReadTs)
+					svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
 					if err != nil {
 						if err != posting.ErrNoValue {
 							filterErr = err
 						}
 						return false
 					}
-					dst, err := types.Convert(sv, typ)
-					return err == nil &&
-						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
-				case ".":
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
-					if err != nil {
-						filterErr = err
-						return false
-					}
-					values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
-					if err != nil {
-						filterErr = err
-						return false
-					}
-					for _, sv := range values {
+					for _, sv := range svs {
 						dst, err := types.Convert(sv, typ)
-						if err == nil &&
-							types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
+						if err == nil && types.CompareVals(compareFuncName, dst, eqToken) {
 							return true
 						}
 					}
+
 					return false
-				default:
-					sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
-					if err != nil {
-						if err != posting.ErrNoValue {
-							filterErr = err
-						}
-						return false
-					}
-					if sv.Value == nil {
-						return false
-					}
-					return types.CompareVals(arg.q.SrcFunc.Name, sv, arg.srcFn.eqTokens[row])
 				}
-			})
-			if filterErr != nil {
+
+				pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
+				if err != nil {
+					filterErr = err
+					return false
+				}
+				sv, err := pl.Value(arg.q.ReadTs)
+				if err != nil {
+					if err != posting.ErrNoValue {
+						filterErr = err
+					}
+					return false
+				}
+				dst, err := types.Convert(sv, typ)
+				return err == nil &&
+					types.CompareVals(compareFuncName, dst, eqToken)
+			case ".":
+				pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
+				if err != nil {
+					filterErr = err
+					return false
+				}
+				values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
+				if err != nil {
+					filterErr = err
+					return false
+				}
+				for _, sv := range values {
+					dst, err := types.Convert(sv, typ)
+					if err == nil &&
+						types.CompareVals(compareFuncName, dst, eqToken) {
+						return true
+					}
+				}
+				return false
+			default:
+				sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
+				if err != nil {
+					if err != posting.ErrNoValue {
+						filterErr = err
+					}
+					return false
+				}
+				if sv.Value == nil {
+					return false
+				}
+				return types.CompareVals(compareFuncName, sv, eqToken)
+			}
+		})
+		if filterErr != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	switch {
+	case arg.srcFn.fname == eq:
+		// If fn is eq, we could have multiple arguments and hence multiple rows to filter.
+		// rowsToFilter = len(arg.srcFn.tokens)
+		for row := 0; row < len(arg.srcFn.tokens); row++ {
+			if err := filterRow(row, arg.srcFn.eqTokens[row]); err != nil {
 				return err
 			}
 		}
+	case arg.srcFn.fname == between:
+		if err := filterRow(0, arg.srcFn.eqTokens[0]); err != nil {
+			return err
+		}
+		if err := filterRow(len(arg.out.UidMatrix)-1, arg.srcFn.eqTokens[1]); err != nil {
+			return err
+		}
+	case arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken[0]:
+		// If operation is not eq and ineqValueToken equals first token,
+		// then we need to filter first row.
+		// rowsToFilter = 1
+		if err := filterRow(0, arg.srcFn.eqTokens[0]); err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -1592,7 +1620,7 @@ type functionContext struct {
 	// TODO(@Animesh): change field names which could explain their uses better. Check if we
 	// really need all of ineqValue, eqTokens, tokens
 	eqTokens       []types.Val
-	ineqValueToken string
+	ineqValueToken []string
 	n              int
 	threshold      int64
 	uidsPresent    []uint64
@@ -1605,7 +1633,8 @@ type functionContext struct {
 }
 
 const (
-	eq = "eq" // equal
+	eq      = "eq" // equal
+	between = "between"
 )
 
 func ensureArgsCount(srcFunc *pb.SrcFunction, expected int) error {
@@ -1668,6 +1697,10 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			if len(args) < 1 {
 				return nil, errors.Errorf("eq expects atleast 1 argument.")
 			}
+		} else if fc.fname == between {
+			if len(args) != 2 {
+				return nil, errors.Errorf("between expects exactly 2 argument.")
+			}
 		} else { // Others can have only 1 arg.
 			if len(args) != 1 {
 				return nil, errors.Errorf("%+v expects only 1 argument. Got: %+v",
@@ -1677,12 +1710,29 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 
 		var tokens []string
 		// eq can have multiple args.
-		for _, arg := range args {
-			if fc.ineqValue, err = convertValue(attr, arg); err != nil {
-				return nil, errors.Errorf("Got error: %v while running: %v", err,
-					q.SrcFunc)
+		// for _, arg := range args {
+		for idx := 0; idx < len(args); idx++ {
+			arg := args[idx]
+			var ineqValues []types.Val
+			ineqValue1, err := convertValue(attr, arg)
+			if err != nil {
+				return nil, errors.Errorf("Got error: %v while running: %v", err, q.SrcFunc)
 			}
-			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
+			ineqValues = append(ineqValues, ineqValue1)
+			fc.ineqValue = ineqValue1
+			fc.eqTokens = append(fc.eqTokens, ineqValue1)
+
+			// in case of between also pass other value.
+			if fc.fname == between {
+				ineqValue2, err := convertValue(attr, args[idx+1])
+				if err != nil {
+					return nil, errors.Errorf("Got error: %v while running: %v", err, q.SrcFunc)
+				}
+				idx++
+				ineqValues = append(ineqValues, ineqValue2)
+				fc.eqTokens = append(fc.eqTokens, ineqValue2)
+			}
+
 			if !isIndexedAttr {
 				// In case of non-indexed predicate we won't have any tokens.
 				continue
@@ -1696,7 +1746,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 
 			// Get tokens ge / le ineqValueToken.
 			if tokens, fc.ineqValueToken, err = getInequalityTokens(ctx, q.ReadTs, attr, f, lang,
-				fc.ineqValue); err != nil {
+				ineqValues); err != nil {
 				return nil, err
 			}
 			if len(tokens) == 0 {

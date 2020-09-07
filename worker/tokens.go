@@ -112,36 +112,42 @@ func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, e
 // getInequalityTokens gets tokens ge / le compared to given token using the first sortable
 // index that is found for the predicate.
 func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang string,
-	ineqValue types.Val) ([]string, string, error) {
+	ineqValues []types.Val) ([]string, []string, error) {
 	tokenizer, err := pickTokenizer(ctx, attr, f)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	// Get the token for the value passed in function.
 	// XXX: the lang should be query.Langs, but it only matters in edge case test below.
 	tokenizer = tok.GetTokenizerForLang(tokenizer, lang)
-	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer)
-	if err != nil {
-		return nil, "", err
-	}
 
-	switch {
-	case len(ineqTokens) == 0:
-		return nil, "", nil
+	var ineqTokensFinal []string
+	for _, ineqValue := range ineqValues {
+		ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer)
+		if err != nil {
+			return nil, nil, err
+		}
 
-	// Allow eq with term/fulltext tokenizers, even though they give multiple tokens.
-	case f == "eq" &&
-		(tokenizer.Identifier() == tok.IdentTerm || tokenizer.Identifier() == tok.IdentFullText):
-		break
+		switch {
+		case len(ineqTokens) == 0:
+			return nil, nil, nil
 
-	case len(ineqTokens) > 1:
-		return nil, "", errors.Errorf("Attribute %s does not have a valid tokenizer.", attr)
-	}
-	ineqToken := ineqTokens[0]
+		// Allow eq with term/fulltext tokenizers, even though they give multiple tokens.
+		case f == "eq" &&
+			(tokenizer.Identifier() == tok.IdentTerm || tokenizer.Identifier() == tok.IdentFullText):
+			break
 
-	if f == "eq" {
-		return []string{ineqToken}, ineqToken, nil
+		case len(ineqTokens) > 1:
+			return nil, nil, errors.Errorf("Attribute %s does not have a valid tokenizer.", attr)
+		}
+
+		ineqToken := ineqTokens[0]
+		ineqTokensFinal = append(ineqTokensFinal, ineqToken)
+
+		if f == "eq" {
+			return []string{ineqToken}, ineqTokensFinal, nil
+		}
 	}
 
 	// If some new index key was written as part of same transaction it won't be on disk
@@ -150,9 +156,9 @@ func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang strin
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
-	seekKey := x.IndexKey(attr, ineqToken)
+	seekKey := x.IndexKey(attr, ineqTokensFinal[0])
 
-	isgeOrGt := f == "ge" || f == "gt"
+	isgeOrGt := f == "ge" || f == "gt" || f == "between"
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.Reverse = !isgeOrGt
@@ -161,7 +167,12 @@ func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang strin
 	defer itr.Close()
 
 	// used for inequality comparison below
-	ineqTokenInBytes := []byte(ineqToken)
+	ineqTokenInBytes1 := []byte(ineqTokensFinal[0])
+
+	var ineqTokenInBytes2 []byte
+	if f == "between" {
+		ineqTokenInBytes2 = []byte(ineqTokensFinal[1])
+	}
 
 	var out []string
 	for itr.Seek(seekKey); itr.Valid(); itr.Next() {
@@ -169,7 +180,7 @@ func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang strin
 		key := item.Key()
 		k, err := x.Parse(key)
 		if err != nil {
-			return nil, "", err
+			return nil, nil, err
 		}
 
 		switch {
@@ -181,11 +192,16 @@ func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang strin
 		// for non Lossy lets compare for inequality (gt & lt)
 		// to see if key needs to be included
 		case f == "gt":
-			if bytes.Compare([]byte(k.Term), ineqTokenInBytes) > 0 {
+			if bytes.Compare([]byte(k.Term), ineqTokenInBytes1) > 0 {
 				out = append(out, k.Term)
 			}
 		case f == "lt":
-			if bytes.Compare([]byte(k.Term), ineqTokenInBytes) < 0 {
+			if bytes.Compare([]byte(k.Term), ineqTokenInBytes1) < 0 {
+				out = append(out, k.Term)
+			}
+		case f == "between":
+			if bytes.Compare([]byte(k.Term), ineqTokenInBytes1) >= 0 &&
+				bytes.Compare([]byte(k.Term), ineqTokenInBytes2) <= 0 {
 				out = append(out, k.Term)
 			}
 		default:
@@ -193,5 +209,5 @@ func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang strin
 			out = append(out, k.Term)
 		}
 	}
-	return out, ineqToken, nil
+	return out, ineqTokensFinal, nil
 }
