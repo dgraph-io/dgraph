@@ -58,7 +58,7 @@ curl -H "Content-Type: application/graphql+-" -H "x-auth-token: <api-key>" -XPOS
 
 ### gRPC
 
-The gRPC endpoint works identically to Dgraph's gRPC endpoint, with the additional constraint of requiring authentication on every gRPC call. The Slash API token must be passed in the "Authorization" metadata to every gRPC call. This may be achieved by using [Metadata Call Credentials](https://godoc.org/google.golang.org/grpc/credentials#PerRPCCredentials) or the equivalent in your language.
+The gRPC endpoint works identically to Dgraph's gRPC endpoint, with the additional constraint of requiring authentication on every gRPC call. The Slash API token must be passed in the "authorization" metadata to every gRPC call. This may be achieved by using [Metadata Call Credentials](https://godoc.org/google.golang.org/grpc/credentials#PerRPCCredentials) or the equivalent in your language.
 
 For example, if your GraphQL Endpoint is `https://frozen-mango-42.eu-central-1.aws.cloud.dgraph.io/graphql`, your gRPC endpoint will be `frozen-mango-42.grpc.eu-central-1.aws.cloud.dgraph.io:443`.
 
@@ -82,7 +82,7 @@ GRPC_PORT = "443"
 You will then need to pass your API key as follows:
 ```python
 creds = grpc.ssl_channel_credentials()
-call_credentials = grpc.metadata_call_credentials(lambda context, callback: callback((("Authorization", "<api-key>"),), None))
+call_credentials = grpc.metadata_call_credentials(lambda context, callback: callback((("authorization", "<api-key>"),), None))
 composite_credentials = grpc.composite_channel_credentials(creds, call_credentials)
 client_stub = pydgraph.DgraphClientStub('{host}:{port}'.format(host=GRPC_HOST, port=GRPC_PORT), composite_credentials)
 client = pydgraph.DgraphClient(client_stub)
