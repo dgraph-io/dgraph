@@ -41,8 +41,12 @@ func unknownStatus(q schema.Query, err error) *resolve.Resolved {
 }
 
 func resolveRestoreStatus(ctx context.Context, q schema.Query) *resolve.Resolved {
-	restoreId := int(q.ArgValue("restoreId").(int64))
-	status, err := worker.ProcessRestoreStatus(ctx, restoreId)
+	restoreId, err := q.ArgValue("restoreId").(json.Number).Int64()
+	if err != nil {
+		return unknownStatus(q, err)
+	}
+
+	status, err := worker.ProcessRestoreStatus(ctx, int(restoreId))
 	if err != nil {
 		return unknownStatus(q, err)
 	}
