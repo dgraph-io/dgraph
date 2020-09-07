@@ -530,8 +530,9 @@ func run() {
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
 		AclEnabled:          secretFile != "",
-		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
-		AbortOlderThan:      abortDur,
+		// SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
+		SnapshotAfter:  100,
+		AbortOlderThan: abortDur,
 	}
 
 	setupCustomTokenizers()

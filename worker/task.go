@@ -804,6 +804,29 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	}
 	span.Annotatef(nil, "Done waiting for checksum match")
 
+	var qs queryState
+	if q.Cache == UseTxnCache {
+		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
+	}
+	// For now, remove the query level cache. It is causing contention for queries with high
+	// fan-out.
+
+	out, err := qs.helpProcessTask(ctx, q, gid)
+	if err != nil {
+		return &pb.Result{}, err
+	}
+
+	// Move the check to after processing the request. This is to ensure that in case of a tablet
+	// move, the check for whether we're still serving the tablet happens AFTER it was
+	// potentially dropped. Consider this sequence of events:
+	// e(membership update) < e(drop), based on CleanPredicate in draft.go.
+	// e(processTask) < e(check), this change.
+	// Say, we dropped the predicate before reading it, therefore e(drop) < e(read). This is the
+	// error situation.
+	// In that case, e(membership update) < e(drop) < e(processTask) < e(check)
+	// Therefore, e(membership update) < e(check).
+	// Thus, we'd always know if we read a dropped tablet and error out accordingly.
+
 	// If a group stops serving tablet and it gets partitioned away from group
 	// zero, then it wouldn't know that this group is no longer serving this
 	// predicate. There's no issue if a we are serving a particular tablet and
@@ -818,18 +841,6 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 		return &pb.Result{}, errNonExistentTablet
 	case knownGid != groups().groupId():
 		return &pb.Result{}, errUnservedTablet
-	}
-
-	var qs queryState
-	if q.Cache == UseTxnCache {
-		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
-	}
-	// For now, remove the query level cache. It is causing contention for queries with high
-	// fan-out.
-
-	out, err := qs.helpProcessTask(ctx, q, gid)
-	if err != nil {
-		return &pb.Result{}, err
 	}
 	return out, nil
 }
