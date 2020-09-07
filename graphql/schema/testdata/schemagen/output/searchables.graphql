@@ -227,9 +227,6 @@ enum PostOrderable {
 	title
 	titleByEverything
 	text
-	tags
-	tagsHash
-	tagsExact
 	publishByYear
 	publishByMonth
 	publishByDay

@@ -41,9 +41,9 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -1016,7 +1016,7 @@ func IsGuardian(groups []string) bool {
 
 // RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
 // Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
-func RunVlogGC(store *badger.DB, closer *y.Closer) {
+func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 	// Get initial size on start.
 	_, lastVlogSize := store.Size()
@@ -1057,7 +1057,7 @@ type DB interface {
 	Sync() error
 }
 
-func StoreSync(db DB, closer *y.Closer) {
+func StoreSync(db DB, closer *z.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(1 * time.Second)
 	for {
@@ -1146,4 +1146,17 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 	}
 
 	return cachePercent, nil
+}
+
+func ToHex(i uint64) []byte {
+	var b [16]byte
+	tmp := strconv.AppendUint(b[:0], i, 16)
+
+	out := make([]byte, len(tmp)+3+1)
+	out[0] = '"'
+	out[1] = '0'
+	out[2] = 'x'
+	n := copy(out[3:], tmp)
+	out[3+n] = '"'
+	return out
 }

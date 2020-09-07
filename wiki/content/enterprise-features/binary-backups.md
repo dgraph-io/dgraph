@@ -55,7 +55,6 @@ endpoints, this is only accessible on the same machine as the Alpha unless
 [whitelisted for admin operations]({{< relref "deploy/dgraph-administration.md#whitelisting-admin-operations" >}}).
 Execute the following mutation on /admin endpoint using any GraphQL compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
-
 ### Backup to Amazon S3
 
 ```graphql
@@ -210,6 +209,22 @@ mutation {
 }
 ```
 
+### Automating Backups
+
+You can use the provided endpoint to automate backups, however, there are a few
+things to keep in mind.
+
+- The requests should go to a single alpha. The alpha that receives the request
+is responsible for looking up the location and determining from which point the
+backup should resume.
+
+- Versions of Dgraph starting with v20.07.1, v20.03.5, and v1.2.7 have a way to
+block multiple backup requests going to the same alpha. For previous versions,
+keep this in mind and avoid sending multiple requests at once. This is for the
+same reason as the point above.
+
+- You can have multiple backup series in the same location although the feature
+still works if you set up a unique location for each series.
 
 ## Encrypted Backups
 
