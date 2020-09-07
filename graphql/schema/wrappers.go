@@ -517,9 +517,9 @@ func mutatedTypeMapping(s *schema,
 		default:
 		}
 		// This is a convoluted way of getting the type for mutatedTypeName. We get the definition
-		// for UpdateTPayload and get the type from the first field. There is no direct way to get
-		// the type from the definition of an object. We use Delete and not Update or Add here because
-		// Interfaces can't have Add and if there is no non Id field then Update also will not be there.
+		// for AddTPayload and get the type from the first field. There is no direct way to get
+		// the type from the definition of an object. Interfaces can't have Add and if there is no non Id
+		// field then Update also will not be there, so we use Delete if there is no AddTPayload.
 		var def *ast.Definition
 		if def = s.schema.Types["Add"+mutatedTypeName+"Payload"]; def == nil {
 			def = s.schema.Types["Delete"+mutatedTypeName+"Payload"]
