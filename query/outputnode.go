@@ -322,8 +322,7 @@ func (enc *encoder) fixOrder(fj fastJsonNode) {
 	if (fj.meta & visitedBit) > 0 {
 		return
 	}
-
-	fj.meta |= visitedBit
+	enc.setVisited(fj, true)
 
 	tail := fj.child // This is node 5 in the chain mentioned above.
 	// Edge cases: Child is nil, or only child.
@@ -724,39 +723,33 @@ func (enc *encoder) copyFastJsonList(fj fastJsonNode) (fastJsonNode, int) {
 		return fj, 0
 	}
 
-	var start, cur fastJsonNode
+	var head, tail fastJsonNode
 	nodeCount := 0
 
 	for fj != nil {
 		nodeCount++
-		nn := enc.newNode(enc.getAttr(fj))
-		nn.meta = fj.meta
-		nn.child = fj.child
-		if cur == nil {
-			cur = nn
-			start = nn
+		nn := enc.copySingleNode(fj)
+		if tail == nil {
+			head, tail = nn, nn
 			fj = fj.next
 			continue
 		}
-		cur.next = nn
-		cur = nn
-
-		fj = fj.next
+		tail.next = nn
+		fj, tail = fj.next, tail.next
 	}
 
-	return start, nodeCount
+	return head, nodeCount
 }
 
 func (enc *encoder) copySingleNode(fj fastJsonNode) fastJsonNode {
 	if fj == nil {
-		return fj
+		return nil
 	}
 
 	nn := enc.newNode(enc.getAttr(fj))
 	nn.meta = fj.meta
 	nn.child = fj.child
 	nn.next = nil
-
 	return nn
 }
 
@@ -1297,8 +1290,8 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 						// the expectation is that its children have
 						// already been normalized.
 
-						// Check reason for calling fixOrder() here in processNodeUids(), just
-						// before calling normalize().
+						// TODO(ashish): Check reason for calling fixOrder() here in
+						// processNodeUids(), just before calling normalize().
 						enc.fixOrder(uc)
 						normAttrs, err := enc.normalize(uc)
 						if err != nil {
