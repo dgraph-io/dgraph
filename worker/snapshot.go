@@ -19,7 +19,6 @@ package worker
 import (
 	"context"
 	"log"
-	"math"
 	"sync/atomic"
 	"time"
 
@@ -120,7 +119,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 	iOpt := badger.DefaultIteratorOptions
 	iOpt.AllVersions = true
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+	txn := pstore.NewTransactionAt(snap.ReadTs, false)
 	it := txn.NewIterator(iOpt)
 	for it.Rewind(); it.Valid(); it.Next() {
 		i := it.Item()
@@ -139,7 +138,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		for _, uid := range plist.Splits {
 			sKey, kErr := x.SplitKey(k, uid)
 			x.Check(kErr)
-			newTxn := pstore.NewTransactionAt(math.MaxUint64, false)
+			newTxn := pstore.NewTransactionAt(snap.ReadTs, false)
 			_, dbErr := newTxn.Get(sKey)
 			if dbErr != nil {
 				log.Panic("Unable to find splitKey: ", sKey, " in badger")
