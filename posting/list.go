@@ -842,11 +842,11 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
 	})
 
-	if len(l.plist.Splits) > 0 {
-		if l.plist.Splits[0] != uint64(1) {
-			log.Panic("First uid of split ", l.plist.Splits[0], " is not 1")
+	if len(out.plist.Splits) > 0 {
+		if out.plist.Splits[0] != uint64(1) {
+			log.Panic("First uid of split ", out.plist.Splits[0], " is not 1")
 		}
-		for _, uid := range l.plist.Splits {
+		for _, uid := range out.plist.Splits {
 			if _, ok := out.parts[uid]; !ok {
 				log.Panic(uid, " split uid is not present")
 			}
@@ -856,7 +856,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 				log.Panic("Error while generating splitKey. baseKey: ", l.key, " startUid: ", uid)
 			}
 			keyIdx := sort.Search(len(kvs), func(i int) bool {
-				return bytes.Compare(kvs[i].Key, partKey) == 0
+				return bytes.Compare(kvs[i].Key, partKey) >= 0
 			})
 
 			if keyIdx == len(kvs) {
