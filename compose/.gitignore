@@ -1,3 +1,4 @@
 /compose
 *.yml
 *.yaml
+/acl-secret

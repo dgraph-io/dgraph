@@ -23,14 +23,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
 // ResetCors make the dgraph to accept all the origins if no origins were given
 // by the users.
-func ResetCors(closer *y.Closer) {
+func ResetCors(closer *z.Closer) {
 	defer func() {
 		glog.Infof("ResetCors closed")
 		closer.Done()

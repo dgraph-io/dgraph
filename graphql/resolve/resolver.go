@@ -688,7 +688,9 @@ func completeDgraphResult(
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
 	// So we are only building object results.
 	var valToComplete map[string]interface{}
-	err := json.Unmarshal(dgResult, &valToComplete)
+	d := json.NewDecoder(bytes.NewBuffer(dgResult))
+	d.UseNumber()
+	err := d.Decode(&valToComplete)
 	if err != nil {
 		glog.Errorf("%+v \n Dgraph result :\n%s\n",
 			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
@@ -1459,18 +1461,19 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case bool:
 			val = strconv.FormatBool(v)
 		case string:
+		case json.Number:
+			val = v.String()
 		default:
 			return nil, valueCoercionError(v)
 		}
 	case "Boolean":
 		switch v := val.(type) {
-		case float64:
-			val = v != 0
-		case int64:
-			val = v != 0
 		case string:
 			val = len(v) > 0
 		case bool:
+		case json.Number:
+			valFloat, _ := v.Float64()
+			val = valFloat != 0
 		default:
 			return nil, valueCoercionError(v)
 		}
@@ -1498,12 +1501,12 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case string:
 			i, err := strconv.ParseFloat(v, 64)
 			// An error can be encountered if we had a value that can't be fit into
-			// a 64 bit floating point number.
+			// a 64 bit floating point number..
+			// Lets try to see if this number could be converted to int32 without losing
+			// information, otherwise return error.
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
-			// Lets try to see if this number could be converted to int32 without losing
-			// information, otherwise return error.
 			i32Val := int32(i)
 			if i == float64(i32Val) {
 				val = i32Val
@@ -1515,9 +1518,21 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				return nil, valueCoercionError(v)
 			}
 		case int:
-			// numUids are added as int, so we need special handling for that. Other number values
-			// in a JSON object are automatically unmarshalled as float so they are handle above.
+			// numUids are added as int, so we need special handling for that.
 			if v > math.MaxInt32 || v < math.MinInt32 {
+				return nil, valueCoercionError(v)
+			}
+		case json.Number:
+			// We have already checked range for int32 at input validation time.
+			// So now just parse and check errors.
+			i, err := strconv.ParseFloat(v.String(), 64)
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			i32Val := int32(i)
+			if i == float64(i32Val) {
+				val = i32Val
+			} else {
 				return nil, valueCoercionError(v)
 			}
 		default:
@@ -1525,22 +1540,6 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		}
 	case "Int64":
 		switch v := val.(type) {
-		case float64:
-			// The spec says that we can coerce a Float value to Int, if we don't lose information.
-			// See: https: //spec.graphql.org/June2018/#sec-Float
-			// See: JSON RFC https://tools.ietf.org/html/rfc8259#section-6, to understand how the
-			// number type guarantees the correctness of integers only between the range
-			// [-(2**53)+1, (2**53)-1] and not the range [-(2**63), (2**63)-1].
-			// Lets try to see if this number could be converted to int64 without losing
-			// information, otherwise return error.
-			// See: https://github.com/golang/go/issues/19405 to understand why the comparison
-			// should be done after double conversion.
-			i64Val := int64(v)
-			if v == float64(i64Val) {
-				val = i64Val
-			} else {
-				return nil, valueCoercionError(v)
-			}
 		case bool:
 			if v {
 				val = 1
@@ -1548,20 +1547,21 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				val = 0
 			}
 		case string:
-			i, err := strconv.ParseFloat(v, 64)
+			i, err := strconv.ParseInt(v, 10, 64)
 			// An error can be encountered if we had a value that can't be fit into
-			// a 64 bit floating point number.
+			// a 64 bit int or because of other parsing issues.
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
-			// Lets try to see if this number could be converted to int64 without losing
-			// information, otherwise return error.
-			i64Val := int64(i)
-			if i == float64(i64Val) {
-				val = i64Val
-			} else {
+			val = i
+		case json.Number:
+			// To use whole 64-bit range for int64 without any coercing,
+			// We pass int64 values as string to dgraph and parse it as integer here
+			i, err := strconv.ParseInt(v.String(), 10, 64)
+			if err != nil {
 				return nil, valueCoercionError(v)
 			}
+			val = i
 		default:
 			return nil, valueCoercionError(v)
 		}
@@ -1575,12 +1575,18 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			}
 		case string:
 			i, err := strconv.ParseFloat(v, 64)
+			// An error can be encountered if we had a value that can't be fit into
+			// a 64 bit floating point number or because of other parsing issues.
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
 			val = i
-		case int64:
-			val = float64(v)
+		case json.Number:
+			i, err := strconv.ParseFloat(v.String(), 64)
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			val = i
 		case float64:
 		default:
 			return nil, valueCoercionError(v)
@@ -1591,18 +1597,16 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			if _, err := types.ParseTime(v); err != nil {
 				return nil, valueCoercionError(v)
 			}
-		case float64:
-			truncated := math.Trunc(v)
-			if truncated == v {
+		case json.Number:
+			valFloat, _ := v.Float64()
+			truncated := math.Trunc(valFloat)
+			if truncated == valFloat {
 				// Lets interpret int values as unix timestamp.
 				t := time.Unix(int64(truncated), 0).UTC()
 				val = t.Format(time.RFC3339)
 			} else {
 				return nil, valueCoercionError(v)
 			}
-		case int64:
-			t := time.Unix(v, 0).UTC()
-			val = t.Format(time.RFC3339)
 		default:
 			return nil, valueCoercionError(v)
 		}

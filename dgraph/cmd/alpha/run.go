@@ -35,7 +35,6 @@ import (
 	"time"
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -47,6 +46,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
@@ -80,6 +80,8 @@ var (
 
 	// need this here to refer it in admin_backup.go
 	adminServer web.IServeGraphQL
+
+	initDone uint32
 )
 
 func init() {
@@ -200,6 +202,7 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
+	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. This returns auth errors to clients. We do not recommend turning it on for production.")
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
 	flag.Int("ludicrous_concurrency", 2000, "Number of concurrent threads in ludicrous mode")
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
@@ -386,7 +389,7 @@ func setupListener(addr string, port int) (net.Listener, error) {
 	return net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
 }
 
-func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
+func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	defer closer.Done()
 
 	x.RegisterExporters(Alpha.Conf, "dgraph.alpha")
@@ -409,7 +412,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
 	s.Stop()
 }
 
-func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
+func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	defer closer.Done()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
@@ -432,7 +435,7 @@ func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
 	}
 }
 
-func setupServer(closer *y.Closer) {
+func setupServer(closer *z.Closer) {
 	go worker.RunServer(bindall) // For pb.communication.
 
 	laddr := "localhost"
@@ -561,7 +564,7 @@ func setupServer(closer *y.Closer) {
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initialize the servers.
-	admin.ServerCloser = y.NewCloser(3)
+	admin.ServerCloser = z.NewCloser(3)
 	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
 	go serveHTTP(httpListener, tlsCfg, admin.ServerCloser)
 
@@ -587,6 +590,7 @@ func setupServer(closer *y.Closer) {
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 
+	atomic.AddUint32(&initDone, 1)
 	admin.ServerCloser.Wait()
 }
 
@@ -720,6 +724,7 @@ func run() {
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
+	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
@@ -765,16 +770,24 @@ func run() {
 			}
 			numShutDownSig++
 			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
-			if numShutDownSig == 3 {
+
+			switch {
+			case atomic.LoadUint32(&initDone) < 2:
+				// Forcefully kill alpha if we haven't finish server initialization.
+				glog.Infoln("Stopped before initialization completed")
+				os.Exit(1)
+			case numShutDownSig == 3:
 				glog.Infoln("Signaled thrice. Aborting!")
 				os.Exit(1)
 			}
 		}
 	}()
 
-	updaters := y.NewCloser(4)
+	updaters := z.NewCloser(4)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
+		atomic.AddUint32(&initDone, 1)
+
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
 		edgraph.ResetAcl(updaters)
@@ -796,7 +809,7 @@ func run() {
 
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we
 	// close alpha. This closer is for closing and waiting that subscription.
-	adminCloser := y.NewCloser(1)
+	adminCloser := z.NewCloser(1)
 
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
@@ -822,7 +835,7 @@ func run() {
 }
 
 // listenForCorsUpdate listen for any cors change and update the accepeted cors.
-func listenForCorsUpdate(closer *y.Closer) {
+func listenForCorsUpdate(closer *z.Closer) {
 	prefix := x.DataKey("dgraph.cors", 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]

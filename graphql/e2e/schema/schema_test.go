@@ -603,6 +603,36 @@ func TestUpdateGQLSchemaFields(t *testing.T) {
 	require.Equal(t, string(generatedSchema), updateResp.UpdateGQLSchema.GQLSchema.GeneratedSchema)
 }
 
+func TestIntrospection(t *testing.T) {
+	// note that both the types implement the same interface and have a field called `name`, which
+	// has exact same name as a field in full introspection query.
+	schema := `
+	interface Node {
+		id: ID!
+	}
+	
+	type Human implements Node {
+		name: String
+	}
+	
+	type Dog implements Node {
+		name: String
+	}`
+	updateGQLSchemaRequireNoErrors(t, schema, groupOneAdminServer)
+	query, err := ioutil.ReadFile("../../schema/testdata/introspection/input/full_query.graphql")
+	require.NoError(t, err)
+
+	introspectionParams := &common.GraphQLParams{Query: string(query)}
+	resp := introspectionParams.ExecuteAsPost(t, groupOneServer)
+
+	// checking that there are no errors in the response, i.e., we always get some data in the
+	// introspection response.
+	require.Nilf(t, resp.Errors, "%s", resp.Errors)
+	require.NotEmpty(t, resp.Data)
+	// TODO: we should actually compare data here, but there seems to be some issue with either the
+	// introspection response or the JSON comparison. Needs deeper looking.
+}
+
 func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {
 	req := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
