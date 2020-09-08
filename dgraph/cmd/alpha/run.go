@@ -111,12 +111,17 @@ they form a Raft group and provide synchronous replication.
 			"log directory. mmap consumes more RAM, but provides better performance. If you pass "+
 			"two values separated by a comma the first value will be used for the postings "+
 			"directory and the second for the w directory.")
-	flag.Int("badger.compression_level", 3,
-		"The compression level for Badger. A higher value uses more resources.")
 	flag.String("encryption_key_file", "",
 		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
 			"The key size determines the corresponding block size for AES encryption "+
 			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+	flag.String("badger.compression_level", "3,0",
+		"Specifies the compression level for the postings and write-ahead log "+
+			"directory. A higher value uses more resources. The value of 0 disables "+
+			"compression. If you pass two values separated by a comma the first "+
+			"value will be used for the postings directory (p) and the second for "+
+			"the wal directory (w). If a single value is passed the value is used "+
+			"as compression level for both directories.")
 
 	// Snapshot and Transactions.
 	flag.Int("snapshot_after", 10000,
@@ -554,15 +559,22 @@ func run() {
 	wstoreBlockCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
 	wstoreIndexCacheSize := (cachePercent[4] * (totalCache << 20)) / 100
 
+	compressionLevelString := Alpha.Conf.GetString("badger.compression_level")
+	compressionLevels, err := x.GetCompressionLevels(compressionLevelString)
+	x.Check(err)
+	postingDirCompressionLevel := compressionLevels[0]
+	walDirCompressionLevel := compressionLevels[1]
+
 	opts := worker.Options{
-		BadgerKeyFile:          Alpha.Conf.GetString("encryption_key_file"),
-		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-		PostingDir:             Alpha.Conf.GetString("postings"),
-		WALDir:                 Alpha.Conf.GetString("wal"),
-		PBlockCacheSize:        pstoreBlockCacheSize,
-		PIndexCacheSize:        pstoreIndexCacheSize,
-		WBlockCacheSize:        wstoreBlockCacheSize,
-		WIndexCacheSize:        wstoreIndexCacheSize,
+		BadgerKeyFile:              Alpha.Conf.GetString("encryption_key_file"),
+		PostingDir:                 Alpha.Conf.GetString("postings"),
+		WALDir:                     Alpha.Conf.GetString("wal"),
+		PostingDirCompressionLevel: postingDirCompressionLevel,
+		WALDirCompressionLevel:     walDirCompressionLevel,
+		PBlockCacheSize:            pstoreBlockCacheSize,
+		PIndexCacheSize:            pstoreIndexCacheSize,
+		WBlockCacheSize:            wstoreBlockCacheSize,
+		WIndexCacheSize:            wstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
