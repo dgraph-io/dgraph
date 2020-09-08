@@ -3721,26 +3721,26 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
 
 	expected := `{
 		"addPerson1": {
-			"person1": [
+		  "person1": [
+			{
+			  "friends": [
 				{
-					"friends": [
-						{
-							"friends": [
-								{
-									"name": "Or"
-								},
-								{
-									"name": "Justin"
-								}
-							],
-							"name": "Michal"
-						}
-					],
-					"name": "Or"
+				  "friends": [
+					{
+					  "name": "Or"
+					},
+					{
+					  "name": "Justin"
+					}
+				  ],
+				  "name": "Michal"
 				}
-			]
+			  ],
+			  "name": "Or"
+			}
+		  ]
 		}
-	}`
+	  }`
 	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 
 	// cleanup
