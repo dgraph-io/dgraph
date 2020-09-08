@@ -32,6 +32,7 @@ func TestRestoreStatus(t *testing.T) {
 		})
 	require.NoError(t, err)
 	GQLQuery := test.GetQuery(t, op)
-	_, err = getRestoreStatusInput(GQLQuery)
+	v, err := getRestoreStatusInput(GQLQuery)
 	require.NoError(t, err)
+	require.IsType(t, int64(2), v, nil)
 }
