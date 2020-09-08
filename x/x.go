@@ -1169,25 +1169,16 @@ func GetCompressionLevels(compressionLevelsString string) ([]int, error) {
 		return nil, errors.Errorf("ERROR: expected single integer or two comma separated integers")
 	}
 	var compressionLevelsInt []int
-	if len(compressionLevels) == 1 {
-		x, err := ParseCompressionLevel(compressionLevels[0])
-		if err != nil {
-			return nil, err
-		}
-		// Appending twice. One for PostingsDir, other for WALDir
-		compressionLevelsInt = append(compressionLevelsInt, x)
-		compressionLevelsInt = append(compressionLevelsInt, x)
-	} else {
-		x, err := ParseCompressionLevel(compressionLevels[0])
+	for _, cLevel := range compressionLevels {
+		x, err := ParseCompressionLevel(cLevel)
 		if err != nil {
 			return nil, err
 		}
 		compressionLevelsInt = append(compressionLevelsInt, x)
-		x, err = ParseCompressionLevel(compressionLevels[1])
-		if err != nil {
-			return nil, err
-		}
-		compressionLevelsInt = append(compressionLevelsInt, x)
+	}
+	// Append the same compression level in case only one level was passed.
+	if len(compressionLevelsInt) == 1 {
+		compressionLevelsInt = append(compressionLevelsInt, compressionLevelsInt[0])
 	}
 	return compressionLevelsInt, nil
 }
