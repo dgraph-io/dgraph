@@ -124,6 +124,11 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	for it.Rewind(); it.Valid(); it.Next() {
 		i := it.Item()
 		k := i.Key()
+		parsedKey, kErr := x.Parse(k)
+		x.Check(kErr)
+		if !parsedKey.IsData() {
+			continue
+		}
 		v, vErr := i.ValueCopy(nil)
 		x.Check(vErr)
 		plist := &pb.PostingList{}
