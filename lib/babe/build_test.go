@@ -117,10 +117,7 @@ func createTestBlock(t *testing.T, babeService *Service, parent *types.Header, e
 		}
 	}
 
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, err)
 	return block, slot
 }
 
@@ -141,9 +138,7 @@ func TestBuildBlock_ok(t *testing.T) {
 
 	// create pre-digest
 	preDigest, err := babeService.buildBlockPreDigest(slot)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	expectedBlockHeader := &types.Header{
 		ParentHash:     emptyHeader.Hash(),
@@ -157,7 +152,9 @@ func TestBuildBlock_ok(t *testing.T) {
 	block.Header.Digest = block.Header.Digest[:1]
 	// reset state root, since it has randomness aspects in it
 	// TODO: where does this randomness come from?
-	block.Header.StateRoot, _ = babeService.storageState.StorageRoot()
+	header, err := babeService.blockState.BestBlockHeader()
+	require.NoError(t, err)
+	block.Header.StateRoot = header.StateRoot
 
 	if !reflect.DeepEqual(block.Header, expectedBlockHeader) {
 		t.Fatalf("Fail: got %v expected %v", block.Header, expectedBlockHeader)
@@ -165,14 +162,10 @@ func TestBuildBlock_ok(t *testing.T) {
 
 	// confirm block body is correct
 	extsRes, err := block.Body.AsExtrinsics()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	extsBytes := types.ExtrinsicsArrayToBytesArray(extsRes)
-	if !reflect.DeepEqual(extsBytes, exts) {
-		t.Fatalf("Fail: got %v expected %v", extsBytes, exts)
-	}
+	require.Equal(t, exts, extsBytes)
 }
 
 func TestBuildBlock_failing(t *testing.T) {
@@ -195,13 +188,8 @@ func TestBuildBlock_failing(t *testing.T) {
 	var slotNumber uint64 = 1
 
 	outAndProof, err := babeService.runLottery(slotNumber)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if outAndProof == nil {
-		t.Fatal("proof was nil when over threshold")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, outAndProof, "proof was nil when over threshold")
 
 	babeService.slotToProof[slotNumber] = outAndProof
 
@@ -218,9 +206,7 @@ func TestBuildBlock_failing(t *testing.T) {
 	babeService.transactionQueue.Push(vtx)
 
 	zeroHash, err := common.HexToHash("0x00")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	parentHeader := &types.Header{
 		ParentHash: zeroHash,

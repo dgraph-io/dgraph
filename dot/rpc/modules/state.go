@@ -133,14 +133,17 @@ func (sm *StateModule) GetPairs(r *http.Request, req *[]string, res *[]interface
 	reqBytes, _ := common.HexToBytes(pReq[0])
 
 	if len(reqBytes) < 1 {
-		pairs := sm.storageAPI.Entries()
+		pairs, err := sm.storageAPI.Entries(nil)
+		if err != nil {
+			return err
+		}
 		for k, v := range pairs {
 			*res = append(*res, []string{"0x" + hex.EncodeToString([]byte(k)), "0x" + hex.EncodeToString(v)})
 		}
 	} else {
 		// TODO this should return all keys with same prefix, currently only returning
 		//  matches.  Implement when #837 is done.
-		resI, err := sm.storageAPI.GetStorage(reqBytes)
+		resI, err := sm.storageAPI.GetStorage(nil, reqBytes)
 		if err != nil {
 			return err
 		}
@@ -214,12 +217,30 @@ func (sm *StateModule) GetRuntimeVersion(r *http.Request, req *StateBlockHashQue
 
 // GetStorage Returns a storage entry at a specific block's state. If not block hash is provided, the latest value is returned.
 func (sm *StateModule) GetStorage(r *http.Request, req *[]string, res *interface{}) error {
-	// TODO implement change storage trie so that block hash parameter works (See issue #834)
 	pReq := *req
 	reqBytes, _ := common.HexToBytes(pReq[0]) // no need to catch error here
-	item, err := sm.storageAPI.GetStorage(reqBytes)
-	if err != nil {
-		return err
+
+	var (
+		item  []byte
+		bhash common.Hash
+		err   error
+	)
+
+	if len(pReq) > 1 {
+		bhash, err = common.HexToHash(pReq[1])
+		if err != nil {
+			return err
+		}
+
+		item, err = sm.storageAPI.GetStorageByBlockHash(bhash, reqBytes)
+		if err != nil {
+			return err
+		}
+	} else {
+		item, err = sm.storageAPI.GetStorage(nil, reqBytes)
+		if err != nil {
+			return err
+		}
 	}
 
 	if len(item) > 0 {
@@ -236,11 +257,29 @@ func (sm *StateModule) GetStorage(r *http.Request, req *[]string, res *interface
 //  TODO implement change storage trie so that block hash parameter works (See issue #834)
 func (sm *StateModule) GetStorageHash(r *http.Request, req *[]string, res *interface{}) error {
 	pReq := *req
-	reqByte, _ := common.HexToBytes(pReq[0])
+	reqBytes, _ := common.HexToBytes(pReq[0])
 
-	item, err := sm.storageAPI.GetStorage(reqByte)
-	if err != nil {
-		return err
+	var (
+		item  []byte
+		bhash common.Hash
+		err   error
+	)
+
+	if len(pReq) > 1 {
+		bhash, err = common.HexToHash(pReq[1])
+		if err != nil {
+			return err
+		}
+
+		item, err = sm.storageAPI.GetStorageByBlockHash(bhash, reqBytes)
+		if err != nil {
+			return err
+		}
+	} else {
+		item, err = sm.storageAPI.GetStorage(nil, reqBytes)
+		if err != nil {
+			return err
+		}
 	}
 
 	if len(item) > 0 {
@@ -257,11 +296,29 @@ func (sm *StateModule) GetStorageHash(r *http.Request, req *[]string, res *inter
 // TODO implement change storage trie so that block hash parameter works (See issue #834)
 func (sm *StateModule) GetStorageSize(r *http.Request, req *[]string, res *interface{}) error {
 	pReq := *req
-	reqByte, _ := common.HexToBytes(pReq[0])
+	reqBytes, _ := common.HexToBytes(pReq[0])
 
-	item, err := sm.storageAPI.GetStorage(reqByte)
-	if err != nil {
-		return err
+	var (
+		item  []byte
+		bhash common.Hash
+		err   error
+	)
+
+	if len(pReq) > 1 {
+		bhash, err = common.HexToHash(pReq[1])
+		if err != nil {
+			return err
+		}
+
+		item, err = sm.storageAPI.GetStorageByBlockHash(bhash, reqBytes)
+		if err != nil {
+			return err
+		}
+	} else {
+		item, err = sm.storageAPI.GetStorage(nil, reqBytes)
+		if err != nil {
+			return err
+		}
 	}
 
 	if len(item) > 0 {

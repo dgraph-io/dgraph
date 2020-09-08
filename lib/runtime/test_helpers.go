@@ -50,13 +50,13 @@ func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie, l
 	_, err := GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL)
 	require.Nil(t, err, "Fail: could not get runtime", "targetRuntime", targetRuntime)
 
-	rs := NewTestRuntimeStorage(tt)
+	s := newTestRuntimeStorage(tt)
 
 	fp, err := filepath.Abs(testRuntimeFilePath)
 	require.Nil(t, err, "could not create testRuntimeFilePath", "targetRuntime", targetRuntime)
 
 	cfg := &Config{
-		Storage:  rs,
+		Storage:  s,
 		Keystore: keystore.NewGenericKeystore("test"),
 		Imports:  importsFunc,
 		LogLvl:   lvl,
@@ -65,7 +65,6 @@ func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie, l
 	r, err := NewRuntimeFromFile(fp, cfg)
 	require.Nil(t, err, "Got error when trying to create new VM", "targetRuntime", targetRuntime)
 	require.NotNil(t, r, "Could not create new VM instance", "targetRuntime", targetRuntime)
-
 	return r
 }
 
@@ -174,68 +173,56 @@ func GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL string) (n int64, err er
 	return n, err
 }
 
-// TestRuntimeStorage holds trie pointer
-type TestRuntimeStorage struct {
+type testRuntimeStorage struct {
 	trie *trie.Trie
 }
 
-// NewTestRuntimeStorage creates new instance of TestRuntimeStorage
-func NewTestRuntimeStorage(tr *trie.Trie) *TestRuntimeStorage {
+func newTestRuntimeStorage(tr *trie.Trie) *testRuntimeStorage {
 	if tr == nil {
 		tr = trie.NewEmptyTrie()
 	}
-	return &TestRuntimeStorage{
+	return &testRuntimeStorage{
 		trie: tr,
 	}
 }
 
-// TrieAsString is a dummy test func
-func (trs TestRuntimeStorage) TrieAsString() string {
+func (trs testRuntimeStorage) TrieAsString() string {
 	return trs.trie.String()
 }
 
-// SetStorage is a dummy test func
-func (trs TestRuntimeStorage) SetStorage(key []byte, value []byte) error {
+func (trs testRuntimeStorage) Set(key []byte, value []byte) error {
 	return trs.trie.Put(key, value)
 }
 
-// GetStorage is a dummy test func
-func (trs TestRuntimeStorage) GetStorage(key []byte) ([]byte, error) {
+func (trs testRuntimeStorage) Get(key []byte) ([]byte, error) {
 	return trs.trie.Get(key)
 }
 
-// StorageRoot is a dummy test func
-func (trs TestRuntimeStorage) StorageRoot() (common.Hash, error) {
+func (trs testRuntimeStorage) Root() (common.Hash, error) {
 	return trs.trie.Hash()
 }
 
-// SetStorageChild is a dummy test func
-func (trs TestRuntimeStorage) SetStorageChild(keyToChild []byte, child *trie.Trie) error {
+func (trs testRuntimeStorage) SetChild(keyToChild []byte, child *trie.Trie) error {
 	return trs.trie.PutChild(keyToChild, child)
 }
 
-// SetStorageIntoChild is a dummy test func
-func (trs TestRuntimeStorage) SetStorageIntoChild(keyToChild, key, value []byte) error {
+func (trs testRuntimeStorage) SetChildStorage(keyToChild, key, value []byte) error {
 	return trs.trie.PutIntoChild(keyToChild, key, value)
 }
 
-// GetStorageFromChild is a dummy test func
-func (trs TestRuntimeStorage) GetStorageFromChild(keyToChild, key []byte) ([]byte, error) {
+func (trs testRuntimeStorage) GetChildStorage(keyToChild, key []byte) ([]byte, error) {
 	return trs.trie.GetFromChild(keyToChild, key)
 }
 
-// ClearStorage is a dummy test func
-func (trs TestRuntimeStorage) ClearStorage(key []byte) error {
+func (trs testRuntimeStorage) Delete(key []byte) error {
 	return trs.trie.Delete(key)
 }
 
-// Entries is a dummy test func
-func (trs TestRuntimeStorage) Entries() map[string][]byte {
+func (trs testRuntimeStorage) Entries() map[string][]byte {
 	return trs.trie.Entries()
 }
 
-// SetBalance sets the balance for an account with the given public key
-func (trs TestRuntimeStorage) SetBalance(key [32]byte, balance uint64) error {
+func (trs testRuntimeStorage) SetBalance(key [32]byte, balance uint64) error {
 	skey, err := common.BalanceKey(key)
 	if err != nil {
 		return err
@@ -244,17 +231,16 @@ func (trs TestRuntimeStorage) SetBalance(key [32]byte, balance uint64) error {
 	bb := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bb, balance)
 
-	return trs.SetStorage(skey, bb)
+	return trs.Set(skey, bb)
 }
 
-// GetBalance gets the balance for an account with the given public key
-func (trs TestRuntimeStorage) GetBalance(key [32]byte) (uint64, error) {
+func (trs testRuntimeStorage) GetBalance(key [32]byte) (uint64, error) {
 	skey, err := common.BalanceKey(key)
 	if err != nil {
 		return 0, err
 	}
 
-	bal, err := trs.GetStorage(skey)
+	bal, err := trs.Get(skey)
 	if err != nil {
 		return 0, err
 	}

@@ -100,6 +100,10 @@ func StoreTrie(db database.Database, t *trie.Trie) error {
 		return err
 	}
 
+	if has, err := db.Has(roothash[:]); err == nil && has {
+		return nil
+	}
+
 	return db.Put(roothash[:], enc)
 }
 

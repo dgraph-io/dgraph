@@ -106,7 +106,7 @@ func TestApplyExtrinsic_Transfer_WithBalance_UncheckedExtrinsic(t *testing.T) {
 	bb := [32]byte{}
 	copy(bb[:], bob)
 
-	rt.storage.SetBalance(ab, 2000)
+	rt.ctx.storage.SetBalance(ab, 2000)
 
 	var nonce uint64 = 0
 	tranCallData := struct {
@@ -142,7 +142,7 @@ func TestApplyExtrinsic_Transfer_WithBalance_UncheckedExtrinsic(t *testing.T) {
 	require.Equal(t, []byte{1, 2, 0, 1}, res) // 0x01020001 represents Apply error, Type: Payment: Inability to pay some fees
 
 	// TODO: not sure why balances aren't getting adjusted properly, because of AncientBirthBlock?
-	bal, err := rt.storage.GetBalance(ab)
+	bal, err := rt.ctx.storage.GetBalance(ab)
 	require.NoError(t, err)
 	require.Equal(t, uint64(2000), bal)
 

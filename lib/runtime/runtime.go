@@ -17,7 +17,6 @@
 package runtime
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -47,11 +46,9 @@ type Config struct {
 
 // Runtime struct
 type Runtime struct {
-	vm        wasm.Instance
-	storage   Storage
-	keystore  *keystore.GenericKeystore
-	mutex     sync.Mutex
-	allocator *FreeingBumpHeapAllocator
+	vm    wasm.Instance
+	ctx   *Ctx
+	mutex sync.Mutex
 }
 
 // NewRuntimeFromFile instantiates a runtime from a .wasm file
@@ -67,10 +64,6 @@ func NewRuntimeFromFile(fp string, cfg *Config) (*Runtime, error) {
 
 // NewRuntime instantiates a runtime from raw wasm bytecode
 func NewRuntime(code []byte, cfg *Config) (*Runtime, error) {
-	if cfg.Storage == nil {
-		return nil, errors.New("runtime does not have storage trie")
-	}
-
 	// if cfg.LogLvl set to < 0, then don't change package log level
 	if cfg.LogLvl >= 0 {
 		h := log.StreamHandler(os.Stdout, log.TerminalFormat())
@@ -99,21 +92,18 @@ func NewRuntime(code []byte, cfg *Config) (*Runtime, error) {
 
 	memAllocator := NewAllocator(instance.Memory, 0)
 
-	runtimeCtx := Ctx{
+	runtimeCtx := &Ctx{
 		storage:   cfg.Storage,
 		allocator: memAllocator,
 		keystore:  cfg.Keystore,
 	}
 
 	logger.Debug("NewRuntime", "runtimeCtx", runtimeCtx)
-	instance.SetContextData(&runtimeCtx)
+	instance.SetContextData(runtimeCtx)
 
 	r := Runtime{
-		vm:        instance,
-		storage:   cfg.Storage,
-		mutex:     sync.Mutex{},
-		keystore:  cfg.Keystore,
-		allocator: memAllocator,
+		vm:  instance,
+		ctx: runtimeCtx,
 	}
 
 	return &r, nil
@@ -138,6 +128,10 @@ func (r *Runtime) Load(location, length int32) []byte {
 
 // Exec func
 func (r *Runtime) Exec(function string, data []byte) ([]byte, error) {
+	if r.ctx.storage == nil {
+		return nil, ErrNilStorage
+	}
+
 	ptr, err := r.malloc(uint32(len(data)))
 	if err != nil {
 		return nil, err
@@ -176,9 +170,9 @@ func (r *Runtime) Exec(function string, data []byte) ([]byte, error) {
 }
 
 func (r *Runtime) malloc(size uint32) (uint32, error) {
-	return r.allocator.Allocate(size)
+	return r.ctx.allocator.Allocate(size)
 }
 
 func (r *Runtime) free(ptr uint32) error {
-	return r.allocator.Deallocate(ptr)
+	return r.ctx.allocator.Deallocate(ptr)
 }

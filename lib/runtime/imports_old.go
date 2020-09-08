@@ -144,7 +144,7 @@ func ext_get_storage_into(context unsafe.Pointer, keyData, keyLen, valueData, va
 	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
-	val, err := s.GetStorage(key)
+	val, err := s.Get(key)
 	if err != nil {
 		logger.Warn("[ext_get_storage_into]", "err", err)
 		ret := 1<<32 - 1
@@ -178,7 +178,7 @@ func ext_set_storage(context unsafe.Pointer, keyData, keyLen, valueData, valueLe
 	key := memory[keyData : keyData+keyLen]
 	val := memory[valueData : valueData+valueLen]
 	logger.Trace("[ext_set_storage]", "key", fmt.Sprintf("0x%x", key), "val", val)
-	err := s.SetStorage(key, val)
+	err := s.Set(key, val)
 	if err != nil {
 		logger.Error("[ext_set_storage]", "error", err)
 		return
@@ -198,7 +198,7 @@ func ext_set_child_storage(context unsafe.Pointer, storageKeyData, storageKeyLen
 	key := memory[keyData : keyData+keyLen]
 	value := memory[valueData : valueData+valueLen]
 
-	err := s.SetStorageIntoChild(keyToChild, key, value)
+	err := s.SetChildStorage(keyToChild, key, value)
 	if err != nil {
 		logger.Error("[ext_set_child_storage]", "error", err)
 	}
@@ -216,7 +216,7 @@ func ext_get_child_storage_into(context unsafe.Pointer, storageKeyData, storageK
 	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
 	key := memory[keyData : keyData+keyLen]
 
-	value, err := s.GetStorageFromChild(keyToChild, key)
+	value, err := s.GetChildStorage(keyToChild, key)
 	if err != nil {
 		logger.Error("[ext_get_child_storage_into]", "error", err)
 		return -(1 << 31)
@@ -236,7 +236,7 @@ func ext_storage_root(context unsafe.Pointer, resultPtr int32) {
 	runtimeCtx := instanceContext.Data().(*Ctx)
 	s := runtimeCtx.storage
 
-	root, err := s.StorageRoot()
+	root, err := s.Root()
 	if err != nil {
 		logger.Error("[ext_storage_root]", "error", err)
 		return
@@ -266,7 +266,7 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 	key := memory[keyData : keyData+keyLen]
 	logger.Trace("[ext_get_allocated_storage]", "key", fmt.Sprintf("0x%x", key))
 
-	val, err := s.GetStorage(key)
+	val, err := s.Get(key)
 	if err != nil {
 		logger.Error("[ext_get_allocated_storage]", "error", err)
 		copy(memory[writtenOut:writtenOut+4], []byte{0xff, 0xff, 0xff, 0xff})
@@ -334,7 +334,7 @@ func ext_clear_storage(context unsafe.Pointer, keyData, keyLen int32) {
 	s := runtimeCtx.storage
 
 	key := memory[keyData : keyData+keyLen]
-	err := s.ClearStorage(key)
+	err := s.Delete(key)
 	if err != nil {
 		logger.Error("[ext_storage_root]", "error", err)
 	}
@@ -354,7 +354,7 @@ func ext_clear_prefix(context unsafe.Pointer, prefixData, prefixLen int32) {
 	entries := s.Entries()
 	for k := range entries {
 		if bytes.Equal([]byte(k)[:prefixLen], prefix) {
-			err := s.ClearStorage([]byte(k))
+			err := s.Delete([]byte(k))
 			if err != nil {
 				logger.Error("[ext_clear_prefix]", "err", err)
 			}

@@ -44,6 +44,7 @@ type Service struct {
 
 	// State interfaces
 	blockState       BlockState // retrieve our current head of chain from BlockState
+	storageState     StorageState
 	transactionQueue TransactionQueue
 	blockProducer    BlockProducer
 
@@ -66,6 +67,7 @@ type Service struct {
 type Config struct {
 	LogLvl           log.Lvl
 	BlockState       BlockState
+	StorageState     StorageState
 	BlockProducer    BlockProducer
 	TransactionQueue TransactionQueue
 	Runtime          *runtime.Runtime
@@ -77,6 +79,10 @@ type Config struct {
 func NewService(cfg *Config) (*Service, error) {
 	if cfg.BlockState == nil {
 		return nil, ErrNilBlockState
+	}
+
+	if cfg.StorageState == nil {
+		return nil, ErrNilStorageState
 	}
 
 	if cfg.Verifier == nil {
@@ -92,12 +98,14 @@ func NewService(cfg *Config) (*Service, error) {
 	}
 
 	logger := log.New("pkg", "sync")
-	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
-	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
+	handler := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	handler = log.CallerFileHandler(handler)
+	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, handler))
 
 	return &Service{
 		logger:           logger,
 		blockState:       cfg.BlockState,
+		storageState:     cfg.StorageState,
 		blockProducer:    cfg.BlockProducer,
 		synced:           true,
 		highestSeenBlock: big.NewInt(0),
@@ -210,8 +218,8 @@ func (s *Service) HandleBlockResponse(msg *network.BlockResponseMessage) *networ
 
 	// if we cannot find the parent block in our blocktree, we are missing some blocks, and need to request
 	// blocks from farther back in the chain
-	if err == blocktree.ErrParentNotFound {
-		s.logger.Debug("got ErrParentNotFound; need to request earlier blocks")
+	if err == blocktree.ErrParentNotFound || err == chaindb.ErrKeyNotFound {
+		s.logger.Debug("got ErrParentNotFound or ErrKeyNotFound; need to request earlier blocks")
 		bestNum, err := s.blockState.BestBlockNumber() //nolint
 		if err != nil {
 			s.logger.Error("failed to get best block number", "error", err)
@@ -283,6 +291,10 @@ func (s *Service) createBlockRequest(startInt int64) *network.BlockRequestMessag
 
 // processBlockResponseData processes the BlockResponse and returns the start and end blocks in the response
 func (s *Service) processBlockResponseData(msg *network.BlockResponseMessage) (int64, int64, error) {
+	if msg == nil {
+		return 0, 0, errors.New("got nil BlockResponseMessage")
+	}
+
 	blockData := msg.BlockData
 	start := maxInt64
 	end := int64(0)
@@ -397,13 +409,34 @@ func (s *Service) handleBody(body *types.Body) error {
 
 // handleHeader handles blocks (header+body) included in BlockResponses
 func (s *Service) handleBlock(block *types.Block) error {
+	if block == nil || block.Header == nil {
+		return errors.New("nil block or header")
+	}
+
+	parent, err := s.blockState.GetHeader(block.Header.ParentHash)
+	if err != nil {
+		return err
+	}
+
+	ts, err := s.storageState.TrieState(&parent.StateRoot)
+	if err != nil {
+		return err
+	}
+
+	s.runtime.SetContext(ts)
+
 	// TODO: needs to be fixed by #941
 	// _, err := s.executeBlock(block)
 	// if err != nil {
 	// 	return err
 	// }
 
-	err := s.blockState.AddBlock(block)
+	err = s.storageState.StoreTrie(block.Header.StateRoot, ts)
+	if err != nil {
+		return err
+	}
+
+	err = s.blockState.AddBlock(block)
 	if err != nil {
 		if err == blocktree.ErrParentNotFound && block.Header.Number.Cmp(big.NewInt(0)) != 0 {
 			return err

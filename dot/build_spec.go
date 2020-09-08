@@ -93,7 +93,11 @@ func BuildFromDB(path string) (*BuildSpec, error) {
 	}
 
 	// set genesis fields data
-	ent := stateSrvc.Storage.Entries()
+	ent, err := stateSrvc.Storage.Entries(nil)
+	if err != nil {
+		return nil, err
+	}
+
 	err = genesis.BuildFromMap(ent, tmpGen)
 	if err != nil {
 		return nil, err

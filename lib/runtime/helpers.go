@@ -22,6 +22,9 @@ var ErrInvalidTransaction = &json2.Error{Code: 1010, Message: "Invalid Transacti
 //  value of [1, 1, x]
 var ErrUnknownTransaction = &json2.Error{Code: 1011, Message: "Unknown Transaction Validity"}
 
+// ErrNilStorage is returned when the runtime context storage isn't set
+var ErrNilStorage = errors.New("runtime context storage is nil")
+
 // ValidateTransaction runs the extrinsic through runtime function TaggedTransactionQueue_validate_transaction and returns *Validity
 func (r *Runtime) ValidateTransaction(e types.Extrinsic) (*transaction.Validity, error) {
 	ret, err := r.Exec(TaggedTransactionQueueValidateTransaction, e)
@@ -56,6 +59,11 @@ func determineError(res []byte) error {
 	}
 
 	return ErrCannotValidateTx
+}
+
+// SetContext sets the runtime's storage. It should be set before calls to the below functions.
+func (r *Runtime) SetContext(s Storage) {
+	r.ctx.storage = s
 }
 
 // BabeConfiguration gets the configuration data for BABE from the runtime

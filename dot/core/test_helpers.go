@@ -203,7 +203,8 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 
 	genesisData := new(genesis.Data)
 
-	err := stateSrvc.Initialize(genesisData, testGenesisHeader, trie.NewEmptyTrie(), firstEpochInfo)
+	tt := trie.NewEmptyTrie()
+	err := stateSrvc.Initialize(genesisData, testGenesisHeader, tt, firstEpochInfo)
 	require.Nil(t, err)
 
 	err = stateSrvc.Start()

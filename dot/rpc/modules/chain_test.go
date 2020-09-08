@@ -33,13 +33,13 @@ import (
 )
 
 func TestChainGetHeader_Genesis(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 	expected := &ChainBlockHeaderResponse{
 		ParentHash:     "0x0000000000000000000000000000000000000000000000000000000000000000",
 		Number:         "0x00",
-		StateRoot:      "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
-		ExtrinsicsRoot: "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
+		StateRoot:      trie.EmptyHash.String(),
+		ExtrinsicsRoot: trie.EmptyHash.String(),
 		Digest:         ChainBlockHeaderDigest{},
 	}
 	res := &ChainBlockHeaderResponse{}
@@ -51,12 +51,12 @@ func TestChainGetHeader_Genesis(t *testing.T) {
 }
 
 func TestChainGetHeader_Latest(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 	expected := &ChainBlockHeaderResponse{
-		ParentHash:     "0xdbfdd87392d9ee52f499610582737daceecf83dc3ad7946fcadeb01c86e1ef75",
+		ParentHash:     "0x8b38e3b4dda30540c1245eab842b8d5ceefd8abcb46c5752348f5b0742e49d21",
 		Number:         "0x01",
-		StateRoot:      "0x0000000000000000000000000000000000000000000000000000000000000000",
+		StateRoot:      trie.EmptyHash.String(),
 		ExtrinsicsRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
 		Digest:         ChainBlockHeaderDigest{},
 	}
@@ -69,7 +69,7 @@ func TestChainGetHeader_Latest(t *testing.T) {
 }
 
 func TestChainGetHeader_NotFound(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 
 	res := &ChainBlockHeaderResponse{}
@@ -79,7 +79,7 @@ func TestChainGetHeader_NotFound(t *testing.T) {
 }
 
 func TestChainGetHeader_Error(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 
 	res := &ChainBlockHeaderResponse{}
@@ -89,13 +89,13 @@ func TestChainGetHeader_Error(t *testing.T) {
 }
 
 func TestChainGetBlock_Genesis(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 	header := &ChainBlockHeaderResponse{
 		ParentHash:     "0x0000000000000000000000000000000000000000000000000000000000000000",
 		Number:         "0x00",
-		StateRoot:      "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
-		ExtrinsicsRoot: "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
+		StateRoot:      trie.EmptyHash.String(),
+		ExtrinsicsRoot: trie.EmptyHash.String(),
 		Digest:         ChainBlockHeaderDigest{},
 	}
 	expected := &ChainBlockResponse{
@@ -114,12 +114,12 @@ func TestChainGetBlock_Genesis(t *testing.T) {
 }
 
 func TestChainGetBlock_Latest(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 	header := &ChainBlockHeaderResponse{
-		ParentHash:     "0xdbfdd87392d9ee52f499610582737daceecf83dc3ad7946fcadeb01c86e1ef75",
+		ParentHash:     "0x8b38e3b4dda30540c1245eab842b8d5ceefd8abcb46c5752348f5b0742e49d21",
 		Number:         "0x01",
-		StateRoot:      "0x0000000000000000000000000000000000000000000000000000000000000000",
+		StateRoot:      trie.EmptyHash.String(),
 		ExtrinsicsRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
 		Digest:         ChainBlockHeaderDigest{},
 	}
@@ -139,7 +139,7 @@ func TestChainGetBlock_Latest(t *testing.T) {
 }
 
 func TestChainGetBlock_NoFound(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 
 	res := &ChainBlockResponse{}
@@ -149,7 +149,7 @@ func TestChainGetBlock_NoFound(t *testing.T) {
 }
 
 func TestChainGetBlock_Error(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 
 	res := &ChainBlockResponse{}
@@ -159,7 +159,7 @@ func TestChainGetBlock_Error(t *testing.T) {
 }
 
 func TestChainGetBlockHash_Latest(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 
 	resString := string("")
@@ -168,12 +168,12 @@ func TestChainGetBlockHash_Latest(t *testing.T) {
 	err := svc.GetBlockHash(nil, &req, &res)
 
 	require.Nil(t, err)
-
-	require.Equal(t, "0x80d653de440352760f89366c302c02a92ab059f396e2bfbf7f860e6e256cd698", res)
+	expected := chain.Block.BestBlockHash()
+	require.Equal(t, expected.String(), res)
 }
 
 func TestChainGetBlockHash_ByNumber(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 
 	resString := string("")
@@ -183,11 +183,11 @@ func TestChainGetBlockHash_ByNumber(t *testing.T) {
 
 	require.Nil(t, err)
 
-	require.Equal(t, "0x80d653de440352760f89366c302c02a92ab059f396e2bfbf7f860e6e256cd698", res)
+	require.Equal(t, "0x12ee07bf9e9f12e8edc7ec24e323debe693c04b40d121ae23bcd6fcf2a7dcc3b", res)
 }
 
 func TestChainGetBlockHash_ByHex(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 
 	resString := string("")
@@ -197,11 +197,11 @@ func TestChainGetBlockHash_ByHex(t *testing.T) {
 
 	require.Nil(t, err)
 
-	require.Equal(t, "0x80d653de440352760f89366c302c02a92ab059f396e2bfbf7f860e6e256cd698", res)
+	require.Equal(t, "0x12ee07bf9e9f12e8edc7ec24e323debe693c04b40d121ae23bcd6fcf2a7dcc3b", res)
 }
 
 func TestChainGetBlockHash_Array(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 
 	resString := string("")
@@ -214,11 +214,11 @@ func TestChainGetBlockHash_Array(t *testing.T) {
 
 	require.Nil(t, err)
 
-	require.Equal(t, []string{"0xdbfdd87392d9ee52f499610582737daceecf83dc3ad7946fcadeb01c86e1ef75", "0x80d653de440352760f89366c302c02a92ab059f396e2bfbf7f860e6e256cd698"}, res)
+	require.Equal(t, []string{"0x8b38e3b4dda30540c1245eab842b8d5ceefd8abcb46c5752348f5b0742e49d21", "0x12ee07bf9e9f12e8edc7ec24e323debe693c04b40d121ae23bcd6fcf2a7dcc3b"}, res)
 }
 
 func TestChainGetFinalizedHead(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 
 	var res ChainHashResponse
@@ -229,7 +229,7 @@ func TestChainGetFinalizedHead(t *testing.T) {
 }
 
 func TestChainGetFinalizedHeadByRound(t *testing.T) {
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	svc := NewChainModule(chain.Block)
 
 	var res ChainHashResponse
@@ -256,7 +256,7 @@ var firstEpochInfo = &types.EpochInfo{
 	FirstBlock: 0,
 }
 
-func newTestChainService(t *testing.T) *state.Service {
+func newTestStateService(t *testing.T) *state.Service {
 	testDir := utils.NewTestDir(t)
 	defer utils.RemoveTestDir(t)
 	stateSrvc := state.NewService(testDir, log.LvlInfo)
@@ -289,6 +289,7 @@ func loadTestBlocks(gh common.Hash, bs *state.BlockState) error {
 		Number:     big.NewInt(0),
 		Digest:     [][]byte{},
 		ParentHash: gh,
+		StateRoot:  trie.EmptyHash,
 	}
 	// Create blockHash
 	blockHash0 := header0.Hash()
@@ -310,6 +311,7 @@ func loadTestBlocks(gh common.Hash, bs *state.BlockState) error {
 		Number:     big.NewInt(1),
 		Digest:     [][]byte{},
 		ParentHash: blockHash0,
+		StateRoot:  trie.EmptyHash,
 	}
 
 	// Create Block with fake extrinsics

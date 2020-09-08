@@ -13,8 +13,9 @@ import (
 
 // StorageAPI is the interface for the storage state
 type StorageAPI interface {
-	GetStorage(key []byte) ([]byte, error)
-	Entries() map[string][]byte
+	GetStorage(root *common.Hash, key []byte) ([]byte, error)
+	GetStorageByBlockHash(bhash common.Hash, key []byte) ([]byte, error)
+	Entries(root *common.Hash) (map[string][]byte, error)
 	RegisterStorageChangeChannel(ch chan<- *state.KeyValue) (byte, error)
 	UnregisterStorageChangeChannel(id byte)
 }

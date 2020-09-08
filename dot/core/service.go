@@ -137,7 +137,12 @@ func NewService(cfg *Config) (*Service, error) {
 	h = log.CallerFileHandler(h)
 	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
 
-	codeHash, err := cfg.StorageState.LoadCodeHash()
+	sr, err := cfg.BlockState.BestBlockStateRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	codeHash, err := cfg.StorageState.LoadCodeHash(&sr)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +239,13 @@ func (s *Service) StorageRoot() (common.Hash, error) {
 	if s.storageState == nil {
 		return common.Hash{}, ErrNilStorageState
 	}
-	return s.storageState.StorageRoot()
+
+	ts, err := s.storageState.TrieState(nil)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return ts.Root()
 }
 
 func (s *Service) safeMsgSend(msg network.Message) {
@@ -257,14 +268,14 @@ func (s *Service) handleBlocks(ctx context.Context) {
 				continue
 			}
 
-			err := s.handleRuntimeChanges(block.Header)
+			err := s.storageState.StoreInDB(block.Header.StateRoot)
 			if err != nil {
-				log.Warn("failed to handle runtime change for block", "block", block.Header.Hash())
+				log.Warn("failed to store storage trie in database", "error", err)
 			}
 
-			err = s.storageState.StoreInDB()
+			err = s.handleRuntimeChanges(block.Header)
 			if err != nil {
-				log.Warn("failed to storage storage root in database", "error", err)
+				log.Warn("failed to handle runtime change for block", "block", block.Header.Hash(), "error", err)
 			}
 		case <-ctx.Done():
 			return
@@ -364,21 +375,31 @@ func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
 // handleRuntimeChanges checks if changes to the runtime code have occurred; if so, load the new runtime
 // It also updates the BABE service and block verifier with the new runtime
 func (s *Service) handleRuntimeChanges(header *types.Header) error {
-	currentCodeHash, err := s.storageState.LoadCodeHash()
+	sr, err := s.blockState.BestBlockStateRoot()
+	if err != nil {
+		return err
+	}
+
+	currentCodeHash, err := s.storageState.LoadCodeHash(&sr)
 	if err != nil {
 		return err
 	}
 
 	if !bytes.Equal(currentCodeHash[:], s.codeHash[:]) {
-		code, err := s.storageState.LoadCode()
+		code, err := s.storageState.LoadCode(&sr)
 		if err != nil {
 			return err
 		}
 
 		s.rt.Stop()
 
+		ts, err := s.storageState.TrieState(&sr)
+		if err != nil {
+			return err
+		}
+
 		cfg := &runtime.Config{
-			Storage:  s.storageState,
+			Storage:  ts,
 			Keystore: s.keys.Acco.(*keystore.GenericKeystore),
 			Imports:  runtime.RegisterImports_NodeRuntime,
 			LogLvl:   -1, // don't change runtime package log level
@@ -424,6 +445,12 @@ func (s *Service) GetRuntimeVersion() (*runtime.VersionAPI, error) {
 		RuntimeVersion: &runtime.Version{},
 		API:            nil,
 	}
+
+	ts, err := s.storageState.TrieState(nil)
+	if err != nil {
+		return nil, err
+	}
+	s.rt.SetContext(ts)
 
 	ret, err := s.rt.Exec(runtime.CoreVersion, []byte{})
 	if err != nil {

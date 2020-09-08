@@ -136,11 +136,35 @@ func TestHandleRuntimeChanges(t *testing.T) {
 	testRuntime, err := ioutil.ReadFile(runtime.TESTS_FP)
 	require.Nil(t, err)
 
-	err = s.storageState.SetStorage([]byte(":code"), testRuntime)
+	ts, err := s.storageState.TrieState(nil)
+	require.NoError(t, err)
+
+	err = ts.Set([]byte(":code"), testRuntime)
 	require.Nil(t, err)
 
+	root, err := ts.Root()
+	require.NoError(t, err)
+
+	s.storageState.StoreTrie(root, ts)
+	head := &types.Header{
+		ParentHash: s.blockState.BestBlockHash(),
+		Number:     big.NewInt(1),
+		StateRoot:  root,
+		Digest:     [][]byte{},
+	}
+
+	err = s.blockState.AddBlock(&types.Block{
+		Header: head,
+		Body:   types.NewBody([]byte{}),
+	})
+	require.NoError(t, err)
+
+	bestHeader, err := s.blockState.BestBlockHeader()
+	require.NoError(t, err)
+	require.Equal(t, head, bestHeader)
+
 	err = s.handleRuntimeChanges(testGenesisHeader)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestService_HasKey(t *testing.T) {

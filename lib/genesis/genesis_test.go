@@ -28,6 +28,6 @@ import (
 
 func TestNewRuntimeFromGenesis(t *testing.T) {
 	gen := dot.NewTestGenesis(t)
-	_, err := genesis.NewRuntimeFromGenesis(gen, &state.StorageState{})
+	_, err := genesis.NewRuntimeFromGenesis(gen, &state.TrieState{})
 	require.NoError(t, err)
 }

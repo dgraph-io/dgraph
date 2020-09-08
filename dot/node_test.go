@@ -371,7 +371,7 @@ func TestInitNode_LoadBalances(t *testing.T) {
 	kr, _ := keystore.NewSr25519Keyring()
 	alice := kr.Alice().Public().(*sr25519.PublicKey).AsBytes()
 
-	bal, err := stateSrv.Storage.GetBalance(alice)
+	bal, err := stateSrv.Storage.GetBalance(nil, alice)
 	require.NoError(t, err)
 
 	genbal := "0x0000000000000001"

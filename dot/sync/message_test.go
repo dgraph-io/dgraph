@@ -8,6 +8,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/common/variadic"
+	"github.com/ChainSafe/gossamer/lib/trie"
 
 	"github.com/stretchr/testify/require"
 )
@@ -22,6 +23,7 @@ func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) {
 			Header: &types.Header{
 				ParentHash: previousHash,
 				Number:     big.NewInt(int64(i)).Add(previousNum, big.NewInt(int64(i))),
+				StateRoot:  trie.EmptyHash,
 				Digest:     [][]byte{},
 			},
 			Body: &types.Body{},

@@ -17,9 +17,11 @@ package modules
 
 import (
 	"fmt"
+	"math/big"
 	"sort"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/stretchr/testify/require"
 )
@@ -173,11 +175,29 @@ func TestStateModule_GetMetadata(t *testing.T) {
 func setupStateModule(t *testing.T) *StateModule {
 	// setup service
 	net := newNetworkService(t)
-	chain := newTestChainService(t)
+	chain := newTestStateService(t)
 	// init storage with test data
-	err := chain.Storage.SetStorage([]byte(`:key1`), []byte(`value1`))
+	ts, err := chain.Storage.TrieState(nil)
 	require.NoError(t, err)
-	err = chain.Storage.SetStorage([]byte(`:key2`), []byte(`value2`))
+
+	err = ts.Set([]byte(`:key1`), []byte(`value1`))
+	require.NoError(t, err)
+	err = ts.Set([]byte(`:key2`), []byte(`value2`))
+	require.NoError(t, err)
+
+	sr1, err := ts.Root()
+	require.NoError(t, err)
+	err = chain.Storage.StoreTrie(sr1, ts)
+	require.NoError(t, err)
+
+	err = chain.Block.AddBlock(&types.Block{
+		Header: &types.Header{
+			ParentHash: chain.Block.BestBlockHash(),
+			Number:     big.NewInt(2),
+			StateRoot:  sr1,
+		},
+		Body: types.NewBody([]byte{}),
+	})
 	require.NoError(t, err)
 
 	core := newCoreService(t)

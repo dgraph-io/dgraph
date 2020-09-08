@@ -33,9 +33,9 @@ func TestStorageState_RegisterStorageChangeChannel(t *testing.T) {
 	defer ss.UnregisterStorageChangeChannel(id)
 
 	// three storage change events
-	ss.SetStorage([]byte("mackcom"), []byte("wuz here"))
-	ss.SetStorage([]byte("key1"), []byte("value1"))
-	ss.SetStorage([]byte("key1"), []byte("value2"))
+	ss.setStorage(nil, []byte("mackcom"), []byte("wuz here"))
+	ss.setStorage(nil, []byte("key1"), []byte("value1"))
+	ss.setStorage(nil, []byte("key1"), []byte("value2"))
 
 	for i := 0; i < 3; i++ {
 		select {
@@ -61,7 +61,7 @@ func TestStorageState_RegisterStorageChangeChannel_Multi(t *testing.T) {
 	}
 
 	key1 := []byte("key1")
-	ss.SetStorage(key1, []byte("value1"))
+	ss.setStorage(nil, key1, []byte("value1"))
 
 	var wg sync.WaitGroup
 	wg.Add(num)

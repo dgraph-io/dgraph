@@ -69,6 +69,10 @@ func newTestSyncer(t *testing.T, cfg *Config) *Service {
 		cfg.BlockState = stateSrvc.Block
 	}
 
+	if cfg.StorageState == nil {
+		cfg.StorageState = stateSrvc.Storage
+	}
+
 	if cfg.Runtime == nil {
 		cfg.Runtime = runtime.NewTestRuntime(t, runtime.SUBSTRATE_TEST_RUNTIME)
 	}
@@ -300,9 +304,9 @@ func TestHandleBlockResponse_BlockData(t *testing.T) {
 	syncer := newTestSyncer(t, nil)
 
 	cHeader := &optional.CoreHeader{
-		ParentHash:     common.Hash{}, // executeBlock fails empty or 0 hash
-		Number:         big.NewInt(0),
-		StateRoot:      common.Hash{},
+		ParentHash:     syncer.blockState.BestBlockHash(), // executeBlock fails empty or 0 hash
+		Number:         big.NewInt(1),
+		StateRoot:      trie.EmptyHash,
 		ExtrinsicsRoot: common.Hash{},
 		Digest:         nil,
 	}
@@ -321,8 +325,8 @@ func TestHandleBlockResponse_BlockData(t *testing.T) {
 	}
 	low, high, err := syncer.processBlockResponseData(msg)
 	require.Nil(t, err)
-	require.Equal(t, int64(0), low)
-	require.Equal(t, int64(0), high)
+	require.Equal(t, int64(1), low)
+	require.Equal(t, int64(1), high)
 }
 
 func newBlockBuilder(t *testing.T, cfg *babe.ServiceConfig) *babe.Service { //nolint

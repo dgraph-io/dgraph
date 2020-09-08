@@ -20,12 +20,12 @@ import (
 	"math/big"
 
 	"github.com/ChainSafe/gossamer/dot/network"
+	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/services"
 	"github.com/ChainSafe/gossamer/lib/transaction"
-	"github.com/ChainSafe/gossamer/lib/trie"
 )
 
 // BlockState interface for block state methods
@@ -33,6 +33,7 @@ type BlockState interface {
 	BestBlockHash() common.Hash
 	BestBlockHeader() (*types.Header, error)
 	BestBlockNumber() (*big.Int, error)
+	BestBlockStateRoot() (common.Hash, error)
 	BestBlock() (*types.Block, error)
 	AddBlock(*types.Block) error
 	GetAllBlocksAtDepth(hash common.Hash) []common.Hash
@@ -54,19 +55,11 @@ type BlockState interface {
 
 // StorageState interface for storage state methods
 type StorageState interface {
-	StorageRoot() (common.Hash, error)
-	SetStorage([]byte, []byte) error
-	GetStorage([]byte) ([]byte, error)
-	StoreInDB() error
-	LoadCode() ([]byte, error)
-	LoadCodeHash() (common.Hash, error)
-	SetStorageChild([]byte, *trie.Trie) error
-	SetStorageIntoChild([]byte, []byte, []byte) error
-	GetStorageFromChild([]byte, []byte) ([]byte, error)
-	ClearStorage([]byte) error
-	Entries() map[string][]byte
-	SetBalance(key [32]byte, balance uint64) error
-	GetBalance(key [32]byte) (uint64, error)
+	StoreTrie(common.Hash, *state.TrieState) error
+	StoreInDB(root common.Hash) error
+	LoadCode(root *common.Hash) ([]byte, error)
+	LoadCodeHash(root *common.Hash) (common.Hash, error)
+	TrieState(root *common.Hash) (*state.TrieState, error)
 }
 
 // TransactionQueue is the interface for transaction queue methods

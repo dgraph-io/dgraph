@@ -100,11 +100,14 @@ func (m *MockBlockAPI) UnregisterImportedChannel(id byte) {
 
 type MockStorageAPI struct{}
 
-func (m *MockStorageAPI) GetStorage(key []byte) ([]byte, error) {
+func (m *MockStorageAPI) GetStorage(_ *common.Hash, key []byte) ([]byte, error) {
 	return nil, nil
 }
-func (m *MockStorageAPI) Entries() map[string][]byte {
-	return nil
+func (m *MockStorageAPI) Entries(_ *common.Hash) (map[string][]byte, error) {
+	return nil, nil
+}
+func (m *MockStorageAPI) GetStorageByBlockHash(_ common.Hash, key []byte) ([]byte, error) {
+	return nil, nil
 }
 func (m *MockStorageAPI) RegisterStorageChangeChannel(ch chan<- *state.KeyValue) (byte, error) {
 	return 0, nil

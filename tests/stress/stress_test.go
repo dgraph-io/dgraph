@@ -188,7 +188,6 @@ func TestSync_Bench(t *testing.T) {
 	// start syncing node
 	bob, err := utils.RunGossamer(t, 1, utils.TestDir(t, "bob"), utils.GenesisDefault, utils.ConfigNoBABE)
 	require.NoError(t, err)
-	start := time.Now()
 
 	nodes := []*utils.Node{alice, bob}
 	defer func() {
@@ -198,6 +197,7 @@ func TestSync_Bench(t *testing.T) {
 
 	// see how long it takes to sync to block 256
 	last := big.NewInt(int64(numBlocks))
+	start := time.Now()
 	var end time.Time
 
 	for {
@@ -212,8 +212,8 @@ func TestSync_Bench(t *testing.T) {
 		}
 	}
 
-	maxTime := time.Second * 12
-	minBPS := float64(22)
+	maxTime := time.Second * 15
+	minBPS := float64(17)
 	totalTime := end.Sub(start)
 	bps := float64(numBlocks) / end.Sub(start).Seconds()
 	t.Log("total sync time:", totalTime)

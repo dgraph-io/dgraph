@@ -62,6 +62,16 @@ func (t *Trie) EncodeRoot() ([]byte, error) {
 	return encode(t.RootNode())
 }
 
+// MustHash returns the hashed root of the trie. It panics if it fails to hash the root node.
+func (t *Trie) MustHash() common.Hash {
+	h, err := t.Hash()
+	if err != nil {
+		panic(err)
+	}
+
+	return h
+}
+
 // Hash returns the hashed root of the trie
 func (t *Trie) Hash() (common.Hash, error) {
 	encRoot, err := t.EncodeRoot()

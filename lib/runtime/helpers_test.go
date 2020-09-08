@@ -388,7 +388,7 @@ func TestApplyExtrinsic_StorageChange_Set(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []byte{0, 0}, res)
 
-	val, err := rt.storage.GetStorage([]byte("testkey"))
+	val, err := rt.ctx.storage.Get([]byte("testkey"))
 	require.NoError(t, err)
 	require.Equal(t, []byte("testvalue"), val)
 
@@ -400,7 +400,7 @@ func TestApplyExtrinsic_StorageChange_Set(t *testing.T) {
 	}
 	require.NoError(t, err)
 
-	val, err = rt.storage.GetStorage([]byte("testkey"))
+	val, err = rt.ctx.storage.Get([]byte("testkey"))
 	require.NoError(t, err)
 	// TODO: why does calling finalize_block modify the storage?
 	require.NotEqual(t, []byte("testvalue"), val)
@@ -425,7 +425,7 @@ func TestApplyExtrinsic_StorageChange_Delete(t *testing.T) {
 
 	require.Equal(t, []byte{0, 0}, res)
 
-	val, err := rt.storage.GetStorage([]byte("testkey"))
+	val, err := rt.ctx.storage.Get([]byte("testkey"))
 	require.NoError(t, err)
 	require.Equal(t, []byte(nil), val)
 }
@@ -479,7 +479,7 @@ func TestApplyExtrinsic_Transfer_WithBalance(t *testing.T) {
 	bb := [32]byte{}
 	copy(bb[:], bob)
 
-	rt.storage.SetBalance(ab, 2000)
+	rt.ctx.storage.SetBalance(ab, 2000)
 
 	transfer := extrinsic.NewTransfer(ab, bb, 1000, 0)
 	ext, err := transfer.AsSignedExtrinsic(kr.Alice().Private().(*sr25519.PrivateKey))
@@ -495,11 +495,11 @@ func TestApplyExtrinsic_Transfer_WithBalance(t *testing.T) {
 	require.Equal(t, []byte{0, 0}, res)
 
 	// TODO: not sure if alice's balance is getting decremented properly, seems like it's always getting set to the transfer amount
-	bal, err := rt.storage.GetBalance(ab)
+	bal, err := rt.ctx.storage.GetBalance(ab)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1000), bal)
 
-	bal, err = rt.storage.GetBalance(bb)
+	bal, err = rt.ctx.storage.GetBalance(bb)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1000), bal)
 }

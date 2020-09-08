@@ -29,7 +29,7 @@ func TestExt_get_storage_into(t *testing.T) {
 	// store kv pair in trie
 	key := []byte(":noot")
 	value := []byte{1, 3, 3, 7}
-	err := runtime.storage.SetStorage(key, value)
+	err := runtime.ctx.storage.Set(key, value)
 	require.Nil(t, err)
 
 	// copy key to position `keyData` in memory
@@ -89,7 +89,7 @@ func TestExt_set_storage(t *testing.T) {
 	require.Nil(t, err)
 
 	// make sure we can get the value from the trie
-	trieValue, err := runtime.storage.GetStorage(key)
+	trieValue, err := runtime.ctx.storage.Get(key)
 	require.Nil(t, err)
 
 	if !bytes.Equal(value, trieValue) {
@@ -106,7 +106,7 @@ func TestExt_storage_root(t *testing.T) {
 	mem := runtime.vm.Memory.Data()
 	// save result at `resultPtr` in memory
 	resultPtr := 170
-	hash, err := runtime.storage.StorageRoot()
+	hash, err := runtime.ctx.storage.Root()
 	require.Nil(t, err)
 
 	testFunc, ok := runtime.vm.Exports["test_ext_storage_root"]
@@ -190,7 +190,7 @@ func Test_ext_get_allocated_storage(t *testing.T) {
 	// put kv pair in trie
 	key := []byte(":noot")
 	value := []byte{1, 3, 3, 7}
-	err := runtime.storage.SetStorage(key, value)
+	err := runtime.ctx.storage.Set(key, value)
 	require.Nil(t, err)
 
 	// copy key to `keyData` in memory
@@ -238,7 +238,7 @@ func TestExt_clear_storage(t *testing.T) {
 	// save kv pair in trie
 	key := []byte(":noot")
 	value := []byte{1, 3, 3, 7}
-	err := runtime.storage.SetStorage(key, value)
+	err := runtime.ctx.storage.Set(key, value)
 	require.Nil(t, err)
 
 	// copy key to wasm memory
@@ -254,7 +254,7 @@ func TestExt_clear_storage(t *testing.T) {
 	require.Nil(t, err)
 
 	// make sure value is deleted
-	ret, err := runtime.storage.GetStorage(key)
+	ret, err := runtime.ctx.storage.Get(key)
 	require.Nil(t, err)
 
 	if ret != nil {
@@ -280,7 +280,7 @@ func TestExt_clear_prefix(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		e := runtime.storage.SetStorage(test.key, test.value)
+		e := runtime.ctx.storage.Set(test.key, test.value)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -318,7 +318,7 @@ func TestExt_clear_prefix(t *testing.T) {
 	require.Nil(t, err)
 
 	// make sure entries with that prefix were deleted
-	runtimeTrieHash, err := runtime.storage.StorageRoot()
+	runtimeTrieHash, err := runtime.ctx.storage.Root()
 	require.Nil(t, err)
 
 	expectedHash, err := expectedTrie.Hash()
@@ -791,7 +791,7 @@ func TestExt_sr25519_generate(t *testing.T) {
 	pubkey, err := sr25519.NewPublicKey(pubkeyData)
 	require.Nil(t, err)
 
-	kp := runtime.keystore.GetKeypair(pubkey)
+	kp := runtime.ctx.keystore.GetKeypair(pubkey)
 	if kp == nil {
 		t.Fatal("Fail: keypair was not saved in keystore")
 	}
@@ -829,7 +829,7 @@ func TestExt_ed25519_generate(t *testing.T) {
 	pubkey, err := ed25519.NewPublicKey(pubkeyData)
 	require.Nil(t, err)
 
-	kp := runtime.keystore.GetKeypair(pubkey)
+	kp := runtime.ctx.keystore.GetKeypair(pubkey)
 	if kp == nil {
 		t.Fatal("Fail: keypair was not saved in keystore")
 	}
@@ -848,7 +848,7 @@ func TestExt_ed25519_public_keys(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		runtime.keystore.Insert(kp)
+		runtime.ctx.keystore.Insert(kp)
 		testKps = append(testKps, kp)
 		expected := testKps[i].Public().Encode()
 		expectedPubkeys = append(expectedPubkeys, expected)
@@ -860,7 +860,7 @@ func TestExt_ed25519_public_keys(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		runtime.keystore.Insert(kp)
+		runtime.ctx.keystore.Insert(kp)
 	}
 
 	mem := runtime.vm.Memory.Data()
@@ -909,7 +909,7 @@ func TestExt_sr25519_public_keys(t *testing.T) {
 		kp, err := sr25519.GenerateKeypair()
 		require.Nil(t, err)
 
-		runtime.keystore.Insert(kp)
+		runtime.ctx.keystore.Insert(kp)
 		testKps = append(testKps, kp)
 		expected := testKps[i].Public().Encode()
 		expectedPubkeys = append(expectedPubkeys, expected)
@@ -920,7 +920,7 @@ func TestExt_sr25519_public_keys(t *testing.T) {
 		kp, err := ed25519.GenerateKeypair()
 		require.Nil(t, err)
 
-		runtime.keystore.Insert(kp)
+		runtime.ctx.keystore.Insert(kp)
 	}
 
 	mem := runtime.vm.Memory.Data()
@@ -968,7 +968,7 @@ func TestExt_ed25519_sign(t *testing.T) {
 	kp, err := ed25519.GenerateKeypair()
 	require.Nil(t, err)
 
-	runtime.keystore.Insert(kp)
+	runtime.ctx.keystore.Insert(kp)
 
 	idLoc := 0
 	pubkeyLoc := 0
@@ -1013,7 +1013,7 @@ func TestExt_sr25519_sign(t *testing.T) {
 	kp, err := sr25519.GenerateKeypair()
 	require.Nil(t, err)
 
-	runtime.keystore.Insert(kp)
+	runtime.ctx.keystore.Insert(kp)
 
 	idLoc := 0
 	pubkeyLoc := 0
@@ -1060,10 +1060,10 @@ func TestExt_get_child_storage_into(t *testing.T) {
 	key := []byte("mykey")
 	value := []byte("myvalue")
 
-	err := runtime.storage.SetStorageChild(storageKey, trie.NewEmptyTrie())
+	err := runtime.ctx.storage.SetChild(storageKey, trie.NewEmptyTrie())
 	require.Nil(t, err)
 
-	err = runtime.storage.SetStorageIntoChild(storageKey, key, value)
+	err = runtime.ctx.storage.SetChildStorage(storageKey, key, value)
 	require.Nil(t, err)
 
 	storageKeyData := 0
@@ -1102,7 +1102,7 @@ func TestExt_set_child_storage(t *testing.T) {
 	key := []byte("mykey")
 	value := []byte("myvalue")
 
-	err := runtime.storage.SetStorageChild(storageKey, trie.NewEmptyTrie())
+	err := runtime.ctx.storage.SetChild(storageKey, trie.NewEmptyTrie())
 	require.Nil(t, err)
 
 	storageKeyData := 0
@@ -1125,7 +1125,7 @@ func TestExt_set_child_storage(t *testing.T) {
 	_, err = testFunc(storageKeyData, storageKeyLen, keyData, keyLen, valueData, valueLen)
 	require.Nil(t, err)
 
-	res, err := runtime.storage.GetStorageFromChild(storageKey, key)
+	res, err := runtime.ctx.storage.GetChildStorage(storageKey, key)
 	require.Nil(t, err)
 
 	if !bytes.Equal(res, value) {
