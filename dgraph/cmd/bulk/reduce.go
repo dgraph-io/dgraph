@@ -43,6 +43,8 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/dustin/go-humanize"
 )
 
 type reducer struct {
@@ -51,10 +53,6 @@ type reducer struct {
 	mu        sync.RWMutex
 	streamIds map[string]uint32
 }
-
-const batchSize = 10000
-const maxSplitBatchLen = 1000
-const batchAlloc = batchSize * 11 / 10
 
 func (r *reducer) run() error {
 	dirs := readShardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
@@ -71,10 +69,17 @@ func (r *reducer) run() error {
 
 			mapFiles := filenamesInTree(dirs[shardId])
 			var mapItrs []*mapIterator
-			partitionKeys := [][]byte{}
+
+			// Dedup the partition keys.
+			partitions := make(map[string]struct{})
 			for _, mapFile := range mapFiles {
 				header, itr := newMapIterator(mapFile)
-				partitionKeys = append(partitionKeys, header.PartitionKeys...)
+				for _, k := range header.PartitionKeys {
+					if len(k) == 0 {
+						continue
+					}
+					partitions[string(k)] = struct{}{}
+				}
 				mapItrs = append(mapItrs, itr)
 			}
 
@@ -88,6 +93,13 @@ func (r *reducer) run() error {
 				writer:      writer,
 				splitWriter: splitWriter,
 				tmpDb:       tmpDb,
+				splitCh:     make(chan *bpb.KVList, 2*runtime.NumCPU()),
+				countBuf:    z.NewBuffer(1024),
+			}
+
+			partitionKeys := make([][]byte, len(partitions))
+			for k := range partitions {
+				partitionKeys = append(partitionKeys, []byte(k))
 			}
 			sort.Slice(partitionKeys, func(i, j int) bool {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
@@ -101,6 +113,7 @@ func (r *reducer) run() error {
 			ci.wait()
 
 			x.Check(writer.Flush())
+			fmt.Println("Writing split lists back to the main DB now")
 
 			// Write split lists back to the main DB.
 			r.writeSplitLists(db, tmpDb)
@@ -172,75 +185,65 @@ func (r *reducer) setBadgerOptions(opt *badger.Options, compression bool) {
 }
 
 type mapIterator struct {
-	fd       *os.File
-	reader   *bufio.Reader
-	batchCh  chan *iteratorEntry
-	freelist chan *iteratorEntry
+	fd      *os.File
+	reader  *bufio.Reader
+	batchCh chan *iteratorEntry
 }
 
 type iteratorEntry struct {
 	partitionKey []byte
-	batch        [][]byte
+	cbuf         *z.Buffer
 }
 
 func (mi *mapIterator) release(ie *iteratorEntry) {
-	ie.batch = ie.batch[:0]
-	select {
-	case mi.freelist <- ie:
-	default:
-	}
+	ie.cbuf.Release()
 }
 
 func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	var ie *iteratorEntry
 	prevKeyExist := false
-	var buf, eBuf, key []byte
-	var err error
+	var meBuf, key []byte
+	var cbuf *z.Buffer
 
-	// readKey reads the next map entry key.
 	readMapEntry := func() error {
 		if prevKeyExist {
 			return nil
 		}
 		r := mi.reader
-		buf, err = r.Peek(binary.MaxVarintLen64)
+		sizeBuf, err := r.Peek(binary.MaxVarintLen64)
 		if err != nil {
 			return err
 		}
-		sz, n := binary.Uvarint(buf)
+		sz, n := binary.Uvarint(sizeBuf)
 		if n <= 0 {
 			log.Fatalf("Could not read uvarint: %d", n)
 		}
 		x.Check2(r.Discard(n))
-
-		eBuf = make([]byte, sz)
-		x.Check2(io.ReadFull(r, eBuf))
-
-		key, err = GetKeyForMapEntry(eBuf)
-		return err
+		if cap(meBuf) < int(sz) {
+			meBuf = make([]byte, int(sz))
+		}
+		meBuf = meBuf[:int(sz)]
+		x.Check2(io.ReadFull(r, meBuf))
+		key = MapEntry(meBuf).Key()
+		return nil
 	}
 
 	for _, pKey := range partitionsKeys {
-		select {
-		case ie = <-mi.freelist:
-		default:
-			ie = &iteratorEntry{
-				batch: make([][]byte, 0, batchAlloc),
-			}
-		}
-		ie.partitionKey = pKey
+		ie = &iteratorEntry{partitionKey: pKey, cbuf: z.NewBuffer(64)}
 		for {
 			err := readMapEntry()
 			if err == io.EOF {
 				break
 			}
 			x.Check(err)
+
 			if bytes.Compare(key, ie.partitionKey) < 0 {
+				b := ie.cbuf.SliceAllocate(len(meBuf))
+				copy(b, meBuf)
 				prevKeyExist = false
-				ie.batch = append(ie.batch, eBuf)
+				// map entry is already part of cBuf.
 				continue
 			}
-
 			// Current key is not part of this batch so track that we have already read the key.
 			prevKeyExist = true
 			break
@@ -249,18 +252,19 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 	}
 
 	// Drain the last items.
-	batch := make([][]byte, 0, batchAlloc)
+	cbuf = z.NewBuffer(64)
 	for {
 		err := readMapEntry()
 		if err == io.EOF {
 			break
 		}
 		x.Check(err)
+		b := cbuf.SliceAllocate(len(meBuf))
+		copy(b, meBuf)
 		prevKeyExist = false
-		batch = append(batch, eBuf)
 	}
 	mi.batchCh <- &iteratorEntry{
-		batch:        batch,
+		cbuf:         cbuf,
 		partitionKey: nil,
 	}
 }
@@ -293,25 +297,20 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 	x.Check(err)
 
 	itr := &mapIterator{
-		fd:       fd,
-		reader:   reader,
-		batchCh:  make(chan *iteratorEntry, 3),
-		freelist: make(chan *iteratorEntry, 3),
+		fd:      fd,
+		reader:  reader,
+		batchCh: make(chan *iteratorEntry, 3),
 	}
 	return header, itr
 }
 
-type countIndexEntry struct {
-	key   []byte
-	count int
-}
-
 type encodeRequest struct {
-	entries   [][]byte
-	countKeys []*countIndexEntry
-	wg        *sync.WaitGroup
-	list      *bpb.KVList
-	splitList *bpb.KVList
+	cbuf     *z.Buffer
+	countBuf *z.Buffer
+	wg       *sync.WaitGroup
+	listCh   chan *bpb.KVList
+	splitCh  chan *bpb.KVList
+	offsets  []int
 }
 
 func (r *reducer) streamIdFor(pred string) uint32 {
@@ -331,30 +330,27 @@ func (r *reducer) streamIdFor(pred string) uint32 {
 	return streamId
 }
 
-func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
+func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
-	for req := range entryCh {
 
-		req.list = &bpb.KVList{}
-		req.splitList = &bpb.KVList{}
-		countKeys := r.toList(req.entries, req.list, req.splitList)
-		for _, kv := range req.list.Kv {
-			pk, err := x.Parse(kv.Key)
-			x.Check(err)
-			x.AssertTrue(len(pk.Attr) > 0)
-			kv.StreamId = r.streamIdFor(pk.Attr)
-		}
-		req.countKeys = countKeys
+	var offsets []int // Use this to avoid allocating too much memory.
+	for req := range entryCh {
+		req.offsets = offsets
+
+		r.toList(req)
+		offsets = req.offsets // We might have allocated a bigger slice, so set offsets to that.
+
 		req.wg.Done()
-		atomic.AddInt32(&r.prog.numEncoding, -1)
 	}
 }
 
-func (r *reducer) writeTmpSplits(ci *countIndexer, kvsCh chan *bpb.KVList, wg *sync.WaitGroup) {
+const maxSplitBatchLen = 1000
+
+func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 	defer wg.Done()
 	splitBatchLen := 0
 
-	for kvs := range kvsCh {
+	for kvs := range ci.splitCh {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			continue
 		}
@@ -381,40 +377,49 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, kvsCh chan *bpb.KVList, wg *s
 	x.Check(ci.splitWriter.Flush())
 }
 
-func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *y.Closer) {
+func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
 
 	// Concurrently write split lists to a temporary badger.
 	tmpWg := new(sync.WaitGroup)
 	tmpWg.Add(1)
-	splitCh := make(chan *bpb.KVList, 2*runtime.NumCPU())
-	go r.writeTmpSplits(ci, splitCh, tmpWg)
+	go r.writeTmpSplits(ci, tmpWg)
 
+	var offsets []int
 	for req := range writerCh {
+		req.wg.Add(1) // One for finishing the writes.
+		go func() {
+			defer req.wg.Done()
+			for kvlist := range req.listCh {
+				x.Check(ci.writer.Write(kvlist))
+			}
+		}()
 		req.wg.Wait()
 
-		for _, countKey := range req.countKeys {
-			ci.addUid(countKey.key, countKey.count)
+		// Go through the countBuf.
+		offsets = req.countBuf.SliceOffsets(offsets[:0])
+		sort.Slice(offsets, func(i, j int) bool {
+			left := countEntry(req.countBuf.Slice(offsets[i]))
+			right := countEntry(req.countBuf.Slice(offsets[j]))
+			return left.less(right)
+		})
+		if sz := req.countBuf.Len(); sz > 0 {
+			ci.countBuf.Grow(sz)
 		}
-		// Wait for it to be encoded.
-		start := time.Now()
-
-		x.Check(ci.writer.Write(req.list))
-		if req.splitList != nil && len(req.splitList.Kv) > 0 {
-			splitCh <- req.splitList
+		for _, offset := range offsets {
+			ce := countEntry(req.countBuf.Slice(offset))
+			ci.addCountEntry(ce)
 		}
-
-		if dur := time.Since(start).Round(time.Millisecond); dur > time.Second {
-			fmt.Printf("writeCh: Time taken to write req: %v\n",
-				time.Since(start).Round(time.Millisecond))
-		}
+		req.countBuf.Release()
 	}
 
 	// Wait for split lists to be written to the temporary badger.
-	close(splitCh)
+	close(ci.splitCh)
 	tmpWg.Wait()
 }
 
+// TODO(martinmr): This should be done via the stream framework.
+// Also, do we delete the tmpDb?
 func (r *reducer) writeSplitLists(db, tmpDb *badger.DB) {
 	txn := tmpDb.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
@@ -450,50 +455,107 @@ func (r *reducer) writeSplitLists(db, tmpDb *badger.DB) {
 }
 
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
-	cpu := runtime.NumCPU()
-	fmt.Printf("Num CPUs: %d\n", cpu)
+	cpu := r.opt.NumGoroutines
+	fmt.Printf("Num Encoders: %d\n", cpu)
 	encoderCh := make(chan *encodeRequest, 2*cpu)
 	writerCh := make(chan *encodeRequest, 2*cpu)
-	encoderCloser := y.NewCloser(cpu)
+	encoderCloser := z.NewCloser(cpu)
 	for i := 0; i < cpu; i++ {
 		// Start listening to encode entries
 		// For time being let's lease 100 stream id for each encoder.
 		go r.encode(encoderCh, encoderCloser)
 	}
 	// Start listening to write the badger list.
-	writerCloser := y.NewCloser(1)
+	writerCloser := z.NewCloser(1)
 	go r.startWriting(ci, writerCh, writerCloser)
 
-	for i := 0; i < len(partitionKeys); i++ {
-		batch := make([][]byte, 0, batchAlloc)
-		for _, itr := range mapItrs {
-			res := itr.Next()
-			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
-			batch = append(batch, res.batch...)
-			itr.release(res)
+	throttle := func() {
+		for {
+			sz := atomic.LoadInt64(&r.prog.numEncoding)
+			if sz < 1<<30 {
+				return
+			}
+			fmt.Printf("Not sending out more encoder load. Num Bytes being encoded: %d\n", sz)
+			time.Sleep(10 * time.Second)
 		}
+	}
+
+	sendReq := func(zbuf *z.Buffer) {
 		wg := new(sync.WaitGroup)
 		wg.Add(1)
-		req := &encodeRequest{entries: batch, wg: wg}
-		atomic.AddInt32(&r.prog.numEncoding, 1)
+		req := &encodeRequest{
+			cbuf:     zbuf,
+			wg:       wg,
+			listCh:   make(chan *bpb.KVList, 3),
+			splitCh:  ci.splitCh,
+			countBuf: z.NewBuffer(1 << 10),
+		}
 		encoderCh <- req
 		writerCh <- req
 	}
 
-	// Drain the last batch
-	batch := make([][]byte, 0, batchAlloc)
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	hd := z.NewHistogramData(z.HistogramBounds(20, 40)) // 1 MB onwards.
+	cbuf := z.NewBuffer(4 << 20)
+	for i := 0; i < len(partitionKeys); i++ {
+		throttle()
+		for _, itr := range mapItrs {
+			res := itr.Next()
+			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
+			cbuf.Write(res.cbuf.Bytes())
+			itr.release(res)
+		}
+		hd.Update(int64(cbuf.Len()))
+		select {
+		case <-ticker.C:
+			fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
+		default:
+		}
+		if cbuf.Len() == 0 {
+			continue
+		}
+		if cbuf.Len() > 1<<30 {
+			fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.Len())))
+
+			// Just check how many keys do we have in this giant buffer.
+			keys := make(map[uint64]int64)
+			var offset, numEntries int
+			for offset < cbuf.Len() {
+				me := MapEntry(cbuf.Slice(offset))
+				keys[z.MemHash(me.Key())]++
+
+				offset += 4 + len(me)
+				numEntries++
+			}
+			keyHist := z.NewHistogramData(z.HistogramBounds(10, 32))
+			for _, num := range keys {
+				keyHist.Update(num)
+			}
+			fmt.Printf("Num Entries: %d. Total keys: %d\n Histogram: %s\n",
+				numEntries, len(keys), keyHist.String())
+		}
+
+		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
+		sendReq(cbuf)
+		cbuf = z.NewBuffer(4 << 20)
+	}
+
+	throttle()
+	fmt.Println("Draining the last batch")
+	cbuf.Reset()
 	for _, itr := range mapItrs {
 		res := itr.Next()
 		y.AssertTrue(res.partitionKey == nil)
-		batch = append(batch, res.batch...)
+		cbuf.Write(res.cbuf.Bytes())
+		itr.release(res)
 	}
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
-	req := &encodeRequest{entries: batch, wg: wg}
-	atomic.AddInt32(&r.prog.numEncoding, 1)
-	encoderCh <- req
-	writerCh <- req
+	atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
+	hd.Update(int64(cbuf.Len()))
+	fmt.Printf("Final Histogram of buffer sizes: %s\n", hd.String())
 
+	sendReq(cbuf)
 	// Close the encodes.
 	close(encoderCh)
 	encoderCloser.SignalAndWait()
@@ -503,55 +565,85 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser.SignalAndWait()
 }
 
-func (r *reducer) toList(bufEntries [][]byte, list, splitList *bpb.KVList) []*countIndexEntry {
-	sort.Slice(bufEntries, func(i, j int) bool {
-		lh, err := GetKeyForMapEntry(bufEntries[i])
-		x.Check(err)
-		rh, err := GetKeyForMapEntry(bufEntries[j])
-		x.Check(err)
-		return bytes.Compare(lh, rh) < 0
+func (r *reducer) toList(req *encodeRequest) {
+	cbuf := req.cbuf
+	defer func() {
+		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.Len()))
+		cbuf.Release()
+	}()
+
+	req.offsets = cbuf.SliceOffsets(req.offsets[:0])
+	sort.Slice(req.offsets, func(i, j int) bool {
+		lhs := MapEntry(cbuf.Slice(req.offsets[i]))
+		rhs := MapEntry(cbuf.Slice(req.offsets[j]))
+		return bytes.Compare(lhs.Key(), rhs.Key()) < 0
 	})
 
 	var currentKey []byte
-	var uids []uint64
 	pl := new(pb.PostingList)
 
 	userMeta := []byte{posting.BitCompletePosting}
 	writeVersionTs := r.state.writeTs
 
-	countEntries := []*countIndexEntry{}
-	currentBatch := make([]*pb.MapEntry, 0, 100)
-	freelist := make([]*pb.MapEntry, 0)
+	var currentBatch []int
+	kvList := &bpb.KVList{}
+	trackCountIndex := make(map[string]bool)
 
 	appendToList := func() {
 		if len(currentBatch) == 0 {
 			return
 		}
+		if len(currentBatch) > 1e9 {
+			fmt.Printf("Got current batch of size: %d\n", len(currentBatch))
+		}
 
-		// Calculate count entries.
-		countEntries = append(countEntries, &countIndexEntry{
-			key:   y.Copy(currentKey),
-			count: len(currentBatch),
-		})
+		pk, err := x.Parse(currentKey)
+		x.Check(err)
+		x.AssertTrue(len(pk.Attr) > 0)
 
-		// Now make a list and write it to badger.
-		sort.Slice(currentBatch, func(i, j int) bool {
-			return less(currentBatch[i], currentBatch[j])
-		})
-		for _, mapEntry := range currentBatch {
-			uid := mapEntry.Uid
-			if mapEntry.Posting != nil {
-				uid = mapEntry.Posting.Uid
+		// We might not need to track count index every time.
+		if pk.IsData() || pk.IsReverse() {
+			doCount, ok := trackCountIndex[pk.Attr]
+			if !ok {
+				doCount = r.schema.getSchema(pk.Attr).GetCount()
+				trackCountIndex[pk.Attr] = doCount
 			}
-			if len(uids) > 0 && uids[len(uids)-1] == uid {
-				continue
-			}
-			// TODO: Potentially could be doing codec.Encoding right here.
-			uids = append(uids, uid)
-			if mapEntry.Posting != nil {
-				pl.Postings = append(pl.Postings, mapEntry.Posting)
+			if doCount {
+				// Calculate count entries.
+				ck := x.CountKey(pk.Attr, uint32(len(currentBatch)), pk.IsReverse())
+				dst := req.countBuf.SliceAllocate(countEntrySize(ck))
+				marshalCountEntry(dst, ck, pk.Uid)
 			}
 		}
+
+		sort.Slice(currentBatch, func(i, j int) bool {
+			lhs := MapEntry(cbuf.Slice(currentBatch[i]))
+			rhs := MapEntry(cbuf.Slice(currentBatch[j]))
+			return less(lhs, rhs)
+		})
+
+		enc := codec.Encoder{BlockSize: 256}
+		var lastUid uint64
+		for _, offset := range currentBatch {
+			me := MapEntry(cbuf.Slice(offset))
+			uid := me.Uid()
+			if uid == lastUid {
+				continue
+			}
+			lastUid = uid
+
+			enc.Add(uid)
+			if pbuf := me.Plist(); len(pbuf) > 0 {
+				p := &pb.Posting{}
+				x.Check(p.Unmarshal(pbuf))
+				pl.Postings = append(pl.Postings, p)
+			}
+		}
+
+		// We should not do defer FreePack here, because we might be giving ownership of it away if
+		// we run Rollup.
+		pl.Pack = enc.Done()
+		numUids := codec.ExactLen(pl.Pack)
 
 		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
 
@@ -560,7 +652,8 @@ func (r *reducer) toList(bufEntries [][]byte, list, splitList *bpb.KVList) []*co
 		// list when the value is read by dgraph.  For a value posting list,
 		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
-		if len(uids) == 0 {
+		if numUids == 0 {
+			codec.FreePack(pl.Pack)
 			return
 		}
 
@@ -572,7 +665,7 @@ func (r *reducer) toList(bufEntries [][]byte, list, splitList *bpb.KVList) []*co
 		x.Check(err)
 		if parsedKey.IsData() {
 			schema := r.state.schema.getSchema(parsedKey.Attr)
-			if schema.GetValueType() == pb.Posting_UID && !schema.GetList() && len(uids) > 1 {
+			if schema.GetValueType() == pb.Posting_UID && !schema.GetList() && numUids > 1 {
 				fmt.Printf("Schema for pred %s specifies that this is not a list but more than  "+
 					"one UID has been found. Forcing the schema to be a list to avoid any "+
 					"data loss. Please fix the data to your specifications once Dgraph is up.\n",
@@ -581,56 +674,63 @@ func (r *reducer) toList(bufEntries [][]byte, list, splitList *bpb.KVList) []*co
 			}
 		}
 
-		pl.Pack = codec.Encode(uids, 256)
 		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
+			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup()
 			x.Check(err)
-			list.Kv = append(list.Kv, kvs[0])
-			splitList.Kv = append(splitList.Kv, kvs[1:]...)
+
+			for _, kv := range kvs {
+				kv.StreamId = r.streamIdFor(pk.Attr)
+			}
+			kvList.Kv = append(kvList.Kv, kvs[0])
+			if splits := kvs[1:]; len(splits) > 0 {
+				req.splitCh <- &bpb.KVList{Kv: splits}
+			}
 		} else {
 			val, err := pl.Marshal()
 			x.Check(err)
+			codec.FreePack(pl.Pack)
+
 			kv := &bpb.KV{
 				Key:      y.Copy(currentKey),
 				Value:    val,
 				UserMeta: userMeta,
 				Version:  writeVersionTs,
 			}
-			list.Kv = append(list.Kv, kv)
+			kv.StreamId = r.streamIdFor(pk.Attr)
+			kvList.Kv = append(kvList.Kv, kv)
 		}
 
-		uids = uids[:0]
 		pl.Reset()
-		// Now we have written the list. It's time to reuse the current batch.
-		freelist = append(freelist, currentBatch...)
 		// Reset the current batch.
 		currentBatch = currentBatch[:0]
 	}
 
-	for _, entry := range bufEntries {
+	var sz int
+	for _, offset := range req.offsets {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
-		entryKey, err := GetKeyForMapEntry(entry)
-		x.Check(err)
+		entry := MapEntry(cbuf.Slice(offset))
+		entryKey := entry.Key()
+
 		if !bytes.Equal(entryKey, currentKey) && currentKey != nil {
 			appendToList()
+			sz += kvList.Kv[len(kvList.Kv)-1].Size()
+			if sz > 256<<20 {
+				req.listCh <- kvList
+				kvList = &bpb.KVList{}
+				sz = 0
+			}
 		}
+
 		currentKey = append(currentKey[:0], entryKey...)
-		var mapEntry *pb.MapEntry
-		if len(freelist) == 0 {
-			// Create a new map entry.
-			mapEntry = &pb.MapEntry{}
-		} else {
-			// Obtain from freelist.
-			mapEntry = freelist[0]
-			mapEntry.Reset()
-			freelist = freelist[1:]
-		}
-		x.Check(mapEntry.Unmarshal(entry))
-		currentBatch = append(currentBatch, mapEntry)
+		currentBatch = append(currentBatch, offset)
 	}
 
 	appendToList()
-	return countEntries
+	if len(kvList.Kv) > 0 {
+		req.listCh <- kvList
+	}
+	close(req.listCh)
 }

@@ -20,12 +20,11 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/query"
 
 	"github.com/pkg/errors"
-
-	"github.com/dgraph-io/badger/v2/y"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
@@ -305,7 +304,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 }
 
 // RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
-func RefreshAcls(closer *y.Closer) {
+func RefreshAcls(closer *z.Closer) {
 	defer func() {
 		glog.Infoln("RefreshAcls closed")
 		closer.Done()
@@ -368,7 +367,7 @@ const queryAcls = `
 `
 
 // ResetAcl clears the aclCachePtr and upserts the Groot account.
-func ResetAcl(closer *y.Closer) {
+func ResetAcl(closer *z.Closer) {
 	defer func() {
 		glog.Infof("ResetAcl closed")
 		closer.Done()
@@ -588,7 +587,10 @@ func parsePredsFromMutation(nquads []*api.NQuad) []string {
 	// use a map to dedup predicates
 	predsMap := make(map[string]struct{})
 	for _, nquad := range nquads {
-		predsMap[nquad.Predicate] = struct{}{}
+		// _STAR_ALL is not a predicate in itself.
+		if nquad.Predicate != "_STAR_ALL" {
+			predsMap[nquad.Predicate] = struct{}{}
+		}
 	}
 
 	preds := make([]string, 0, len(predsMap))
@@ -663,7 +665,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return nil
 		}
 
-		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Write)
+		blockedPreds, allowedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -673,7 +675,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to mutate following predicates: %s\n", msg.String())
 		}
-
+		gmu.AllowedPreds = allowedPreds
 		return nil
 	}
 

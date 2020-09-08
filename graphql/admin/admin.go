@@ -26,7 +26,6 @@ import (
 	"github.com/pkg/errors"
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -35,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
@@ -360,6 +360,16 @@ var (
 	mainHealthStore = &GraphQLHealthStore{}
 )
 
+func SchemaValidate(sch string) error {
+	schHandler, err := schema.NewHandler(sch, true)
+	if err != nil {
+		return err
+	}
+
+	_, err = schema.FromString(schHandler.GQLSchema())
+	return err
+}
+
 // GraphQLHealth is used to report the health status of a GraphQL server.
 // It is required for kubernetes probing.
 type GraphQLHealth struct {
@@ -415,7 +425,7 @@ type adminServer struct {
 
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
-func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (web.IServeGraphQL,
+func NewServers(withIntrospection bool, globalEpoch *uint64, closer *z.Closer) (web.IServeGraphQL,
 	web.IServeGraphQL, *GraphQLHealthStore) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
@@ -444,7 +454,7 @@ func newAdminResolver(
 	fns *resolve.ResolverFns,
 	withIntrospection bool,
 	epoch *uint64,
-	closer *y.Closer) *resolve.RequestResolver {
+	closer *z.Closer) *resolve.RequestResolver {
 
 	adminSchema, err := schema.FromString(graphqlAdminSchema)
 	if err != nil {
@@ -602,7 +612,7 @@ func getCurrentGraphQLSchema() (*gqlSchema, error) {
 }
 
 func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
-	schHandler, err := schema.NewHandler(sch.Schema)
+	schHandler, err := schema.NewHandler(sch.Schema, false)
 	if err != nil {
 		return nil, err
 	}
