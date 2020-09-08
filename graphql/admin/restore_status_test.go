@@ -1,13 +1,13 @@
 package admin
 
 import (
-	"context"
 	"encoding/json"
+	"strings"
+	"testing"
+
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/stretchr/testify/require"
-	"strings"
-	"testing"
 )
 
 func TestRestoreStatus(t *testing.T) {
@@ -25,13 +25,13 @@ func TestRestoreStatus(t *testing.T) {
 	err := d.Decode(&vars)
 	require.NoError(t, err)
 
-	op, err:= gqlSchema.Operation(
+	op, err := gqlSchema.Operation(
 		&schema.Request{
-			Query: gqlQuery,
+			Query:     gqlQuery,
 			Variables: vars,
 		})
 	require.NoError(t, err)
-	GQLQuery:= test.GetQuery(t, op)
-	resolved:= resolveRestoreStatus(context.Background(), GQLQuery)
-	require.NoError(t, resolved.Err)
+	GQLQuery := test.GetQuery(t, op)
+	_, err = getRestoreStatusInput(GQLQuery)
+	require.NoError(t, err)
 }
