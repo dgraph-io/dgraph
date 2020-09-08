@@ -1,0 +1,164 @@
+#######################
+# Input Schema
+#######################
+
+type X{
+    f1: [X] @dgraph(pred: "f1")
+    f3: [Z] @dgraph(pred: "~f3")
+}
+
+type Y{
+    f1: [Y] @dgraph(pred: "~f1")
+    f2: [X] @dgraph(pred: "f2")
+}
+
+type Z{
+    f1: [X] @dgraph(pred: "~f2")
+    f3: [X] @dgraph(pred: "f3")
+}
+
+#######################
+# Extended Definitions
+#######################
+
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can currently represent values in range [-(2^53)+1, (2^53)-1] without any error.
+Values out of this range but representable by a signed 64-bit integer, may get coercion error.
+"""
+scalar Int64
+
+scalar DateTime
+
+enum DgraphIndex {
+    int
+    int64
+    float
+    bool
+    hash
+    exact
+    term
+    fulltext
+    trigram
+    regexp
+    year
+    month
+    day
+    hour
+}
+
+input AuthRule {
+    and: [AuthRule]
+    or: [AuthRule]
+    not: AuthRule
+    rule: String
+}
+
+enum HTTPMethod {
+    GET
+    POST
+    PUT
+    PATCH
+    DELETE
+}
+
+enum Mode {
+    BATCH
+    SINGLE
+}
+
+input CustomHTTP {
+    url: String!
+    method: HTTPMethod!
+    body: String
+    graphql: String
+    mode: Mode
+    forwardHeaders: [String!]
+    secretHeaders: [String!]
+    introspectionHeaders: [String!]
+    skipIntrospection: Boolean
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+    query: AuthRule,
+    add: AuthRule,
+    update: AuthRule,
+    delete:AuthRule) on OBJECT
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE
+directive @cascade on FIELD
+
+input IntFilter {
+    eq: Int
+    le: Int
+    lt: Int
+    ge: Int
+    gt: Int
+}
+
+input Int64Filter {
+    eq: Int64
+    le: Int64
+    lt: Int64
+    ge: Int64
+    gt: Int64
+}
+
+input FloatFilter {
+    eq: Float
+    le: Float
+    lt: Float
+    ge: Float
+    gt: Float
+}
+
+input DateTimeFilter {
+    eq: DateTime
+    le: DateTime
+    lt: DateTime
+    ge: DateTime
+    gt: DateTime
+}
+
+input StringTermFilter {
+    allofterms: String
+    anyofterms: String
+}
+
+input StringRegExpFilter {
+    regexp: String
+}
+
+input StringFullTextFilter {
+    alloftext: String
+    anyoftext: String
+}
+
+input StringExactFilter {
+    eq: String
+    le: String
+    lt: String
+    ge: String
+    gt: String
+}
+
+input StringHashFilter {
+    eq: String
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+    queryX(first: Int, offset: Int): [X]
+    queryY(first: Int, offset: Int): [Y]
+    queryZ(first: Int, offset: Int): [Z]
+}
+

@@ -502,11 +502,11 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 }
 
 func filterDefnations() {
-// start from a defination
-// scan it , ignore unnecessary fields
-//explore all the refrences recursively, if a reference is on same path delete it
-//if refrence is empty delete it
-//if this type itself become empty , delete it
+	// start from a defination
+	// scan it , ignore unnecessary fields
+	//explore all the refrences recursively, if a reference is on same path delete it
+	//if refrence is empty delete it
+	//if this type itself become empty , delete it
 
 }
 
@@ -579,6 +579,111 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addQueries(sch, defn)
 		addTypeHasFilter(sch, defn)
 	}
+}
+
+func cleanSchema(sch *ast.Schema, definitions []string) {
+	//if mutation field of the schema is nil return
+	if sch.Mutation.Fields == nil {
+		return
+	}
+	var types map[string]int
+	types = make(map[string]int)
+	j := 0
+	for _, fd := range sch.Mutation.Fields {
+		mutationInput := fd.Arguments.ForName("input").Type.NamedType
+		inputArg := mutationInput[1 : len(mutationInput)-2]
+		input := sch.Types[inputArg]
+		typeName := string(inputArg[3])
+		if types[typeName] != 0 {
+			continue
+		}
+		//start traversal
+		types[typeName] = 1
+		if input != nil {
+			i := 0
+			for _, inputFields := range input.Fields {
+				if inputFields.Type.Elem != nil {
+					nextInputName := inputFields.Type.Elem.NamedType
+					if nextInputName[1:] == "Ref" {
+						cleanSchema1("Add"+string(nextInputName[0])+"Input", types, sch, definitions)
+						if sch.Types["Add"+string(nextInputName[0])+"Input"] == nil {
+							copy(input.Fields[i:], input.Fields[i+1:])
+							input.Fields = input.Fields[:len(input.Fields)-1]
+
+						} else {
+							i++
+						}
+					}
+				} else {
+					i++
+				}
+			}
+			if len(input.Fields) == 0 {
+				delete(sch.Types, inputArg)
+				delete(sch.Types, typeName+"Ref")
+				delete(sch.Types, "Add"+typeName+"Payload")
+				copy(sch.Mutation.Fields[j:], sch.Mutation.Fields[j+1:])
+				sch.Mutation.Fields = sch.Mutation.Fields[:len(sch.Mutation.Fields)-1]
+			} else {
+				j++
+			}
+
+		}
+		//complete traversal
+		types[typeName] = 2
+	}
+}
+
+func cleanSchema1(schField string, types map[string]int, sch *ast.Schema, definitions []string) {
+	//start traversal
+	typeName := string(schField[3])
+	types[typeName] = 1
+	input := sch.Types[schField]
+	if types[typeName] != 0 {
+		return
+	}
+	if input == nil {
+		return
+		//complete traversal
+		types[typeName] = 2
+	}
+	i := 0
+	j := 0
+	mutationInput := "[" + schField + "!]"
+	for _, fd := range sch.Mutation.Fields {
+		if fd.Arguments.ForName("input").Type.NamedType == mutationInput {
+			break
+		}
+		j++
+	}
+
+	if input != nil {
+		for _, inputFields := range input.Fields {
+			if inputFields.Type.Elem != nil {
+				nextInputName := inputFields.Type.Elem.NamedType
+				if nextInputName[1:] == "Ref" {
+					cleanSchema1("Add"+string(nextInputName[0])+"Input", types, sch, definitions)
+					if sch.Types["Add"+string(nextInputName[0])+"Input"] == nil {
+						copy(input.Fields[i:], input.Fields[i+1:])
+						input.Fields = input.Fields[:len(input.Fields)-1]
+					} else {
+						i++
+					}
+				}
+			} else {
+				i++
+			}
+		}
+		if len(input.Fields) == 0 {
+			delete(sch.Types, schField)
+			delete(sch.Types, typeName+"Ref")
+			delete(sch.Types, "Add"+typeName+"Payload")
+			copy(sch.Mutation.Fields[j:], sch.Mutation.Fields[j+1:])
+			sch.Mutation.Fields = sch.Mutation.Fields[:len(sch.Mutation.Fields)-1]
+		}
+	}
+	types[typeName] = 2
+	//complete traversal
 }
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
@@ -693,9 +798,6 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 //   }
 // }
 func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
-	if schema.Types["Add"+defn.Name+"Input"]==nil{
-		return
-	}
 	for _, fld := range defn.Fields {
 		custom := fld.Directives.ForName(customDirective)
 		// Filtering and ordering for fields with @custom directive is handled by the remote
@@ -735,9 +837,6 @@ func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 // addTypeHasFilter adds `enum TypeHasFilter {...}` to the Schema
 // if the object/interface has a field other than the ID field
 func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
-	if schema.Types["Add"+defn.Name+"Input"]==nil{
-		return
-	}
 	filterName := defn.Name + "HasFilter"
 	filter := &ast.Definition{
 		Kind: ast.Enum,
@@ -844,9 +943,6 @@ func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName str
 //   ...
 // }
 func addFilterType(schema *ast.Schema, defn *ast.Definition) {
-	if schema.Types["Add"+defn.Name+"Input"]==nil{
-		return
-	}
 	filterName := defn.Name + "Filter"
 	filter := &ast.Definition{
 		Kind: ast.InputObject,
@@ -1232,9 +1328,6 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
-	if schema.Types["Add"+defn.Name+"Input"]==nil{
-		return
-	}
 	addGetQuery(schema, defn)
 	addPasswordQuery(schema, defn)
 	addFilterQuery(schema, defn)
@@ -1308,7 +1401,7 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addMutations(schema *ast.Schema, defn *ast.Definition) {
-	if schema.Types["Add"+defn.Name+"Input"]==nil{
+	if schema.Types["Add"+defn.Name+"Input"] == nil {
 		return
 	}
 	addAddMutation(schema, defn)
