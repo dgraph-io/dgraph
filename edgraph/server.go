@@ -84,9 +84,6 @@ const (
 	// NoAuthorize is used to indicate that authorization needs to be skipped.
 	// Used when ACL needs to query information for performing the authorization check.
 	NoAuthorize
-	// AuthorizeGraphqlPredicate is used to indicate that the given request is authorized to do
-	// mutation on reserved graphql predicates.
-	AuthorizeGraphqlPredicate
 )
 
 var (
@@ -979,11 +976,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		}
 	}
 
-	if doAuth != AuthorizeGraphqlPredicate {
-		if rerr = validateGraphqlInternalInMutation(ctx, qc); rerr != nil {
-			return
-		}
-	}
 	// We use defer here because for queries, startTs will be
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
@@ -1218,31 +1210,6 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 		}
 	}
 
-	return nil
-}
-
-// validateGraphqlInternalInMutation check whether mutation contains graphql reserved predicates.
-// If it's contain those predicate, we'll throw an error.
-func validateGraphqlInternalInMutation(ctx context.Context, qc *queryContext) error {
-	validateNquad := func(nquads []*api.NQuad) error {
-		for _, nquad := range nquads {
-			_, ok := x.GraphqlReservedPredicate[nquad.Predicate]
-			if !ok {
-				continue
-			}
-			return fmt.Errorf("Mutations are not allowed for the internal predicate %s",
-				nquad.Predicate)
-		}
-		return nil
-	}
-	for _, gmu := range qc.gmuList {
-		if err := validateNquad(gmu.Set); err != nil {
-			return err
-		}
-		if err := validateNquad(gmu.Del); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

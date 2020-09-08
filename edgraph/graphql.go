@@ -58,7 +58,8 @@ func ResetCors(closer *y.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
-		if _, err := (&Server{}).doQuery(ctx, req, AuthorizeGraphqlPredicate); err != nil {
+		ctx = context.WithValue(ctx, IsGraphql, true)
+		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -89,7 +90,7 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 		},
 		CommitNow: true,
 	}
-	_, err := (&Server{}).doQuery(ctx, req, AuthorizeGraphqlPredicate)
+	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
 	return err
 }
 
@@ -103,7 +104,7 @@ func GetCorsOrigins(ctx context.Context) ([]string, error) {
 		}`,
 		ReadOnly: true,
 	}
-	res, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+	res, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
 	if err != nil {
 		return nil, err
 	}
@@ -147,6 +148,6 @@ func UpdateSchemaHistory(ctx context.Context, schema string) error {
 		},
 		CommitNow: true,
 	}
-	_, err := (&Server{}).doQuery(ctx, req, AuthorizeGraphqlPredicate)
+	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
 	return err
 }

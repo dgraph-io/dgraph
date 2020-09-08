@@ -544,8 +544,11 @@ var aclPredicateMap = map[string]struct{}{
 }
 
 var graphqlReservedPredicate = map[string]struct{}{
-	"dgraph.graphql.xid":    {},
-	"dgraph.graphql.schema": {},
+	"dgraph.graphql.xid":               {},
+	"dgraph.graphql.schema":            {},
+	"dgraph.cors":                      {},
+	"dgraph.graphql.schema_history":    {},
+	"dgraph.graphql.schema_created_at": {},
 }
 
 // internalPredicateMap stores a set of Dgraph's internal predicate. An internal
