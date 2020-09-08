@@ -1740,6 +1740,9 @@ func squashIntoObject(label string) func(interface{}, interface{}, bool) interfa
 			case []interface{}:
 				ev = append(ev, vv...)
 				val = ev
+			case interface{}:
+				ev = append(ev, vv)
+				val = ev
 			default:
 			}
 		default:
