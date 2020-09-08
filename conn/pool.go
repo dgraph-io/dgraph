@@ -21,10 +21,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.opencensus.io/plugin/ocgrpc"
@@ -50,7 +50,7 @@ type Pool struct {
 
 	lastEcho   time.Time
 	Addr       string
-	closer     *y.Closer
+	closer     *z.Closer
 	healthInfo pb.HealthInfo
 }
 
@@ -175,7 +175,7 @@ func newPool(addr string) (*Pool, error) {
 	if err != nil {
 		return nil, err
 	}
-	pl := &Pool{conn: conn, Addr: addr, lastEcho: time.Now(), closer: y.NewCloser(1)}
+	pl := &Pool{conn: conn, Addr: addr, lastEcho: time.Now(), closer: z.NewCloser(1)}
 	go pl.MonitorHealth()
 	return pl, nil
 }

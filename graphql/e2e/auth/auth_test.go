@@ -21,11 +21,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -43,17 +41,18 @@ var (
 	metaInfo *testutil.AuthMeta
 )
 
+type Tweets struct {
+	Id        string `json:"id,omitempty"`
+	Text      string `json:"text,omitempty"`
+	Timestamp string `json:"timestamp,omitempty"`
+	User      User   `json:"user,omitempty"`
+}
+
 type User struct {
 	Username string `json:"username,omitempty"`
 	Age      uint64 `json:"age,omitempty"`
 	IsPublic bool   `json:"isPublic,omitempty"`
 	Disabled bool   `json:"disabled,omitempty"`
-}
-
-type UserSecret struct {
-	Id      string `json:"id,omitempty"`
-	ASecret string `json:"aSecret,omitempty"`
-	OwnedBy string `json:"ownedBy,omitempty"`
 }
 
 type Region struct {
@@ -127,8 +126,8 @@ type Task struct {
 }
 
 type TaskOccurrence struct {
-	Id string `json:"id,omitempty"`
-	Due string `json:"due,omitempty"`
+	Id   string `json:"id,omitempty"`
+	Due  string `json:"due,omitempty"`
 	Comp string `json:"comp,omitempty"`
 }
 
@@ -149,6 +148,7 @@ type uidResult struct {
 }
 
 type Tasks []Task
+
 func (tasks Tasks) add(t *testing.T) {
 	getParams := &common.GraphQLParams{
 		Query: `
@@ -166,7 +166,7 @@ func (tasks Tasks) add(t *testing.T) {
 
 func (r *Region) add(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, user, role),
+		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query: `
 		mutation addRegion($region: AddRegionInput!) {
 		  addRegion(input: [$region]) {
@@ -182,7 +182,7 @@ func (r *Region) add(t *testing.T, user, role string) {
 
 func (r *Region) delete(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, user, role),
+		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query: `
 		mutation deleteRegion($name: String) {
 		  deleteRegion(filter:{name: { eq: $name}}) {
@@ -194,24 +194,6 @@ func (r *Region) delete(t *testing.T, user, role string) {
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
-}
-
-func getJWT(t *testing.T, user, role string) http.Header {
-	metaInfo.AuthVars = map[string]interface{}{}
-	if user != "" {
-		metaInfo.AuthVars["USER"] = user
-	}
-
-	if role != "" {
-		metaInfo.AuthVars["ROLE"] = role
-	}
-
-	jwtToken, err := metaInfo.GetSignedToken("./sample_private_key.pem", 300*time.Second)
-	require.NoError(t, err)
-
-	h := make(http.Header)
-	h.Add(metaInfo.Header, jwtToken)
-	return h
 }
 
 func TestOptimizedNestedAuthQuery(t *testing.T) {
@@ -230,7 +212,7 @@ func TestOptimizedNestedAuthQuery(t *testing.T) {
 	role := "ADMIN"
 
 	getUserParams := &common.GraphQLParams{
-		Headers: getJWT(t, user, role),
+		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query:   query,
 	}
 
@@ -332,7 +314,7 @@ func TestAuthWithDgraphDirective(t *testing.T) {
 		t.Run(tcase.role+"_"+tcase.user, func(t *testing.T) {
 			queryParams := &common.GraphQLParams{
 				Query:   queryStudent,
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 			}
 			gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
@@ -405,14 +387,14 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 
 		testInvalidKey := strings.HasSuffix(tcase.name, "invalid JWT Token")
 		if testInvalidKey {
-			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
+			queryParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
 			jwtVar := queryParams.Headers.Get(metaInfo.Header)
 
 			// Create a invalid JWT signature.
 			jwtVar = jwtVar + "A"
 			queryParams.Headers.Set(metaInfo.Header, jwtVar)
 		} else if tcase.user != "" || tcase.role != "" {
-			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
+			queryParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
 		}
 
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
@@ -432,7 +414,7 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 func TestOrderAndOffset(t *testing.T) {
 	tasks := Tasks{
 		Task{
-			Name:        "First Task four occurrence",
+			Name: "First Task four occurrence",
 			Occurrences: []*TaskOccurrence{
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
@@ -441,7 +423,7 @@ func TestOrderAndOffset(t *testing.T) {
 			},
 		},
 		Task{
-			Name:       "Second Task single occurrence",
+			Name: "Second Task single occurrence",
 			Occurrences: []*TaskOccurrence{
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
 			},
@@ -451,7 +433,7 @@ func TestOrderAndOffset(t *testing.T) {
 			Occurrences: []*TaskOccurrence{},
 		},
 		Task{
-			Name:        "Fourth Task two occurrences",
+			Name: "Fourth Task two occurrences",
 			Occurrences: []*TaskOccurrence{
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
@@ -524,7 +506,7 @@ func TestOrderAndOffset(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
@@ -611,7 +593,7 @@ func TestOrRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
@@ -638,7 +620,7 @@ func getColID(t *testing.T, tcase TestCase) string {
 	}
 
 	getUserParams := &common.GraphQLParams{
-		Headers:   getJWT(t, tcase.user, tcase.role),
+		Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 		Query:     query,
 		Variables: map[string]interface{}{"name": tcase.name},
 	}
@@ -690,7 +672,7 @@ func TestRootGetFilter(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"id": tcase.name},
 			}
@@ -717,7 +699,7 @@ func getProjectID(t *testing.T, tcase TestCase) string {
 	}
 
 	getUserParams := &common.GraphQLParams{
-		Headers:   getJWT(t, tcase.user, tcase.role),
+		Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 		Query:     query,
 		Variables: map[string]interface{}{"name": tcase.name},
 	}
@@ -772,7 +754,7 @@ func TestRootGetDeepFilter(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"id": tcase.name},
 			}
@@ -817,7 +799,7 @@ func TestDeepFilter(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"name": tcase.name},
 			}
@@ -853,7 +835,7 @@ func TestRootFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
@@ -885,7 +867,7 @@ func TestDeepRBACValue(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
@@ -914,7 +896,7 @@ func TestRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
@@ -951,7 +933,7 @@ func TestAndRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
@@ -1063,7 +1045,7 @@ func TestNestedFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
@@ -1110,7 +1092,7 @@ func TestDeleteAuthRule(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Headers: getJWT(t, tcase.user, tcase.role),
+			Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 			Query:   query,
 			Variables: map[string]interface{}{
 				"filter": tcase.filter,
@@ -1220,7 +1202,7 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Headers: getJWT(t, tcase.user, tcase.role),
+			Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 			Query:   query,
 			Variables: map[string]interface{}{
 				"filter": tcase.filter,
@@ -1258,10 +1240,11 @@ func TestMain(m *testing.M) {
 
 		authMeta := testutil.SetAuthMeta(string(authSchema))
 		metaInfo = &testutil.AuthMeta{
-			PublicKey: authMeta.VerificationKey,
-			Namespace: authMeta.Namespace,
-			Algo:      authMeta.Algo,
-			Header:    authMeta.Header,
+			PublicKey:      authMeta.VerificationKey,
+			Namespace:      authMeta.Namespace,
+			Algo:           authMeta.Algo,
+			Header:         authMeta.Header,
+			PrivateKeyPath: "./sample_private_key.pem",
 		}
 
 		common.BootstrapServer(authSchema, data)

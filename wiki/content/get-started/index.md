@@ -168,6 +168,8 @@ curl "localhost:8080/alter" -XPOST -d $'
   release_date: datetime @index(year) .
   revenue: float .
   running_time: int .
+  starring: uid .
+  director: uid .
 
   type Person {
     name

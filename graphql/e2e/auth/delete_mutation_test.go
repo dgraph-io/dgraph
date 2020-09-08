@@ -10,7 +10,7 @@ import (
 
 func (c *Column) add(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, user, role),
+		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query: `
 		mutation addColumn($column: AddColumnInput!) {
 		  addColumn(input: [$column]) {
@@ -26,7 +26,7 @@ func (c *Column) add(t *testing.T, user, role string) {
 
 func (l *Log) add(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, user, role),
+		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query: `
 		mutation addLog($log: AddLogInput!) {
 		  addLog(input: [$log]) {
@@ -42,7 +42,7 @@ func (l *Log) add(t *testing.T, user, role string) {
 
 func (i *Issue) add(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, user, role),
+		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query: `
 		mutation addIssue($issue: AddIssueInput!) {
 		  addIssue(input: [$issue]) {
@@ -58,7 +58,7 @@ func (i *Issue) add(t *testing.T, user, role string) {
 
 func (m *Movie) add(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, user, role),
+		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query: `
 		mutation addMovie($movie: AddMovieInput!) {
 		  addMovie(input: [$movie]) {
@@ -74,7 +74,7 @@ func (m *Movie) add(t *testing.T, user, role string) {
 
 func (cl *ComplexLog) add(t *testing.T, role string) {
 	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, "", role),
+		Headers: common.GetJWT(t, "", role, metaInfo),
 		Query: `
 		mutation addComplexLog($complexlog: AddComplexLogInput!) {
 		  addComplexLog(input: [$complexlog]) {
@@ -101,7 +101,7 @@ func getComplexLog(t *testing.T, role string) ([]*ComplexLog, []string) {
 		`,
 	}
 
-	getParams.Headers = getJWT(t, "", role)
+	getParams.Headers = common.GetJWT(t, "", role, metaInfo)
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
@@ -154,7 +154,7 @@ func TestDeleteRootFilter(t *testing.T) {
 			deleteColumns, _ := getAllColumns(t, []string{tcase.user}, []string{tcase.role})
 
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"cols": allColumnIds},
 			}
@@ -199,7 +199,7 @@ func TestDeleteRBACFilter(t *testing.T) {
 			deletedLogs, _ := getAllLogs(t, []string{tcase.user}, []string{tcase.role})
 
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"logs": allLogIds},
 			}
@@ -240,7 +240,7 @@ func TestDeleteOrRBACFilter(t *testing.T) {
 			require.True(t, len(allComplexLogIds) == 2)
 
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"ids": allComplexLogIds},
 			}
@@ -292,7 +292,7 @@ func TestDeleteAndRBACFilter(t *testing.T) {
 			deletedIssues, _ := getAllIssues(t, []string{tcase.user}, []string{tcase.role})
 
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"ids": ids},
 			}
@@ -345,7 +345,7 @@ func TestDeleteNestedFilter(t *testing.T) {
 			deleteMovies, _ := getAllMovies(t, []string{tcase.user}, []string{tcase.role})
 
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"ids": ids},
 			}
@@ -358,6 +358,70 @@ func TestDeleteNestedFilter(t *testing.T) {
 			for _, movie := range deleteMovies {
 				movie.add(t, tcase.user, tcase.role)
 			}
+		})
+	}
+}
+
+func TestDeleteRBACRuleInverseField(t *testing.T) {
+	mutation := `
+	mutation addTweets($tweet: AddTweetsInput!){
+      addTweets(input: [$tweet]) {
+        numUids
+      }
+    }
+	`
+
+	addTweetsParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, "foo", "", metaInfo),
+		Query:   mutation,
+		Variables: map[string]interface{}{"tweet": Tweets{
+			Id:        "tweet1",
+			Text:      "abc",
+			Timestamp: "2020-10-10",
+			User: User{
+				Username: "foo",
+			},
+		}},
+	}
+
+	gqlResponse := addTweetsParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	testCases := []TestCase{
+		{
+			user:   "foobar",
+			result: `{"deleteTweets":{"numUids":0,"tweets":[]}}`,
+		},
+		{
+			user:   "foo",
+			result: `{"deleteTweets":{"numUids":1,"tweets":[ {"text": "abc"}]}}`,
+		},
+	}
+
+	mutation = `
+	mutation {
+      deleteTweets(
+        filter: {
+          text: {anyoftext: "abc"}
+        }) {
+		numUids
+        tweets {
+          text
+        }
+      }
+    }
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			deleteTweetsParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   mutation,
+			}
+
+			gqlResponse := deleteTweetsParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
@@ -49,7 +50,7 @@ type executor struct {
 
 	sync.RWMutex
 	predChan map[string]chan *subMutation
-	closer   *y.Closer
+	closer   *z.Closer
 	applied  *y.WaterMark
 	throttle *y.Throttle
 }
@@ -57,7 +58,7 @@ type executor struct {
 func newExecutor(applied *y.WaterMark, conc int) *executor {
 	ex := &executor{
 		predChan: make(map[string]chan *subMutation),
-		closer:   y.NewCloser(0),
+		closer:   z.NewCloser(0),
 		applied:  applied,
 		throttle: y.NewThrottle(conc), // Run conc threads mutations at a time.
 	}
