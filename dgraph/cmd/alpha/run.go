@@ -122,9 +122,9 @@ they form a Raft group and provide synchronous replication.
 		"Specifies the compression level for the postings and write-ahead log "+
 			"directory. A higher value uses more resources. The value of 0 disables "+
 			"compression. If you pass two values separated by a comma the first "+
-			"value will be used for the postings directory and the second for "+
-			"the w directory. If a single value is passed the value is used as "+
-			"compression level for both directories.")
+			"value will be used for the postings directory (p) and the second for "+
+			"the wal directory (w). If a single value is passed the value is used "+
+			"as compression level for both directories.")
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -626,13 +626,13 @@ func run() {
 	compressionLevels, err := x.GetCompressionLevels(compressionLevelString)
 	x.Check(err)
 	postingDirCompressionLevel := compressionLevels[0]
-	wALDirCompressionLevel := compressionLevels[1]
+	walDirCompressionLevel := compressionLevels[1]
 
 	opts := worker.Options{
 		PostingDir:                 Alpha.Conf.GetString("postings"),
 		WALDir:                     Alpha.Conf.GetString("wal"),
 		PostingDirCompressionLevel: postingDirCompressionLevel,
-		WALDirCompressionLevel:     wALDirCompressionLevel,
+		WALDirCompressionLevel:     walDirCompressionLevel,
 		PBlockCacheSize:            pstoreBlockCacheSize,
 		PIndexCacheSize:            pstoreIndexCacheSize,
 		WBlockCacheSize:            wstoreBlockCacheSize,
