@@ -12,7 +12,7 @@ import (
 
 func TestRestoreStatus(t *testing.T) {
 	gqlSchema := test.LoadSchema(t, graphqlAdminSchema)
-	gqlQuery := `query restoreStatus($restoreId: Int!) {
+	Query := `query restoreStatus($restoreId: Int!) {
 					restoreStatus(restoreId: $restoreId) {
 						status
 						errors
@@ -27,12 +27,12 @@ func TestRestoreStatus(t *testing.T) {
 
 	op, err := gqlSchema.Operation(
 		&schema.Request{
-			Query:     gqlQuery,
+			Query:     Query,
 			Variables: vars,
 		})
 	require.NoError(t, err)
-	GQLQuery := test.GetQuery(t, op)
-	v, err := getRestoreStatusInput(GQLQuery)
+	gqlQuery := test.GetQuery(t, op)
+	v, err := getRestoreStatusInput(gqlQuery)
 	require.NoError(t, err)
 	require.IsType(t, int64(2), v, nil)
 }
