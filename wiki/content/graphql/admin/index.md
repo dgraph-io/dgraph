@@ -321,6 +321,7 @@ You'll notice that the /admin schema is very much the same as the schemas genera
 * The `getGQLSchema` query gets the current GraphQL schema served at `/graphql`, or returns null if there's no such schema.
 * The `getAllowedCORSOrigins` query returns your CORS policy.
 * The `updateGQLSchema` mutation allows you to change the schema currently served at `/graphql`.
+
 ## Enterprise Features
 
 Enterprise Features like ACL, Backups and Restore are also available using the GraphQL API at `/admin` endpoint.
