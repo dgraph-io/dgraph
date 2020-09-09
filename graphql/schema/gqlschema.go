@@ -587,97 +587,28 @@ func cleanSchema(sch *ast.Schema, definitions []string) {
 		return
 	}
 	types := make(map[string]int)
-	j := 0
 	for _, fd := range sch.Mutation.Fields {
-		if fd.Arguments.ForName("input")==nil{
-			j++
-			continue
-		}
-		if fd.Arguments.ForName("input").Type.NamedType==""{ // for custom mutation
-			j++
+		if !validInputFieldToTraverse(fd) {
 			continue
 		}
 		mutationInput := fd.Arguments.ForName("input").Type.NamedType
-		inputName := mutationInput[1 : len(mutationInput)-2]
-		schInput := sch.Types[inputName]
-		if schInput==nil{
-			j++
+		schInputName := mutationInput[1 : len(mutationInput)-2]
+		schInput := sch.Types[schInputName]
+		if schInput == nil {
 			continue
 		}
-		typeName := string(inputName[3])
+		typeName := string(schInputName[3])
 		if types[typeName] != 0 {
-			j++
 			continue
 		}
-		//start traversal
-		types[typeName] = 1
-		if schInput != nil {
-			i := 0
-			for _, inputFields := range schInput.Fields {
-				if inputFields.Type.Elem != nil {
-					nextInputName := inputFields.Type.Elem.NamedType
-					if nextInputName[1:] == "Ref" {
-						cleanSchema1("Add"+string(nextInputName[0])+"Input", types, sch, definitions)
-						if sch.Types["Add"+string(nextInputName[0])+"Input"] == nil {
-							ref:=sch.Types[typeName+"Ref"]
-							k:=0
-							for _,refFields := range ref.Fields{
-								if refFields.Type.Elem!=nil{
-									if refFields.Type.Elem.NamedType==nextInputName{
-										break
-									}
-								}
-								k++
-							}
-							patch:=sch.Types[typeName+"Patch"]
-							if patch!=nil {
-								l := 0
-								for _, patchFields := range patch.Fields {
-									if patchFields.Type.Elem != nil {
-										if patchFields.Type.Elem.NamedType == nextInputName {
-											break
-										}
-									}
-									l++
-								}
-								copy(patch.Fields[l:], patch.Fields[l+1:])
-								patch.Fields = patch.Fields[:len(patch.Fields)-1]
-							}
-							copy(ref.Fields[k:], ref.Fields[k+1:])
-							ref.Fields = ref.Fields[:len(ref.Fields)-1]
-							copy(schInput.Fields[i:], schInput.Fields[i+1:])
-							schInput.Fields = schInput.Fields[:len(schInput.Fields)-1]
-
-						} else {
-							i++
-						}
-					}
-				} else {
-					i++
-				}
-			}
-			if len(schInput.Fields) == 0 {
-				delete(sch.Types, inputName)
-				delete(sch.Types, typeName+"Ref")
-				delete(sch.Types, typeName+"Patch")
-				delete(sch.Types, "Add"+typeName+"Payload")
-				copy(sch.Mutation.Fields[j:], sch.Mutation.Fields[j+1:])
-				sch.Mutation.Fields = sch.Mutation.Fields[:len(sch.Mutation.Fields)-1]
-			} else {
-				j++
-			}
-
-		}
-		//complete traversal
-		types[typeName] = 2
+		cleanSchemaRecurse(schInputName, types, sch, definitions)
 	}
 }
 
-func cleanSchema1(schField string, types map[string]int, sch *ast.Schema, definitions []string) {
+func cleanSchemaRecurse(schInputName string, types map[string]int, sch *ast.Schema, definitions []string) {
 	//start traversal
-	typeName := string(schField[3])
-	types[typeName] = 1
-	input := sch.Types[schField]
+	typeName := string(schInputName[3])
+	input := sch.Types[schInputName]
 	if types[typeName] != 0 {
 		return
 	}
@@ -688,9 +619,9 @@ func cleanSchema1(schField string, types map[string]int, sch *ast.Schema, defini
 	}
 	i := 0
 	j := 0
-	mutationInput := "[" + schField + "!]"
+	mutationInput := "[" + schInputName + "!]"
 	for _, fd := range sch.Mutation.Fields {
-		if types[typeName] != 0 {
+		if types[typeName] != 0 || !validInputFieldToTraverse(fd) {
 			j++
 			continue
 		}
@@ -699,40 +630,17 @@ func cleanSchema1(schField string, types map[string]int, sch *ast.Schema, defini
 		}
 		j++
 	}
-
+	types[typeName] = 1
+	//start traversal
 	if input != nil {
 		for _, inputFields := range input.Fields {
 			if inputFields.Type.Elem != nil {
 				nextInputName := inputFields.Type.Elem.NamedType
 				if nextInputName[1:] == "Ref" {
-					cleanSchema1("Add"+string(nextInputName[0])+"Input", types, sch, definitions)
+					cleanSchemaRecurse("Add"+string(nextInputName[0])+"Input", types, sch, definitions)
 					if sch.Types["Add"+string(nextInputName[0])+"Input"] == nil {
-						ref:=sch.Types[typeName+"Ref"]
-						k:=0
-						for _,refFields := range ref.Fields{
-							if refFields.Type.Elem!=nil{
-								if refFields.Type.Elem.NamedType==nextInputName{
-									break
-								}
-							}
-							k++
-						}
-						patch:=sch.Types[typeName+"Patch"]
-						if patch!=nil {
-							l := 0
-							for _, patchFields := range patch.Fields {
-								if patchFields.Type.Elem != nil {
-									if patchFields.Type.Elem.NamedType == nextInputName {
-										break
-									}
-								}
-								l++
-							}
-							copy(patch.Fields[l:], patch.Fields[l+1:])
-							patch.Fields = patch.Fields[:len(patch.Fields)-1]
-						}
-						copy(ref.Fields[k:], ref.Fields[k+1:])
-						ref.Fields = ref.Fields[:len(ref.Fields)-1]
+						removeFields(nextInputName, typeName+"Ref", sch)
+						removeFields(nextInputName, typeName+"Patch", sch)
 						copy(input.Fields[i:], input.Fields[i+1:])
 						input.Fields = input.Fields[:len(input.Fields)-1]
 					} else {
@@ -744,7 +652,7 @@ func cleanSchema1(schField string, types map[string]int, sch *ast.Schema, defini
 			}
 		}
 		if len(input.Fields) == 0 {
-			delete(sch.Types, schField)
+			delete(sch.Types, schInputName)
 			delete(sch.Types, typeName+"Ref")
 			delete(sch.Types, typeName+"Patch")
 			delete(sch.Types, "Add"+typeName+"Payload")
@@ -754,6 +662,32 @@ func cleanSchema1(schField string, types map[string]int, sch *ast.Schema, defini
 	}
 	types[typeName] = 2
 	//complete traversal
+}
+
+func removeFields(fieldNamedType string, schTypeName string, sch *ast.Schema) {
+	schType := sch.Types[schTypeName]
+	if schType != nil {
+		index := 0
+		for _, Fields := range schType.Fields {
+			if Fields.Type.Elem != nil && Fields.Type.Elem.NamedType == fieldNamedType {
+				break
+			}
+			index++
+		}
+		copy(schType.Fields[index:], schType.Fields[index+1:])
+		schType.Fields = schType.Fields[:len(schType.Fields)-1]
+	}
+}
+
+func validInputFieldToTraverse(field *ast.FieldDefinition) bool {
+	if field.Arguments.ForName("input") == nil {
+		return false
+	}
+	if field.Arguments.ForName("input").Type.NamedType == "" { // for custom mutation
+		return false
+	}
+	return true
+
 }
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
