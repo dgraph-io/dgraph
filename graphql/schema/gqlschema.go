@@ -501,15 +501,6 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 	return errs
 }
 
-func filterDefnations() {
-	// start from a defination
-	// scan it , ignore unnecessary fields
-	//explore all the refrences recursively, if a reference is on same path delete it
-	//if refrence is empty delete it
-	//if this type itself become empty , delete it
-
-}
-
 // completeSchema generates all the required types and fields for
 // query/mutation/update for all the types mentioned in the schema.
 func completeSchema(sch *ast.Schema, definitions []string) {
