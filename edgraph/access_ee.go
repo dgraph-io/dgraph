@@ -587,7 +587,10 @@ func parsePredsFromMutation(nquads []*api.NQuad) []string {
 	// use a map to dedup predicates
 	predsMap := make(map[string]struct{})
 	for _, nquad := range nquads {
-		predsMap[nquad.Predicate] = struct{}{}
+		// _STAR_ALL is not a predicate in itself.
+		if nquad.Predicate != "_STAR_ALL" {
+			predsMap[nquad.Predicate] = struct{}{}
+		}
 	}
 
 	preds := make([]string, 0, len(predsMap))
@@ -662,7 +665,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return nil
 		}
 
-		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Write)
+		blockedPreds, allowedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -672,7 +675,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to mutate following predicates: %s\n", msg.String())
 		}
-
+		gmu.AllowedPreds = allowedPreds
 		return nil
 	}
 
