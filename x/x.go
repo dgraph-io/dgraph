@@ -41,14 +41,17 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.opencensus.io/plugin/ocgrpc"
+	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/trace"
 	"golang.org/x/crypto/ssh/terminal"
 	"google.golang.org/grpc"
@@ -1012,6 +1015,69 @@ func IsGuardian(groups []string) bool {
 	}
 
 	return false
+}
+
+// MonitorCacheHealth periodically monitors the cache metrics and reports if
+// there is high contention in the cache.
+func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, closer *y.Closer) {
+	defer closer.Done()
+
+	checkCache := func(ct string) {
+		var metrics *ristretto.Metrics
+		switch ct {
+		case "pstore-block":
+			metrics = db.BlockCacheMetrics()
+			ostats.Record(context.Background(), PBlockHitRatio.M(metrics.Ratio()))
+		case "pstore-index":
+			metrics = db.IndexCacheMetrics()
+			ostats.Record(context.Background(), PIndexHitRatio.M(metrics.Ratio()))
+		case "WALstore-block":
+			metrics = db.BlockCacheMetrics()
+			ostats.Record(context.Background(), WBlockHitRatio.M(metrics.Ratio()))
+		case "WALstore-index":
+			metrics = db.IndexCacheMetrics()
+			ostats.Record(context.Background(), WIndexHitRatio.M(metrics.Ratio()))
+		case "zwstore-block":
+			metrics = db.BlockCacheMetrics()
+			ostats.Record(context.Background(), ZWBlockHitRatio.M(metrics.Ratio()))
+		case "zwstore-index":
+			metrics = db.IndexCacheMetrics()
+			ostats.Record(context.Background(), ZWIndexHitRatio.M(metrics.Ratio()))
+		default:
+			panic("invalid cache type")
+		}
+		if metrics == nil {
+			return
+		}
+		prefix := fmt.Sprintf("%s-%s", prefix, ct)
+		le := metrics.LifeExpectancySeconds()
+		glog.V(2).Infof("%s metrics %+v %+v", prefix, metrics, le)
+
+		// If the mean life expectancy is leff than 5 seconds, the cache
+		// might be under contention.
+		lifeTooShort := le.Count > 0 && float64(le.Sum)/float64(le.Count) < 5
+		// Check misses and hits to ensure we're not looking at a closed cache.
+		hitRatioTooLow := metrics.Ratio() < 0.4
+		if bool(glog.V(2)) && (lifeTooShort || hitRatioTooLow) {
+			glog.Warningf("======== Cache might be too small %s =====", ct)
+			glog.Warningf("Metric: %+v", metrics)
+			glog.Warningf("Life expectancy: %+v", le)
+		}
+
+	}
+
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			checkCache(prefix + "-block")
+			checkCache(prefix + "-index")
+		case <-closer.HasBeenClosed():
+			return
+		}
+	}
 }
 
 // RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.

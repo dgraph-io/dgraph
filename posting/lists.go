@@ -139,12 +139,10 @@ func Init(ps *badger.DB, cacheSize int64) {
 	pstore = ps
 	closer = z.NewCloser(1)
 	go updateMemoryMetrics(closer)
-
 	// Initialize cache.
 	if cacheSize == 0 {
 		return
 	}
-
 	var err error
 	lCache, err = ristretto.NewCache(&ristretto.Config{
 		// Use 5% of cache memory for storing counters.
@@ -163,9 +161,11 @@ func Init(ps *badger.DB, cacheSize int64) {
 	x.Check(err)
 	go func() {
 		m := lCache.Metrics
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(10 * time.Second)
 		for range ticker.C {
 			glog.V(2).Infof("Posting list cache metrics: %s", m)
+			// Record the posting list cache hit ratio
+			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 		}
 	}()
 }
