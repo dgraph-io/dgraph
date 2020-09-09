@@ -20,12 +20,14 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -169,6 +171,7 @@ func (r *reducer) createTmpBadger() *badger.DB {
 	// Do not enable compression in temporary badger to improve performance.
 	db := r.createBadgerInternal(tmpDir, false)
 	r.tmpDbs = append(r.tmpDbs, db)
+	r.tmpDbDirs = append(r.tmpDbDirs, tmpDir)
 	return db
 }
 
@@ -420,40 +423,54 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	tmpWg.Wait()
 }
 
-// TODO(martinmr): This should be done via the stream framework.
-// Also, do we delete the tmpDb?
-func (r *reducer) writeSplitLists(db, tmpDb *badger.DB) {
-	txn := tmpDb.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-	itr := txn.NewIterator(badger.DefaultIteratorOptions)
-	defer itr.Close()
+type splitWriteBatch struct {
+	sync.Mutex
+	db       *badger.DB
+	writer   *badger.WriteBatch
+	batchLen int
+}
 
-	writer := db.NewManagedWriteBatch()
-	splitBatchLen := 0
+func (wb *splitWriteBatch) Write(kvs *bpb.KVList) {
+	wb.Lock()
+	defer wb.Unlock()
 
-	for itr.Rewind(); itr.Valid(); itr.Next() {
-		// Flush the write batch when the max batch length is reached to prevent the
-		// value log from growing over the allowed limit.
-		if splitBatchLen >= maxSplitBatchLen {
-			x.Check(writer.Flush())
-			writer = db.NewManagedWriteBatch()
-			splitBatchLen = 0
-		}
-		item := itr.Item()
-
-		valCopy, err := item.ValueCopy(nil)
-		x.Check(err)
-		kv := &bpb.KV{
-			Key:       item.KeyCopy(nil),
-			Value:     valCopy,
-			UserMeta:  []byte{item.UserMeta()},
-			Version:   item.Version(),
-			ExpiresAt: item.ExpiresAt(),
-		}
-		x.Check(writer.Write(&bpb.KVList{Kv: []*bpb.KV{kv}}))
-		splitBatchLen += 1
+	// Flush the write batch when the max batch length is reached to prevent the
+	// value log from growing over the allowed limit.
+	if wb.batchLen >= maxSplitBatchLen {
+		x.Check(wb.writer.Flush())
+		wb.writer = wb.db.NewManagedWriteBatch()
+		wb.batchLen = 0
 	}
-	x.Check(writer.Flush())
+
+	x.Check(wb.writer.Write(kvs))
+	wb.batchLen += len(kvs.Kv)
+}
+
+func (r *reducer) writeSplitLists(db, tmpDb *badger.DB) {
+	// Use multiple writers to avoid contention.
+	writers := make([]*splitWriteBatch, 8)
+	for i, _ := range writers {
+		writers[i] = &splitWriteBatch{
+			db:     db,
+			writer: db.NewManagedWriteBatch(),
+		}
+	}
+
+	rand.Seed(time.Now().UnixNano())
+	stream := tmpDb.NewStreamAt(math.MaxUint64)
+	stream.LogPrefix = "copying split keys to main DB"
+	stream.Send = func(kvs *bpb.KVList) error {
+		// Randomly pick a writer.
+		writer := writers[rand.Intn(len(writers))]
+		writer.Write(kvs)
+		return nil
+	}
+	x.Check(stream.Orchestrate(context.Background()))
+
+	// Flush all the writers after the stream has finished.
+	for i, _ := range writers {
+		x.Check(writers[i].writer.Flush())
+	}
 }
 
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {

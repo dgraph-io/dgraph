@@ -90,6 +90,7 @@ type state struct {
 	mapFileId     uint32 // Used atomically to name the output files of the mappers.
 	dbs           []*badger.DB
 	tmpDbs        []*badger.DB // Temporary DB to write the split lists to avoid ordering issues.
+	tmpDbDirs     []string     // Location of temporary DBs.
 	writeTs       uint64       // All badger writes use this timestamp
 }
 
@@ -347,6 +348,9 @@ func (ld *loader) cleanup() {
 	}
 	for _, db := range ld.tmpDbs {
 		x.Check(db.Close())
+	}
+	for _, dir := range ld.tmpDbDirs {
+		x.Check(os.RemoveAll(dir))
 	}
 	ld.prog.endSummary()
 }
