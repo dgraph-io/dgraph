@@ -2381,7 +2381,7 @@ func OverwriteUidPredicatesMultipleTxn(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 
-	resp, err = txn.Mutate(context.Background(), &api.Mutation{
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
 		SetNquads: []byte(fmt.Sprintf(`<%s> <best_friend> _:carl .
 		_:carl <name> "Carl" .`, alice)),
 	})
