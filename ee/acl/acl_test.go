@@ -2093,7 +2093,15 @@ func TestSchemaQueryWithACL(t *testing.T) {
     {
       "predicate": "dgraph.graphql.schema",
       "type": "string"
-    },
+	},
+	{
+		"predicate": "dgraph.graphql.schema_created_at",
+		"type": "datetime"
+	},
+	{
+		"predicate": "dgraph.graphql.schema_history",
+		"type": "string"
+	},
     {
       "predicate": "dgraph.graphql.xid",
       "type": "string",
@@ -2156,7 +2164,17 @@ func TestSchemaQueryWithACL(t *testing.T) {
         }
       ],
       "name": "dgraph.graphql"
-    },
+	},
+	{
+		"fields": [
+			{
+				"name": "dgraph.graphql.schema_history"
+			},{
+				"name": "dgraph.graphql.schema_created_at"
+			}
+		],
+		"name": "dgraph.graphql.history"
+	},
     {
       "fields": [
         {
@@ -2210,7 +2228,11 @@ func TestSchemaQueryWithACL(t *testing.T) {
     {
       "fields": [],
       "name": "dgraph.graphql"
-    },
+	},
+	{
+		"fields": [],
+		"name": "dgraph.graphql.history"
+	},
     {
       "fields": [],
       "name": "dgraph.type.Group"
