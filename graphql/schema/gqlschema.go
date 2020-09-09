@@ -586,29 +586,67 @@ func cleanSchema(sch *ast.Schema, definitions []string) {
 	if sch.Mutation.Fields == nil {
 		return
 	}
-	var types map[string]int
-	types = make(map[string]int)
+	types := make(map[string]int)
 	j := 0
 	for _, fd := range sch.Mutation.Fields {
+		if fd.Arguments.ForName("input")==nil{
+			j++
+			continue
+		}
+		if fd.Arguments.ForName("input").Type.NamedType==""{ // for custom mutation
+			j++
+			continue
+		}
 		mutationInput := fd.Arguments.ForName("input").Type.NamedType
-		inputArg := mutationInput[1 : len(mutationInput)-2]
-		input := sch.Types[inputArg]
-		typeName := string(inputArg[3])
+		inputName := mutationInput[1 : len(mutationInput)-2]
+		schInput := sch.Types[inputName]
+		if schInput==nil{
+			j++
+			continue
+		}
+		typeName := string(inputName[3])
 		if types[typeName] != 0 {
+			j++
 			continue
 		}
 		//start traversal
 		types[typeName] = 1
-		if input != nil {
+		if schInput != nil {
 			i := 0
-			for _, inputFields := range input.Fields {
+			for _, inputFields := range schInput.Fields {
 				if inputFields.Type.Elem != nil {
 					nextInputName := inputFields.Type.Elem.NamedType
 					if nextInputName[1:] == "Ref" {
 						cleanSchema1("Add"+string(nextInputName[0])+"Input", types, sch, definitions)
 						if sch.Types["Add"+string(nextInputName[0])+"Input"] == nil {
-							copy(input.Fields[i:], input.Fields[i+1:])
-							input.Fields = input.Fields[:len(input.Fields)-1]
+							ref:=sch.Types[typeName+"Ref"]
+							k:=0
+							for _,refFields := range ref.Fields{
+								if refFields.Type.Elem!=nil{
+									if refFields.Type.Elem.NamedType==nextInputName{
+										break
+									}
+								}
+								k++
+							}
+							patch:=sch.Types[typeName+"Patch"]
+							if patch!=nil {
+								l := 0
+								for _, patchFields := range patch.Fields {
+									if patchFields.Type.Elem != nil {
+										if patchFields.Type.Elem.NamedType == nextInputName {
+											break
+										}
+									}
+									l++
+								}
+								copy(patch.Fields[l:], patch.Fields[l+1:])
+								patch.Fields = patch.Fields[:len(patch.Fields)-1]
+							}
+							copy(ref.Fields[k:], ref.Fields[k+1:])
+							ref.Fields = ref.Fields[:len(ref.Fields)-1]
+							copy(schInput.Fields[i:], schInput.Fields[i+1:])
+							schInput.Fields = schInput.Fields[:len(schInput.Fields)-1]
 
 						} else {
 							i++
@@ -618,9 +656,10 @@ func cleanSchema(sch *ast.Schema, definitions []string) {
 					i++
 				}
 			}
-			if len(input.Fields) == 0 {
-				delete(sch.Types, inputArg)
+			if len(schInput.Fields) == 0 {
+				delete(sch.Types, inputName)
 				delete(sch.Types, typeName+"Ref")
+				delete(sch.Types, typeName+"Patch")
 				delete(sch.Types, "Add"+typeName+"Payload")
 				copy(sch.Mutation.Fields[j:], sch.Mutation.Fields[j+1:])
 				sch.Mutation.Fields = sch.Mutation.Fields[:len(sch.Mutation.Fields)-1]
@@ -651,6 +690,10 @@ func cleanSchema1(schField string, types map[string]int, sch *ast.Schema, defini
 	j := 0
 	mutationInput := "[" + schField + "!]"
 	for _, fd := range sch.Mutation.Fields {
+		if types[typeName] != 0 {
+			j++
+			continue
+		}
 		if fd.Arguments.ForName("input").Type.NamedType == mutationInput {
 			break
 		}
@@ -664,6 +707,32 @@ func cleanSchema1(schField string, types map[string]int, sch *ast.Schema, defini
 				if nextInputName[1:] == "Ref" {
 					cleanSchema1("Add"+string(nextInputName[0])+"Input", types, sch, definitions)
 					if sch.Types["Add"+string(nextInputName[0])+"Input"] == nil {
+						ref:=sch.Types[typeName+"Ref"]
+						k:=0
+						for _,refFields := range ref.Fields{
+							if refFields.Type.Elem!=nil{
+								if refFields.Type.Elem.NamedType==nextInputName{
+									break
+								}
+							}
+							k++
+						}
+						patch:=sch.Types[typeName+"Patch"]
+						if patch!=nil {
+							l := 0
+							for _, patchFields := range patch.Fields {
+								if patchFields.Type.Elem != nil {
+									if patchFields.Type.Elem.NamedType == nextInputName {
+										break
+									}
+								}
+								l++
+							}
+							copy(patch.Fields[l:], patch.Fields[l+1:])
+							patch.Fields = patch.Fields[:len(patch.Fields)-1]
+						}
+						copy(ref.Fields[k:], ref.Fields[k+1:])
+						ref.Fields = ref.Fields[:len(ref.Fields)-1]
 						copy(input.Fields[i:], input.Fields[i+1:])
 						input.Fields = input.Fields[:len(input.Fields)-1]
 					} else {
@@ -677,6 +746,7 @@ func cleanSchema1(schField string, types map[string]int, sch *ast.Schema, defini
 		if len(input.Fields) == 0 {
 			delete(sch.Types, schField)
 			delete(sch.Types, typeName+"Ref")
+			delete(sch.Types, typeName+"Patch")
 			delete(sch.Types, "Add"+typeName+"Payload")
 			copy(sch.Mutation.Fields[j:], sch.Mutation.Fields[j+1:])
 			sch.Mutation.Fields = sch.Mutation.Fields[:len(sch.Mutation.Fields)-1]

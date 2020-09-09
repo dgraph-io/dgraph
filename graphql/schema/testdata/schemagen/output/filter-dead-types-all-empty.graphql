@@ -3,18 +3,16 @@
 #######################
 
 type X {
+	name(first: Int, offset: Int): [Y]
 	f1(first: Int, offset: Int): [Y] @dgraph(pred: "f1")
-	name: String
-	id: ID
 }
 
 type Y {
-	f2(first: Int, offset: Int): [Z] @dgraph(pred: "~f2")
-	f1(filter: XFilter, order: XOrder, first: Int, offset: Int): [X] @dgraph(pred: "~f1")
+	f1(first: Int, offset: Int): [X] @dgraph(pred: "~f1")
 }
 
 type Z {
-	f2(first: Int, offset: Int): [Y] @dgraph(pred: "f2")
+	add(first: Int, offset: Int): [X]
 }
 
 #######################
@@ -153,82 +151,31 @@ input StringHashFilter {
 }
 
 #######################
-# Generated Types
-#######################
-
-type AddXPayload {
-	x(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
-	numUids: Int
-}
-
-type DeleteXPayload {
-	x(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
-	msg: String
-	numUids: Int
-}
-
-type UpdateXPayload {
-	x(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
-	numUids: Int
-}
-
-#######################
 # Generated Enums
 #######################
 
 enum XHasFilter {
+	name
 	f1
-	name
-}
-
-enum XOrderable {
-	name
 }
 
 enum YHasFilter {
-	f2
 	f1
 }
 
 enum ZHasFilter {
-	f2
+	add
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddXInput {
-	name: String
-}
-
-input UpdateXInput {
-	filter: XFilter!
-	set: XPatch
-	remove: XPatch
-}
-
 input XFilter {
-	id: [ID!]
 	has: XHasFilter
 	and: XFilter
 	or: XFilter
 	not: XFilter
-}
-
-input XOrder {
-	asc: XOrderable
-	desc: XOrderable
-	then: XOrder
-}
-
-input XPatch {
-	name: String
-}
-
-input XRef {
-	id: ID
-	name: String
 }
 
 input YFilter {
@@ -247,19 +194,8 @@ input ZFilter {
 #######################
 
 type Query {
-	getX(id: ID!): X
-	queryX(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
+	queryX(first: Int, offset: Int): [X]
 	queryY(first: Int, offset: Int): [Y]
 	queryZ(first: Int, offset: Int): [Z]
-}
-
-#######################
-# Generated Mutations
-#######################
-
-type Mutation {
-	addX(input: [AddXInput!]!): AddXPayload
-	updateX(input: UpdateXInput!): UpdateXPayload
-	deleteX(filter: XFilter!): DeleteXPayload
 }
 

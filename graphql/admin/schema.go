@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -54,6 +55,7 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 		return resolve.EmptyResult(m, err), false
 	}
 
+	fmt.Printf( schHandler.GQLSchema())
 	if _, err = schema.FromString(schHandler.GQLSchema()); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
