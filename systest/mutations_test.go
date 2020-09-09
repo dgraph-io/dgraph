@@ -2400,7 +2400,7 @@ func OverwriteUidPredicatesMultipleTxn(t *testing.T, c *dgo.Dgraph) {
 
 	resp, err = c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Carol"}}]}`,
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Carl"}}]}`,
 		string(resp.GetJson()))
 }
 
