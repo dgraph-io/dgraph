@@ -323,11 +323,17 @@ var scalarToDgraph = map[string]string{
 // directiveLocationMap stores the directives and their locations for the ones which can be
 // applied at type level in the user supplied schema. It is used during validation.
 var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
+	"hasInverse":       nil,
+	"search":           nil,
 	"dgraph":           {ast.Object: true, ast.Interface: true},
+	"id":               nil,
 	"withSubscription": {ast.Object: true, ast.Interface: true},
 	"secret":           {ast.Object: true, ast.Interface: true},
 	"auth":             {ast.Object: true},
+	"custom":           nil,
 	"remote":           {ast.Object: true, ast.Interface: true, ast.Union: true},
+	"cascade":          nil,
+	"oneOf":            nil,
 }
 
 func ValidatorNoOp(

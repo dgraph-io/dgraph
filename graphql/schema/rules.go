@@ -451,13 +451,16 @@ func nameCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 	return nil
 }
 
-// This could be reomved once the following gqlparser bug is fixed:
+// This could be removed once the following gqlparser bug is fixed:
 // 	https://github.com/vektah/gqlparser/issues/128
 func directiveLocationCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 	var errs []*gqlerror.Error
 	for _, dir := range defn.Directives {
 		dirLocInfo, ok := directiveLocationMap[dir.Name]
 		if !ok {
+			continue
+		}
+		if dirLocInfo == nil {
 			errs = append(errs, gqlerror.ErrorPosf(
 				dir.Position, "Type %s; has the @%s directive, "+
 					"but it is not applicable at type level.", defn.Name, dir.Name))
