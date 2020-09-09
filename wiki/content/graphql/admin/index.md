@@ -325,6 +325,7 @@ You'll notice that the /admin schema is very much the same as the schemas genera
 ## Enterprise Features
 
 Enterprise Features like ACL, Backups and Restore are also available using the GraphQL API at `/admin` endpoint.
+
 * [ACL](https://dgraph.io/docs/enterprise-features/access-control-lists/#using-graphql-admin-api).
 * [Backups](https://dgraph.io/docs/enterprise-features/binary-backups/#create-a-backup).
 * [Restore](https://dgraph.io/docs/enterprise-features/binary-backups/#restore-from-backup).
