@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
@@ -40,7 +41,11 @@ type updateGQLSchemaInput struct {
 	Set gqlSchema `json:"set,omitempty"`
 }
 
-func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+type updateSchemaResolver struct {
+	admin *adminServer
+}
+
+func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got updateGQLSchema request")
 
 	input, err := getSchemaInput(m)
@@ -48,7 +53,9 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 		return resolve.EmptyResult(m, err), false
 	}
 
-	schHandler, err := schema.NewHandler(input.Set.Schema)
+	// We just need to validate the schema. Schema is later set in `resetSchema()` when the schema
+	// is returned from badger.
+	schHandler, err := schema.NewHandler(input.Set.Schema, true)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
@@ -56,12 +63,20 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if _, err = schema.FromString(schHandler.GQLSchema()); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	newGQLSchema := input.Set.Schema
-	newDgraphSchema := schHandler.DGSchema()
 
-	resp, err := edgraph.UpdateGQLSchema(ctx, newGQLSchema, newDgraphSchema)
+	oldSchemaHash := farm.Fingerprint64([]byte(usr.admin.schema.Schema))
+	newSchemaHash := farm.Fingerprint64([]byte(input.Set.Schema))
+	updateHistory := oldSchemaHash != newSchemaHash
+
+	resp, err := edgraph.UpdateGQLSchema(ctx, input.Set.Schema, schHandler.DGSchema())
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
+	}
+
+	if updateHistory {
+		if err := edgraph.UpdateSchemaHistory(ctx, input.Set.Schema); err != nil {
+			glog.Errorf("error while updating schema history %s", err.Error())
+		}
 	}
 
 	return &resolve.Resolved{
@@ -69,8 +84,8 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 			m.Name(): map[string]interface{}{
 				"gqlSchema": map[string]interface{}{
 					"id":              query.UidToHex(resp.Uid),
-					"schema":          newGQLSchema,
-					"generatedSchema": newDgraphSchema,
+					"schema":          input.Set.Schema,
+					"generatedSchema": schHandler.GQLSchema(),
 				}}},
 		Field: m,
 		Err:   nil,

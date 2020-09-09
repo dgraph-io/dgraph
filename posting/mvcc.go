@@ -27,7 +27,6 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -105,7 +104,7 @@ func (ir *incrRollupi) addKeyToBatch(key []byte) {
 }
 
 // Process will rollup batches of 64 keys in a go routine.
-func (ir *incrRollupi) Process(closer *y.Closer) {
+func (ir *incrRollupi) Process(closer *z.Closer) {
 	defer closer.Done()
 
 	writer := NewTxnWriter(pstore)
@@ -417,6 +416,9 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		}
 	}
 
+	if pstore.IsClosed() {
+		return nil, badger.ErrDBClosed
+	}
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 

@@ -18,6 +18,7 @@ package x
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -156,4 +157,12 @@ func TestVersionString(t *testing.T) {
 	dgraphVersion = "v1.2.2-rc1-g123456"
 	require.False(t, DevVersion())
 
+}
+
+func TestToHex(t *testing.T) {
+	require.Equal(t, []byte(`"0x0"`), ToHex(0))
+	require.Equal(t, []byte(`"0xf"`), ToHex(15))
+	require.Equal(t, []byte(`"0x19"`), ToHex(25))
+	require.Equal(t, []byte(`"0xff"`), ToHex(255))
+	require.Equal(t, []byte(`"0xffffffffffffffff"`), ToHex(math.MaxUint64))
 }

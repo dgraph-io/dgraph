@@ -84,9 +84,6 @@ const (
 	// NoAuthorize is used to indicate that authorization needs to be skipped.
 	// Used when ACL needs to query information for performing the authorization check.
 	NoAuthorize
-	// CorsMutationAllowed is used to indicate that the given request is authorized to do
-	// cors mutation.
-	CorsMutationAllowed
 )
 
 var (
@@ -328,8 +325,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// reset their in-memory GraphQL schema
 		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
-		ResetAcl()
-		ResetCors()
+		ResetAcl(nil)
+		ResetCors(nil)
 		return empty, err
 	}
 
@@ -353,8 +350,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
 		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
 		// recreate the admin account after a drop data operation
-		ResetAcl()
-		ResetCors()
+		ResetAcl(nil)
+		ResetCors(nil)
 		return empty, err
 	}
 
@@ -494,12 +491,21 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if x.WorkerConfig.LudicrousMode {
 		// Mutations are automatically committed in case of ludicrous mode, so we don't
 		// need to manually commit.
+		if resp.Txn == nil {
+			return errors.Wrapf(err, "Txn Context is nil")
+		}
 		resp.Txn.Keys = resp.Txn.Keys[:0]
 		resp.Txn.CommitTs = qc.req.StartTs
 		return err
 	}
-
+	// calculateMutationMetrics calculate cost for the mutation.
+	calculateMutationMetrics := func() {
+		cost := uint64(len(newUids) + len(edges))
+		resp.Metrics.NumUids["mutation_cost"] = cost
+		resp.Metrics.NumUids["_total"] = resp.Metrics.NumUids["_total"] + cost
+	}
 	if !qc.req.CommitNow {
+		calculateMutationMetrics()
 		if err == zero.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
 		}
@@ -544,7 +550,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	// CommitNow was true, no need to send keys.
 	resp.Txn.Keys = resp.Txn.Keys[:0]
 	resp.Txn.CommitTs = cts
-
+	calculateMutationMetrics()
 	return nil
 }
 
@@ -979,11 +985,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		}
 	}
 
-	if doAuth != CorsMutationAllowed {
-		if rerr = validateCorsInMutation(ctx, qc); rerr != nil {
-			return
-		}
-	}
 	// We use defer here because for queries, startTs will be
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
@@ -1218,29 +1219,6 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 		}
 	}
 
-	return nil
-}
-
-// validateCorsInMutation check whether mutation contains cors predication. If it's contain cors
-// predicate, we'll throw an error.
-func validateCorsInMutation(ctx context.Context, qc *queryContext) error {
-	validateNquad := func(nquads []*api.NQuad) error {
-		for _, nquad := range nquads {
-			if nquad.Predicate != "dgraph.cors" {
-				continue
-			}
-			return errors.New("Mutations are not allowed for the predicate dgraph.cors")
-		}
-		return nil
-	}
-	for _, gmu := range qc.gmuList {
-		if err := validateNquad(gmu.Set); err != nil {
-			return err
-		}
-		if err := validateNquad(gmu.Del); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -1537,95 +1515,4 @@ func isDropAll(op *api.Operation) bool {
 		return true
 	}
 	return false
-}
-
-// ResetCors make the dgraph to accept all the origins if no origins were given
-// by the users.
-func ResetCors() {
-	req := &api.Request{
-		Query: `query{
-			cors as var(func: has(dgraph.cors))
-		}`,
-		Mutations: []*api.Mutation{
-			{
-				Set: []*api.NQuad{
-					{
-						Subject:     "_:a",
-						Predicate:   "dgraph.cors",
-						ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "*"}},
-					},
-				},
-				Cond: `@if(eq(len(cors), 0))`,
-			},
-		},
-		CommitNow: true,
-	}
-
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-		if _, err := (&Server{}).doQuery(ctx, req, CorsMutationAllowed); err != nil {
-			glog.Infof("Unable to upsert cors. Error: %v", err)
-			time.Sleep(100 * time.Millisecond)
-		}
-		break
-	}
-}
-
-func generateNquadsForCors(origins []string) []byte {
-	out := &bytes.Buffer{}
-	for _, origin := range origins {
-		out.Write([]byte(fmt.Sprintf("uid(cors) <dgraph.cors> \"%s\" . \n", origin)))
-	}
-	return out.Bytes()
-}
-
-// AddCorsOrigins Adds the cors origins to the Dgraph.
-func AddCorsOrigins(ctx context.Context, origins []string) error {
-	req := &api.Request{
-		Query: `query{
-			cors as var(func: has(dgraph.cors))
-		}`,
-		Mutations: []*api.Mutation{
-			{
-				SetNquads: generateNquadsForCors(origins),
-				Cond:      `@if(eq(len(cors), 1))`,
-				DelNquads: []byte(`uid(cors) <dgraph.cors> * .`),
-			},
-		},
-		CommitNow: true,
-	}
-	_, err := (&Server{}).doQuery(ctx, req, CorsMutationAllowed)
-	return err
-}
-
-// GetCorsOrigins retrive all the cors origin from the database.
-func GetCorsOrigins(ctx context.Context) ([]string, error) {
-	req := &api.Request{
-		Query: `query{
-			me(func: has(dgraph.cors)){
-				dgraph.cors
-			}
-		}`,
-		ReadOnly: true,
-	}
-	res, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
-	if err != nil {
-		return nil, err
-	}
-
-	type corsResponse struct {
-		Me []struct {
-			DgraphCors []string `json:"dgraph.cors"`
-		} `json:"me"`
-	}
-	corsRes := &corsResponse{}
-	if err = json.Unmarshal(res.Json, corsRes); err != nil {
-		return nil, err
-	}
-	if len(corsRes.Me) > 1 {
-		glog.Errorf("Something went wrong in cors predicate, expected 1 predicate but got %d",
-			len(corsRes.Me))
-	}
-	return corsRes.Me[0].DgraphCors, nil
 }

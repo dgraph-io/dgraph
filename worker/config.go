@@ -48,10 +48,14 @@ type Options struct {
 	// BadgerWalVlog is the name of the mode used to load the badger value log for the w directory.
 	BadgerWalVlog string
 
-	// BadgerCompressionLevel is the ZSTD compression level used by badger. A
+	// WALDirCompressionLevel is the ZSTD compression level used by WAL directory. A
 	// higher value means more CPU intensive compression and better compression
 	// ratio.
-	BadgerCompressionLevel int
+	WALDirCompressionLevel int
+	// PostingDirCompressionLevel is the ZSTD compression level used by Postings directory. A
+	// higher value means more CPU intensive compression and better compression
+	// ratio.
+	PostingDirCompressionLevel int
 	// WALDir is the path to the directory storing the write-ahead log.
 	WALDir string
 	// MutationsMode is the mode used to handle mutation requests.
@@ -60,6 +64,15 @@ type Options struct {
 	AuthToken string
 	// AllottedMemory is the estimated size taken by the LRU cache.
 	AllottedMemory float64
+
+	// PBlockCacheSize is the size of block cache for pstore
+	PBlockCacheSize int64
+	// PIndexCacheSize is the size of index cache for pstore
+	PIndexCacheSize int64
+	// WBlockCacheSize is the size of block cache for wstore
+	WBlockCacheSize int64
+	// WIndexCacheSize is the size of index cache for wstore
+	WIndexCacheSize int64
 
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
 	HmacSecret x.SensitiveByteSlice

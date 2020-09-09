@@ -219,6 +219,7 @@ message DirectedEdge {
 	}
 	Op op = 8;
 	repeated api.Facet facets = 9;
+	repeated string allowedPreds = 10;
 }
 
 message Mutations {
@@ -470,15 +471,6 @@ message TypeUpdate {
 
 message MapHeader {
 	repeated bytes partition_keys = 1;
-}
-
-// Bulk loader proto.
-message MapEntry {
-	bytes key = 1;
-
-	// Only one should be set.
-	fixed64 uid = 2;
-	Posting posting = 3;
 }
 
 message MovePredicatePayload {

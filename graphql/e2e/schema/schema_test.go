@@ -17,20 +17,22 @@
 package schema
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
-
-	"github.com/dgraph-io/dgraph/worker"
-
 	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -216,9 +218,17 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
       		  "exact"
       		],
       		"upsert": true
-        },
-        {
+		},
+		{
             "predicate": "dgraph.graphql.schema",
+            "type": "string"
+		},
+		{
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
             "type": "string"
 		},
         {
@@ -258,6 +268,16 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         }
     ]
 }`, tcases[lastSuccessTcaseIdx].dgraphSchema)
@@ -287,6 +307,35 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 	require.NoError(t, json.Unmarshal(res.GetJson(), &resp))
 	require.Len(t, resp.GqlSchema, 1)
 	require.Equal(t, finalGraphQLSchema, resp.GqlSchema[0].Schema)
+}
+
+// TestIntrospectionQueryAfterDropAll make sure that Introspection query after drop_all doesn't give any internal error
+func TestIntrospectionQueryAfterDropAll(t *testing.T) {
+	// First Do the drop_all operation
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	// wait for a bit
+	time.Sleep(time.Second)
+
+	introspectionQuery := `
+	query{
+		__schema{
+		   types{
+			 name
+		   }
+		}
+	}`
+	introspect := &common.GraphQLParams{
+		Query: introspectionQuery,
+	}
+
+	// On doing Introspection Query Now, We should get the Expected Error Message, not the Internal Error.
+	introspectionResult := introspect.ExecuteAsPost(t, groupOneServer)
+	require.Len(t, introspectionResult.Errors, 1)
+	gotErrorMessage := introspectionResult.Errors[0].Message
+	expectedErrorMessage := "Not resolving __schema. There's no GraphQL schema in Dgraph.  Use the /admin API to add a GraphQL schema"
+	require.Equal(t, expectedErrorMessage, gotErrorMessage)
 }
 
 // TestUpdateGQLSchemaAfterDropAll makes sure that updating the GraphQL schema after drop_all works
@@ -336,6 +385,252 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 	// we should still get the schema we inserted earlier
 	require.Equal(t, schema, getGQLSchemaRequireId(t, groupOneAdminServer))
 
+}
+
+// TestSchemaHistory checks the admin schema history API working properly or not.
+func TestSchemaHistory(t *testing.T) {
+	// Drop all to remove all the previous schema history.
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA, RunInBackground: false}))
+
+	// Let's get the schema. It should return empty results.
+	get := &common.GraphQLParams{
+		Query: `query{
+			querySchemaHistory(first:10){
+			  schema
+			  created_at
+			}
+		  }`,
+	}
+	getResult := get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
+
+	require.JSONEq(t, `{
+		"querySchemaHistory": []
+	  }`, string(getResult.Data))
+
+	// Let's add an schema and expect the history in the history api.
+	updateGQLSchemaRequireNoErrors(t, `
+	type A {
+		b: String!
+	}`, groupOneAdminServer)
+	time.Sleep(time.Second)
+
+	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
+	type History struct {
+		Schema    string `json:"schema"`
+		CreatedAt string `json:"created_at"`
+	}
+	type schemaHistory struct {
+		QuerySchemaHistory []History `json:"querySchemaHistory"`
+	}
+	history := schemaHistory{}
+	require.NoError(t, json.Unmarshal(getResult.Data, &history))
+	require.Equal(t, int(1), len(history.QuerySchemaHistory))
+	require.Equal(t, history.QuerySchemaHistory[0].Schema, "\n\ttype A {\n\t\tb: String!\n\t}")
+
+	// Let's update the same schema. But we should not get the 2 history because, we
+	// are updating the same schema.
+	updateGQLSchemaRequireNoErrors(t, `
+	type A {
+		b: String!
+	}`, groupOneAdminServer)
+	time.Sleep(time.Second)
+
+	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
+	history = schemaHistory{}
+	require.NoError(t, json.Unmarshal(getResult.Data, &history))
+	require.Equal(t, int(1), len(history.QuerySchemaHistory))
+	require.Equal(t, history.QuerySchemaHistory[0].Schema, "\n\ttype A {\n\t\tb: String!\n\t}")
+
+	// Let's update a new schema and check the history.
+	updateGQLSchemaRequireNoErrors(t, `
+	type B {
+		b: String!
+	}`, groupOneAdminServer)
+	time.Sleep(time.Second)
+
+	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
+	history = schemaHistory{}
+	require.NoError(t, json.Unmarshal(getResult.Data, &history))
+	require.Equal(t, int(2), len(history.QuerySchemaHistory))
+	require.Equal(t, history.QuerySchemaHistory[0].Schema, "\n\ttype B {\n\t\tb: String!\n\t}")
+	require.Equal(t, history.QuerySchemaHistory[1].Schema, "\n\ttype A {\n\t\tb: String!\n\t}")
+
+	// Check offset working properly or not.
+	get = &common.GraphQLParams{
+		Query: `query{
+			querySchemaHistory(first:10, offset:1){
+			  schema
+			  created_at
+			}
+		  }`,
+	}
+	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
+	history = schemaHistory{}
+	require.NoError(t, json.Unmarshal(getResult.Data, &history))
+	require.Equal(t, int(1), len(history.QuerySchemaHistory))
+	require.Equal(t, history.QuerySchemaHistory[0].Schema, "\n\ttype A {\n\t\tb: String!\n\t}")
+
+	// Let's drop eveything and see whether we getting empty results are not.
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA, RunInBackground: false}))
+	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
+	require.Nil(t, getResult.Errors)
+	require.JSONEq(t, `{
+		"querySchemaHistory": []
+	  }`, string(getResult.Data))
+}
+
+// verifyEmptySchema verifies that the schema is not set in the GraphQL server.
+func verifyEmptySchema(t *testing.T) {
+	schema := getGQLSchema(t, groupOneAdminServer)
+	require.Empty(t, schema.Schema)
+}
+
+func TestGQLSchemaValidate(t *testing.T) {
+	testCases := []struct {
+		schema string
+		errors x.GqlErrorList
+		valid  bool
+	}{
+		{
+			schema: `
+				type Task @auth(
+					query: { rule: "{$USERROLE: { eq: \"USER\"}}" }
+				) {
+					id: ID!
+					name: String!
+					occurrences: [TaskOccurrence] @hasInverse(field: task)
+				}
+				
+				type TaskOccurrence @auth(
+					query: { rule: "query { queryTaskOccurrence { task { id } } }" }
+				) {
+					id: ID!
+					due: DateTime
+					comp: DateTime
+					task: Task @hasInverse(field: occurrences)
+				}
+			`,
+			valid: true,
+		},
+		{
+			schema: `
+				type X {
+					id: ID @dgraph(pred: "X.id")
+					name: String
+				}
+				type Y {
+					f1: String! @dgraph(pred:"~movie")
+				}
+			`,
+			errors: x.GqlErrorList{{Message: "input:3: Type X; Field id: has the @dgraph directive but fields of type ID can't have the @dgraph directive."}, {Message: "input:7: Type Y; Field f1 is of type String, but reverse predicate in @dgraph directive only applies to fields with object types."}},
+			valid:  false,
+		},
+	}
+
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+
+	validateUrl := groupOneAdminServer + "/schema/validate"
+	var response x.QueryResWithData
+	for _, tcase := range testCases {
+		resp, err := http.Post(validateUrl, "text/plain", bytes.NewBuffer([]byte(tcase.schema)))
+		require.NoError(t, err)
+
+		decoder := json.NewDecoder(resp.Body)
+		err = decoder.Decode(&response)
+		require.NoError(t, err)
+
+		// Verify that we only validate the schema and not set it.
+		verifyEmptySchema(t)
+
+		if tcase.valid {
+			require.Equal(t, resp.StatusCode, http.StatusOK)
+			continue
+		}
+		require.Equal(t, resp.StatusCode, http.StatusBadRequest)
+		require.NotNil(t, response.Errors)
+		require.Equal(t, len(response.Errors), len(tcase.errors))
+		for idx, err := range response.Errors {
+			require.Equal(t, err.Message, tcase.errors[idx].Message)
+		}
+	}
+}
+
+func TestUpdateGQLSchemaFields(t *testing.T) {
+	schema := `
+	type Author {
+		id: ID!
+		name: String!
+	}`
+
+	generatedSchema, err := ioutil.ReadFile("generatedSchema.graphql")
+	require.NoError(t, err)
+
+	req := &common.GraphQLParams{
+		Query: `mutation updateGQLSchema($sch: String!) {
+			updateGQLSchema(input: { set: { schema: $sch }}) {
+				gqlSchema {
+					schema
+					generatedSchema
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": schema},
+	}
+	resp := req.ExecuteAsPost(t, groupOneAdminServer)
+	require.NotNil(t, resp)
+	require.Nilf(t, resp.Errors, "%s", resp.Errors)
+
+	var updateResp struct {
+		UpdateGQLSchema struct {
+			GQLSchema struct {
+				Schema          string
+				GeneratedSchema string
+			}
+		}
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &updateResp))
+
+	require.Equal(t, schema, updateResp.UpdateGQLSchema.GQLSchema.Schema)
+	require.Equal(t, string(generatedSchema), updateResp.UpdateGQLSchema.GQLSchema.GeneratedSchema)
+}
+
+func TestIntrospection(t *testing.T) {
+	// note that both the types implement the same interface and have a field called `name`, which
+	// has exact same name as a field in full introspection query.
+	schema := `
+	interface Node {
+		id: ID!
+	}
+	
+	type Human implements Node {
+		name: String
+	}
+	
+	type Dog implements Node {
+		name: String
+	}`
+	updateGQLSchemaRequireNoErrors(t, schema, groupOneAdminServer)
+	query, err := ioutil.ReadFile("../../schema/testdata/introspection/input/full_query.graphql")
+	require.NoError(t, err)
+
+	introspectionParams := &common.GraphQLParams{Query: string(query)}
+	resp := introspectionParams.ExecuteAsPost(t, groupOneServer)
+
+	// checking that there are no errors in the response, i.e., we always get some data in the
+	// introspection response.
+	require.Nilf(t, resp.Errors, "%s", resp.Errors)
+	require.NotEmpty(t, resp.Data)
+	// TODO: we should actually compare data here, but there seems to be some issue with either the
+	// introspection response or the JSON comparison. Needs deeper looking.
 }
 
 func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {

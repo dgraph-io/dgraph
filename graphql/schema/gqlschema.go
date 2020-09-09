@@ -43,6 +43,7 @@ const (
 	customDirective       = "custom"
 	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
 	cascadeDirective      = "cascade"
+	cascadeArg            = "fields"
 	SubscriptionDirective = "withSubscription"
 
 	// custom directive args and fields
@@ -63,11 +64,14 @@ const (
 	schemaExtras = `
 """
 The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
-Int64 can currently represent values in range [-(2^53)+1, (2^53)-1] without any error.
-Values out of this range but representable by a signed 64-bit integer, may get coercion error.
+Int64 can represent values in range [-(2^63),(2^63 - 1)].
 """
 scalar Int64
 
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
 scalar DateTime
 
 enum DgraphIndex {
@@ -132,7 +136,7 @@ directive @auth(
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
 
 input IntFilter {
 	eq: Int
@@ -1129,7 +1133,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if orderable[fld.Type.Name()] {
+		if fld.Type.NamedType != "" && orderable[fld.Type.NamedType] {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}

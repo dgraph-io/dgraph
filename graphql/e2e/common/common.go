@@ -30,6 +30,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -37,7 +38,7 @@ import (
 )
 
 const (
-	graphqlURL      = "http://localhost:8180/graphql"
+	GraphqlURL      = "http://localhost:8180/graphql"
 	graphqlAdminURL = "http://localhost:8180/admin"
 	AlphagRPC       = "localhost:9180"
 
@@ -170,6 +171,28 @@ type student struct {
 	Xid      string     `json:"xid,omitempty"`
 	Name     string     `json:"name,omitempty"`
 	TaughtBy []*teacher `json:"taughtBy,omitempty"`
+}
+
+type UserSecret struct {
+	Id      string `json:"id,omitempty"`
+	ASecret string `json:"aSecret,omitempty"`
+	OwnedBy string `json:"ownedBy,omitempty"`
+}
+
+func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) {
+	getParams := &GraphQLParams{
+		Headers: GetJWT(t, user, role, metaInfo),
+		Query: `
+			mutation deleteUserSecret($ids: [ID!]) {
+				deleteUserSecret(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{us.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
 }
 
 func BootstrapServer(schema, data []byte) {
@@ -305,6 +328,7 @@ func RunAll(t *testing.T) {
 	t.Run("deep mutations", deepMutations)
 	t.Run("add multiple mutations", testMultipleMutations)
 	t.Run("deep XID mutations", deepXIDMutations)
+	t.Run("three level xid", testThreeLevelXID)
 	t.Run("error in multiple mutations", addMultipleMutationWithOneError)
 	t.Run("dgraph directive with reverse edge adds data correctly",
 		addMutationWithReverseDgraphEdge)
@@ -318,6 +342,8 @@ func RunAll(t *testing.T) {
 	t.Run("alias works for mutations", mutationsWithAlias)
 	t.Run("three level deep", threeLevelDeepMutation)
 	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
+	t.Run("Input coercing for int64 type", int64BoundaryTesting)
+	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -377,7 +403,7 @@ func gzipCompressionHeader(t *testing.T) {
 		}`,
 	}
 
-	req, err := queryCountry.createGQLPost(graphqlURL)
+	req, err := queryCountry.createGQLPost(GraphqlURL)
 	require.NoError(t, err)
 
 	req.Header.Set("Content-Encoding", "gzip")
@@ -404,7 +430,7 @@ func gzipCompressionNoHeader(t *testing.T) {
 		gzipEncoding: true,
 	}
 
-	req, err := queryCountry.createGQLPost(graphqlURL)
+	req, err := queryCountry.createGQLPost(GraphqlURL)
 	require.NoError(t, err)
 
 	req.Header.Del("Content-Encoding")
@@ -430,7 +456,7 @@ func getQueryEmptyVariable(t *testing.T) {
 			}
 		}`,
 	}
-	req, err := queryCountry.createGQLGet(graphqlURL)
+	req, err := queryCountry.createGQLGet(GraphqlURL)
 	require.NoError(t, err)
 
 	q := req.URL.Query()
@@ -640,7 +666,7 @@ func allCountriesAdded() ([]*country, error) {
 		return nil, errors.Wrap(err, "unable to build GraphQL query")
 	}
 
-	req, err := http.NewRequest("POST", graphqlURL, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", GraphqlURL, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to build GraphQL request")
 	}
@@ -803,4 +829,23 @@ func addSchemaThroughAdminSchemaEndpt(url, schema string) error {
 	}
 
 	return nil
+}
+
+func GetJWT(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) http.Header {
+	metaInfo.AuthVars = map[string]interface{}{}
+	if user != "" {
+		metaInfo.AuthVars["USER"] = user
+	}
+
+	if role != "" {
+		metaInfo.AuthVars["ROLE"] = role
+	}
+
+	require.NotNil(t, metaInfo.PrivateKeyPath)
+	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
+	require.NoError(t, err)
+
+	h := make(http.Header)
+	h.Add(metaInfo.Header, jwtToken)
+	return h
 }

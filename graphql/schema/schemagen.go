@@ -72,7 +72,7 @@ func (s *handler) DGSchema() string {
 	return s.dgraphSchema
 }
 
-func parseSecrets(sch string) (map[string]string, error) {
+func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error) {
 	m := make(map[string]string)
 	scanner := bufio.NewScanner(strings.NewReader(sch))
 	authSecret := ""
@@ -81,7 +81,7 @@ func parseSecrets(sch string) (map[string]string, error) {
 
 		if strings.HasPrefix(text, "# Dgraph.Authorization") {
 			if authSecret != "" {
-				return nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
+				return nil, nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
 					"a schema, found second mention: %v", text)
 			}
 			authSecret = text
@@ -94,12 +94,12 @@ func parseSecrets(sch string) (map[string]string, error) {
 		const doubleQuotesCode = 34
 
 		if len(parts) < 4 {
-			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+			return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
 				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
 		}
 		val := strings.Join(parts[3:], " ")
 		if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
-			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+			return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
 				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
 		}
 
@@ -109,23 +109,28 @@ func parseSecrets(sch string) (map[string]string, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
+		return nil, nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
 	}
+
 	if authSecret == "" {
-		return m, nil
+		return m, nil, nil
 	}
-	err := authorization.ParseAuthMeta(authSecret)
-	return m, err
+
+	metaInfo, err := authorization.ParseAuthMeta(authSecret)
+	if err != nil {
+		return nil, nil, err
+	}
+	return m, metaInfo, nil
 }
 
 // NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
-func NewHandler(input string) (Handler, error) {
+func NewHandler(input string, validateOnly bool) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
 
-	secrets, err := parseSecrets(input)
+	secrets, metaInfo, err := parseSecrets(input)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +206,12 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
-	headers := getAllowedHeaders(sch, defns)
+	var authHeader string
+	if metaInfo != nil {
+		authHeader = metaInfo.Header
+	}
+
+	headers := getAllowedHeaders(sch, defns, authHeader)
 	dgSchema := genDgSchema(sch, typesToComplete)
 	completeSchema(sch, typesToComplete)
 	cleanSchema(sch, typesToComplete)
@@ -209,17 +219,27 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
 	}
 
+	handler := &handler{
+		input:          input,
+		dgraphSchema:   dgSchema,
+		completeSchema: sch,
+		originalDefs:   defns,
+	}
+
+	// Return early since we are only validating the schema.
+	if validateOnly {
+		return handler, nil
+	}
+
 	hc.Lock()
 	hc.allowed = headers
 	hc.secrets = schemaSecrets
 	hc.Unlock()
 
-	return &handler{
-		input:          input,
-		dgraphSchema:   dgSchema,
-		completeSchema: sch,
-		originalDefs:   defns,
-	}, nil
+	if metaInfo != nil {
+		authorization.SetAuthMeta(metaInfo)
+	}
+	return handler, nil
 }
 
 type headersConfig struct {
@@ -237,7 +257,7 @@ var hc = headersConfig{
 	allowed: x.AccessControlAllowedHeaders,
 }
 
-func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
+func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string) string {
 	headers := make(map[string]struct{})
 
 	setHeaders := func(dir *ast.Directive) {
@@ -278,8 +298,8 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 	}
 
 	// Add Auth Header to allowed headers list
-	if authorization.GetHeader() != "" {
-		finalHeaders = append(finalHeaders, authorization.GetHeader())
+	if authHeader != "" {
+		finalHeaders = append(finalHeaders, authHeader)
 	}
 
 	allowed := x.AccessControlAllowedHeaders

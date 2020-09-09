@@ -35,7 +35,6 @@ import (
 	"time"
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -47,6 +46,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
@@ -80,6 +80,8 @@ var (
 
 	// need this here to refer it in admin_backup.go
 	adminServer web.IServeGraphQL
+
+	initDone uint32
 )
 
 func init() {
@@ -116,8 +118,13 @@ they form a Raft group and provide synchronous replication.
 			"log directory. mmap consumes more RAM, but provides better performance. If you pass "+
 			"two values separated by a comma the first value will be used for the postings "+
 			"directory and the second for the w directory.")
-	flag.Int("badger.compression_level", 3,
-		"The compression level for Badger. A higher value uses more resources.")
+	flag.String("badger.compression_level", "3,0",
+		"Specifies the compression level for the postings and write-ahead log "+
+			"directory. A higher value uses more resources. The value of 0 disables "+
+			"compression. If you pass two values separated by a comma the first "+
+			"value will be used for the postings directory (p) and the second for "+
+			"the wal directory (w). If a single value is passed the value is used "+
+			"as compression level for both directories.")
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -200,9 +207,17 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
+	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. This returns auth errors to clients. We do not recommend turning it on for production.")
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
+	flag.Int("ludicrous_concurrency", 2000, "Number of concurrent threads in ludicrous mode")
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
+
+	// Cache flags
+	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha.")
+	flag.String("cache_percentage", "0,65,25,0,10",
+		`Cache percentages summing up to 100 for various caches (FORMAT:
+		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).`)
 }
 
 func setupCustomTokenizers() {
@@ -379,7 +394,7 @@ func setupListener(addr string, port int) (net.Listener, error) {
 	return net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
 }
 
-func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
+func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	defer closer.Done()
 
 	x.RegisterExporters(Alpha.Conf, "dgraph.alpha")
@@ -402,7 +417,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
 	s.Stop()
 }
 
-func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
+func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	defer closer.Done()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
@@ -425,7 +440,7 @@ func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
 	}
 }
 
-func setupServer(closer *y.Closer) {
+func setupServer(closer *z.Closer) {
 	go worker.RunServer(bindall) // For pb.communication.
 
 	laddr := "localhost"
@@ -502,6 +517,23 @@ func setupServer(closer *y.Closer) {
 		adminSchemaHandler(w, r, adminServer)
 	})))
 
+	http.Handle("/admin/schema/validate", http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
+		schema := readRequest(w, r)
+		w.Header().Set("Content-Type", "application/json")
+
+		err := admin.SchemaValidate(string(schema))
+		if err == nil {
+			w.WriteHeader(http.StatusOK)
+			x.SetStatus(w, "success", "Schema is valid")
+			return
+		}
+
+		w.WriteHeader(http.StatusBadRequest)
+		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
+		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
+	}))
+
 	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			shutDownHandler(w, r, adminServer)
@@ -537,7 +569,7 @@ func setupServer(closer *y.Closer) {
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initialize the servers.
-	admin.ServerCloser = y.NewCloser(3)
+	admin.ServerCloser = z.NewCloser(3)
 	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
 	go serveHTTP(httpListener, tlsCfg, admin.ServerCloser)
 
@@ -563,6 +595,7 @@ func setupServer(closer *y.Closer) {
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 
+	atomic.AddUint32(&initDone, 1)
 	admin.ServerCloser.Wait()
 }
 
@@ -577,10 +610,33 @@ func run() {
 	}
 	bindall = Alpha.Conf.GetBool("bindall")
 
+	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
+	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
+
+	cachePercentage := Alpha.Conf.GetString("cache_percentage")
+	cachePercent, err := x.GetCachePercentages(cachePercentage, 5)
+	x.Check(err)
+	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
+	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
+	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
+	wstoreBlockCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
+	wstoreIndexCacheSize := (cachePercent[4] * (totalCache << 20)) / 100
+
+	compressionLevelString := Alpha.Conf.GetString("badger.compression_level")
+	compressionLevels, err := x.GetCompressionLevels(compressionLevelString)
+	x.Check(err)
+	postingDirCompressionLevel := compressionLevels[0]
+	walDirCompressionLevel := compressionLevels[1]
+
 	opts := worker.Options{
-		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-		PostingDir:             Alpha.Conf.GetString("postings"),
-		WALDir:                 Alpha.Conf.GetString("wal"),
+		PostingDir:                 Alpha.Conf.GetString("postings"),
+		WALDir:                     Alpha.Conf.GetString("wal"),
+		PostingDirCompressionLevel: postingDirCompressionLevel,
+		WALDirCompressionLevel:     walDirCompressionLevel,
+		PBlockCacheSize:            pstoreBlockCacheSize,
+		PIndexCacheSize:            pstoreIndexCacheSize,
+		WBlockCacheSize:            wstoreBlockCacheSize,
+		WIndexCacheSize:            wstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
@@ -652,20 +708,21 @@ func run() {
 	x.Check(err)
 
 	x.WorkerConfig = x.WorkerOptions{
-		ExportPath:          Alpha.Conf.GetString("export"),
-		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
-		Tracing:             Alpha.Conf.GetFloat64("trace"),
-		MyAddr:              Alpha.Conf.GetString("my"),
-		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
-		RaftId:              cast.ToUint64(Alpha.Conf.GetString("idx")),
-		WhiteListedIPRanges: ips,
-		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
-		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
-		AclEnabled:          secretFile != "",
-		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
-		AbortOlderThan:      abortDur,
-		StartTime:           startTime,
-		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
+		ExportPath:           Alpha.Conf.GetString("export"),
+		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
+		Tracing:              Alpha.Conf.GetFloat64("trace"),
+		MyAddr:               Alpha.Conf.GetString("my"),
+		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
+		RaftId:               cast.ToUint64(Alpha.Conf.GetString("idx")),
+		WhiteListedIPRanges:  ips,
+		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
+		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
+		AclEnabled:           secretFile != "",
+		SnapshotAfter:        Alpha.Conf.GetInt("snapshot_after"),
+		AbortOlderThan:       abortDur,
+		StartTime:            startTime,
+		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
+		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
 	}
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
@@ -679,6 +736,7 @@ func run() {
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
+	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
@@ -701,7 +759,7 @@ func run() {
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	schema.Init(worker.State.Pstore)
-	posting.Init(worker.State.Pstore)
+	posting.Init(worker.State.Pstore, postingListCacheSize)
 	defer posting.Cleanup()
 	worker.Init(worker.State.Pstore)
 
@@ -724,55 +782,72 @@ func run() {
 			}
 			numShutDownSig++
 			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
-			if numShutDownSig == 3 {
+
+			switch {
+			case atomic.LoadUint32(&initDone) < 2:
+				// Forcefully kill alpha if we haven't finish server initialization.
+				glog.Infoln("Stopped before initialization completed")
+				os.Exit(1)
+			case numShutDownSig == 3:
 				glog.Infoln("Signaled thrice. Aborting!")
 				os.Exit(1)
 			}
 		}
 	}()
 
-	// Setup external communication.
-	aclCloser := y.NewCloser(1)
+	updaters := z.NewCloser(4)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
+		atomic.AddUint32(&initDone, 1)
+
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
-		edgraph.ResetAcl()
-		edgraph.RefreshAcls(aclCloser)
-		edgraph.ResetCors()
+		edgraph.ResetAcl(updaters)
+		edgraph.RefreshAcls(updaters)
+		edgraph.ResetCors(updaters)
 		// Update the accepted cors origins.
-		for {
-			origins, err := edgraph.GetCorsOrigins(context.TODO())
+		for updaters.Ctx().Err() == nil {
+			origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
 			if err != nil {
 				glog.Errorf("Error while retriving cors origins: %s", err.Error())
 				continue
 			}
 			x.UpdateCorsOrigins(origins)
-			break
+			return
 		}
 	}()
 	// Listen for any new cors origin update.
-	corsCloser := y.NewCloser(1)
-	go listenForCorsUpdate(corsCloser)
+	go listenForCorsUpdate(updaters)
 
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we
 	// close alpha. This closer is for closing and waiting that subscription.
-	adminCloser := y.NewCloser(1)
+	adminCloser := z.NewCloser(1)
 
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
-	aclCloser.SignalAndWait()
-	corsCloser.SignalAndWait()
+
+	// This might not close until group is given the signal to close. So, only signal here,
+	// wait for it after group is closed.
+	updaters.Signal()
+
 	worker.BlockingStop()
+	glog.Infoln("worker stopped.")
+
 	adminCloser.SignalAndWait()
-	glog.Info("Disposing server state.")
+	glog.Infoln("adminCloser closed.")
+
 	worker.State.Dispose()
 	x.RemoveCidFile()
+	glog.Info("worker.State disposed.")
+
+	updaters.Wait()
+	glog.Infoln("updaters closed.")
+
 	glog.Infoln("Server shutdown. Bye!")
 }
 
 // listenForCorsUpdate listen for any cors change and update the accepeted cors.
-func listenForCorsUpdate(closer *y.Closer) {
+func listenForCorsUpdate(closer *z.Closer) {
 	prefix := x.DataKey("dgraph.cors", 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]

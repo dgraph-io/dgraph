@@ -22,7 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -84,7 +83,7 @@ type Starship {
         length: Float
 }`
 
-	schHandler, errs := NewHandler(schemaStr)
+	schHandler, errs := NewHandler(schemaStr, false)
 	require.NoError(t, errs)
 	sch, err := FromString(schHandler.GQLSchema())
 	require.NoError(t, err)
@@ -206,7 +205,7 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 			length: Float
 	}`
 
-	schHandler, errs := NewHandler(schemaStr)
+	schHandler, errs := NewHandler(schemaStr, false)
 	require.NoError(t, errs)
 	sch, err := FromString(schHandler.GQLSchema())
 	require.NoError(t, err)
@@ -796,7 +795,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			schHandler, errs := NewHandler(tcase.GQLSchema)
+			schHandler, errs := NewHandler(tcase.GQLSchema, false)
 			require.NoError(t, errs)
 			sch, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
@@ -836,7 +835,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 			c, err := field.CustomHTTPConfig()
 			require.NoError(t, err)
 
-			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema)
+			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema, false)
 			require.NoError(t, errs)
 			remoteSchema, err := FromString(remoteSchemaHandler.GQLSchema())
 			require.NoError(t, err)
@@ -896,7 +895,7 @@ func TestAllowedHeadersList(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			schHandler, errs := NewHandler(test.schemaStr)
+			schHandler, errs := NewHandler(test.schemaStr, false)
 			require.NoError(t, errs)
 			_, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
@@ -979,7 +978,7 @@ func TestCustomLogicHeaders(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := NewHandler(test.schemaStr)
+			_, err := NewHandler(test.schemaStr, false)
 			require.EqualError(t, err, test.err.Error())
 		})
 	}
@@ -1135,15 +1134,15 @@ func TestParseSecrets(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			s, err := parseSecrets(test.schemaStr)
+			s, authMeta, err := parseSecrets(test.schemaStr)
 			if test.err != nil || err != nil {
 				require.EqualError(t, err, test.err.Error())
 				return
 			}
-
 			require.Equal(t, test.expectedSecrets, s)
 			if test.expectedAuthHeader != "" {
-				require.Equal(t, test.expectedAuthHeader, authorization.GetHeader())
+				require.NotNil(t, authMeta)
+				require.Equal(t, test.expectedAuthHeader, authMeta.Header)
 			}
 		})
 	}
