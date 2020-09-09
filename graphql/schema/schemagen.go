@@ -185,7 +185,7 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 			continue
 		}
 		defns = append(defns, defn.Name)
-		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
+		if defn.Kind == ast.Object || defn.Kind == ast.Interface || defn.Kind == ast.Union {
 			remoteDir := defn.Directives.ForName(remoteDirective)
 			if remoteDir != nil {
 				continue
@@ -436,7 +436,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
-				case ast.Object, ast.Interface:
+				case ast.Object, ast.Interface, ast.Union:
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
 					if parentInt == nil {
