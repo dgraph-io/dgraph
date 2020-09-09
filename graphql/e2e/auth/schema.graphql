@@ -27,7 +27,8 @@ type User @auth(
 }
 
 type Tweets @auth (
-    query: { rule: "{$USER: { eq: \"foo\" } }"},
+    query: { rule: "{$ROLE: { eq: \"admin\" } }"},
+    add: { rule: "{$USER: { eq: \"foo\" } }"},
     delete: { rule: "{$USER: { eq: \"foo\" } }"},
     update: { rule: "{$USER: { eq: \"foo\" } }"}
 ){
