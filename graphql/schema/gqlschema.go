@@ -582,27 +582,27 @@ func cleanSchema(sch *ast.Schema, definitions []string) {
 		return
 	}
 	types := make(map[string]int)
+
 	for _, fd := range sch.Mutation.Fields {
 		if !validInputFieldToTraverse(fd) {
 			continue
 		}
-		mutationInput := fd.Arguments.ForName("input").Type.NamedType
-		schInputName := mutationInput[1 : len(mutationInput)-2]
+		schInputName:="Add"+fd.Name[3:]+"Input"
 		schInput := sch.Types[schInputName]
 		if schInput == nil {
 			continue
 		}
-		typeName := string(schInputName[3])
+		typeName := fd.Name[3:]
 		if types[typeName] != 0 {
 			continue
 		}
-		cleanSchemaRecurse(schInputName, types, sch, definitions)
+		cleanSchemaRecurse(fd.Name[3:],types, sch, definitions)
 	}
 }
 
-func cleanSchemaRecurse(schInputName string, types map[string]int, sch *ast.Schema, definitions []string) {
+func cleanSchemaRecurse(typeName string, types map[string]int, sch *ast.Schema, definitions []string) {
 	//start traversal
-	typeName := string(schInputName[3])
+	schInputName:="Add"+typeName+"Input"
 	input := sch.Types[schInputName]
 	if types[typeName] != 0 {
 		return
@@ -629,11 +629,20 @@ func cleanSchemaRecurse(schInputName string, types map[string]int, sch *ast.Sche
 	//start traversal
 	if input != nil {
 		for _, inputFields := range input.Fields {
-			if inputFields.Type.Elem != nil {
-				nextInputName := inputFields.Type.Elem.NamedType
-				if nextInputName[1:] == "Ref" {
-					cleanSchemaRecurse("Add"+string(nextInputName[0])+"Input", types, sch, definitions)
-					if sch.Types["Add"+string(nextInputName[0])+"Input"] == nil {
+			if inputFields.Type.Elem != nil || inputFields.Type.NamedType!= "" {
+				var nextInputName string
+				if inputFields.Type.NamedType!= ""{
+					nextInputName = inputFields.Type.NamedType
+				} else {
+					nextInputName = inputFields.Type.Elem.NamedType
+				}
+				if nextInputName[len(nextInputName)-3:] == "Ref" {
+					nextTypeName:=nextInputName[:len(nextInputName)-3]
+					if sch.Types[nextTypeName].Kind=="INTERFACE"{
+						continue
+					}
+					cleanSchemaRecurse(nextTypeName, types, sch, definitions)
+					if sch.Types["Add"+nextTypeName+"Input"] == nil {
 						removeFields(nextInputName, typeName+"Ref", sch)
 						removeFields(nextInputName, typeName+"Patch", sch)
 						copy(input.Fields[i:], input.Fields[i+1:])
@@ -675,12 +684,17 @@ func removeFields(fieldNamedType string, schTypeName string, sch *ast.Schema) {
 }
 
 func validInputFieldToTraverse(field *ast.FieldDefinition) bool {
+	if  len(field.Name)<4 || field.Name[:3]!="add" {
+		return false
+	}
+
 	if field.Arguments.ForName("input") == nil {
 		return false
 	}
-	if field.Arguments.ForName("input").Type.NamedType == "" { // for custom mutation
+	if field.Arguments.ForName("input").Type.NamedType != "[Add"+field.Name[3:]+"Input!]" { // for custom mutation
 		return false
 	}
+
 	return true
 
 }
