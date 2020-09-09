@@ -16,7 +16,10 @@ It will take few minutes while the new back-end spins up. You will be able to se
 If you wish to deploy your apps to your own domain, you can do that easily with any of the hosting services. You can follow below steps to deploy your app on [Netlify](https://www.netlify.com/).
 
 1. Fork the github repo of the app you wish to deploy.
-2. In your fork update the `REACT_APP_GRAPHQL_ENDPOINT` with the graphql endpoint obtained from Slash GraphQL after you created your own instance on Slash GraphQL.
-3. Link your forked repo to Netlify by Clicking `New Site from Git`.
-4. Add `npm build` in Build Command and `build` in Publish directory textboxes respectively.
+2. Link your forked repo to Netlify by Clicking `New Site from Git` and
+   {{% load-img "/images/importSite.png" "Import Site" %}}
+3. After successful import of the forked repository click on `Show advanced` and `New variable`.
+4. Add `REACT_APP_GRAPHQL_ENDPOINT` in the key and your graphql endpoint obtained from Slash GraphQL in the value field.
 5. Click `Deploy Site` on Netlify Dashboard.
+
+   {{% load-img "/images/advancedSettingsNetlify.png" "Advanced Settings" %}}
