@@ -269,8 +269,6 @@ Here are the important types, queries, and mutations from the admin schema.
 		lruMb: Float
 	}
 
-	` + adminTypes + `
-
 	type Query {
 		getGQLSchema: GQLSchema
 		health: [NodeState]
@@ -278,7 +276,6 @@ Here are the important types, queries, and mutations from the admin schema.
 		config: Config
 		getAllowedCORSOrigins: Cors
 		querySchemaHistory(first: Int, offset: Int): [SchemaHistory]
-		` + adminQueries + `
 	}
 
 	type Mutation {
@@ -313,7 +310,6 @@ Here are the important types, queries, and mutations from the admin schema.
 		
 		replaceAllowedCORSOrigins(origins: [String]): Cors
 
-		` + adminMutations + `
 	}
 ```
 
@@ -321,8 +317,16 @@ You'll notice that the /admin schema is very much the same as the schemas genera
 
 * The `health` query lets you know if everything is connected and if there's a schema currently being served at `/graphql`.
 * The `state`  query returns the current state of the cluster and group membership information. For more information about `state` see [here](https://dgraph.io/docs/deploy/dgraph-zero/#more-about-state-endpoint). 
+* The `config` query returns the configuration options of the cluster set at the time of starting it.
 * The `getGQLSchema` query gets the current GraphQL schema served at `/graphql`, or returns null if there's no such schema.
+* The `getAllowedCORSOrigins` query returns your CORS policy.
 * The `updateGQLSchema` mutation allows you to change the schema currently served at `/graphql`.
+## Enterprise Features
+
+Enterprise Features like ACL, Backups and Restore are also available using the GraphQL API at `/admin` endpoint.
+* [ACL](https://dgraph.io/docs/enterprise-features/access-control-lists/#using-graphql-admin-api).
+* [Backups](https://dgraph.io/docs/enterprise-features/binary-backups/#create-a-backup).
+* [Restore](https://dgraph.io/docs/enterprise-features/binary-backups/#restore-from-backup).
 
 ## First Start
 
