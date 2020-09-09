@@ -41,7 +41,6 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto"
@@ -1024,7 +1023,7 @@ func IsGuardian(groups []string) bool {
 
 // MonitorCacheHealth periodically monitors the cache metrics and reports if
 // there is high contention in the cache.
-func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, closer *y.Closer) {
+func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
 	checkCache := func(ct string) {

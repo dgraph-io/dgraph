@@ -35,7 +35,6 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bopt "github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -307,7 +306,7 @@ func run() {
 	go x.RunVlogGC(kv, gcCloser)
 	defer gcCloser.SignalAndWait()
 
-	cacheHealthCloser := y.NewCloser(1)
+	cacheHealthCloser := z.NewCloser(1)
 	go x.MonitorCacheHealth(10*time.Second, "zwstore", kv, cacheHealthCloser)
 	defer cacheHealthCloser.SignalAndWait()
 	store := raftwal.Init(kv, opts.nodeId, 0)

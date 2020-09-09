@@ -24,7 +24,6 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -38,7 +37,7 @@ type ServerState struct {
 	Pstore            *badger.DB
 	WALstore          *badger.DB
 	gcCloser          *z.Closer // closer for valueLogGC
-	cacheHealthCloser *y.Closer // closer for cacheHealth
+	cacheHealthCloser *z.Closer // closer for cacheHealth
 
 	needTs chan tsReq
 }
@@ -194,7 +193,7 @@ func (s *ServerState) initStorage() {
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
 	go x.RunVlogGC(s.WALstore, s.gcCloser)
 
-	s.cacheHealthCloser = y.NewCloser(2)
+	s.cacheHealthCloser = z.NewCloser(2)
 	go x.MonitorCacheHealth(10*time.Second, "pstore", s.Pstore, s.cacheHealthCloser)
 	go x.MonitorCacheHealth(10*time.Second, "WALstore", s.WALstore, s.cacheHealthCloser)
 }
