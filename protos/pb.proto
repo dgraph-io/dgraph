@@ -475,15 +475,6 @@ message MapHeader {
 	repeated bytes partition_keys = 1;
 }
 
-// Bulk loader proto.
-message MapEntry {
-	bytes key = 1;
-
-	// Only one should be set.
-	fixed64 uid = 2;
-	Posting posting = 3;
-}
-
 message MovePredicatePayload {
 	string predicate         = 1;
 	uint32 source_gid        = 2;
