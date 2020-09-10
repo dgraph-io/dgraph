@@ -34,17 +34,22 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
-	dgraphDirective       = "dgraph"
-	dgraphTypeArg         = "type"
-	dgraphPredArg         = "pred"
+	dgraphDirective = "dgraph"
+	dgraphTypeArg   = "type"
+	dgraphPredArg   = "pred"
+
 	idDirective           = "id"
+	subscriptionDirective = "withSubscription"
 	secretDirective       = "secret"
 	authDirective         = "auth"
 	customDirective       = "custom"
 	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
-	cascadeDirective      = "cascade"
-	cascadeArg            = "fields"
-	SubscriptionDirective = "withSubscription"
+
+	cascadeDirective = "cascade"
+	cascadeArg       = "fields"
+
+	// this directive is used internally for union inputs. It can't be present in user's schema.
+	oneOfDirective = "oneOf"
 
 	// custom directive args and fields
 	dqlArg = "dql"
@@ -320,22 +325,6 @@ var scalarToDgraph = map[string]string{
 	"Password": "password",
 }
 
-// directiveLocationMap stores the directives and their locations for the ones which can be
-// applied at type level in the user supplied schema. It is used during validation.
-var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
-	"hasInverse":       nil,
-	"search":           nil,
-	"dgraph":           {ast.Object: true, ast.Interface: true},
-	"id":               nil,
-	"withSubscription": {ast.Object: true, ast.Interface: true},
-	"secret":           {ast.Object: true, ast.Interface: true},
-	"auth":             {ast.Object: true},
-	"custom":           nil,
-	"remote":           {ast.Object: true, ast.Interface: true, ast.Union: true},
-	"cascade":          nil,
-	"oneOf":            nil,
-}
-
 func ValidatorNoOp(
 	sch *ast.Schema,
 	typ *ast.Definition,
@@ -350,13 +339,29 @@ var directiveValidators = map[string]directiveValidator{
 	searchDirective:       searchValidation,
 	dgraphDirective:       dgraphDirectiveValidation,
 	idDirective:           idValidation,
+	subscriptionDirective: ValidatorNoOp,
 	secretDirective:       passwordValidation,
+	authDirective:         ValidatorNoOp, // Just to get it printed into generated schema
 	customDirective:       customDirectiveValidation,
 	remoteDirective:       ValidatorNoOp,
+	oneOfDirective:        ValidatorNoOp, // Just to get it printed into generated schema
 	deprecatedDirective:   ValidatorNoOp,
-	SubscriptionDirective: ValidatorNoOp,
-	// Just go get it printed into generated schema
-	authDirective: ValidatorNoOp,
+}
+
+// directiveLocationMap stores the directives and their locations for the ones which can be
+// applied at type level in the user supplied schema. It is used during validation.
+var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
+	inverseDirective:      nil,
+	searchDirective:       nil,
+	dgraphDirective:       {ast.Object: true, ast.Interface: true},
+	idDirective:           nil,
+	subscriptionDirective: {ast.Object: true, ast.Interface: true},
+	secretDirective:       {ast.Object: true, ast.Interface: true},
+	authDirective:         {ast.Object: true},
+	customDirective:       nil,
+	remoteDirective:       {ast.Object: true, ast.Interface: true, ast.Union: true},
+	cascadeDirective:      nil,
+	oneOfDirective:        nil,
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
@@ -607,8 +612,8 @@ func addUnionReferenceType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.InputObject,
 		Name: refTypeName,
 		Directives: ast.DirectiveList{{
-			Name:       "oneOf",
-			Definition: schema.Directives["oneOf"],
+			Name:       oneOfDirective,
+			Definition: schema.Directives[oneOfDirective],
 		}},
 	}
 	for _, typName := range defn.Types {
@@ -1230,7 +1235,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 		})
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	subs := defn.Directives.ForName(SubscriptionDirective)
+	subs := defn.Directives.ForName(subscriptionDirective)
 	if subs != nil {
 		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 	}
@@ -1250,7 +1255,7 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	addPaginationArguments(qry)
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	subs := defn.Directives.ForName(SubscriptionDirective)
+	subs := defn.Directives.ForName(subscriptionDirective)
 	if subs != nil {
 		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 	}
@@ -1603,7 +1608,9 @@ func genArgumentString(arg *ast.Argument) string {
 }
 
 func generateInputString(typ *ast.Definition) string {
-	return fmt.Sprintf("input %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
+	return fmt.Sprintf("%sinput %s%s {\n%s}\n",
+		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
+		genFieldsString(typ.Fields))
 }
 
 func generateEnumString(typ *ast.Definition) string {

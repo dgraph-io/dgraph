@@ -503,7 +503,7 @@ func conflictingDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gql
 		if dir.Name == remoteDirective {
 			hasRemote = true
 		}
-		if dir.Name == SubscriptionDirective {
+		if dir.Name == subscriptionDirective {
 			hasSubscription = true
 		}
 	}
@@ -513,7 +513,7 @@ func conflictingDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gql
 	}
 	if hasSubscription && hasRemote {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(typ.Position, `Type %s; cannot have both @%s and @%s directive`,
-			typ.Name, SubscriptionDirective, remoteDirective)}
+			typ.Name, subscriptionDirective, remoteDirective)}
 	}
 	return nil
 }

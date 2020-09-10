@@ -23,6 +23,16 @@ enum AnEnum {
 	AnotherVal
 }
 
+"""Desc"""
+union A_Union = T
+
+"""Desc"""
+input AnInput {
+	id: ID!
+	"""Desc"""
+	i: Int
+}
+
 #######################
 # Extended Definitions
 #######################
@@ -186,6 +196,10 @@ type UpdateTPayload {
 # Generated Enums
 #######################
 
+enum A_UnionType {
+	T
+}
+
 enum IHasFilter {
 	s
 }
@@ -207,6 +221,15 @@ enum TOrderable {
 #######################
 # Generated Inputs
 #######################
+
+input A_UnionFilter {
+	a_UnionTypes: [A_UnionType!]
+	tFilter: TFilter
+}
+
+input A_UnionRef @oneOf {
+	tRef: TRef
+}
 
 input AddTInput {
 	s: String!
