@@ -298,6 +298,46 @@ schemas:
       D.link: uid .
       D.correct: bool .
 
+  - name: "Schema with union"
+    input: |
+      interface W {
+        f1: ID!
+      }
+      type X implements W {
+        f2: String
+      }
+      type Y implements W {
+        f3: Int
+      }
+      type Z {
+        f4: Float
+      }
+      union P @remote = X | Y
+      union U = X | Y | Z
+      type V {
+        id: ID!
+        f5: [U!]! @dgraph(pred: "data")
+      }
+    output: |
+      type W {
+      }
+      type X {
+        X.f2
+      }
+      X.f2: string .
+      type Y {
+        Y.f3
+      }
+      Y.f3: int .
+      type Z {
+        Z.f4
+      }
+      Z.f4: float .
+      type V {
+        data
+      }
+      data: [uid] .
+
   -
     name: "Schema with @dgraph directive."
     input: |
