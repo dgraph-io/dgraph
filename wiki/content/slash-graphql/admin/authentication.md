@@ -10,8 +10,8 @@ All the APIs documented here require an API token for access. A new API token ca
 ![Slash-GraphQL: Add an API Key ](/images/graphql/tutorial/todo/slash-graphql-4.png)
 
 There are two types of API keys, client and admin. 
-- A client API key can only be used to perform query, mutation and commit operations.
-- An admin API key can be used to perform both client operations and admin operations like drop data, destroy backend, update schema.
+- **Client API keys** can only be used to perform query, mutation and commit operations.
+- **Admin API keys** can be used to perform both client operations and admin operations like drop data, destroy backend, update schema.
 
 ![Slash-GraphQL: Select API Key role ](/images/graphql/tutorial/todo/slash-graphql-5.png)
 
