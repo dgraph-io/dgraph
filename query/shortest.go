@@ -341,7 +341,10 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			// Add path to list.
+			itemRoute := make([]pathInfo, len(*item.path.route))
+			copy(itemRoute, *item.path.route)
 			newRoute := item.path
+			newRoute.route = &itemRoute
 			newRoute.totalWeight = item.cost
 			kroutes = append(kroutes, newRoute)
 			if len(kroutes) == numPaths {
