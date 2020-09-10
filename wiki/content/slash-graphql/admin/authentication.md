@@ -13,8 +13,9 @@ There are two types of API keys, client and admin.
 - **Client API keys** can only be used to perform query, mutation and commit operations.
 - **Admin API keys** can be used to perform both client operations and admin operations like drop data, destroy backend, update schema.
 
-![Slash-GraphQL: Select API Key role ](/images/graphql/tutorial/todo/slash-graphql-5.png)
-
+<img src="/images/graphql/tutorial/todo/slash-graphql-5.png" alt="Select API Key role" width="60%">
+<br>
+<br>
 All admin API requests must be authenticated by passing the API token as the 'X-Auth-Token' header to every HTTP request. You can verify that your API token works by using the following HTTP example.
 
 ```
