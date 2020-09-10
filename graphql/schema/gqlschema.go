@@ -636,6 +636,11 @@ func cleanSchemaRecurse(typeName string, types map[string]int, sch *ast.Schema, 
 				} else {
 					nextInputName = inputFields.Type.Elem.NamedType
 				}
+				if len(nextInputName)<3 {
+				    	if sch.Types[nextInputName]!=nil && sch.Types[nextInputName].Kind=="ENUM"{
+				    		continue
+						}
+					}
 				if nextInputName[len(nextInputName)-3:] == "Ref" {
 					nextTypeName:=nextInputName[:len(nextInputName)-3]
 					if sch.Types[nextTypeName].Kind=="INTERFACE"{
