@@ -57,4 +57,4 @@ Response:
   }
 ```
 ***Summary*** <br> 
-Concurrent modifications to the same predicate causes the TxnConflictException. When several transactions hit the same node's predicate at the same time, the first one succeeds, while the other will get the “TxnConflictException”. Upon constantly retrying, the transactions begin to succeed one after another, and given enough retries, correctly completes its work.
+Concurrent modifications to the same predicate causes the "TxnConflictException" exception. When several transactions hit the same node's predicate at the same time, the first one succeeds, while the other will get the “TxnConflictException”. Upon constantly retrying, the transactions begin to succeed one after another, and given enough retries, correctly completes its work.
