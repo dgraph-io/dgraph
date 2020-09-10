@@ -193,9 +193,9 @@ invalid_schemas:
       type Y {
         f2: Int
       }
-      union U = X | Y @secret(field: "f2")
+      union U @secret(field: "f2") = X | Y
     errlist: [
-      { "message": "Unexpected @", "locations": [ { "line": 7, "column": 17 } ] }
+      { "message": "Type U; has the @secret directive, but it is not applicable on types of UNION kind.", "locations":[{"line":7, "column":10}]}
     ]
 
   -
@@ -207,9 +207,9 @@ invalid_schemas:
       type Y {
         f2: Int
       }
-      union U = X | Y @auth(query: {})
+      union U @auth(query: {}) = X | Y
     errlist: [
-      { "message": "Unexpected @", "locations": [ { "line": 7, "column": 17 } ] }
+      { "message": "Type U; has the @auth directive, but it is not applicable on types of UNION kind.", "locations":[{"line":7, "column":10}]}
     ]
 
   -
