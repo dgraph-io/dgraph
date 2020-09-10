@@ -140,7 +140,7 @@ directive @auth(
 	update: AuthRule,
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
-directive @remote on OBJECT | INTERFACE | UNION
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @oneOf on INPUT_OBJECT
 
@@ -359,9 +359,10 @@ var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
 	secretDirective:       {ast.Object: true, ast.Interface: true},
 	authDirective:         {ast.Object: true},
 	customDirective:       nil,
-	remoteDirective:       {ast.Object: true, ast.Interface: true, ast.Union: true},
-	cascadeDirective:      nil,
-	oneOfDirective:        nil,
+	remoteDirective: {ast.Object: true, ast.Interface: true, ast.Union: true,
+		ast.InputObject: true, ast.Enum: true},
+	cascadeDirective: nil,
+	oneOfDirective:   nil,
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
