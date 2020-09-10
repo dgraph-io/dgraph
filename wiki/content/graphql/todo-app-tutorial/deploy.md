@@ -15,7 +15,7 @@ After successfully logging into the site for the first time, your dashboard shou
 
 ![Slash-GraphQL: Get Started](/images/graphql/tutorial/todo/slash-graphql-1.png)
 
-Let's go ahead and create a new deployment.
+Let's go ahead and launch a new deployment.
 
 ![Slash-GraphQL: Create deployment](/images/graphql/tutorial/todo/slash-graphql-2.png)
 
@@ -23,15 +23,11 @@ We named our deployment `todo-app-deployment` and set the optional subdomain as
 `todo-app`, using which the deployment will be accessible. We can choose any
 subdomain here as long as it is available.
 
-Let's set it up in AWS, in the US region, and click on the *Create Deployment* button.
+Let's set it up in AWS, in the US region, and click on the *Launch* button.
 
 ![Slash-GraphQL: Deployment created ](/images/graphql/tutorial/todo/slash-graphql-3.png)
 
-While the deployment is spinning up, remember to copy the API key, as the same API key
-won't be visible again. Though, you don't need to worry too much about it since you can
-create and revoke API keys from the setting page.
-
-Let's also copy the endpoint, which is our GraphQL API endpoint.
+Now the backend is ready.
 
 Once the deployment is ready, let's add our schema there (insert your public key) by going to the schema tab.
 
