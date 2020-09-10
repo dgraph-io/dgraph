@@ -156,7 +156,7 @@ This stops the Alpha on which the command is executed and not the entire cluster
 
 ## Deleting database
 
-Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs](/query-language#delete).
+Individual triples, patterns of triples and predicates can be deleted as described in the [DQL docs]({{< relref "mutations/delete.md" >}}).
 
 To drop all data, you could send a `DropAll` request via `/alter` endpoint.
 
@@ -174,7 +174,7 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 2. Ensure it is successful
 3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
 4. Start a new Dgraph cluster using new data directories (this can be done by passing empty directories to the options `-p` and `-w` for Alphas and `-w` for Zeros)
-5. Reload the data via [bulk loader]({{< relref "#bulk-loader" >}})
+5. Reload the data via [bulk loader]({{< relref "deploy/fast-data-loading.md#bulk-loader" >}})
 6. Verify the correctness of the new Dgraph cluster. If all looks good, you can delete the old directories (export serves as an insurance)
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
@@ -225,7 +225,7 @@ new type name and copy data from old predicate name to new predicate name for al
 are affected. Then, you can drop the old types and predicates from DB.
 
 {{% notice "note" %}}
-If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section](/howto/#schema-types-scalar-uid-and-list-uid).
+If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section]({{< relref "howto/migrate-dgraph-1-1.md" >}}).
 {{% /notice %}}
 
 ## Post Installation

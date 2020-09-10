@@ -17,7 +17,7 @@ Both the terminologies get used interchangeably in our code. Dgraph considers ed
 i.e. from `Subject -> Object`. This is the direction that the queries would be run.
 
 {{% notice "tip" %}}Dgraph can automatically generate a reverse edge. If the user wants to run
-queries in that direction, they would need to define the [reverse edge](/query-language#reverse-edges)
+queries in that direction, they would need to define the [reverse edge]({{< relref "query-language/schema.md#reverse-edges" >}})
 as part of the schema.{{% /notice %}}
 
 Internally, the RDF N-Quad gets parsed into this format.
@@ -157,7 +157,7 @@ Each group should typically be served by at least 3 servers, if available. In th
 failure, other servers serving the same group can still handle the load in that case.
 
 ## New Server and Discovery
-Dgraph cluster can detect new machines allocated to the [cluster](/deploy#cluster),
+Dgraph cluster can detect new machines allocated to the [cluster]({{< relref "deploy/cluster-setup.md" >}}),
 establish connections, and transfer a subset of existing predicates to it based on the groups served
 by the new machine.
 
