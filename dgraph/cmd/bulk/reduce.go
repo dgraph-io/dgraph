@@ -27,7 +27,6 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -114,11 +113,11 @@ func (r *reducer) run() error {
 			r.reduce(partitionKeys, mapItrs, ci)
 			ci.wait()
 
-			x.Check(writer.Flush())
 			fmt.Println("Writing split lists back to the main DB now")
-
 			// Write split lists back to the main DB.
-			r.writeSplitLists(db, tmpDb)
+			r.writeSplitLists(db, tmpDb, writer)
+
+			x.Check(writer.Flush())
 
 			for _, itr := range mapItrs {
 				if err := itr.Close(); err != nil {
@@ -171,7 +170,6 @@ func (r *reducer) createTmpBadger() *badger.DB {
 	// Do not enable compression in temporary badger to improve performance.
 	db := r.createBadgerInternal(tmpDir, false)
 	r.tmpDbs = append(r.tmpDbs, db)
-	r.tmpDbDirs = append(r.tmpDbDirs, tmpDir)
 	return db
 }
 
@@ -423,54 +421,18 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	tmpWg.Wait()
 }
 
-type splitWriteBatch struct {
-	sync.Mutex
-	db       *badger.DB
-	writer   *badger.WriteBatch
-	batchLen int
-}
-
-func (wb *splitWriteBatch) Write(kvs *bpb.KVList) {
-	wb.Lock()
-	defer wb.Unlock()
-
-	// Flush the write batch when the max batch length is reached to prevent the
-	// value log from growing over the allowed limit.
-	if wb.batchLen >= maxSplitBatchLen {
-		x.Check(wb.writer.Flush())
-		wb.writer = wb.db.NewManagedWriteBatch()
-		wb.batchLen = 0
-	}
-
-	x.Check(wb.writer.Write(kvs))
-	wb.batchLen += len(kvs.Kv)
-}
-
-func (r *reducer) writeSplitLists(db, tmpDb *badger.DB) {
-	// Use multiple writers to avoid contention.
-	writers := make([]*splitWriteBatch, 8)
-	for i, _ := range writers {
-		writers[i] = &splitWriteBatch{
-			db:     db,
-			writer: db.NewManagedWriteBatch(),
-		}
-	}
-
-	rand.Seed(time.Now().UnixNano())
+func (r *reducer) writeSplitLists(db, tmpDb *badger.DB, writer *badger.StreamWriter) {
 	stream := tmpDb.NewStreamAt(math.MaxUint64)
 	stream.LogPrefix = "copying split keys to main DB"
 	stream.Send = func(kvs *bpb.KVList) error {
-		// Randomly pick a writer.
-		writer := writers[rand.Intn(len(writers))]
-		writer.Write(kvs)
+		streamId := atomic.AddUint32(&r.streamId, 1)
+		for _, kv := range kvs.Kv {
+			kv.StreamId = streamId
+		}
+		x.Check(writer.Write(kvs))
 		return nil
 	}
 	x.Check(stream.Orchestrate(context.Background()))
-
-	// Flush all the writers after the stream has finished.
-	for i, _ := range writers {
-		x.Check(writers[i].writer.Flush())
-	}
 }
 
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
