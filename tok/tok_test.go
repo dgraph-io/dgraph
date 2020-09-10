@@ -152,6 +152,18 @@ func TestTermTokenizer(t *testing.T) {
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
 	require.Equal(t, []string{encodeToken("tokenizer", id), encodeToken("works", id)}, tokens)
+
+	// TEMPORARILY COMMENTED OUT AS THIS IS THE IDEAL BEHAVIOUR. WE ARE NOT THERE YET.
+	/*
+		tokens, err = BuildTokens("Barack Obama made Obamacare", tokenizer)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(tokens))
+		require.Equal(t, []string{
+			encodeToken("barack obama", id),
+			encodeToken("made", id),
+			encodeToken("obamacare", id),
+		})
+	*/
 }
 
 func TestTrigramTokenizer(t *testing.T) {
@@ -285,6 +297,24 @@ func TestFullTextTokenizerCJKJapanese(t *testing.T) {
 	checkSortedAndUnique(t, got)
 }
 
+func TestTermTokenizeCJKChinese(t *testing.T) {
+	tokenizer, ok := GetTokenizer("term")
+	require.True(t, ok)
+	require.NotNil(t, tokenizer)
+
+	got, err := BuildTokens("第一轮 第二轮 第一轮", GetTokenizerForLang(tokenizer, "zh"))
+	require.NoError(t, err)
+
+	id := tokenizer.Identifier()
+	wantToks := []string{
+		encodeToken("第一轮", id),
+		encodeToken("第二轮", id),
+	}
+	require.Equal(t, wantToks, got)
+	checkSortedAndUnique(t, got)
+
+}
+
 func checkSortedAndUnique(t *testing.T, tokens []string) {
 	if !sort.StringsAreSorted(tokens) {
 		t.Error("tokens were not sorted")
@@ -298,4 +328,8 @@ func checkSortedAndUnique(t *testing.T, tokens []string) {
 		}
 		set[tok] = struct{}{}
 	}
+}
+
+func BenchmarkTermTokenizer(b *testing.B) {
+	b.Skip() // tmp
 }

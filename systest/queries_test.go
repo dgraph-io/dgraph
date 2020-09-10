@@ -392,6 +392,12 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	  {
 		"predicate": "dgraph.cors"
 	  },
+	  {
+	    "predicate": "dgraph.graphql.schema_history"
+	  },
+	  {
+	    "predicate": "dgraph.graphql.schema_created_at"
+	  },
       {
         "predicate": "dgraph.xid"
       },
