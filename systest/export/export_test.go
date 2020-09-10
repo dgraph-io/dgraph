@@ -81,12 +81,18 @@ var expectedSchema = `<movie>:string .` + " " + `
 <dgraph.type>:[string] @index(exact) .` + " " + `
 <dgraph.graphql.xid>:string @index(exact) @upsert .` + " " + `
 <dgraph.graphql.schema>:string .` + " " + `
+<dgraph.graphql.schema_history>:string .` + " " + `
+<dgraph.graphql.schema_created_at>:datetime .` + " " + `
 type Node {
 	movie
 }
 type dgraph.graphql {
 	dgraph.graphql.schema
 	dgraph.graphql.xid
+}
+type dgraph.graphql.history {
+	dgraph.graphql.schema_history
+	dgraph.graphql.schema_created_at
 }
 `
 

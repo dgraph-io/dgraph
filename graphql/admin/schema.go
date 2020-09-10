@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
@@ -41,7 +42,11 @@ type updateGQLSchemaInput struct {
 	Set gqlSchema `json:"set,omitempty"`
 }
 
-func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+type updateSchemaResolver struct {
+	admin *adminServer
+}
+
+func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got updateGQLSchema request")
 
 	input, err := getSchemaInput(m)
@@ -60,9 +65,19 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 		return resolve.EmptyResult(m, err), false
 	}
 
+	oldSchemaHash := farm.Fingerprint64([]byte(usr.admin.schema.Schema))
+	newSchemaHash := farm.Fingerprint64([]byte(input.Set.Schema))
+	updateHistory := oldSchemaHash != newSchemaHash
+
 	resp, err := edgraph.UpdateGQLSchema(ctx, input.Set.Schema, schHandler.DGSchema())
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
+	}
+
+	if updateHistory {
+		if err := edgraph.UpdateSchemaHistory(ctx, input.Set.Schema); err != nil {
+			glog.Errorf("error while updating schema history %s", err.Error())
+		}
 	}
 
 	return &resolve.Resolved{
