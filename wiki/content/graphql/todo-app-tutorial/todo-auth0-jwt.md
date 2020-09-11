@@ -42,10 +42,12 @@ openssl x509 -pubkey -noout -in file_name.pem
 Copy the public key and now let's add it to our schema. For doing that we will add something like this, to the bottom of our schema file - 
 
 ```
-# Dgraph.Authorization X-Auth0-Token https://dgraph.io/jwt/claims RS256 "<AUTH0-APP-PUBLIC-KEY>"
+# Dgraph.Authorization {"VerificationKey":"<AUTH0-APP-PUBLIC-KEY>","Header":"X-Auth-Token","Namespace":"https://dgraph.io/jwt/claims","Algo":"RS256","Audience":["<AUTH0-APP-CLIENT-ID>"]}
 ```
 
-Let me just quickly explain what each thing means in that, so firstly we start the line with a `#  Dgraph.Authorization`, next is the name of the header `X-Auth0-Token` (can be anything) which will be used to send the value of the JWT. Next is the custom-claim name `https://dgraph.io/jwt/claims` (again can be anything, just needs to match with the name specified in Auth0). Then next is the `RS256` the JWT signature algorithm (another option is `HS256` but remember to use the same algorithm in Auth0) and lastly, update `<AUTH0-APP-PUBLIC-KEY>` with your public key within the quotes and make sure to have it in a single line and add `\n` where ever needed.  The updated schema will look something like this (update the public key with your key) - 
+Let me just quickly explain what each thing means in that, so firstly we start the line with a `#  Dgraph.Authorization`. Next is the `VerificationKey`, so update `<AUTH0-APP-PUBLIC-KEY>` with your public key within the quotes and make sure to have it in a single line and add `\n` where ever needed. Then set `Header` to the name of the header `X-Auth-Token` (can be anything) which will be used to send the value of the JWT. Next is the `Namespace` name `https://dgraph.io/jwt/claims` (again can be anything, just needs to match with the name specified in Auth0). Then next is the `Algo` which is `RS256`, the JWT signature algorithm (another option is `HS256` but remember to use the same algorithm in Auth0). Then for the `Audience`, add your application's Auth0 client ID.
+
+The updated schema will look something like this (update the public key with your key) - 
 
 ```graphql
 type Task @auth(
@@ -67,7 +69,7 @@ type User {
   name: String
   tasks: [Task] @hasInverse(field: user)
 }
-# Dgraph.Authorization X-Auth0-Token https://dgraph.io/jwt/claims RS256 "<AUTH0-APP-PUBLIC-KEY>"
+# Dgraph.Authorization {"VerificationKey":"<AUTH0-APP-PUBLIC-KEY>","Header":"X-Auth-Token","Namespace":"https://dgraph.io/jwt/claims","Algo":"RS256","Audience":["<AUTH0-APP-CLIENT-ID>"]}
 ```
 
 Resubmit the updated schema -
