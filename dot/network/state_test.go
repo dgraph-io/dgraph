@@ -64,21 +64,9 @@ func (mbs *MockBlockState) GenesisHash() common.Hash {
 	return common.NewHash([]byte{})
 }
 
-// MockNetworkState for testing purposes
-type MockNetworkState struct {
-	Health       common.Health
-	NetworkState common.NetworkState
-	Peers        []common.PeerInfo
-}
-
 // GetHealth retrieves network health from the database
 func (ns *MockNetworkState) GetHealth() common.Health {
 	return ns.Health
-}
-
-// SetHealth sets network health in the database
-func (ns *MockNetworkState) SetHealth(health common.Health) {
-	ns.Health = health
 }
 
 // GetMockNetworkState retrieves network state from the database
@@ -86,17 +74,7 @@ func (ns *MockNetworkState) GetNetworkState() common.NetworkState {
 	return ns.NetworkState
 }
 
-// SetMockNetworkState sets network state in the database
-func (ns *MockNetworkState) SetNetworkState(networkState common.NetworkState) {
-	ns.NetworkState = networkState
-}
-
 // GetPeers retrieves network state from the database
 func (ns *MockNetworkState) GetPeers() []common.PeerInfo {
 	return ns.Peers
-}
-
-// SetPeers sets network state in the database
-func (ns *MockNetworkState) SetPeers(peers []common.PeerInfo) {
-	ns.Peers = peers
 }

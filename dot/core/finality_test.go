@@ -21,8 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ChainSafe/gossamer/dot/network"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,22 +45,17 @@ func TestSendVoteMessages(t *testing.T) {
 		finalized: make(chan FinalityMessage, 2),
 	}
 
-	msgSend := make(chan network.Message, 2)
-
+	net := new(mockNetwork)
 	s := NewTestService(t, &Config{
-		MsgSend:        msgSend,
+		Network:        net,
 		FinalityGadget: fg,
 	})
 
 	go s.sendVoteMessages(context.Background())
 	fg.out <- &mockFinalityMessage{}
 
-	select {
-	case msg := <-msgSend:
-		require.Equal(t, testConsensusMessage, msg)
-	case <-time.After(testMessageTimeout):
-		t.Fatal("did not receive finality message")
-	}
+	time.Sleep(testMessageTimeout)
+	require.Equal(t, testConsensusMessage, net.Message)
 }
 
 func TestSendFinalizationMessages(t *testing.T) {
@@ -72,20 +65,15 @@ func TestSendFinalizationMessages(t *testing.T) {
 		finalized: make(chan FinalityMessage, 2),
 	}
 
-	msgSend := make(chan network.Message, 2)
-
+	net := new(mockNetwork)
 	s := NewTestService(t, &Config{
-		MsgSend:        msgSend,
 		FinalityGadget: fg,
+		Network:        net,
 	})
 
 	go s.sendFinalizationMessages(context.Background())
 	fg.finalized <- &mockFinalityMessage{}
 
-	select {
-	case msg := <-msgSend:
-		require.Equal(t, testConsensusMessage, msg)
-	case <-time.After(testMessageTimeout):
-		t.Fatal("did not receive finality message")
-	}
+	time.Sleep(testMessageTimeout)
+	require.Equal(t, testConsensusMessage, net.Message)
 }

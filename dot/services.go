@@ -174,7 +174,8 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks k
 // Core Service
 
 // createCoreService creates the core service from the provided core configuration
-func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, verifier *babe.VerificationManager, rt *runtime.Runtime, ks *keystore.GlobalKeystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message) (*core.Service, error) {
+//func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, verifier *babe.VerificationManager, rt *runtime.Runtime, ks *keystore.Keystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message) (*core.Service, error) {
+func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, verifier *babe.VerificationManager, rt *runtime.Runtime, ks *keystore.GlobalKeystore, stateSrvc *state.Service, net *network.Service) (*core.Service, error) {
 	logger.Info(
 		"creating core service...",
 		"authority", cfg.Core.Authority,
@@ -198,11 +199,10 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, ve
 		ConsensusMessageHandler: handler,
 		Keystore:                ks,
 		Runtime:                 rt,
-		MsgRec:                  networkMsgs, // message channel from network service to core service
-		MsgSend:                 coreMsgs,    // message channel from core service to network service
 		IsBlockProducer:         cfg.Core.BabeAuthority,
 		IsFinalityAuthority:     cfg.Core.GrandpaAuthority,
 		Verifier:                verifier,
+		Network:                 net,
 	}
 
 	// create new core service
@@ -218,7 +218,7 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, ve
 // Network Service
 
 // createNetworkService creates a network service from the command configuration and genesis data
-func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncer *sync.Service) (*network.Service, error) {
+func createNetworkService(cfg *Config, stateSrvc *state.Service, syncer *sync.Service) (*network.Service, error) {
 	logger.Info(
 		"creating network service...",
 		"roles", cfg.Core.Roles,
@@ -246,8 +246,6 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan n
 		ProtocolID:   cfg.Network.ProtocolID,
 		NoBootstrap:  cfg.Network.NoBootstrap,
 		NoMDNS:       cfg.Network.NoMDNS,
-		MsgRec:       coreMsgs,    // message channel from core service to network service
-		MsgSend:      networkMsgs, // message channel from network service to core service
 		Syncer:       syncer,
 	}
 

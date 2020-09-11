@@ -29,7 +29,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
-
 	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 )
@@ -75,12 +74,12 @@ func TestStartService(t *testing.T) {
 }
 
 func TestAnnounceBlock(t *testing.T) {
-	msgSend := make(chan network.Message)
+	net := new(mockNetwork)
 	newBlocks := make(chan types.Block)
 
 	cfg := &Config{
 		NewBlocks: newBlocks,
-		MsgSend:   msgSend,
+		Network:   net,
 	}
 
 	s := NewTestService(t, cfg)
@@ -102,13 +101,8 @@ func TestAnnounceBlock(t *testing.T) {
 		Body: &types.Body{},
 	}
 
-	select {
-	case msg := <-msgSend:
-		msgType := msg.Type()
-		require.Equal(t, network.BlockAnnounceMsgType, msgType)
-	case <-time.After(testMessageTimeout):
-		t.Error("timeout waiting for message")
-	}
+	time.Sleep(testMessageTimeout)
+	require.Equal(t, network.BlockAnnounceMsgType, net.Message.Type())
 }
 
 func TestHandleRuntimeChanges(t *testing.T) {

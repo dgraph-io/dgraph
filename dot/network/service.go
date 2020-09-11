@@ -22,7 +22,6 @@ import (
 	"errors"
 	"math/big"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/ChainSafe/gossamer/lib/common"
@@ -59,11 +58,8 @@ type Service struct {
 	networkState NetworkState
 	syncer       Syncer
 
-	// Channels for inter-process communication
-	// as well as a lock for safe channel closures
-	msgRec  <-chan Message
-	msgSend chan<- Message
-	lock    sync.Mutex
+	// Interface for inter-process communication
+	messageHandler MessageHandler
 
 	// Configuration options
 	noBootstrap bool
@@ -85,14 +81,6 @@ func NewService(cfg *Config) (*Service, error) {
 	err := cfg.build()
 	if err != nil {
 		return nil, err //nolint
-	}
-
-	if cfg.MsgRec == nil {
-		return nil, errors.New("MsgRec is nil")
-	}
-
-	if cfg.MsgSend == nil {
-		return nil, errors.New("MsgSend is nil")
 	}
 
 	if cfg.Syncer == nil {
@@ -117,8 +105,7 @@ func NewService(cfg *Config) (*Service, error) {
 		requestTracker: newRequestTracker(host.logger),
 		blockState:     cfg.BlockState,
 		networkState:   cfg.NetworkState,
-		msgRec:         cfg.MsgRec,
-		msgSend:        cfg.MsgSend,
+		messageHandler: cfg.MessageHandler,
 		noBootstrap:    cfg.NoBootstrap,
 		noMDNS:         cfg.NoMDNS,
 		noStatus:       cfg.NoStatus,
@@ -137,9 +124,6 @@ func (s *Service) Start() error {
 
 	// update network state
 	go s.updateNetworkState()
-
-	// receive messages from core service
-	go s.receiveCoreMessages()
 
 	s.host.registerConnHandler(s.handleConn)
 	s.host.registerStreamHandler("", s.handleStream)
@@ -168,14 +152,6 @@ func (s *Service) Start() error {
 // the message channel from the network service to the core service (services that
 // are dependent on the host instance should be closed first)
 func (s *Service) Stop() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	// close channel to core service
-	if s.msgSend != nil && !s.IsStopped() {
-		close(s.msgSend)
-	}
-
 	s.cancel()
 
 	// close mDNS discovery service
@@ -212,38 +188,26 @@ func (s *Service) updateNetworkState() {
 	}
 }
 
-// receiveCoreMessages broadcasts messages from the core service
-func (s *Service) receiveCoreMessages() {
-	for {
-		select {
-		case msg, ok := <-s.msgRec:
-			if !ok || msg == nil {
-				s.logger.Debug("Received nil message from core service")
-				continue
-			}
-
-			s.logger.Debug(
-				"Broadcasting message from core service",
-				"host", s.host.id(),
-				"type", msg.Type(),
-			)
-
-			// broadcast message to connected peers
-			s.host.broadcast(msg)
-		case <-s.ctx.Done():
-			return
-		}
+// SendMessage implementation of interface to handle receiving messages
+func (s *Service) SendMessage(msg Message) {
+	if s.host == nil {
+		return
 	}
-}
-
-func (s *Service) safeMsgSend(msg Message) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
 	if s.IsStopped() {
-		return errors.New("service has been stopped")
+		return
 	}
-	s.msgSend <- msg
-	return nil
+	if msg == nil {
+		s.logger.Debug("Received nil message from core service")
+		return
+	}
+	s.logger.Debug(
+		"Broadcasting message from core service",
+		"host", s.host.id(),
+		"type", msg.Type(),
+	)
+
+	// broadcast message to connected peers
+	s.host.broadcast(msg)
 }
 
 // handleConn starts processes that manage the connection
@@ -417,10 +381,11 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 					}
 				}
 			} else {
-				err := s.safeMsgSend(msg)
-				if err != nil {
-					s.logger.Error("Failed to send message", "error", err)
+				if s.messageHandler == nil {
+					s.logger.Crit("Failed to send message", "error", "message handler is nil")
+					return
 				}
+				s.messageHandler.HandleMessage(msg)
 			}
 		}
 
@@ -521,4 +486,9 @@ func (s *Service) Peers() []common.PeerInfo {
 // NodeRoles Returns the roles the node is running as.
 func (s *Service) NodeRoles() byte {
 	return s.cfg.Roles
+}
+
+//SetMessageHandler sets the given MessageHandler for this service
+func (s *Service) SetMessageHandler(handler MessageHandler) {
+	s.messageHandler = handler
 }

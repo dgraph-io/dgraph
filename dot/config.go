@@ -114,8 +114,8 @@ func (c *Config) String() string {
 	return string(out)
 }
 
-// NetworkServiceEnabled returns true if the network service is enabled
-func NetworkServiceEnabled(cfg *Config) bool {
+// networkServiceEnabled returns true if the network service is enabled
+func networkServiceEnabled(cfg *Config) bool {
 	return cfg.Core.Roles != byte(0)
 }
 

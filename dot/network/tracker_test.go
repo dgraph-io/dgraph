@@ -67,8 +67,7 @@ func TestHandleStatusMessage(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	heightA := big.NewInt(3)
-	msgRecA := make(chan Message)
-
+	mmhA := new(MockMessageHandler)
 	configA := &Config{
 		BasePath:    basePathA,
 		BlockState:  newMockBlockState(heightA),
@@ -76,7 +75,6 @@ func TestHandleStatusMessage(t *testing.T) {
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMDNS:      true,
-		MsgRec:      msgRecA,
 		Syncer:      newMockSyncer(),
 	}
 
@@ -102,12 +100,12 @@ func TestHandleStatusMessage(t *testing.T) {
 	}
 
 	// simulate host status message sent from core service on startup
-	msgRecA <- testStatusMessage
+	mmhA.HandleMessage(testStatusMessage)
 
 	basePathB := utils.NewTestBasePath(t, "nodeB")
 
 	heightB := big.NewInt(1)
-	msgRecB := make(chan Message)
+	mmhB := new(MockMessageHandler)
 
 	configB := &Config{
 		BasePath:    basePathB,
@@ -116,7 +114,6 @@ func TestHandleStatusMessage(t *testing.T) {
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMDNS:      true,
-		MsgRec:      msgRecB,
 		Syncer:      newMockSyncer(),
 	}
 
@@ -126,7 +123,7 @@ func TestHandleStatusMessage(t *testing.T) {
 	nodeB.noGossip = true
 
 	// simulate host status message sent from core service on startup
-	msgRecB <- testStatusMessage
+	mmhB.HandleMessage(testStatusMessage)
 
 	addrInfosB, err := nodeB.host.addrInfos()
 	require.Nil(t, err)

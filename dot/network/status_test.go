@@ -34,7 +34,7 @@ func TestStatus(t *testing.T) {
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
-	msgRecA := make(chan Message)
+	mmhA := new(MockMessageHandler)
 
 	configA := &Config{
 		BasePath:    basePathA,
@@ -42,7 +42,6 @@ func TestStatus(t *testing.T) {
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMDNS:      true,
-		MsgRec:      msgRecA,
 	}
 
 	nodeA := createTestService(t, configA)
@@ -71,11 +70,11 @@ func TestStatus(t *testing.T) {
 	}
 
 	// simulate host status message sent from core service on startup
-	msgRecA <- testStatusMessage
+	mmhA.HandleMessage(testStatusMessage)
 
 	basePathB := utils.NewTestBasePath(t, "nodeB")
 
-	msgRecB := make(chan Message)
+	mmhB := new(MockMessageHandler)
 
 	configB := &Config{
 		BasePath:    basePathB,
@@ -83,7 +82,6 @@ func TestStatus(t *testing.T) {
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMDNS:      true,
-		MsgRec:      msgRecB,
 	}
 
 	nodeB := createTestService(t, configB)
@@ -92,7 +90,7 @@ func TestStatus(t *testing.T) {
 	nodeB.noGossip = true
 
 	// simulate host status message sent from core service on startup
-	msgRecB <- testStatusMessage
+	mmhB.HandleMessage(testStatusMessage)
 
 	addrInfosB, err := nodeB.host.addrInfos()
 	if err != nil {

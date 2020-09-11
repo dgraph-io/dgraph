@@ -28,21 +28,20 @@ func TestGossip(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping TestGossip")
 	}
-
 	basePathA := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
-	msgSendA := make(chan Message)
+	mmhA := new(MockMessageHandler)
 
 	configA := &Config{
-		BasePath:    basePathA,
-		Port:        7001,
-		RandSeed:    1,
-		NoBootstrap: true,
-		NoMDNS:      true,
-		MsgSend:     msgSendA,
+		BasePath:       basePathA,
+		Port:           7001,
+		RandSeed:       1,
+		NoBootstrap:    true,
+		NoMDNS:         true,
+		MessageHandler: mmhA,
 	}
 
 	nodeA := createTestService(t, configA)
@@ -52,15 +51,15 @@ func TestGossip(t *testing.T) {
 
 	basePathB := utils.NewTestBasePath(t, "nodeB")
 
-	msgSendB := make(chan Message)
+	mmhB := new(MockMessageHandler)
 
 	configB := &Config{
-		BasePath:    basePathB,
-		Port:        7002,
-		RandSeed:    2,
-		NoBootstrap: true,
-		NoMDNS:      true,
-		MsgSend:     msgSendB,
+		BasePath:       basePathB,
+		Port:           7002,
+		RandSeed:       2,
+		NoBootstrap:    true,
+		NoMDNS:         true,
+		MessageHandler: mmhB,
 	}
 
 	nodeB := createTestService(t, configB)
@@ -85,15 +84,15 @@ func TestGossip(t *testing.T) {
 
 	basePathC := utils.NewTestBasePath(t, "nodeC")
 
-	msgSendC := make(chan Message)
+	mmhC := new(MockMessageHandler)
 
 	configC := &Config{
-		BasePath:    basePathC,
-		Port:        7003,
-		RandSeed:    3,
-		NoBootstrap: true,
-		NoMDNS:      true,
-		MsgSend:     msgSendC,
+		BasePath:       basePathC,
+		Port:           7003,
+		RandSeed:       3,
+		NoBootstrap:    true,
+		NoMDNS:         true,
+		MessageHandler: mmhC,
 	}
 
 	nodeC := createTestService(t, configC)
@@ -131,31 +130,25 @@ func TestGossip(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	time.Sleep(TestMessageTimeout)
+
 	// node A sends message to node B
-	select {
-	case <-msgSendB:
-	case <-time.After(TestMessageTimeout):
+	if mmhB.Message == nil {
 		t.Error("node A timeout waiting for message")
 	}
 
 	// node B gossips message to node C
-	select {
-	case <-msgSendC:
-	case <-time.After(TestMessageTimeout):
+	if mmhC.Message == nil {
 		t.Error("node A timeout waiting for message")
 	}
 
 	// node C gossips message to node A
-	select {
-	case <-msgSendA:
-	case <-time.After(TestMessageTimeout):
+	if mmhA.Message == nil {
 		t.Error("node A timeout waiting for message")
 	}
 
 	// node A gossips message to node B
-	select {
-	case <-msgSendB:
-	case <-time.After(TestMessageTimeout):
+	if mmhB.Message == nil {
 		t.Error("node A timeout waiting for message")
 	}
 

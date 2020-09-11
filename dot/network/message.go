@@ -294,7 +294,7 @@ func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 
 // IDString Returns the ID of the block
 func (bm *BlockRequestMessage) IDString() string {
-	return string(bm.ID)
+	return fmt.Sprintf("%d", bm.ID)
 }
 
 // BlockAnnounceMessage is a state block header
@@ -397,7 +397,7 @@ func (bm *BlockResponseMessage) Decode(r io.Reader) error {
 
 // IDString returns the ID of BlockResponseMessage
 func (bm *BlockResponseMessage) IDString() string {
-	return string(bm.ID)
+	return fmt.Sprintf("%d", bm.ID)
 }
 
 // TransactionMessage is a struct that holds reference to Extrinsics

@@ -30,7 +30,7 @@ func (s *Service) processConsensusMessage(msg *network.ConsensusMessage) error {
 	}
 
 	if out != nil {
-		s.safeMsgSend(out)
+		s.net.SendMessage(out)
 		return nil
 	}
 
@@ -55,7 +55,7 @@ func (s *Service) sendVoteMessages(ctx context.Context) {
 			}
 
 			s.logger.Debug("sending VoteMessage to network", "msg", msg)
-			s.safeMsgSend(msg)
+			s.net.SendMessage(msg)
 		case <-ctx.Done():
 			return
 		}
@@ -81,7 +81,7 @@ func (s *Service) sendFinalizationMessages(ctx context.Context) {
 			}
 
 			s.logger.Debug("sending FinalityMessage to network", "msg", v)
-			s.safeMsgSend(msg)
+			s.net.SendMessage(msg)
 		case <-ctx.Done():
 			return
 		}

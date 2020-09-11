@@ -29,6 +29,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/trie"
+	"github.com/ChainSafe/gossamer/lib/utils"
 	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 )
@@ -89,6 +90,14 @@ func (bp *mockBlockProducer) GetBlockChannel() <-chan types.Block {
 // SetRuntime mocks setting runtime
 func (bp *mockBlockProducer) SetRuntime(rt *runtime.Runtime) error {
 	return nil
+}
+
+type mockNetwork struct {
+	Message network.Message
+}
+
+func (n *mockNetwork) SendMessage(m network.Message) {
+	n.Message = m
 }
 
 // mockFinalityGadget implements the FinalityGadget interface
@@ -184,14 +193,6 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 		cfg.NewBlocks = make(chan types.Block)
 	}
 
-	if cfg.MsgRec == nil {
-		cfg.MsgRec = make(chan network.Message, 10)
-	}
-
-	if cfg.MsgSend == nil {
-		cfg.MsgSend = make(chan network.Message, 10)
-	}
-
 	if cfg.Verifier == nil {
 		cfg.Verifier = new(mockVerifier)
 	}
@@ -222,8 +223,88 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 		cfg.ConsensusMessageHandler = &mockConsensusMessageHandler{}
 	}
 
+	if cfg.Network == nil {
+		basePath := utils.NewTestBasePath(t, "node")
+
+		// removes all data directories created within test directory
+		defer utils.RemoveTestDir(t)
+
+		config := &network.Config{
+			BasePath:    basePath,
+			Port:        7001,
+			RandSeed:    1,
+			NoBootstrap: true,
+			NoMDNS:      true,
+			BlockState:  stateSrvc.Block,
+		}
+		cfg.Network = createTestNetworkService(t, config)
+		require.NoError(t, err)
+	}
+
 	s, err := NewService(cfg)
 	require.Nil(t, err)
 
 	return s
+}
+
+// helper method to create and start a new network service
+func createTestNetworkService(t *testing.T, cfg *network.Config) (srvc *network.Service) {
+	if cfg.NetworkState == nil {
+		cfg.NetworkState = &network.MockNetworkState{}
+	}
+
+	if cfg.LogLvl == 0 {
+		cfg.LogLvl = 3
+	}
+
+	if cfg.Syncer == nil {
+		cfg.Syncer = newMockSyncer()
+	}
+
+	srvc, err := network.NewService(cfg)
+	require.NoError(t, err)
+
+	err = srvc.Start()
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		utils.RemoveTestDir(t)
+		err := srvc.Stop()
+		require.NoError(t, err)
+	})
+	return srvc
+}
+
+type mockSyncer struct {
+	highestSeen *big.Int
+}
+
+func newMockSyncer() *mockSyncer {
+	return &mockSyncer{
+		highestSeen: big.NewInt(0),
+	}
+}
+func (s *mockSyncer) CreateBlockResponse(msg *network.BlockRequestMessage) (*network.BlockResponseMessage, error) {
+	return nil, nil
+}
+
+func (s *mockSyncer) HandleBlockAnnounce(msg *network.BlockAnnounceMessage) *network.BlockRequestMessage {
+	if msg.Number.Cmp(s.highestSeen) > 0 {
+		s.highestSeen = msg.Number
+	}
+
+	return &network.BlockRequestMessage{
+		ID: 99,
+	}
+}
+
+func (s *mockSyncer) HandleBlockResponse(msg *network.BlockResponseMessage) *network.BlockRequestMessage {
+	return nil
+}
+
+func (s *mockSyncer) HandleSeenBlocks(num *big.Int) *network.BlockRequestMessage {
+	if num.Cmp(s.highestSeen) > 0 {
+		s.highestSeen = num
+	}
+	return nil
 }

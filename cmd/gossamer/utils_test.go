@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -59,12 +60,12 @@ func newTestContext(description string, flags []string, values []interface{}) (*
 				}
 			}
 		case string:
-			err := ctx.Set(flags[i], v)
+			err := ctx.Set(flags[i], values[i].(string))
 			if err != nil {
 				return nil, fmt.Errorf("failed to set cli flag: %T", flags[i])
 			}
 		case uint:
-			err := ctx.Set(flags[i], string(v))
+			err := ctx.Set(flags[i], strconv.Itoa(int(values[i].(uint))))
 			if err != nil {
 				return nil, fmt.Errorf("failed to set cli flag: %T", flags[i])
 			}
