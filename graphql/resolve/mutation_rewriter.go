@@ -1731,8 +1731,8 @@ func squashIntoObject(label string) func(interface{}, interface{}, bool) interfa
 		val := v
 
 		// If there is an existing value for the label in the object, then we should append to it
-		// instead of overwriting it. This can happen when there is @hasInverse and we are doing
-		// nested adds.
+		// instead of overwriting it if the existing value is a list. This can happen when there
+		// is @hasInverse and we are doing nested adds.
 		existing := asObject[label]
 		switch ev := existing.(type) {
 		case []interface{}:
