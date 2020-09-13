@@ -1,7 +1,7 @@
 type X {
     f1: [Y] @dgraph(pred: "f1")
-    name:String
-    id:ID
+    name: String
+    id: ID
 }
 
 type Y {
