@@ -6,7 +6,6 @@ title = "Cascade"
     weight = 5   
 +++
 
-##Cascade
 `@cascade` is available as a directive which can be applied on fields. With the @cascade
 directive, nodes that don’t have all fields specified in the query are removed.
 This can be useful in cases where some filter was applied and some nodes might not
@@ -42,12 +41,14 @@ but only those posts which have both `text` and `id`.
     }
 }
 ```
-##Parameterized Cascade
 
-`@cascade` is implied on all the query levels from where it's declared and sometimes it can be too strict because for a node, 
-all its children in the sub-graph must be present for it to be part of the response. 
-So, we also allow fields name as parameters in cascade and  only those fields specified in argument needs to be in response.
+### Parameterized Cascade
+
+@cascade is sometimes very strict because for a node to be in response, all its children in the sub-graph must be present. 
+Instead to consider all fields in cascade, we give flexiblity to user to specify fields as argument to cascade as below.
+
 `@cascade(fields:["field1","field2"..])` 
+
 In below example argument field "name" is used as argument to cascade and forwarded to next query level also. So for author 
 to be in query response it should have name and if has subfield country that should also have name.
 ```graphql
@@ -60,7 +61,7 @@ queryAuthor  @cascade(fields:["name"]) {
 		}
 	}
 ```
-Following query ensures authors which has post field should also have text field in it.
+Following query ensures authors which has post field should also have text subfield in it.
 ```graphql
 queryAuthor {
 		reputation
@@ -73,7 +74,7 @@ queryAuthor {
 ```
 Also these fields are  forwarded to next query level unless there is a cascade at next level , 
 in that case arguments to cascade are overwritten.
-Below query ensures that  author should have fields reputation and name. And if it has subfield field posts then it should also have
+Below query ensures that  author should have fields reputation and name. And if it has subfield posts then it should also have
 field text in it.
 
 ```graphql
