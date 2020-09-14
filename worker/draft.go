@@ -88,6 +88,8 @@ func (id op) String() string {
 		return "opRestore"
 	case opBackup:
 		return "opBackup"
+	case opPredMove:
+		return "opPredMove"
 	default:
 		return "opUnknown"
 	}
@@ -99,6 +101,7 @@ const (
 	opIndexing
 	opRestore
 	opBackup
+	opPredMove
 )
 
 // startTask is used to check whether an op is already running. If a rollup is running,
@@ -155,7 +158,7 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 			delete(n.ops, otherId)
 			otherCloser.SignalAndWait()
 		}
-	case opSnapshot, opIndexing:
+	case opSnapshot, opIndexing, opPredMove:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
 				// Remove from map and signal the closer to cancel the operation.

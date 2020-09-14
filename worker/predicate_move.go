@@ -227,6 +227,14 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 }
 
 func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error {
+	// Note: Manish thinks it *should* be OK for a predicate receiver to not have to stop other
+	// operations like snapshots and rollups.
+	closer, err := groups().Node.startTask(opPredMove)
+	if err != nil {
+		return errors.Wrapf(err, "unable to start task opPredMove")
+	}
+	defer closer.Done()
+
 	span := otrace.FromContext(ctx)
 
 	pl := groups().Leader(in.DestGid)
