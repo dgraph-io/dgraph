@@ -529,7 +529,6 @@ func Parse(key []byte) (ParsedKey, error) {
 // These predicates appear for queries that have * as predicate in them.
 var starAllPredicateMap = map[string]struct{}{
 	"dgraph.type": {},
-	"dgraph.cors": {},
 }
 
 var aclPredicateMap = map[string]struct{}{
@@ -542,8 +541,11 @@ var aclPredicateMap = map[string]struct{}{
 }
 
 var graphqlReservedPredicate = map[string]struct{}{
-	"dgraph.graphql.xid":    {},
-	"dgraph.graphql.schema": {},
+	"dgraph.graphql.xid":               {},
+	"dgraph.graphql.schema":            {},
+	"dgraph.cors":                      {},
+	"dgraph.graphql.schema_history":    {},
+	"dgraph.graphql.schema_created_at": {},
 }
 
 // internalPredicateMap stores a set of Dgraph's internal predicate. An internal
@@ -554,10 +556,11 @@ var internalPredicateMap = map[string]struct{}{
 }
 
 var preDefinedTypeMap = map[string]struct{}{
-	"dgraph.graphql":    {},
-	"dgraph.type.User":  {},
-	"dgraph.type.Group": {},
-	"dgraph.type.Rule":  {},
+	"dgraph.graphql":         {},
+	"dgraph.type.User":       {},
+	"dgraph.type.Group":      {},
+	"dgraph.type.Rule":       {},
+	"dgraph.graphql.history": {},
 }
 
 // IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.

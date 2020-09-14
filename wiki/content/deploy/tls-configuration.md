@@ -254,18 +254,16 @@ also need to install client certificate on your browser:
    ```
    Use any password you like for export, it is used to encrypt the p12 file.
 
-3. Import the client certificate to your browser. It can be done as follows:
-
-   ##### Chrome
+3. Import the client certificate to your browser. It can be done in chrome as follows:
    * Goto Settings -> Privacy and Security -> Security -> Manage Certificates -> Your Certificates
    * Click on Import and import the `laptopuser.p12`. For mac OS, this process returns back to KeyChain, and under the area "My Certificates" select `laptopuser.p12`.
 
-   {{% notice "note" %}}
-   Under macOS you can alternatively import the `.p12` file via command line by `security import ./laptopuser.p12 -P secretPassword`.
-   {{% /notice %}}
-   {{% notice "note" %}}
-   Mutual TLS may not work in Firefox because Firefox is unable to send privately-signed client certificates, this issue is filed [here](https://bugzilla.mozilla.org/show_bug.cgi?id=1662607).
-   {{% /notice %}}
+{{% notice "note" %}}
+Under macOS you can alternatively import the `.p12` file via command line by `security import ./laptopuser.p12 -P secretPassword`.
+{{% /notice %}}
+{{% notice "note" %}}
+Mutual TLS may not work in Firefox because Firefox is unable to send privately-signed client certificates, this issue is filed [here](https://bugzilla.mozilla.org/show_bug.cgi?id=1662607).
+{{% /notice %}}
 
 
 Next time you use Ratel to connect to an alpha with Client authentication

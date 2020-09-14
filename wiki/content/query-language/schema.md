@@ -258,7 +258,7 @@ email: string @index(exact) @noconflict .
 
 Dgraph supports a number of [RDF types in mutations]({{< relref "mutations/language-rdf-types.md" >}}).
 
-As well as implying a schema type for a [first mutation]({{< relref "#schema" >}}), an RDF type can override a schema type for storage.
+As well as implying a schema type for a [first mutation]({{< relref "query-language/schema.md" >}}), an RDF type can override a schema type for storage.
 
 If a predicate has a schema type and a mutation has an RDF type with a different underlying Dgraph type, the convertibility to schema type is checked, and an error is thrown if they are incompatible, but the value is stored in the RDF type's corresponding Dgraph type.  Query results are always returned in schema type.
 
@@ -355,7 +355,7 @@ output:
 
 ## Indexing
 
-{{% notice "note" %}}Filtering on a predicate by applying a [function]({{< relref "#functions" >}}) requires an index.{{% /notice %}}
+{{% notice "note" %}}Filtering on a predicate by applying a [function]({{< relref "query-language/functions.md" >}}) requires an index.{{% /notice %}}
 
 When filtering by applying a function, Dgraph uses the index to make the search through a potentially large dataset efficient.
 
@@ -446,8 +446,7 @@ score: [int] .
 * A set operation adds to the list of values. The order of the stored values is non-deterministic.
 * A delete operation deletes the value from the list.
 * Querying for these predicates would return the list in an array.
-* Indexes can be applied on predicates which have a list type and you can use [Functions]({{<ref
-  "#functions">}}) on them.
+* Indexes can be applied on predicates which have a list type and you can use [Functions]({{<relref "query-language/functions.md">}}) on them.
 * Sorting is not allowed using these predicates.
 
 ## Filtering on list

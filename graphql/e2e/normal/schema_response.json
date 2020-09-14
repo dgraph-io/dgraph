@@ -151,6 +151,15 @@
             "type": "string"
         },
         {
+            "predicate": "Person1.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Person1.friends",
+            "type": "uid",
+            "list": true
+        },
+        {
             "predicate": "Post.author",
             "type": "uid"
         },
@@ -336,6 +345,14 @@
             "type": "string"
         },
         {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
+            "type": "string"
+		},
+        {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
             "index": true,
@@ -501,6 +518,17 @@
                 }
             ],
             "name": "Person"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Person1.name"
+                },
+                {
+                    "name": "Person1.friends"
+                }
+            ],
+            "name": "Person1"
         },
         {
             "fields": [
@@ -675,6 +703,16 @@
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         }
     ]
 }

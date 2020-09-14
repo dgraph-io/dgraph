@@ -120,7 +120,7 @@ All facets on an edge are queried with `@facets`.
 
 ## Facets i18n
 
-Facets keys and values can use language-specific characters directly when mutating. But facet keys need to be enclosed in angle brackets `<>` when querying. This is similar to predicates. See [Predicates i18n](#predicates-i18n) for more info.
+Facets keys and values can use language-specific characters directly when mutating. But facet keys need to be enclosed in angle brackets `<>` when querying. This is similar to predicates. See [Predicates i18n]({{< relref "query-language/schema.md#predicates-i18n" >}}) for more info.
 
 {{% notice "note" %}}Dgraph supports [Internationalized Resource Identifiers](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRIs) for facet keys when querying.{{% /notice  %}}
 
@@ -288,7 +288,7 @@ Charlie by their `rating` which is a facet.
 
 ## Assigning Facet values to a variable
 
-Facets on UID edges can be stored in [value variables]({{< relref "#value-variables" >}}).  The variable is a map from the edge target to the facet value.
+Facets on UID edges can be stored in [value variables]({{< relref "query-language/value-variables.md" >}}).  The variable is a map from the edge target to the facet value.
 
 Alice's friends reported by variables for `close` and `relative`.
 {{< runnable >}}
@@ -312,7 +312,7 @@ Alice's friends reported by variables for `close` and `relative`.
 
 ## Facets and Variable Propagation
 
-Facet values of `int` and `float` can be assigned to variables and thus the [values propagate]({{< relref "#variable-propagation" >}}).
+Facet values of `int` and `float` can be assigned to variables and thus the [values propagate]({{< relref "query-language/value-variables.md#variable-propagation" >}}).
 
 
 Alice, Bob and Charlie each rated every movie.  A value variable on facet `rating` maps movies to ratings.  A query that reaches a movie through multiple paths sums the ratings on each path.  The following sums Alice, Bob and Charlie's ratings for the three movies.

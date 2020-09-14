@@ -69,6 +69,15 @@
             "upsert": true
         },
         {
+            "predicate": "Person1.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Person1.friends",
+            "type": "uid",
+            "list": true
+        },
+        {
             "predicate": "Post1.comments",
             "type": "uid",
             "list": true
@@ -169,6 +178,14 @@
         },
         {
             "predicate": "dgraph.graphql.schema",
+            "type": "string"
+        },
+        {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+        },
+        {
+            "predicate": "dgraph.graphql.schema_history",
             "type": "string"
         },
         {
@@ -452,6 +469,17 @@
         {
             "fields": [
                 {
+                    "name": "Person1.name"
+                },
+                {
+                    "name": "Person1.friends"
+                }
+            ],
+            "name": "Person1"
+        },
+        {
+            "fields": [
+                {
                     "name": "Post1.id"
                 },
                 {
@@ -576,6 +604,16 @@
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         },
         {
             "fields": [
