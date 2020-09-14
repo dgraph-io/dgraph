@@ -9,7 +9,7 @@ title = "Using Kubernetes"
 The following section covers running Dgraph with Kubernetes. We have tested Dgraph with Kubernetes versions 1.14 to 1.16 on [GKE](https://cloud.google.com/kubernetes-engine) and versions 1.14 to 1.17 on [EKS](https://aws.amazon.com/eks/).
 
 {{% notice "note" %}}These instructions are for running Dgraph alpha service without TLS configuration.
-Instructions for running Dgraph alpha service with TLS refer [TLS instructions]({{< relref "tls-configuration.md" >}}).{{% /notice %}}
+Instructions for running Dgraph alpha service with TLS refer [TLS instructions]({{< relref "deploy/tls-configuration.md" >}}).{{% /notice %}}
 
 * Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) which is used to deploy
   and manage applications on kubernetes.
@@ -231,7 +231,7 @@ helm install my-release dgraph/dgraph --set image.tag="v1.2.6"
 
 #### Dgraph Configuration Files
 
-You can supply a dgraph config files (see [Config]({{< relref "config.md" >}})) for alpha and zero with Helm chart configuration values:
+You can supply a dgraph config files (see [Config]({{< relref "deploy/config.md" >}})) for alpha and zero with Helm chart configuration values:
 
 ```yaml
 # my-config-values.yaml
@@ -363,7 +363,7 @@ upgrade the configuration in multiple steps following the steps below.
 
 #### Upgrade to HA cluster setup
 
-To upgrade to an [HA cluster setup]({{< relref "#ha-cluster-setup" >}}), ensure
+To upgrade to an [HA cluster setup]({{< relref "#ha-cluster-setup-using-kubernetes" >}}), ensure
 that the shard replication setting is more than 1. When `zero.shardReplicaCount`
 is not set to an HA configuration (3 or 5), follow the steps below:
 
@@ -661,7 +661,7 @@ configuration to be updated.
 ## Kubernetes and Bulk Loader
 
 You may want to initialize a new cluster with an existing data set such as data
-from the [Dgraph Bulk Loader]({{< relref "#bulk-loader" >}}). You can use [Init
+from the [Dgraph Bulk Loader]({{< relref "deploy/fast-data-loading.md#bulk-loader" >}}). You can use [Init
 Containers](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/)
 to copy the data to the pod volume before the Alpha process runs.
 

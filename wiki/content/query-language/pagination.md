@@ -8,7 +8,7 @@ title = "Pagination"
 
 Pagination allows returning only a portion, rather than the whole, result set.  This can be useful for top-k style queries as well as to reduce the size of the result set for client side processing or to allow paged access to results.
 
-Pagination is often used with [sorting]({{< relref "#sorting">}}).
+Pagination is often used with [sorting]({{< relref "query-language/sorting.md">}}).
 
 {{% notice "note" %}}Without a sort order specified, the results are sorted by `uid`, which is assigned randomly. So the ordering, while deterministic, might not be what you expected.{{% /notice  %}}
 ## First
