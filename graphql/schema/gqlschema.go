@@ -576,132 +576,84 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 	}
 }
 
-func cleanSchema(sch *ast.Schema, definitions []string) {
-	//if mutation field of the schema is nil return
-	if sch.Mutation.Fields == nil {
+func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
+	// seen helps us avoid cycles
+	if def == nil || seen[def.Name] {
 		return
 	}
-	types := make(map[string]int)
 
-	for _, fd := range sch.Mutation.Fields {
-		if !validInputFieldToTraverse(fd) {
-			continue
-		}
-		schInputName:="Add"+fd.Name[3:]+"Input"
-		schInput := sch.Types[schInputName]
-		if schInput == nil {
-			continue
-		}
-		typeName := fd.Name[3:]
-		if types[typeName] != 0 {
-			continue
-		}
-		cleanSchemaRecurse(fd.Name[3:],types, sch, definitions)
-	}
-}
-
-func cleanSchemaRecurse(typeName string, types map[string]int, sch *ast.Schema, definitions []string) {
-	//start traversal
-	schInputName:="Add"+typeName+"Input"
-	input := sch.Types[schInputName]
-	if types[typeName] != 0 {
-		return
-	}
-	if input == nil {
-		return
-		//complete traversal
-		types[typeName] = 2
-	}
 	i := 0
-	j := 0
-	mutationInput := "[" + schInputName + "!]"
-	for _, fd := range sch.Mutation.Fields {
-		if types[typeName] != 0 || !validInputFieldToTraverse(fd) {
-			j++
+	// recursively walk over fields for an input type and delete those which are themselves empty.
+	for _, f := range def.Fields {
+		nt := f.Type.NamedType
+		if nt == "" {
+			nt = f.Type.Elem.NamedType
+		}
+
+		enum := sch.Types[nt] != nil && sch.Types[nt].Kind == "ENUM"
+		// Lets skip scalar types and enums.
+		if _, ok := scalarToDgraph[nt]; ok || enum {
+			def.Fields[i] = f
+			i++
 			continue
 		}
-		if fd.Arguments.ForName("input").Type.NamedType == mutationInput {
-			break
-		}
-		j++
-	}
-	types[typeName] = 1
-	//start traversal
-	if input != nil {
-		for _, inputFields := range input.Fields {
-			if inputFields.Type.Elem != nil || inputFields.Type.NamedType!= "" {
-				var nextInputName string
-				if inputFields.Type.NamedType!= ""{
-					nextInputName = inputFields.Type.NamedType
-				} else {
-					nextInputName = inputFields.Type.Elem.NamedType
-				}
-				if len(nextInputName)<3 {
-				    	if sch.Types[nextInputName]!=nil && sch.Types[nextInputName].Kind=="ENUM"{
-				    		continue
-						}
-					}
-				if nextInputName[len(nextInputName)-3:] == "Ref" {
-					nextTypeName:=nextInputName[:len(nextInputName)-3]
-					if sch.Types[nextTypeName].Kind=="INTERFACE"{
-						continue
-					}
-					cleanSchemaRecurse(nextTypeName, types, sch, definitions)
-					if sch.Types["Add"+nextTypeName+"Input"] == nil {
-						removeFields(nextInputName, typeName+"Ref", sch)
-						removeFields(nextInputName, typeName+"Patch", sch)
-						copy(input.Fields[i:], input.Fields[i+1:])
-						input.Fields = input.Fields[:len(input.Fields)-1]
-					} else {
-						i++
-					}
-				}
-			} else {
-				i++
-			}
-		}
-		if len(input.Fields) == 0 {
-			delete(sch.Types, schInputName)
-			delete(sch.Types, typeName+"Ref")
-			delete(sch.Types, typeName+"Patch")
-			delete(sch.Types, "Add"+typeName+"Payload")
-			copy(sch.Mutation.Fields[j:], sch.Mutation.Fields[j+1:])
-			sch.Mutation.Fields = sch.Mutation.Fields[:len(sch.Mutation.Fields)-1]
-		}
-	}
-	types[typeName] = 2
-	//complete traversal
-}
 
-func removeFields(fieldNamedType string, schTypeName string, sch *ast.Schema) {
-	schType := sch.Types[schTypeName]
-	if schType != nil {
-		index := 0
-		for _, Fields := range schType.Fields {
-			if Fields.Type.Elem != nil && Fields.Type.Elem.NamedType == fieldNamedType {
-				break
-			}
-			index++
+		seen[def.Name] = true
+		cleanupInput(sch, sch.Types[nt], seen)
+		seen[def.Name] = false
+
+		// If after calling cleanup on an input type, it got deleted then it doesn't need to be
+		// in the fields for this type anymore.
+		if sch.Types[nt] == nil {
+			continue
 		}
-		copy(schType.Fields[index:], schType.Fields[index+1:])
-		schType.Fields = schType.Fields[:len(schType.Fields)-1]
+		def.Fields[i] = f
+		i++
+	}
+	def.Fields = def.Fields[:i]
+
+	if len(def.Fields) == 0 {
+		delete(sch.Types, def.Name)
 	}
 }
 
-func validInputFieldToTraverse(field *ast.FieldDefinition) bool {
-	if  len(field.Name)<4 || field.Name[:3]!="add" {
-		return false
+func cleanSchema(sch *ast.Schema) {
+	// Let's go over inputs of the type TRef, TPatch and AddTInput and delete the ones which
+	// don't have field inside them.
+	for k := range sch.Types {
+		if strings.HasSuffix(k, "Ref") || strings.HasSuffix(k, "Patch") ||
+			(strings.HasPrefix(k, "Add") && strings.HasSuffix(k, "Input")) {
+			cleanupInput(sch, sch.Types[k], map[string]bool{})
+		}
 	}
 
-	if field.Arguments.ForName("input") == nil {
-		return false
-	}
-	if field.Arguments.ForName("input").Type.NamedType != "[Add"+field.Name[3:]+"Input!]" { // for custom mutation
-		return false
-	}
+	// Let's go over mutations and cleanup those which don't have AddTInput defined in the schema
+	// anymore.
+	i := 0 // helps us overwrite the array with valid entries.
+	for _, field := range sch.Mutation.Fields {
+		custom := field.Directives.ForName("custom")
+		// TODO(jatin) - Add a test to verify that we don't mess up with custom mutations that start
+		// with add.
+		// We would only modify add type queries.
+		if custom != nil || !strings.HasPrefix(field.Name, "add") {
+			sch.Mutation.Fields[i] = field
+			i++
+			continue
+		}
 
-	return true
+		// addT type mutations have an input which is AddTInput so if that doesn't exist anymore,
+		// we can delete the AddTPayload and also skip this mutation.
+		typ := field.Name[3:]
+		input := sch.Types["Add"+typ+"Input"]
+		if input == nil {
+			delete(sch.Types, "Add"+typ+"Payload")
+			continue
+		}
+		sch.Mutation.Fields[i] = field
+		i++
 
+	}
+	sch.Mutation.Fields = sch.Mutation.Fields[:i]
 }
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
