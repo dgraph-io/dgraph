@@ -316,7 +316,7 @@ The result:
 ## Running read-only queries
 
 You can set the query parameter `ro=true` to `/query` to set it as a
-[read-only]({{< relref "#read-only-transactions" >}}) query.
+[read-only]({{< relref "clients/go.md#read-only-transactions" >}}) query.
 
 
 ```sh
@@ -333,7 +333,7 @@ $ curl -H "Content-Type: application/graphql+-" -X POST "localhost:8080/query?ro
 ## Running best-effort queries
 
 You can set the query parameter `be=true` to `/query` to set it as a
-[best-effort]({{< relref "#read-only-transactions" >}}) query.
+[best-effort]({{< relref "clients/go.md#read-only-transactions" >}}) query.
 
 
 ```sh
