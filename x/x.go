@@ -1057,10 +1057,9 @@ func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, clos
 		le := metrics.LifeExpectancySeconds()
 		glog.V(2).Infof("%s metrics %+v %+v", prefix, metrics, le)
 
-		// If the mean life expectancy is leff than 5 seconds, the cache
-		// might be under contention.
-		lifeTooShort := le.Count > 0 && float64(le.Sum)/float64(le.Count) < 5
-		// Check misses and hits to ensure we're not looking at a closed cache.
+		// If the mean life expectancy is less than 10 seconds, the cache
+		// might be too small.
+		lifeTooShort := le.Count > 0 && float64(le.Sum)/float64(le.Count) < 10
 		hitRatioTooLow := metrics.Ratio() < 0.4
 		if bool(glog.V(2)) && (lifeTooShort || hitRatioTooLow) {
 			glog.Warningf("======== Cache might be too small %s =====", ct)
