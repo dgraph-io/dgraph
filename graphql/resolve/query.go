@@ -188,6 +188,8 @@ func convertScalarToString(val interface{}) (string, error) {
 		str = strconv.FormatInt(v, 10)
 	case float64:
 		str = strconv.FormatFloat(v, 'f', -1, 64)
+	case json.Number:
+		str = v.String()
 	case nil:
 		str = ""
 	default:

@@ -2748,7 +2748,11 @@ func TestCustomDQL(t *testing.T) {
 
 	params = &common.GraphQLParams{
 		Query: `
-		query {
+		query ($count: Int!) {
+		  queryWithVar: getFirstUserByFollowerCount(count: $count) {
+			screen_name
+			followers
+		  }
 		  getFirstUserByFollowerCount(count: 10) {
 			screen_name
 			followers
@@ -2764,12 +2768,17 @@ func TestCustomDQL(t *testing.T) {
 			tweetCount
 		  }
 		}`,
+		Variables: map[string]interface{}{"count": 5},
 	}
 
 	result = params.ExecuteAsPost(t, alphaURL)
 	common.RequireNoGQLErrors(t, result)
 
 	require.JSONEq(t, `{
+		"queryWithVar": {
+		  "screen_name": "abhimanyu",
+		  "followers": 5
+		},
 		"getFirstUserByFollowerCount": {
 		  "screen_name": "pawan",
 		  "followers": 10
