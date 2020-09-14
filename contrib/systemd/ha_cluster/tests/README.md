@@ -20,25 +20,25 @@ vagrant up
 
 ```bash
 # test a zero virtual guest
-curl $(awk '/zero0/{ print $1 }' hosts):6080/health
+curl $(awk '/zero-0/{ print $1 }' hosts):6080/health
 # test an alpha virtual guest
-curl $(awk '/alpha0/{ print $1 }' hosts):8080/health
+curl $(awk '/alpha-0/{ print $1 }' hosts):8080/health
 ```
 
 ### Get State of Cluster
 
 ```bash
 # get state of cluster
-curl $(awk '/zero0/{ print $1 }' hosts):6080/state
+curl $(awk '/zero-0/{ print $1 }' hosts):6080/state
 ```
 
 ### Get Logs
 
 ```bash
 # get logs from zero0
-vagrant ssh zero0 --command "sudo journalctl -u dgraph-zero"
+vagrant ssh zero-0 --command "sudo journalctl -u dgraph-zero"
 # get logs from alpha0
-vagrant ssh alpha0 --command "sudo journalctl -u dgraph-alpha"
+vagrant ssh alpha-0 --command "sudo journalctl -u dgraph-alpha"
 ```
 ### Cleanup and Destroy VMs
 

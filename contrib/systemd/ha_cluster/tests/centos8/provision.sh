@@ -94,7 +94,7 @@ setup_firewall() {
 ################################
 setup_systemd_zero() {
   TYPE=${1:-"peer"}
-  LDR="zero0:5080"
+  LDR="zero-0:5080"
   WAL=/var/lib/dgraph/zw
   IDX=$(( $(grep -o '[0-9]' <<< $HOSTNAME) + 1 ))
   if [[ $TYPE == "leader" ]]; then
@@ -116,7 +116,7 @@ setup_systemd_alpha() {
   WAL=/var/lib/dgraph/w
   POSTINGS=/var/lib/dgraph/p
   # build array based on number of replicas
-  for (( I=0; I <= $REPLICAS-1; I++)); do ZEROS+=("zero$I:5080");done
+  for (( I=0; I <= $REPLICAS-1; I++)); do ZEROS+=("zero-$I:5080");done
   IFS=, eval 'ZERO_LIST="${ZEROS[*]}"' # join by ','
 
   EXEC="/bin/bash -c '/usr/local/bin/dgraph alpha --my=\$(hostname):7080 --lru_mb 2048 --zero $ZERO_LIST --postings $POSTINGS --wal $WAL'"
@@ -166,10 +166,10 @@ EOF
 ################################
 setup_systemd() {
   case $(hostname) in
-    *zero0*)
+    *zero-0*)
       setup_systemd_zero "leader"
       ;;
-    *zero[1-9]*)
+    *zero-[1-9]*)
       setup_systemd_zero "peer"
       ;;
     *alpha*)

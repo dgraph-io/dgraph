@@ -1,7 +1,7 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 hosts = File.readlines("./hosts").map { |ln| i,h= ln.split(/\s+/); [h,i] }.to_h
-replicas = hosts.keys.select { |host| host.to_s.match /^zero\d+/ }.count
+replicas = hosts.keys.select { |host| host.to_s.match /^zero-\d+/ }.count
 version = ENV['DGRAPH_VERSION'] || 'v20.07.0'
 
 Vagrant.configure("2") do |config|
