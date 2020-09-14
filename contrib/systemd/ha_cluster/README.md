@@ -7,9 +7,9 @@ This following document describes how to configure several nodes that are manage
 You will configure the following types of Dgraph nodes:
 
 * zero nodes
-  * zero leader node - an initial leader node configured at start of cluster, e.g. `zero0`
-  * zero peer nodes - peer nodes, e.g. `zero1`, `zero2`, that point to the zero leader
-* alpha nodes - configured similarly, e.g. `alpha0`, `alpha1`, `alpha2`, that point to list of all zero nodes
+  * zero leader node - an initial leader node configured at start of cluster, e.g. `zero-0`
+  * zero peer nodes - peer nodes, e.g. `zero-1`, `zero-2`, that point to the zero leader
+* alpha nodes - configured similarly, e.g. `alpha-0`, `alpha-1`, `alpha-2`, that point to list of all zero nodes
 
 > **NOTE** These commands are run as root using bash shell.
 
@@ -47,7 +47,7 @@ systemctl start dgraph-zero
 
 ### Configure Second Zero Node
 
-This process is similar to previous step. Edit the file [dgraph-zero-1.service](dgraph-zero-1.service) as required. Replace the string `{{ zero0 }}` to match the hostname of the zero leader, such as `zero0`.  The `idx` will be set to `2`
+This process is similar to previous step. Edit the file [dgraph-zero-1.service](dgraph-zero-1.service) as required. Replace the string `{{ zero-0 }}` to match the hostname of the zero leader, such as `zero-0`.  The `idx` will be set to `2`
 
 Copy the file to `/etc/systemd/system/dgraph-zero.service` and run the following:
 
@@ -69,14 +69,14 @@ systemctl start dgraph-zero
 
 ### Configure Firewall for Zero Ports
 
-For zero you will want to open up ports `5080` and `6080` (see https://dgraph.io/docs/deploy/ports-usage/).  This process will vary depending on firewall you are using.  Some examples below:
+For zero you will want to open up port `5080` (GRPC). The port `6080` (HTTP) is optional admin port that is not required by clients. For further information, see https://dgraph.io/docs/deploy/ports-usage/.  This process will vary depending on firewall you are using.  Some examples below:
 
 On **Ubuntu 18.04**:
 
 ```bash
 # enable internal port
 ufw allow from any to any port 5080 proto tcp
-# enable external ports
+# admin port (not required by clients)
 ufw allow from any to any port 6080 proto tcp
 ```
 
@@ -86,7 +86,7 @@ On **CentOS 8**:
 # NOTE: public zone is the default and includes NIC used to access service
 # enable internal port
 firewall-cmd --zone=public --permanent --add-port=5080/tcp
-# enable external port
+# admin port (not required by clients)
 firewall-cmd --zone=public --permanent --add-port=6080/tcp
 firewall-cmd --reload
 ```
@@ -100,10 +100,10 @@ mkdir --parents /var/{log/dgraph,lib/dgraph/{w,p}}
 chown --recursive dgraph:dgraph /var/{lib,log}/dgraph
 ```
 
-Edit the file [dgraph-alpha.service](dgraph-alpha.service) as required.  For the `--zero` parameter, you want to create a list that matches all the zeros in your cluster, so that when `{{ zero0 }}`, `{{ zero1 }}`, and `{{ zero2 }}` are replaced, you will have a string something like this (adjusted to your organization's domain):
+Edit the file [dgraph-alpha.service](dgraph-alpha.service) as required.  For the `--zero` parameter, you want to create a list that matches all the zeros in your cluster, so that when `{{ zero-0 }}`, `{{ zero-1 }}`, and `{{ zero-2 }}` are replaced, you will have a string something like this (adjusted to your organization's domain):
 
 ```
---zero zero0:5080,zero0:5080,zero0:5080
+--zero zero-0:5080,zero-1:5080,zero-2:5080
 ```
 
 Copy the edited file to `/etc/systemd/system/dgraph-alpha.service` and run the following:
@@ -115,7 +115,7 @@ systemctl start dgraph-alpha
 
 ### Configure Firewall for Alpha Ports
 
-For alpha you will want to open up ports `7080`, `8080`, and `9080` (see: https://dgraph.io/docs/deploy/ports-usage/) This process will vary depending on firewall you are using.  Some examples below:
+For alpha you will want to open up ports `7080` (GRPC), `8080` (HTTP/S), and `9080` (GRPC).  For further information, see: https://dgraph.io/docs/deploy/ports-usage/. This process will vary depending on firewall you are using.  Some examples below:
 
 On **Ubuntu 18.04**:
 
@@ -151,8 +151,8 @@ Below are examples of checking the health of the nodes and cluster.
 You can check the health and state endpoints of the service:
 
 ```bash
-curl zero0:6080/health
-curl zero0:6080/state
+curl zero-0:6080/health
+curl zero-0:6080/state
 ```
 
 On the system itself, you can check the service status and logs:
@@ -167,8 +167,8 @@ journalctl -u dgraph-zero
 You can check the health and state endpoints of the service:
 
 ```bash
-curl alpha0:6080/health
-curl alpha0:6080/state
+curl alpha-0:8080/health
+curl alpha-0:8080/state
 ```
 
 On the system itself, you can check the service status and logs:
