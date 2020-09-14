@@ -50,20 +50,20 @@ In the example below, name is supplied in the fields argument. It would also be 
 to be in query response it should have a name and if has a subfield country then that should also have name.
 ```graphql
 {
-queryAuthor  @cascade(fields:["name"]) {
-		reputation
-		name
-		country {
-             Id
-             name
-		}
-	}
+    queryAuthor  @cascade(fields:["name"]) {
+        reputation
+        name
+        country{
+           Id
+           name
+        }
+    }
 }
 ```
 The query below would only return those posts which have a non-null text field.
 ```graphql
 {
-queryAuthor {
+        queryAuthor {
 		reputation
 		name
 		posts @cascade(fields:["text"]) {
@@ -80,14 +80,14 @@ field text in it.
 
 ```graphql
 {
-queryAuthor @cascade(fields:["reputation","name"]) {
-		reputation
-		name
-		dob
-		posts @cascade(fields:["text"]) {
-			title
-			text
-		   }
-		}
+      queryAuthor @cascade(fields:["reputation","name"]) {
+        reputation
+        name
+        dob
+        posts @cascade(fields:["text"]) {
+            title
+            text
+            }
+        }
 }
 ```
