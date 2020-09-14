@@ -130,7 +130,7 @@ func TestAddDeepFilter(t *testing.T) {
 				Name: "project_add_2",
 				Roles: []*Role{{
 					Permission: "ADMIN",
-					AssignedTo: []*User{{
+					AssignedTo: []*common.User{{
 						Username: "user2",
 					}},
 				}},
@@ -146,12 +146,12 @@ func TestAddDeepFilter(t *testing.T) {
 				Name: "project_add_4",
 				Roles: []*Role{{
 					Permission: "ADMIN",
-					AssignedTo: []*User{{
+					AssignedTo: []*common.User{{
 						Username: "user6",
 					}},
 				}, {
 					Permission: "VIEW",
-					AssignedTo: []*User{{
+					AssignedTo: []*common.User{{
 						Username: "user6",
 					}},
 				}},
@@ -197,7 +197,7 @@ func TestAddDeepFilter(t *testing.T) {
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
-		err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+		err = json.Unmarshal(gqlResponse.Data, &result)
 		require.NoError(t, err)
 
 		opt := cmpopts.IgnoreFields(Column{}, "ColID")
@@ -234,7 +234,7 @@ func TestAddOrRBACFilter(t *testing.T) {
 			Name: "project_add_2",
 			Roles: []*Role{{
 				Permission: "ADMIN",
-				AssignedTo: []*User{{
+				AssignedTo: []*common.User{{
 					Username: "user2",
 				}},
 			}},
@@ -247,12 +247,12 @@ func TestAddOrRBACFilter(t *testing.T) {
 			Name: "project_add_3",
 			Roles: []*Role{{
 				Permission: "ADMIN",
-				AssignedTo: []*User{{
+				AssignedTo: []*common.User{{
 					Username: "user7",
 				}},
 			}, {
 				Permission: "VIEW",
-				AssignedTo: []*User{{
+				AssignedTo: []*common.User{{
 					Username: "user7",
 				}},
 			}},
@@ -294,7 +294,7 @@ func TestAddOrRBACFilter(t *testing.T) {
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
-		err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+		err = json.Unmarshal(gqlResponse.Data, &result)
 		require.NoError(t, err)
 
 		opt := cmpopts.IgnoreFields(Project{}, "ProjID")
@@ -315,13 +315,13 @@ func TestAddAndRBACFilterMultiple(t *testing.T) {
 		result: `{"addIssue": {"issue":[{"msg":"issue_add_5"}, {"msg":"issue_add_6"}, {"msg":"issue_add_7"}]}}`,
 		variables: map[string]interface{}{"issues": []*Issue{{
 			Msg:   "issue_add_5",
-			Owner: &User{Username: "user8"},
+			Owner: &common.User{Username: "user8"},
 		}, {
 			Msg:   "issue_add_6",
-			Owner: &User{Username: "user8"},
+			Owner: &common.User{Username: "user8"},
 		}, {
 			Msg:   "issue_add_7",
-			Owner: &User{Username: "user8"},
+			Owner: &common.User{Username: "user8"},
 		}}},
 	}, {
 		user:   "user8",
@@ -329,13 +329,13 @@ func TestAddAndRBACFilterMultiple(t *testing.T) {
 		result: ``,
 		variables: map[string]interface{}{"issues": []*Issue{{
 			Msg:   "issue_add_8",
-			Owner: &User{Username: "user8"},
+			Owner: &common.User{Username: "user8"},
 		}, {
 			Msg:   "issue_add_9",
-			Owner: &User{Username: "user8"},
+			Owner: &common.User{Username: "user8"},
 		}, {
 			Msg:   "issue_add_10",
-			Owner: &User{Username: "user9"},
+			Owner: &common.User{Username: "user9"},
 		}}},
 	}}
 
@@ -373,7 +373,7 @@ func TestAddAndRBACFilterMultiple(t *testing.T) {
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
-		err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+		err = json.Unmarshal(gqlResponse.Data, &result)
 		require.NoError(t, err)
 
 		opt := cmpopts.IgnoreFields(Issue{}, "Id")
@@ -394,7 +394,7 @@ func TestAddAndRBACFilter(t *testing.T) {
 		result: `{"addIssue": {"issue":[{"msg":"issue_add_1"}]}}`,
 		variables: map[string]interface{}{"issue": &Issue{
 			Msg:   "issue_add_1",
-			Owner: &User{Username: "user7"},
+			Owner: &common.User{Username: "user7"},
 		}},
 	}, {
 		user:   "user7",
@@ -402,7 +402,7 @@ func TestAddAndRBACFilter(t *testing.T) {
 		result: ``,
 		variables: map[string]interface{}{"issue": &Issue{
 			Msg:   "issue_add_2",
-			Owner: &User{Username: "user8"},
+			Owner: &common.User{Username: "user8"},
 		}},
 	}, {
 		user:   "user7",
@@ -410,7 +410,7 @@ func TestAddAndRBACFilter(t *testing.T) {
 		result: ``,
 		variables: map[string]interface{}{"issue": &Issue{
 			Msg:   "issue_add_3",
-			Owner: &User{Username: "user7"},
+			Owner: &common.User{Username: "user7"},
 		}},
 	}}
 
@@ -448,7 +448,7 @@ func TestAddAndRBACFilter(t *testing.T) {
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
-		err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+		err = json.Unmarshal(gqlResponse.Data, &result)
 		require.NoError(t, err)
 
 		opt := cmpopts.IgnoreFields(Issue{}, "Id")
@@ -510,7 +510,7 @@ func TestAddComplexFilter(t *testing.T) {
 			RegionsAvailable: []*Region{{
 				Name:   "add_region_2",
 				Global: false,
-				Users: []*User{{
+				Users: []*common.User{{
 					Username: "user8",
 				}},
 			}},
@@ -552,7 +552,7 @@ func TestAddComplexFilter(t *testing.T) {
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
-		err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+		err = json.Unmarshal(gqlResponse.Data, &result)
 		require.NoError(t, err)
 
 		opt := cmpopts.IgnoreFields(Movie{}, "Id")
@@ -618,7 +618,7 @@ func TestAddRBACFilter(t *testing.T) {
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
-		err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+		err = json.Unmarshal(gqlResponse.Data, &result)
 		require.NoError(t, err)
 
 		opt := cmpopts.IgnoreFields(Log{}, "Id")
