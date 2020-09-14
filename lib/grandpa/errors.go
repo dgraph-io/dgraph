@@ -86,3 +86,6 @@ var ErrGHOSTlessCatchUp = errors.New("catch up response does not contain grandpa
 
 // ErrCatchUpResponseNotCompletable is returned when the round represented by the catch up response is not completable
 var ErrCatchUpResponseNotCompletable = errors.New("catch up response is not completable")
+
+// ErrServicePaused is returned if the service is paused and waiting for catch up messages
+var ErrServicePaused = errors.New("service is paused")

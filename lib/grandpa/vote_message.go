@@ -19,6 +19,8 @@ package grandpa
 import (
 	"bytes"
 	"context"
+	"errors"
+	"time"
 
 	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
@@ -33,8 +35,11 @@ func (s *Service) receiveMessages(cond func() bool) {
 		for {
 			select {
 			case msg := <-s.in:
-				s.logger.Trace("received vote message", "msg", msg)
+				if msg == nil {
+					continue
+				}
 
+				s.logger.Trace("received vote message", "msg", msg)
 				vm, ok := msg.(*VoteMessage)
 				if !ok {
 					s.logger.Trace("failed to cast message to VoteMessage")
@@ -60,6 +65,7 @@ func (s *Service) receiveMessages(cond func() bool) {
 			cancel()
 			return
 		}
+		time.Sleep(time.Millisecond * 10)
 	}
 }
 
@@ -119,6 +125,10 @@ func (s *Service) createVoteMessage(vote *Vote, stage subround, kp crypto.Keypai
 // validateMessage validates a VoteMessage and adds it to the current votes
 // it returns the resulting vote if validated, error otherwise
 func (s *Service) validateMessage(m *VoteMessage) (*Vote, error) {
+	if m.Message == nil {
+		return nil, errors.New("invalid VoteMessage; missing Message field")
+	}
+
 	// check for message signature
 	pk, err := ed25519.NewPublicKey(m.Message.AuthorityID[:])
 	if err != nil {

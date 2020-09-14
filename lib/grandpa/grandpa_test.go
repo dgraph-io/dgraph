@@ -1003,6 +1003,7 @@ func TestIsFinalizable_False(t *testing.T) {
 	gs.bestFinalCandidate[0] = &Vote{
 		number: 4,
 	}
+	gs.preVotedBlock[gs.state.round] = voteA
 
 	finalizable, err := gs.isFinalizable(gs.state.round)
 	require.NoError(t, err)

@@ -106,3 +106,27 @@ func TestStress_Grandpa_NineAuthorities(t *testing.T) {
 		t.Logf("finalized hash in round %d: %s", i, fin)
 	}
 }
+
+func TestStress_Grandpa_CatchUp(t *testing.T) {
+	numNodes = 3
+	nodes, err := utils.InitializeAndStartNodes(t, numNodes-1, utils.GenesisThreeAuths, utils.ConfigDefault)
+	require.NoError(t, err)
+
+	defer func() {
+		errList := utils.TearDown(t, nodes)
+		require.Len(t, errList, 0)
+	}()
+
+	time.Sleep(time.Second * 50) // let some rounds run
+
+	node, err := utils.RunGossamer(t, numNodes-1, utils.TestDir(t, "charlie"), utils.GenesisThreeAuths, utils.ConfigDefault)
+	require.NoError(t, err)
+	nodes = append(nodes, node)
+
+	numRounds := 10
+	for i := 1; i < numRounds+1; i++ {
+		fin, err := compareFinalizedHeadsWithRetry(t, nodes, uint64(i))
+		require.NoError(t, err)
+		t.Logf("finalized hash in round %d: %s", i, fin)
+	}
+}

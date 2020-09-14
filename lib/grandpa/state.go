@@ -31,6 +31,7 @@ type BlockState interface {
 	GetHeaderByNumber(num *big.Int) (*types.Header, error)
 	IsDescendantOf(parent, child common.Hash) (bool, error)
 	HighestCommonAncestor(a, b common.Hash) (common.Hash, error)
+	HasFinalizedBlock(round, setID uint64) (bool, error)
 	GetFinalizedHeader(uint64, uint64) (*types.Header, error)
 	SetFinalizedHash(common.Hash, uint64, uint64) error
 	BestBlockHeader() (*types.Header, error)
