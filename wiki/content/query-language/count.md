@@ -26,9 +26,9 @@ Query Example: The number of films acted in by each actor with `Orlando` in thei
 }
 {{< /runnable >}}
 
-Count can be used at root and [aliased]({{< relref "#alias">}}).
+Count can be used at root and [aliased]({{< relref "query-language/alias.md" >}}).
 
-Query Example: Count of directors who have directed more than five films.  When used at the query root, the [count index]({{< relref "#count-index">}}) is required.
+Query Example: Count of directors who have directed more than five films.  When used at the query root, the [count index]({{< relref "query-language/schema.md#count-index" >}}) is required.
 
 {{< runnable >}}
 {
@@ -39,7 +39,7 @@ Query Example: Count of directors who have directed more than five films.  When 
 {{< /runnable >}}
 
 
-Count can be assigned to a [value variable]({{< relref "#value-variables">}}).
+Count can be assigned to a [value variable]({{< relref "query-language/value-variables.md">}}).
 
 Query Example: The actors of Ang Lee's "Eat Drink Man Woman" ordered by the number of movies acted in.
 

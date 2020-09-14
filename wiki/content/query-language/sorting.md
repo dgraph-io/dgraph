@@ -18,9 +18,9 @@ Sortable Types: `int`, `float`, `String`, `dateTime`, `default`
 
 Results can be sorted in ascending order (`orderasc`) or descending order (`orderdesc`) by a predicate or variable.
 
-For sorting on predicates with [sortable indices]({{< relref "#sortable-indices">}}), Dgraph sorts on the values and with the index in parallel and returns whichever result is computed first.
+For sorting on predicates with [sortable indices]({{< relref "query-language/schema.md#sortable-indices">}}), Dgraph sorts on the values and with the index in parallel and returns whichever result is computed first.
 
-Sorted queries retrieve up to 1000 results by default. This can be changed with [first]({{< relref "#first">}}).
+Sorted queries retrieve up to 1000 results by default. This can be changed with [first]({{< relref "query-language/pagination.md#first">}}).
 
 
 Query Example: French director Jean-Pierre Jeunet's movies sorted by release date.
