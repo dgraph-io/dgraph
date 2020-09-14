@@ -78,7 +78,7 @@ Here are the important types, queries, and mutations from the admin schema.
 	}
 
 	"""
-	A NodeState is the state of an individual node in the Dgraph cluster.
+	A NodeState is the state of an individual Alpha or Zero node in the Dgraph cluster.
 	"""
 	type NodeState {
 
