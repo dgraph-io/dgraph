@@ -174,8 +174,6 @@ func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 			if err != nil {
 				continue
 			}
-			t.Logf(string(resp.GetJson()))
-			t.Logf(string(bodies[1]))
 			require.False(t, testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), "", true))
 		} else {
 			require.NoError(t, err)
