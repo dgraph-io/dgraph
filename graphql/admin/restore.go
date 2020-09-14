@@ -24,11 +24,13 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/pkg/errors"
 )
 
 type restoreInput struct {
 	Location          string
 	BackupId          string
+	BackupNum         int
 	EncryptionKeyFile string
 	AccessKey         string
 	SecretKey         string
@@ -51,6 +53,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	req := pb.RestoreRequest{
 		Location:          input.Location,
 		BackupId:          input.BackupId,
+		BackupNum:         uint64(input.BackupNum),
 		EncryptionKeyFile: input.EncryptionKeyFile,
 		AccessKey:         input.AccessKey,
 		SecretKey:         input.SecretKey,
@@ -93,6 +96,13 @@ func getRestoreInput(m schema.Mutation) (*restoreInput, error) {
 	}
 
 	var input restoreInput
-	err = json.Unmarshal(inputByts, &input)
-	return &input, schema.GQLWrapf(err, "couldn't get input argument")
+	if err := json.Unmarshal(inputByts, &input); err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't get input argument")
+	}
+
+	if input.BackupNum < 0 {
+		err := errors.Errorf("backupNum value should be equal or greater than zero")
+		return nil, schema.GQLWrapf(err, "couldn't get input argument")
+	}
+	return &input, nil
 }
