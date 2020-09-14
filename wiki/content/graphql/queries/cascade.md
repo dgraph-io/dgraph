@@ -75,8 +75,7 @@ The query below would only return those posts which have a non-null text field.
 ```
 Also, these fields are  forwarded to the next query level unless there is a cascade at the next level, 
 in that case, arguments to cascade are overwritten.
-The below query ensures that the author should have field reputation and name. And if it has subfield posts then that should also have
-field text in it.
+The below query ensures that the author should have field reputation and name. And if it has subfield posts then that should also have field text in it.
 
 ```graphql
 {
