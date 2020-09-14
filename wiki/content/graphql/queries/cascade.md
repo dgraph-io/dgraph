@@ -6,14 +6,14 @@ title = "Cascade"
     weight = 5   
 +++
 
-`@cascade` is available as a directive which can be applied on fields. With the @cascade
+`@cascade` is available as a directive that can be applied to fields. With the @cascade
 directive, nodes that don’t have all fields specified in the query are removed.
 This can be useful in cases where some filter was applied and some nodes might not
-have all listed fields.
+have all the listed fields.
 
 For example, the query below would only return the authors which have both reputation
 and posts and where posts have text. Note that `@cascade` trickles down so it would
-automatically be applied at the `posts` level as well if its applied at the `queryAuthor`
+automatically be applied at the `posts` level as well if it's applied at the `queryAuthor`
 level.
 
 ```graphql
@@ -44,13 +44,13 @@ but only those posts which have both `text` and `id`.
 
 ### Parameterized Cascade
 
-@cascade is sometimes very strict because for a node to be in response, all its children in the sub-graph must be present. 
-Instead to consider all fields in cascade, we give flexiblity to user to specify fields as argument to cascade as below.
+cascade is sometimes very strict because for a node to be in response, all its children in the sub-graph must be present. 
+Instead, to consider all fields in cascade, we give flexibility to the user to specify fields as an argument to cascade as below.
 
 `@cascade(fields:["field1","field2"..])` 
 
-In below example argument field "name" is used as argument to cascade and forwarded to next query level also. So for author 
-to be in query response it should have name and if has subfield country that should also have name.
+In the below example argument field "name" is used as an argument to cascade and forwarded to the next query level also. So for author 
+to be in query response it should have a name and if has a subfield country then that should also have name.
 ```graphql
 queryAuthor  @cascade(fields:["name"]) {
 		reputation
@@ -72,9 +72,9 @@ queryAuthor {
 		}
 	}
 ```
-Also these fields are  forwarded to next query level unless there is a cascade at next level , 
-in that case arguments to cascade are overwritten.
-Below query ensures that  author should have fields reputation and name. And if it has subfield posts then it should also have
+Also, these fields are  forwarded to the next query level unless there is a cascade at the next level, 
+in that case, arguments to cascade are overwritten.
+The below query ensures that the author should have field reputation and name. And if it has subfield posts then that should also have
 field text in it.
 
 ```graphql
