@@ -53,6 +53,42 @@ To create a backup, make an HTTP POST request to `/admin` to a Dgraph
 Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin`
 endpoints, this is only accessible on the same machine as the Alpha unless
 [whitelisted for admin operations]({{< relref "deploy/dgraph-administration.md#whitelisting-admin-operations" >}}).
+You can look at `BackupInput` given below for all the possible options.
+```graphql
+input BackupInput {
+
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket.
+		"""
+		destination: String!
+
+		"""
+		Access key credential for the destination.
+		"""
+		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""		
+		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""	
+		sessionToken: String
+
+		"""
+		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
+		"""	
+		anonymous: Boolean
+
+		"""
+		Force a full backup instead of an incremental backup.
+		"""	
+		forceFull: Boolean
+	}
+```
+
 Execute the following mutation on /admin endpoint using any GraphQL compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
 ### Backup to Amazon S3
