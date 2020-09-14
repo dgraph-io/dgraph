@@ -44,33 +44,34 @@ but only those posts which have both `text` and `id`.
 
 ### Parameterized Cascade
 
-cascade is sometimes very strict because for a node to be in response, all its children in the sub-graph must be present. 
-Instead, to consider all fields in cascade, we give flexibility to the user to specify fields as an argument to cascade as below.
+@cascade can also optionally take a list of fields as an argument. This changes the default behaviour to consider only the supplied fields as mandatory instead of all the fields for a type.
 
-`@cascade(fields:["field1","field2"..])` 
-
-In the below example argument field "name" is used as an argument to cascade and forwarded to the next query level also. So for author 
+In the example below, name is supplied in the fields argument. It would also be automatically cascaded as a required argument to country below. So for author 
 to be in query response it should have a name and if has a subfield country then that should also have name.
 ```graphql
+{
 queryAuthor  @cascade(fields:["name"]) {
 		reputation
 		name
 		country {
-                Id
-				name
+             Id
+             name
 		}
 	}
+}
 ```
-Following query ensures authors which has post field should also have text subfield in it.
+The query below would only return those posts which have a non-null text field.
 ```graphql
+{
 queryAuthor {
 		reputation
 		name
 		posts @cascade(fields:["text"]) {
-			   title
-			   text
+		   title
+		   text
 		}
 	}
+}
 ```
 Also, these fields are  forwarded to the next query level unless there is a cascade at the next level, 
 in that case, arguments to cascade are overwritten.
@@ -78,13 +79,15 @@ The below query ensures that the author should have field reputation and name. A
 field text in it.
 
 ```graphql
+{
 queryAuthor @cascade(fields:["reputation","name"]) {
 		reputation
 		name
 		dob
 		posts @cascade(fields:["text"]) {
-				title
-				text
-			 }
+			title
+			text
+		   }
 		}
+}
 ```
