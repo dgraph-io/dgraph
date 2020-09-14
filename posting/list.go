@@ -942,7 +942,7 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 	var plist *pb.PostingList
 	var startUid, endUid uint64
 	var splitIdx int
-	enc := codec.Encoder{BlockSize: blockSize}
+	enc := codec.Encoder{BlockSize: blockSize, ManualAlloc: true}
 
 	// Method to properly initialize the variables above
 	// when a multi-part list boundary is crossed.
