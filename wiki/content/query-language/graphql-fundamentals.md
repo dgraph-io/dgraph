@@ -194,7 +194,7 @@ above.
 
 ---
 
-In [full-text search functions]({{< relref "#full-text-search" >}})
+In [full-text search functions]({{< relref "query-language/functions.md#full-text-search" >}})
 (`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`),
 the default (English) full-text tokenizer is used. This does not mean that
 the value with the `en` tag will be searched when querying the untagged value,
