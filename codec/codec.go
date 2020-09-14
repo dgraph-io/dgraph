@@ -46,37 +46,21 @@ type Encoder struct {
 	BlockSize int
 	pack      *pb.UidPack
 	uids      []uint64
+	alloc     *z.Allocator
+	buf       *bytes.Buffer
 }
 
 var blockSize = int(unsafe.Sizeof(pb.UidBlock{}))
-
-// AllocateBlock would allocate a block via Calloc. This block must be released via a call to
-// ReleaseBlock.
-func AllocateBlock() *pb.UidBlock {
-	// Allocate blocks manually.
-	// TODO: Avoid calling z.Calloc repeatedly. Instead use the allocator. The tricky question here
-	// is how would FreePack call be able to trace the allocator.
-	b := z.CallocNoRef(blockSize)
-	if len(b) == 0 {
-		return &pb.UidBlock{}
-	}
-	return (*pb.UidBlock)(unsafe.Pointer(&b[0]))
-}
-
-// FreeBlock releases a previously manually allocated UidBlock.
-func FreeBlock(ub *pb.UidBlock) {
-	buf := (*[z.MaxArrayLen]byte)(unsafe.Pointer(ub))[:blockSize:blockSize]
-	z.Free(buf)
-}
 
 func FreePack(pack *pb.UidPack) {
 	if pack == nil {
 		return
 	}
-	for _, b := range pack.Blocks {
-		z.Free(b.Deltas)
-		FreeBlock(b)
+	if pack.Allocator == 0 {
+		return
 	}
+	alloc := z.AllocatorFrom(pack.Allocator)
+	alloc.Release()
 }
 
 func (e *Encoder) packBlock() {
@@ -85,7 +69,9 @@ func (e *Encoder) packBlock() {
 	}
 
 	// Allocate blocks manually.
-	block := AllocateBlock()
+	b := e.alloc.Allocate(blockSize)
+	block := (*pb.UidBlock)(unsafe.Pointer(&b[0]))
+
 	block.Base = e.uids[0]
 	block.NumUids = uint32(len(e.uids))
 
@@ -93,10 +79,7 @@ func (e *Encoder) packBlock() {
 	last := e.uids[0]
 	e.uids = e.uids[1:]
 
-	var out z.Buffer
-	// We are not releasing the allocated memory here. Instead, block.Deltas would need to be
-	// released at the end.
-
+	e.buf.Reset()
 	buf := make([]byte, 17)
 	tmpUids := make([]uint32, 4)
 	for {
@@ -111,7 +94,7 @@ func (e *Encoder) packBlock() {
 		}
 
 		data := groupvarint.Encode4(buf, tmpUids)
-		x.Check2(out.Write(data))
+		x.Check2(e.buf.Write(data))
 
 		// e.uids has ended and we have padded tmpUids with 0s
 		if len(e.uids) <= 4 {
@@ -121,15 +104,21 @@ func (e *Encoder) packBlock() {
 		e.uids = e.uids[4:]
 	}
 
-	// TODO: Instead of one z.Buffer for every delta, allocate one big one.
-	block.Deltas = out.Bytes()
+	sz := len(e.buf.Bytes())
+	block.Deltas = e.alloc.Allocate(sz)
+	x.AssertTrue(sz == copy(block.Deltas, e.buf.Bytes()))
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
+
+var tagEncoder string = "enc"
 
 // Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
+		e.alloc = z.NewAllocator(1024)
+		e.alloc.Tag = tagEncoder
+		e.buf = new(bytes.Buffer)
 	}
 
 	size := len(e.uids)
@@ -148,6 +137,9 @@ func (e *Encoder) Add(uid uint64) {
 // Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
 func (e *Encoder) Done() *pb.UidPack {
 	e.packBlock()
+	if e.pack != nil && e.alloc != nil {
+		e.pack.Allocator = e.alloc.Ref
+	}
 	return e.pack
 }
 

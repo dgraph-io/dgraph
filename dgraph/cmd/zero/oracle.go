@@ -42,7 +42,7 @@ type Oracle struct {
 	x.SafeMutex
 	commits map[uint64]uint64 // startTs -> commitTs
 	// TODO: Check if we need LRU.
-	keyCommit   map[string]uint64 // fp(key) -> commitTs. Used to detect conflict.
+	keyCommit   map[uint64]uint64 // fp(key) -> commitTs. Used to detect conflict.
 	maxAssigned uint64            // max transaction assigned by us.
 
 	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
@@ -58,7 +58,7 @@ type Oracle struct {
 // Init initializes the oracle.
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
-	o.keyCommit = make(map[string]uint64)
+	o.keyCommit = make(map[uint64]uint64)
 	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init(nil)
@@ -69,7 +69,7 @@ func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
 	defer o.Unlock()
 	o.startTxnTs = ts
-	o.keyCommit = make(map[string]uint64)
+	o.keyCommit = make(map[uint64]uint64)
 }
 
 // TODO: This should be done during proposal application for Txn status.
@@ -79,7 +79,12 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 		return true
 	}
 	for _, k := range src.Keys {
-		if last := o.keyCommit[k]; last > src.StartTs {
+		ki, err := strconv.ParseUint(k, 36, 64)
+		if err != nil {
+			glog.Errorf("Got error while parsing conflict key %q: %v\n", k, err)
+			continue
+		}
+		if last := o.keyCommit[ki]; last > src.StartTs {
 			return true
 		}
 	}
@@ -117,7 +122,12 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 		return ErrConflict
 	}
 	for _, k := range src.Keys {
-		o.keyCommit[k] = src.CommitTs // CommitTs is handed out before calling this func.
+		ki, err := strconv.ParseUint(k, 36, 64)
+		if err != nil {
+			glog.Errorf("Got error while parsing conflict key %q: %v\n", k, err)
+			continue
+		}
+		o.keyCommit[ki] = src.CommitTs // CommitTs is handed out before calling this func.
 	}
 	return nil
 }

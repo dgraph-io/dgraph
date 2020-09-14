@@ -89,7 +89,7 @@ Commit SHA-1     : %v
 Commit timestamp : %v
 Branch           : %v
 Go version       : %v
-Jemalloc enabled : %v
+jemalloc enabled : %v
 
 For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
