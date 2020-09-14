@@ -263,7 +263,7 @@ mutation{
     location: "/path/to/backup/directory",
   }){
     message
-    code    
+    code 
     restoreId
   }
 }
@@ -342,6 +342,87 @@ input RestoreInput {
 		anonymous: Boolean
 }
 ```
+
+## Restore using `dgraph restore`
+
 {{% notice "note" %}}
 `dgraph restore` is being deprecated, please use GraphQL api for Restoring from Backup.
 {{% /notice %}}
+
+The restore utility is a standalone tool today. A new flag `--encryption_key_file` is added to the restore utility so it can decrypt the backup. This file must contain the same key that was used for encryption during backup.
+Alternatively, starting with v20.07.0, the `vault_*` options can be used to restore a backup. 
+
+The `dgraph restore` command restores the postings directory from a previously
+created backup to a directory in the local filesystem. Restore is intended to
+restore a backup to a new Dgraph cluster not a currently live one. During a
+restore, a new Dgraph Zero may be running to fully restore the backup state.
+
+The `--location` (`-l`) flag specifies a source URI with Dgraph backup objects.
+This URI supports all the schemes used for backup.
+
+The `--postings` (`-p`) flag sets the directory to which the restored posting
+directories will be saved. This directory will contain a posting directory for
+each group in the restored backup.
+
+The `--zero` (`-z`) flag specifies a Dgraph Zero address to update the start
+timestamp and UID lease using the restored version. If no zero address is
+passed, the command will complain unless you set the value of the
+`--force_zero` flag to false. If do not pass a zero value to this command,
+the timestamp and UID lease must be manually updated through Zero's HTTP
+'assign' endpoint using the values printed near the end of the command's output.
+
+The `--backup_id` optional flag specifies the ID of the backup series to
+restore. A backup series consists of a full backup and all the incremental
+backups built on top of it. Each time a new full backup is created, a new backup
+series with a different ID is started. The backup series ID is stored in each
+`manifest.json` file stored in every backup folder.
+
+The `--encryption_key_file` flag is required if you took the backup in an
+encrypted cluster and should point to the location of the same key used to
+run the cluster.
+
+The `--vault_*` flags specifies the Vault server address, role id, secret id and 
+field that contains the encryption key that was used to encrypt the backup.
+
+The restore feature will create a cluster with as many groups as the original
+cluster had at the time of the last backup. For each group, `dgraph restore`
+creates a posting directory `p<N>` corresponding to the backup group ID. For
+example, a backup for Alpha group 2 would have the name `.../r32-g2.backup`
+and would be loaded to posting directory `p2`.
+
+After running the restore command, the directories inside the `postings`
+directory need to be manually copied over to the machines/containers running the
+alphas before running the `dgraph alpha` command. For example, in a database
+cluster with two Alpha groups and one replica each, `p1` needs to be moved to
+the location of the first Alpha and `p2` needs to be moved to the location of
+the second Alpha.
+
+By default, Dgraph will look for a posting directory with the name `p`, so make
+sure to rename the directories after moving them. You can also use the `-p`
+option of the `dgraph alpha` command to specify a different path from the default.
+
+
+### Restore from Amazon S3
+```sh
+$ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/<bucketname>
+```
+
+
+### Restore from Minio
+```sh
+$ dgraph restore -p /var/db/dgraph -l minio://127.0.0.1:9000/<bucketname>
+```
+
+
+### Restore from Local Directory or NFS
+```sh
+$ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph
+```
+
+
+### Restore and Update Timestamp
+
+Specify the Zero address and port for the new cluster with `--zero`/`-z` to update the timestamp.
+```sh
+$ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
+```
