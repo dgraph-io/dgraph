@@ -390,10 +390,12 @@ func TestDeleteRBACRuleInverseField(t *testing.T) {
 	testCases := []TestCase{
 		{
 			user:   "foobar",
+			role:   "admin",
 			result: `{"deleteTweets":{"numUids":0,"tweets":[]}}`,
 		},
 		{
 			user:   "foo",
+			role:   "admin",
 			result: `{"deleteTweets":{"numUids":1,"tweets":[ {"text": "abc"}]}}`,
 		},
 	}
