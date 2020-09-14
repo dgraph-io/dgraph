@@ -632,8 +632,6 @@ func cleanSchema(sch *ast.Schema) {
 	i := 0 // helps us overwrite the array with valid entries.
 	for _, field := range sch.Mutation.Fields {
 		custom := field.Directives.ForName("custom")
-		// TODO(jatin) - Add a test to verify that we don't mess up with custom mutations that start
-		// with add.
 		// We would only modify add type queries.
 		if custom != nil || !strings.HasPrefix(field.Name, "add") {
 			sch.Mutation.Fields[i] = field
