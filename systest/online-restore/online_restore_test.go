@@ -37,15 +37,15 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func sendRestoreRequest(t *testing.T, backupId string) int {
+func sendRestoreRequest(t *testing.T, backupId string, backupNum int) int {
 	restoreRequest := fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "%s",
+		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
 			restoreId
 		}
-	}`, backupId)
+	}`, backupId, backupNum)
 
 	adminUrl := "http://localhost:8180/admin"
 	params := testutil.GraphQLParams{
@@ -171,7 +171,10 @@ func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 
 		resp, err := dg.NewTxn().Query(context.Background(), bodies[0])
 		if shouldFail {
-			require.Error(t, err)
+			if err != nil {
+				continue
+			}
+			require.False(t, testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), "", true))
 		} else {
 			require.NoError(t, err)
 			require.True(t, testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), "", true))
@@ -226,10 +229,86 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	restoreId := sendRestoreRequest(t, "youthful_rhodes3")
+	restoreId := sendRestoreRequest(t, "youthful_rhodes3", 0)
 	waitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 	runMutations(t, dg)
+}
+
+func TestRestoreBackupNum(t *testing.T) {
+	disableDraining(t)
+
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	runQueries(t, dg, true)
+
+	restoreId := sendRestoreRequest(t, "youthful_rhodes3", 1)
+	waitForRestore(t, restoreId, dg)
+	runQueries(t, dg, true)
+	runMutations(t, dg)
+}
+
+func TestRestoreBackupNumInvalid(t *testing.T) {
+	disableDraining(t)
+
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	runQueries(t, dg, true)
+
+	// Send a request with a backupNum greater than the number of manifests.
+	adminUrl := "http://localhost:8180/admin"
+	restoreRequest := fmt.Sprintf(`mutation restore() {
+		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
+		 	encryptionKeyFile: "/data/keys/enc_key"}) {
+			code
+			message
+			restoreId
+		}
+	}`, "youthful_rhodes3", 1000)
+
+	params := testutil.GraphQLParams{
+		Query: restoreRequest,
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	buf, err := ioutil.ReadAll(resp.Body)
+	bufString := string(buf)
+	require.NoError(t, err)
+	require.Contains(t, bufString, "not enough backups")
+
+	// Send a request with a negative backupNum value.
+	restoreRequest = fmt.Sprintf(`mutation restore() {
+		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
+		 	encryptionKeyFile: "/data/keys/enc_key"}) {
+			code
+			message
+			restoreId
+		}
+	}`, "youthful_rhodes3", -1)
+
+	params = testutil.GraphQLParams{
+		Query: restoreRequest,
+	}
+	b, err = json.Marshal(params)
+	require.NoError(t, err)
+
+	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	buf, err = ioutil.ReadAll(resp.Body)
+	bufString = string(buf)
+	require.NoError(t, err)
+	require.Contains(t, bufString, "backupNum value should be equal or greater than zero")
 }
 
 func TestMoveTablets(t *testing.T) {
@@ -242,13 +321,13 @@ func TestMoveTablets(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	restoreId := sendRestoreRequest(t, "youthful_rhodes3")
+	restoreId := sendRestoreRequest(t, "youthful_rhodes3", 0)
 	waitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
-	restoreId = sendRestoreRequest(t, "blissful_hermann1")
+	restoreId = sendRestoreRequest(t, "blissful_hermann1", 0)
 	waitForRestore(t, restoreId, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
@@ -304,7 +383,7 @@ func TestListBackups(t *testing.T) {
 			encrypted
 			groups {
 				groupId
-				predicates    
+				predicates
 			}
 			path
 			since
