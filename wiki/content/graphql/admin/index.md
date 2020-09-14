@@ -183,7 +183,6 @@ Here are the important types, queries, and mutations from the admin schema.
 	}
 
 	directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-	directive @id on FIELD_DEFINITION
 	directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 
