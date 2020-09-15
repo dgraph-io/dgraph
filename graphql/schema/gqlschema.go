@@ -585,11 +585,7 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 	i := 0
 	// recursively walk over fields for an input type and delete those which are themselves empty.
 	for _, f := range def.Fields {
-		nt := f.Type.NamedType
-		if nt == "" {
-			nt = f.Type.Elem.NamedType
-		}
-
+		nt := f.Type.Name()
 		enum := sch.Types[nt] != nil && sch.Types[nt].Kind == "ENUM"
 		// Lets skip scalar types and enums.
 		if _, ok := scalarToDgraph[nt]; ok || enum {
