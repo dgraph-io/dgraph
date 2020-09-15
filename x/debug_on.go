@@ -1,5 +1,21 @@
 // +build debug
 
+/*
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package x
 
 import (
@@ -23,35 +39,37 @@ func VerifySnapshot(pstore *badger.DB, readTs uint64) {
 		i := it.Item()
 		k := i.Key()
 		parsedKey, kErr := Parse(k)
-		Check(kErr)
+		Checkf(kErr, "Error parsing key: %v, version: %d", k, i.Version())
 		if !parsedKey.IsData() {
 			continue
 		}
 		v, vErr := i.ValueCopy(nil)
-		Check(vErr)
+		Checkf(vErr, "Error getting value for key: %v, version: %d", k, i.Version())
 		plist := &pb.PostingList{}
-		err := plist.Unmarshal(v)
-		Check(err)
+		Check(plist.Unmarshal(v))
 		if len(plist.Splits) == 0 {
 			continue
 		}
 		if plist.Splits[0] != uint64(1) {
-			log.Panic("First split UID is not 1")
+			log.Panic("First split UID is not 1 baseKey: ", k, " version ", i.Version())
 		}
 		for _, uid := range plist.Splits {
 			sKey, kErr := SplitKey(k, uid)
-			Check(kErr)
+			Checkf(kErr, "Error creating split key from base key: %v, version: %d", k, i.Version())
 			newTxn := pstore.NewTransactionAt(readTs, false)
 			_, dbErr := newTxn.Get(sKey)
 			if dbErr != nil {
 				log.Panic("Snapshot verification failed: Unable to find splitKey: ",
-					sKey, "\nbaseKey: ", parsedKey, "\nSplits: ", plist.Splits,
+					sKey, "\nbaseKey: ", " version: ", i.Version(),
+					parsedKey, "\nSplits: ", plist.Splits,
 				)
 			}
 		}
 	}
 }
 
+// VerifyPostingSplits checks if all the keys from parts are
+// present in kvs. parts is a map of split keys -> postinglist
 func VerifyPostingSplits(kvs []*bpb.KV, plist *pb.PostingList,
 	parts map[uint64]*pb.PostingList, baseKey []byte) {
 
