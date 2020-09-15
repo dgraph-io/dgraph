@@ -6,6 +6,7 @@ interface Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	enemyOf(filter: ResidentFilter): Resident
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
 }
 
@@ -13,6 +14,7 @@ type Human implements Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	enemyOf(filter: ResidentFilter): Resident
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	totalCredits: Int
@@ -22,6 +24,7 @@ type Droid implements Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	enemyOf(filter: ResidentFilter): Resident
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	primaryFunction: String
 }
@@ -274,6 +277,7 @@ type UpdateStarshipPayload {
 enum CharacterHasFilter {
 	name
 	friends
+	enemyOf
 	appearsIn
 }
 
@@ -284,6 +288,7 @@ enum CharacterOrderable {
 enum DroidHasFilter {
 	name
 	friends
+	enemyOf
 	appearsIn
 	primaryFunction
 }
@@ -296,6 +301,7 @@ enum DroidOrderable {
 enum HumanHasFilter {
 	name
 	friends
+	enemyOf
 	appearsIn
 	starships
 	totalCredits
@@ -339,6 +345,7 @@ enum StarshipOrderable {
 input AddDroidInput {
 	name: String!
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]!
 	primaryFunction: String
 }
@@ -346,6 +353,7 @@ input AddDroidInput {
 input AddHumanInput {
 	name: String!
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]!
 	starships: [StarshipRef]
 	totalCredits: Int
@@ -380,6 +388,7 @@ input CharacterOrder {
 input CharacterPatch {
 	name: String
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]
 }
 
@@ -406,6 +415,7 @@ input DroidOrder {
 input DroidPatch {
 	name: String
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]
 	primaryFunction: String
 }
@@ -414,6 +424,7 @@ input DroidRef {
 	id: ID
 	name: String
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]
 	primaryFunction: String
 }
@@ -441,6 +452,7 @@ input HumanOrder {
 input HumanPatch {
 	name: String
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]
 	starships: [StarshipRef]
 	totalCredits: Int
@@ -450,6 +462,7 @@ input HumanRef {
 	id: ID
 	name: String
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]
 	starships: [StarshipRef]
 	totalCredits: Int

@@ -983,9 +983,9 @@ invalid_schemas:
         name: String
       }
     errlist: [
-    {"message": "UpdateAuthorInput is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":5, "column":7}]},
-    {"message": "URef is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":10, "column":7}]},
-    {"message": "IntFilter is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":13, "column":6}]},
+    {"message": "UpdateAuthorInput is a reserved word, so you can't declare a INPUT_OBJECT with this name. Pick a different name for the INPUT_OBJECT.", "locations":[{"line":5, "column":7}]},
+    {"message": "URef is a reserved word, so you can't declare a INPUT_OBJECT with this name. Pick a different name for the INPUT_OBJECT.", "locations":[{"line":10, "column":7}]},
+    {"message": "IntFilter is a reserved word, so you can't declare a OBJECT with this name. Pick a different name for the OBJECT.", "locations":[{"line":13, "column":6}]},
     ]
 
   - name: "@custom query can't have same name as the query generated for other types"

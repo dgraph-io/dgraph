@@ -317,6 +317,7 @@ schemas:
       type V {
         id: ID!
         f5: [U!]! @dgraph(pred: "data")
+        f6: U
       }
     output: |
       type W {
@@ -335,8 +336,10 @@ schemas:
       Z.f4: float .
       type V {
         data
+        V.f6
       }
       data: [uid] .
+      V.f6: uid .
 
   -
     name: "Schema with @dgraph directive."

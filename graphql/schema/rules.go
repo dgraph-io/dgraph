@@ -318,8 +318,8 @@ func typeNameValidation(schema *ast.SchemaDocument) gqlerror.List {
 	for _, typ := range schema.Definitions {
 		if !typ.BuiltIn && forbiddenTypeNames[typ.Name] {
 			errs = append(errs, gqlerror.ErrorPosf(typ.Position,
-				"%s is a reserved word, so you can't declare a type with this name. "+
-					"Pick a different name for the type.", typ.Name))
+				"%s is a reserved word, so you can't declare a %s with this name. "+
+					"Pick a different name for the %s.", typ.Name, typ.Kind, typ.Kind))
 		}
 	}
 

@@ -567,6 +567,8 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		}
 		defn := sch.Types[key]
 		if defn.Kind == ast.Union {
+			// TODO: properly check the case of reverse predicates (~) with union members and clean
+			// them from unionRef or unionFilter as required.
 			addUnionReferenceType(sch, defn)
 			addUnionFilterType(sch, defn)
 			addUnionMemberTypeEnum(sch, defn)
