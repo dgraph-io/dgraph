@@ -987,8 +987,8 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// entries to process on a restart.
 				if calculate {
 					// We can set discardN argument to zero, because we already know that calculate
-					// would NOT be true if either we absolutely needed to calculate the snapshot,
-					// or our checkpoint is already crosses the SnapshotAfter threshold.
+					// would be true if either we absolutely needed to calculate the snapshot,
+					// or our checkpoint already crossed the SnapshotAfter threshold.
 					if err := n.proposeSnapshot(0); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					}
