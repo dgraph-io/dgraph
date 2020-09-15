@@ -299,9 +299,6 @@ func commonHeaders(admin bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if admin {
 			x.AddCorsHeaders(w)
-			// Overwrite the allowed headers after also including headers which are part of
-			// forwardHeaders.
-			w.Header().Set("Access-Control-Allow-Headers", schema.AllowedHeaders())
 		} else {
 			// /graphql endpoint is protected by allow listed origins.
 			addDynamicHeaders(r.Header.Get("Origin"), w, schema.AllowedHeaders())
