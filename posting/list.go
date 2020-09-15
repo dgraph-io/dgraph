@@ -896,9 +896,17 @@ func marshalPostingList(plist *pb.PostingList) ([]byte, byte) {
 	if isPlistEmpty(plist) {
 		return nil, BitEmptyPosting
 	}
+	alloc := plist.Pack.GetAllocator()
+	if plist.Pack != nil {
+		// Set allocator to zero for marshal.
+		plist.Pack.Allocator = 0
+	}
 
 	data, err := plist.Marshal()
 	x.Check(err)
+	if plist.Pack != nil {
+		plist.Pack.Allocator = alloc
+	}
 	return data, BitCompletePosting
 }
 
