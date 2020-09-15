@@ -11,8 +11,8 @@ directive, nodes that don’t have all fields specified in the query are removed
 This can be useful in cases where some filter was applied and some nodes might not
 have all the listed fields.
 
-For example, the query below would only return the authors which have both reputation
-and posts and where posts have text. Note that `@cascade` trickles down so it would
+For example, the query below only return the authors which have both reputation
+and posts, where posts have text. Note that `@cascade` trickles down so it would
 automatically be applied at the `posts` level as well if it's applied at the `queryAuthor`
 level.
 
@@ -46,8 +46,8 @@ but only those posts which have both `text` and `id`.
 
 @cascade can also optionally take a list of fields as an argument. This changes the default behaviour to consider only the supplied fields as mandatory instead of all the fields for a type.
 
-In the example below, name is supplied in the fields argument. It would also be automatically cascaded as a required argument to country below. So for author 
-to be in query response it should have a name and if has a subfield country then that should also have name.
+In the example below, name is supplied in the fields argument. Listed fields are also automatically cascaded as a required argument to nested selection sets. 
+For example, name is supplied in the fields argument below, so for an author to be in the query response it must have a name and if it has a subfield country, then that must also have name.
 ```graphql
 {
     queryAuthor  @cascade(fields:["name"]) {
@@ -60,7 +60,7 @@ to be in query response it should have a name and if has a subfield country then
     }
 }
 ```
-The query below would only return those posts which have a non-null text field.
+The query below only return those posts which have a non-null text field.
 ```graphql
 {
         queryAuthor {
@@ -73,9 +73,8 @@ The query below would only return those posts which have a non-null text field.
 	}
 }
 ```
-Also, these fields are  forwarded to the next query level unless there is a cascade at the next level, 
-in that case, arguments to cascade are overwritten.
-The below query ensures that the author should have field reputation and name. And if it has subfield posts then that should also have field text in it.
+The cascading nature of field selection is overwritten by a nested @casecade. 
+For example, the query below ensures that an author has fields reputation and name, and, if it has subfield posts, then that must have field text.
 
 ```graphql
 {
