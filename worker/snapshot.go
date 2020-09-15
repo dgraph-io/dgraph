@@ -18,7 +18,6 @@ package worker
 
 import (
 	"context"
-	"log"
 	"sync/atomic"
 	"time"
 
@@ -117,40 +116,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		return 0, err
 	}
 
-	iOpt := badger.DefaultIteratorOptions
-	iOpt.AllVersions = true
-	txn := pstore.NewTransactionAt(snap.ReadTs, false)
-	it := txn.NewIterator(iOpt)
-	for it.Rewind(); it.Valid(); it.Next() {
-		i := it.Item()
-		k := i.Key()
-		parsedKey, kErr := x.Parse(k)
-		x.Check(kErr)
-		if !parsedKey.IsData() {
-			continue
-		}
-		v, vErr := i.ValueCopy(nil)
-		x.Check(vErr)
-		plist := &pb.PostingList{}
-		err := plist.Unmarshal(v)
-		x.Check(err)
-		if len(plist.Splits) == 0 {
-			continue
-		}
-		if plist.Splits[0] != uint64(1) {
-			log.Panic("First split UID is not 1")
-		}
-		for _, uid := range plist.Splits {
-			sKey, kErr := x.SplitKey(k, uid)
-			x.Check(kErr)
-			newTxn := pstore.NewTransactionAt(snap.ReadTs, false)
-			_, dbErr := newTxn.Get(sKey)
-			if dbErr != nil {
-				log.Panic("Unable to find splitKey: ", sKey, " in badger")
-			}
-		}
-	}
-
+	x.VerifySnapshot(pstore, snap.ReadTs)
 	glog.Infof("Populated snapshot with %d keys.\n", count)
 	return count, nil
 }
