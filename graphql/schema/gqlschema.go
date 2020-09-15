@@ -537,6 +537,7 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		Name:   "Subscription",
 		Fields: make([]*ast.FieldDefinition, 0),
 	}
+
 	for _, key := range definitions {
 		if isQueryOrMutation(key) {
 			continue
