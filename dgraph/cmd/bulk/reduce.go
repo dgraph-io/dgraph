@@ -423,7 +423,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 
 func (r *reducer) writeSplitLists(db, tmpDb *badger.DB, writer *badger.StreamWriter) {
 	// baseStreamId is the max ID seen while writing non-split lists.
-	baseStreamId := atomic.LoadUint32(&r.streamId)
+	baseStreamId := atomic.AddUint32(&r.streamId, 1)
 	stream := tmpDb.NewStreamAt(math.MaxUint64)
 	stream.LogPrefix = "copying split keys to main DB"
 	stream.Send = func(kvs *bpb.KVList) error {
