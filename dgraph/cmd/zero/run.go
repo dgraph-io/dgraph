@@ -268,7 +268,8 @@ func run() {
 		WithValueLogFileSize(64 << 20).
 		WithBlockCacheSize(blockCacheSz).
 		WithIndexCacheSize(indexCacheSz).
-		WithLoadBloomsOnOpen(false)
+		WithLoadBloomsOnOpen(false).
+		WithNumLevelZeroTables(1) // Faster cleanup
 
 	compression_level := Zero.Conf.GetInt("badger.compression_level")
 	if compression_level > 0 {
@@ -298,7 +299,7 @@ func run() {
 	}
 	glog.Infof("Opening zero BadgerDB with options: %+v\n", kvOpt)
 
-	kv, err := badger.Open(kvOpt)
+	kv, err := badger.OpenManaged(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
 

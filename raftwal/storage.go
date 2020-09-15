@@ -36,10 +36,11 @@ import (
 
 // DiskStorage handles disk access and writing for the RAFT write-ahead log.
 type DiskStorage struct {
-	db   *badger.DB
-	id   uint64
-	gid  uint32
-	elog trace.EventLog
+	db       *badger.DB
+	commitTs uint64
+	id       uint64
+	gid      uint32
+	elog     trace.EventLog
 
 	cache          *sync.Map
 	Closer         *z.Closer
@@ -60,6 +61,21 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 		Closer:         z.NewCloser(1),
 		indexRangeChan: make(chan indexRange, 16),
 	}
+
+	maxVersion := uint64(0)
+	x.Check(db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			vs := it.Item().Version()
+			if vs > maxVersion {
+				maxVersion = vs
+			}
+		}
+		return nil
+	}))
+	w.commitTs = maxVersion + 1
+
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
@@ -95,7 +111,7 @@ func (w *DiskStorage) processIndexRange() {
 		if r.from == r.until {
 			return
 		}
-		batch := w.db.NewWriteBatch()
+		batch := w.db.NewWriteBatchAt(w.commitTs)
 		if err := w.deleteRange(batch, r.from, r.until); err != nil {
 			glog.Errorf("deleteRange failed with error: %v, from: %d, until: %d\n",
 				err, r.from, r.until)
@@ -192,9 +208,18 @@ func (w *DiskStorage) entryPrefix() []byte {
 	return b
 }
 
+func (w *DiskStorage) update(cb func(txn *badger.Txn) error) error {
+	txn := w.db.NewTransactionAt(math.MaxUint64, true)
+	defer txn.Discard()
+	if err := cb(txn); err != nil {
+		return err
+	}
+	return txn.CommitAt(w.commitTs, nil)
+}
+
 // StoreRaftId stores the given RAFT ID in disk.
 func (w *DiskStorage) StoreRaftId(id uint64) error {
-	return w.db.Update(func(txn *badger.Txn) error {
+	return w.update(func(txn *badger.Txn) error {
 		var b [8]byte
 		binary.BigEndian.PutUint64(b[:], id)
 		return txn.Set(idKey, b[:])
@@ -203,7 +228,7 @@ func (w *DiskStorage) StoreRaftId(id uint64) error {
 
 // UpdateCheckpoint writes the given snapshot to disk.
 func (w *DiskStorage) UpdateCheckpoint(snap *pb.Snapshot) error {
-	return w.db.Update(func(txn *badger.Txn) error {
+	return w.update(func(txn *badger.Txn) error {
 		data, err := snap.Marshal()
 		if err != nil {
 			return err
@@ -453,7 +478,7 @@ func (w *DiskStorage) reset(es []raftpb.Entry) error {
 	w.cache = new(sync.Map) // reset cache.
 
 	// Clean out the state.
-	batch := w.db.NewWriteBatch()
+	batch := w.db.NewWriteBatchAt(w.commitTs)
 	defer batch.Cancel()
 
 	if err := w.deleteFrom(batch, 0); err != nil {
@@ -679,7 +704,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 	snap.Metadata.ConfState = *cs
 	snap.Data = data
 
-	batch := w.db.NewWriteBatch()
+	batch := w.db.NewWriteBatchAt(w.commitTs)
 	defer batch.Cancel()
 	if err := w.setSnapshot(batch, &snap); err != nil {
 		return err
@@ -701,7 +726,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 // writes then all of them can be written together. Note that when writing an Entry with Index i,
 // any previously-persisted entries with Index >= i must be discarded.
 func (w *DiskStorage) Save(h *raftpb.HardState, es []raftpb.Entry, snap *raftpb.Snapshot) error {
-	batch := w.db.NewWriteBatch()
+	batch := w.db.NewWriteBatchAt(w.commitTs)
 	defer batch.Cancel()
 
 	if err := w.addEntries(batch, es); err != nil {
