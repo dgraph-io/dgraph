@@ -1217,18 +1217,13 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
 
-	filterRow := func(row int, eqToken types.Val) error {
+	filterRow := func(row int, eqToken types.Val, compareFunc string) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
-		compareFuncName := arg.q.SrcFunc.Name
-		if compareFuncName == between && row == 0 {
-			compareFuncName = "ge"
-		} else if compareFuncName == between && row == len(arg.out.UidMatrix)-1 {
-			compareFuncName = "le"
-		}
+
 		var filterErr error
 		algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
 			switch lang {
@@ -1248,7 +1243,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					}
 					for _, sv := range svs {
 						dst, err := types.Convert(sv, typ)
-						if err == nil && types.CompareVals(compareFuncName, dst, eqToken) {
+						if err == nil && types.CompareVals(compareFunc, dst, eqToken) {
 							return true
 						}
 					}
@@ -1270,7 +1265,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				}
 				dst, err := types.Convert(sv, typ)
 				return err == nil &&
-					types.CompareVals(compareFuncName, dst, eqToken)
+					types.CompareVals(compareFunc, dst, eqToken)
 			case ".":
 				pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 				if err != nil {
@@ -1285,7 +1280,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				for _, sv := range values {
 					dst, err := types.Convert(sv, typ)
 					if err == nil &&
-						types.CompareVals(compareFuncName, dst, eqToken) {
+						types.CompareVals(compareFunc, dst, eqToken) {
 						return true
 					}
 				}
@@ -1301,7 +1296,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				if sv.Value == nil {
 					return false
 				}
-				return types.CompareVals(compareFuncName, sv, eqToken)
+				return types.CompareVals(compareFunc, sv, eqToken)
 			}
 		})
 		if filterErr != nil {
@@ -1316,22 +1311,22 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 		// If fn is eq, we could have multiple arguments and hence multiple rows to filter.
 		// rowsToFilter = len(arg.srcFn.tokens)
 		for row := 0; row < len(arg.srcFn.tokens); row++ {
-			if err := filterRow(row, arg.srcFn.eqTokens[row]); err != nil {
+			if err := filterRow(row, arg.srcFn.eqTokens[row], arg.q.SrcFunc.Name); err != nil {
 				return err
 			}
 		}
 	case arg.srcFn.fname == between:
-		if err := filterRow(0, arg.srcFn.eqTokens[0]); err != nil {
+		if err := filterRow(0, arg.srcFn.eqTokens[0], "ge"); err != nil {
 			return err
 		}
-		if err := filterRow(len(arg.out.UidMatrix)-1, arg.srcFn.eqTokens[1]); err != nil {
+		if err := filterRow(len(arg.out.UidMatrix)-1, arg.srcFn.eqTokens[1], "le"); err != nil {
 			return err
 		}
 	case arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken[0]:
 		// If operation is not eq and ineqValueToken equals first token,
 		// then we need to filter first row.
 		// rowsToFilter = 1
-		if err := filterRow(0, arg.srcFn.eqTokens[0]); err != nil {
+		if err := filterRow(0, arg.srcFn.eqTokens[0], arg.q.SrcFunc.Name); err != nil {
 			return err
 		}
 	}
