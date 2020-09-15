@@ -822,7 +822,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	kv := &bpb.KV{}
 	kv.Version = out.newMinTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(out.plist)
+	val, meta := MarshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 	kvs = append(kvs, kv)
@@ -867,7 +867,7 @@ func (l *List) SingleListRollup(kv *bpb.KV) error {
 
 	kv.Version = out.newMinTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(out.plist)
+	val, meta := MarshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 
@@ -885,14 +885,14 @@ func (out *rollupOutput) marshalPostingListPart(
 			hex.EncodeToString(baseKey), startUid)
 	}
 	kv.Key = key
-	val, meta := marshalPostingList(plist)
+	val, meta := MarshalPostingList(plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 
 	return kv, nil
 }
 
-func marshalPostingList(plist *pb.PostingList) ([]byte, byte) {
+func MarshalPostingList(plist *pb.PostingList) ([]byte, byte) {
 	if isPlistEmpty(plist) {
 		return nil, BitEmptyPosting
 	}

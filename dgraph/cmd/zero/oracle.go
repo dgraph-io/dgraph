@@ -121,6 +121,9 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 	if o.hasConflict(src) {
 		return ErrConflict
 	}
+	// We store src.Keys as string to ensure compatibility with all the various language clients we
+	// have. But, really they are just uint64s encoded as strings. We use base 36 during creation of
+	// these keys in FillContext in posting/mvcc.go.
 	for _, k := range src.Keys {
 		ki, err := strconv.ParseUint(k, 36, 64)
 		if err != nil {
