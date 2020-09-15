@@ -65,6 +65,9 @@ endif
 .PHONY: all $(BIN)
 all: $(BIN)
 
+$(JEMALLOC_SRC_DIR)/Makefile:
+	cd $(JEMALLOC_SRC_DIR) && ./autogen.sh && ./configure --with-jemalloc-prefix="je_" --enable-prof
+
 $(BIN): clean
 	@go build $(BUILD_FLAGS) -o $(BIN)
 
