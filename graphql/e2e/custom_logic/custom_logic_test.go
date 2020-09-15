@@ -233,6 +233,26 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	require.Nil(t, result.Errors)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
+
+	// verify whether we getting forwared headers as part of accepted
+	// header.
+	requiredHeaders := []string{"X-App-Token", "X-User-Id"}
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", alphaURL, nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	respHeaders := strings.Split(resp.Header.Get("Access-Control-Allow-Headers"), ",")
+	for _, requiredHeader := range requiredHeaders {
+		exist := false
+		for _, header := range respHeaders {
+			if requiredHeader == header {
+				exist = true
+				break
+			}
+		}
+		require.True(t, exist, requiredHeader, "is not exist in the response header")
+	}
 }
 
 func TestCustomNameForwardHeaders(t *testing.T) {
