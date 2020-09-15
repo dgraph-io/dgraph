@@ -26,6 +26,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
@@ -316,11 +317,18 @@ func RefreshAcls(closer *z.Closer) {
 
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
 	// aclCachePtr
-	retrieveAcls := func() error {
+	var maxRefreshTs uint64
+	retrieveAcls := func(refreshTs uint64) error {
+		if refreshTs <= maxRefreshTs {
+			return nil
+		}
+		maxRefreshTs = refreshTs
+
 		glog.V(3).Infof("Refreshing ACLs")
 		queryRequest := api.Request{
 			Query:    queryAcls,
 			ReadOnly: true,
+			StartTs:  refreshTs,
 		}
 
 		queryResp, err := (&Server{}).doQuery(closer.Ctx(), &queryRequest, NoAuthorize)
@@ -337,18 +345,17 @@ func RefreshAcls(closer *z.Closer) {
 		return nil
 	}
 
-	ticker := time.NewTicker(worker.Config.AclRefreshInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			if err := retrieveAcls(); err != nil {
-				glog.Errorf("Error while retrieving acls: %v", err)
-			}
-		case <-closer.HasBeenClosed():
+	closer.AddRunning(1)
+	go worker.SubscribeForUpdates(aclPrefixes, func(kvs *bpb.KVList) {
+		if kvs == nil || len(kvs.Kv) == 0 {
 			return
 		}
-	}
+		if err := retrieveAcls(kvs.Kv[0].Version); err != nil {
+			glog.Errorf("Error while retrieving acls: %v", err)
+		}
+	}, 1, closer)
+
+	<-closer.HasBeenClosed()
 }
 
 const queryAcls = `
@@ -365,6 +372,15 @@ const queryAcls = `
   }
 }
 `
+
+var aclPrefixes = [][]byte{
+	x.PredicatePrefix("dgraph.acl.permission"),
+	x.PredicatePrefix("dgraph.acl.predicate"),
+	x.PredicatePrefix("dgraph.acl.rule"),
+	x.PredicatePrefix("dgraph.user.group"),
+	x.PredicatePrefix("dgraph.type.Group"),
+	x.PredicatePrefix("dgraph.xid"),
+}
 
 // ResetAcl clears the aclCachePtr and upserts the Groot account.
 func ResetAcl(closer *z.Closer) {
