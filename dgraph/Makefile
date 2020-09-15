@@ -29,7 +29,7 @@ else
 BUILD_VERSION ?= $(shell git describe --always --tags)
 endif
 
-BUILD_TAGS    ?= jemalloc
+BUILD_TAGS    ?=
 GOPATH        ?= $(shell go env GOPATH)
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
