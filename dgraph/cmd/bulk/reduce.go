@@ -181,9 +181,6 @@ func (r *reducer) createTmpBadger() *badger.DB {
 	return db
 }
 
-func (r *reducer) setBadgerOptions(opt *badger.Options, compression bool) {
-}
-
 type mapIterator struct {
 	fd      *os.File
 	reader  *bufio.Reader
