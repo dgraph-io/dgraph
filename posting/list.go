@@ -1483,6 +1483,7 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 	lowPl.Pack = &pb.UidPack{
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[:midBlock],
+		Allocator: plist.Pack.Allocator,
 	}
 
 	// Generate posting list holding the second half of the current list's postings.
@@ -1490,6 +1491,7 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 	highPl.Pack = &pb.UidPack{
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[midBlock:],
+		Allocator: plist.Pack.Allocator,
 	}
 
 	// Add elements in plist.Postings to the corresponding list.
