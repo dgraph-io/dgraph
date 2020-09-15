@@ -35,12 +35,12 @@ func (v *mockVerifier) VerifyBlock(header *types.Header) (bool, error) {
 
 // mockBlockProducer implements the BlockProducer interface
 type mockBlockProducer struct {
-	auths []*types.BABEAuthorityData
+	auths []*types.Authority
 }
 
 func newMockBlockProducer() *mockBlockProducer {
 	return &mockBlockProducer{
-		auths: []*types.BABEAuthorityData{},
+		auths: []*types.Authority{},
 	}
 }
 

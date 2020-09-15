@@ -61,7 +61,7 @@ func newTestVerificationManager(t *testing.T, descriptor *Descriptor) *Verificat
 
 func TestVerificationManager_SetAuthorityChangeAtBlock(t *testing.T) {
 	descriptor := &Descriptor{
-		AuthorityData: []*types.BABEAuthorityData{{Weight: 1}},
+		AuthorityData: []*types.Authority{{Weight: 1}},
 		Randomness:    [types.RandomnessLength]byte{77},
 		Threshold:     big.NewInt(99),
 	}
@@ -92,7 +92,7 @@ func TestVerificationManager_SetAuthorityChangeAtBlock(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	authsA := []*types.BABEAuthorityData{{Weight: 77}}
+	authsA := []*types.Authority{{Weight: 77}}
 	vm.SetAuthorityChangeAtBlock(block1a, authsA)
 	require.Equal(t, []int64{1, 0}, vm.branchNums)
 	require.Equal(t, []common.Hash{block1a.Hash()}, vm.branches[1])
@@ -104,7 +104,7 @@ func TestVerificationManager_SetAuthorityChangeAtBlock(t *testing.T) {
 	}
 	require.Equal(t, expected, vm.descriptors[block1a.Hash()])
 
-	authsB := []*types.BABEAuthorityData{{Weight: 88}}
+	authsB := []*types.Authority{{Weight: 88}}
 	vm.SetAuthorityChangeAtBlock(block1b, authsB)
 	require.Equal(t, []int64{1, 0}, vm.branchNums)
 	require.Equal(t, []common.Hash{block1a.Hash(), block1b.Hash()}, vm.branches[1])
@@ -234,9 +234,9 @@ func TestVerifySlotWinner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	authorityData := make([]*types.BABEAuthorityData, 1)
-	authorityData[0] = &types.BABEAuthorityData{
-		ID: kp.Public().(*sr25519.PublicKey),
+	authorityData := make([]*types.Authority, 1)
+	authorityData[0] = &types.Authority{
+		Key: kp.Public().(*sr25519.PublicKey),
 	}
 	babeService.authorityData = authorityData
 
@@ -286,9 +286,9 @@ func TestVerifyAuthorshipRight_Equivocation(t *testing.T) {
 
 	babeService := createTestService(t, cfg)
 
-	babeService.authorityData = make([]*types.BABEAuthorityData, 1)
-	babeService.authorityData[0] = &types.BABEAuthorityData{
-		ID: kp.Public().(*sr25519.PublicKey),
+	babeService.authorityData = make([]*types.Authority, 1)
+	babeService.authorityData[0] = &types.Authority{
+		Key: kp.Public().(*sr25519.PublicKey),
 	}
 
 	// create and add first block

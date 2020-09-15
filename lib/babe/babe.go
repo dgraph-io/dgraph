@@ -63,7 +63,7 @@ type Service struct {
 	config         *types.BabeConfiguration
 	randomness     [types.RandomnessLength]byte
 	authorityIndex uint64
-	authorityData  []*types.BABEAuthorityData
+	authorityData  []*types.Authority
 	epochThreshold *big.Int // validator threshold
 	startSlot      uint64
 	slotToProof    map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
@@ -85,7 +85,7 @@ type ServiceConfig struct {
 	EpochState       EpochState
 	Keypair          *sr25519.Keypair
 	Runtime          *runtime.Runtime
-	AuthData         []*types.BABEAuthorityData
+	AuthData         []*types.Authority
 	EpochThreshold   *big.Int // for development purposes
 	SlotDuration     uint64   // for development purposes; in milliseconds
 	StartSlot        uint64   // slot to start at
@@ -150,7 +150,7 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 	if babeService.authorityData == nil {
 		logger.Info("setting authority data to genesis authorities", "authorities", babeService.config.GenesisAuthorities)
 
-		babeService.authorityData, err = types.BABEAuthorityDataRawToAuthorityData(babeService.config.GenesisAuthorities)
+		babeService.authorityData, err = types.BABEAuthorityRawToAuthority(babeService.config.GenesisAuthorities)
 		if err != nil {
 			return nil, err
 		}
@@ -256,17 +256,17 @@ func (b *Service) Descriptor() *Descriptor {
 }
 
 // Authorities returns the current BABE authorities
-func (b *Service) Authorities() []*types.BABEAuthorityData {
+func (b *Service) Authorities() []*types.Authority {
 	return b.authorityData
 }
 
 // SetAuthorities sets the current Block Producer Authorities and sets Authority index
-func (b *Service) SetAuthorities(data []*types.BABEAuthorityData) error {
+func (b *Service) SetAuthorities(data []*types.Authority) error {
 	// check key is in new Authorities list before we update Authorities Data
 	pub := b.keypair.Public()
 	found := false
 	for _, auth := range data {
-		if bytes.Equal(pub.Encode(), auth.ID.Encode()) {
+		if bytes.Equal(pub.Encode(), auth.Key.Encode()) {
 			found = true
 		}
 	}
@@ -323,7 +323,7 @@ func (b *Service) setAuthorityIndex() error {
 	b.logger.Debug("set authority index", "authority key", pub.Hex(), "authorities", AuthorityData(b.authorityData))
 
 	for i, auth := range b.authorityData {
-		if bytes.Equal(pub.Encode(), auth.ID.Encode()) {
+		if bytes.Equal(pub.Encode(), auth.Key.Encode()) {
 			b.authorityIndex = uint64(i)
 			return nil
 		}

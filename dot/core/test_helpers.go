@@ -54,13 +54,13 @@ func (v *mockVerifier) SetRuntimeChangeAtBlock(header *types.Header, rt *runtime
 	return nil
 }
 
-func (v *mockVerifier) SetAuthorityChangeAtBlock(header *types.Header, auths []*types.BABEAuthorityData) {
+func (v *mockVerifier) SetAuthorityChangeAtBlock(header *types.Header, auths []*types.Authority) {
 
 }
 
 // mockBlockProducer implements the BlockProducer interface
 type mockBlockProducer struct {
-	auths []*types.BABEAuthorityData
+	auths []*types.Authority
 }
 
 // Start mocks starting
@@ -73,11 +73,11 @@ func (bp *mockBlockProducer) Stop() error {
 	return nil
 }
 
-func (bp *mockBlockProducer) Authorities() []*types.BABEAuthorityData {
+func (bp *mockBlockProducer) Authorities() []*types.Authority {
 	return bp.auths
 }
 
-func (bp *mockBlockProducer) SetAuthorities(a []*types.BABEAuthorityData) error {
+func (bp *mockBlockProducer) SetAuthorities(a []*types.Authority) error {
 	bp.auths = a
 	return nil
 }
@@ -105,7 +105,7 @@ type mockFinalityGadget struct {
 	in        chan FinalityMessage
 	out       chan FinalityMessage
 	finalized chan FinalityMessage
-	auths     []*types.GrandpaAuthorityData
+	auths     []*types.Authority
 }
 
 // Start mocks starting
@@ -138,11 +138,11 @@ func (fg *mockFinalityGadget) DecodeMessage(*network.ConsensusMessage) (Finality
 	return &mockFinalityMessage{}, nil
 }
 
-func (fg *mockFinalityGadget) UpdateAuthorities(ad []*types.GrandpaAuthorityData) {
+func (fg *mockFinalityGadget) UpdateAuthorities(ad []*types.Authority) {
 	fg.auths = ad
 }
 
-func (fg *mockFinalityGadget) Authorities() []*types.GrandpaAuthorityData {
+func (fg *mockFinalityGadget) Authorities() []*types.Authority {
 	return fg.auths
 }
 

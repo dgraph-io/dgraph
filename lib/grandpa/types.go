@@ -79,13 +79,15 @@ func (v *Voter) String() string {
 }
 
 // NewVotersFromAuthorityData returns an array of Voters given an array of GrandpaAuthorityData
-func NewVotersFromAuthorityData(ad []*types.GrandpaAuthorityData) []*Voter {
+func NewVotersFromAuthorityData(ad []*types.Authority) []*Voter {
 	v := make([]*Voter, len(ad))
 
 	for i, d := range ad {
-		v[i] = &Voter{
-			key: d.Key,
-			id:  d.ID,
+		if pk, ok := d.Key.(*ed25519.PublicKey); ok {
+			v[i] = &Voter{
+				key: pk,
+				id:  d.Weight,
+			}
 		}
 	}
 

@@ -46,21 +46,21 @@ func NewSlot(start, duration, number uint64) *Slot {
 	}
 }
 
-// AuthorityData is an alias for []*types.BABEAuthorityData
-type AuthorityData []*types.BABEAuthorityData
+// AuthorityData is an alias for []*types.Authority
+type AuthorityData []*types.Authority
 
 // String returns the AuthorityData as a formatted string
 func (d AuthorityData) String() string {
 	str := ""
-	for _, di := range []*types.BABEAuthorityData(d) {
-		str = str + fmt.Sprintf("[key=0x%x idx=%d] ", di.ID.Encode(), di.Weight)
+	for _, di := range []*types.Authority(d) {
+		str = str + fmt.Sprintf("[key=0x%x idx=%d] ", di.Key.Encode(), di.Weight)
 	}
 	return str
 }
 
 // Descriptor contains the information needed to verify blocks
 type Descriptor struct {
-	AuthorityData []*types.BABEAuthorityData
+	AuthorityData []*types.Authority
 	Randomness    [types.RandomnessLength]byte
 	Threshold     *big.Int
 }

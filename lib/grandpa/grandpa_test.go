@@ -101,8 +101,8 @@ func newTestService(t *testing.T) (*Service, *state.Service) {
 
 func TestUpdateAuthorities(t *testing.T) {
 	gs, _ := newTestService(t)
-	gs.UpdateAuthorities([]*types.GrandpaAuthorityData{
-		{Key: kr.Alice().Public().(*ed25519.PublicKey), ID: 0},
+	gs.UpdateAuthorities([]*types.Authority{
+		{Key: kr.Alice().Public().(*ed25519.PublicKey), Weight: 0},
 	})
 
 	err := gs.Start()
@@ -114,8 +114,8 @@ func TestUpdateAuthorities(t *testing.T) {
 		{key: kr.Alice().Public().(*ed25519.PublicKey), id: 0},
 	}, gs.state.voters)
 
-	gs.UpdateAuthorities([]*types.GrandpaAuthorityData{
-		{Key: kr.Alice().Public().(*ed25519.PublicKey), ID: 0},
+	gs.UpdateAuthorities([]*types.Authority{
+		{Key: kr.Alice().Public().(*ed25519.PublicKey), Weight: 0},
 	})
 
 	err = gs.Stop()

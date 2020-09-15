@@ -75,11 +75,11 @@ func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 	}
 
 	if cfg.AuthData == nil {
-		auth := &types.BABEAuthorityData{
-			ID:     cfg.Keypair.Public().(*sr25519.PublicKey),
+		auth := &types.Authority{
+			Key:    cfg.Keypair.Public().(*sr25519.PublicKey),
 			Weight: 1,
 		}
-		cfg.AuthData = []*types.BABEAuthorityData{auth}
+		cfg.AuthData = []*types.Authority{auth}
 	}
 
 	if cfg.TransactionQueue == nil {
@@ -212,16 +212,16 @@ func TestBabeAnnounceMessage(t *testing.T) {
 		EpochLength:        6,
 		C1:                 1,
 		C2:                 10,
-		GenesisAuthorities: []*types.BABEAuthorityDataRaw{},
+		GenesisAuthorities: []*types.AuthorityRaw{},
 		Randomness:         [32]byte{},
 		SecondarySlots:     false,
 	}
 
 	babeService.authorityIndex = 0
-	babeService.authorityData = []*types.BABEAuthorityData{
-		{ID: nil, Weight: 1},
-		{ID: nil, Weight: 1},
-		{ID: nil, Weight: 1},
+	babeService.authorityData = []*types.Authority{
+		{Key: nil, Weight: 1},
+		{Key: nil, Weight: 1},
+		{Key: nil, Weight: 1},
 	}
 
 	err := babeService.Start()
@@ -253,9 +253,9 @@ func TestDetermineAuthorityIndex(t *testing.T) {
 	pubA := kpA.Public().(*sr25519.PublicKey)
 	pubB := kpB.Public().(*sr25519.PublicKey)
 
-	authData := []*types.BABEAuthorityData{
-		{ID: pubA, Weight: 1},
-		{ID: pubB, Weight: 1},
+	authData := []*types.Authority{
+		{Key: pubA, Weight: 1},
+		{Key: pubB, Weight: 1},
 	}
 
 	bs := &Service{
@@ -308,14 +308,14 @@ func TestService_SetAuthorities(t *testing.T) {
 
 	aBefore := bs.authorityData
 
-	auths := []*types.BABEAuthorityData{}
-	bd1 := &types.BABEAuthorityData{
-		ID:     kr.Alice().Public().(*sr25519.PublicKey),
+	auths := []*types.Authority{}
+	bd1 := &types.Authority{
+		Key:    kr.Alice().Public().(*sr25519.PublicKey),
 		Weight: 1,
 	}
 	auths = append(auths, bd1)
-	bd2 := &types.BABEAuthorityData{
-		ID:     kr.Bob().Public().(*sr25519.PublicKey),
+	bd2 := &types.Authority{
+		Key:    kr.Bob().Public().(*sr25519.PublicKey),
 		Weight: 1,
 	}
 	auths = append(auths, bd2)
@@ -335,9 +335,9 @@ func TestService_SetAuthorities_WrongKey(t *testing.T) {
 
 	aBefore := bs.authorityData
 
-	auths := []*types.BABEAuthorityData{}
-	bd1 := &types.BABEAuthorityData{
-		ID:     kr.Bob().Public().(*sr25519.PublicKey),
+	auths := []*types.Authority{}
+	bd1 := &types.Authority{
+		Key:    kr.Bob().Public().(*sr25519.PublicKey),
 		Weight: 1,
 	}
 	auths = append(auths, bd1)

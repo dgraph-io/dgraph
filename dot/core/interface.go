@@ -77,8 +77,8 @@ type FinalityGadget interface {
 	GetVoteOutChannel() <-chan FinalityMessage
 	GetVoteInChannel() chan<- FinalityMessage
 	GetFinalizedChannel() <-chan FinalityMessage
-	UpdateAuthorities(ad []*types.GrandpaAuthorityData)
-	Authorities() []*types.GrandpaAuthorityData
+	UpdateAuthorities(ad []*types.Authority)
+	Authorities() []*types.Authority
 }
 
 // FinalityMessage is the interface a finality message must implement
@@ -96,14 +96,14 @@ type ConsensusMessageHandler interface {
 type BlockProducer interface {
 	GetBlockChannel() <-chan types.Block
 	SetRuntime(*runtime.Runtime) error
-	Authorities() []*types.BABEAuthorityData
-	SetAuthorities([]*types.BABEAuthorityData) error
+	Authorities() []*types.Authority
+	SetAuthorities([]*types.Authority) error
 }
 
 // Verifier is the interface for the block verifier
 type Verifier interface {
 	SetRuntimeChangeAtBlock(header *types.Header, rt *runtime.Runtime) error
-	SetAuthorityChangeAtBlock(header *types.Header, authorities []*types.BABEAuthorityData)
+	SetAuthorityChangeAtBlock(header *types.Header, authorities []*types.Authority)
 }
 
 // Network is the interface for the network service

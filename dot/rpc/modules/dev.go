@@ -64,15 +64,15 @@ func (m *DevModule) Control(r *http.Request, req *[]string, res *string) error {
 
 // SetBlockProducerAuthorities dev rpc method that sets authorities for block producer
 func (m *DevModule) SetBlockProducerAuthorities(r *http.Request, req *[]interface{}, res *string) error {
-	ab := []*types.BABEAuthorityData{}
+	ab := []*types.Authority{}
 	for _, v := range *req {
 		kb := crypto.PublicAddressToByteArray(common.Address(v.([]interface{})[0].(string)))
 		pk, err := sr25519.NewPublicKey(kb)
 		if err != nil {
 			return err
 		}
-		bd := &types.BABEAuthorityData{
-			ID:     pk,
+		bd := &types.Authority{
+			Key:    pk,
 			Weight: uint64(v.([]interface{})[1].(float64)),
 		}
 		ab = append(ab, bd)

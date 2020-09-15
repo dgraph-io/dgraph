@@ -69,6 +69,7 @@ func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie, l
 }
 
 // exportRuntime writes the runtime to a file as a hex string.
+// nolint  (without this the linter complains that exportRuntime is unused (used in helper.test.go 28)
 func exportRuntime(t *testing.T, targetRuntime string, outFp string) {
 	testRuntimeFilePath, testRuntimeURL, _ := GetRuntimeVars(targetRuntime)
 

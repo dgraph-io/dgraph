@@ -21,7 +21,7 @@ var ResumeType = byte(5)
 
 // BABEScheduledChange represents a BABE scheduled authority change
 type BABEScheduledChange struct {
-	Auths []*BABEAuthorityDataRaw
+	Auths []*AuthorityRaw
 	Delay uint32
 }
 
@@ -37,7 +37,7 @@ func (sc *BABEScheduledChange) Encode() ([]byte, error) {
 
 // BABEForcedChange represents a BABE forced authority change
 type BABEForcedChange struct {
-	Auths []*BABEAuthorityDataRaw
+	Auths []*AuthorityRaw
 	Delay uint32
 }
 

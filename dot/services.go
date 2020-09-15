@@ -347,7 +347,7 @@ func createBlockVerifier(cfg *Config, st *state.Service, rt *runtime.Runtime) (*
 		return nil, err
 	}
 
-	ad, err := types.BABEAuthorityDataRawToAuthorityData(babeCfg.GenesisAuthorities)
+	ad, err := types.BABEAuthorityRawToAuthority(babeCfg.GenesisAuthorities)
 	if err != nil {
 		return nil, err
 	}

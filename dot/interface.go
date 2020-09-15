@@ -16,8 +16,8 @@ type BlockProducer interface {
 	SetRuntime(*runtime.Runtime) error
 	Pause() error
 	Resume() error
-	Authorities() []*types.BABEAuthorityData
-	SetAuthorities([]*types.BABEAuthorityData) error
+	Authorities() []*types.Authority
+	SetAuthorities([]*types.Authority) error
 	SetRandomness([types.RandomnessLength]byte)
 	SetEpochThreshold(*big.Int)
 }

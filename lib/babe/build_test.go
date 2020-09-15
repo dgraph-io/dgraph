@@ -179,8 +179,8 @@ func TestBuildBlock_failing(t *testing.T) {
 	var err error
 	babeService := createTestService(t, cfg)
 
-	babeService.authorityData = []*types.BABEAuthorityData{
-		{ID: nil, Weight: 1},
+	babeService.authorityData = []*types.Authority{
+		{Key: nil, Weight: 1},
 	}
 
 	// create proof that we can authorize this block
