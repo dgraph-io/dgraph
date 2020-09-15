@@ -109,10 +109,12 @@ func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, e
 	return tokenizers[0], nil
 }
 
-// getInequalityTokens gets tokens ge / le compared to given token using the first sortable
+// getInequalityTokens gets tokens ge/le/between compared to given tokens using the first sortable
 // index that is found for the predicate.
+// In case of ge/gt/le/lt/eq len(ineqValues) should be 1, else(between) len(ineqValues) should be 2.
 func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang string,
 	ineqValues []types.Val) ([]string, []string, error) {
+
 	tokenizer, err := pickTokenizer(ctx, attr, f)
 	if err != nil {
 		return nil, nil, err
@@ -175,6 +177,7 @@ func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang strin
 	}
 
 	var out []string
+LOOP:
 	for itr.Seek(seekKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
 		key := item.Key()
@@ -203,6 +206,8 @@ func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang strin
 			if bytes.Compare([]byte(k.Term), ineqTokenInBytes1) >= 0 &&
 				bytes.Compare([]byte(k.Term), ineqTokenInBytes2) <= 0 {
 				out = append(out, k.Term)
+			} else { // We should break out of loop as soon as we are out of between range.
+				break LOOP
 			}
 		default:
 			// for le or ge or any other fn consider the key

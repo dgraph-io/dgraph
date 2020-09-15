@@ -1692,12 +1692,11 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		fc.n = len(q.UidList.Uids)
 	case compareAttrFn:
 		args := q.SrcFunc.Args
-		// Only eq can have multiple args. It should have atleast one.
-		if fc.fname == eq {
+		if fc.fname == eq { // Only eq can have multiple args. It should have atleast one.
 			if len(args) < 1 {
 				return nil, errors.Errorf("eq expects atleast 1 argument.")
 			}
-		} else if fc.fname == between {
+		} else if fc.fname == between { // between should have exactly 2 arguments.
 			if len(args) != 2 {
 				return nil, errors.Errorf("between expects exactly 2 argument.")
 			}
@@ -1709,11 +1708,11 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 
 		var tokens []string
+		var ineqValues []types.Val
 		// eq can have multiple args.
-		// for _, arg := range args {
 		for idx := 0; idx < len(args); idx++ {
 			arg := args[idx]
-			var ineqValues []types.Val
+			ineqValues = ineqValues[:0]
 			ineqValue1, err := convertValue(attr, arg)
 			if err != nil {
 				return nil, errors.Errorf("Got error: %v while running: %v", err, q.SrcFunc)
@@ -1744,7 +1743,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 				lang = q.Langs[0]
 			}
 
-			// Get tokens ge / le ineqValueToken.
+			// Get tokens ge/le ineqValueToken.
 			if tokens, fc.ineqValueToken, err = getInequalityTokens(ctx, q.ReadTs, attr, f, lang,
 				ineqValues); err != nil {
 				return nil, err
