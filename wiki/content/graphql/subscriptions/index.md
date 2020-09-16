@@ -38,6 +38,7 @@ Once the schema is added, you can fire a subscription query, and we receive upda
 Here is an excellent blog explaining in detail on [how to set up GraphQL Subscriptions using Apollo client](https://dgraph.io/blog/post/how-does-graphql-subscription/).
 
 ## Authorization with Subscriptions
+
 Authorization adds more power to GraphQL subscriptions.You can use all the features of authorization which are there for queries.
 In addition to them, You can also specify the timeout of the subscription in jwt after which the subscription automatically terminates.
 
