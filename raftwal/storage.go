@@ -60,21 +60,8 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 		cache:          new(sync.Map),
 		Closer:         z.NewCloser(1),
 		indexRangeChan: make(chan indexRange, 16),
+		commitTs:       math.MaxUint64,
 	}
-
-	maxVersion := uint64(0)
-	x.Check(db.View(func(txn *badger.Txn) error {
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			vs := it.Item().Version()
-			if vs > maxVersion {
-				maxVersion = vs
-			}
-		}
-		return nil
-	}))
-	w.commitTs = maxVersion + 1
 
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))

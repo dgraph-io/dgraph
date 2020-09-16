@@ -268,8 +268,7 @@ func run() {
 		WithValueLogFileSize(64 << 20).
 		WithBlockCacheSize(blockCacheSz).
 		WithIndexCacheSize(indexCacheSz).
-		WithLoadBloomsOnOpen(false).
-		WithNumLevelZeroTables(1) // Faster cleanup
+		WithLoadBloomsOnOpen(false)
 
 	compression_level := Zero.Conf.GetInt("badger.compression_level")
 	if compression_level > 0 {
