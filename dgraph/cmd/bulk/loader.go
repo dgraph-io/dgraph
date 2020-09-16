@@ -346,7 +346,9 @@ func (ld *loader) cleanup() {
 		x.Check(db.Close())
 	}
 	for _, db := range ld.tmpDbs {
+		opts := db.Opts()
 		x.Check(db.Close())
+		x.Check(os.RemoveAll(opts.Dir))
 	}
 	ld.prog.endSummary()
 }
