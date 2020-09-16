@@ -50,7 +50,7 @@ func TestStorageTerm(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 	defer ds.Closer.SignalAndWait()
