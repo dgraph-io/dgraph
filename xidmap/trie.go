@@ -1,6 +1,7 @@
 package xidmap
 
 import (
+	"io/ioutil"
 	"os"
 	"sync/atomic"
 	"unicode/utf8"
@@ -31,18 +32,13 @@ func (a *Arena) Release() {
 	x.Check(a.fd.Truncate(0))
 	x.Check(os.Remove(a.fd.Name()))
 }
-
-type Trie struct {
-	root   *node
-	alloc  *Arena
-	offset int
-}
-
 func NewArena(sz int64) *Arena {
-	f, err := os.Create("arena.dat")
+	f, err := ioutil.TempFile("", "arena")
 	x.Check(err)
 	f.Truncate(sz)
 
+	// mtype := unix.PROT_READ | unix.PROT_WRITE
+	// data, err := unix.Mmap(-1, 0, int(sz), mtype, unix.MAP_SHARED|unix.MAP_ANONYMOUS)
 	data, err := y.Mmap(f, true, sz)
 	x.Check(err)
 
@@ -51,6 +47,12 @@ func NewArena(sz int64) *Arena {
 		fd:     f,
 		offset: 0,
 	}
+}
+
+type Trie struct {
+	root   *node
+	alloc  *Arena
+	offset int
 }
 
 func NewTrie(alloc *Arena) *Trie {
