@@ -1069,7 +1069,11 @@ func hasFilterable(defn *ast.Definition) bool {
 
 func hasOrderables(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return orderable[fld.Type.Name()] })
+		func(fld *ast.FieldDefinition) bool {
+			// lists can't be ordered and NamedType will be empty for lists,
+			// so it will return false for list fields
+			return orderable[fld.Type.NamedType]
+		})
 }
 
 func hasID(defn *ast.Definition) bool {
