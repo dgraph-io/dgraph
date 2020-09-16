@@ -34,17 +34,22 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
-	dgraphDirective       = "dgraph"
-	dgraphTypeArg         = "type"
-	dgraphPredArg         = "pred"
+	dgraphDirective = "dgraph"
+	dgraphTypeArg   = "type"
+	dgraphPredArg   = "pred"
+
 	idDirective           = "id"
+	subscriptionDirective = "withSubscription"
 	secretDirective       = "secret"
 	authDirective         = "auth"
 	customDirective       = "custom"
 	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
-	cascadeDirective      = "cascade"
-	cascadeArg            = "fields"
-	SubscriptionDirective = "withSubscription"
+
+	cascadeDirective = "cascade"
+	cascadeArg       = "fields"
+
+	// this directive is used internally for union inputs. It can't be present in user's schema.
+	oneOfDirective = "oneOf"
 
 	// custom directive args and fields
 	dqlArg = "dql"
@@ -135,8 +140,9 @@ directive @auth(
 	update: AuthRule,
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
-directive @remote on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
+directive @oneOf on INPUT_OBJECT
 
 input IntFilter {
 	eq: Int
@@ -333,13 +339,30 @@ var directiveValidators = map[string]directiveValidator{
 	searchDirective:       searchValidation,
 	dgraphDirective:       dgraphDirectiveValidation,
 	idDirective:           idValidation,
+	subscriptionDirective: ValidatorNoOp,
 	secretDirective:       passwordValidation,
+	authDirective:         ValidatorNoOp, // Just to get it printed into generated schema
 	customDirective:       customDirectiveValidation,
 	remoteDirective:       ValidatorNoOp,
+	oneOfDirective:        ValidatorNoOp, // Just to get it printed into generated schema
 	deprecatedDirective:   ValidatorNoOp,
-	SubscriptionDirective: ValidatorNoOp,
-	// Just go get it printed into generated schema
-	authDirective: ValidatorNoOp,
+}
+
+// directiveLocationMap stores the directives and their locations for the ones which can be
+// applied at type level in the user supplied schema. It is used during validation.
+var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
+	inverseDirective:      nil,
+	searchDirective:       nil,
+	dgraphDirective:       {ast.Object: true, ast.Interface: true},
+	idDirective:           nil,
+	subscriptionDirective: {ast.Object: true, ast.Interface: true},
+	secretDirective:       {ast.Object: true, ast.Interface: true},
+	authDirective:         {ast.Object: true},
+	customDirective:       nil,
+	remoteDirective: {ast.Object: true, ast.Interface: true, ast.Union: true,
+		ast.InputObject: true, ast.Enum: true},
+	cascadeDirective: nil,
+	oneOfDirective:   nil,
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
@@ -543,6 +566,15 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 			continue
 		}
 		defn := sch.Types[key]
+		if defn.Kind == ast.Union {
+			// TODO: properly check the case of reverse predicates (~) with union members and clean
+			// them from unionRef or unionFilter as required.
+			addUnionReferenceType(sch, defn)
+			addUnionFilterType(sch, defn)
+			addUnionMemberTypeEnum(sch, defn)
+			continue
+		}
+
 		if defn.Kind != ast.Interface && defn.Kind != ast.Object {
 			continue
 		}
@@ -649,6 +681,64 @@ func cleanSchema(sch *ast.Schema) {
 
 	}
 	sch.Mutation.Fields = sch.Mutation.Fields[:i]
+}
+
+func addUnionReferenceType(schema *ast.Schema, defn *ast.Definition) {
+	refTypeName := defn.Name + "Ref"
+	refType := &ast.Definition{
+		Kind: ast.InputObject,
+		Name: refTypeName,
+		Directives: ast.DirectiveList{{
+			Name:       oneOfDirective,
+			Definition: schema.Directives[oneOfDirective],
+		}},
+	}
+	for _, typName := range defn.Types {
+		refType.Fields = append(refType.Fields, &ast.FieldDefinition{
+			Name: camelCase(typName) + "Ref",
+			// the TRef for every member type is guaranteed to exist because member types can
+			// only be objects types, and a TRef is always generated for an object type
+			Type: &ast.Type{NamedType: typName + "Ref"},
+		})
+	}
+	schema.Types[refTypeName] = refType
+}
+
+func addUnionFilterType(schema *ast.Schema, defn *ast.Definition) {
+	filterName := defn.Name + "Filter"
+	filter := &ast.Definition{
+		Kind: ast.InputObject,
+		Name: defn.Name + "Filter",
+		Fields: []*ast.FieldDefinition{
+			// field for selecting the union member type to report back
+			{
+				Name: camelCase(defn.Name) + "Types",
+				Type: &ast.Type{Elem: &ast.Type{NamedType: defn.Name + "Type", NonNull: true}},
+			},
+		},
+	}
+	// adding fields for specifying type filter for each union member type
+	for _, typName := range defn.Types {
+		filter.Fields = append(filter.Fields, &ast.FieldDefinition{
+			Name: camelCase(typName) + "Filter",
+			// the TFilter for every member type is guaranteed to exist because each member type
+			// will either have an ID field or some other kind of field causing it to have hasFilter
+			Type: &ast.Type{NamedType: typName + "Filter"},
+		})
+	}
+	schema.Types[filterName] = filter
+}
+
+func addUnionMemberTypeEnum(schema *ast.Schema, defn *ast.Definition) {
+	enumName := defn.Name + "Type"
+	enum := &ast.Definition{
+		Kind: ast.Enum,
+		Name: enumName,
+	}
+	for _, typName := range defn.Types {
+		enum.EnumValues = append(enum.EnumValues, &ast.EnumValueDefinition{Name: typName})
+	}
+	schema.Types[enumName] = enum
 }
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
@@ -789,12 +879,13 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
-	fldType := fld.Type.Name()
-	if hasFilterable(schema.Types[fldType]) {
+	fldTypeName := fld.Type.Name()
+	fldType := schema.Types[fldTypeName]
+	if fldType.Kind == ast.Union || hasFilterable(fldType) {
 		fld.Arguments = append(fld.Arguments,
 			&ast.ArgumentDefinition{
 				Name: "filter",
-				Type: &ast.Type{NamedType: fldType + "Filter"},
+				Type: &ast.Type{NamedType: fldTypeName + "Filter"},
 			})
 	}
 }
@@ -1123,6 +1214,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	addFilterArgument(schema, qry)
 	addOrderArgument(schema, qry)
 	addPaginationArguments(qry)
+
 	if schema.Types["Add"+defn.Name+"Input"] != nil {
 		schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
 			Kind:   ast.Object,
@@ -1231,7 +1323,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 		})
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	subs := defn.Directives.ForName(SubscriptionDirective)
+	subs := defn.Directives.ForName(subscriptionDirective)
 	if subs != nil {
 		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 	}
@@ -1251,7 +1343,7 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	addPaginationArguments(qry)
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	subs := defn.Directives.ForName(SubscriptionDirective)
+	subs := defn.Directives.ForName(subscriptionDirective)
 	if subs != nil {
 		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 	}
@@ -1319,7 +1411,6 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
-
 }
 
 func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
@@ -1379,8 +1470,8 @@ func addMutations(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinition {
-	if schema.Types[fld.Type.Name()].Kind == ast.Object ||
-		schema.Types[fld.Type.Name()].Kind == ast.Interface {
+	fieldTypeKind := schema.Types[fld.Type.Name()].Kind
+	if fieldTypeKind == ast.Object || fieldTypeKind == ast.Interface || fieldTypeKind == ast.Union {
 		newDefn := &ast.FieldDefinition{
 			Name: fld.Name,
 		}
@@ -1473,6 +1564,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			(!hasID(schema.Types[fld.Type.Name()]) && !hasXID(schema.Types[fld.Type.Name()])) {
 			continue
 		}
+
 		fldList = append(fldList, createField(schema, fld))
 	}
 
@@ -1607,7 +1699,9 @@ func genArgumentString(arg *ast.Argument) string {
 }
 
 func generateInputString(typ *ast.Definition) string {
-	return fmt.Sprintf("input %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
+	return fmt.Sprintf("%sinput %s%s {\n%s}\n",
+		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
+		genFieldsString(typ.Fields))
 }
 
 func generateEnumString(typ *ast.Definition) string {
@@ -1654,6 +1748,12 @@ func generateObjectString(typ *ast.Definition) string {
 		genFieldsString(typ.Fields))
 }
 
+func generateUnionString(typ *ast.Definition) string {
+	return fmt.Sprintf("%sunion %s%s = %s\n",
+		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
+		strings.Join(typ.Types, " | "))
+}
+
 // Stringify the schema as a GraphQL SDL string.  It's assumed that the schema was
 // built by completeSchema, and so contains an original set of definitions, the
 // definitions from schemaExtras and generated types, queries and mutations.
@@ -1670,8 +1770,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 
 	printed := make(map[string]bool)
 
-	// original defs can only be types and enums, print those in the same order
-	// as the original schema.
+	// original defs can only be interface, type, union, enum or input.
+	// print those in the same order as the original schema.
 	for _, typName := range originalTypes {
 		if isQueryOrMutation(typName) {
 			// These would be printed later in schema.Query and schema.Mutation
@@ -1683,6 +1783,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 			x.Check2(original.WriteString(generateInterfaceString(typ) + "\n"))
 		case ast.Object:
 			x.Check2(original.WriteString(generateObjectString(typ) + "\n"))
+		case ast.Union:
+			x.Check2(original.WriteString(generateUnionString(typ) + "\n"))
 		case ast.Enum:
 			x.Check2(original.WriteString(generateEnumString(typ) + "\n"))
 		case ast.InputObject:
