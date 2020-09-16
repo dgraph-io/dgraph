@@ -12,6 +12,10 @@ import (
 )
 
 // Arena is thread-safe.
+// TODO: Perhaps make it so that Arena doesn't go beyond uint32, and then we can use node offsets to
+// be cheaper. Shards can then take care of bigger datasets. Each trie would have it's own arena, no
+// need for making this thread-safe. And then we'd need to do remap, to avoid having too big files
+// created upfront.
 type Arena struct {
 	data   []byte
 	fd     *os.File
@@ -20,6 +24,7 @@ type Arena struct {
 
 func (a *Arena) Allocate(sz int64) []byte {
 	off := atomic.AddInt64(&a.offset, sz)
+	// TODO: Modify this to do file truncate, and a remap?
 	x.AssertTrue(off < int64(len(a.data)))
 	return a.data[off-sz : off]
 }
@@ -72,21 +77,27 @@ func (t *Trie) Release() {
 	t.alloc.Release()
 }
 
-// arena of 4GB. Then we can use uint32 for offsets.
+// TODO: arena of 4GB. Then we can use uint32 for offsets. Then 24 bytes instead of 40 bytes.
 type node struct {
+	// TODO: Instead of using pointers, use offsets if we need to remap.
 	left  *node // 8 bytes
 	mid   *node
 	right *node
-	uid   uint64
 	r     rune
+	uid   uint64
 }
+
+// TODO: Do we need to ever do a tree rebalance to keep leaves around the same height from the top?
+// TODO: Try using skiplists on mmap instead?
 
 var nodeSz = int64(unsafe.Sizeof(node{}))
 
+// TODO: use byte slice instead of string.
 func get(n *node, key string) uint64 {
 	if n == nil {
 		return 0
 	}
+	// TODO: Avoid decoding repeatedly.
 	r, width := utf8.DecodeRuneInString(key)
 	if r < n.r {
 		return get(n.left, key)
