@@ -25,54 +25,72 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
 // VerifySnapshot iterates over all the keys in badger. For all data keys it checks
 // if key is a split key and it verifies if all part are present in badger as well.
 func VerifySnapshot(pstore *badger.DB, readTs uint64) {
-	iOpt := badger.DefaultIteratorOptions
-	iOpt.AllVersions = true
-	txn := pstore.NewTransactionAt(readTs, false)
-	it := txn.NewIterator(iOpt)
-	for it.Rewind(); it.Valid(); it.Next() {
-		i := it.Item()
-		k := i.Key()
-		parsedKey, kErr := Parse(k)
-		Checkf(kErr, "Error parsing key: %v, version: %d", k, i.Version())
-		if !parsedKey.IsData() {
-			continue
-		}
-		v, vErr := i.ValueCopy(nil)
-		Checkf(vErr, "Error getting value for key: %v, version: %d", k, i.Version())
-		plist := &pb.PostingList{}
-		Check(plist.Unmarshal(v))
-		if len(plist.Splits) == 0 {
-			continue
-		}
-		if plist.Splits[0] != uint64(1) {
-			log.Panic("First split UID is not 1 baseKey: ", k, " version ", i.Version())
-		}
-		for _, uid := range plist.Splits {
-			sKey, kErr := SplitKey(k, uid)
-			Checkf(kErr, "Error creating split key from base key: %v, version: %d", k, i.Version())
-			newTxn := pstore.NewTransactionAt(readTs, false)
-			_, dbErr := newTxn.Get(sKey)
-			if dbErr != nil {
-				log.Panic("Snapshot verification failed: Unable to find splitKey: ",
-					sKey, "\nbaseKey: ", " version: ", i.Version(),
-					parsedKey, "\nSplits: ", plist.Splits,
-				)
+	stream := pstore.NewStreamAt(readTs)
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+		for ; itr.Valid(); itr.Next() {
+			item := itr.Item()
+			if item.IsDeletedOrExpired() {
+				break
+			}
+			if !bytes.Equal(key, item.Key()) {
+				// Break out on the first encounter with another key.
+				break
+			}
+
+			k := item.Key()
+			parsedKey, kErr := Parse(k)
+			Checkf(kErr, "Error parsing key: %v, version: %d", k, item.Version())
+			if !parsedKey.IsData() {
+				continue
+			}
+
+			err := item.Value(func(v []byte) error {
+				plist := &pb.PostingList{}
+				Check(plist.Unmarshal(v))
+				if len(plist.Splits) == 0 {
+					return nil
+				}
+				if plist.Splits[0] != uint64(1) {
+					log.Panic("First split UID is not 1 baseKey: ", k,
+						" version ", item.Version())
+				}
+				for _, uid := range plist.Splits {
+					sKey, kErr := SplitKey(k, uid)
+					Checkf(kErr,
+						"Error creating split key from base key: %v, version: %d", k,
+						item.Version())
+					newTxn := pstore.NewTransactionAt(readTs, false)
+					_, dbErr := newTxn.Get(sKey)
+					if dbErr != nil {
+						log.Panic("Snapshot verification failed: Unable to find splitKey: ",
+							sKey, "\nbaseKey: ", " version: ", item.Version(),
+							parsedKey, "\nSplits: ", plist.Splits,
+						)
+					}
+				}
+				return nil
+			})
+			x.Checkf(err, "Error getting value of key: %v version: %v", k, item.Version())
+
+			if item.DiscardEarlierVersions() {
+				break
 			}
 		}
+		return nil, nil
 	}
 }
 
 // VerifyPostingSplits checks if all the keys from parts are
-// present in kvs. parts is a map of split keys -> postinglist
+// present in kvs. Parts is a map of split keys -> postinglist.
 func VerifyPostingSplits(kvs []*bpb.KV, plist *pb.PostingList,
 	parts map[uint64]*pb.PostingList, baseKey []byte) {
-
 	if len(plist.Splits) == 0 {
 		return
 	}
