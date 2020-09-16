@@ -106,8 +106,8 @@ func init() {
 	// Options around how to set up Badger.
 	flag.Int("badger.compression_level", 1,
 		"The compression level for Badger. A higher value uses more resources.")
-	flag.Int64("badger.cache_mb", 0, "Total size of cache (in MB) per shard.")
-	flag.String("badger.cache_percentage", "65,35",
+	flag.Int64("badger.cache_mb", 0, "Total size of cache (in MB) per shard in reducer.")
+	flag.String("badger.cache_percentage", "0,100",
 		"Cache percentages summing up to 100 for various caches"+
 			" (FORMAT: BlockCacheSize, IndexCacheSize).")
 
