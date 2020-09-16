@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -112,11 +113,11 @@ func (r *reducer) run() error {
 			r.reduce(partitionKeys, mapItrs, ci)
 			ci.wait()
 
-			x.Check(writer.Flush())
 			fmt.Println("Writing split lists back to the main DB now")
-
 			// Write split lists back to the main DB.
-			r.writeSplitLists(db, tmpDb)
+			r.writeSplitLists(db, tmpDb, writer)
+
+			x.Check(writer.Flush())
 
 			for _, itr := range mapItrs {
 				if err := itr.Close(); err != nil {
@@ -420,40 +421,19 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	tmpWg.Wait()
 }
 
-// TODO(martinmr): This should be done via the stream framework.
-// Also, do we delete the tmpDb?
-func (r *reducer) writeSplitLists(db, tmpDb *badger.DB) {
-	txn := tmpDb.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-	itr := txn.NewIterator(badger.DefaultIteratorOptions)
-	defer itr.Close()
-
-	writer := db.NewManagedWriteBatch()
-	splitBatchLen := 0
-
-	for itr.Rewind(); itr.Valid(); itr.Next() {
-		// Flush the write batch when the max batch length is reached to prevent the
-		// value log from growing over the allowed limit.
-		if splitBatchLen >= maxSplitBatchLen {
-			x.Check(writer.Flush())
-			writer = db.NewManagedWriteBatch()
-			splitBatchLen = 0
+func (r *reducer) writeSplitLists(db, tmpDb *badger.DB, writer *badger.StreamWriter) {
+	// baseStreamId is the max ID seen while writing non-split lists.
+	baseStreamId := atomic.AddUint32(&r.streamId, 1)
+	stream := tmpDb.NewStreamAt(math.MaxUint64)
+	stream.LogPrefix = "copying split keys to main DB"
+	stream.Send = func(kvs *bpb.KVList) error {
+		for _, kv := range kvs.Kv {
+			kv.StreamId += baseStreamId
 		}
-		item := itr.Item()
-
-		valCopy, err := item.ValueCopy(nil)
-		x.Check(err)
-		kv := &bpb.KV{
-			Key:       item.KeyCopy(nil),
-			Value:     valCopy,
-			UserMeta:  []byte{item.UserMeta()},
-			Version:   item.Version(),
-			ExpiresAt: item.ExpiresAt(),
-		}
-		x.Check(writer.Write(&bpb.KVList{Kv: []*bpb.KV{kv}}))
-		splitBatchLen += 1
+		x.Check(writer.Write(kvs))
+		return nil
 	}
-	x.Check(writer.Flush())
+	x.Check(stream.Orchestrate(context.Background()))
 }
 
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
@@ -583,8 +563,6 @@ func (r *reducer) toList(req *encodeRequest) {
 
 	var currentKey []byte
 	pl := new(pb.PostingList)
-
-	userMeta := []byte{posting.BitCompletePosting}
 	writeVersionTs := r.state.writeTs
 
 	var currentBatch []int
@@ -691,14 +669,13 @@ func (r *reducer) toList(req *encodeRequest) {
 				req.splitCh <- &bpb.KVList{Kv: splits}
 			}
 		} else {
-			val, err := pl.Marshal()
-			x.Check(err)
+			data, byt := posting.MarshalPostingList(pl)
 			codec.FreePack(pl.Pack)
 
 			kv := &bpb.KV{
 				Key:      y.Copy(currentKey),
-				Value:    val,
-				UserMeta: userMeta,
+				Value:    data,
+				UserMeta: []byte{byt},
 				Version:  writeVersionTs,
 			}
 			kv.StreamId = r.streamIdFor(pk.Attr)

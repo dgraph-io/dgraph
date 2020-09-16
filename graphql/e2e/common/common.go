@@ -100,6 +100,20 @@ type GraphQLResponse struct {
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
+type Tweets struct {
+	Id        string `json:"id,omitempty"`
+	Text      string `json:"text,omitempty"`
+	Timestamp string `json:"timestamp,omitempty"`
+	User      *User  `json:"user,omitempty"`
+}
+
+type User struct {
+	Username string `json:"username,omitempty"`
+	Age      uint64 `json:"age,omitempty"`
+	IsPublic bool   `json:"isPublic,omitempty"`
+	Disabled bool   `json:"disabled,omitempty"`
+}
+
 type country struct {
 	ID     string   `json:"id,omitempty"`
 	Name   string   `json:"name,omitempty"`
@@ -177,6 +191,24 @@ type UserSecret struct {
 	Id      string `json:"id,omitempty"`
 	ASecret string `json:"aSecret,omitempty"`
 	OwnedBy string `json:"ownedBy,omitempty"`
+}
+
+func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.AuthMeta) {
+	getParams := &GraphQLParams{
+		Headers: GetJWT(t, user, "", metaInfo),
+		Query: `
+			mutation delTweets ($filter : TweetsFilter!){
+			  	deleteTweets (filter: $filter) {
+					numUids
+			  	}
+			}
+		`,
+		Variables: map[string]interface{}{"filter": map[string]interface{}{
+			"id": map[string]interface{}{"eq": twt.Id},
+		}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
 }
 
 func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) {

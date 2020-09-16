@@ -89,6 +89,39 @@ func TestAddGQL(t *testing.T) {
 	}
 }
 
+func TestAddMutationWithXid(t *testing.T) {
+	mutation := `
+	mutation addTweets($tweet: AddTweetsInput!){
+      addTweets(input: [$tweet]) {
+        numUids
+      }
+    }
+	`
+
+	tweet := common.Tweets{
+		Id:        "tweet1",
+		Text:      "abc",
+		Timestamp: "2020-10-10",
+	}
+	user := "foo"
+	addTweetsParams := &common.GraphQLParams{
+		Headers:   common.GetJWT(t, user, "", metaInfo),
+		Query:     mutation,
+		Variables: map[string]interface{}{"tweet": tweet},
+	}
+
+	// Add the tweet for the first time.
+	gqlResponse := addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	// Re-adding the tweet should fail.
+	gqlResponse = addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	// Clear the tweet.
+	tweet.DeleteByID(t, user, metaInfo)
+}
+
 func TestMain(m *testing.M) {
 	schemaFile := "../schema.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)
