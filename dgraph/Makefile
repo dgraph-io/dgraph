@@ -95,5 +95,6 @@ jemalloc:
 	    make ; \
 	    echo "==== Need sudo access to install jemalloc" ; \
 	    sudo make install ; \
+	    ldconfig ; \
 	fi
 
