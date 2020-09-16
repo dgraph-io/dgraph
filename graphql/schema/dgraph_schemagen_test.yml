@@ -302,6 +302,7 @@ schemas:
     input: |
       interface W {
         f1: ID!
+        f7: U
       }
       type X implements W {
         f2: String
@@ -321,12 +322,16 @@ schemas:
       }
     output: |
       type W {
+        W.f7
       }
+      W.f7: uid .
       type X {
+        W.f7
         X.f2
       }
       X.f2: string .
       type Y {
+        W.f7
         Y.f3
       }
       Y.f3: int .
