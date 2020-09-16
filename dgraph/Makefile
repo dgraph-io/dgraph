@@ -29,7 +29,8 @@ else
 BUILD_VERSION ?= $(shell git describe --always --tags)
 endif
 
-BUILD_TAGS    ?= jemalloc
+# Only build with jemalloc on Linux and macOS
+BUILD_TAGS    ?= $(ifeq ($(GOOS),windows),,jemalloc)
 GOPATH        ?= $(shell go env GOPATH)
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
