@@ -852,6 +852,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
 	})
 
+	x.VerifyPostingSplits(kvs, out.plist, out.parts, l.key)
 	return kvs, nil
 }
 
