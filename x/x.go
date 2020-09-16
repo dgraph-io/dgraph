@@ -490,7 +490,7 @@ func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error
 	if err != nil {
 		return 0, err
 	}
-	w.Header().Set("Content-Length", strconv.FormatInt(int64(bytesWritten), 64))
+	w.Header().Set("Content-Length", strconv.FormatInt(int64(bytesWritten), 10))
 	return bytesWritten, nil
 }
 
