@@ -21,6 +21,9 @@ BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 BUILD_VERSION  ?= $(shell git describe --always --tags)
 
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
+HAS_JEMALLOC = $(shell ldconfig -p | grep jemalloc | wc -l)
+JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2"
+
 
 SUBDIRS = dgraph
 
@@ -68,6 +71,19 @@ image:
 	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
 	@rm -r linux
+
+jemalloc:
+	@if [ $(HAS_JEMALLOC) = 0 ] ; then \
+	    mkdir -p /tmp/jemalloc-temp && cd /tmp/jemalloc-temp ; \
+	    echo "Downloading jemalloc" ; \
+	    curl -s -L ${JEMALLOC_URL} -o jemalloc.tar.bz2 ; \
+	    tar xjf ./jemalloc.tar.bz2 ; \
+	    cd jemalloc-5.2.1 ; \
+	    ./configure --with-jemalloc-prefix='je_' ; \
+	    make ; \
+	    echo "==== Need sudo access to install jemalloc" ; \
+	    sudo make install ; \
+	fi
 
 help:
 	@echo
