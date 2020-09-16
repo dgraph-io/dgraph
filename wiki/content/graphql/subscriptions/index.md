@@ -36,3 +36,29 @@ Once the schema is added, you can fire a subscription query, and we receive upda
 ## Apollo Client Setup
 
 Here is an excellent blog explaining in detail on [how to set up GraphQL Subscriptions using Apollo client](https://dgraph.io/blog/post/how-does-graphql-subscription/).
+
+##Authorization with Subscriptions
+Authorization adds more power to GraphQL subscriptions.You can use all the features of authorization which are there for queries.
+In addition to them, You can also specify the timeout of the subscription in jwt after which the subscription automatically terminates.
+
+##Example 
+
+Consider following Schema, it has both @withSubscription and @auth directive defined on type. Auth rule enforces that only those todo's are visible which have owner $USER whose value is given in jwt.
+
+```graphql
+type Todo @withSubscription @auth(
+    	query: { rule: """
+    		query ($USER: String!) {
+    			queryTodo(filter: { owner: { eq: $USER } } ) {
+    				__typename
+    			}
+   			}"""
+     	}
+   ){
+        id: ID!
+    	text: String! @search(by: [term])
+     	owner: String! @search(by: [hash])
+   }
+# Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
+```
+
