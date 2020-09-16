@@ -498,8 +498,14 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		resp.Txn.CommitTs = qc.req.StartTs
 		return err
 	}
-
+	// calculateMutationMetrics calculate cost for the mutation.
+	calculateMutationMetrics := func() {
+		cost := uint64(len(newUids) + len(edges))
+		resp.Metrics.NumUids["mutation_cost"] = cost
+		resp.Metrics.NumUids["_total"] = resp.Metrics.NumUids["_total"] + cost
+	}
 	if !qc.req.CommitNow {
+		calculateMutationMetrics()
 		if err == zero.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
 		}
@@ -544,7 +550,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	// CommitNow was true, no need to send keys.
 	resp.Txn.Keys = resp.Txn.Keys[:0]
 	resp.Txn.CommitTs = cts
-
+	calculateMutationMetrics()
 	return nil
 }
 
