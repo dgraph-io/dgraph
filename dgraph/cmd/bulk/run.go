@@ -109,6 +109,10 @@ func init() {
 			" schema and data files (if encrytped). Enterprise feature.")
 	flag.Int("badger.compression_level", 1,
 		"The compression level for Badger. A higher value uses more resources.")
+	flag.Int64("badger.cache_mb", 0, "Total size of cache (in MB) per shard in reducer.")
+	flag.String("badger.cache_percentage", "0,100",
+		"Cache percentages summing up to 100 for various caches"+
+			" (FORMAT: BlockCacheSize, IndexCacheSize).")
 }
 
 func run() {
@@ -135,7 +139,7 @@ func run() {
 		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
-
+		// Badger options
 		BadgerKeyFile:          Bulk.Conf.GetString("encryption_key_file"),
 		BadgerCompressionLevel: Bulk.Conf.GetInt("badger.compression_level"),
 	}
@@ -149,6 +153,19 @@ func run() {
 		fmt.Printf("Cannot enable encryption: %s", x.ErrNotSupported)
 		os.Exit(1)
 	}
+	if opt.BadgerCompressionLevel < 0 {
+		fmt.Printf("Invalid compression level: %d. It should be non-negative",
+			opt.BadgerCompressionLevel)
+	}
+
+	totalCache := int64(Bulk.Conf.GetInt("badger.cache_mb"))
+	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
+	cachePercent, err := x.GetCachePercentages(Bulk.Conf.GetString("badger.cache_percentage"), 2)
+	x.Check(err)
+	totalCache <<= 20 // Convert to MB.
+	opt.BlockCacheSize = (cachePercent[0] * totalCache) / 100
+	opt.IndexCacheSize = (cachePercent[1] * totalCache) / 100
+
 	if opt.Encrypted && opt.BadgerKeyFile == "" {
 		fmt.Printf("Must use --encryption_key_file option with --encrypted option.\n")
 		os.Exit(1)
