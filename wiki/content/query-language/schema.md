@@ -435,8 +435,7 @@ For predicates with the `@count` Dgraph indexes the number of edges out of each 
 ## List Type
 
 Predicate with scalar types can also store a list of values if specified in the schema. The scalar
-type needs to be enclosed within `[]` to indicate that its a list type. These lists are like an
-unordered set.
+type needs to be enclosed within `[]` to indicate that its a list type.
 
 ```
 occupations: [string] .
@@ -448,6 +447,7 @@ score: [int] .
 * Querying for these predicates would return the list in an array.
 * Indexes can be applied on predicates which have a list type and you can use [Functions]({{<relref "query-language/functions.md">}}) on them.
 * Sorting is not allowed using these predicates.
+* These lists are like an unordered set. For example: `["e1", "e1", "e2"]` may get stored as `["e2", "e1"]`, i.e., duplicate values will not be stored and order may not be preserved.
 
 ## Filtering on list
 

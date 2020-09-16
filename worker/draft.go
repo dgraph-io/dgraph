@@ -88,6 +88,8 @@ func (id op) String() string {
 		return "opRestore"
 	case opBackup:
 		return "opBackup"
+	case opPredMove:
+		return "opPredMove"
 	default:
 		return "opUnknown"
 	}
@@ -99,6 +101,7 @@ const (
 	opIndexing
 	opRestore
 	opBackup
+	opPredMove
 )
 
 // startTask is used to check whether an op is already running. If a rollup is running,
@@ -155,7 +158,7 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 			delete(n.ops, otherId)
 			otherCloser.SignalAndWait()
 		}
-	case opSnapshot, opIndexing:
+	case opSnapshot, opIndexing, opPredMove:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
 				// Remove from map and signal the closer to cancel the operation.
@@ -953,12 +956,22 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 
 			if n.AmLeader() {
-				var calculate bool
+				// If leader doesn't have a snapshot, we should create one immediately. This is very
+				// useful when you bring up the cluster from bulk loader. If you remove an alpha and
+				// add a new alpha, the new follower won't get a snapshot if the leader doesn't have
+				// one.
+				snap, err := n.Store.Snapshot()
+				if err != nil {
+					glog.Errorf("While retrieving snapshot from Store: %v\n", err)
+					continue
+				}
+				calculate := raft.IsEmptySnap(snap) // If no snapshot, then calculate one immediately.
+
 				if chk, err := n.Store.Checkpoint(); err == nil {
 					if first, err := n.Store.FirstIndex(); err == nil {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
-						calculate = chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
+						calculate = calculate || chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
 						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
 							"snapshotAfter:%d snap:%v", first, chk, chk-first,
 							x.WorkerConfig.SnapshotAfter, calculate)
@@ -976,7 +989,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
 				if calculate {
-					if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
+					// We can set discardN argument to zero, because we already know that calculate
+					// would be true if either we absolutely needed to calculate the snapshot,
+					// or our checkpoint already crossed the SnapshotAfter threshold.
+					if err := n.proposeSnapshot(0); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					}
 				}
