@@ -53,6 +53,42 @@ To create a backup, make an HTTP POST request to `/admin` to a Dgraph
 Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin`
 endpoints, this is only accessible on the same machine as the Alpha unless
 [whitelisted for admin operations]({{< relref "deploy/dgraph-administration.md#whitelisting-admin-operations" >}}).
+You can look at `BackupInput` given below for all the possible options.
+```graphql
+input BackupInput {
+
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket.
+		"""
+		destination: String!
+
+		"""
+		Access key credential for the destination.
+		"""
+		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""		
+		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""	
+		sessionToken: String
+
+		"""
+		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
+		"""	
+		anonymous: Boolean
+
+		"""
+		Force a full backup instead of an incremental backup.
+		"""	
+		forceFull: Boolean
+	}
+```
+
 Execute the following mutation on /admin endpoint using any GraphQL compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
 ### Backup to Amazon S3
@@ -255,6 +291,100 @@ Backup is an online tool, meaning it is available when alpha is running. For enc
 {{% /notice %}}
 
 ## Restore from Backup
+To restore from a backup, execute the following mutation on `/admin` endpoint.
+
+```graphql
+mutation{
+  restore(input:{
+    location: "/path/to/backup/directory",
+  }){
+    message
+    code 
+    restoreId
+  }
+}
+```
+Restore can be performed from Amazon S3 / Minio or from Local Directory. Below is the `RestoreInput` to be passed into the mutation. 
+```graphql
+input RestoreInput {
+
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket.
+		"""
+		location: String!
+
+		"""
+		Backup ID of the backup series to restore. This ID is included in the manifest.json file.
+		If missing, it defaults to the latest series.
+		"""
+		backupId: String
+
+		"""
+		Path to the key file needed to decrypt the backup. This file should be accessible
+		by all alphas in the group. The backup will be written using the encryption key
+		with which the cluster was started, which might be different than this key.
+		"""
+		encryptionKeyFile: String
+
+		"""
+		Vault server address where the key is stored. This server must be accessible
+		by all alphas in the group. Default "http://localhost:8200".
+		"""
+		vaultAddr: String
+
+		"""
+		Path to the Vault RoleID file.
+		"""
+		vaultRoleIDFile: String
+
+		"""
+		Path to the Vault SecretID file.
+		"""
+		vaultSecretIDFile: String
+
+		"""
+		Vault kv store path where the key lives. Default "secret/data/dgraph".
+		"""
+		vaultPath: String
+
+		"""
+		Vault kv store field whose value is the key. Default "enc_key".
+		"""
+		vaultField: String
+
+		"""
+		Vault kv store field's format. Must be "base64" or "raw". Default "base64".
+		"""
+		vaultFormat: String
+
+		"""
+		Access key credential for the destination.
+		"""
+		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""		
+		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""	
+		sessionToken: String
+
+		"""
+		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
+		"""	
+		anonymous: Boolean
+}
+```
+
+## Restore using `dgraph restore`
+
+{{% notice "note" %}}
+`dgraph restore` is being deprecated, please use GraphQL api for Restoring from Backup.
+{{% /notice %}}
+
 The restore utility is a standalone tool today. A new flag `--encryption_key_file` is added to the restore utility so it can decrypt the backup. This file must contain the same key that was used for encryption during backup.
 Alternatively, starting with v20.07.0, the `vault_*` options can be used to restore a backup. 
 
