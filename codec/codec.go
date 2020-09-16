@@ -186,7 +186,12 @@ func (d *Decoder) UnpackBlock() []uint64 {
 			// The SSE code tries to read 16 bytes past the header(1 byte).
 			// So we are padding encData to increase its length to 17 bytes.
 			// This is a workaround for https://github.com/dgryski/go-groupvarint/issues/1
-			encData = append(encData, bytes.Repeat([]byte{0}, 17-len(encData))...)
+			//
+			// We should NEVER write to encData, because it references block.Deltas, which is laid
+			// out on an allocator.
+			tmp := make([]byte, 17)
+			copy(tmp, encData)
+			encData = tmp
 		}
 
 		groupvarint.Decode4(tmpUids, encData)
