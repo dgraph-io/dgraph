@@ -37,13 +37,13 @@ Once the schema is added, you can fire a subscription query, and we receive upda
 
 Here is an excellent blog explaining in detail on [how to set up GraphQL Subscriptions using Apollo client](https://dgraph.io/blog/post/how-does-graphql-subscription/).
 
-##Authorization with Subscriptions
+## Authorization with Subscriptions
 Authorization adds more power to GraphQL subscriptions.You can use all the features of authorization which are there for queries.
 In addition to them, You can also specify the timeout of the subscription in jwt after which the subscription automatically terminates.
 
-##Example 
+## Example 
 
-Consider following Schema, it has both @withSubscription and @auth directive defined on type. Auth rule enforces that only those todo's are visible which have owner $USER whose value is given in jwt.
+Consider following Schema, it has both @withSubscription and @auth directive defined on type Todo. Auth rule enforces that only todo's of owner $USER are visible which will be given in Jwt.
 
 ```graphql
 type Todo @withSubscription @auth(
@@ -61,4 +61,18 @@ type Todo @withSubscription @auth(
    }
 # Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
 ```
+Subscription needs jwt in which $USER , expiry and other variables are declared. Below example shows generating Jwt and then using it with subscriptions.
 
+![Subscription+Auth](/images/graphql/Auth+Subscription.gif "Subscription with Auth Example")
+
+Generally jwt is passed in header from graphql client as key value pair, where key is Header given in schema and value is jwt.
+For example in our case,key is Authorization and value is jwt. 
+
+From apollo client this key-value pair is passed in connectionParams as follows.
+```javascript
+const wsLink = new WebSocketLink({
+  uri: `wss://${ENDPOINT}`,
+  options: {
+    reconnect: true,
+    connectionParams: {  "Authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2OTAxMjg2MjIsImh0dHBzOi8vZGdyYXBoLmlvIjp7IlJPTEUiOiJVU0VSIiwiVVNFUiI6IkFsaWNlIn0sImlzcyI6InRlc3QifQ.6AODlumsk9kbnwZHwy08l40PeqEmBHqK4E_ozNjQpuI", },});
+```
