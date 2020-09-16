@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
@@ -142,8 +142,8 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 }
 
 func (m *XidMap) shardFor(xid string) *shard {
-	fp := farm.Fingerprint32([]byte(xid))
-	idx := fp % uint32(len(m.shards))
+	fp := z.MemHashString(xid)
+	idx := fp % uint64(len(m.shards))
 	return m.shards[idx]
 }
 
