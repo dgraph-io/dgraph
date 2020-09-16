@@ -21,7 +21,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.2-0.20200827131741-d5a25b83fbf4
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200401175452-e463f9234453
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200715131837-c0460019ead2
-	github.com/dgraph-io/ristretto v0.0.4-0.20200905024719-d8d7ab19e35b
+	github.com/dgraph-io/ristretto v0.0.4-0.20200915135229-0f2ad8c2c06a
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13

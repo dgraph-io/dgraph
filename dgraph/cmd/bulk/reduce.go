@@ -583,8 +583,6 @@ func (r *reducer) toList(req *encodeRequest) {
 
 	var currentKey []byte
 	pl := new(pb.PostingList)
-
-	userMeta := []byte{posting.BitCompletePosting}
 	writeVersionTs := r.state.writeTs
 
 	var currentBatch []int
@@ -691,14 +689,13 @@ func (r *reducer) toList(req *encodeRequest) {
 				req.splitCh <- &bpb.KVList{Kv: splits}
 			}
 		} else {
-			val, err := pl.Marshal()
-			x.Check(err)
+			data, byt := posting.MarshalPostingList(pl)
 			codec.FreePack(pl.Pack)
 
 			kv := &bpb.KV{
 				Key:      y.Copy(currentKey),
-				Value:    val,
-				UserMeta: userMeta,
+				Value:    data,
+				UserMeta: []byte{byt},
 				Version:  writeVersionTs,
 			}
 			kv.StreamId = r.streamIdFor(pk.Attr)

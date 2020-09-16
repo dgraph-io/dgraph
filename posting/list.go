@@ -817,7 +817,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	kv := &bpb.KV{}
 	kv.Version = out.newMinTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(out.plist)
+	val, meta := MarshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 	kvs = append(kvs, kv)
@@ -862,7 +862,7 @@ func (l *List) SingleListRollup(kv *bpb.KV) error {
 
 	kv.Version = out.newMinTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(out.plist)
+	val, meta := MarshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 
@@ -880,20 +880,28 @@ func (out *rollupOutput) marshalPostingListPart(
 			hex.EncodeToString(baseKey), startUid)
 	}
 	kv.Key = key
-	val, meta := marshalPostingList(plist)
+	val, meta := MarshalPostingList(plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 
 	return kv, nil
 }
 
-func marshalPostingList(plist *pb.PostingList) ([]byte, byte) {
+func MarshalPostingList(plist *pb.PostingList) ([]byte, byte) {
 	if isPlistEmpty(plist) {
 		return nil, BitEmptyPosting
+	}
+	alloc := plist.Pack.GetAllocator()
+	if plist.Pack != nil {
+		// Set allocator to zero for marshal.
+		plist.Pack.Allocator = 0
 	}
 
 	data, err := plist.Marshal()
 	x.Check(err)
+	if plist.Pack != nil {
+		plist.Pack.Allocator = alloc
+	}
 	return data, BitCompletePosting
 }
 
@@ -1478,6 +1486,7 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 	lowPl.Pack = &pb.UidPack{
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[:midBlock],
+		Allocator: plist.Pack.Allocator,
 	}
 
 	// Generate posting list holding the second half of the current list's postings.
@@ -1485,6 +1494,7 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 	highPl.Pack = &pb.UidPack{
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[midBlock:],
+		Allocator: plist.Pack.Allocator,
 	}
 
 	// Add elements in plist.Postings to the corresponding list.
