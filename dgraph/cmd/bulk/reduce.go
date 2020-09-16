@@ -403,7 +403,16 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		// Wait for it to be encoded.
 		start := time.Now()
 
-		x.Check(ci.writer.Write(req.list))
+		for len(req.list.GetKv()) > 0 {
+			batchSize := 100
+			if len(req.list.Kv) < batchSize {
+				batchSize = len(req.list.Kv)
+			}
+			batch := &bpb.KVList{Kv: req.list.Kv[:batchSize]}
+			req.list.Kv = req.list.Kv[batchSize:]
+			x.Check(ci.writer.Write(batch))
+		}
+
 		if req.splitList != nil && len(req.splitList.Kv) > 0 {
 			splitCh <- req.splitList
 		}
