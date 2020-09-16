@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
@@ -76,6 +77,10 @@ func BuildDetails() string {
 			"Community License"
 	}
 
+	buf := z.CallocNoRef(1)
+	jem := len(buf) > 0
+	z.Free(buf)
+
 	return fmt.Sprintf(`
 Dgraph version   : %v
 Dgraph codename  : %v
@@ -84,6 +89,7 @@ Commit SHA-1     : %v
 Commit timestamp : %v
 Branch           : %v
 Go version       : %v
+jemalloc enabled : %v
 
 For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
@@ -93,7 +99,7 @@ Copyright 2015-2020 Dgraph Labs, Inc.
 
 `,
 		dgraphVersion, dgraphCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
-		runtime.Version(), licenseInfo)
+		runtime.Version(), jem, licenseInfo)
 }
 
 // PrintVersion prints version and other helpful information if --version.
