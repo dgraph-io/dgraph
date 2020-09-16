@@ -315,6 +315,45 @@ func TestGtAge(t *testing.T) {
 	require.JSONEq(t, `{"data": {"senior_citizens":[]}}`, js)
 }
 
+func TestBetweenAge(t *testing.T) {
+	query := `
+    {
+			senior_citizens(func: between(age, 18, 30)) {
+				name
+				age
+			}
+    }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"senior_citizens": [
+					{
+						"name": "Andrea",
+						"age": 19
+					},
+					{
+						"name": "Alice",
+						"age": 25
+					},
+					{
+						"name": "Bob",
+						"age": 25
+					},
+					{
+						"name": "Colin",
+						"age": 25
+					},
+					{
+						"name": "Elizabeth",
+						"age": 25
+					}
+				]
+			}
+		}
+	`, js)
+}
+
 func TestLeAge(t *testing.T) {
 	query := `{
 		  minors(func: le(age, 15)) {
@@ -2351,13 +2390,63 @@ func TestNonFlattenedResponse(t *testing.T) {
 func TestDateTimeQuery(t *testing.T) {
 	var query string
 
+	// Test 23
+	query = `
+{
+	q(func: between(graduation, "1931-01-01", "1932-03-01")) {
+		uid
+		graduation
+	}
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x1","graduation":["1932-01-01T00:00:00Z"]}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 22
+	query = `
+{
+	q(func: between(graduation, "1932-03-01", "1950-01-01")) {
+		uid
+		graduation
+	}
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x1f","graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 21
+	query = `
+{
+  q(func: between(created_at, "2021-03-28T14:41:57+30:00", "2019-03-28T15:41:57+30:00"), orderdesc: created_at) {
+	  uid
+	  created_at
+  }
+}
+`
+	require.JSONEq(t, `{"data":{"q":[]}}`, processQueryNoErr(t, query))
+
+	// Test 20
+	query = `
+{
+  q(func: between(created_at, "2019-03-28T14:41:57+30:00", "2019-03-28T15:41:57+30:00"), orderdesc: created_at) {
+	  uid
+	  created_at
+	}
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x130","created_at":"2019-03-28T15:41:57+30:00"},{"uid":"0x12d","created_at":"2019-03-28T14:41:57+30:00"},{"uid":"0x12e","created_at":"2019-03-28T13:41:57+29:00"},{"uid":"0x12f","created_at":"2019-03-27T14:41:57+06:00"}]}}`,
+		processQueryNoErr(t, query))
+
 	// Test 19
 	query = `
 {
   q(func: has(created_at), orderdesc: created_at) {
 		uid
 		created_at
-  }
+	}
 }
 `
 	require.JSONEq(t,
