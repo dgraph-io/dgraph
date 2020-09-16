@@ -19,10 +19,22 @@ BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME  = shuri-1
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
-BUILD_VERSION  ?= $(shell git describe --always --tags)
-BUILD_TAGS     ?=
-GOPATH         ?= $(shell go env GOPATH)
 
+# Use the next build version on master branch
+# NOTE: this needs to be updated with each new release
+ifeq ($(BUILD_BRANCH),master)
+# Version on master is of the format <next-release-version>-g<commit-id>
+BUILD_VERSION ?= 'v20.11.0-g'$(BUILD)
+else
+BUILD_VERSION ?= $(shell git describe --always --tags)
+endif
+
+GOOS          ?= $(shell go env GOOS)
+# Only build with jemalloc on Linux
+ifeq ($(GOOS),linux)
+	BUILD_TAGS ?= jemalloc
+endif
+GOPATH        ?= $(shell go env GOPATH)
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
 
 export GO111MODULE := on
@@ -54,10 +66,14 @@ ifneq ($(strip $(BUILD_RACE)),)
 	BUILD_FLAGS += -race
 endif
 
+# jemalloc stuff
+HAS_JEMALLOC = $(shell test -f /usr/local/lib/libjemalloc.a && echo "jemalloc")
+JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2"
+
 .PHONY: all $(BIN)
 all: $(BIN)
 
-$(BIN): clean
+$(BIN): clean jemalloc
 	@go build $(BUILD_FLAGS) -o $(BIN)
 
 clean:
@@ -66,8 +82,22 @@ clean:
 uninstall:
 	@go clean -i -x
 
-install:
+install: jemalloc
 	@echo "Commit SHA256: `git rev-parse HEAD`"
 	@echo "Old SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
 	@go install $(BUILD_FLAGS)
 	@echo "New SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
+
+jemalloc:
+	@if [ -z "$(HAS_JEMALLOC)" ] ; then \
+	    mkdir -p /tmp/jemalloc-temp && cd /tmp/jemalloc-temp ; \
+	    echo "Downloading jemalloc" ; \
+	    curl -s -L ${JEMALLOC_URL} -o jemalloc.tar.bz2 ; \
+	    tar xjf ./jemalloc.tar.bz2 ; \
+	    cd jemalloc-5.2.1 ; \
+	    ./configure --with-jemalloc-prefix='je_' ; \
+	    make ; \
+	    echo "==== Need sudo access to install jemalloc" ; \
+	    sudo make install ; \
+	fi
+
