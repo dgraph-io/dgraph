@@ -62,10 +62,14 @@ ifneq ($(strip $(BUILD_RACE)),)
 	BUILD_FLAGS += -race
 endif
 
+# jemalloc stuff
+HAS_JEMALLOC = $(shell ldconfig -p | grep jemalloc | wc -l)
+JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2"
+
 .PHONY: all $(BIN)
 all: $(BIN)
 
-$(BIN): clean
+$(BIN): clean jemalloc
 	@go build $(BUILD_FLAGS) -o $(BIN)
 
 clean:
@@ -74,8 +78,22 @@ clean:
 uninstall:
 	@go clean -i -x
 
-install:
+install: jemalloc
 	@echo "Commit SHA256: `git rev-parse HEAD`"
 	@echo "Old SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
 	@go install $(BUILD_FLAGS)
 	@echo "New SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
+
+jemalloc:
+	@if [ $(HAS_JEMALLOC) = 0 ] ; then \
+	    mkdir -p /tmp/jemalloc-temp && cd /tmp/jemalloc-temp ; \
+	    echo "Downloading jemalloc" ; \
+	    curl -s -L ${JEMALLOC_URL} -o jemalloc.tar.bz2 ; \
+	    tar xjf ./jemalloc.tar.bz2 ; \
+	    cd jemalloc-5.2.1 ; \
+	    ./configure --with-jemalloc-prefix='je_' ; \
+	    make ; \
+	    echo "==== Need sudo access to install jemalloc" ; \
+	    sudo make install ; \
+	fi
+
