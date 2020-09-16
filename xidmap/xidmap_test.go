@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/stretchr/testify/require"
 )
 
@@ -122,20 +124,42 @@ func TestXidmapMemory(t *testing.T) {
 	t.Logf("Time taken: %v", time.Since(start).Round(time.Millisecond))
 }
 
-func BenchmarkXidmap(b *testing.B) {
+func BenchmarkXidmapWrites(b *testing.B) {
 	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
 	if err != nil {
 		b.Fatalf("Error setting up connection: %s", err.Error())
 	}
 
-	var counter uint64
+	var counter int64
 	xidmap := New(conn, nil)
 	b.ResetTimer()
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			xid := atomic.AddUint64(&counter, 1)
-			xidmap.AssignUid(fmt.Sprintf("xid-%d", xid))
+			xid := atomic.AddInt64(&counter, 1)
+			xidmap.AssignUid("xid-" + strconv.Itoa(int(xid)))
+		}
+	})
+}
+
+func BenchmarkXidmapReads(b *testing.B) {
+	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
+	if err != nil {
+		b.Fatalf("Error setting up connection: %s", err.Error())
+	}
+
+	var N = 1000000
+	xidmap := New(conn, nil)
+	for i := 0; i < N; i++ {
+		xidmap.AssignUid("xid-" + strconv.Itoa(i))
+	}
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			xid := int(z.FastRand()) % N
+			// xid := atomic.AddUint64(&counter, 1)
+			xidmap.AssignUid("xid-" + strconv.Itoa(xid))
 		}
 	})
 }

@@ -1,21 +1,63 @@
 package xidmap
 
 import (
+	"os"
+	"sync/atomic"
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgraph/x"
 )
 
-type Trie struct {
-	root  *node
-	alloc *z.Allocator
+// Arena is thread-safe.
+type Arena struct {
+	data   []byte
+	fd     *os.File
+	offset int64
 }
 
-func NewTrie() *Trie {
+func (a *Arena) Allocate(sz int64) []byte {
+	off := atomic.AddInt64(&a.offset, sz)
+	x.AssertTrue(off < int64(len(a.data)))
+	return a.data[off-sz : off]
+}
+func (a *Arena) Size() int64 {
+	return atomic.LoadInt64(&a.offset)
+}
+func (a *Arena) Release() {
+	// TODO: Add a x.Log
+	x.Check(y.Munmap(a.data))
+	x.Check(a.fd.Truncate(0))
+	x.Check(os.Remove(a.fd.Name()))
+}
+
+type Trie struct {
+	root   *node
+	alloc  *Arena
+	offset int
+}
+
+func NewArena(sz int64) *Arena {
+	f, err := os.Create("arena.dat")
+	x.Check(err)
+	f.Truncate(sz)
+
+	data, err := y.Mmap(f, true, sz)
+	x.Check(err)
+
+	return &Arena{
+		data:   data,
+		fd:     f,
+		offset: 0,
+	}
+}
+
+func NewTrie(alloc *Arena) *Trie {
 	return &Trie{
 		root:  &node{},
-		alloc: z.NewAllocator(1024),
+		alloc: alloc,
+		// alloc: z.NewAllocator(1024),
 	}
 }
 func (t *Trie) Get(key string) uint64 {
@@ -28,15 +70,16 @@ func (t *Trie) Release() {
 	t.alloc.Release()
 }
 
+// arena of 4GB. Then we can use uint32 for offsets.
 type node struct {
-	left  *node
+	left  *node // 8 bytes
 	mid   *node
 	right *node
 	uid   uint64
 	r     rune
 }
 
-var nodeSz = int(unsafe.Sizeof(node{}))
+var nodeSz = int64(unsafe.Sizeof(node{}))
 
 func get(n *node, key string) uint64 {
 	if n == nil {

@@ -50,7 +50,8 @@ type shard struct {
 	sync.RWMutex
 	block
 
-	uidMap map[string]uint64
+	trie *Trie
+	// uidMap map[string]uint64
 }
 
 type block struct {
@@ -78,9 +79,11 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
 	}
+	arena := NewArena(8 << 30)
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
-			uidMap: make(map[string]uint64),
+			trie: NewTrie(arena),
+			// uidMap: make(map[string]uint64),
 		}
 	}
 	if db != nil {
@@ -100,7 +103,8 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 				err := item.Value(func(val []byte) error {
 					uid := binary.BigEndian.Uint64(val)
 					// No need to acquire a lock. This is all serial access.
-					sh.uidMap[key] = uid
+					sh.trie.Put(key, uid)
+					// sh.uidMap[key] = uid
 					return nil
 				})
 				if err != nil {
@@ -151,15 +155,18 @@ func (m *XidMap) CheckUid(xid string) bool {
 	sh := m.shardFor(xid)
 	sh.RLock()
 	defer sh.RUnlock()
-	_, ok := sh.uidMap[xid]
-	return ok
+	uid := sh.trie.Get(xid)
+	return uid != 0
+	// _, ok := sh.uidMap[xid]
+	// return ok
 }
 
 func (m *XidMap) SetUid(xid string, uid uint64) {
 	sh := m.shardFor(xid)
 	sh.Lock()
 	defer sh.Unlock()
-	sh.uidMap[xid] = uid
+	sh.trie.Put(xid, uid)
+	// sh.uidMap[xid] = uid
 }
 
 // AssignUid creates new or looks up existing XID to UID mappings. It also returns if
@@ -167,7 +174,8 @@ func (m *XidMap) SetUid(xid string, uid uint64) {
 func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh := m.shardFor(xid)
 	sh.RLock()
-	uid := sh.uidMap[xid]
+	uid := sh.trie.Get(xid)
+	// uid := sh.uidMap[xid]
 	sh.RUnlock()
 	if uid > 0 {
 		return uid, false
@@ -176,13 +184,15 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid = sh.uidMap[xid]
+	uid = sh.trie.Get(xid)
+	// uid = sh.uidMap[xid]
 	if uid > 0 {
 		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
-	sh.uidMap[xid] = newUid
+	sh.trie.Put(xid, newUid)
+	// sh.uidMap[xid] = newUid
 
 	if m.writer != nil {
 		var uidBuf [8]byte
