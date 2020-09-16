@@ -39,12 +39,12 @@ Here is an excellent blog explaining in detail on [how to set up GraphQL Subscri
 
 ## Authorization with Subscriptions
 
-Authorization adds more power to GraphQL subscriptions.You can use all the features of authorization which are there for queries.
-In addition to them, You can also specify the timeout of the subscription in jwt after which the subscription automatically terminates.
+Authorization adds more power to GraphQL subscriptions. You can use all the features of authorization that are there for queries.
+In addition to them, You can also specify the timeout of the subscription in JWT after which the subscription automatically terminates.
 
 ## Example 
 
-Consider following Schema, it has both @withSubscription and @auth directive defined on type Todo. Auth rule enforces that only todo's of owner $USER are visible which will be given in Jwt.
+Consider following Schema, it has both @withSubscription and @auth directive defined on type Todo. Auth rule enforces that only todo's of owner $USER is visible which will be given in JWT.
 
 ```graphql
 type Todo @withSubscription @auth(
@@ -62,14 +62,14 @@ type Todo @withSubscription @auth(
    }
 # Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
 ```
-Subscription needs jwt in which $USER , expiry and other variables are declared. Below example shows generating Jwt and then using it with subscriptions.
+Subscription needs JWT in which $USER , expiry, and other variables are declared. The below example shows generating JWT and then using it with subscriptions.
 
 ![Subscription+Auth](/images/graphql/Auth+Subscription.gif "Subscription with Auth Example")
 
-Generally jwt is passed in header from graphql client as key value pair, where key is Header given in schema and value is jwt.
-For example in our case,key is Authorization and value is jwt. 
+Generally, JWT is passed in a header from graphql client as key-value pair, where the key is Header given in schema and the value is JWT.
+For example in our case, the key is Authorization and the value is JWT. 
 
-From apollo client this key-value pair is passed in connectionParams as follows.
+From apollo client, this key-value pair is passed in connectionParams as follows.
 ```javascript
 const wsLink = new WebSocketLink({
   uri: `wss://${ENDPOINT}`,
