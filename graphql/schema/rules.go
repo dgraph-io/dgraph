@@ -1863,6 +1863,10 @@ func isReservedKeyWord(name string) bool {
 		// Reserved Type names
 		"uid":          true,
 		"Subscription": true,
+		"as":           true, // this is reserved keyword because DQL uses this for variables
+		"As":           true,
+		"AS":           true,
+		"aS":           true,
 	}
 
 	if isScalar(name) || isQueryOrMutation(name) || reservedTypeNames[name] {
