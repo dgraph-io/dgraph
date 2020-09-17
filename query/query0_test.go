@@ -3015,6 +3015,95 @@ func TestFilterNonIndexedPredicate(t *testing.T) {
 	}
 }
 
+func TestBetweenString(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test between string on predicate with lang tag`,
+			`
+			{
+				me(func: between(name, "", "Alice")) {
+					uid
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x33","name":"A"},{"uid":"0x6e","name":"Alice"},{"uid":"0x3e8","name":"Alice"},{"uid":"0xdac","name":""},{"uid":"0xdad","name":"Alex"},{"uid":"0xdae","name":""},{"uid":"0x2710","name":"Alice"},{"uid":"0x2712","name":"Alice"},{"uid":"0x2714","name":"Alice"}]}}`,
+		},
+		{
+			`Test between string on predicate with lang tag when bounds are invalid`,
+			`
+			{
+				me(func: between(name, "Alice", "")) {
+					uid
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[]}}`,
+		},
+		{
+			`Test between string on predicate without lang tag when bounds are invalid`,
+			`
+			{
+				me(func: between(newname, "P", "P1")) {
+					uid
+					newname
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x1f5","newname":"P1"}]}}`,
+		},
+		{
+			`Test between string on predicate without lang tag when bounds are invalid`,
+			`
+			{
+				me(func: between(newname, "P1", "P5")) {
+					uid
+					newname
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x1f5","newname":"P1"},{"uid":"0x1f6","newname":"P2"},{"uid":"0x1f7","newname":"P3"},{"uid":"0x1f8","newname":"P4"},{"uid":"0x1f9","newname":"P5"},{"uid":"0x1fe","newname":"P10"},{"uid":"0x1ff","newname":"P11"},{"uid":"0x200","newname":"P12"}]}}`,
+		},
+		{
+			`Test between string on predicate of list type`,
+			`
+			{
+				me(func: between(pet_name, "a", "z")) {
+					uid
+					pet_name
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x4e20","pet_name":["little master","master blaster"]},{"uid":"0x4e21","pet_name":["mahi","ms"]}]}}`,
+		},
+		{
+			`Test between string on predicate of list type with partial match`,
+			`
+			{
+				me(func: between(pet_name, "a", "mahi")) {
+					uid
+					pet_name
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x4e20","pet_name":["little master","master blaster"]},{"uid":"0x4e21","pet_name":["mahi","ms"]}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
+
 func TestBetweenFloat(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -3070,6 +3159,18 @@ func TestBetweenFloat(t *testing.T) {
 			`,
 			`{"data":{"me":[]}}`,
 		},
+		{
+			`Test between for float list`,
+			`
+			{
+				me(func: between(average, "30", "50")) {
+					uid
+					average
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x4e20","average":[46.930000,55.100000]},{"uid":"0x4e21","average":[35.200000,49.330000]}]}}`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -3080,35 +3181,58 @@ func TestBetweenFloat(t *testing.T) {
 	}
 }
 
-// func TestBetweenString(t *testing.T) {
-// 	t.Parallel()
-// 	tests := []struct {
-// 		name   string
-// 		query  string
-// 		result string
-// 	}{
-// 		{
-// 			`Test between name`,
-// 			`
-// 			{
-// 				me(func: between(name, "", "az")) {
-// 					uid
-// 					name
-// 				}
-// 			}
-// 			`,
-// 			`{"data":{"me":[{"uid":"0x2710","salary":10000.000000},{"uid":"0x2712","salary":10002.000000}]}}`,
-// 		},
-// 	}
+func TestBetweenInt(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test between on int list predicate`,
+			`
+			{
+				me(func: between(score, "50", "70")) {
+					uid
+					score
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x4e20","score":[56,90]},{"uid":"0x4e21","score":[85,68]}]}}`,
+		},
+		{
+			`Test between on int list predicate empty respone`,
+			`
+			{
+				me(func: between(score, "1", "30")) {
+					uid
+					score
+				}
+			}
+			`,
+			`{"data":{"me":[]}}`,
+		},
+		{
+			`Test between on int`,
+			`
+			{
+				senior_citizens(func: between(age, 18, 30)) {
+					name
+					age
+				}
+			}
+			`,
+			`{"data": {"senior_citizens": [{"name": "Andrea","age": 19},{"name": "Alice","age": 25},{"name": "Bob","age": 25},{"name": "Colin","age": 25},{"name": "Elizabeth","age": 25}]}}`,
+		},
+	}
 
-// 	for _, tc := range tests {
-// 		t.Run(tc.name, func(t *testing.T) {
-// 			js := processQueryNoErr(t, tc.query)
-// 			fmt.Println(js)
-// 			require.JSONEq(t, js, tc.result)
-// 		})
-// 	}
-// }
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
 
 var client *dgo.Dgraph
 

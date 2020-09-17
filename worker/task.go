@@ -1613,7 +1613,6 @@ type functionContext struct {
 	tokens        []string
 	geoQuery      *types.GeoQueryData
 	intersectDest bool
-	ineqValue     types.Val
 	// eqTokens is used by compareAttr functions. It stores values corresponding to each
 	// function argument. There could be multiple arguments to `eq` function but only one for
 	// other compareAttr functions.
@@ -1718,7 +1717,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 				return nil, errors.Errorf("Got error: %v while running: %v", err, q.SrcFunc)
 			}
 			ineqValues = append(ineqValues, ineqValue1)
-			fc.ineqValue = ineqValue1
 			fc.eqTokens = append(fc.eqTokens, ineqValue1)
 
 			// in case of between also pass other value.

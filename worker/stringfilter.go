@@ -85,27 +85,16 @@ func defaultMatch(value types.Val, filter *stringFilter) bool {
 }
 
 func ineqMatch(value types.Val, filter *stringFilter) bool {
-	// if len(filter.eqVals) == 0 {
-	// 	// if filter.funcName == "between" {
-	// 	// 	return types.CompareVals("le", value, filter.ineqValue[0]) &&
-	// 	// 		types.CompareVals("ge", value, filter.ineqValue[1])
-	// 	// }
-	// 	// return types.CompareVals(filter.funcName, value, filter.ineqValue[0])
-	// 	return types.CompareVals(filter.funcName, value, filter.ineqValue)
-	// }
-
-	if filter.funcName == "eq" {
+	if filter.funcName == eq {
 		for _, v := range filter.eqVals {
 			if types.CompareVals(filter.funcName, value, v) {
 				return true
 			}
 		}
 		return false
-	}
-
-	if filter.funcName == "between" {
-		return types.CompareVals("le", value, filter.eqVals[0]) &&
-			types.CompareVals("ge", value, filter.eqVals[1])
+	} else if filter.funcName == between {
+		return types.CompareVals("ge", value, filter.eqVals[0]) &&
+			types.CompareVals("le", value, filter.eqVals[1])
 	}
 
 	return types.CompareVals(filter.funcName, value, filter.eqVals[0])
