@@ -112,23 +112,32 @@ func read(t *testing.T, dg *dgo.Dgraph, expected int) {
 	wg.Wait()
 }
 
-func readBestEffort(t *testing.T, dg *dgo.Dgraph, pred string, M int) {
+func readBestEffortWithRetry(t *testing.T, dg *dgo.Dgraph, pred string, M int, retryCount int) {
 	conf := viper.New()
 	conf.Set("pred", pred)
 	conf.Set("be", true)
 	var last int
-	for i := 0; i < M; i++ {
-		cnt, err := process(dg, conf)
-		if err != nil {
-			t.Errorf("Error while reading: %v", err)
-		} else {
-			if last > cnt.Val {
-				t.Errorf("Current %d < Last %d", cnt.Val, last)
+	var allErrors []string
+	for trial := 0; trial < retryCount; trial++ {
+		for i := 0; i < M; i++ {
+			cnt, err := process(dg, conf)
+			if err != nil {
+				allErrors = append(allErrors, fmt.Sprintf("Error while reading: %v", err))
+				continue
+			} else {
+				if last > cnt.Val {
+					allErrors = append(allErrors, fmt.Sprintf("Current %d < Last %d", cnt.Val, last))
+					continue
+				}
+				last = cnt.Val
 			}
-			last = cnt.Val
 		}
+		t.Logf("Last value read by best effort: %d", last)
+		return
 	}
-	t.Logf("Last value read by best effort: %d", last)
+	if len(allErrors) > 0 {
+		t.Error("Err")
+	}
 }
 
 func setup(t *testing.T) *dgo.Dgraph {
@@ -190,22 +199,26 @@ func TestBestEffort(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(time.Second)
-		readBestEffort(t, dg, "counter.val", 1000)
+		readBestEffortWithRetry(t, dg, "counter.val", 1000, 3)
 		atomic.AddInt32(&done, 1)
 	}()
 	wg.Wait()
 	t.Logf("Write/Best-Effort read stage OK.")
 }
 
+func RetryRead(readRetryCount int) {
+
+}
+
 func TestBestEffortOnly(t *testing.T) {
 	dg := setup(t)
-	readBestEffort(t, dg, fmt.Sprintf("counter.val.%d", rand.Int()), 1)
+	readBestEffortWithRetry(t, dg, fmt.Sprintf("counter.val.%d", rand.Int()), 1, 3)
 	time.Sleep(time.Second)
 
 	doneCh := make(chan struct{})
 	go func() {
 		for i := 0; i < 10; i++ {
-			readBestEffort(t, dg, fmt.Sprintf("counter.val.%d", rand.Int()), 1)
+			readBestEffortWithRetry(t, dg, fmt.Sprintf("counter.val.%d", rand.Int()), 1, 3)
 		}
 		doneCh <- struct{}{}
 	}()
@@ -225,7 +238,7 @@ func TestBestEffortTs(t *testing.T) {
 	dg := setup(t)
 	pred := "counter.val"
 	incrementInLoop(t, dg, 1)
-	readBestEffort(t, dg, pred, 1)
+	readBestEffortWithRetry(t, dg, pred, 1, 3)
 	txn := dg.NewReadOnlyTxn().BestEffort()
 	_, err := queryCounter(context.Background(), txn, pred)
 	require.NoError(t, err)
