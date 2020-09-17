@@ -3080,6 +3080,36 @@ func TestBetweenFloat(t *testing.T) {
 	}
 }
 
+// func TestBetweenString(t *testing.T) {
+// 	t.Parallel()
+// 	tests := []struct {
+// 		name   string
+// 		query  string
+// 		result string
+// 	}{
+// 		{
+// 			`Test between name`,
+// 			`
+// 			{
+// 				me(func: between(name, "", "az")) {
+// 					uid
+// 					name
+// 				}
+// 			}
+// 			`,
+// 			`{"data":{"me":[{"uid":"0x2710","salary":10000.000000},{"uid":"0x2712","salary":10002.000000}]}}`,
+// 		},
+// 	}
+
+// 	for _, tc := range tests {
+// 		t.Run(tc.name, func(t *testing.T) {
+// 			js := processQueryNoErr(t, tc.query)
+// 			fmt.Println(js)
+// 			require.JSONEq(t, js, tc.result)
+// 		})
+// 	}
+// }
+
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {

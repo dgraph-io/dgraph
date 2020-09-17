@@ -451,7 +451,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					if val, err = types.Convert(val, srcFn.atype); err != nil {
 						return err
 					}
-					if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
+					if types.CompareVals(srcFn.fname, val, srcFn.eqTokens[0]) {
 						uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
 						break
 					}
@@ -1567,7 +1567,7 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 		filter.tokName = arg.q.SrcFunc.Args[0]
 		filtered = matchStrings(filtered, values, &filter)
 	case compareAttrFn:
-		filter.ineqValue = arg.srcFn.ineqValue
+		// filter.ineqValue = arg.srcFn.ineqValue
 		filter.eqVals = arg.srcFn.eqTokens
 		filter.match = ineqMatch
 		filtered = matchStrings(filtered, values, &filter)
