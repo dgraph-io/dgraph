@@ -79,8 +79,8 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
 	}
-	arena := NewArena(8 << 30)
 	for i := range xm.shards {
+		arena := NewArena(32 << 20) // Start with 32 MB.
 		xm.shards[i] = &shard{
 			trie: NewTrie(arena),
 			// uidMap: make(map[string]uint64),
@@ -88,6 +88,10 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	}
 	if db != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
+		//
+		// TODO: We don't need to write to Badger upfront like this. With Trie, we can iterate over
+		// the trie and write to Badger at the end. In fact, we might even be able to use
+		// streamwriter for it.
 		xm.writer = db.NewWriteBatch()
 
 		err := db.View(func(txn *badger.Txn) error {
@@ -255,6 +259,9 @@ func (m *XidMap) AllocateUid() uint64 {
 
 // Flush must be called if DB is provided to XidMap.
 func (m *XidMap) Flush() error {
+	for _, shard := range m.shards {
+		shard.trie.Release()
+	}
 	// While running bulk loader, this method is called at the completion of map phase. After this
 	// method returns xidmap of bulk loader is made nil. But xidmap still show up in memory profiles
 	// even during reduce phase. If bulk loader is running on large dataset, this occupies lot of

@@ -1,123 +1,195 @@
 package xidmap
 
 import (
+	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
-	"sync/atomic"
-	"unicode/utf8"
 	"unsafe"
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/x"
+	"golang.org/x/sys/unix"
 )
 
-// Arena is thread-safe.
-// TODO: Perhaps make it so that Arena doesn't go beyond uint32, and then we can use node offsets to
-// be cheaper. Shards can then take care of bigger datasets. Each trie would have it's own arena, no
-// need for making this thread-safe. And then we'd need to do remap, to avoid having too big files
-// created upfront.
+// Arena uses file mmap to allocate memory. This allows us to store big data structures like Tries
+// without using physical memory. Arena limits to 4GB, so we can use uint32 to save the cost of
+// allocating a node. Shards can take care of bigger datasets. Each trie would have it's own arena,
+// no need for making this thread-safe. Arena can grow the file as needed, to avoid pre-allocating
+// really big files.
+// Arena is not thread-safe.
 type Arena struct {
 	data   []byte
 	fd     *os.File
-	offset int64
+	offset uint32
 }
 
-func (a *Arena) Allocate(sz int64) []byte {
-	off := atomic.AddInt64(&a.offset, sz)
-	// TODO: Modify this to do file truncate, and a remap?
-	x.AssertTrue(off < int64(len(a.data)))
-	return a.data[off-sz : off]
+// Allocate would allocate the given size of bytes in the Arena. If needed, it would remap the
+// underlying file to double the existing size. Allocate would crash if we reach MaxUint32.
+func (a *Arena) Allocate(sz uint32) uint32 {
+	if len(a.data)-int(a.offset) < int(sz) {
+		x.AssertTrue(len(a.data) < math.MaxUint32)
+		toSize := int64(len(a.data)) * 2
+		if toSize > math.MaxUint32 {
+			toSize = math.MaxUint32
+		}
+
+		// TODO: Move Msync over to Badger so it works with various OS.
+		// TODO: Somehow doing truncate and remap here is causing faults.
+		fmt.Printf("Remapping Arena from %d to %d\n", len(a.data), toSize)
+		x.Check(unix.Msync(a.data, unix.MS_SYNC))
+		x.Check(y.Munmap(a.data))
+		x.Check(a.fd.Sync())
+		x.Check(a.fd.Truncate(toSize))
+
+		data, err := y.Mmap(a.fd, true, toSize)
+		x.Check(err)
+		zeroOut(data, int(a.offset))
+		// data := make([]byte, toSize)
+		// copy(data, a.data)
+		a.data = data
+		fmt.Printf("Done %d\n", toSize)
+	}
+	a.offset += sz
+	return a.offset - sz
 }
-func (a *Arena) Size() int64 {
-	return atomic.LoadInt64(&a.offset)
+
+// Size returns the current Arena offset.
+func (a *Arena) Size() uint32 {
+	return a.offset
 }
+
+// Data returns a slice of data from the provided offset. It does not cap the end of the slice. So,
+// use carefully.
+func (a *Arena) Data(offset uint32) []byte {
+	x.AssertTrue(int(offset) < len(a.data))
+	return a.data[offset:]
+}
+
+// Release unmaps the file, truncates it and deletes it.
 func (a *Arena) Release() {
-	// TODO: Add a x.Log
-	x.Check(y.Munmap(a.data))
-	x.Check(a.fd.Truncate(0))
-	x.Check(os.Remove(a.fd.Name()))
+	// return
+	x.Log(y.Munmap(a.data), "while unmapping Arena")
+	x.Log(a.fd.Truncate(0), "while truncating Arena file")
+	x.Log(os.Remove(a.fd.Name()), "while deleting Arena file")
 }
-func NewArena(sz int64) *Arena {
-	f, err := ioutil.TempFile("", "arena")
-	x.Check(err)
-	f.Truncate(sz)
 
-	// mtype := unix.PROT_READ | unix.PROT_WRITE
-	// data, err := unix.Mmap(-1, 0, int(sz), mtype, unix.MAP_SHARED|unix.MAP_ANONYMOUS)
-	data, err := y.Mmap(f, true, sz)
-	x.Check(err)
-
-	return &Arena{
-		data:   data,
-		fd:     f,
-		offset: 0,
+func zeroOut(data []byte, offset int) {
+	data = data[offset:]
+	data[0] = 0x00
+	for bp := 1; bp < len(data); bp *= 2 {
+		copy(data[bp:], data[:bp])
 	}
 }
 
-type Trie struct {
-	root   *node
-	alloc  *Arena
-	offset int
+func NewArena(sz int64) *Arena {
+	x.AssertTruef(sz <= math.MaxUint32,
+		"Arena Size %d should be under MaxUint32 %d", sz, math.MaxUint32)
+	fd, err := ioutil.TempFile("", "arena")
+	x.Check(err)
+	fd.Truncate(sz)
+
+	// mtype := unix.PROT_READ | unix.PROT_WRITE
+	// data, err := unix.Mmap(-1, 0, int(sz), mtype, unix.MAP_SHARED|unix.MAP_ANONYMOUS)
+	data, err := y.Mmap(fd, true, sz)
+	x.Check(err)
+	zeroOut(data, 0)
+
+	return &Arena{
+		// data:   make([]byte, sz),
+		data:   data,
+		fd:     fd,
+		offset: 1, // Skip offset zero for nil nodes.
+	}
 }
 
+// Trie is an implementation of Ternary Search Tries to store XID to UID map. It uses Arena to
+// allocate nodes in the trie. It is not thread-safe.
+type Trie struct {
+	root  uint32
+	alloc *Arena
+}
+
+// NewTrie would return back a Trie backed by the provided Arena. Trie would assume ownership of the
+// Arena. Release must be called at the end to release Arena's resources.
 func NewTrie(alloc *Arena) *Trie {
+	ro := alloc.Allocate(nodeSz)
 	return &Trie{
-		root:  &node{},
+		root:  ro,
 		alloc: alloc,
 		// alloc: z.NewAllocator(1024),
 	}
 }
-func (t *Trie) Get(key string) uint64 {
-	return get(t.root, key)
+func (t *Trie) getNode(offset uint32) *node {
+	if offset == 0 {
+		return nil
+	}
+	data := t.alloc.Data(offset)
+	return (*node)(unsafe.Pointer(&data[0]))
 }
+
+// Get would return the UID for the key. If the key is not found, it would return 0.
+func (t *Trie) Get(key string) uint64 {
+	return t.get(t.root, key)
+}
+
+// Put would store the UID for the key.
 func (t *Trie) Put(key string, uid uint64) {
 	t.put(t.root, key, uid)
 }
+
+// Size returns the size of Arena used by this Trie so far.
+func (t *Trie) Size() uint32 {
+	return t.alloc.Size()
+}
+
+// Release would release the resources used by the Arena.
 func (t *Trie) Release() {
 	t.alloc.Release()
 }
 
-// TODO: arena of 4GB. Then we can use uint32 for offsets. Then 24 bytes instead of 40 bytes.
+// node uses 4-byte offsets to save the cost of storing 8-byte pointers. Also, offsets allow us to
+// truncate the file bigger and remap it. This struct costs 24 bytes.
 type node struct {
-	// TODO: Instead of using pointers, use offsets if we need to remap.
-	left  *node // 8 bytes
-	mid   *node
-	right *node
-	r     rune
 	uid   uint64
+	r     byte
+	left  uint32
+	mid   uint32
+	right uint32
 }
 
-// TODO: Do we need to ever do a tree rebalance to keep leaves around the same height from the top?
 // TODO: Try using skiplists on mmap instead?
 
-var nodeSz = int64(unsafe.Sizeof(node{}))
+var nodeSz = uint32(unsafe.Sizeof(node{}))
 
-// TODO: use byte slice instead of string.
-func get(n *node, key string) uint64 {
-	if n == nil {
+func (t *Trie) get(offset uint32, key string) uint64 {
+	if len(key) == 0 {
 		return 0
 	}
-	// TODO: Avoid decoding repeatedly.
-	r, width := utf8.DecodeRuneInString(key)
-	if r < n.r {
-		return get(n.left, key)
+	for offset != 0 {
+		n := t.getNode(offset)
+		r := key[0]
+		switch {
+		case r < n.r:
+			offset = n.left
+		case r > n.r:
+			offset = n.right
+		case len(key[1:]) > 0:
+			key = key[1:]
+			offset = n.mid
+		default:
+			return n.uid
+		}
 	}
-	if r > n.r {
-		return get(n.right, key)
-	}
-
-	// rune matches
-	if len(key[width:]) > 0 {
-		return get(n.mid, key[width:])
-	}
-	return n.uid
+	return 0
 }
 
-func (t *Trie) put(n *node, key string, uid uint64) *node {
-	r, width := utf8.DecodeRuneInString(key)
+func (t *Trie) put(offset uint32, key string, uid uint64) uint32 {
+	n := t.getNode(offset)
+	r := key[0]
 	if n == nil {
-		b := t.alloc.Allocate(nodeSz)
-		n = (*node)(unsafe.Pointer(&b[0]))
+		offset = t.alloc.Allocate(nodeSz)
+		n = t.getNode(offset)
 		n.r = r
 	}
 	switch {
@@ -127,11 +199,11 @@ func (t *Trie) put(n *node, key string, uid uint64) *node {
 	case r > n.r:
 		n.right = t.put(n.right, key, uid)
 
-	case len(key[width:]) > 0:
-		n.mid = t.put(n.mid, key[width:], uid)
+	case len(key[1:]) > 0:
+		n.mid = t.put(n.mid, key[1:], uid)
 
 	default:
 		n.uid = uid
 	}
-	return n
+	return offset
 }

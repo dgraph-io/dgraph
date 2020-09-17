@@ -2,24 +2,16 @@ package xidmap
 
 import (
 	"math/rand"
-	"strings"
 	"testing"
 
 	"github.com/dustin/go-humanize"
 	"github.com/stretchr/testify/require"
 )
 
-func printTrie(t *testing.T, n *node, indent int) {
-	if n == nil {
-		return
-	}
-	t.Logf("%s node: %q %d\n", strings.Repeat(" ", indent), n.r, n.uid)
-	printTrie(t, n.left, indent+1)
-	printTrie(t, n.mid, indent+1)
-	printTrie(t, n.right, indent+1)
-}
-
 func TestTrie(t *testing.T) {
+	require.Equal(t, uint32(24), nodeSz,
+		"Size of Trie node should be 24. Got: %d\n", nodeSz)
+
 	arena := NewArena(1 << 20)
 	defer arena.Release()
 
@@ -29,18 +21,17 @@ func TestTrie(t *testing.T) {
 	trie.Put("tree", 2)
 	trie.Put("bird", 3)
 	trie.Put("birds", 4)
+	trie.Put("t", 5)
 
-	printTrie(t, trie.root, 0)
-
+	require.Equal(t, uint64(0), trie.Get(""))
 	require.Equal(t, uint64(1), trie.Get("trie"))
 	require.Equal(t, uint64(2), trie.Get("tree"))
 	require.Equal(t, uint64(3), trie.Get("bird"))
 	require.Equal(t, uint64(4), trie.Get("birds"))
+	require.Equal(t, uint64(5), trie.Get("t"))
 	t.Logf("Size of node: %d\n", nodeSz)
-	t.Logf("Size used by allocator: %d\n", trie.offset)
+	t.Logf("Size used by allocator: %d\n", trie.Size())
 }
-
-// var N = 10000000
 
 // $ go test -bench=BenchmarkWordsTrie --run=XXX -benchmem -memprofile mem.out
 // $ go tool pprof mem.out
@@ -49,8 +40,7 @@ func TestTrie(t *testing.T) {
 // doesn't make sense.
 func BenchmarkWordsTrie(b *testing.B) {
 	buf := make([]byte, 32)
-	arena := NewArena(8 << 30)
-	defer arena.Release()
+	arena := NewArena(2 << 20)
 
 	trie := NewTrie(arena)
 	var uid uint64
@@ -63,9 +53,10 @@ func BenchmarkWordsTrie(b *testing.B) {
 		trie.Put(word, uid)
 	}
 	b.Logf("Words: %d. Allocator: %s. Per word: %d\n", uid,
-		humanize.IBytes(uint64(trie.offset)),
-		uint64(trie.offset)/uid)
+		humanize.IBytes(uint64(trie.Size())),
+		uint64(trie.Size())/uid)
 	b.StopTimer()
+	arena.Release()
 }
 
 func BenchmarkWordsMap(b *testing.B) {

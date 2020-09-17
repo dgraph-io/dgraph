@@ -331,9 +331,13 @@ func (m *mapper) lookupUid(xid string) uint64 {
 	// xid is alive, the whole line is going to be alive and won't be GC'd.
 	// Also, checked that sb goes on the stack whereas sb.String() goes on
 	// heap. Note that the calls to the strings.Builder.* are inlined.
-	sb := strings.Builder{}
-	x.Check2(sb.WriteString(xid))
-	uid, isNew := m.xids.AssignUid(sb.String())
+
+	// With Trie, we no longer need to use strings.Builder, because Trie would use its own storage
+	// for the strings.
+	// sb := strings.Builder{}
+	// x.Check2(sb.WriteString(xid))
+	// uid, isNew := m.xids.AssignUid(sb.String())
+	uid, isNew := m.xids.AssignUid(xid)
 	if !m.opt.StoreXids || !isNew {
 		return uid
 	}
