@@ -19,9 +19,10 @@ import (
 // really big files.
 // Arena is not thread-safe.
 type Arena struct {
-	data   []byte
-	fd     *os.File
-	offset uint32
+	data      []byte
+	staleData []byte
+	fd        *os.File
+	offset    uint32
 }
 
 // Allocate would allocate the given size of bytes in the Arena. If needed, it would remap the
@@ -38,10 +39,13 @@ func (a *Arena) Allocate(sz uint32) uint32 {
 		// TODO: Somehow doing truncate and remap here is causing faults.
 		fmt.Printf("Remapping Arena from %d to %d\n", len(a.data), toSize)
 		x.Check(unix.Msync(a.data, unix.MS_SYNC))
-		x.Check(y.Munmap(a.data))
 		x.Check(a.fd.Sync())
 		x.Check(a.fd.Truncate(toSize))
 
+		// DO NOT unmap a.data. It might be possible that we're inside a
+		// recursive call and there are references to data. Instead, set
+		// staleData which will be cleared while returning from Put.
+		a.staleData = a.data
 		data, err := y.Mmap(a.fd, true, toSize)
 		x.Check(err)
 		zeroOut(data, int(a.offset))
@@ -135,6 +139,12 @@ func (t *Trie) Get(key string) uint64 {
 
 // Put would store the UID for the key.
 func (t *Trie) Put(key string, uid uint64) {
+	// Clean up stale mmapped buffer while returning.
+	if len(t.alloc.staleData) != 0 {
+		y.Check(y.Munmap(t.alloc.staleData))
+		t.alloc.staleData = nil
+	}
+
 	t.put(t.root, key, uid)
 }
 
