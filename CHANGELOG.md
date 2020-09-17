@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
-## [20.03.5] - Unreleased
+## [20.03.5] - 2020-09-17
 [20.03.5]: https://github.com/dgraph-io/dgraph/compare/v20.03.4...v20.03.5
 
 ### Changed
@@ -12,14 +12,55 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Add retry for schema update. ([#6097][]) 
 - Queue keys for rollup during mutation. ([#6150][]) 
 
+### Added
+
+- Add --cache_mb and --cache_percentage flags. ([#6287][])
+- Add flag to set up compression in zero. ([#6356][])
+- Add flags to set table and vlog loading mode for zero. ([#6343][])
+
 ### Fixed
 
+- GraphQL
+  - Prevent empty values in fields having `id` directive. ([#6197][]) 
 - Fix out of order issues with split keys in bulk loader. ([#6125][])
 - Rollup a batch if more than 2 seconds elapsed since last batch. ([#6138][])
 - Simplify how list splits are tracked. ([#6071][])
 - Perform rollups more aggresively. ([#6147][]) 
 - Don't allow idx flag to be set to 0 on dgraph zero. ([#6156][]) 
+- Stop forcing RAM mode for the write-ahead log. ([#6260][])
+- Fix panicwrap parent check.  ([#6300][]) 
+- Sort manifests by backup number. ([#6280][]) 
+- Don't store start_ts in postings. ([#6214][])
+- Update reverse index when updating single UID predicates. ([#6006][])
+- Return error on closed DB.  ([#6321][]) 
+- Optimize splits by doing binary search.  Clear the pack from the main list. ([#6333][]) 
+- Sentry nil pointer check. ([#6375][])
+- Use z.Closer instead of y.Closer. ([#6398][])
+- Make Alpha Shutdown Again. ([#6403][])
+- Force exit if CTRL-C is caught before initialization. ([#6409][])
+- Batch list in bulk loader to avoid panic. ([#6445][])
+- Enterprise features
+  -  Make backups cancel other tasks. ([#6244][])
+  - Add a lock to backups to process one request at a time. ([#6340][])
 
+[#6409]: https://github.com/dgraph-io/dgraph/issues/6409
+[#6445]: https://github.com/dgraph-io/dgraph/issues/6445
+[#6398]: https://github.com/dgraph-io/dgraph/issues/6398
+[#6403]: https://github.com/dgraph-io/dgraph/issues/6403
+[#6260]: https://github.com/dgraph-io/dgraph/issues/6260
+[#6300]: https://github.com/dgraph-io/dgraph/issues/6300
+[#6280]: https://github.com/dgraph-io/dgraph/issues/6280
+[#6214]: https://github.com/dgraph-io/dgraph/issues/6214
+[#6006]: https://github.com/dgraph-io/dgraph/issues/6006
+[#6321]: https://github.com/dgraph-io/dgraph/issues/6321
+[#6244]: https://github.com/dgraph-io/dgraph/issues/6244
+[#6333]: https://github.com/dgraph-io/dgraph/issues/6333
+[#6340]: https://github.com/dgraph-io/dgraph/issues/6340
+[#6343]: https://github.com/dgraph-io/dgraph/issues/6343
+[#6197]: https://github.com/dgraph-io/dgraph/issues/6197
+[#6375]: https://github.com/dgraph-io/dgraph/issues/6375
+[#6287]: https://github.com/dgraph-io/dgraph/issues/6287
+[#6356]: https://github.com/dgraph-io/dgraph/issues/6356
 [#5988]: https://github.com/dgraph-io/dgraph/issues/5988
 [#6097]: https://github.com/dgraph-io/dgraph/issues/6097
 [#6094]: https://github.com/dgraph-io/dgraph/issues/6094
