@@ -190,10 +190,10 @@ LOOP:
 		// if its lossy then we handle inequality comparison later
 		// in handleCompareFunction
 		case tokenizer.IsLossy():
-			out = append(out, k.Term)
 			if f == "between" && bytes.Compare([]byte(k.Term), ineqTokenInBytes2) > 0 {
 				break LOOP
 			}
+			out = append(out, k.Term)
 
 		// for non Lossy lets compare for inequality (gt & lt)
 		// to see if key needs to be included

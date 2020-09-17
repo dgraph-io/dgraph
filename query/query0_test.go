@@ -354,6 +354,24 @@ func TestBetweenAge(t *testing.T) {
 	`, js)
 }
 
+func TestBetweenAgeEmptyResponse(t *testing.T) {
+	query := `
+    {
+			senior_citizens(func: between(age, 30, 18)) {
+				name
+				age
+			}
+    }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"senior_citizens": []
+			}
+		}
+	`, js)
+}
+
 func TestLeAge(t *testing.T) {
 	query := `{
 		  minors(func: le(age, 15)) {
@@ -2986,6 +3004,71 @@ func TestFilterNonIndexedPredicate(t *testing.T) {
 			}
 			`,
 			`{"data":{"me":[{"friend":[{"name":"Rick Grimes","survival_rate":1.600000},{"name":"Glenn Rhee","survival_rate":1.600000},{"name":"Daryl Dixon","survival_rate":1.600000},{"name":"Andrea","survival_rate":1.600000}]}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
+
+func TestBetweenFloat(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test between salary all results`,
+			`
+			{
+				me(func: between(salary, "9999.0000", "10003.0000")) {
+					uid
+					salary
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x2710","salary":10000.000000},{"uid":"0x2712","salary":10002.000000}]}}`,
+		},
+		{
+			`Test between salary 1 result`,
+			`
+			{
+				me(func: between(salary, "10000.1000", "10002.1000")) {
+					uid
+					salary
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x2712","salary":10002.000000}]}}`,
+		},
+		{
+			`Test between salary empty response`,
+			`
+			{
+				me(func: between(salary, "10000.1000", "10001.1000")) {
+					uid
+					salary
+				}
+			}
+			`,
+			`{"data":{"me":[]}}`,
+		},
+		{
+			`Test between salary invalid args`,
+			`
+			{
+				me(func: between(salary, "10010.1000", "10001.1000")) {
+					uid
+					salary
+				}
+			}
+			`,
+			`{"data":{"me":[]}}`,
 		},
 	}
 
