@@ -54,11 +54,18 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Don't store start_ts in postings. ([#6213][]) 
 - Use z.Closer instead of y.Closer. ([#6399][]) 
 - Make Alpha Shutdown Again. ([#6402][])
+- Force exit if CTRL-C is caught before initialization. ([#6407][])
+- Update advanced-queries.md.
+- Batch list in bulk loader to avoid panic. ([#6446][])
 - Enterprise features
   - Make backups cancel other tasks. ([#6243][]) 
   - Online Restore honors credentials passed in. ([#6302][]) 
   - Add a lock to backups to process one request at a time. ([#6339][])
+  - Fix Star_All delete query when used with ACL enabled. ([#6336][])
 
+[#6407]: https://github.com/dgraph-io/dgraph/issues/6407
+[#6336]: https://github.com/dgraph-io/dgraph/issues/6336
+[#6446]: https://github.com/dgraph-io/dgraph/issues/6446
 [#6402]: https://github.com/dgraph-io/dgraph/issues/6402
 [#6399]: https://github.com/dgraph-io/dgraph/issues/6399
 [#6346]: https://github.com/dgraph-io/dgraph/issues/6346
@@ -135,10 +142,14 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Sentry nil pointer check. ([#6375][])
 - Use z.Closer instead of y.Closer. ([#6398][])
 - Make Alpha Shutdown Again. ([#6403][])
+- Force exit if CTRL-C is caught before initialization. ([#6409][])
+- Batch list in bulk loader to avoid panic. ([#6445][])
 - Enterprise features
   -  Make backups cancel other tasks. ([#6244][])
   - Add a lock to backups to process one request at a time. ([#6340][])
 
+[#6409]: https://github.com/dgraph-io/dgraph/issues/6409
+[#6445]: https://github.com/dgraph-io/dgraph/issues/6445
 [#6398]: https://github.com/dgraph-io/dgraph/issues/6398
 [#6403]: https://github.com/dgraph-io/dgraph/issues/6403
 [#6260]: https://github.com/dgraph-io/dgraph/issues/6260
@@ -183,10 +194,14 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Optimize splits by doing binary search.  Clear the pack from the main list. ([#6334][]) 
 - Add a lock to backups to process one request at a time. ([#6341][])
 - Use z.Closer instead of y.Closer' ([#6396][])
+- Force exit if CTRL-C is caught before initialization. ([#6408][])
+- Fix(Alpha): MASA: Make Alpha Shutdown Again. ([#6406][])
 - Enterprise features
   - Sort manifests by backup number. ([#6281][]) 
   - Skip backing up nil lists. ([#6314][]) 
 
+[#6408]: https://github.com/dgraph-io/dgraph/issues/6408
+[#6406]: https://github.com/dgraph-io/dgraph/issues/6406
 [#6396]: https://github.com/dgraph-io/dgraph/issues/6396
 [#6261]: https://github.com/dgraph-io/dgraph/issues/6261
 [#6319]: https://github.com/dgraph-io/dgraph/issues/6319
