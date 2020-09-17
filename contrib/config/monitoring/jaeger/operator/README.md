@@ -30,7 +30,7 @@ helmfile apply
 If you do not have `helmfile` available you can do these steps:
 
 ```bash
-kubernetes create namespace observability
+kubectl create namespace observability
 
 ## Install Jaeger Operator
 helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
@@ -72,7 +72,7 @@ kubectl delete \
 helm delete --namespace observability "jaeger-operator"
 ```
 
-## Log Into Jaeger Query UI
+## Jaeger Query UI
 
 You can use port-forward option to access the Jaeger Query UI from localhost with this:
 
@@ -87,4 +87,4 @@ kubectl port-forward --namespace observability $POD_NAME 16686:16686
 
 Afteward, visit:
 
-* http:localhost:16686
+* http://localhost:16686
