@@ -948,6 +948,13 @@ func validateSearchArg(searchArg string,
 	return nil
 }
 
+func isGeoType(typ *ast.Type) bool {
+	if typ.Name() == "Point" {
+		return true
+	}
+	return false
+}
+
 func searchValidation(
 	sch *ast.Schema,
 	typ *ast.Definition,
@@ -961,7 +968,7 @@ func searchValidation(
 		// If there's no arg, then it can be an enum or has to be a scalar that's
 		// not ID. The schema generation will add the default search
 		// for that type.
-		if sch.Types[field.Type.Name()].Kind == ast.Enum ||
+		if sch.Types[field.Type.Name()].Kind == ast.Enum || isGeoType(field.Type) ||
 			(sch.Types[field.Type.Name()].Kind == ast.Scalar && !isIDField(typ, field)) {
 			return nil
 		}

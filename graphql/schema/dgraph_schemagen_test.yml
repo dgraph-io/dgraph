@@ -607,3 +607,18 @@ schemas:
           method: "POST"
         })
       }
+
+  - name: "geo type."
+    input: |
+      type Hotel {
+        id: ID!
+        name: String!
+        location: Point @search
+      }
+    output: |
+      type Hotel {
+        Hotel.name
+        Hotel.location
+      }
+      Hotel.name: string .
+      Hotel.location: geo @index(geo) .

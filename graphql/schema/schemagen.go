@@ -438,7 +438,12 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
 				case ast.Object, ast.Interface:
-					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
+					if isGeoType(f.Type) {
+						typStr = "geo"
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", []string{"geo"})
+					} else {
+						typStr = fmt.Sprintf("%suid%s", prefix, suffix)
+					}
 
 					if parentInt == nil {
 						if strings.HasPrefix(fname, "~") {
