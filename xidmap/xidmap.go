@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/skl"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
@@ -50,7 +51,7 @@ type shard struct {
 	sync.RWMutex
 	block
 
-	uidMap map[string]uint64
+	uidMap *skl.SkiplistMmap
 }
 
 type block struct {
@@ -79,8 +80,9 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		shards:    make([]*shard, numShards),
 	}
 	for i := range xm.shards {
+		arenaSize := int64(100 << 20)
 		xm.shards[i] = &shard{
-			uidMap: make(map[string]uint64),
+			uidMap: skl.NewSkiplistMmap(arenaSize),
 		}
 	}
 	if db != nil {
@@ -100,7 +102,7 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 				err := item.Value(func(val []byte) error {
 					uid := binary.BigEndian.Uint64(val)
 					// No need to acquire a lock. This is all serial access.
-					sh.uidMap[key] = uid
+					sh.uidMap.Put(key, uid)
 					return nil
 				})
 				if err != nil {
@@ -151,15 +153,14 @@ func (m *XidMap) CheckUid(xid string) bool {
 	sh := m.shardFor(xid)
 	sh.RLock()
 	defer sh.RUnlock()
-	_, ok := sh.uidMap[xid]
-	return ok
+	return sh.uidMap.Get(xid) != 0
 }
 
 func (m *XidMap) SetUid(xid string, uid uint64) {
 	sh := m.shardFor(xid)
 	sh.Lock()
 	defer sh.Unlock()
-	sh.uidMap[xid] = uid
+	sh.uidMap.Put(xid, uid)
 }
 
 // AssignUid creates new or looks up existing XID to UID mappings. It also returns if
@@ -167,7 +168,7 @@ func (m *XidMap) SetUid(xid string, uid uint64) {
 func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh := m.shardFor(xid)
 	sh.RLock()
-	uid := sh.uidMap[xid]
+	uid := sh.uidMap.Get(xid)
 	sh.RUnlock()
 	if uid > 0 {
 		return uid, false
@@ -176,13 +177,13 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid = sh.uidMap[xid]
+	uid = sh.uidMap.Get(xid)
 	if uid > 0 {
 		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
-	sh.uidMap[xid] = newUid
+	sh.uidMap.Put(xid, newUid)
 
 	if m.writer != nil {
 		var uidBuf [8]byte
