@@ -78,6 +78,8 @@ type options struct {
 	EncryptionKey x.SensitiveByteSlice
 	// BadgerCompressionlevel is the compression level to use while writing to badger.
 	BadgerCompressionLevel int
+	BlockCacheSize         int64
+	IndexCacheSize         int64
 }
 
 type state struct {

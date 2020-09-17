@@ -41,6 +41,18 @@ type volume struct {
 	ReadOnly bool `yaml:"read_only"`
 }
 
+type deploy struct {
+	Resources res `yaml:",omitempty"`
+}
+
+type res struct {
+	Limits limit `yaml:",omitempty"`
+}
+
+type limit struct {
+	Memory string `yaml:",omitempty"`
+}
+
 type service struct {
 	name          string // not exported
 	Image         string
@@ -56,6 +68,7 @@ type service struct {
 	TmpFS         []string  `yaml:",omitempty"`
 	User          string    `yaml:",omitempty"`
 	Command       string    `yaml:",omitempty"`
+	Deploy        deploy    `yaml:",omitempty"`
 }
 
 type composeConfig struct {
@@ -85,6 +98,7 @@ type options struct {
 	WhiteList     bool
 	Ratel         bool
 	RatelPort     int
+	MemLimit      string
 }
 
 var opts options
@@ -193,6 +207,11 @@ func getZero(idx int) service {
 	} else {
 		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), basePort)
 	}
+	if len(opts.MemLimit) > 0 {
+		svc.Deploy.Resources = res{
+			Limits: limit{Memory: opts.MemLimit},
+		}
+	}
 
 	return svc
 }
@@ -254,7 +273,11 @@ func getAlpha(idx int) service {
 			ReadOnly: true,
 		})
 	}
-
+	if len(opts.MemLimit) > 0 {
+		svc.Deploy.Resources = res{
+			Limits: limit{Memory: opts.MemLimit},
+		}
+	}
 	return svc
 }
 
@@ -421,6 +444,8 @@ func main() {
 		"include ratel service")
 	cmd.PersistentFlags().IntVar(&opts.RatelPort, "ratel_port", 8000,
 		"Port to expose Ratel service")
+	cmd.PersistentFlags().StringVarP(&opts.MemLimit, "mem", "", "",
+		"Limit memory provided to the docker containers, for example 8G.")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
