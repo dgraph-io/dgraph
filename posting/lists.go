@@ -163,7 +163,6 @@ func Init(ps *badger.DB, cacheSize int64) {
 		m := lCache.Metrics
 		ticker := time.NewTicker(10 * time.Second)
 		for range ticker.C {
-			glog.V(2).Infof("Posting list cache metrics: %s", m)
 			// Record the posting list cache hit ratio
 			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 		}
