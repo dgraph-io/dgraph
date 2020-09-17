@@ -40,7 +40,7 @@ func TestTrie(t *testing.T) {
 // doesn't make sense.
 func BenchmarkWordsTrie(b *testing.B) {
 	buf := make([]byte, 32)
-	arena := NewArena(2 << 20)
+	arena := NewArena(4 << 20)
 
 	trie := NewTrie(arena)
 	var uid uint64

@@ -45,10 +45,7 @@ func (a *Arena) Allocate(sz uint32) uint32 {
 		data, err := y.Mmap(a.fd, true, toSize)
 		x.Check(err)
 		zeroOut(data, int(a.offset))
-		// data := make([]byte, toSize)
-		// copy(data, a.data)
 		a.data = data
-		fmt.Printf("Done %d\n", toSize)
 	}
 	a.offset += sz
 	return a.offset - sz
@@ -192,15 +189,21 @@ func (t *Trie) put(offset uint32, key string, uid uint64) uint32 {
 		n = t.getNode(offset)
 		n.r = r
 	}
+
 	switch {
 	case r < n.r:
-		n.left = t.put(n.left, key, uid)
+		off := t.put(n.left, key, uid)
+		// We need to get the node again to avoid holding a reference to arena's data struct, which
+		// might have remapped due to a call to Allocate.
+		t.getNode(offset).left = off
 
 	case r > n.r:
-		n.right = t.put(n.right, key, uid)
+		off := t.put(n.right, key, uid)
+		t.getNode(offset).right = off
 
 	case len(key[1:]) > 0:
-		n.mid = t.put(n.mid, key[1:], uid)
+		off := t.put(n.mid, key[1:], uid)
+		t.getNode(offset).mid = off
 
 	default:
 		n.uid = uid
