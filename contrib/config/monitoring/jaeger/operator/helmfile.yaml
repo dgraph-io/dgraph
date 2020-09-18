@@ -14,6 +14,10 @@ releases:
           name: jaeger-operator
         rbac:
           clusterRole: true
+  ## Jaeger Operator Reference (official)
+  ##  https://godoc.org/github.com/jaegertracing/jaeger-operator/pkg/apis/jaegertracing/v1#JaegerSpec
+  ## Example based on
+  ##  https://github.com/jaegertracing/jaeger-operator/blob/master/deploy/examples/with-badger-and-volume.yaml
   - name: jaeger
     namespace: observability
     chart: ./jaeger

@@ -1,6 +1,6 @@
 # Jaeger Operator
 
-Jaeger operator is an implementation of a [Kubernetes operator](https://coreos.com/operators/) that aims to ease the operational complexity of deploying and managing Jaeger.
+The [Jaeger operator](https://github.com/jaegertracing/jaeger-operator) is an implementation of a [Kubernetes operator](https://coreos.com/operators/) that aims to ease the operational complexity of deploying and managing Jaeger.
 
 ## Tool Requirements
 
@@ -19,13 +19,13 @@ These tools are optional if you would like to use a single command to install al
 
 ## Deploy
 
-### Using Helmfile
+### Deploy Using Helmfile
 
 ```bash
 helmfile apply
 ```
 
-### Without Helmfile
+### Deploy Helm and Kubectl
 
 If you do not have `helmfile` available you can do these steps:
 
@@ -43,7 +43,7 @@ helm install "jaeger-operator" \
 ## Install Jaeger using Jaeger Operator CRD
 kubectl apply \
   --namespace observability \
-  --kustomize jaeger-kustomize/overlays/badger/
+  --kustomize ./jaeger-kustomize/overlays/badger
 
 ## Install Dgraph configured to use Jaeger
 helm repo add dgraph https://charts.dgraph.io
@@ -55,20 +55,26 @@ helm install "my-release" \
 
 ## Cleanup
 
-### Using Helmfile
+### Cleanup Using Helmfile
 
 ```bash
 helmfile delete
+kubectl delete pvc --namespace default --selector release="dgraph"
 ```
 
-### Without Helmfile
+### Cleanup Using Helm and Kubectl
 
 ```bash
+## Delete Dgraph and Dgraph Persistence
 helm delete --namespace default "my-release"
 kubectl delete pvc --namespace default --selector release="my-release"
+
+## Delete Jaeger
 kubectl delete \
   --namespace observability \
   --kustomize jaeger-kustomize/overlays/badger/
+
+## Delete Jaeber Operator
 helm delete --namespace observability "jaeger-operator"
 ```
 
