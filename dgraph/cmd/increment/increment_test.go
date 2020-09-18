@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package counter
+package increment
 
 import (
 	"context"
