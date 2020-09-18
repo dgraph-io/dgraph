@@ -13,17 +13,25 @@
 package worker
 
 import (
+	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/ee/enc"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -32,6 +40,10 @@ import (
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
 	fp *os.File
+}
+
+type BackupExporter struct {
+	fileHandler
 }
 
 // readManifest reads a manifest file at path using the handler.
@@ -239,4 +251,114 @@ func pathExist(path string) bool {
 		return true
 	}
 	return !os.IsNotExist(err) && !os.IsPermission(err)
+}
+
+func (h *fileHandler) ExportBackup(backupDir, exportDir string,
+	key x.SensitiveByteSlice) error {
+
+	loadFn := func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+		dir := filepath.Join(exportDir, fmt.Sprintf("p%d", groupId))
+
+		r, err := enc.GetReader(key, r)
+		if err != nil {
+			return 0, err
+		}
+
+		gzReader, err := gzip.NewReader(r)
+		if err != nil {
+			if len(key) != 0 {
+				err = errors.Wrap(err,
+					"Unable to read the backup. Ensure the encryption key is correct.")
+			}
+			return 0, err
+		}
+		// The badger DB should be opened only after creating the backup
+		// file reader and verifying the encryption in the backup file.
+		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+			WithSyncWrites(false).
+			WithTableLoadingMode(options.MemoryMap).
+			WithValueThreshold(1 << 10).
+			WithNumVersionsToKeep(math.MaxInt32).
+			WithEncryptionKey(key))
+
+		if err != nil {
+			return 0, err
+		}
+		defer db.Close()
+		if !pathExist(dir) {
+			fmt.Println("Creating new db:", dir)
+		}
+		maxUid, err := loadFromBackup(db, gzReader, 0, preds)
+		if err != nil {
+			return 0, err
+		}
+		return maxUid, x.WriteGroupIdFile(dir, uint32(groupId))
+	}
+
+	manifest := &Manifest{}
+	manifestPath := filepath.Join(backupDir, backupManifest)
+	if err := h.ReadManifest(manifestPath, manifest); err != nil {
+		return err
+	}
+	manifest.Path = manifestPath
+	if manifest.Since == 0 || len(manifest.Groups) == 0 {
+		return errors.Errorf("no data in backup")
+	}
+
+	for gid := range manifest.Groups {
+		file := filepath.Join(backupDir, backupName(manifest.Since, gid))
+		fp, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+		defer fp.Close()
+
+		// Only restore the predicates that were assigned to this group at the time
+		// of the last backup.
+		predSet := manifest.getPredsInGroup(gid)
+
+		_, err = loadFn(fp, gid, predSet)
+		if err != nil {
+			return err
+		}
+	}
+
+	ch := make(chan error, len(manifest.Groups))
+	for gid := range manifest.Groups {
+		go func(group uint32) {
+			dir := filepath.Join(exportDir, fmt.Sprintf("p%d", group))
+			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+				WithSyncWrites(false).
+				WithTableLoadingMode(options.MemoryMap).
+				WithValueThreshold(1 << 10).
+				WithNumVersionsToKeep(math.MaxInt32).
+				WithEncryptionKey(key))
+
+			if err != nil {
+				ch <- err
+				return
+			}
+			defer db.Close()
+
+			req := &pb.ExportRequest{
+				GroupId:     group,
+				ReadTs:      math.MaxUint64,
+				UnixTs:      time.Now().Unix(),
+				Format:      "rdf",
+				Destination: exportDir,
+			}
+
+			_, err = exportInternal(context.Background(), req, db, true)
+			ch <- err
+		}(gid)
+	}
+
+	for i := 0; i < len(manifest.Groups); i++ {
+		err := <-ch
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
