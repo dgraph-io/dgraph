@@ -44,7 +44,8 @@ In addition to them, You can also specify the timeout of the subscription in the
 
 ## Example 
 
-Consider following Schema, it has both @withSubscription and @auth directive defined on type Todo. Auth rule enforces that only todo's of owner $USER is visible which will be given in the JWT.
+### schema
+Consider following Schema, it has both `@withSubscription` and `@auth` directive defined on type Todo. Auth rule enforces that only todo's of owner `$USER` is visible which will be given in the JWT.
 
 ```graphql
 type Todo @withSubscription @auth(
@@ -62,7 +63,10 @@ type Todo @withSubscription @auth(
    }
 # Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
 ```
-Subscription needs the JWT in which $USER, expiry, and other variables are declared. 
+
+### JWT
+
+Subscription needs the JWT in which `$USER`, expiry, and other variables are declared. 
 The JWT is passed from graphql client as key-value pair, where the key is Header given in schema and the value is the JWT.
 For example in our case, the key is Authorization and the value is the JWT. 
 
@@ -76,19 +80,23 @@ const wsLink = new WebSocketLink({
     connectionParams: {  "Authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2OTAxMjg2MjIsImh0dHBzOi8vZGdyYXBoLmlvIjp7IlJPTEUiOiJVU0VSIiwiVVNFUiI6IkFsaWNlIn0sImlzcyI6InRlc3QifQ.6AODlumsk9kbnwZHwy08l40PeqEmBHqK4E_ozNjQpuI", },});
 ```
 
+### Working
+
 The below example shows the working of Subscription with Auth rules for the schema given above.
 
-First, we will generate the JWT with expiry and $USER which is the owner of TODO, and put it in the header section in the client from where it will be passed 
+First, we generate the JWT as shown in the below image with expiry and `$USER` which is the owner of TODO.
+You can generate the JWT from [jwt.io](https://jwt.io/)
+We need to send the JWT to the server along with the request as discussed above.
 
-![Subscription-Generating-JWT](/images/graphql/Generating-JWT.gif "Subscription with Auth Example")
+![Subscription-Generating-JWT](/images/graphql/Generating-JWT.png "Subscription with Auth Example")
 
 
-Next, we run the subscription and send updates. We see that only the todo's which are added with the owner name Alice are visible in the subscription.
+Next, We run the subscription and send updates. We see that only the Todo's which are added with the owner name Alice are visible in the subscription.
 
 ![Subscription+Auth-Action](/images/graphql/Auth-Action.gif "Subscription with Auth Example")
 
 
-And after some time the JWT expires and the subscription terminates as shown below
+And after some time the JWT expires and the subscription terminates as shown below.
 
 ![Subscription+Timeout](/images/graphql/Subscription-Timeout.gif "Subscription with Auth Example")
 
