@@ -22,29 +22,30 @@ First choose the desired storage of Cassandra or ElasticSearch:
 
 ```bash
 # Cassandra is desired storage
-export JAEGER_STORAGE=cassandra
+export JAEGER_STORAGE_TYPE=cassandra
 # ElasticSearch is the desired storage
-export JAEGER_STORAGE=elasticsearch
+export JAEGER_STORAGE_TYPE=elasticsearch
 ```
 
-**IMPORTANT**: In either `jaeger_cassandra.yaml` or `jaeger_elasticsearch.yaml`, change the password helm config values to a strong password.
+**IMPORTANT**: Change the `<secret_password>` to a strong password in the instructions below.
 
-### Using Helmfile
+### Deploy Using Helmfile
 
 ```bash
-helmfile apply
+JAEGER_STORAGE_PASSWORD="<secret_password>" helmfile apply
 ```
 
-### Using Helm
+### Deploy Using Helm
 
 ```bash
 kubectl create namespace observability
 
-export JAEGER_STORAGE=${JAEGER_STORAGE:-'cassandra'}
+export JAEGER_STORAGE_TYPE=${JAEGER_STORAGE_TYPE:-'cassandra'}
 helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
 helm install "jaeger" \
   --namespace observability \
-  --values ./jaeger_${JAEGER_STORAGE}.yaml \
+  --values ./jaeger_${JAEGER_STORAGE_TYPE}.yaml \
+  --set storage.${JAEGER_STORAGE_TYPE}.password="<secret_password>" \
   jaegertracing/jaeger
 
 helm install "my-release" \
@@ -53,20 +54,31 @@ helm install "my-release" \
   dgraph/dgraph
 ```
 
+
 ## Cleanup
 
-### Using Helmfile
+### Cleanup Using Helmfile
 
 ```bash
-helmfile delete
+## Delete Jaeger, Storage (Cassandra or ElasticSearch), Dgraph
+JAEGER_STORAGE_PASSWORD="<secret_password>" helmfile delete
+
+## Remove Any Persistent Storage
+kubectl delete pvc --namespace default --selector release="dgraph"
+kubectl delete pvc --namespace observability --selector release="jaeger"
+
 ```
 
-### Using Helm
+### Cleanup Using Helm
 
 ```bash
+## Delete Jaeger, Storage (Cassandra or ElasticSearch), Dgraph
 helm delete --namespace default "my-release"
-kubectl delete pvc --namespace default --selector release="my-release"
 helm delete --namespace observability "jaeger"
+
+## Remove Any Persistent Storage
+kubectl delete pvc --namespace default --selector release="my-release"
+kubectl delete pvc --namespace observability --selector release="jaeger"
 ```
 
 ## Jaeger Query UI

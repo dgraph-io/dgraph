@@ -10,7 +10,10 @@ releases:
     chart: jaegertracing/jaeger
     version: 0.37.0
     values:
-      - ./jaeger_{{ env "JAEGER_STORAGE" | default "cassandra" }}.yaml
+      - ./jaeger_{{ env "JAEGER_STORAGE_TYPE" | default "cassandra" }}.yaml
+      - storage:
+          {{ env "JAEGER_STORAGE_TYPE" | default "cassandra" }}:
+            password: {{ requiredEnv "JAEGER_STORAGE_PASSWORD" }}
 
   - name: dgraph
     namespace: default

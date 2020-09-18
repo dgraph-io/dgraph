@@ -5,7 +5,11 @@ storage:
   cassandra:
     user: cassandrauser
     usePassword: true
+    ## CHANGE THIS BEFORE DEPLOYING!!!
     password: CHANGEME
+    
+## The settings under cassandra can be found here:
+##   https://github.com/helm/charts/tree/master/incubator/cassandra
 cassandra:
   persistence:
     enabled: true
