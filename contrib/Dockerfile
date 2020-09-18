@@ -19,4 +19,5 @@ EXPOSE 9080
 RUN mkdir /dgraph
 WORKDIR /dgraph
 
+ENV JE_MALLOC_CONF "background_thread:true,metadata_thp:auto"
 CMD ["dgraph"] # Shows the dgraph version and commands available.
