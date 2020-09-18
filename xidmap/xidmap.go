@@ -129,8 +129,8 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		backoff := initBackoff
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 1e4})
-			glog.V(1).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
+			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 1e5})
+			glog.V(2).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
 			cancel()
 			if err == nil {
 				backoff = initBackoff
