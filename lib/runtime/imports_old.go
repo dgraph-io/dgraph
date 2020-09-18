@@ -716,7 +716,12 @@ func ext_secp256k1_ecdsa_recover(context unsafe.Pointer, msgData, sigData, pubke
 //export ext_is_validator
 func ext_is_validator(context unsafe.Pointer) int32 {
 	logger.Trace("[ext_is_validator] executing...")
-	logger.Warn("[ext_is_validator] Not yet implemented.")
+	instanceContext := wasm.IntoInstanceContext(context)
+
+	runtimeCtx := instanceContext.Data().(*Ctx)
+	if runtimeCtx.validator {
+		return 1
+	}
 	return 0
 }
 

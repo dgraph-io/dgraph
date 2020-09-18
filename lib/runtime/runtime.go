@@ -34,6 +34,7 @@ type Ctx struct {
 	storage   Storage
 	allocator *FreeingBumpHeapAllocator
 	keystore  *keystore.GenericKeystore
+	validator bool
 }
 
 // Config represents a runtime configuration
@@ -42,6 +43,7 @@ type Config struct {
 	Keystore *keystore.GenericKeystore
 	Imports  func() (*wasm.Imports, error)
 	LogLvl   log.Lvl
+	Role     byte
 }
 
 // Runtime struct
@@ -92,10 +94,16 @@ func NewRuntime(code []byte, cfg *Config) (*Runtime, error) {
 
 	memAllocator := NewAllocator(instance.Memory, 0)
 
+	validator := false
+	if cfg.Role == byte(4) {
+		validator = true
+	}
+
 	runtimeCtx := &Ctx{
 		storage:   cfg.Storage,
 		allocator: memAllocator,
 		keystore:  cfg.Keystore,
+		validator: validator,
 	}
 
 	logger.Debug("NewRuntime", "runtimeCtx", runtimeCtx)
