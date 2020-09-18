@@ -18,6 +18,7 @@ package query
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -3229,6 +3230,35 @@ func TestBetweenInt(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
+
+func TestBetweenCount(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test between on count`,
+			`
+			{
+				me(func: between(count(friend), 1, 3)) {
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[{"name":"Rick Grimes"},{"name":"Andrea"}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			fmt.Println(js)
 			require.JSONEq(t, js, tc.result)
 		})
 	}
