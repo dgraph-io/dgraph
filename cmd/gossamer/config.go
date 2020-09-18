@@ -273,6 +273,10 @@ func setDotGlobalConfig(ctx *cli.Context, cfg *dot.GlobalConfig) {
 		cfg.BasePath = basepath
 	}
 
+	// check if cfg.BasePath his been set, if not set to default
+	if cfg.BasePath == "" {
+		cfg.BasePath = dot.GssmrConfig().Global.BasePath
+	}
 	// check --log flag
 	if lvlToInt, err := strconv.Atoi(ctx.String(LogFlag.Name)); err == nil {
 		lvl := log.Lvl(lvlToInt)
