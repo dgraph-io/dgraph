@@ -26,7 +26,7 @@ Graph databases optimize internal data representation to be able to do graph ope
 
 ### Language
 
-Dgraph supports [GraphQL+-]({{< relref "query-language/_index.md#graphql">}}),
+Dgraph supports [GraphQL+-]({{< relref "query-language/graphql-fundamentals.md">}}),
 a variation of [GraphQL](https://graphql.org/), a query language created by
 Facebook. 
 GraphQL+-, as GraphQL itself, allows results to be produced as subgraph rather than lists.

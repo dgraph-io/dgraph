@@ -23,9 +23,9 @@ Dgraph cluster nodes use different ports to communicate over gRPC and HTTP. User
        ratel      |  --Not Used--         | --Not Used--  |  8000
 
 
-<sup>1</sup>: Dgraph Zero's gRPC-internal port is used for internal communication within the cluster. It's also needed for the [fast data loading]({{< relref "#fast-data-loading" >}}) tools Dgraph Live Loader and Dgraph Bulk Loader.
+<sup>1</sup>: Dgraph Zero's gRPC-internal port is used for internal communication within the cluster. It's also needed for the [fast data loading]({{< relref "deploy/fast-data-loading.md" >}}) tools Dgraph Live Loader and Dgraph Bulk Loader.
 
-<sup>2</sup>: Dgraph Zero's HTTP-external port is used for [admin]({{< relref "#more-about-dgraph-zero" >}}) operations. Access to it is not required by clients.
+<sup>2</sup>: Dgraph Zero's HTTP-external port is used for [admin]({{< relref "deploy/dgraph-zero.md" >}}) operations. Access to it is not required by clients.
 
 Users have to modify security rules or open firewall ports depending up on their underlying network to allow communication between cluster nodes and between the Dgraph instances themselves and between Dgraph and a client. A general rule is to make *-external (gRPC/HTTP) ports wide open to clients and gRPC-internal ports open within the cluster nodes.
 
