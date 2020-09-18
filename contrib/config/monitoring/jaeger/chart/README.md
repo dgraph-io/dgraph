@@ -1,13 +1,13 @@
 # Jaeger Helm Chart
 
-The Jaeger Helm Chart adds all components required to run Jaeger in Kubernetes for a production-like deployment.
+The [Jaeger Helm Chart](https://github.com/jaegertracing/helm-charts/tree/master/charts/jaeger) adds all components required to run Jaeger in Kubernetes for a production-like deployment.
 
 ## Tool Requirements
 
 ### Required
 
 * [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) - required to interact with kubernetes
-* [helm](https://helm.sh/docs/intro/install/) - required to install jaeger-operator using helm chart
+* [helm](https://helm.sh/docs/intro/install/) - required to install jaeger, cassandra, and elasticsearch using helm chart
 
 ### Optional
 
@@ -17,6 +17,17 @@ These tools are optional if you would like to use a single command to install al
 * [helm-diff](https://github.com/databus23/helm-diff) helm plugin: `helm plugin install https://github.com/databus23/helm-diff`
 
 ## Deploy
+
+First choose the desired storage of Cassandra or ElasticSearch:
+
+```bash
+# Cassandra is desired storage
+export JAEGER_STORAGE=cassandra
+# ElasticSearch is the desired storage
+export JAEGER_STORAGE=elasticsearch
+```
+
+**IMPORTANT**: In either `jaeger_cassandra.yaml` or `jaeger_elasticsearch.yaml`, change the password helm config values to a strong password.
 
 ### Using Helmfile
 
@@ -29,10 +40,11 @@ helmfile apply
 ```bash
 kubectl create namespace observability
 
+export JAEGER_STORAGE=${JAEGER_STORAGE:-'cassandra'}
 helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
 helm install "jaeger" \
   --namespace observability \
-  --values ./jaeger_cassandra.yaml \
+  --values ./jaeger_${JAEGER_STORAGE}.yaml \
   jaegertracing/jaeger
 
 helm install "my-release" \
@@ -49,14 +61,13 @@ helm install "my-release" \
 helmfile delete
 ```
 
-## Using Helm
+### Using Helm
 
 ```bash
 helm delete --namespace default "my-release"
 kubectl delete pvc --namespace default --selector release="my-release"
 helm delete --namespace observability "jaeger"
 ```
-
 
 ## Jaeger Query UI
 

@@ -10,12 +10,12 @@ releases:
     chart: jaegertracing/jaeger
     version: 0.37.0
     values:
-      - ./jaeger_cassandra.yaml
+      - ./jaeger_{{ env "JAEGER_STORAGE" | default "cassandra" }}.yaml
 
   - name: dgraph
     namespace: default
     chart: dgraph/dgraph
-    need:
+    needs:
       - observability/jaeger
     values:
       - ./dgraph_jaeger.yaml

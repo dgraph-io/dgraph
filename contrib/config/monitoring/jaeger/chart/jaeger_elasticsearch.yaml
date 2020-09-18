@@ -1,17 +1,11 @@
 provisionDataStore:
-  cassandra: true
+  elasticsearch: true
 storage:
-  type: cassandra
+  type: elasticsearch
   cassandra:
-    user: cassandrauser
+    user: elasticuser
     usePassword: true
     password: CHANGEME
-cassandra:
-  persistence:
-    enabled: true
-  image:
-    repo: cassandra
-    tag: 3.11.8
 
 agent:
   ## Optional Monitoring for Prometheus
