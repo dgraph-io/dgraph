@@ -1026,39 +1026,44 @@ func IsGuardian(groups []string) bool {
 func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
-	checkCache := func(ct string) {
+	getMetrics := func(ct string) *ristretto.Metrics {
 		var metrics *ristretto.Metrics
 		switch ct {
 		case "pstore-block":
 			metrics = db.BlockCacheMetrics()
-			ostats.Record(context.Background(), PBlockHitRatio.M(metrics.Ratio()))
 		case "pstore-index":
 			metrics = db.IndexCacheMetrics()
-			ostats.Record(context.Background(), PIndexHitRatio.M(metrics.Ratio()))
 		case "WALstore-block":
 			metrics = db.BlockCacheMetrics()
-			ostats.Record(context.Background(), WBlockHitRatio.M(metrics.Ratio()))
 		case "WALstore-index":
 			metrics = db.IndexCacheMetrics()
-			ostats.Record(context.Background(), WIndexHitRatio.M(metrics.Ratio()))
-		case "zwstore-block":
-			metrics = db.BlockCacheMetrics()
-			ostats.Record(context.Background(), ZWBlockHitRatio.M(metrics.Ratio()))
-		case "zwstore-index":
-			metrics = db.IndexCacheMetrics()
-			ostats.Record(context.Background(), ZWIndexHitRatio.M(metrics.Ratio()))
 		default:
-			panic("invalid cache type")
+			metrics = nil
 		}
+		return metrics
+	}
+
+	checkCache := func(ct string) {
+		metrics := getMetrics(ct)
 		if metrics == nil {
 			return
 		}
-		prefix := fmt.Sprintf("%s-%s", prefix, ct)
-		le := metrics.LifeExpectancySeconds()
-		glog.V(2).Infof("%s metrics %+v %+v", prefix, metrics, le)
+		switch ct {
+		case "pstore-block":
+			ostats.Record(context.Background(), PBlockHitRatio.M(metrics.Ratio()))
+		case "pstore-index":
+			ostats.Record(context.Background(), PIndexHitRatio.M(metrics.Ratio()))
+		case "WALstore-block":
+			ostats.Record(context.Background(), WBlockHitRatio.M(metrics.Ratio()))
+		case "WALstore-index":
+			ostats.Record(context.Background(), WIndexHitRatio.M(metrics.Ratio()))
+		default:
+			panic("invalid cache type")
+		}
 
 		// If the mean life expectancy is less than 10 seconds, the cache
 		// might be too small.
+		le := metrics.LifeExpectancySeconds()
 		lifeTooShort := le.Count > 0 && float64(le.Sum)/float64(le.Count) < 10
 		hitRatioTooLow := metrics.Ratio() < 0.4
 		if bool(glog.V(2)) && (lifeTooShort || hitRatioTooLow) {
@@ -1066,10 +1071,19 @@ func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, clos
 			glog.Warningf("Metric: %+v", metrics)
 			glog.Warningf("Life expectancy: %+v", le)
 		}
+	}
 
+	logMetrics := func(ct string) {
+		if metrics := getMetrics(ct); metrics != nil {
+			prefix := fmt.Sprintf("%s-%s", prefix, ct)
+			le := metrics.LifeExpectancySeconds()
+			glog.V(2).Infof("%s metrics %+v %+v", prefix, metrics, le)
+		}
 	}
 
 	ticker := time.NewTicker(period)
+	tickerLog := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
 	defer ticker.Stop()
 
 	for {
@@ -1077,6 +1091,9 @@ func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, clos
 		case <-ticker.C:
 			checkCache(prefix + "-block")
 			checkCache(prefix + "-index")
+		case <-tickerLog.C:
+			logMetrics(prefix + "-block")
+			logMetrics(prefix + "-index")
 		case <-closer.HasBeenClosed():
 			return
 		}

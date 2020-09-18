@@ -84,24 +84,18 @@ var (
 	// TxnAborts records count of aborted transactions.
 	TxnAborts = stats.Int64("txn_aborts",
 		"Number of transaction aborts", stats.UnitDimensionless)
-	// PBlockHitRatio records the hit ratio of p store block cache.
+	// PBlockHitRatio records the hit ratio of posting store block cache.
 	PBlockHitRatio = stats.Float64("hit_ratio_postings_block",
 		"Hit ratio of p store block cache", stats.UnitDimensionless)
-	// PIndexHitRatio records the hit ratio of p store index cache.
+	// PIndexHitRatio records the hit ratio of posting store index cache.
 	PIndexHitRatio = stats.Float64("hit_ratio_postings_index",
 		"Hit ratio of p store index cache", stats.UnitDimensionless)
-	// WBlockHitRatio records the hit ratio of w store block cache.
+	// WBlockHitRatio records the hit ratio of wal store block cache.
 	WBlockHitRatio = stats.Float64("hit_ratio_wal_block",
 		"Hit ratio of w store block cache", stats.UnitDimensionless)
-	// WIndexHitRatio records the hit ratio of w store index cache.
+	// WIndexHitRatio records the hit ratio of wal store index cache.
 	WIndexHitRatio = stats.Float64("hit_ratio_wal_index",
 		"Hit ratio of w store index cache", stats.UnitDimensionless)
-	// ZWBlockHitRatio records the hit ratio of zw store block cache.
-	ZWBlockHitRatio = stats.Float64("hit_ratio_zwal_block",
-		"Hit ratio of zw store block cache", stats.UnitDimensionless)
-	// ZWIndexHitRatio records the hit ratio of zw store index cache.
-	ZWIndexHitRatio = stats.Float64("hit_ratio_zwal_index",
-		"Hit ratio of zw store index cache", stats.UnitDimensionless)
 	// PLCacheHitRatio records the hit ratio of posting list cache.
 	PLCacheHitRatio = stats.Float64("hit_ratio_posting_cache",
 		"Hit ratio of posting list cache", stats.UnitDimensionless)
@@ -254,20 +248,6 @@ var (
 			Name:        WIndexHitRatio.Name(),
 			Measure:     WIndexHitRatio,
 			Description: WIndexHitRatio.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        ZWBlockHitRatio.Name(),
-			Measure:     ZWBlockHitRatio,
-			Description: ZWBlockHitRatio.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        ZWIndexHitRatio.Name(),
-			Measure:     ZWIndexHitRatio,
-			Description: ZWIndexHitRatio.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
