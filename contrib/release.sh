@@ -43,6 +43,8 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
+# TODO Check if ports 8000, 9080, or 6080 are bound already and error out early.
+
 check_command_exists strip
 check_command_exists make
 check_command_exists gcc
@@ -232,6 +234,11 @@ createSum windows
 # Create Docker image.
 cp $basedir/dgraph/contrib/Dockerfile $TMP
 pushd $TMP
+  # Get a fresh ubuntu:latest image each time
+  # Don't rely on whatever "latest" version
+  # happens to be on the machine.
+  docker image rm ubuntu:latest
+
   docker build -t dgraph/dgraph:$DOCKER_TAG .
 popd
 rm $TMP/Dockerfile
