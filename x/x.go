@@ -1193,15 +1193,29 @@ func GetCompressionLevels(compressionLevelsString string) ([]int, error) {
 	return compressionLevelsInt, nil
 }
 
-func ToHex(i uint64) []byte {
+// ToHex converts a uint64 to a hex byte array. If rdf is true it will
+// use < > brackets to delimit the value. Otherwise it will use quotes
+// like JSON requires.
+func ToHex(i uint64, rdf bool) []byte {
 	var b [16]byte
 	tmp := strconv.AppendUint(b[:0], i, 16)
 
 	out := make([]byte, len(tmp)+3+1)
-	out[0] = '"'
+	if rdf {
+		out[0] = '<'
+	} else {
+		out[0] = '"'
+	}
+
 	out[1] = '0'
 	out[2] = 'x'
 	n := copy(out[3:], tmp)
-	out[3+n] = '"'
+
+	if rdf {
+		out[3+n] = '>'
+	} else {
+		out[3+n] = '"'
+	}
+
 	return out
 }

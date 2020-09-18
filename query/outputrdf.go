@@ -113,7 +113,7 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 
 func (b *rdfBuilder) writeRDF(subject uint64, predicate []byte, object []byte) {
 	// add subject
-	x.Check2(b.buf.Write(toHex(subject)))
+	x.Check2(b.buf.Write(x.ToHex(subject, true)))
 	x.Check(b.buf.WriteByte(' '))
 	// add predicate
 	b.writeTriple(predicate)
@@ -149,14 +149,14 @@ func (b *rdfBuilder) rdfForUIDList(subject uint64, list *pb.List, sg *SubGraph) 
 			continue
 		}
 		// Build object.
-		b.writeRDF(subject, []byte(sg.fieldName()), toHex(destUID))
+		b.writeRDF(subject, []byte(sg.fieldName()), x.ToHex(destUID, true))
 	}
 }
 
 // rdfForValueList returns rdf for the value list.
 func (b *rdfBuilder) rdfForValueList(subject uint64, valueList *pb.ValueList, attr string) {
 	if attr == "uid" {
-		b.writeRDF(subject, []byte(attr), toHex(subject))
+		b.writeRDF(subject, []byte(attr), x.ToHex(subject, true))
 		return
 	}
 	for _, destValue := range valueList.Values {
@@ -228,17 +228,4 @@ func quotedNumber(val []byte) []byte {
 	tmpVal = append(tmpVal, val...)
 	tmpVal = append(tmpVal, '"')
 	return tmpVal
-}
-
-func toHex(uid uint64) []byte {
-	var buf [16]byte
-	tmp := strconv.AppendUint(buf[:0], uid, 16)
-
-	out := make([]byte, len(tmp)+3+1)
-	out[0] = '<'
-	out[1] = '0'
-	out[2] = 'x'
-	n := copy(out[3:], tmp)
-	out[3+n] = '>'
-	return out
 }
