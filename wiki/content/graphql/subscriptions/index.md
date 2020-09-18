@@ -67,7 +67,7 @@ type Todo @withSubscription @auth(
 ### JWT
 
 Subscription needs the JWT in which `$USER`, expiry, and other variables are declared. 
-The JWT is passed from graphql client as key-value pair, where the key is Header given in schema and the value is the JWT.
+The JWT is passed from GraphQL client as key-value pair, where the key is Header given in schema and the value is the JWT.
 For example in our case, the key is Authorization and the value is the JWT. 
 
 Most of the GraphQL clients have a separate header section to pass Header-JWT key-value pair while from apollo client it is passed
