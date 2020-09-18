@@ -188,7 +188,7 @@ a `Rdf` field, which has the RDF encoded result.
 	const q = `
 		{
 			all(func: anyofterms(name, "Alice Bob")) {
-				uid
+				name
 				balance
 			}
 		}
@@ -197,7 +197,9 @@ a `Rdf` field, which has the RDF encoded result.
 	if err != nil {
 		log.Fatal(err)
 	}
-
+ 
+	// <0x17> <name> "Alice" .
+	// <0x17> <balance> 100 .
 	fmt.Println(resp.Rdf)
 ```
 
