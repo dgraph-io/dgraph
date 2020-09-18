@@ -3543,40 +3543,6 @@ func updateMutationWithoutSetRemove(t *testing.T) {
 	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
 }
 
-func int64BoundaryTesting(t *testing.T) {
-	//This test checks the range of Int64
-	//(2^63)=9223372036854775808
-	addPost1Params := &GraphQLParams{
-		Query: `mutation {
-			addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },{title: "Dgraph1", numLikes: -9223372036854775808 }]) {
-				post1 {
-					title
-					numLikes
-				}
-			}
-		}`,
-	}
-
-	gqlResponse := addPost1Params.ExecuteAsPost(t, graphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	addPost1Expected := `{
-		"addpost1": {
-			"post1": [{
-				"title": "Dgraph",
-				"numLikes": 9223372036854775807
-
-			},{
-				"title": "Dgraph1",
-				"numLikes": -9223372036854775808
-			}]
-		}
-	}`
-	testutil.CompareJSON(t, addPost1Expected, string(gqlResponse.Data))
-	filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
-	deleteGqlType(t, "post1", filter, 2, nil)
-}
-
 func nestedAddMutationWithHasInverse(t *testing.T) {
 	params := &GraphQLParams{
 		Query: `mutation addPerson1($input: [AddPerson1Input!]!) {
