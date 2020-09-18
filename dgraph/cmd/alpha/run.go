@@ -214,7 +214,7 @@ they form a Raft group and provide synchronous replication.
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
 
 	// Cache flags
-	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha.")
+	flag.Int64("cache_mb", 2048, "Total size of cache (in MB) to be used in alpha.")
 	flag.String("cache_percentage", "0,65,25,0,10",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).`)
@@ -727,6 +727,15 @@ func run() {
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
 		return
+	}
+
+	hasEncryption := len(x.WorkerConfig.EncryptionKey) > 0
+	// Dgraph should not be used without cache when compression/encryption are enabled.
+	pNeedsCache := (opts.PostingDirCompressionLevel != 0 || hasEncryption)
+	wNeedsCache := (opts.WALDirCompressionLevel != 0 || hasEncryption)
+	if pNeedsCache && opts.PBlockCacheSize == 0 || wNeedsCache && opts.WBlockCacheSize == 0 {
+		log.Fatal("Block cache is needed when compression or encryption is enabled. " +
+			"Please set the --cache_mb flag and --cache_percentage flags.")
 	}
 
 	setupCustomTokenizers()

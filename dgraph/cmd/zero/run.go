@@ -118,7 +118,7 @@ instances to achieve high-availability.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored for the write-ahead log directory "+
 			"log directory. mmap consumes more RAM, but provides better performance.")
-	flag.Int("badger.compression_level", 3,
+	flag.Int("badger.compression_level", 0,
 		"The compression level for Badger. A higher value uses more resources.")
 }
 
@@ -275,6 +275,11 @@ func run() {
 		// By default, compression is disabled in badger.
 		kvOpt.Compression = bopt.ZSTD
 		kvOpt.ZSTDCompressionLevel = compression_level
+	}
+
+	if compression_level > 0 && blockCacheSz == 0 {
+		log.Fatal("Cache is required with Compression. " +
+			"Please set --cache_mb and --cache_percentage flags.")
 	}
 
 	// Set loading mode options.
