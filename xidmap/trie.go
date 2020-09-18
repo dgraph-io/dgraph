@@ -1,7 +1,6 @@
 package xidmap
 
 import (
-	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"golang.org/x/sys/unix"
 )
 
@@ -36,7 +36,7 @@ func (a *Arena) Allocate(sz uint32) uint32 {
 
 		// TODO: Move Msync over to Badger so it works with various OS.
 		// TODO: Somehow doing truncate and remap here is causing faults.
-		fmt.Printf("Remapping Arena from %d to %d\n", len(a.data), toSize)
+		glog.V(2).Infof("Remapping Arena from %d to %d\n", len(a.data), toSize)
 		x.Check(unix.Msync(a.data, unix.MS_SYNC))
 		x.Check(y.Munmap(a.data))
 		x.Check(a.fd.Sync())
@@ -65,7 +65,6 @@ func (a *Arena) Data(offset uint32) []byte {
 
 // Release unmaps the file, truncates it and deletes it.
 func (a *Arena) Release() {
-	// return
 	x.Log(y.Munmap(a.data), "while unmapping Arena")
 	x.Log(a.fd.Truncate(0), "while truncating Arena file")
 	x.Log(os.Remove(a.fd.Name()), "while deleting Arena file")
