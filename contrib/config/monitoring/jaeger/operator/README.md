@@ -85,6 +85,6 @@ export POD_NAME=$(kubectl get pods \
 kubectl port-forward --namespace observability $POD_NAME 16686:16686
 ```
 
-Afteward, visit:
+Afterward, visit:
 
 * http://localhost:16686
