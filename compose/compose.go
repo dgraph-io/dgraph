@@ -460,8 +460,8 @@ func main() {
 	if opts.NumZeros < 1 || opts.NumZeros > 99 {
 		fatal(errors.Errorf("number of zeros must be 1-99"))
 	}
-	if opts.NumAlphas < 1 || opts.NumAlphas > 99 {
-		fatal(errors.Errorf("number of alphas must be 1-99"))
+	if opts.NumAlphas < 0 || opts.NumAlphas > 99 {
+		fatal(errors.Errorf("number of alphas must be 0-99"))
 	}
 	if opts.NumReplicas%2 == 0 {
 		fatal(errors.Errorf("number of replicas must be odd"))
