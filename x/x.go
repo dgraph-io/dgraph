@@ -41,9 +41,9 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -139,6 +139,9 @@ const (
 },{
 	"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],
 	"name": "dgraph.type.Rule"
+}, {
+	"fields": [{"name": "dgraph.graphql.schema_history"},{"name": "dgraph.graphql.schema_created_at"}],
+	"name": "dgraph.graphql.history"
 }]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
@@ -155,6 +158,8 @@ const (
 	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
 	GraphqlPredicates = `
 {"predicate":"dgraph.graphql.schema", "type": "string"},
+{"predicate":"dgraph.graphql.schema_history", "type": "string"},
+{"predicate":"dgraph.graphql.schema_created_at", "type": "datetime"},
 {"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
 `
 )
@@ -326,6 +331,22 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	}
 }
 
+func SetStatusWithErrors(w http.ResponseWriter, code string, errs []string) {
+	var qr queryRes
+	ext := make(map[string]interface{})
+	ext["code"] = code
+	for _, err := range errs {
+		qr.Errors = append(qr.Errors, &GqlError{Message: err, Extensions: ext})
+	}
+	if js, err := json.Marshal(qr); err == nil {
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
+	} else {
+		Panic(errors.Errorf("Unable to marshal: %+v", qr))
+	}
+}
+
 // SetHttpStatus is similar to SetStatus but sets a proper HTTP status code
 // in the response instead of always returning HTTP 200 (OK).
 func SetHttpStatus(w http.ResponseWriter, code int, msg string) {
@@ -465,7 +486,12 @@ func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error
 		out = gzw
 	}
 
-	return out.Write(b)
+	bytesWritten, err := out.Write(b)
+	if err != nil {
+		return 0, err
+	}
+	w.Header().Set("Content-Length", strconv.FormatInt(int64(bytesWritten), 10))
+	return bytesWritten, nil
 }
 
 // Min returns the minimum of the two given numbers.
@@ -1000,7 +1026,7 @@ func IsGuardian(groups []string) bool {
 
 // RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
 // Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
-func RunVlogGC(store *badger.DB, closer *y.Closer) {
+func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 	// Get initial size on start.
 	_, lastVlogSize := store.Size()
@@ -1041,7 +1067,7 @@ type DB interface {
 	Sync() error
 }
 
-func StoreSync(db DB, closer *y.Closer) {
+func StoreSync(db DB, closer *z.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(1 * time.Second)
 	for {
@@ -1130,4 +1156,52 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 	}
 
 	return cachePercent, nil
+}
+
+// ParseCompressionLevel returns compression level(int) given the compression level(string)
+func ParseCompressionLevel(compressionLevel string) (int, error) {
+	x, err := strconv.Atoi(compressionLevel)
+	if err != nil {
+		return 0, errors.Errorf("ERROR: unable to parse compression level(%s)", compressionLevel)
+	}
+	if x < 0 {
+		return 0, errors.Errorf("ERROR: compression level(%s) cannot be negative", compressionLevel)
+	}
+	return x, nil
+}
+
+// GetCompressionLevels returns the slice of compression levels given the "," (comma) separated
+// compression levels(integers) string.
+func GetCompressionLevels(compressionLevelsString string) ([]int, error) {
+	compressionLevels := strings.Split(compressionLevelsString, ",")
+	// Validity checks
+	if len(compressionLevels) != 1 && len(compressionLevels) != 2 {
+		return nil, errors.Errorf("ERROR: expected single integer or two comma separated integers")
+	}
+	var compressionLevelsInt []int
+	for _, cLevel := range compressionLevels {
+		x, err := ParseCompressionLevel(cLevel)
+		if err != nil {
+			return nil, err
+		}
+		compressionLevelsInt = append(compressionLevelsInt, x)
+	}
+	// Append the same compression level in case only one level was passed.
+	if len(compressionLevelsInt) == 1 {
+		compressionLevelsInt = append(compressionLevelsInt, compressionLevelsInt[0])
+	}
+	return compressionLevelsInt, nil
+}
+
+func ToHex(i uint64) []byte {
+	var b [16]byte
+	tmp := strconv.AppendUint(b[:0], i, 16)
+
+	out := make([]byte, len(tmp)+3+1)
+	out[0] = '"'
+	out[1] = '0'
+	out[2] = 'x'
+	n := copy(out[3:], tmp)
+	out[3+n] = '"'
+	return out
 }

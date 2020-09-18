@@ -69,6 +69,15 @@
             "upsert": true
         },
         {
+            "predicate": "Person1.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Person1.friends",
+            "type": "uid",
+            "list": true
+        },
+        {
             "predicate": "Post1.comments",
             "type": "uid",
             "list": true
@@ -81,6 +90,17 @@
                 "hash"
             ],
             "upsert": true
+        },
+        {
+            "predicate": "post1.title",
+            "type": "string",
+            "index": true,
+            "tokenizer": ["trigram", "hash"],
+            "upsert": true
+        },
+        {
+            "predicate": "post1.numLikes",
+            "type": "int"
         },
         {
             "predicate": "State.capital",
@@ -158,6 +178,14 @@
         },
         {
             "predicate": "dgraph.graphql.schema",
+            "type": "string"
+        },
+        {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+        },
+        {
+            "predicate": "dgraph.graphql.schema_history",
             "type": "string"
         },
         {
@@ -441,6 +469,17 @@
         {
             "fields": [
                 {
+                    "name": "Person1.name"
+                },
+                {
+                    "name": "Person1.friends"
+                }
+            ],
+            "name": "Person1"
+        },
+        {
+            "fields": [
+                {
                     "name": "Post1.id"
                 },
                 {
@@ -448,6 +487,17 @@
                 }
             ],
             "name": "Post1"
+        },
+        {
+            "fields": [
+                {
+                    "name": "post1.title"
+                },
+                {
+                    "name": "post1.numLikes"
+                }
+            ],
+            "name": "post1"
         },
         {
             "fields": [
@@ -554,6 +604,16 @@
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         },
         {
             "fields": [

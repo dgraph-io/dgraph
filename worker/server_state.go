@@ -24,9 +24,9 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
@@ -36,7 +36,7 @@ type ServerState struct {
 
 	Pstore   *badger.DB
 	WALstore *badger.DB
-	gcCloser *y.Closer // closer for valueLogGC
+	gcCloser *z.Closer // closer for valueLogGC
 
 	needTs chan tsReq
 }
@@ -83,20 +83,25 @@ func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
 		// Settings for the write-ahead log.
 		badgerTables = Config.BadgerWalTables
 		badgerVlog = Config.BadgerWalVlog
-		// Disable compression for WAL as it is supposed to be fast. Compression makes it a
-		// little slow (Though we save some disk space but it is not worth the slowness).
-		opt.Compression = options.None
+		glog.Infof("Setting WAL Dir Compression Level: %d", Config.WALDirCompressionLevel)
+		// Default value of WALDirCompressionLevel is 0 so compression will always
+		// be disabled, unless it is explicitly enabled by setting the value to greater than 0.
+		if Config.WALDirCompressionLevel != 0 {
+			// By default, compression is disabled in badger.
+			opt.Compression = options.ZSTD
+			opt.ZSTDCompressionLevel = Config.WALDirCompressionLevel
+		}
 	} else {
 		// Settings for the data directory.
 		badgerTables = Config.BadgerTables
 		badgerVlog = Config.BadgerVlog
-		glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
-		// Default value of badgerCompressionLevel is 3 so compression will always
+		glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
+		// Default value of postingDirCompressionLevel is 3 so compression will always
 		// be enabled, unless it is explicitly disabled by setting the value to 0.
-		if Config.BadgerCompressionLevel != 0 {
+		if Config.PostingDirCompressionLevel != 0 {
 			// By default, compression is disabled in badger.
 			opt.Compression = options.ZSTD
-			opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
+			opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
 		}
 	}
 
@@ -183,7 +188,7 @@ func (s *ServerState) initStorage() {
 		opt.EncryptionKey = nil
 	}
 
-	s.gcCloser = y.NewCloser(2)
+	s.gcCloser = z.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
 	go x.RunVlogGC(s.WALstore, s.gcCloser)
 }

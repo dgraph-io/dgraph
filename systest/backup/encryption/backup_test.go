@@ -295,11 +295,12 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	restoredPreds, err := testutil.GetPredicateNames(pdir)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.cors", "dgraph.graphql.xid",
-		"dgraph.type", "movie"}, restoredPreds)
+		"dgraph.type", "movie", "dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at"},
+		restoredPreds)
 
 	restoredTypes, err := testutil.GetTypeNames(pdir)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"Node", "dgraph.graphql"}, restoredTypes)
+	require.ElementsMatch(t, []string{"Node", "dgraph.graphql", "dgraph.graphql.history"}, restoredTypes)
 
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)

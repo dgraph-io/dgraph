@@ -58,6 +58,14 @@ const (
             "type": "string"
         },
         {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
+            "type": "string"
+		},
+        {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
             "index": true,
@@ -86,6 +94,16 @@ const (
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         }
     ]
 }`
@@ -114,6 +132,14 @@ const (
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
+        {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
+            "type": "string"
+		},
         {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
@@ -151,6 +177,16 @@ const (
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         }
     ]
 }`
@@ -195,6 +231,14 @@ const (
             "type": "string"
         },
         {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
+            "type": "string"
+		},
+        {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
             "index": true,
@@ -234,6 +278,16 @@ const (
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         }
     ]
 }`
@@ -286,6 +340,14 @@ const (
             "type": "string"
         },
         {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
+            "type": "string"
+		},
+        {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
             "index": true,
@@ -328,6 +390,16 @@ const (
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         }
     ]
 }`
@@ -743,7 +815,7 @@ func testCors(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		client := &http.Client{}
-		req, err := http.NewRequest("GET", graphqlURL, nil)
+		req, err := http.NewRequest("GET", GraphqlURL, nil)
 		require.NoError(t, err)
 		req.Header.Add("Origin", "google.com")
 		resp, err := client.Do(req)
@@ -754,7 +826,7 @@ func testCors(t *testing.T) {
 		require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "true")
 
 		client = &http.Client{}
-		req, err = http.NewRequest("GET", graphqlURL, nil)
+		req, err = http.NewRequest("GET", GraphqlURL, nil)
 		require.NoError(t, err)
 		req.Header.Add("Origin", "googl.com")
 		resp, err = client.Do(req)

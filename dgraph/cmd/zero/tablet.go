@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	predicateMoveTimeout = 20 * time.Minute
+	predicateMoveTimeout = 120 * time.Minute
 )
 
 /*

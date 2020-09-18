@@ -48,10 +48,14 @@ type Options struct {
 	// BadgerWalVlog is the name of the mode used to load the badger value log for the w directory.
 	BadgerWalVlog string
 
-	// BadgerCompressionLevel is the ZSTD compression level used by badger. A
+	// WALDirCompressionLevel is the ZSTD compression level used by WAL directory. A
 	// higher value means more CPU intensive compression and better compression
 	// ratio.
-	BadgerCompressionLevel int
+	WALDirCompressionLevel int
+	// PostingDirCompressionLevel is the ZSTD compression level used by Postings directory. A
+	// higher value means more CPU intensive compression and better compression
+	// ratio.
+	PostingDirCompressionLevel int
 	// WALDir is the path to the directory storing the write-ahead log.
 	WALDir string
 	// MutationsMode is the mode used to handle mutation requests.

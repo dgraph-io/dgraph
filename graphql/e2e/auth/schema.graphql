@@ -23,6 +23,21 @@ type User @auth(
   tickets: [Ticket] @hasInverse(field: assignedTo)
   secrets: [UserSecret]
   issues: [Issue]
+  tweets: [Tweets] @hasInverse(field: user)
+}
+
+type Tweets @auth (
+    query: { rule: "{$ROLE: { eq: \"admin\" } }"},
+    add: { rule: "{$USER: { eq: \"foo\" } }"},
+    delete: { rule: "{$USER: { eq: \"foo\" } }"},
+    update: { rule: "{$USER: { eq: \"foo\" } }"}
+){
+    id: String! @id
+    text: String! @search(by: [fulltext])
+    user: User
+    timestamp: DateTime! @search
+    score: Int @search
+    streams: String @search
 }
 
 type UserSecret @auth(

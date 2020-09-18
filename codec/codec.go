@@ -20,9 +20,11 @@ import (
 	"bytes"
 	"math"
 	"sort"
+	"unsafe"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-groupvarint"
 )
 
@@ -44,17 +46,40 @@ type Encoder struct {
 	BlockSize int
 	pack      *pb.UidPack
 	uids      []uint64
+	alloc     *z.Allocator
+	buf       *bytes.Buffer
+}
+
+var blockSize = int(unsafe.Sizeof(pb.UidBlock{}))
+
+func FreePack(pack *pb.UidPack) {
+	if pack == nil {
+		return
+	}
+	if pack.Allocator == 0 {
+		return
+	}
+	alloc := z.AllocatorFrom(pack.Allocator)
+	alloc.Release()
 }
 
 func (e *Encoder) packBlock() {
 	if len(e.uids) == 0 {
 		return
 	}
-	block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
+
+	// Allocate blocks manually.
+	b := e.alloc.Allocate(blockSize)
+	block := (*pb.UidBlock)(unsafe.Pointer(&b[0]))
+
+	block.Base = e.uids[0]
+	block.NumUids = uint32(len(e.uids))
+
+	// block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
 	last := e.uids[0]
 	e.uids = e.uids[1:]
 
-	var out bytes.Buffer
+	e.buf.Reset()
 	buf := make([]byte, 17)
 	tmpUids := make([]uint32, 4)
 	for {
@@ -69,7 +94,7 @@ func (e *Encoder) packBlock() {
 		}
 
 		data := groupvarint.Encode4(buf, tmpUids)
-		x.Check2(out.Write(data))
+		x.Check2(e.buf.Write(data))
 
 		// e.uids has ended and we have padded tmpUids with 0s
 		if len(e.uids) <= 4 {
@@ -79,14 +104,21 @@ func (e *Encoder) packBlock() {
 		e.uids = e.uids[4:]
 	}
 
-	block.Deltas = out.Bytes()
+	sz := len(e.buf.Bytes())
+	block.Deltas = e.alloc.Allocate(sz)
+	x.AssertTrue(sz == copy(block.Deltas, e.buf.Bytes()))
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
+
+var tagEncoder string = "enc"
 
 // Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
+		e.alloc = z.NewAllocator(1024)
+		e.alloc.Tag = tagEncoder
+		e.buf = new(bytes.Buffer)
 	}
 
 	size := len(e.uids)
@@ -102,9 +134,12 @@ func (e *Encoder) Add(uid uint64) {
 	}
 }
 
-// Done returns the final output of the encoder.
+// Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
 func (e *Encoder) Done() *pb.UidPack {
 	e.packBlock()
+	if e.pack != nil && e.alloc != nil {
+		e.pack.Allocator = e.alloc.Ref
+	}
 	return e.pack
 }
 
@@ -151,7 +186,12 @@ func (d *Decoder) UnpackBlock() []uint64 {
 			// The SSE code tries to read 16 bytes past the header(1 byte).
 			// So we are padding encData to increase its length to 17 bytes.
 			// This is a workaround for https://github.com/dgryski/go-groupvarint/issues/1
-			encData = append(encData, bytes.Repeat([]byte{0}, 17-len(encData))...)
+			//
+			// We should NEVER write to encData, because it references block.Deltas, which is laid
+			// out on an allocator.
+			tmp := make([]byte, 17)
+			copy(tmp, encData)
+			encData = tmp
 		}
 
 		groupvarint.Decode4(tmpUids, encData)
