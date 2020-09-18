@@ -1,6 +1,7 @@
 package xidmap
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
@@ -8,8 +9,6 @@ import (
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"golang.org/x/sys/unix"
 )
 
 // Arena uses file mmap to allocate memory. This allows us to store big data structures like Tries
@@ -22,30 +21,31 @@ type Arena struct {
 	data   []byte
 	fd     *os.File
 	offset uint32
+	fsz    int64
 }
 
 // Allocate would allocate the given size of bytes in the Arena. If needed, it would remap the
 // underlying file to double the existing size. Allocate would crash if we reach MaxUint32.
 func (a *Arena) Allocate(sz uint32) uint32 {
-	if len(a.data)-int(a.offset) < int(sz) {
-		x.AssertTrue(len(a.data) < math.MaxUint32)
-		toSize := int64(len(a.data)) * 2
+	if a.fsz-int64(a.offset) < int64(sz) {
+		x.AssertTrue(a.fsz < math.MaxUint32)
+		toSize := a.fsz * 2
 		if toSize > math.MaxUint32 {
 			toSize = math.MaxUint32
 		}
 
-		// TODO: Move Msync over to Badger so it works with various OS.
-		// TODO: Somehow doing truncate and remap here is causing faults.
-		glog.V(2).Infof("Remapping Arena from %d to %d\n", len(a.data), toSize)
-		x.Check(unix.Msync(a.data, unix.MS_SYNC))
-		x.Check(y.Munmap(a.data))
-		x.Check(a.fd.Sync())
+		// glog.V(2).Infof("Remapping Arena from %d to %d\n", len(a.data), toSize)
+		fmt.Printf("Remapping Arena from %d to %d\n", len(a.data), toSize)
+		// x.Check(unix.Msync(a.data, unix.MS_SYNC))
+		// x.Check(y.Munmap(a.data))
+		// x.Check(a.fd.Sync())
 		x.Check(a.fd.Truncate(toSize))
+		a.fsz = toSize
 
-		data, err := y.Mmap(a.fd, true, toSize)
-		x.Check(err)
-		zeroOut(data, int(a.offset))
-		a.data = data
+		// data, err := y.Mmap(a.fd, true, toSize)
+		// x.Check(err)
+		// a.zeroOut()
+		// a.data = data
 	}
 	a.offset += sz
 	return a.offset - sz
@@ -70,13 +70,17 @@ func (a *Arena) Release() {
 	x.Log(os.Remove(a.fd.Name()), "while deleting Arena file")
 }
 
-func zeroOut(data []byte, offset int) {
-	data = data[offset:]
-	data[0] = 0x00
-	for bp := 1; bp < len(data); bp *= 2 {
-		copy(data[bp:], data[:bp])
-	}
-}
+// Don't think we need this. Doing this is expensive.
+// func (a *Arena) zeroOut() {
+// 	data := a.data[a.offset:a.fsz]
+// 	if len(data) == 0 {
+// 		return
+// 	}
+// 	data[0] = 0x00
+// 	for bp := 1; bp < len(data); bp *= 2 {
+// 		copy(data[bp:], data[:bp])
+// 	}
+// }
 
 func NewArena(sz int64) *Arena {
 	x.AssertTruef(sz <= math.MaxUint32,
@@ -87,16 +91,19 @@ func NewArena(sz int64) *Arena {
 
 	// mtype := unix.PROT_READ | unix.PROT_WRITE
 	// data, err := unix.Mmap(-1, 0, int(sz), mtype, unix.MAP_SHARED|unix.MAP_ANONYMOUS)
-	data, err := y.Mmap(fd, true, sz)
+	data, err := y.Mmap(fd, true, 4<<30) // Mmap the entire 4GB.
 	x.Check(err)
-	zeroOut(data, 0)
 
-	return &Arena{
+	data[0] = 0x00
+	a := &Arena{
 		// data:   make([]byte, sz),
 		data:   data,
 		fd:     fd,
+		fsz:    sz,
 		offset: 1, // Skip offset zero for nil nodes.
 	}
+	// a.zeroOut()
+	return a
 }
 
 // Trie is an implementation of Ternary Search Tries to store XID to UID map. It uses Arena to
