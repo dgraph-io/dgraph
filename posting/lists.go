@@ -162,6 +162,7 @@ func Init(ps *badger.DB, cacheSize int64) {
 	go func() {
 		m := lCache.Metrics
 		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
 		for range ticker.C {
 			// Record the posting list cache hit ratio
 			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))

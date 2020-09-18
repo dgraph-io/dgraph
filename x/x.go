@@ -1037,8 +1037,6 @@ func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, clos
 			metrics = db.BlockCacheMetrics()
 		case "WALstore-index":
 			metrics = db.IndexCacheMetrics()
-		default:
-			metrics = nil
 		}
 		return metrics
 	}
@@ -1082,9 +1080,9 @@ func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, clos
 	}
 
 	ticker := time.NewTicker(period)
+	defer ticker.Stop()
 	tickerLog := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-	defer ticker.Stop()
+	defer tickerLog.Stop()
 
 	for {
 		select {
