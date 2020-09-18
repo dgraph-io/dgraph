@@ -1,0 +1,21 @@
+repositories:
+  - name: jaegertracing
+    url: https://jaegertracing.github.io/helm-charts
+  - name: dgraph
+    url: https://charts.dgraph.io
+
+releases:
+  - name: jaeger
+    namespace: observability
+    chart: jaegertracing/jaeger
+    version: 0.37.0
+    values:
+      - ./jaeger_cassandra.yaml
+
+  - name: dgraph
+    namespace: default
+    chart: dgraph/dgraph
+    need:
+      - observability/jaeger
+    values:
+      - ./dgraph_jaeger.yaml
