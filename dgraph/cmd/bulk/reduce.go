@@ -480,7 +480,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		return cbuf
 	}
 
-	hd := z.NewHistogramData(z.HistogramBounds(20, 40)) // 1 MB onwards.
+	hd := z.NewHistogramData(z.HistogramBounds(16, 40))
 	cbuf := getBuf()
 
 	for i := 0; i < len(partitionKeys); i++ {
