@@ -599,10 +599,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			return false
 		}
 
-		if !pk.IsType() {
-			if skipZero {
-				return true
-			}
+		if !pk.IsType() && !skipZero {
 			if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
 				return false
 			}

@@ -182,13 +182,6 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 					kv.Value = restoreVal
 					kv.UserMeta = []byte{byt}
 
-					pk, err := x.Parse(kv.Key)
-					if err != nil {
-						panic(err)
-					}
-					if pk.ByteType == x.ByteSplit && pk.StartUid == 0 {
-						panic(pk)
-					}
 					if err := loader.Set(kv); err != nil {
 						return 0, err
 					}
@@ -203,13 +196,6 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 						return 0, err
 					}
 					for _, kv := range kvs {
-						pk, err := x.Parse(kv.Key)
-						if err != nil {
-							panic(err)
-						}
-						if pk.ByteType == x.ByteSplit && pk.StartUid == 0 {
-							panic(pk)
-						}
 						if err := loader.Set(kv); err != nil {
 							return 0, err
 						}
