@@ -57,10 +57,17 @@ type shardState struct {
 	mu   sync.Mutex // Allow only 1 write per shard at a time.
 }
 
+func newMapperBuffer(opt *options) *z.Buffer {
+	sz := float64(opt.MapBufSize) * 1.2
+	buf, err := z.NewBufferWith(int(sz), 2*int(opt.MapBufSize), z.UseMmap)
+	x.Check(err)
+	return buf
+}
+
 func newMapper(st *state) *mapper {
 	shards := make([]shardState, st.opt.MapShards)
 	for i := range shards {
-		shards[i].cbuf = z.NewBuffer(1 << 20)
+		shards[i].cbuf = newMapperBuffer(st.opt)
 	}
 	return &mapper{
 		state:  st,
@@ -246,9 +253,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 				go m.writeMapEntriesToFile(sh.cbuf, i)
 				// Clear the entries and encodedSize for the next batch.
 				// Proactively allocate 32 slots to bootstrap the entries slice.
-				var err error
-				sh.cbuf, err = z.NewBufferWith(1<<20, math.MaxInt64, z.UseMmap)
-				x.Check(err)
+				sh.cbuf = newMapperBuffer(m.opt)
 			}
 		}
 	}
