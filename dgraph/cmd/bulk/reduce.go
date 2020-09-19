@@ -401,7 +401,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 			right := countEntry(req.countBuf.Slice(offsets[j]))
 			return left.less(right)
 		})
-		if sz := req.countBuf.Len(); sz > 0 {
+		if sz := req.countBuf.Len(); sz > 1 {
 			ci.countBuf.Grow(sz)
 		}
 		for _, offset := range offsets {
@@ -497,7 +497,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
 		default:
 		}
-		if cbuf.Len() == 0 {
+		if cbuf.IsEmpty() {
 			continue
 		}
 		if cbuf.Len() > 1<<30 {
@@ -505,7 +505,8 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 
 			// Just check how many keys do we have in this giant buffer.
 			keys := make(map[uint64]int64)
-			var offset, numEntries int
+			var numEntries int
+			offset := 1
 			for offset < cbuf.Len() {
 				me := MapEntry(cbuf.Slice(offset))
 				keys[z.MemHash(me.Key())]++
@@ -578,6 +579,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		if len(currentBatch) > 1e9 {
 			fmt.Printf("Got current batch of size: %d\n", len(currentBatch))
 		}
+		atomic.AddInt64(&r.prog.reduceEdgeCount, int64(len(currentBatch)))
 
 		pk, err := x.Parse(currentKey)
 		x.Check(err)
@@ -691,7 +693,6 @@ func (r *reducer) toList(req *encodeRequest) {
 
 	var sz int
 	for _, offset := range req.offsets {
-		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 		entry := MapEntry(cbuf.Slice(offset))
 		entryKey := entry.Key()
 
