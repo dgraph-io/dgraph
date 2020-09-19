@@ -58,7 +58,7 @@ type shardState struct {
 }
 
 func newMapperBuffer(opt *options) *z.Buffer {
-	sz := float64(opt.MapBufSize) * 1.2
+	sz := float64(opt.MapBufSize) * 1.1
 	buf, err := z.NewBufferWith(int(sz), 2*int(opt.MapBufSize), z.UseMmap)
 	x.Check(err)
 	return buf
@@ -154,7 +154,6 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	}()
 
 	offsets := cbuf.SliceOffsets(nil)
-
 	sort.Slice(offsets, func(i, j int) bool {
 		lhs := MapEntry(cbuf.Slice(offsets[i]))
 		rhs := MapEntry(cbuf.Slice(offsets[j]))
@@ -170,7 +169,7 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	}()
 
 	gzWriter := gzip.NewWriter(f)
-	w := bufio.NewWriter(gzWriter)
+	w := bufio.NewWriterSize(gzWriter, 4<<20)
 	defer func() {
 		x.Check(w.Flush())
 		x.Check(gzWriter.Flush())
