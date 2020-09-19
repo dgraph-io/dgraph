@@ -149,7 +149,8 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 		WithLogger(nil).
 		WithEncryptionKey(r.opt.EncryptionKey).
 		WithBlockCacheSize(r.opt.BlockCacheSize).
-		WithIndexCacheSize(r.opt.IndexCacheSize)
+		WithIndexCacheSize(r.opt.IndexCacheSize).
+		WithLoadBloomsOnOpen(false)
 
 	opt.Compression = bo.None
 	opt.ZSTDCompressionLevel = 0
@@ -297,7 +298,7 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 	itr := &mapIterator{
 		fd:      fd,
 		reader:  reader,
-		batchCh: make(chan *iteratorEntry, 3),
+		batchCh: make(chan *iteratorEntry), // Make this unbuffered.
 	}
 	return header, itr
 }
@@ -446,15 +447,22 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser := z.NewCloser(1)
 	go r.startWriting(ci, writerCh, writerCloser)
 
-	const limit = 4 << 30
+	const limit = 2 << 30
 	throttle := func() {
+		var paused bool
 		for {
 			sz := atomic.LoadInt64(&r.prog.numEncoding)
 			if sz < limit {
+				if paused {
+					fmt.Println("Resuming encoding...")
+				}
 				return
 			}
-			fmt.Printf("Not sending out more encoder load. Num Bytes being encoded: %d\n", sz)
-			time.Sleep(10 * time.Second)
+			if !paused {
+				fmt.Printf("Not sending out more encoder load. Num Bytes being encoded: %d\n", sz)
+			}
+			paused = true
+			time.Sleep(time.Second)
 		}
 	}
 
@@ -504,7 +512,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		default:
 		}
 
-		if cbuf.Len() > limit {
+		if cbuf.Len() > limit/2 {
 			fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.Len())))
 
 			// Just check how many keys do we have in this giant buffer.
@@ -576,6 +584,22 @@ func (r *reducer) toList(req *encodeRequest) {
 	kvList := &bpb.KVList{}
 	trackCountIndex := make(map[string]bool)
 
+	var freePostings []*pb.Posting
+
+	getPosting := func() *pb.Posting {
+		if sz := len(freePostings); sz > 0 {
+			last := freePostings[sz-1]
+			freePostings = freePostings[:sz-1]
+			return last
+		}
+		return &pb.Posting{}
+	}
+
+	freePosting := func(p *pb.Posting) {
+		p.Reset()
+		freePostings = append(freePostings, p)
+	}
+
 	appendToList := func() {
 		if len(currentBatch) == 0 {
 			return
@@ -622,7 +646,7 @@ func (r *reducer) toList(req *encodeRequest) {
 
 			enc.Add(uid)
 			if pbuf := me.Plist(); len(pbuf) > 0 {
-				p := &pb.Posting{}
+				p := getPosting()
 				x.Check(p.Unmarshal(pbuf))
 				pl.Postings = append(pl.Postings, p)
 			}
@@ -690,6 +714,9 @@ func (r *reducer) toList(req *encodeRequest) {
 			kvList.Kv = append(kvList.Kv, kv)
 		}
 
+		for _, p := range pl.Postings {
+			freePosting(p)
+		}
 		pl.Reset()
 		// Reset the current batch.
 		currentBatch = currentBatch[:0]
