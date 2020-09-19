@@ -9,13 +9,10 @@ import (
 )
 
 func TestTrie(t *testing.T) {
-	require.Equal(t, uint32(24), nodeSz,
+	require.Equal(t, uint32(24), uint32(nodeSz),
 		"Size of Trie node should be 24. Got: %d\n", nodeSz)
 
-	arena := NewArena(1 << 20)
-	defer arena.Release()
-
-	trie := NewTrie(arena)
+	trie := NewTrie()
 
 	trie.Put("trie", 1)
 	trie.Put("tree", 2)
@@ -40,9 +37,10 @@ func TestTrie(t *testing.T) {
 // doesn't make sense.
 func BenchmarkWordsTrie(b *testing.B) {
 	buf := make([]byte, 32)
-	arena := NewArena(4 << 20)
 
-	trie := NewTrie(arena)
+	trie := NewTrie()
+	defer trie.Release()
+
 	var uid uint64
 	b.ResetTimer()
 
@@ -56,7 +54,6 @@ func BenchmarkWordsTrie(b *testing.B) {
 		humanize.IBytes(uint64(trie.Size())),
 		uint64(trie.Size())/uid)
 	b.StopTimer()
-	arena.Release()
 }
 
 func BenchmarkWordsMap(b *testing.B) {

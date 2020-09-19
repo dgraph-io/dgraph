@@ -80,9 +80,8 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		shards:    make([]*shard, numShards),
 	}
 	for i := range xm.shards {
-		arena := NewArena(32 << 20) // Start with 32 MB.
 		xm.shards[i] = &shard{
-			trie: NewTrie(arena),
+			trie: NewTrie(),
 			// uidMap: make(map[string]uint64),
 		}
 	}

@@ -246,7 +246,9 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 				go m.writeMapEntriesToFile(sh.cbuf, i)
 				// Clear the entries and encodedSize for the next batch.
 				// Proactively allocate 32 slots to bootstrap the entries slice.
-				sh.cbuf = z.NewBuffer(1 << 20)
+				var err error
+				sh.cbuf, err = z.NewBufferWith(1<<20, math.MaxInt64, z.UseMmap)
+				x.Check(err)
 			}
 		}
 	}

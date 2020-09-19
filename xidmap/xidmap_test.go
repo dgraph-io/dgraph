@@ -72,10 +72,6 @@ func TestXidmap(t *testing.T) {
 }
 
 func TestXidmapMemory(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping because -short=true")
-	}
-
 	var loop uint32
 	bToMb := func(b uint64) uint64 {
 		return b / 1024 / 1024
@@ -90,10 +86,9 @@ func TestXidmapMemory(t *testing.T) {
 		fmt.Printf(" Loop = %.2fM", float64(atomic.LoadUint32(&loop))/1e6)
 		fmt.Printf(" NumGC = %v\n", m.NumGC)
 	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-
 		for range ticker.C {
 			printMemory()
 		}
@@ -113,7 +108,7 @@ func TestXidmapMemory(t *testing.T) {
 			defer wg.Done()
 			for {
 				i := atomic.AddUint32(&loop, 1)
-				if i > 50e6 {
+				if i > 10e6 {
 					return
 				}
 				xidmap.AssignUid(fmt.Sprintf("xid-%d", i))
