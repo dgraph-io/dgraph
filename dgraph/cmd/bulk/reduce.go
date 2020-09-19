@@ -98,7 +98,7 @@ func (r *reducer) run() error {
 				countBuf:    z.NewBuffer(1024),
 			}
 
-			partitionKeys := make([][]byte, len(partitions))
+			partitionKeys := make([][]byte, 0, len(partitions))
 			for k := range partitions {
 				partitionKeys = append(partitionKeys, []byte(k))
 			}
@@ -106,10 +106,6 @@ func (r *reducer) run() error {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
 			})
 
-			// Start batching for the given keys.
-			for _, itr := range mapItrs {
-				go itr.startBatching(partitionKeys)
-			}
 			r.reduce(partitionKeys, mapItrs, ci)
 			ci.wait()
 
@@ -184,28 +180,14 @@ func (r *reducer) createTmpBadger() *badger.DB {
 }
 
 type mapIterator struct {
-	fd      *os.File
-	reader  *bufio.Reader
-	batchCh chan *iteratorEntry
+	fd     *os.File
+	reader *bufio.Reader
+	meBuf  []byte
 }
 
-type iteratorEntry struct {
-	partitionKey []byte
-	cbuf         *z.Buffer
-}
-
-func (mi *mapIterator) release(ie *iteratorEntry) {
-	ie.cbuf.Release()
-}
-
-func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
-	var ie *iteratorEntry
-	prevKeyExist := false
-	var meBuf, key []byte
-	var cbuf *z.Buffer
-
+func (mi *mapIterator) Next(cbuf *z.Buffer, partitionKey []byte) {
 	readMapEntry := func() error {
-		if prevKeyExist {
+		if len(mi.meBuf) > 0 {
 			return nil
 		}
 		r := mi.reader
@@ -218,62 +200,35 @@ func (mi *mapIterator) startBatching(partitionsKeys [][]byte) {
 			log.Fatalf("Could not read uvarint: %d", n)
 		}
 		x.Check2(r.Discard(n))
-		if cap(meBuf) < int(sz) {
-			meBuf = make([]byte, int(sz))
+		if cap(mi.meBuf) < int(sz) {
+			mi.meBuf = make([]byte, int(sz))
 		}
-		meBuf = meBuf[:int(sz)]
-		x.Check2(io.ReadFull(r, meBuf))
-		key = MapEntry(meBuf).Key()
+		mi.meBuf = mi.meBuf[:int(sz)]
+		x.Check2(io.ReadFull(r, mi.meBuf))
 		return nil
 	}
-
-	for _, pKey := range partitionsKeys {
-		ie = &iteratorEntry{partitionKey: pKey, cbuf: z.NewBuffer(64)}
-		for {
-			err := readMapEntry()
-			if err == io.EOF {
-				break
-			}
-			x.Check(err)
-
-			if bytes.Compare(key, ie.partitionKey) < 0 {
-				b := ie.cbuf.SliceAllocate(len(meBuf))
-				copy(b, meBuf)
-				prevKeyExist = false
-				// map entry is already part of cBuf.
-				continue
-			}
-			// Current key is not part of this batch so track that we have already read the key.
-			prevKeyExist = true
-			break
-		}
-		mi.batchCh <- ie
-	}
-
-	// Drain the last items.
-	cbuf = z.NewBuffer(64)
 	for {
-		err := readMapEntry()
-		if err == io.EOF {
+		if err := readMapEntry(); err == io.EOF {
 			break
+		} else {
+			x.Check(err)
 		}
-		x.Check(err)
-		b := cbuf.SliceAllocate(len(meBuf))
-		copy(b, meBuf)
-		prevKeyExist = false
-	}
-	mi.batchCh <- &iteratorEntry{
-		cbuf:         cbuf,
-		partitionKey: nil,
+		key := MapEntry(mi.meBuf).Key()
+
+		if len(partitionKey) == 0 || bytes.Compare(key, partitionKey) < 0 {
+			b := cbuf.SliceAllocate(len(mi.meBuf))
+			copy(b, mi.meBuf)
+			mi.meBuf = mi.meBuf[:0]
+			// map entry is already part of cBuf.
+			continue
+		}
+		// Current key is not part of this batch so track that we have already read the key.
+		return
 	}
 }
 
 func (mi *mapIterator) Close() error {
 	return mi.fd.Close()
-}
-
-func (mi *mapIterator) Next() *iteratorEntry {
-	return <-mi.batchCh
 }
 
 func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
@@ -296,9 +251,8 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 	x.Check(err)
 
 	itr := &mapIterator{
-		fd:      fd,
-		reader:  reader,
-		batchCh: make(chan *iteratorEntry), // Make this unbuffered.
+		fd:     fd,
+		reader: reader,
 	}
 	return header, itr
 }
@@ -432,6 +386,48 @@ func (r *reducer) writeSplitLists(db, tmpDb *badger.DB, writer *badger.StreamWri
 	x.Check(stream.Orchestrate(context.Background()))
 }
 
+const limit = 2 << 30
+
+func (r *reducer) throttle() {
+	var paused bool
+	for {
+		sz := atomic.LoadInt64(&r.prog.numEncoding)
+		if sz < limit {
+			if paused {
+				fmt.Println("Resuming encoding...")
+			}
+			return
+		}
+		if !paused {
+			fmt.Printf("Not sending out more encoder load. Num Bytes being encoded: %d\n", sz)
+		}
+		paused = true
+		time.Sleep(time.Second)
+	}
+}
+
+func bufferStats(cbuf *z.Buffer) {
+	fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.Len())))
+
+	// Just check how many keys do we have in this giant buffer.
+	keys := make(map[uint64]int64)
+	var numEntries int
+	offset := 1
+	for offset < cbuf.Len() {
+		me := MapEntry(cbuf.Slice(offset))
+		keys[z.MemHash(me.Key())]++
+
+		offset += 4 + len(me)
+		numEntries++
+	}
+	keyHist := z.NewHistogramData(z.HistogramBounds(10, 32))
+	for _, num := range keys {
+		keyHist.Update(num)
+	}
+	fmt.Printf("Num Entries: %d. Total keys: %d\n Histogram: %s\n",
+		numEntries, len(keys), keyHist.String())
+}
+
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
 	cpu := r.opt.NumGoroutines
 	fmt.Printf("Num Encoders: %d\n", cpu)
@@ -446,25 +442,6 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	// Start listening to write the badger list.
 	writerCloser := z.NewCloser(1)
 	go r.startWriting(ci, writerCh, writerCloser)
-
-	const limit = 2 << 30
-	throttle := func() {
-		var paused bool
-		for {
-			sz := atomic.LoadInt64(&r.prog.numEncoding)
-			if sz < limit {
-				if paused {
-					fmt.Println("Resuming encoding...")
-				}
-				return
-			}
-			if !paused {
-				fmt.Printf("Not sending out more encoder load. Num Bytes being encoded: %d\n", sz)
-			}
-			paused = true
-			time.Sleep(time.Second)
-		}
-	}
 
 	sendReq := func(zbuf *z.Buffer) {
 		wg := new(sync.WaitGroup)
@@ -489,70 +466,50 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		return cbuf
 	}
 
-	hd := z.NewHistogramData(z.HistogramBounds(16, 40))
-	cbuf := getBuf()
+	buffers := make(chan *z.Buffer, 3)
 
-	for i := 0; i < len(partitionKeys); i++ {
-		throttle()
-		for _, itr := range mapItrs {
-			res := itr.Next()
-			y.AssertTrue(bytes.Equal(res.partitionKey, partitionKeys[i]))
-			cbuf.Write(res.cbuf.Bytes())
-			itr.release(res)
-		}
-		if cbuf.Len() < 256<<20 {
-			// Pick up more data.
-			continue
-		}
+	go func() {
+		// Start collecting buffers.
+		hd := z.NewHistogramData(z.HistogramBounds(16, 40))
+		cbuf := getBuf()
+		// Append nil for the last entries.
+		partitionKeys = append(partitionKeys, nil)
 
-		hd.Update(int64(cbuf.Len()))
-		select {
-		case <-ticker.C:
-			fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
-		default:
+		for i := 0; i < len(partitionKeys); i++ {
+			for _, itr := range mapItrs {
+				pkey := partitionKeys[i]
+				itr.Next(cbuf, pkey)
+			}
+			if cbuf.Len() < 256<<20 {
+				// Pick up more data.
+				continue
+			}
+
+			hd.Update(int64(cbuf.Len()))
+			select {
+			case <-ticker.C:
+				fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
+			default:
+			}
+
+			buffers <- cbuf
+			cbuf = getBuf()
 		}
+		cbuf.Release()
+		fmt.Printf("Final Histogram of buffer sizes: %s\n", hd.String())
+		close(buffers)
+	}()
+
+	for cbuf := range buffers {
+		r.throttle()
 
 		if cbuf.Len() > limit/2 {
-			fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.Len())))
-
-			// Just check how many keys do we have in this giant buffer.
-			keys := make(map[uint64]int64)
-			var numEntries int
-			offset := 1
-			for offset < cbuf.Len() {
-				me := MapEntry(cbuf.Slice(offset))
-				keys[z.MemHash(me.Key())]++
-
-				offset += 4 + len(me)
-				numEntries++
-			}
-			keyHist := z.NewHistogramData(z.HistogramBounds(10, 32))
-			for _, num := range keys {
-				keyHist.Update(num)
-			}
-			fmt.Printf("Num Entries: %d. Total keys: %d\n Histogram: %s\n",
-				numEntries, len(keys), keyHist.String())
+			bufferStats(cbuf)
 		}
-
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
 		sendReq(cbuf)
-		cbuf = getBuf()
 	}
 
-	throttle()
-	fmt.Println("Draining the last batch")
-	cbuf.Reset()
-	for _, itr := range mapItrs {
-		res := itr.Next()
-		y.AssertTrue(res.partitionKey == nil)
-		cbuf.Write(res.cbuf.Bytes())
-		itr.release(res)
-	}
-	atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
-	hd.Update(int64(cbuf.Len()))
-	fmt.Printf("Final Histogram of buffer sizes: %s\n", hd.String())
-
-	sendReq(cbuf)
 	// Close the encodes.
 	close(encoderCh)
 	encoderCloser.SignalAndWait()
