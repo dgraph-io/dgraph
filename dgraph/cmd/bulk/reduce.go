@@ -495,7 +495,12 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			buffers <- cbuf
 			cbuf = getBuf()
 		}
-		cbuf.Release()
+		if !cbuf.IsEmpty() {
+			hd.Update(int64(cbuf.Len()))
+			buffers <- cbuf
+		} else {
+			cbuf.Release()
+		}
 		fmt.Printf("Final Histogram of buffer sizes: %s\n", hd.String())
 		close(buffers)
 	}()

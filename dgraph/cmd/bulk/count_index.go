@@ -115,7 +115,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		c.wg.Done()
 		buf.Release()
 	}()
-	if buf.Len() == 0 {
+	if buf.IsEmpty() {
 		return
 	}
 
