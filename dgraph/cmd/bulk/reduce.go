@@ -446,10 +446,11 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser := z.NewCloser(1)
 	go r.startWriting(ci, writerCh, writerCloser)
 
+	const limit = 4 << 30
 	throttle := func() {
 		for {
 			sz := atomic.LoadInt64(&r.prog.numEncoding)
-			if sz < 1<<30 {
+			if sz < limit {
 				return
 			}
 			fmt.Printf("Not sending out more encoder load. Num Bytes being encoded: %d\n", sz)
@@ -491,16 +492,19 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			cbuf.Write(res.cbuf.Bytes())
 			itr.release(res)
 		}
+		if cbuf.Len() < 256<<20 {
+			// Pick up more data.
+			continue
+		}
+
 		hd.Update(int64(cbuf.Len()))
 		select {
 		case <-ticker.C:
 			fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
 		default:
 		}
-		if cbuf.IsEmpty() {
-			continue
-		}
-		if cbuf.Len() > 1<<30 {
+
+		if cbuf.Len() > limit {
 			fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.Len())))
 
 			// Just check how many keys do we have in this giant buffer.
