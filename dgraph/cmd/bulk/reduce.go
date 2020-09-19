@@ -474,8 +474,15 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
+	getBuf := func() *z.Buffer {
+		cbuf, err := z.NewBufferWith(64<<20, 64<<30, z.UseMmap)
+		x.Check(err)
+		return cbuf
+	}
+
 	hd := z.NewHistogramData(z.HistogramBounds(20, 40)) // 1 MB onwards.
-	cbuf := z.NewBuffer(4 << 20)
+	cbuf := getBuf()
+
 	for i := 0; i < len(partitionKeys); i++ {
 		throttle()
 		for _, itr := range mapItrs {
@@ -516,7 +523,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
 		sendReq(cbuf)
-		cbuf = z.NewBuffer(4 << 20)
+		cbuf = getBuf()
 	}
 
 	throttle()
