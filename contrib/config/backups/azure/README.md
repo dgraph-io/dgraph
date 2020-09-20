@@ -185,6 +185,7 @@ ALPHA_HOST="localhost"  # hostname to connect to alpha1 container
 MINIO_HOST="gateway"    # hostname from alpha1 container
 BACKUP_BUCKET_NAME="<name-of-bucket>" # azure storage container name, e.g. dgraph-backups
 BACKUP_PATH=minio://${MINIO_HOST}:9000/${BACKUP_BUCKET_NAME}?secure=false
+
 GRAPHQL="{\"query\": \"mutation { backup(input: {destination: \\\"$BACKUP_PATH\\\" forceFull: true}) { response { message code } } }\"}"
 HEADER="Content-Type: application/json"
 
