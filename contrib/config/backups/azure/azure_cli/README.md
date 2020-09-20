@@ -9,6 +9,8 @@ This script will create required resources needed to create Azure Blog Storage u
 You need the following installed to use this automation:
 
 * [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) - Active Azure subscription has been setup.
+* [jq](https://stedolan.github.io/jq/) - command-line JSON process that makes it easy to parse JSON output from Azure CLI.
+* [bash](https://www.gnu.org/software/bash/) - shell environment
 
 ## Configuration
 
@@ -23,7 +25,7 @@ You will need to define these environment variables:
 
 ## Steps
 
-## Define Variables
+### Define Variables
 
 You can create a `env.sh` with the desired values, for example:
 
@@ -35,10 +37,34 @@ export MY_CONTAINER_NAME="my-backups"
 EOF
 ```
 
-## Run the Script
+### Run the Script
 
 ```bash
-## source env vars
+## source env vars setup earlier
 . env.sh
 ./create_blob.sh
+```
+
+## Cleanup
+
+You can run these commands to delete the resources (with prompts) on Azure.
+
+```bash
+## source env vars setup earlier
+. env.sh
+
+if az storage account list | jq '.[].name' -r | grep -q ${MY_STORAGE_ACCT}; then
+  az storage container delete \
+    --account-name ${MY_STORAGE_ACCT} \
+    --name ${MY_CONTAINER_NAME} \
+    --auth-mode login
+
+  az storage account delete \
+    --name ${MY_STORAGE_ACCT} \
+    --resource-group ${MY_RESOURCE_GROUP}
+fi
+
+if az group list | jq '.[].name' -r | grep -q ${MY_RESOURCE_GROUP}; then
+  az group delete --name=${MY_RESOURCE_GROUP}
+fi
 ```

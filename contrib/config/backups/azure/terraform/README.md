@@ -23,7 +23,7 @@ You will need to define the following variables:
 
 ## Steps
 
-## Define Variables
+### Define Variables
 
 You can define these when prompted, or in `terrafrom.tfvars` file, or through command line variables, e.g. `TF_VAR_resource_group_name`, `TF_VAR_storage_account_name`.
 
@@ -33,17 +33,24 @@ resource_group_name  = "my-organization-resources"
 storage_account_name = "myorguniquestorage12345"
 ```
 
-## Download Plugins and Modules
+### Download Plugins and Modules
 
 ```bash
 terraform init
 ```
 
-## Prepare and Provision Resources
+### Prepare and Provision Resources
 
 ```bash
 ## get list of changes that will be made
 terraform plan
 ## apply the changes
 terraform apply
+```
+
+
+## Cleanup
+
+```bash
+terraform destroy
 ```
