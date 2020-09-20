@@ -2,7 +2,7 @@
 
 ## About
 
-This script will create required resources needed to create Azure Blog Storage using (`simple-azure-blob`)[https://github.com/darkn3rd/simple-azure-blob] module.
+This script will create the required resources needed to create Azure Blob Storage using (`simple-azure-blob`)[https://github.com/darkn3rd/simple-azure-blob] module.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ You will need to define these environment variables:
   * `MY_STORAGE_ACCT` (required) - Azure storage account (unique global name) to contain storage.  If the storage account does not exist, this script will create it.
   * `MY_CONTAINER_NAME` (required) - Azure container to host the blob storage.  
 * Optional Variables:
-  * `MY_LOCATION` (default = `eastus2`)- location where to create the resource group if it doesn't exist
+  * `MY_LOCATION` (default = `eastus2`)- the location where to create the resource group if it doesn't exist
 
 ## Steps
 

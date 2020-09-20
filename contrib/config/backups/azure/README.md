@@ -1,6 +1,6 @@
 # Binary Backups to Azure Blob
 
-Binary backups can use Azure Blob Storage oject storage using MinIO Azure Gateway.
+Binary backups can use Azure Blob Storage for object storage using MinIO Azure Gateway.
 
 ## Provisioning Azure Blob
 
@@ -48,7 +48,7 @@ docker-compose up --detach
 
 #### Access Minio and Ratel UI
 
-* Minio UI: http://localhost:9000
+* MinIO UI: http://localhost:9000
 * Ratel UI: http://localhost:8000
 
 #### Clean Up Docker Environment
@@ -88,13 +88,13 @@ secretKey: <azure-storage-account-key>
 If you have [helmfile](https://github.com/roboll/helmfile#installation) and [helm-diff](https://github.com/databus23/helm-diff) installed, you can deploy Minio Azure Gateway and Dgraph cluster with the following:
 
 ```bash
-export BACKUP_BUCKET_NAME=<name-of-bucket> # corresponds ot Azure Container Name
+export BACKUP_BUCKET_NAME=<name-of-bucket> # corresponds to Azure Container Name
 helmfile apply
 ```
 #### Deploy Using Helm
 
 ```bash
-export BACKUP_BUCKET_NAME=<name-of-bucket> # corresponds ot Azure Container Name
+export BACKUP_BUCKET_NAME=<name-of-bucket> # corresponds to Azure Container Name
 kubectl create namespace "minio"
 helm repo add "minio" https://helm.min.io/
 helm install "azuregw" \
@@ -113,7 +113,6 @@ helm install "my-release" \
 ```
 
 #### Access Resources
-
 
 For MinIO UI, you can use this to access it at  http://localhost:9000:
 
@@ -151,7 +150,6 @@ export RATEL_POD_NAME=$(
 kubectl --namespace default port-forward $RATEL_POD_NAME 8000:8000
 ```
 
-
 #### Cleanup Kubernetes Environment
 
 If you are using helmfile, you can delete the resources with:
@@ -159,21 +157,20 @@ If you are using helmfile, you can delete the resources with:
 ```bash
 export BACKUP_BUCKET_NAME=<name-of-bucket> # corresponds ot Azure Container Name
 helmfile delete
-kubectl delete pvc --selector release=my-release # releasename specified in charts/helmfile.yaml
+kubectl delete pvc --selector release=my-release # release dgraph name specified in charts/helmfile.yaml
 ```
 
 If you are just helm, you can delete the resources with:
 
 ```bash
-helm delete my-release --namespace default "my-release" # releasename used earlier
-kubectl delete pvc --selector release=my-release # releasename specified in charts/helmfile.yaml
+helm delete my-release --namespace default "my-release" # dgraph release name used earlier
+kubectl delete pvc --selector release=my-release # dgraph release name used earlier
 helm delete azuregw --namespace minio
 ```
 
 ## Triggering a Backup
 
-
-This is ran from host with the alpha node accessible on localhost at port `8080`.  Can be done by running the docker-compose environment, or running `kubectl port-forward pod/dgraph-dgraph-alpha-0 8080:8080`.
+This is run from the host with the alpha node accessible on localhost at port `8080`.  Can be done by running the docker-compose environment, or running `kubectl port-forward pod/dgraph-dgraph-alpha-0 8080:8080`.
 In the docker-compose environment, the host for `MINIO_HOST` is `gateway`.  In the Kubernetes environment, using the scripts above, the `MINIO_HOST` is `azuregw-minio.minio.svc`.
 
 ### Using GraphQL
@@ -192,7 +189,7 @@ HEADER="Content-Type: application/json"
 curl --silent --header "$HEADER" --request POST $ALPHA_HOST:8080/admin --data "$GRAPHQL"
 ```
 
-This should return back response in JSON that will look like this if successful:
+This should return a response in JSON that will look like this if successful:
 
 ```JSON
 {
@@ -220,7 +217,7 @@ BACKUP_PATH=minio://${MINIO_HOST}:9000/${BACKUP_BUCKET_NAME}?secure=false
 curl --silent --request POST $ALPHA_HOST:8080/admin/backup?force_full=true --data "destination=$BACKUP_PATH"
 ```
 
-This should return back response in JSON that will look like this if successful:
+This should return a response in JSON that will look like this if successful:
 
 ```JSON
 {

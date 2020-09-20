@@ -5,7 +5,7 @@ variable "create_minio_env" { default = true }
 variable "create_minio_secrets" { default = true }
 variable "create_dgraph_secrets" { default = true }
 
-## Create Resource Group, Storage Account Name, and Container
+## Create a Resource Group, a Storage Account, and a Storage Container
 module "dgraph_backups" {
   source                 = "git::https://github.com/darkn3rd/simple-azure-blob.git?ref=v0.1"
   resource_group_name    = var.resource_group_name

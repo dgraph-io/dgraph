@@ -2,7 +2,7 @@
 
 ## About
 
-This script will create required resources needed to create Azure Blog Storage using (`simple-azure-blob`)[https://github.com/darkn3rd/simple-azure-blob] module.
+This script will create the required resources needed to create Azure Blob Storage using (`simple-azure-blob`)[https://github.com/darkn3rd/simple-azure-blob] module.
 
 ## Prerequisites
 
@@ -19,7 +19,6 @@ You will need to define the following variables:
   * `resource_group_name` (required) - Azure resource group that contains the resources
   * `storage_account_name` (required) - Azure storage account (unique global name) to contain storage
   * `storage_container_name` (default = `dgraph-backups`) - Azure container to host the blob storage
-
 
 ## Steps
 
@@ -42,12 +41,11 @@ terraform init
 ### Prepare and Provision Resources
 
 ```bash
-## get list of changes that will be made
+## get a list of changes that will be made
 terraform plan
 ## apply the changes
 terraform apply
 ```
-
 
 ## Cleanup
 
