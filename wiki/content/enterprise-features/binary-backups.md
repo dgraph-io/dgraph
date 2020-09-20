@@ -36,6 +36,8 @@ via environment variables:
  `AWS_SESSION_TOKEN`                         | AWS session token (if required).
 
 
+Starting with [v20.07.0](https://github.com/dgraph-io/dgraph/releases/tag/v20.07.0) if the system has access to the S3 bucket, you no longer need to explicitly include these environment variables.  In AWS, there are a few ways this can be accomplished: you would first create an [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) that grants access to the S3 bucket, and then attaching the [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) to an [instance profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html), or optionally on [EKS](https://aws.amazon.com/eks/) you can grant access to a pod by establishing a trust relationship between the [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) and Kuberetes Service account using [IRSA](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html).
+
 ### Configure Minio Credentials
 
 To backup to Minio, the Alpha must have the following Minio credentials set via
@@ -54,6 +56,7 @@ Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin`
 endpoints, this is only accessible on the same machine as the Alpha unless
 [whitelisted for admin operations]({{< relref "deploy/dgraph-administration.md#whitelisting-admin-operations" >}}).
 You can look at `BackupInput` given below for all the possible options.
+
 ```graphql
 input BackupInput {
 
@@ -74,17 +77,17 @@ input BackupInput {
 
 		"""
 		AWS session token, if required.
-		"""	
+		"""
 		sessionToken: String
 
 		"""
 		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
-		"""	
+		"""
 		anonymous: Boolean
 
 		"""
 		Force a full backup instead of an incremental backup.
-		"""	
+		"""
 		forceFull: Boolean
 	}
 ```
@@ -120,61 +123,60 @@ mutation {
 
 
 
-### Backup to Minio
+### Backup using a MinIO Gateway
 
+#### Azure Blob Storage
 
-### Backup to Google Cloud Storage via Minio Gateway
+You can use [Azure Blob Storage](https://azure.microsoft.com/services/storage/blobs/) through the [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html).  You need to configure [storage account](https://docs.microsoft.com/azure/storage/common/storage-account-overview) and [container](https://docs.microsoft.com/azure/storage/blobs/storage-blobs-introduction#containers) to organize the blobs.
 
-1. [Create a Service Account key](https://github.com/minio/minio/blob/master/docs/gateway/gcs.md#11-create-a-service-account-ey-for-gcs-and-get-the-credentials-file) for GCS and get the Credentials File
-2. Run MinIO GCS Gateway Using Docker
-```
-docker run -p 9000:9000 --name gcs-s3 \
- -v /path/to/credentials.json:/credentials.json \
- -e "GOOGLE_APPLICATION_CREDENTIALS=/credentials.json" \
- -e "MINIO_ACCESS_KEY=minioaccountname" \
- -e "MINIO_SECRET_KEY=minioaccountkey" \
- minio/minio gateway gcs yourprojectid
-```
-3. Run MinIO GCS Gateway Using the MinIO Binary
-```
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
-export MINIO_ACCESS_KEY=minioaccesskey
-export MINIO_SECRET_KEY=miniosecretkey
-minio gateway gcs yourprojectid
-```
+For MinIO configuration, you will need to [retrieve storage accounts keys](https://docs.microsoft.com/azure/storage/common/storage-account-keys-manage). The [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html) will use `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` to correspond to Azure Storage `AccountName` and `AccountKey`.
 
-### Test Using MinIO Browser
+Once you have the `AccountName` and `AccountKey`, you can access Azure Blob Storage locally using one of these methods:
+
+*  Run [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html) using Docker
+   ```bash
+   docker run --publish 9000:9000 --name gateway \
+     --env "MINIO_ACCESS_KEY=<AccountName>" \
+     --env "MINIO_SECRET_KEY=<AccountKey>" \
+     minio/minio gateway azure
+   ```
+*  Run [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html) using the MinIO Binary
+   ```bash
+   export MINIO_ACCESS_KEY="<AccountName>"
+   export MINIO_SECRET_KEY="<AccountKey>"
+   minio gateway azure
+   ```
+
+#### Google Cloud Storage
+
+You can use [Google Cloud Storage](https://cloud.google.com/storage) through the [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html).  You will need to [create storage buckets](https://cloud.google.com/storage/docs/creating-buckets), create a Service Account key for GCS and get a credentials file.  See [Create a Service Account key](https://github.com/minio/minio/blob/master/docs/gateway/gcs.md#11-create-a-service-account-ey-for-gcs-and-get-the-credentials-file) for further information.
+
+Once you have a `credentials.json`, you can access GCS locally using one of these methods:
+
+*  Run [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html) using Docker
+   ```bash
+   docker run --publish 9000:9000 --name gateway \
+     --volume /path/to/credentials.json:/credentials.json \
+     --env "GOOGLE_APPLICATION_CREDENTIALS=/credentials.json" \
+     --env "MINIO_ACCESS_KEY=minioaccountname" \
+     --env "MINIO_SECRET_KEY=minioaccountkey" \
+     minio/minio gateway gcs <project-id>
+   ```
+*  Run [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html) using the MinIO Binary
+   ```bash
+   export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+   export MINIO_ACCESS_KEY=minioaccesskey
+   export MINIO_SECRET_KEY=miniosecretkey
+   minio gateway gcs <project-id>
+   ```
+ 
+#### Test Using MinIO Browser
+
 MinIO Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that MinIO Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
-![](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser-gateway.png?raw=true)
 
+#### Destination String for MinIO Gateway
 
-### Test Using MinIO Client
-
-MinIO Client is a command-line tool called mc that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, mirror, diff, find, etc.). mc supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
-MinIO Client is a command-line tool called mc that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, diff, find, etc.). mc supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
-
-1. Configure the Gateway using MinIO Client
-
-Use the following command to configure the gateway:
-```
-mc config host add mygcs http://gateway-ip:9000 minioaccesskey miniosecretkey
-```
-
-2. List Containers on GCS
-
-Use the following command to list the containers on GCS:
-
-```
-mc ls mygcs
-```
-A response similar to this one should be displayed:
-
-```
-[2017-02-22 01:50:43 PST]     0B ferenginar/
-[2017-02-26 21:43:51 PST]     0B my-container/
-[2017-02-26 22:10:11 PST]     0B test-container1/
-```
-
+When `dgraph alpha` is running locally, the backup destination string will be `minio://localhost:9000/<bucketname>`.  If you are running Dgraph with a container in the same docker network as the gateway, then the address would based on the container name, e.g. `minio://gateway:9000/<bucketname>`. The `<bucketname>` will represent the GCS bucket or Azure Blob Storage container, depending on what gateway you are using.
 
 ### Disabling HTTPS for S3 and Minio backups
 
@@ -203,8 +205,8 @@ credentials will be transmitted in plain text so use these parameters with
 discretion. The environment variables should be used by default but these
 options are there to allow for greater flexibility.
 
-The `anonymous` parameter can be set to "true" to a allow backing up to S3 or
-Minio bucket that requires no credentials (i.e a public bucket).
+The `anonymous` parameter can be set to "true" to allow backing up to S3 or
+MinIO bucket that requires no credentials (i.e a public bucket).
 
 
 ### Backup to NFS
@@ -222,7 +224,7 @@ mutation {
 
 A local filesystem will work only if all the Alphas have access to it (e.g all
 the Alphas are running on the same filesystems as a normal process, not a Docker
-container). However, a NFS is recommended so that backups work seamlessly across
+container). However, an NFS is recommended so that backups work seamlessly across
 multiple machines and/or containers.
 
 
@@ -231,9 +233,8 @@ multiple machines and/or containers.
 By default, an incremental backup will be created if there's another full backup
 in the specified location. To create a full backup, set the `forceFull` field
 to `true` in the mutation. Each series of backups can be
-identified by a unique ID and each backup in the series is assigned a
-monotonically increasing number. The following section contains more details on
-how to restore a backup series.
+identified by a unique ID and each backup in the series is assigned a monotonically increasing number. The following section contains more details on how to restore a backup series.
+
 ```graphql
 mutation {
   backup(input: {destination: "/path/to/local/directory", forceFull: true}) {
@@ -265,7 +266,7 @@ still works if you set up a unique location for each series.
 ## Encrypted Backups
 
 Encrypted backups are a Enterprise feature that are available from v20.03.1 and v1.2.3 and allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups.
-Starting with v20.07.0, we also added support for Encrypted Backups using encryption keys sitting on Vault. 
+Starting with v20.07.0, we also added support for Encrypted Backups using encryption keys sitting on Vault.
 
 
 ## New flag “Encrypted” in manifest.json
@@ -277,7 +278,7 @@ For a series of full and incremental backups, per the current design, we don't a
 
 ## AES And Chaining with Gzip
 
-If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data.
+If encryption is turned on alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data.
 
 During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
 
@@ -299,12 +300,13 @@ mutation{
     location: "/path/to/backup/directory",
   }){
     message
-    code 
+    code
     restoreId
   }
 }
 ```
-Restore can be performed from Amazon S3 / Minio or from Local Directory. Below is the `RestoreInput` to be passed into the mutation. 
+Restore can be performed from Amazon S3 / Minio or from a local directory. Below is the `RestoreInput` to be passed into the mutation.
+
 ```graphql
 input RestoreInput {
 
@@ -369,12 +371,12 @@ input RestoreInput {
 
 		"""
 		AWS session token, if required.
-		"""	
+		"""
 		sessionToken: String
 
 		"""
 		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
-		"""	
+		"""
 		anonymous: Boolean
 }
 ```
@@ -386,7 +388,7 @@ input RestoreInput {
 {{% /notice %}}
 
 The restore utility is a standalone tool today. A new flag `--encryption_key_file` is added to the restore utility so it can decrypt the backup. This file must contain the same key that was used for encryption during backup.
-Alternatively, starting with v20.07.0, the `vault_*` options can be used to restore a backup. 
+Alternatively, starting with v20.07.0, the `vault_*` options can be used to restore a backup.
 
 The `dgraph restore` command restores the postings directory from a previously
 created backup to a directory in the local filesystem. Restore is intended to
@@ -417,7 +419,7 @@ The `--encryption_key_file` flag is required if you took the backup in an
 encrypted cluster and should point to the location of the same key used to
 run the cluster.
 
-The `--vault_*` flags specifies the Vault server address, role id, secret id and 
+The `--vault_*` flags specifies the Vault server address, role id, secret id and
 field that contains the encryption key that was used to encrypt the backup.
 
 The restore feature will create a cluster with as many groups as the original
