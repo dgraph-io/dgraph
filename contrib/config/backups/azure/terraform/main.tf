@@ -1,6 +1,7 @@
 variable "resource_group_name" {}
 variable "storage_account_name" {}
 variable "storage_container_name" { default = "dgraph-backups" }
+variable "create_minio_env" { default = true }
 
 ## Create Resource Group, Storage Account Name, and Container
 module "dgraph_backups" {
@@ -11,9 +12,6 @@ module "dgraph_backups" {
   create_storage_account = true
   storage_container_name = var.storage_container_name
 }
-
-
-## Create Docker and Helm Chart Values
 
 #####################################################################
 # Locals
@@ -34,6 +32,7 @@ locals {
 # File Resources
 #####################################################################
 resource "local_file" "minio_env" {
+  count           = var.create_minio_env != "" ? 1 : 0
   content         = local.minio_env
   filename        = "${path.module}/../minio.env"
   file_permission = "0644"
