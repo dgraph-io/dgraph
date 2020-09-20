@@ -2,7 +2,11 @@
 # vi: set ft=ruby :
 hosts = File.readlines("./hosts").map { |ln| i,h= ln.split(/\s+/); [h,i] }.to_h
 replicas = hosts.keys.select { |host| host.to_s.match /^zero-\d+/ }.count
-version = ENV['DGRAPH_VERSION'] || 'v20.07.0'
+version = ENV['DGRAPH_VERSION'] || 'v20.07.1'
+## build SMB sync options hash depnding on supplied env vars
+smb_sync_opts = { type: "smb", mount_options: %w[mfsymlinks vers=3.0] }
+smb_sync_opts.merge! smb_username: ENV['SMB_USER'] if ENV['SMB_USER']
+smb_sync_opts.merge! smb_password: ENV['SMB_PASSWD'] if ENV['SMB_PASSWD']
 
 Vagrant.configure("2") do |config|
   hosts.each do |hostname, ipaddr|
@@ -10,7 +14,14 @@ Vagrant.configure("2") do |config|
       node.vm.box = "generic/ubuntu1804"
       node.vm.hostname = "#{hostname}"
       node.vm.network "private_network", ip: ipaddr
-      node.vm.synced_folder ".", "/vagrant"
+
+      ## Use SMB3.0 with Hyper/V provider
+      ## Doc on API: https://www.rubydoc.info/github/hashicorp/vagrant/Vagrant/Util/Platform
+      if Vagrant::Util::Platform.windows_hyperv_enabled? then
+        node.vm.synced_folder ".", "/vagrant", smb_sync_opts
+      else
+        node.vm.synced_folder ".", "/vagrant"
+      end
 
       node.vm.provision "shell" do |shell|
         shell.path = "provision.sh"

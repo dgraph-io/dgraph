@@ -16,6 +16,17 @@ Either `cd centos8` or `cd ubuntu1804` and run:
 vagrant up
 ```
 
+#### Windows Hypver/V
+
+On Windows 10 Pro with Hyper/V enabled, you can run this:
+
+```powershell
+$Env:VAGRANT_DEFAULT_PROVIDER = "hyperv"
+vagrant up
+```
+
+**NOTE**: On Hyper/V, SMB3.0 is enabled.  You will be prompted to enter user and password for each of the six systems.
+
 ### Get Health Check
 
 ```bash
@@ -49,8 +60,9 @@ vagrant destroy --force
 ## Environments Tested
 
 * Guest OS
-  * Cent OS 8
-  * Ubuntu 18.04
+  * [Cent OS 8](https://app.vagrantup.com/generic/boxes/centos8) from [Roboxes](https://roboxes.org/)
+  * [Ubuntu 18.04](https://app.vagrantup.com/generic/boxes/ubuntu1804) from [Roboxes](https://roboxes.org/)
 * Providers
-  * libvrt (KVM)
-  * VirtualBox on Win10 Home
+  * [libvirt](https://github.com/vagrant-libvirt/vagrant-libvirt) (KVM) on Ubuntu 19.10
+  * [VirtualBox](https://www.vagrantup.com/docs/providers/virtualbox) on Win10 Home
+  * [Hyper/V](https://www.vagrantup.com/docs/providers/hyperv) on Win10 Pro
