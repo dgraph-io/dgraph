@@ -2,8 +2,7 @@ backups:
   full:
     enabled: true
     debug: true
-    schedule: "*/5 * * * *"
-  destination: minio://azuregw-minio.minio.svc:9000/dgraph-backups
+    schedule: "*/15 * * * *"
 alpha:
   configFile:
     config.hcl: |

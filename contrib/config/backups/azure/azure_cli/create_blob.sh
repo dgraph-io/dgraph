@@ -13,6 +13,8 @@ MY_RESOURCE_GROUP=${MY_RESOURCE_GROUP:=""}
 MY_LOCATION=${MY_LOCATION:-"eastus2"}
 MY_ACCOUNT_ID="$(az account show | jq '.id' -r)"
 CREATE_MINIO_ENV={$CREATE_MINIO_ENV:-"true"}
+CREATE_MINIO_CHART_SECRETS={$CREATE_MINIO_CHART_SECRETS:-"true"}
+CREATE_DGRAPH_CHART_SECRETS={$CREATE_DGRAPH_CHART_SECRETS:-"true"}
 
 if [[ -z "${MY_CONTAINER_NAME}" ]]; then
   if (( $# < 1 )); then
@@ -31,9 +33,6 @@ if [[ -z "${MY_RESOURCE_GROUP}" ]]; then
   printf "[ERROR]: The env var of 'MY_RESOURCE_GROUP' was not defined. Exiting\n" 1>&2
   exit 1
 fi
-
-
-
 
 ## create resource (idempotently)
 if ! az group list | jq '.[].name' -r | grep -q ${MY_RESOURCE_GROUP}; then
@@ -70,7 +69,18 @@ then
     --auth-mode login
 fi
 
+## Create Minio  env file and Helm Chart secret files
 if [[ "${CREATE_MINIO_ENV}" =~ true|(y)es ]]; then
-  echo "[INFO]: Creating minio.env file"
-  ./create_minio_env.sh
+  echo "[INFO]: Creating Docker Compose 'minio.env' file"
+  ./create_secrets.sh minio_env
+fi
+
+if [[ "${CREATE_MINIO_CHART_SECRETS}" =~ true|(y)es ]]; then
+  echo "[INFO]: Creating Helm Chart 'minio_secrets.yaml' file"
+  ./create_secrets.sh minio_chart
+fi
+
+if [[ "${CREATE_DGRAPH_CHART_SECRETS}" =~ true|(y)es ]]; then
+  echo "[INFO]: Creating Helm Chart 'dgraph_secrets.yaml' file"
+  ./create_secrets.sh dgraph_chart
 fi

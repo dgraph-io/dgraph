@@ -6,8 +6,8 @@ Binary backups can use Azure Blob Storage oject storage using MinIO Azure Gatewa
 
 Some example scripts have been provided to illustrate how to create Azure Blob.
 
-* [azure_cli](azure_cli/README.md) - shell scripts to provision Azure Blob and create `minio.env`
-* [terraform](terraform/README.md) - terraform scripts to provision Azure Blob and create `minio.env`
+* [azure_cli](azure_cli/README.md) - shell scripts to provision Azure Blob
+* [terraform](terraform/README.md) - terraform scripts to provision Azure Blob
 
 ## Setting up the Environment
 
@@ -31,7 +31,7 @@ MINIO_ACCESS_KEY=<Azure Storage Account Name>
 MINIO_SECRET_KEY=<Azure Storage Account Key>
 ```
 
-These values are used to both access the Minio Gateway using the same credentials used to access Azure Storage Account.  Both example terraform and Azure CLI scripts can auto-generate the `minio.env`
+These values are used to both access the Minio Gateway using the same credentials used to access Azure Storage Account.  As a convenience, both example [terraform](terraform/README.md) and [azure_cli](azure_cli/README.md) scripts will auto-generate the `minio.env`.
 
 ### Using Docker Compose
 
