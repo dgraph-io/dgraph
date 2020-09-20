@@ -2,6 +2,8 @@ variable "resource_group_name" {}
 variable "storage_account_name" {}
 variable "storage_container_name" { default = "dgraph-backups" }
 variable "create_minio_env" { default = true }
+variable "create_minio_secrets" { default = true }
+variable "create_dgraph_secrets" { default = true }
 
 ## Create Resource Group, Storage Account Name, and Container
 module "dgraph_backups" {
@@ -19,13 +21,13 @@ module "dgraph_backups" {
 
 locals {
   minio_vars = {
-    accessKey  = module.dgraph_backups.AccountName
-    secretKey  = module.dgraph_backups.AccountKey
+    accessKey = module.dgraph_backups.AccountName
+    secretKey = module.dgraph_backups.AccountKey
   }
 
-  # minio_config  = templatefile("${path.module}/templates/values.minio_config.yaml.tmpl", local.minio_vars)
-  # minio_secrets = templatefile("${path.module}/templates/values.minio_secrets.yaml.tmpl", local.minio_vars)
-  minio_env     = templatefile("${path.module}/templates/minio.env.tmpl", local.minio_vars)
+  dgraph_secrets = templatefile("${path.module}/templates/dgraph_secrets.yaml.tmpl", local.minio_vars)
+  minio_secrets  = templatefile("${path.module}/templates/minio_secrets.yaml.tmpl", local.minio_vars)
+  minio_env      = templatefile("${path.module}/templates/minio.env.tmpl", local.minio_vars)
 }
 
 #####################################################################
@@ -35,5 +37,19 @@ resource "local_file" "minio_env" {
   count           = var.create_minio_env != "" ? 1 : 0
   content         = local.minio_env
   filename        = "${path.module}/../minio.env"
+  file_permission = "0644"
+}
+
+resource "local_file" "minio_secrets" {
+  count           = var.create_minio_secrets != "" ? 1 : 0
+  content         = local.minio_secrets
+  filename        = "${path.module}/../charts/minio_secrets.yaml"
+  file_permission = "0644"
+}
+
+resource "local_file" "dgraph_secrets" {
+  count           = var.create_dgraph_secrets != "" ? 1 : 0
+  content         = local.dgraph_secrets
+  filename        = "${path.module}/../charts/dgraph_secrets.yaml"
   file_permission = "0644"
 }
