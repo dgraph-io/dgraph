@@ -696,7 +696,6 @@ func (n *node) Run() {
 		closer.AddRunning(1)
 		go x.StoreSync(n.Store, closer)
 	}
-
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 
