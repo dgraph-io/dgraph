@@ -718,7 +718,6 @@ func (n *node) Run() {
 	// That way we know sending to readStateCh will not deadlock.
 
 	var timer x.Timer
-	var num uint64
 	for {
 		select {
 		case <-n.closer.HasBeenClosed():
@@ -727,11 +726,6 @@ func (n *node) Run() {
 		case <-ticker.C:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
-			num++
-			if num%1000 == 0 {
-				glog.Infof("Got ready for id: %d: %d\n", n.Id, num)
-			}
-
 			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Zero.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
