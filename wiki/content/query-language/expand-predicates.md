@@ -7,7 +7,7 @@ title = "Expand Predicates"
 +++
 
 The `expand()` function can be used to expand the predicates out of a node. To
-use `expand()`, the [type system]({{< relref "#type-system" >}}) is required.
+use `expand()`, the [type system]({{< relref "query-language/type-system.md" >}}) is required.
 Refer to the section on the type system to check how to set the types
 nodes. The rest of this section assumes familiarity with that section.
 
@@ -66,7 +66,7 @@ veterinarian
 
 {{% notice "note" %}}
 For `string` predicates, `expand` only returns values not tagged with a language
-(see [language preference]({{< relref "#language-support" >}})).  So it's often
+(see [language preference]({{< relref "query-language/graphql-fundamentals.md#language-support" >}})).  So it's often
 required to add `name@fr` or `name@.` as well to an expand query.
 {{% /notice  %}}
 

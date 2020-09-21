@@ -41,25 +41,11 @@ var (
 	metaInfo *testutil.AuthMeta
 )
 
-type Tweets struct {
-	Id        string `json:"id,omitempty"`
-	Text      string `json:"text,omitempty"`
-	Timestamp string `json:"timestamp,omitempty"`
-	User      User   `json:"user,omitempty"`
-}
-
-type User struct {
-	Username string `json:"username,omitempty"`
-	Age      uint64 `json:"age,omitempty"`
-	IsPublic bool   `json:"isPublic,omitempty"`
-	Disabled bool   `json:"disabled,omitempty"`
-}
-
 type Region struct {
-	Id     string  `json:"id,omitempty"`
-	Name   string  `json:"name,omitempty"`
-	Users  []*User `json:"users,omitempty"`
-	Global bool    `json:"global,omitempty"`
+	Id     string         `json:"id,omitempty"`
+	Name   string         `json:"name,omitempty"`
+	Users  []*common.User `json:"users,omitempty"`
+	Global bool           `json:"global,omitempty"`
 }
 
 type Movie struct {
@@ -70,9 +56,9 @@ type Movie struct {
 }
 
 type Issue struct {
-	Id    string `json:"id,omitempty"`
-	Msg   string `json:"msg,omitempty"`
-	Owner *User  `json:"owner,omitempty"`
+	Id    string       `json:"id,omitempty"`
+	Msg   string       `json:"msg,omitempty"`
+	Owner *common.User `json:"owner,omitempty"`
 }
 
 type Log struct {
@@ -88,16 +74,16 @@ type ComplexLog struct {
 }
 
 type Role struct {
-	Id         string  `json:"id,omitempty"`
-	Permission string  `json:"permission,omitempty"`
-	AssignedTo []*User `json:"assignedTo,omitempty"`
+	Id         string         `json:"id,omitempty"`
+	Permission string         `json:"permission,omitempty"`
+	AssignedTo []*common.User `json:"assignedTo,omitempty"`
 }
 
 type Ticket struct {
-	Id         string  `json:"id,omitempty"`
-	OnColumn   *Column `json:"onColumn,omitempty"`
-	Title      string  `json:"title,omitempty"`
-	AssignedTo []*User `json:"assignedTo,omitempty"`
+	Id         string         `json:"id,omitempty"`
+	OnColumn   *Column        `json:"onColumn,omitempty"`
+	Title      string         `json:"title,omitempty"`
+	AssignedTo []*common.User `json:"assignedTo,omitempty"`
 }
 
 type Column struct {
@@ -278,6 +264,42 @@ func (s Student) add(t *testing.T) {
 	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
 	require.JSONEq(t, result, string(gqlResponse.Data))
+}
+
+func TestAddMutationWithXid(t *testing.T) {
+	mutation := `
+	mutation addTweets($tweet: AddTweetsInput!){
+      addTweets(input: [$tweet]) {
+        numUids
+      }
+    }
+	`
+
+	tweet := common.Tweets{
+		Id:        "tweet1",
+		Text:      "abc",
+		Timestamp: "2020-10-10",
+	}
+	user := "foo"
+	addTweetsParams := &common.GraphQLParams{
+		Headers:   common.GetJWT(t, user, "", metaInfo),
+		Query:     mutation,
+		Variables: map[string]interface{}{"tweet": tweet},
+	}
+
+	// Add the tweet for the first time.
+	gqlResponse := addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	// Re-adding the tweet should fail.
+	gqlResponse = addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Error(t, gqlResponse.Errors)
+	require.Equal(t, len(gqlResponse.Errors), 1)
+	require.Contains(t, gqlResponse.Errors[0].Error(),
+		"GraphQL debug: id already exists for type Tweets")
+
+	// Clear the tweet.
+	tweet.DeleteByID(t, user, metaInfo)
 }
 
 func TestAuthWithDgraphDirective(t *testing.T) {
@@ -1215,6 +1237,67 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)
 		}
+	}
+}
+
+func TestDeepRBACValueCascade(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user: "user1",
+			role: "USER",
+			query: `
+			query {
+			  queryUser (filter:{username:{eq:"user1"}}) @cascade {
+				username
+				issues {
+				  msg
+				}
+			  }
+			}`,
+			result: `{"queryUser": []}`,
+		},
+		{
+			user: "user1",
+			role: "USER",
+			query: `
+			query {
+			  queryUser (filter:{username:{eq:"user1"}}) {
+				username
+				issues @cascade {
+				  msg
+				}
+			  }
+			}`,
+			result: `{"queryUser": [{"username": "user1", "issues":[]}]}`,
+		},
+		{
+			user: "user1",
+			role: "ADMIN",
+			query: `
+			query {
+			  queryUser (filter:{username:{eq:"user1"}}) @cascade {
+				username
+				issues {
+				  msg
+				}
+			  }
+			}`,
+			result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}]}]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   tcase.query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
 	}
 }
 

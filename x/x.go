@@ -488,7 +488,12 @@ func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error
 		out = gzw
 	}
 
-	return out.Write(b)
+	bytesWritten, err := out.Write(b)
+	if err != nil {
+		return 0, err
+	}
+	w.Header().Set("Content-Length", strconv.FormatInt(int64(bytesWritten), 10))
+	return bytesWritten, nil
 }
 
 // Min returns the minimum of the two given numbers.

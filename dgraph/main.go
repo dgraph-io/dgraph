@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 )
@@ -33,24 +34,42 @@ func main() {
 	// benchmark notes are located in badger-bench/randread.
 	runtime.GOMAXPROCS(128)
 
+	absDiff := func(a, b uint64) uint64 {
+		if a > b {
+			return a - b
+		}
+		return b - a
+	}
+
 	// Make sure the garbage collector is run periodically.
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 
 		minDiff := uint64(2 << 30)
+
+		var ms runtime.MemStats
 		var lastMs runtime.MemStats
 		var lastNumGC uint32
-		var ms runtime.MemStats
+
+		var js z.MemStats
+		var lastJs z.MemStats
 
 		for range ticker.C {
-			runtime.ReadMemStats(&ms)
-			var diff uint64
-			if ms.HeapAlloc > lastMs.HeapAlloc {
-				diff = ms.HeapAlloc - lastMs.HeapAlloc
+			// Read Jemalloc stats first. Print if there's a big difference.
+			z.ReadMemStats(&js)
+			if diff := absDiff(js.Active, lastJs.Active); diff > 256<<20 {
+				glog.V(2).Infof("jemalloc: Active %s Allocated: %s Resident: %s Retained: %s\n",
+					humanize.IBytes(js.Active), humanize.IBytes(js.Allocated),
+					humanize.IBytes(js.Resident), humanize.IBytes(js.Retained))
+				lastJs = js
+				z.PrintAllocators()
 			} else {
-				diff = lastMs.HeapAlloc - ms.HeapAlloc
+				// Don't update the lastJs here.
 			}
+
+			runtime.ReadMemStats(&ms)
+			diff := absDiff(ms.HeapAlloc, lastMs.HeapAlloc)
 
 			switch {
 			case ms.NumGC > lastNumGC:
@@ -67,8 +86,8 @@ func main() {
 			case ms.NumGC == lastNumGC:
 				runtime.GC()
 				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC,
-					humanize.Bytes(ms.HeapInuse),
-					humanize.Bytes(ms.HeapIdle-ms.HeapReleased))
+					humanize.IBytes(ms.HeapInuse),
+					humanize.IBytes(ms.HeapIdle-ms.HeapReleased))
 				lastNumGC = ms.NumGC + 1
 				lastMs = ms
 			}

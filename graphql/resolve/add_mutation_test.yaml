@@ -2413,3 +2413,61 @@
   explanation: "The add mutation should not be allowed since value of @id field is empty."
   error:
     { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }
+
+-
+  name: "Add mutation for person with @hasInverse"
+  gqlmutation: |
+    mutation($input: [AddPersonInput!]!) {
+      addPerson(input: $input) {
+        person {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Or",
+          "friends": [
+            { "name": "Michal", "friends": [{ "name": "Justin" }] }
+          ]
+        }
+      ]
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Person.friends": [
+            {
+              "Person.friends": [
+                {
+                  "uid": "_:Person1"
+                },
+                {
+                  "Person.friends": [
+                    {
+                      "uid": "_:Person2"
+                    }
+                  ],
+                  "Person.name": "Justin",
+                  "dgraph.type": [
+                    "Person"
+                  ],
+                  "uid": "_:Person3"
+                }
+              ],
+              "Person.name": "Michal",
+              "dgraph.type": [
+                "Person"
+              ],
+              "uid": "_:Person2"
+            }
+          ],
+          "Person.name": "Or",
+          "dgraph.type": [
+            "Person"
+          ],
+          "uid": "_:Person1"
+        }
+

@@ -1095,9 +1095,17 @@ func rewriteObject(
 			xidMetadata.queryExists[variable] = true
 		}
 		frag.conditions = []string{fmt.Sprintf("eq(len(%s), 0)", variable)}
-		frag.check = checkQueryResult(variable,
-			x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name()),
-			nil)
+
+		// We need to conceal the error because we might be leaking information to the user if it
+		// tries to add duplicate data to the field with @id.
+		var err error
+		if queryAuthSelector(typ) == nil {
+			err = x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
+		} else {
+			// This error will only be reported in debug mode.
+			err = x.GqlErrorf("GraphQL debug: id already exists for type %s", typ.Name())
+		}
+		frag.check = checkQueryResult(variable, err, nil)
 	}
 
 	if xid != nil && !atTopLevel {
@@ -1727,7 +1735,27 @@ func squashIntoObject(label string) func(interface{}, interface{}, bool) interfa
 			}
 			asObject = cpy
 		}
-		asObject[label] = v
+
+		val := v
+
+		// If there is an existing value for the label in the object, then we should append to it
+		// instead of overwriting it if the existing value is a list. This can happen when there
+		// is @hasInverse and we are doing nested adds.
+		existing := asObject[label]
+		switch ev := existing.(type) {
+		case []interface{}:
+			switch vv := v.(type) {
+			case []interface{}:
+				ev = append(ev, vv...)
+				val = ev
+			case interface{}:
+				ev = append(ev, vv)
+				val = ev
+			default:
+			}
+		default:
+		}
+		asObject[label] = val
 		return asObject
 	}
 }

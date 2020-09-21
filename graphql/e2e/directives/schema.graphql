@@ -178,3 +178,9 @@ type post1{
     title: String! @id @search(by: [regexp])
     numLikes: Int64
 }
+
+type Person1 {
+    id: ID!
+    name: String!
+    friends: [Person1] @hasInverse(field: friends)
+}
