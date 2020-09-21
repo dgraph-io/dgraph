@@ -70,7 +70,7 @@ func hasAuthRules(field schema.Field, authRw *authRewriter) bool {
 }
 
 func hasCascadeDirective(field schema.Field) bool {
-	if c := field.Cascade(); c != nil {
+	if c := field.Cascade(); c {
 		return true
 	}
 
