@@ -40,8 +40,10 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 
+	"github.com/golang/gddo/httputil/header"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/jsonpb"
+
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
@@ -177,7 +179,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		Query     string            `json:"query"`
 		Variables map[string]string `json:"variables"`
 	}
-	contentType := r.Header.Get("Content-Type")
+
+	contentType, _ := header.ParseValueAndParams(r.Header, "Content-Type")
 	switch strings.ToLower(contentType) {
 	case "application/json":
 		if err := json.Unmarshal(body, &params); err != nil {
@@ -299,7 +302,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	parseStart := time.Now()
 
 	var req *api.Request
-	contentType := r.Header.Get("Content-Type")
+	contentType, _ := header.ParseValueAndParams(r.Header, "Content-Type")
 	switch strings.ToLower(contentType) {
 	case "application/json":
 		ms := make(map[string]*skipJSONUnmarshal)

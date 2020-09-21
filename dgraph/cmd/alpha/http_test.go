@@ -539,6 +539,43 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
+
+func TestTransactionWithHeaderParams(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
+	m1 := `
+    {
+	  set {
+		_:alice <name> "Bob" .
+		_:alice <balance> "110" .
+		_:bob <balance> "60" .
+	  }
+	}
+	`
+
+	q1 := `
+	{
+	  balances(func: anyofterms(name, "Alice Bob")) {
+	    name
+	    balance
+	  }
+	}
+	`
+	_, ts, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+
+	mr, err := mutationWithTs(m1, "application/rdf; charset=utf8", false, false, ts)
+	require.NoError(t, err)
+	require.Equal(t, mr.startTs, ts)
+	require.Equal(t, 4, len(mr.keys))
+
+	d1, err := json.Marshal(params{Query: q1})
+	require.NoError(t, err)
+	data, _, err := queryWithTs(string(d1), "application/json; charset=utf-8", "", ts)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
+}
+
 func TestTransactionForCost(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`name: string @index(term) .`))
