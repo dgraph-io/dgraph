@@ -15,16 +15,6 @@ input UserInput {
 # Extended Definitions
 #######################
 
-"""
-The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
-Int64 can represent values in range [-(2^63),(2^63 - 1)].
-"""
-scalar Int64
-
-"""
-The DateTime scalar type represents date and time as a string in RFC3339 format.
-For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
-"""
 scalar DateTime
 
 enum DgraphIndex {
