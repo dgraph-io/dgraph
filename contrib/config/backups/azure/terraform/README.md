@@ -2,7 +2,7 @@
 
 ## About
 
-This script will create the required resources needed to create Azure Blob Storage using (`simple-azure-blob`)[https://github.com/darkn3rd/simple-azure-blob] module.
+This script will create the required resources needed to create Azure Blob Storage using [`simple-azure-blob`](https://github.com/darkn3rd/simple-azure-blob) module.
 
 ## Prerequisites
 

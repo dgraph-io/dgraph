@@ -1,6 +1,6 @@
 # Binary Backups to Azure Blob
 
-Binary backups can use Azure Blob Storage for object storage using MinIO Azure Gateway.
+Binary backups can use Azure Blob Storage for object storage using [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html).
 
 ## Provisioning Azure Blob
 
@@ -26,7 +26,7 @@ You will need these tools:
 
 ### Using Docker Compose
 
-A `docker-compose.yml` configuration is provided that will run the Azure gateway and Dgraph cluster.
+A `docker-compose.yml` configuration is provided that will run the [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html) and Dgraph cluster.
 
 #### Configuring Docker Compose
 
@@ -37,7 +37,7 @@ MINIO_ACCESS_KEY=<azure-storage-account-name>
 MINIO_SECRET_KEY=<azure-storage-account-key>
 ```
 
-These values are used to both access the Minio Gateway using the same credentials used to access Azure Storage Account.  As a convenience, both example [terraform](terraform/README.md) and [azure_cli](azure_cli/README.md) scripts will auto-generate the `minio.env`.
+These values are used to both access the [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html) using the same credentials used to access Azure Storage Account.  As a convenience, both example [terraform](terraform/README.md) and [azure_cli](azure_cli/README.md) scripts will auto-generate the `minio.env`.
 
 #### Using Docker Compose
 
@@ -60,7 +60,7 @@ docker-compose rm
 
 ### Using Kubernetes with Helm Charts
 
-For Kubernetes, you can deploy Minio Azure Gateway, Dgraph cluster, and a Kubernetes Cronjob that triggers backups using [helm](https://helm.sh/docs/intro/install/).
+For Kubernetes, you can deploy [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html), Dgraph cluster, and a Kubernetes Cronjob that triggers backups using [helm](https://helm.sh/docs/intro/install/).
 
 #### Configuring Secrets Values
 
@@ -85,7 +85,7 @@ secretKey: <azure-storage-account-key>
 
 #### Deploy Using Helmfile
 
-If you have [helmfile](https://github.com/roboll/helmfile#installation) and [helm-diff](https://github.com/databus23/helm-diff) installed, you can deploy Minio Azure Gateway and Dgraph cluster with the following:
+If you have [helmfile](https://github.com/roboll/helmfile#installation) and [helm-diff](https://github.com/databus23/helm-diff) installed, you can deploy [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html) and Dgraph cluster with the following:
 
 ```bash
 export BACKUP_BUCKET_NAME=<name-of-bucket> # corresponds to Azure Container Name
