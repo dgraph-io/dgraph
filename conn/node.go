@@ -134,7 +134,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		Applied:     y.WaterMark{Name: fmt.Sprintf("Applied watermark")},
+		Applied:     y.WaterMark{Name: "Applied watermark"},
 		RaftContext: rc,
 		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 		confChanges: make(map[uint64]chan error),
@@ -641,10 +641,8 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 		span.Annotatef(nil, "Received index: %d", index)
 		if index == 0 {
 			return errReadIndex
-		} else {
-			if num := atomic.AddUint64(&readIndexOk, 1); num%1000 == 0 {
-				glog.V(2).Infof("ReadIndex OK: %d\n", num)
-			}
+		} else if num := atomic.AddUint64(&readIndexOk, 1); num%1000 == 0 {
+			glog.V(2).Infof("ReadIndex OK: %d\n", num)
 		}
 		err := n.Applied.WaitForMark(ctx, index)
 		span.Annotatef(nil, "Error from Applied.WaitForMark: %v", err)

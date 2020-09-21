@@ -280,13 +280,11 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 		if tablet.Force {
 			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, tablet.Predicate)
-		} else {
-			if prev.GroupId != tablet.GroupId {
-				glog.Infof(
-					"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
-					prev.Predicate, tablet.GroupId, prev.GroupId)
-				return errTabletAlreadyServed
-			}
+		} else if prev.GroupId != tablet.GroupId {
+			glog.Infof(
+				"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
+				prev.Predicate, tablet.GroupId, prev.GroupId)
+			return errTabletAlreadyServed
 		}
 	}
 	tablet.Force = false
@@ -442,7 +440,7 @@ func (n *node) triggerLeaderChange() {
 func (n *node) proposeNewCID() {
 	// Either this is a new cluster or can't find a CID in the entries. So, propose a new ID for the cluster.
 	// CID check is needed for the case when a leader assigns a CID to the new node and the new node is proposing a CID
-	for len(n.server.membershipState().Cid) == 0 {
+	for n.server.membershipState().Cid == "" {
 		id := uuid.New().String()
 		err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
 		if err == nil {
