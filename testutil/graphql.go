@@ -145,11 +145,12 @@ func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
 }
 
 type AuthMeta struct {
-	PublicKey string
-	Namespace string
-	Algo      string
-	Header    string
-	AuthVars  map[string]interface{}
+	PublicKey      string
+	Namespace      string
+	Algo           string
+	Header         string
+	AuthVars       map[string]interface{}
+	PrivateKeyPath string
 }
 
 func (a *AuthMeta) GetSignedToken(privateKeyFile string,

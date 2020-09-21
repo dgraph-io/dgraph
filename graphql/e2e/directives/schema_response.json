@@ -59,6 +59,15 @@
             "upsert": true
         },
         {
+            "predicate": "Person1.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Person1.friends",
+            "type": "uid",
+            "list": true
+        },
+        {
             "predicate": "Post1.comments",
             "type": "uid",
             "list": true
@@ -429,6 +438,17 @@
                 }
             ],
             "name": "People"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Person1.name"
+                },
+                {
+                    "name": "Person1.friends"
+                }
+            ],
+            "name": "Person1"
         },
         {
             "fields": [

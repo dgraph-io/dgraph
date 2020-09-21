@@ -107,7 +107,7 @@ We provide sample configs for both [Docker Compose](https://github.com/dgraph-io
 
 {{% load-img "/images/deploy-guide-1.png" "2-node cluster" %}}
 
-Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/_index.md#config" >}})).
+Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/config.md" >}})).
 
 Dgraph Zero:
 * The `--my` flag should be set to the address:port (the internal-gRPC port) that will be accessible to the Dgraph Alpha (default: `localhost:5080`).
@@ -130,7 +130,7 @@ We provide sample configs for both [Docker Compose](https://github.com/dgraph-io
 
 A Dgraph cluster can be configured in a high-availability setup with Dgraph Zero and Dgraph Alpha each set up with peers. These peers are part of Raft consensus groups, which elect a single leader amongst themselves. The non-leader peers are called followers. In the event that the peers cannot communicate with the leader (e.g., a network partition or a machine shuts down), the group automatically elects a new leader to continue.
 
-Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/_index.md#config" >}})).
+Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/config.md" >}})).
 
 In this setup, we assume the following hostnames are set:
 

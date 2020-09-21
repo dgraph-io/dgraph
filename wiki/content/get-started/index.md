@@ -5,6 +5,7 @@ aliases = ["/get-started-old"]
   url = "/get-started"
   name = "Get Started"
   identifier = "get-started"
+  parent = "dql"
   weight = 2
 +++
 

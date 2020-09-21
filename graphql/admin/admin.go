@@ -26,7 +26,6 @@ import (
 	"github.com/pkg/errors"
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -35,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
@@ -415,7 +415,7 @@ type adminServer struct {
 
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
-func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (web.IServeGraphQL,
+func NewServers(withIntrospection bool, globalEpoch *uint64, closer *z.Closer) (web.IServeGraphQL,
 	web.IServeGraphQL, *GraphQLHealthStore) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
@@ -444,7 +444,7 @@ func newAdminResolver(
 	fns *resolve.ResolverFns,
 	withIntrospection bool,
 	epoch *uint64,
-	closer *y.Closer) *resolve.RequestResolver {
+	closer *z.Closer) *resolve.RequestResolver {
 
 	adminSchema, err := schema.FromString(graphqlAdminSchema)
 	if err != nil {
@@ -793,13 +793,18 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	// set status as updating schema
 	mainHealthStore.updatingSchema()
 
-	resolverFactory := resolverFactoryWithErrorMsg(errResolverNotFound)
-	// it is nil after drop_all
-	if gqlSchema != nil {
-		resolverFactory = resolverFactory.WithConventionResolvers(gqlSchema, as.fns)
-	}
-	if as.withIntrospection {
-		resolverFactory.WithSchemaIntrospection()
+	var resolverFactory resolve.ResolverFactory
+	// If schema is nil (which becomes after drop_all) then do not attach Resolver for
+	// introspection operations, and set GQL schema to empty.
+	if gqlSchema == nil {
+		resolverFactory = resolverFactoryWithErrorMsg(errNoGraphQLSchema)
+		gqlSchema, _ = schema.FromString("")
+	} else {
+		resolverFactory = resolverFactoryWithErrorMsg(errResolverNotFound).
+			WithConventionResolvers(gqlSchema, as.fns)
+		if as.withIntrospection {
+			resolverFactory.WithSchemaIntrospection()
+		}
 	}
 
 	// Increment the Epoch when you get a new schema. So, that subscription's local epoch

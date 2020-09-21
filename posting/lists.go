@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -32,12 +31,12 @@ import (
 	ostats "go.opencensus.io/stats"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/golang/glog"
-
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
+
+	"github.com/golang/glog"
 )
 
 const (
@@ -90,7 +89,7 @@ func getMemUsage() int {
 	return rss * os.Getpagesize()
 }
 
-func updateMemoryMetrics(lc *y.Closer) {
+func updateMemoryMetrics(lc *z.Closer) {
 	defer lc.Done()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -130,13 +129,13 @@ func updateMemoryMetrics(lc *y.Closer) {
 
 var (
 	pstore *badger.DB
-	closer *y.Closer
+	closer *z.Closer
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB) {
 	pstore = ps
-	closer = y.NewCloser(1)
+	closer = z.NewCloser(1)
 	go updateMemoryMetrics(closer)
 }
 
@@ -181,6 +180,12 @@ func NewLocalCache(startTs uint64) *LocalCache {
 	}
 }
 
+// NoCache returns a new LocalCache instance, which won't cache anything. Useful to pass startTs
+// around.
+func NoCache(startTs uint64) *LocalCache {
+	return &LocalCache{startTs: startTs}
+}
+
 func (lc *LocalCache) getNoStore(key string) *List {
 	lc.RLock()
 	defer lc.RUnlock()
@@ -205,8 +210,8 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
-	if lc == nil {
-		return getNew(key, pstore, math.MaxUint64)
+	if lc.plists == nil {
+		return getNew(key, pstore, lc.startTs)
 	}
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {
