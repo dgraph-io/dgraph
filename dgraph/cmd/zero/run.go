@@ -297,7 +297,7 @@ func run() {
 	}
 	glog.Infof("Opening zero BadgerDB with options: %+v\n", kvOpt)
 
-	kv, err := badger.Open(kvOpt)
+	kv, err := badger.OpenManaged(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
 

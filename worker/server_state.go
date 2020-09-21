@@ -164,7 +164,7 @@ func (s *ServerState) initStorage() {
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
 		opt.EncryptionKey = key
 
-		s.WALstore, err = badger.Open(opt)
+		s.WALstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV WAL store")
 	}
 	{
