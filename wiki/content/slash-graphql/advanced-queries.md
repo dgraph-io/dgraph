@@ -1,17 +1,17 @@
 +++
-title = "Advanced Queries with GraphQL+-"
+title = "Advanced Queries with DQL"
 [menu.main]
     parent = "slash-graphql"
     weight = 2
 +++
 
-*It is now possible to [embed GraphQL+- queries inside your GraphQL schema](/graphql/custom/graphqlpm), which is recommended for most use cases. The rest of this document covers how to connect to connect to your Slash GraphQL backend with existing Dgraph clients.*
+*It is now possible to [embed DQL queries inside your GraphQL schema](/graphql/custom/graphqlpm), which is recommended for most use cases. The rest of this document covers how to connect to connect to your Slash GraphQL backend with existing Dgraph clients.*
 
-Slash GraphQL also supports running advanced queries with `GraphQL+-`, a query language that is unique to Dgraph. GraphQL+- should be used by advanced users who wish to make queries and mutations using existing Dgraph client libraries, either via the HTTP or gRPC endpoints. You can learn more about existing client libraries by following this [documentation](https://dgraph.io/docs/clients/).
+Slash GraphQL also supports running advanced queries with `DQL`, a query language that is unique to Dgraph. DQL should be used by advanced users who wish to make queries and mutations using existing Dgraph client libraries, either via the HTTP or gRPC endpoints. You can learn more about existing client libraries by following this [documentation](https://dgraph.io/docs/clients/).
 
 If you are getting started with Slash GraphQL, you might want to consider using our [GraphQL APIs](/graphql/overview) instead. It will get you quickly started on the basics of using Slash GraphQL before you go into advanced topics.
 
-Please note that Slash GraphQL does not allow you to alter the schema or create new predicates via GraphQL+-. You will also not be able ta access the /alter endpoint or it's gRPC equivalent. Please add your schema through the GraphQL endpoint (either via the UI or via the Admin API), before accessing the data with GraphQL+-.
+Please note that Slash GraphQL does not allow you to alter the schema or create new predicates via DQL. You will also not be able ta access the /alter endpoint or it's gRPC equivalent. Please add your schema through the GraphQL endpoint (either via the UI or via the Admin API), before accessing the data with DQL.
 
 ## Authentication
 
@@ -19,7 +19,7 @@ All the APIs documented here require an API token for access. Please see [Authen
 
 ### HTTP
 
-You can query your backend with GraphQL+- using the `/query` endpoint of your cluster. As an example, if your graphql endpoint is `https://frozen-mango-42.us-west-2.aws.cloud.dgraph.io/graphql`, then the admin endpoint for schema will be at `https://frozen-mango.us-west-2.aws.cloud.dgraph.io/query`.
+You can query your backend with DQL using the `/query` endpoint of your cluster. As an example, if your graphql endpoint is `https://frozen-mango-42.us-west-2.aws.cloud.dgraph.io/graphql`, then the admin endpoint for schema will be at `https://frozen-mango.us-west-2.aws.cloud.dgraph.io/query`.
 
 This endpoint works identically to to the [/query](https://dgraph.io/docs/query-language/) endpoint of Dgraph, with the additional constraint of requiring authentication, as described in the Authentication section above.
 
@@ -125,7 +125,7 @@ finally:
 
 ### Visualizing your Graph with Ratel
 
-It is possible to use Ratel to visualize your Slash GraphQL backend with GraphQL+-. You may use self hosted Ratel, or using [Dgraph Play](https://play.dgraph.io/?latest#connection)
+It is possible to use Ratel to visualize your Slash GraphQL backend with DQL. You may use self hosted Ratel, or using [Dgraph Play](https://play.dgraph.io/?latest#connection)
 
 In order to configure Ratel, please do the following:
 
@@ -141,4 +141,4 @@ However, please note that certain functionality will not work, such as running B
 
 ### Switching Backend Modes
 
-For those who are interested in using DQL/GraphQL+- as their primary mode of interaction with the backend, it is possible to switch your backend to flexible mode. Please see [Backend Modes](/slash-graphql/admin/backend-modes)
+For those who are interested in using DQL as their primary mode of interaction with the backend, it is possible to switch your backend to flexible mode. Please see [Backend Modes](/slash-graphql/admin/backend-modes)

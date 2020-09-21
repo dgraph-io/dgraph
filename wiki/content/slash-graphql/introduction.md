@@ -16,7 +16,7 @@ Please see the following topics:
   - [Import and Exporting Data](/slash-graphql/admin/import-export) is a guide for exporting your data from a Slash GraphQL backend, and how to import it into another cluster
   - [Dropping Data](/slash-graphql/admin/drop-data) will guide you through dropping all data from your Slash GraphQL backend.
   - [Switching Backend Modes](/slash-graphql/admin/backend-modes) will guide you through changing Slash GraphQL backend mode.
-- [Advanced Queries With GraphQL+-](/slash-graphql/advanced-queries) speaks about how to interact with your database via the gRPC endpoint.
+- [Advanced Queries With DQL](/slash-graphql/advanced-queries) speaks about how to interact with your database via the gRPC endpoint.
 - [One-click Deploy](/slash-graphql/one-click-deploy) speaks about how to deploy sample apps in a fresh instance of backend to start working with them.
 
 You might also be interested in:

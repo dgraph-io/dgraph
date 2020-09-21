@@ -94,11 +94,11 @@ Designed from the ground up to be run in production, Dgraph is the native GraphQ
         <div class="section-item">
           <div class="section-name">
             <a href="{{< relref "tips/index.md">}}">
-              GraphQL+- Tips and Tricks
+              DQL Tips and Tricks
             </a>
           </div>
           <p class="section-desc">
-            A list of commonly used GraphQL+- query snippets
+            A list of commonly used DQL query snippets
           </p>
         </div>
       </div>
