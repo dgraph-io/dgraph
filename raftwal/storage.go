@@ -66,7 +66,7 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 		indexRangeChan: make(chan indexRange, 16),
 	}
 
-	w.fetchCommitTs()
+	w.fetchMaxVersion()
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
@@ -95,12 +95,12 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	return w
 }
 
-// fetchCommitTs fetches the commitTs to be used in the raftwal. The version is
-// fetched from the special key "dgraphVersion-key!!!-id" or from db.MaxVersion
+// fetchMaxVersion fetches the commitTs to be used in the raftwal. The version is
+// fetched from the special key "maxVersion-id" or from db.MaxVersion
 // API which uses the stream framework.
-func (w *DiskStorage) fetchCommitTs() {
+func (w *DiskStorage) fetchMaxVersion() {
 	// This is a special key that is used to fetch the latest version.
-	key := []byte(fmt.Sprintf("dgraphVersion-key!!!-%d", versionKey))
+	key := []byte(fmt.Sprintf("maxVersion-%d", versionKey))
 
 	txn := w.db.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
@@ -110,16 +110,18 @@ func (w *DiskStorage) fetchCommitTs() {
 		w.commitTs = item.Version()
 		return
 	}
-	x.AssertTrue(err == badger.ErrKeyNotFound)
+	if err == badger.ErrKeyNotFound {
+		// We don't have the special key so get it using the MaxVersion API.
+		version, err := w.db.MaxVersion()
+		x.Check(err)
 
-	// We don't have the special key so get it using the MaxVersion API.
-	version, err := w.db.MaxVersion()
-	x.Check(err)
-
-	w.commitTs = version + 1
-	// Insert the same key back into badger for reuse.
-	x.Check(txn.Set(key, nil))
-	x.Check(txn.CommitAt(w.commitTs, nil))
+		w.commitTs = version + 1
+		// Insert the same key back into badger for reuse.
+		x.Check(txn.Set(key, nil))
+		x.Check(txn.CommitAt(w.commitTs, nil))
+	} else {
+		x.Check(err)
+	}
 }
 
 func (w *DiskStorage) processIndexRange() {
