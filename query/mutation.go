@@ -230,14 +230,6 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 				return edges, err
 			}
 		}
-		for _, nq := range gmu.Set {
-			if err := facets.SortAndValidate(nq.Facets); err != nil {
-				return edges, err
-			}
-			if err := parse(nq, pb.DirectedEdge_SET); err != nil {
-				return edges, err
-			}
-		}
 	}
 
 	return edges, nil
