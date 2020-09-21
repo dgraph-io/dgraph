@@ -141,6 +141,15 @@
             "type": "string"
         },
         {
+            "predicate": "Person1.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Person1.friends",
+            "type": "uid",
+            "list": true
+        },
+        {
             "predicate": "Post.author",
             "type": "uid"
         },
@@ -472,6 +481,17 @@
                 }
             ],
             "name": "Person"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Person1.name"
+                },
+                {
+                    "name": "Person1.friends"
+                }
+            ],
+            "name": "Person1"
         },
         {
             "fields": [

@@ -46,6 +46,8 @@ type authRewriter struct {
 	parentVarName string
 	// `hasAuthRules` indicates if any of fields in the complete query hierarchy has auth rules.
 	hasAuthRules bool
+	// `hasCascade` indicates if any of fields in the complete query hierarchy has cascade directive.
+	hasCascade bool
 }
 
 // NewQueryRewriter returns a new QueryRewriter.
@@ -61,6 +63,19 @@ func hasAuthRules(field schema.Field, authRw *authRewriter) bool {
 
 	for _, childField := range field.SelectionSet() {
 		if authRules := hasAuthRules(childField, authRw); authRules {
+			return true
+		}
+	}
+	return false
+}
+
+func hasCascadeDirective(field schema.Field) bool {
+	if c := field.Cascade(); c {
+		return true
+	}
+
+	for _, childField := range field.SelectionSet() {
+		if res := hasCascadeDirective(childField); res {
 			return true
 		}
 	}
@@ -93,6 +108,7 @@ func (qr *queryRewriter) Rewrite(
 		parentVarName: gqlQuery.Type().Name() + "Root",
 	}
 	authRw.hasAuthRules = hasAuthRules(gqlQuery, authRw)
+	authRw.hasCascade = hasCascadeDirective(gqlQuery)
 
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:
@@ -748,14 +764,34 @@ func addSelectionSetFrom(
 			q.Children = append(q.Children, child)
 		}
 
-		// If RBAC rules are evaluated to Negative, we don't write queries for deeper levels.
-		// Hence we don't need to do any further processing for this field.
-		if rbac == schema.Negative {
+		var fieldAuth []*gql.GraphQuery
+		var authFilter *gql.FilterTree
+		if rbac == schema.Negative && auth.hasAuthRules && auth.hasCascade && !auth.isWritingAuth {
+			// If RBAC rules are evaluated to Negative but we have cascade directive we continue
+			// to write the query and add a dummy filter that doesn't return anything.
+			// Example: AdminTask5 as var(func: uid())
+			q.Children = append(q.Children, child)
+			varName := auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+			fieldAuth = append(fieldAuth, &gql.GraphQuery{
+				Var:  varName,
+				Attr: "var",
+				Func: &gql.Function{
+					Name: "uid",
+				},
+			})
+			authFilter = &gql.FilterTree{
+				Func: &gql.Function{
+					Name: "uid",
+					Args: []gql.Arg{{Value: varName}},
+				},
+			}
+			rbac = schema.Positive
+		} else if rbac == schema.Negative {
+			// If RBAC rules are evaluated to Negative, we don't write queries for deeper levels.
+			// Hence we don't need to do any further processing for this field.
 			continue
 		}
 
-		var fieldAuth []*gql.GraphQuery
-		var authFilter *gql.FilterTree
 		// If RBAC rules are evaluated to `Uncertain` then we add the Auth rules.
 		if rbac == schema.Uncertain {
 			fieldAuth, authFilter = auth.rewriteAuthQueries(f.Type())

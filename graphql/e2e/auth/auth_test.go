@@ -1260,6 +1260,67 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 	}
 }
 
+func TestDeepRBACValueCascade(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user: "user1",
+			role: "USER",
+			query: `
+			query {
+			  queryUser (filter:{username:{eq:"user1"}}) @cascade {
+				username
+				issues {
+				  msg
+				}
+			  }
+			}`,
+			result: `{"queryUser": []}`,
+		},
+		{
+			user: "user1",
+			role: "USER",
+			query: `
+			query {
+			  queryUser (filter:{username:{eq:"user1"}}) {
+				username
+				issues @cascade {
+				  msg
+				}
+			  }
+			}`,
+			result: `{"queryUser": [{"username": "user1", "issues":[]}]}`,
+		},
+		{
+			user: "user1",
+			role: "ADMIN",
+			query: `
+			query {
+			  queryUser (filter:{username:{eq:"user1"}}) @cascade {
+				username
+				issues {
+				  msg
+				}
+			  }
+			}`,
+			result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}]}]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   tcase.query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	schemaFile := "schema.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)

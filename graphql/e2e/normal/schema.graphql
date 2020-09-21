@@ -172,3 +172,9 @@ type Comment1 {
       id: String! @id
       replies: [Comment1]
 }
+
+type Person1 {
+        id: ID!
+        name: String!
+        friends: [Person1] @hasInverse(field: friends)
+}
