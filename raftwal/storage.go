@@ -19,6 +19,7 @@ package raftwal
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"sync"
 
@@ -33,6 +34,9 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/trace"
 )
+
+// versionKey is hardcoded into the key used to collect the maximum version for the DB.
+const versionKey = 1
 
 // DiskStorage handles disk access and writing for the RAFT write-ahead log.
 type DiskStorage struct {
@@ -60,9 +64,9 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 		cache:          new(sync.Map),
 		Closer:         z.NewCloser(1),
 		indexRangeChan: make(chan indexRange, 16),
-		commitTs:       math.MaxUint64,
 	}
 
+	w.fetchCommitTs()
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
@@ -89,6 +93,33 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	w.indexRangeChan <- indexRange{0, first - 1}
 
 	return w
+}
+
+// fetchCommitTs fetches the commitTs to be used in the raftwal. The version is
+// fetched from the special key "dgraphVersion-key!!!-id" or from db.MaxVersion
+// API which uses the stream framework.
+func (w *DiskStorage) fetchCommitTs() {
+	// This is a special key that is used to fetch the latest version.
+	key := []byte(fmt.Sprintf("dgraphVersion-key!!!-%d", versionKey))
+
+	txn := w.db.NewTransactionAt(math.MaxUint64, false)
+	defer txn.Discard()
+
+	item, err := txn.Get(key)
+	if err == nil {
+		w.commitTs = item.Version()
+		return
+	}
+	x.AssertTrue(err == badger.ErrKeyNotFound)
+
+	// We don't have the special key so get it using the MaxVersion API.
+	version, err := w.db.MaxVersion()
+	x.Check(err)
+
+	w.commitTs = version + 1
+	// Insert the same key back into badger for reuse.
+	x.Check(txn.Set(key, nil))
+	x.Check(txn.CommitAt(w.commitTs, nil))
 }
 
 func (w *DiskStorage) processIndexRange() {
