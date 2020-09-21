@@ -624,7 +624,7 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "WaitLinearizableRead")
 
-	if num := atomic.AddUint64(&readIndexTotal, 1); num%100 == 0 {
+	if num := atomic.AddUint64(&readIndexTotal, 1); num%1000 == 0 {
 		glog.V(2).Infof("ReadIndex Total: %d\n", num)
 	}
 	indexCh := make(chan uint64, 1)
@@ -642,7 +642,7 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 		if index == 0 {
 			return errReadIndex
 		} else {
-			if num := atomic.AddUint64(&readIndexOk, 1); num%100 == 0 {
+			if num := atomic.AddUint64(&readIndexOk, 1); num%1000 == 0 {
 				glog.V(2).Infof("ReadIndex OK: %d\n", num)
 			}
 		}

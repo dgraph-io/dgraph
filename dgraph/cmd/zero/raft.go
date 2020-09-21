@@ -697,23 +697,6 @@ func (n *node) Run() {
 		go x.StoreSync(n.Store, closer)
 	}
 
-	// var readNum uint64
-	// getRead := func() {
-	// 	start := time.Now()
-	// 	dur := 20 * time.Millisecond
-	// 	ticker := time.NewTicker(dur)
-	// 	defer ticker.Stop()
-	// 	for range ticker.C {
-	// 		err := n.WaitLinearizableRead(context.Background())
-	// 		cnt := atomic.AddUint64(&readNum, 1)
-	// 		if err != nil || cnt%100 == 0 {
-	// 			glog.Infof("Got lin read for id: %d with err: %v. Num: %d. Expected: %d\n", n.Id, err, cnt, 2*time.Since(start)/dur)
-	// 		}
-	// 	}
-	// }
-	// go getRead()
-	// go getRead()
-
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 
