@@ -41,6 +41,13 @@ var (
 	metaInfo *testutil.AuthMeta
 )
 
+type Tweets struct {
+	Id        string `json:"id,omitempty"`
+	Text      string `json:"text,omitempty"`
+	Timestamp string `json:"timestamp,omitempty"`
+	User      User   `json:"user,omitempty"`
+}
+
 type User struct {
 	Username string `json:"username,omitempty"`
 	Age      uint64 `json:"age,omitempty"`
@@ -119,8 +126,8 @@ type Task struct {
 }
 
 type TaskOccurrence struct {
-	Id string `json:"id,omitempty"`
-	Due string `json:"due,omitempty"`
+	Id   string `json:"id,omitempty"`
+	Due  string `json:"due,omitempty"`
 	Comp string `json:"comp,omitempty"`
 }
 
@@ -141,6 +148,7 @@ type uidResult struct {
 }
 
 type Tasks []Task
+
 func (tasks Tasks) add(t *testing.T) {
 	getParams := &common.GraphQLParams{
 		Query: `
@@ -406,7 +414,7 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 func TestOrderAndOffset(t *testing.T) {
 	tasks := Tasks{
 		Task{
-			Name:        "First Task four occurrence",
+			Name: "First Task four occurrence",
 			Occurrences: []*TaskOccurrence{
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
@@ -415,7 +423,7 @@ func TestOrderAndOffset(t *testing.T) {
 			},
 		},
 		Task{
-			Name:       "Second Task single occurrence",
+			Name: "Second Task single occurrence",
 			Occurrences: []*TaskOccurrence{
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
 			},
@@ -425,7 +433,7 @@ func TestOrderAndOffset(t *testing.T) {
 			Occurrences: []*TaskOccurrence{},
 		},
 		Task{
-			Name:        "Fourth Task two occurrences",
+			Name: "Fourth Task two occurrences",
 			Occurrences: []*TaskOccurrence{
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
