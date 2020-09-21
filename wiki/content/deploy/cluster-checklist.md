@@ -14,4 +14,4 @@ In setting up a cluster be sure the check the following.
 * Does each instance have a unique ID on startup?
 * Has `--bindall=true` been set for networked communication?
 
-See the [Production Checklist]({{< relref "#production-checklist" >}}) docs for more info.
+See the [Production Checklist]({{< relref "deploy/production-checklist.md" >}}) docs for more info.

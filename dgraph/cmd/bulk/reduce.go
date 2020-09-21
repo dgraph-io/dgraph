@@ -43,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type reducer struct {
@@ -84,10 +85,10 @@ func (r *reducer) run() error {
 			splitWriter := tmpDb.NewManagedWriteBatch()
 
 			ci := &countIndexer{
-				reducer: r,
-				writer: writer,
+				reducer:     r,
+				writer:      writer,
 				splitWriter: splitWriter,
-				tmpDb: tmpDb,
+				tmpDb:       tmpDb,
 			}
 			sort.Slice(partitionKeys, func(i, j int) bool {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
@@ -130,7 +131,7 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 
 	opt := badger.DefaultOptions(dir).WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
-		WithLogger(nil).WithMaxCacheSize(1 << 20).
+		WithLogger(nil).WithBlockCacheSize(1 << 20).
 		WithEncryptionKey(r.opt.EncryptionKey).WithCompression(bo.None)
 
 	// Overwrite badger options based on the options provided by the user.
@@ -333,7 +334,7 @@ func (r *reducer) streamIdFor(pred string) uint32 {
 	return streamId
 }
 
-func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
+func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
 	for req := range entryCh {
 
@@ -383,7 +384,7 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, kvsCh chan *bpb.KVList, wg *s
 	x.Check(ci.splitWriter.Flush())
 }
 
-func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *y.Closer) {
+func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
 
 	// Concurrently write split lists to a temporary badger.
@@ -401,7 +402,16 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		// Wait for it to be encoded.
 		start := time.Now()
 
-		x.Check(ci.writer.Write(req.list))
+		for len(req.list.GetKv()) > 0 {
+			batchSize := 100
+			if len(req.list.Kv) < batchSize {
+				batchSize = len(req.list.Kv)
+			}
+			batch := &bpb.KVList{Kv: req.list.Kv[:batchSize]}
+			req.list.Kv = req.list.Kv[batchSize:]
+			x.Check(ci.writer.Write(batch))
+		}
+
 		if req.splitList != nil && len(req.splitList.Kv) > 0 {
 			splitCh <- req.splitList
 		}
@@ -456,14 +466,14 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	fmt.Printf("Num CPUs: %d\n", cpu)
 	encoderCh := make(chan *encodeRequest, 2*cpu)
 	writerCh := make(chan *encodeRequest, 2*cpu)
-	encoderCloser := y.NewCloser(cpu)
+	encoderCloser := z.NewCloser(cpu)
 	for i := 0; i < cpu; i++ {
 		// Start listening to encode entries
 		// For time being let's lease 100 stream id for each encoder.
 		go r.encode(encoderCh, encoderCloser)
 	}
 	// Start listening to write the badger list.
-	writerCloser := y.NewCloser(1)
+	writerCloser := z.NewCloser(1)
 	go r.startWriting(ci, writerCh, writerCloser)
 
 	for i := 0; i < len(partitionKeys); i++ {

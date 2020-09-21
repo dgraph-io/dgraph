@@ -204,6 +204,7 @@ func NewHandler(input string) (Handler, error) {
 	headers := getAllowedHeaders(sch, defns)
 	dgSchema := genDgSchema(sch, typesToComplete)
 	completeSchema(sch, typesToComplete)
+	cleanSchema(sch)
 
 	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")

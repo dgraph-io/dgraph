@@ -38,7 +38,6 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/posting"
@@ -47,6 +46,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type node struct {
@@ -60,12 +60,12 @@ type node struct {
 	applyCh chan []*pb.Proposal
 	ctx     context.Context
 	gid     uint32
-	closer  *y.Closer
+	closer  *z.Closer
 
 	streaming int32 // Used to avoid calculating snapshot
 
 	// Used to track the ops going on in the system.
-	ops     map[op]*y.Closer
+	ops     map[op]*z.Closer
 	opsLock sync.Mutex
 
 	canCampaign bool
@@ -86,6 +86,8 @@ func (id op) String() string {
 		return "opIndexing"
 	case opRestore:
 		return "opRestore"
+	case opBackup:
+		return "opBackup"
 	default:
 		return "opUnknown"
 	}
@@ -96,6 +98,7 @@ const (
 	opSnapshot
 	opIndexing
 	opRestore
+	opBackup
 )
 
 // startTask is used to check whether an op is already running. If a rollup is running,
@@ -104,7 +107,7 @@ const (
 // Restore operations have preference and cancel all other operations, not just rollups.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
-func (n *node) startTask(id op) (*y.Closer, error) {
+func (n *node) startTask(id op) (*z.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
 
@@ -123,7 +126,7 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		}
 	}
 
-	closer := y.NewCloser(1)
+	closer := z.NewCloser(1)
 	switch id {
 	case opRollup:
 		if len(n.ops) > 0 {
@@ -136,6 +139,17 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRestore {
 				return nil, errors.Errorf("another restore operation is already running")
+			}
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
+			otherCloser.SignalAndWait()
+		}
+	case opBackup:
+		// Backup cancels all other operations, except for other backups since
+		// only one restore operation should be active any given moment.
+		for otherId, otherCloser := range n.ops {
+			if otherId == opBackup {
+				return nil, errors.Errorf("another backup operation is already running")
 			}
 			// Remove from map and signal the closer to cancel the operation.
 			delete(n.ops, otherId)
@@ -158,7 +172,7 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 
 	n.ops[id] = closer
 	glog.Infof("Operation started with id: %s", id)
-	go func(id op, closer *y.Closer) {
+	go func(id op, closer *z.Closer) {
 		closer.Wait()
 		stopTask(id)
 	}(id, closer)
@@ -225,8 +239,8 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// to maintain quorum health.
 		applyCh: make(chan []*pb.Proposal, 1000),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:  y.NewCloser(4), // Matches CLOSER:1
-		ops:     make(map[op]*y.Closer),
+		closer:  z.NewCloser(4), // Matches CLOSER:1
+		ops:     make(map[op]*z.Closer),
 	}
 	if x.WorkerConfig.LudicrousMode {
 		n.ex = newExecutor(&m.Applied)
@@ -590,7 +604,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		defer x.UpdateDrainingMode(false)
 
 		var err error
-		var closer *y.Closer
+		var closer *z.Closer
 		closer, err = n.startTask(opRestore)
 		if err != nil {
 			return errors.Wrapf(err, "cannot start restore task")
@@ -996,7 +1010,7 @@ func (n *node) Run() {
 	go n.ReportRaftComms()
 
 	if x.WorkerConfig.LudicrousMode {
-		closer := y.NewCloser(2)
+		closer := z.NewCloser(2)
 		defer closer.SignalAndWait()
 		go x.StoreSync(n.Store, closer)
 		go x.StoreSync(pstore, closer)

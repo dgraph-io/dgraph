@@ -18,7 +18,6 @@ package zero
 
 import (
 	"context"
-	//	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -35,12 +34,13 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
+	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 )
@@ -55,6 +55,9 @@ type options struct {
 	w                 string
 	rebalanceInterval time.Duration
 	LudicrousMode     bool
+
+	totalCache      int64
+	cachePercentage string
 }
 
 var opts options
@@ -101,6 +104,22 @@ instances to achieve high-availability.
 		" exporter does not support annotation logs and would discard them.")
 	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+
+	// Cache flags
+	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
+	flag.String("cache_percentage", "100,0",
+		"Cache percentages summing up to 100 for various caches (FORMAT: blockCache,indexCache).")
+
+	// Badger flags
+	flag.String("badger.tables", "mmap",
+		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for write-ahead log directory "+
+			"write-ahead directory. Option sequence consume most to least RAM while providing "+
+			"best to worst read performance respectively")
+	flag.String("badger.vlog", "mmap",
+		"[mmap, disk] Specifies how Badger Value log is stored for the write-ahead log directory "+
+			"log directory. mmap consumes more RAM, but provides better performance.")
+	flag.Int("badger.compression_level", 3,
+		"The compression level for Badger. A higher value uses more resources.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -132,7 +151,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	m.Cfg.DisableProposalForwarding = true
 	st.rs = conn.NewRaftServer(m)
 
-	st.node = &node{Node: m, ctx: context.Background(), closer: y.NewCloser(1)}
+	st.node = &node{Node: m, ctx: context.Background(), closer: z.NewCloser(1)}
 	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node}
 	st.zero.Init()
 	st.node.server = st.zero
@@ -183,6 +202,8 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
+		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
+		cachePercentage:   Zero.Conf.GetString("cache_percentage"),
 	}
 
 	if opts.nodeId == 0 {
@@ -231,18 +252,56 @@ func run() {
 	httpListener, err := setupListener(addr, x.PortZeroHTTP+opts.portOffset, "http")
 	x.Check(err)
 
+	x.AssertTruef(opts.totalCache >= 0, "ERROR: Cache size must be non-negative")
+
+	cachePercent, err := x.GetCachePercentages(opts.cachePercentage, 2)
+	x.Check(err)
+	blockCacheSz := (cachePercent[0] * (opts.totalCache << 20)) / 100
+	indexCacheSz := (cachePercent[1] * (opts.totalCache << 20)) / 100
+
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
-		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20).WithLoadBloomsOnOpen(false)
+	kvOpt := badger.LSMOnlyOptions(opts.w).
+		WithSyncWrites(false).
+		WithTruncate(true).
+		WithValueLogFileSize(64 << 20).
+		WithBlockCacheSize(blockCacheSz).
+		WithIndexCacheSize(indexCacheSz).
+		WithLoadBloomsOnOpen(false)
 
-	kvOpt.ZSTDCompressionLevel = 3
+	compression_level := Zero.Conf.GetInt("badger.compression_level")
+	if compression_level > 0 {
+		// By default, compression is disabled in badger.
+		kvOpt.Compression = bopt.ZSTD
+		kvOpt.ZSTDCompressionLevel = compression_level
+	}
+
+	// Set loading mode options.
+	switch Zero.Conf.GetString("badger.tables") {
+	case "mmap":
+		kvOpt.TableLoadingMode = bopt.MemoryMap
+	case "ram":
+		kvOpt.TableLoadingMode = bopt.LoadToRAM
+	case "disk":
+		kvOpt.TableLoadingMode = bopt.FileIO
+	default:
+		x.Fatalf("Invalid Badger Tables options")
+	}
+	switch Zero.Conf.GetString("badger.vlog") {
+	case "mmap":
+		kvOpt.ValueLogLoadingMode = bopt.MemoryMap
+	case "disk":
+		kvOpt.ValueLogLoadingMode = bopt.FileIO
+	default:
+		x.Fatalf("Invalid Badger Value log options")
+	}
+	glog.Infof("Opening zero BadgerDB with options: %+v\n", kvOpt)
 
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
 
-	gcCloser := y.NewCloser(1) // closer for vLogGC
+	gcCloser := z.NewCloser(1) // closer for vLogGC
 	go x.RunVlogGC(kv, gcCloser)
 	defer gcCloser.SignalAndWait()
 
@@ -314,5 +373,10 @@ func run() {
 
 	glog.Infoln("Running Dgraph Zero...")
 	st.zero.closer.Wait()
-	glog.Infoln("All done.")
+	glog.Infoln("Closer closed.")
+
+	err = kv.Close()
+	glog.Infof("Badger closed with err: %v\n", err)
+
+	glog.Infoln("All done. Goodbye!")
 }

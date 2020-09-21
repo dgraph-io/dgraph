@@ -24,7 +24,7 @@ It is an error to define a value variable but not use it elsewhere in the query.
 
 Value variables are used by extracting the values with `val(var-name)`, or by extracting the UIDs with `uid(var-name)`.
 
-[Facet]({{< relref "#facets-edge-attributes">}}) values can be stored in value variables.
+[Facet]({{< relref "query-language/facets.md">}}) values can be stored in value variables.
 
 Query Example: The number of movie roles played by the actors of the 80's classic "The Princess Bride".  Query variable `pbActors` matches the UIDs of all actors from the movie.  Value variable `roles` is thus a map from actor UID to number of roles.  Value variable `roles` can be used in the `totalRoles` query block because that query block also matches the `pbActors` UIDs, so the actor to number of roles map is available.
 
