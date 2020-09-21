@@ -19,7 +19,6 @@ scalar DateTime
 
 enum DgraphIndex {
 	int
-	int64
 	float
 	bool
 	hash
@@ -77,9 +76,9 @@ directive @auth(
 	add: AuthRule,
 	update: AuthRule,
 	delete:AuthRule) on OBJECT
-directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade(fields: [String]) on FIELD
+directive @cascade on FIELD
 
 input IntFilter {
 	eq: Int
@@ -87,14 +86,6 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
-}
-
-input Int64Filter {
-	eq: Int64
-	le: Int64
-	lt: Int64
-	ge: Int64
-	gt: Int64
 }
 
 input FloatFilter {
@@ -163,10 +154,6 @@ type UpdateUserPayload {
 # Generated Enums
 #######################
 
-enum UserHasFilter {
-	name
-}
-
 enum UserOrderable {
 	name
 }
@@ -187,9 +174,6 @@ input UpdateUserInput {
 
 input UserFilter {
 	id: [ID!]
-	has: UserHasFilter
-	and: UserFilter
-	or: UserFilter
 	not: UserFilter
 }
 
