@@ -3542,3 +3542,68 @@ func updateMutationWithoutSetRemove(t *testing.T) {
 	// cleanup
 	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
 }
+
+func nestedAddMutationWithHasInverse(t *testing.T) {
+	params := &GraphQLParams{
+		Query: `mutation addPerson1($input: [AddPerson1Input!]!) {
+			addPerson1(input: $input) {
+				person1 {
+					name
+					friends {
+						name
+						friends {
+							name
+						}
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"input": []interface{}{
+				map[string]interface{}{
+					"name": "Or",
+					"friends": []interface{}{
+						map[string]interface{}{
+							"name": "Michal",
+							"friends": []interface{}{
+								map[string]interface{}{
+									"name": "Justin",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	gqlResponse := postExecutor(t, GraphqlURL, params)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+		"addPerson1": {
+		  "person1": [
+			{
+			  "friends": [
+				{
+				  "friends": [
+					{
+					  "name": "Or"
+					},
+					{
+					  "name": "Justin"
+					}
+				  ],
+				  "name": "Michal"
+				}
+			  ],
+			  "name": "Or"
+			}
+		  ]
+		}
+	  }`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+
+	// cleanup
+	deleteGqlType(t, "Person1", map[string]interface{}{}, 3, nil)
+}
