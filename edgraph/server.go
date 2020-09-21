@@ -736,7 +736,7 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api
 	return newNQuads
 }
 
-// updateValInMuations does following transformations:
+// updateValInMutations does following transformations:
 // 0x123 <amount> val(v) -> 0x123 <amount> 13.0
 func updateValInMutations(gmu *gql.Mutation, qc *queryContext) {
 	gmu.Del = updateValInNQuads(gmu.Del, qc, false)

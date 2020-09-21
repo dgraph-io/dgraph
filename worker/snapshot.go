@@ -115,6 +115,8 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
 		return 0, err
 	}
+
+	x.VerifySnapshot(pstore, snap.ReadTs)
 	glog.Infof("Populated snapshot with %d keys.\n", count)
 	return count, nil
 }
