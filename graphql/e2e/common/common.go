@@ -270,7 +270,7 @@ func RunAll(t *testing.T) {
 	t.Run("queries with error", queriesWithError)
 	t.Run("date filters", dateFilters)
 	t.Run("float filters", floatFilters)
-	t.Run("int filters", intFilters)
+	t.Run("int filters", int32Filters)
 	t.Run("boolean filters", booleanFilters)
 	t.Run("term filters", termFilters)
 	t.Run("full text filters", fullTextFilters)
