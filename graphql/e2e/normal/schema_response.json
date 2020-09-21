@@ -1,16 +1,6 @@
 {
     "schema": [
         {
-            "index": true,
-            "list": true,
-            "predicate": "dgraph.cors",
-            "tokenizer": [
-              "exact"
-            ],
-            "type": "string",
-            "upsert": true
-        },
-        {
             "predicate": "Author.country",
             "type": "uid"
         },
@@ -168,14 +158,6 @@
         },
         {
             "predicate": "Post.numLikes",
-            "type": "int",
-            "index": true,
-            "tokenizer": [
-                "int"
-            ]
-        },
-        {
-            "predicate": "Post.numViews",
             "type": "int",
             "index": true,
             "tokenizer": [
@@ -507,9 +489,6 @@
                 },
                 {
                     "name": "Post.numLikes"
-                },
-                {
-                    "name": "Post.numViews"
                 },
                 {
                     "name": "Post.isPublished"

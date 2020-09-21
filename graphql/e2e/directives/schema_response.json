@@ -1,16 +1,6 @@
 {
     "schema": [
         {
-            "index": true,
-            "list": true,
-            "predicate": "dgraph.cors",
-            "tokenizer": [
-              "exact"
-            ],
-            "type": "string",
-            "upsert": true
-        },
-        {
             "predicate": "Category.name",
             "type": "string"
         },
@@ -207,14 +197,6 @@
         },
         {
             "predicate": "myPost.numLikes",
-            "type": "int",
-            "index": true,
-            "tokenizer": [
-                "int"
-            ]
-        },
-        {
-            "predicate": "myPost.numViews",
             "type": "int",
             "index": true,
             "tokenizer": [
@@ -571,9 +553,6 @@
                 },
                 {
                     "name": "myPost.numLikes"
-                },
-                {
-                    "name": "myPost.numViews"
                 },
                 {
                     "name": "is_published"
