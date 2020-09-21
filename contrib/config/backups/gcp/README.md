@@ -37,7 +37,7 @@ The Docker Compose configuration `docker-compose.yml` will require the following
 
 For convenience, [terraform](terraform/README.md) scripts and generate random a random password.
 
-The `minio.env` will be used by both Dgraph alpha node(s) and the MinIO GCS Gateway server. You will need to create a file like this:
+The `minio.env` will be used by both Dgraph alpha node(s) and the [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html) server. You will need to create a file like this:
 
 ```bash
 # minio.env
@@ -80,7 +80,7 @@ For Kubernetes, you can deploy [MinIO GCS Gateway](https://docs.min.io/docs/mini
 
 #### Configuring Secrets Values
 
-These values are generated if you used either [terraform](terraform/README.md) scripts.  If you already have an existing GCS bucket you would like to use, you will need to create `charts/dgraph_secrets.yaml` and `charts/minio_secrets.yaml` files.
+These values are generated if you used either [terraform](terraform/README.md) scripts.  If you already have an existing GCS bucket that you would like to use, you will need to create `charts/dgraph_secrets.yaml` and `charts/minio_secrets.yaml` files.
 
 For the `charts/dgraph_secrets.yaml`, you would create a file like this:
 
@@ -104,7 +104,7 @@ gcsgateway:
 
 #### Configuring Environments
 
-Create an `env.sh` file to store `BACKUP_BUCKET_NAME` and `PROJECT_ID`.    If [terraform](terraform/README.md) scripts was were used to create the GCS bucket, these scripts will have already generated this file.
+Create an `env.sh` file to store `BACKUP_BUCKET_NAME` and `PROJECT_ID`.  If [terraform](terraform/README.md) scripts were used to create the GCS bucket, then these scripts will have already generated this file.
 
 This is the same file used for the Docker Compose environment and will look like this:
 
@@ -116,7 +116,7 @@ export BACKUP_BUCKET_NAME=<gcs-bucket-name>
 
 #### Deploy Using Helmfile
 
-If you have [helmfile](https://github.com/roboll/helmfile#installation) and [helm-diff](https://github.com/databus23/helm-diff) installed, you can deploy Minio GCS Gateway and Dgraph cluster with the following:
+If you have [helmfile](https://github.com/roboll/helmfile#installation) and [helm-diff](https://github.com/databus23/helm-diff) installed, you can deploy [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html) and Dgraph cluster with the following:
 
 ```bash
 ## source script for envvars: PROJECT_ID and BACKUP_BUCKET_NAME

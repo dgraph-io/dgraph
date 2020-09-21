@@ -2,7 +2,7 @@
 
 ## About
 
-This script will create the required resources needed to create a bucket in Google Storage Bucket using the (`simple-bucket`)[https://github.com/terraform-google-modules/terraform-google-cloud-storage/tree/master/modules/simple_bucket] Terraform module.  These scripts will also create a `credentials.json` that will have access to the storage bucket, which is needed for the [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html) and optionally generate random MinIO access key and secret key.
+This script will create the required resources needed to create a bucket in Google Storage Bucket using the [`simple-bucket`](https://github.com/terraform-google-modules/terraform-google-cloud-storage/tree/master/modules/simple_bucket) Terraform module.  These scripts will also create a `credentials.json` that will have access to the storage bucket, which is needed for the [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html) and optionally generate random MinIO access key and secret key.
 
 ## Prerequisites
 
