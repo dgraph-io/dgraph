@@ -547,10 +547,14 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	return exportInternal(ctx, in, pstore, false)
 }
 
+// exportInternal contains the core logic to export a Dgraph database. If skipZero is set to
+// false, the parts of this method that require to talk to zero will be skipped. This is useful
+// when exporting a p directory directly from disk without a running cluster.
 func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	skipZero bool) (ExportedFiles, error) {
 	uts := time.Unix(in.UnixTs, 0)
-	exportStorage, err := newExportStorage(in, fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
+	exportStorage, err := newExportStorage(in,
+		fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
 	if err != nil {
 		return nil, err
 	}
@@ -567,7 +571,8 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		return nil, err
 	}
 
-	gqlSchemaWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".gql_schema.gz"))
+	gqlSchemaWriter, err := exportStorage.openFile(
+		fmt.Sprintf("g%02d%s", in.GroupId, ".gql_schema.gz"))
 	if err != nil {
 		return nil, err
 	}

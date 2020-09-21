@@ -181,7 +181,6 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 					kv.Key = restoreKey
 					kv.Value = restoreVal
 					kv.UserMeta = []byte{byt}
-
 					if err := loader.Set(kv); err != nil {
 						return 0, err
 					}

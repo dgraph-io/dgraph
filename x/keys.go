@@ -390,7 +390,6 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 		key, err = SplitKey(key, backupKey.StartUid)
 		Check(err)
 	}
-
 	return key
 }
 

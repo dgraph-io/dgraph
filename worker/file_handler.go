@@ -42,6 +42,8 @@ type fileHandler struct {
 	fp *os.File
 }
 
+// BackupExporter is an alias of fileHandler so that this struct can be used
+// by the export_backup command.
 type BackupExporter struct {
 	fileHandler
 }
@@ -256,8 +258,23 @@ func pathExist(path string) bool {
 func (h *fileHandler) ExportBackup(backupDir, exportDir string,
 	key x.SensitiveByteSlice) error {
 
+	// Create exportDir and temporary folder to store the restored backup.
+	var err error
+	exportDir, err = filepath.Abs(exportDir)
+	if err != nil {
+		return errors.Wrapf(err, "cannot convert path %s to absolute path", exportDir)
+	}
+	if err := os.MkdirAll(exportDir, 0755); err != nil {
+		return errors.Wrapf(err, "cannot create dir %s", exportDir)
+	}
+	tmpDir, err := ioutil.TempDir("", "export_backup")
+	if err != nil {
+		return errors.Wrapf(err, "cannot create temp dir")
+	}
+
+	// Function to load the a single backup file.
 	loadFn := func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
-		dir := filepath.Join(exportDir, fmt.Sprintf("p%d", groupId))
+		dir := filepath.Join(tmpDir, fmt.Sprintf("p%d", groupId))
 
 		r, err := enc.GetReader(key, r)
 		if err != nil {
@@ -270,7 +287,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir string,
 				err = errors.Wrap(err,
 					"Unable to read the backup. Ensure the encryption key is correct.")
 			}
-			return 0, err
+			return 0, errors.Wrapf(err, "cannot create gzip reader")
 		}
 		// The badger DB should be opened only after creating the backup
 		// file reader and verifying the encryption in the backup file.
@@ -282,34 +299,33 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir string,
 			WithEncryptionKey(key))
 
 		if err != nil {
-			return 0, err
+			return 0, errors.Wrapf(err, "cannot open DB at %s", dir)
 		}
 		defer db.Close()
-		if !pathExist(dir) {
-			fmt.Println("Creating new db:", dir)
-		}
-		maxUid, err := loadFromBackup(db, gzReader, 0, preds)
+		_, err = loadFromBackup(db, gzReader, 0, preds)
 		if err != nil {
-			return 0, err
+			return 0, errors.Wrapf(err, "cannot load backup")
 		}
-		return maxUid, x.WriteGroupIdFile(dir, uint32(groupId))
+		return 0, x.WriteGroupIdFile(dir, uint32(groupId))
 	}
 
+	// Read manifest from folder.
 	manifest := &Manifest{}
 	manifestPath := filepath.Join(backupDir, backupManifest)
 	if err := h.ReadManifest(manifestPath, manifest); err != nil {
-		return err
+		return errors.Wrapf(err, "cannot read manifest at %s", manifestPath)
 	}
 	manifest.Path = manifestPath
 	if manifest.Since == 0 || len(manifest.Groups) == 0 {
-		return errors.Errorf("no data in backup")
+		return errors.Errorf("no data found in backup")
 	}
 
+	// Restore backup to disk.
 	for gid := range manifest.Groups {
 		file := filepath.Join(backupDir, backupName(manifest.Since, gid))
 		fp, err := os.Open(file)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "cannot open backup file at %s", file)
 		}
 		defer fp.Close()
 
@@ -323,10 +339,11 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir string,
 		}
 	}
 
+	// Export the data from the p directories produced by the last step.
 	ch := make(chan error, len(manifest.Groups))
 	for gid := range manifest.Groups {
 		go func(group uint32) {
-			dir := filepath.Join(exportDir, fmt.Sprintf("p%d", group))
+			dir := filepath.Join(tmpDir, fmt.Sprintf("p%d", group))
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 				WithSyncWrites(false).
 				WithTableLoadingMode(options.MemoryMap).
@@ -335,7 +352,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir string,
 				WithEncryptionKey(key))
 
 			if err != nil {
-				ch <- err
+				ch <- errors.Wrapf(err, "cannot open DB at %s", dir)
 				return
 			}
 			defer db.Close()
@@ -349,7 +366,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir string,
 			}
 
 			_, err = exportInternal(context.Background(), req, db, true)
-			ch <- err
+			ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
 		}(gid)
 	}
 
@@ -358,6 +375,11 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir string,
 		if err != nil {
 			return err
 		}
+	}
+
+	// Clean up temporary directory.
+	if err := os.RemoveAll(tmpDir); err != nil {
+		return errors.Wrapf(err, "cannot remove temp directory at %s", tmpDir)
 	}
 
 	return nil
