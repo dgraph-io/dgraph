@@ -5,6 +5,7 @@ variable "region" {}
 variable "name" {}
 variable "user_enabled" { default = true }
 variable "create_env_sh" { default = true }
+variable "create_s3_env" { default = true }
 variable "create_dgraph_secrets" { default = true }
 
 #####################################################################
@@ -21,13 +22,19 @@ module "bucket" {
 #####################################################################
 
 locals {
-  minio_vars = {
-    accessKey = module.dgraph_backups.AccountName
-    secretKey = module.dgraph_backups.AccountKey
+  s3_vars = {
+    access_key_id     = module.bucket.access_key_id
+    secret_access_key = module.bucket.secret_access_key
   }
 
-  dgraph_secrets = templatefile("${path.module}/templates/dgraph_secrets.yaml.tmpl", local.minio_vars)
+  env_vars = {
+    bucket_region = var.region
+    bucket_name = var.name
+  }
+
+  dgraph_secrets = templatefile("${path.module}/templates/dgraph_secrets.yaml.tmpl", local.s3_vars)
   env_sh         = templatefile("${path.module}/templates/env.sh.tmpl", local.env_vars)
+  s3_env         = templatefile("${path.module}/templates/s3.env.tmpl", local.s3_vars)
 }
 
 #####################################################################
@@ -40,6 +47,12 @@ resource "local_file" "env_sh" {
   file_permission = "0644"
 }
 
+resource "local_file" "s3_env" {
+  count           = var.create_s3_env != "" ? 1 : 0
+  content         = local.s3_env
+  filename        = "${path.module}/../s3.env"
+  file_permission = "0644"
+}
 
 resource "local_file" "dgraph_secrets" {
   count           = var.create_dgraph_secrets != "" ? 1 : 0
