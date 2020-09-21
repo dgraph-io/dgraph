@@ -444,7 +444,7 @@ func main() {
 		"include ratel service")
 	cmd.PersistentFlags().IntVar(&opts.RatelPort, "ratel_port", 8000,
 		"Port to expose Ratel service")
-	cmd.PersistentFlags().StringVarP(&opts.MemLimit, "mem", "", "",
+	cmd.PersistentFlags().StringVarP(&opts.MemLimit, "mem", "", "32G",
 		"Limit memory provided to the docker containers, for example 8G.")
 
 	err := cmd.ParseFlags(os.Args)
