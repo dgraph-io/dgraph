@@ -121,8 +121,8 @@ If you have [helmfile](https://github.com/roboll/helmfile#installation) and [hel
 ```bash
 ## source script for envvars: PROJECT_ID and BACKUP_BUCKET_NAME
 . env.sh
-helmfile apply
 ## deploy Dgraph cluster and MinIO GCS Gateway using helm charts
+helmfile apply
 ```
 
 #### Deploy Using Helm
