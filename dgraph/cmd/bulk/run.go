@@ -61,6 +61,8 @@ func init() {
 		"Specify file format (rdf or json) instead of getting it from filename.")
 	flag.Bool("encrypted", false,
 		"Flag to indicate whether schema and data files are encrypted.")
+	flag.Bool("encrypted_out", false,
+		"Flag to indicate whether to encrypt the output.")
 	flag.String("out", defaultOutDir,
 		"Location to write the final dgraph data directories.")
 	flag.Bool("replace_out", false,
@@ -122,6 +124,7 @@ func run() {
 		SchemaFile:       Bulk.Conf.GetString("schema"),
 		GqlSchemaFile:    Bulk.Conf.GetString("graphql_schema"),
 		Encrypted:        Bulk.Conf.GetBool("encrypted"),
+		EncryptedOut:     Bulk.Conf.GetBool("encrypted_out"),
 		OutDir:           Bulk.Conf.GetString("out"),
 		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
@@ -166,8 +169,16 @@ func run() {
 		fmt.Printf("unable to read key %v", err)
 		return
 	}
+	if len(opt.EncryptionKey) > 0 && !opt.Encrypted && !opt.EncryptedOut {
+		fmt.Printf("Must use --encrypted/--encrypted_out with --encryption_key_file option.\n")
+		os.Exit(1)		
+	} 
 	if opt.Encrypted && len(opt.EncryptionKey) == 0 {
 		fmt.Printf("Must use --encryption_key_file or vault option(s) with --encrypted option.\n")
+		os.Exit(1)
+	}
+	if opt.EncryptedOut && len(opt.EncryptionKey) == 0 {
+		fmt.Printf("Must use --encryption_key_file or vault option(s) with --encrypted_out option.\n")
 		os.Exit(1)
 	}
 	if opt.SchemaFile == "" {
