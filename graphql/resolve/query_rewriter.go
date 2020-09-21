@@ -115,7 +115,7 @@ func (qr *queryRewriter) Rewrite(
 
 		// TODO: The only error that can occur in query rewriting is if an ID argument
 		// can't be parsed as a uid: e.g. the query was something like:
-		//
+		//UserSecret
 		// getT(id: "HI") { ... }
 		//
 		// But that's not a rewriting error!  It should be caught by validation

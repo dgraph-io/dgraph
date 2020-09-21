@@ -26,22 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func (us *UserSecret) delete(t *testing.T, user, role string) {
-	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, user, role),
-		Query: `
-			mutation deleteUserSecret($ids: [ID!]) {
-				deleteUserSecret(filter:{id:$ids}) {
-					msg
-				}
-			}
-		`,
-		Variables: map[string]interface{}{"ids": []string{us.Id}},
-	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-}
-
 func (p *Project) delete(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
 		Headers: getJWT(t, user, role),
@@ -646,14 +630,14 @@ func TestAddGQLOnly(t *testing.T) {
 	testCases := []TestCase{{
 		user:   "user1",
 		result: `{"addUserSecret":{"usersecret":[{"aSecret":"secret1"}]}}`,
-		variables: map[string]interface{}{"user": &UserSecret{
+		variables: map[string]interface{}{"user": &common.UserSecret{
 			ASecret: "secret1",
 			OwnedBy: "user1",
 		}},
 	}, {
 		user:   "user2",
 		result: ``,
-		variables: map[string]interface{}{"user": &UserSecret{
+		variables: map[string]interface{}{"user": &common.UserSecret{
 			ASecret: "secret2",
 			OwnedBy: "user1",
 		}},
@@ -670,7 +654,7 @@ func TestAddGQLOnly(t *testing.T) {
 	`
 	var expected, result struct {
 		AddUserSecret struct {
-			UserSecret []*UserSecret
+			UserSecret []*common.UserSecret
 		}
 	}
 
@@ -694,13 +678,13 @@ func TestAddGQLOnly(t *testing.T) {
 		err = json.Unmarshal([]byte(gqlResponse.Data), &result)
 		require.NoError(t, err)
 
-		opt := cmpopts.IgnoreFields(UserSecret{}, "Id")
+		opt := cmpopts.IgnoreFields(common.UserSecret{}, "Id")
 		if diff := cmp.Diff(expected, result, opt); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)
 		}
 
 		for _, i := range result.AddUserSecret.UserSecret {
-			i.delete(t, tcase.user, tcase.role)
+			i.Delete(t, tcase.user, tcase.role, metaInfo)
 		}
 	}
 }
