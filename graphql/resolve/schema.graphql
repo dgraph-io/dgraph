@@ -288,3 +288,6 @@ type Person {
     name: String @search(by: [hash])
     friends: [Person] @hasInverse(field: friends)
 }
+interface A {
+    name: String! @id
+}

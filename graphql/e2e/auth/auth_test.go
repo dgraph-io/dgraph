@@ -1270,10 +1270,11 @@ func TestMain(m *testing.M) {
 		}
 
 		metaInfo = &testutil.AuthMeta{
-			PublicKey: authMeta.VerificationKey,
-			Namespace: authMeta.Namespace,
-			Algo:      authMeta.Algo,
-			Header:    authMeta.Header,
+			PublicKey:      authMeta.VerificationKey,
+			Namespace:      authMeta.Namespace,
+			Algo:           authMeta.Algo,
+			Header:         authMeta.Header,
+			PrivateKeyPath: "./sample_private_key.pem",
 		}
 
 		common.BootstrapServer(authSchema, data)
