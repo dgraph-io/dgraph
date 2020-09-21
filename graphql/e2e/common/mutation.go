@@ -968,7 +968,6 @@ func addPost(t *testing.T, authorID, countryID string,
 				isPublished
 				tags
 				numLikes
-				numViews
 				author {
 					id
 					name
@@ -985,7 +984,6 @@ func addPost(t *testing.T, authorID, countryID string,
 			"text":        "This post is just a test.",
 			"isPublished": true,
 			"numLikes":    1000,
-			"numViews":    9007199254740991, // (2^53)-1
 			"tags":        []string{"example", "test"},
 			"author":      map[string]interface{}{"id": authorID},
 		}},
@@ -999,7 +997,6 @@ func addPost(t *testing.T, authorID, countryID string,
 			"isPublished": true,
 			"tags": ["example", "test"],
 			"numLikes": 1000,
-			"numViews": 9007199254740991,
 			"author": {
 				"id": "%s",
 				"name": "Test Author",
@@ -1124,7 +1121,6 @@ func requirePost(
 				isPublished
 				tags
 				numLikes
-				numViews
 				author @include(if: $getAuthor) {
 					id
 					name
