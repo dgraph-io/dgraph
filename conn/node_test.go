@@ -65,7 +65,7 @@ func TestProposal(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	store := raftwal.Init(db, 0, 0)
 	defer store.Closer.SignalAndWait()
