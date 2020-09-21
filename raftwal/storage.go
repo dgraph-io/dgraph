@@ -102,7 +102,7 @@ func (w *DiskStorage) fetchCommitTs() {
 	// This is a special key that is used to fetch the latest version.
 	key := []byte(fmt.Sprintf("dgraphVersion-key!!!-%d", versionKey))
 
-	txn := w.db.NewTransactionAt(math.MaxUint64, false)
+	txn := w.db.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 
 	item, err := txn.Get(key)
