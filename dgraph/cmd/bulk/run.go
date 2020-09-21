@@ -170,9 +170,9 @@ func run() {
 		return
 	}
 	if len(opt.EncryptionKey) > 0 && !opt.Encrypted && !opt.EncryptedOut {
-		fmt.Printf("Must use --encrypted/--encrypted_out with --encryption_key_file option.\n")
-		os.Exit(1)		
-	} 
+		opt.Encrypted = true
+		opt.EncryptedOut = true
+	}
 	if opt.Encrypted && len(opt.EncryptionKey) == 0 {
 		fmt.Printf("Must use --encryption_key_file or vault option(s) with --encrypted option.\n")
 		os.Exit(1)
