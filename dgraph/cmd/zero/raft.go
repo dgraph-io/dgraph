@@ -280,13 +280,11 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 		if tablet.Force {
 			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, tablet.Predicate)
-		} else {
-			if prev.GroupId != tablet.GroupId {
-				glog.Infof(
-					"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
-					prev.Predicate, tablet.GroupId, prev.GroupId)
-				return errTabletAlreadyServed
-			}
+		} else if prev.GroupId != tablet.GroupId {
+			glog.Infof(
+				"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
+				prev.Predicate, tablet.GroupId, prev.GroupId)
+			return errTabletAlreadyServed
 		}
 	}
 	tablet.Force = false
@@ -530,6 +528,7 @@ func (n *node) initAndStartNode() error {
 
 	go n.Run()
 	go n.BatchAndSendMessages()
+	go n.ReportRaftComms()
 	return nil
 }
 
