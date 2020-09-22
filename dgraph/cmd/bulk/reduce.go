@@ -332,6 +332,30 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	tmpWg.Add(1)
 	go r.writeTmpSplits(ci, tmpWg)
 
+	count := func(req *encodeRequest) {
+		defer req.countBuf.Release()
+		if req.countBuf.Len() <= 1 {
+			return
+		}
+
+		// Go through the countBuf.
+		req.countBuf.SortSlice(func(ls, rs []byte) bool {
+			left := countEntry(ls)
+			right := countEntry(rs)
+			return left.less(right)
+		})
+
+		sz := req.countBuf.Len()
+		ci.countBuf.Grow(sz)
+
+		slice, next := []byte{}, 1
+		for next != 0 {
+			slice, next = req.countBuf.Slice(next)
+			ce := countEntry(slice)
+			ci.addCountEntry(ce)
+		}
+	}
+
 	for req := range writerCh {
 		req.wg.Add(1) // One for finishing the writes.
 		go func() {
@@ -341,24 +365,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 			}
 		}()
 		req.wg.Wait()
-
-		// Go through the countBuf.
-		req.countBuf.SortSlice(func(ls, rs []byte) bool {
-			left := countEntry(ls)
-			right := countEntry(rs)
-			return left.less(right)
-		})
-
-		if sz := req.countBuf.Len(); sz > 1 {
-			ci.countBuf.Grow(sz)
-		}
-		slice, next := []byte{}, 1
-		for next != 0 {
-			slice, next = req.countBuf.Slice(next)
-			ce := countEntry(slice)
-			ci.addCountEntry(ce)
-		}
-		req.countBuf.Release()
+		count(req)
 	}
 
 	// Wait for split lists to be written to the temporary badger.
@@ -528,7 +535,8 @@ func (r *reducer) toList(req *encodeRequest) {
 	cbuf.SortSlice(func(ls, rs []byte) bool {
 		lhs := MapEntry(ls)
 		rhs := MapEntry(rs)
-		return bytes.Compare(lhs.Key(), rhs.Key()) < 0
+		return less(lhs, rhs)
+		// return bytes.Compare(lhs.Key(), rhs.Key()) < 0
 	})
 
 	var currentKey []byte
@@ -559,6 +567,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		if num == 0 {
 			return
 		}
+		// fmt.Printf("appendToList: start: %d end: %d num: %d\n", start, end, num)
 		atomic.AddInt64(&r.prog.reduceEdgeCount, int64(num))
 
 		pk, err := x.Parse(currentKey)
@@ -575,24 +584,21 @@ func (r *reducer) toList(req *encodeRequest) {
 			if doCount {
 				// Calculate count entries.
 				ck := x.CountKey(pk.Attr, uint32(num), pk.IsReverse())
+				x.AssertTrue(len(ck) > 0)
 				dst := req.countBuf.SliceAllocate(countEntrySize(ck))
 				marshalCountEntry(dst, ck, pk.Uid)
 			}
 		}
 
-		fmt.Printf("Calling sort slice between: %d %d\n", start, end)
-		cbuf.SortSliceBetween(start, end, func(ls, rs []byte) bool {
-			lhs := MapEntry(ls)
-			rhs := MapEntry(rs)
-			return less(lhs, rhs)
-		})
-
 		enc := codec.Encoder{BlockSize: 256}
 		var lastUid uint64
 		slice, next := []byte{}, start
-		for next != 0 && next < end {
+		for next != 0 && (next < end || end == 0) {
 			slice, next = cbuf.Slice(next)
 			me := MapEntry(slice)
+			// TODO: Remove this.
+			x.AssertTrue(bytes.Equal(currentKey, me.Key()))
+
 			uid := me.Uid()
 			if uid == lastUid {
 				continue
