@@ -18,7 +18,6 @@ package query
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
@@ -3280,7 +3279,6 @@ func TestBetweenCount(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			js := processQueryNoErr(t, tc.query)
-			fmt.Println(js)
 			require.JSONEq(t, js, tc.result)
 		})
 	}
