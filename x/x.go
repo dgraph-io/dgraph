@@ -1068,7 +1068,7 @@ func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, clos
 		// might be too small.
 		le := metrics.LifeExpectancySeconds()
 		lifeTooShort := le.Count > 0 && float64(le.Sum)/float64(le.Count) < 10
-		hitRatioTooLow := metrics.Ratio() < 0.4
+		hitRatioTooLow := metrics.Ratio() > 0 && metrics.Ratio() < 0.4
 		if bool(glog.V(2)) && (lifeTooShort || hitRatioTooLow) {
 			glog.Warningf("======== Cache might be too small %s =====", ct)
 			glog.Warningf("Metric: %+v", metrics)
