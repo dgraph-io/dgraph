@@ -219,12 +219,21 @@ popd
 createSum () {
   os=$1
   echo "Creating checksum for $os"
-  pushd $TMP/$os
-    csum=$(shasum -a 256 dgraph | awk '{print $1}')
-    echo $csum /usr/local/bin/dgraph >> ../dgraph-checksum-$os-amd64.sha256
-    csum=$(shasum -a 256 dgraph-ratel | awk '{print $1}')
-    echo $csum /usr/local/bin/dgraph-ratel >> ../dgraph-checksum-$os-amd64.sha256
-  popd
+  if [[ "$os" != "windows" ]]; then
+    pushd $TMP/$os
+      csum=$(shasum -a 256 dgraph | awk '{print $1}')
+      echo $csum /usr/local/bin/dgraph >> ../dgraph-checksum-$os-amd64.sha256
+      csum=$(shasum -a 256 dgraph-ratel | awk '{print $1}')
+      echo $csum /usr/local/bin/dgraph-ratel >> ../dgraph-checksum-$os-amd64.sha256
+    popd
+  else
+    pushd $TMP/$os
+      csum=$(shasum -a 256 dgraph.exe | awk '{print $1}')
+      echo $csum dgraph.exe >> ../dgraph-checksum-$os-amd64.sha256
+      csum=$(shasum -a 256 dgraph-ratel.exe | awk '{print $1}')
+      echo $csum dgraph-ratel.exe >> ../dgraph-checksum-$os-amd64.sha256
+    popd
+  fi
 }
 
 createSum darwin
