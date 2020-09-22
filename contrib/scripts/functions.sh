@@ -45,6 +45,15 @@ function restartCluster {
   sleep 10 || exit 1
 }
 
+function tailClusterLogs {
+  if [[ -z $1 ]]; then
+    compose_file="docker-compose.yml"
+  else
+    compose_file="$(readlink -f $1)"
+  fi
+  docker-compose -p dgraph -f $compose_file logs -f || true
+}
+
 function stopCluster {
   docker ps --filter label="cluster=test" --format "{{.Names}}" \
   | xargs -r docker stop | sed 's/^/Stopped /'

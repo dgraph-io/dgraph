@@ -100,8 +100,10 @@ function FindCustomClusterTests {
 
 function FindDefaultClusterTests {
     touch $DEFAULT_CLUSTER_TESTS
-    for PKG in $(grep -v -f $CUSTOM_CLUSTER_TESTS $MATCHING_TESTS); do
+    cat $MATCHING_TESTS | while read PKG; do
+      if ! grep "$PKG" $CUSTOM_CLUSTER_TESTS; then
         echo $PKG >> $DEFAULT_CLUSTER_TESTS
+      fi
     done
 }
 
