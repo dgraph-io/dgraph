@@ -43,7 +43,7 @@ In AWS, you can accomplish this by doing the following:
 2. Depending on whether you want to grant access to an EC2 instance, or to a pod running on [EKS](https://aws.amazon.com/eks/), you can do one of these options:
    * [Instance Profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html) can pass the IAM Role to an EC2 Instance
    * [IAM Roles for Amazon EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) to attach the IAM Role to a running EC2 Instance
-   * [IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) to associate the IAM Role to a [Kubernetes Service Account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/)
+   * [IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) to associate the IAM Role to a [Kubernetes Service Account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/).
 
 
 ### Configure Minio Credentials
@@ -395,7 +395,7 @@ Alternatively, starting with v20.07.0, the `vault_*` options can be used to rest
 The `dgraph restore` command restores the postings directory from a previously
 created backup to a directory in the local filesystem. Restore is intended to
 restore a backup to a new Dgraph cluster not a currently live one. During a
-restore, a new Dgraph Zero may be running to fully restore the backup state.
+restore, a new Dgraph Zero server may be running to fully restore the backup state.
 
 The `--location` (`-l`) flag specifies a source URI with Dgraph backup objects.
 This URI supports all the schemes used for backup.
@@ -404,11 +404,11 @@ The `--postings` (`-p`) flag sets the directory to which the restored posting
 directories will be saved. This directory will contain a posting directory for
 each group in the restored backup.
 
-The `--zero` (`-z`) flag specifies a Dgraph Zero address to update the start
-timestamp and UID lease using the restored version. If no zero address is
+The `--zero` (`-z`) flag specifies a Dgraph Zero server address to update the start
+timestamp and UID lease using the restored version. If no Zero server address is
 passed, the command will complain unless you set the value of the
 `--force_zero` flag to false. If do not pass a zero value to this command,
-the timestamp and UID lease must be manually updated through Zero's HTTP
+the timestamp and UID lease must be manually updated through Zero server's HTTP
 'assign' endpoint using the values printed near the end of the command's output.
 
 The `--backup_id` optional flag specifies the ID of the backup series to
@@ -462,7 +462,7 @@ $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph
 
 ### Restore and Update Timestamp
 
-Specify the Zero address and port for the new cluster with `--zero`/`-z` to update the timestamp.
+Specify the Zero server address and port for the new cluster with `--zero`/`-z` to update the timestamp.
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
