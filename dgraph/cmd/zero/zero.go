@@ -752,7 +752,7 @@ func (s *Server) StreamMembership(_ *api.Payload, stream pb.Zero_StreamMembershi
 }
 
 func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState, error) {
-	if err := s.Node.WaitLinearizableRead(ctx); err != nil {
+	if err := s.Node.liveQuorum(); err != nil {
 		return nil, err
 	}
 	ms := s.membershipState()

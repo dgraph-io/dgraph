@@ -51,6 +51,16 @@ type node struct {
 	lastQuorum time.Time
 }
 
+func (n *node) liveQuorum() error {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	if time.Since(n.lastQuorum) <= 5*time.Second {
+		return nil
+	}
+	return fmt.Errorf("Haven't reached quorum for time: %s",
+		time.Since(n.lastQuorum).Truncate(time.Second))
+}
+
 func (n *node) AmLeader() bool {
 	if n.Raft() == nil {
 		return false
@@ -64,9 +74,7 @@ func (n *node) AmLeader() bool {
 	// hidden behind a partition. Basically, if this node was the leader and goes behind a
 	// partition, it would still think that it is indeed the leader for the duration mentioned
 	// below.
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-	return time.Since(n.lastQuorum) <= 5*time.Second
+	return nil == n.liveQuorum()
 }
 
 func (n *node) uniqueKey() string {
@@ -554,7 +562,7 @@ func (n *node) checkQuorum(closer *z.Closer) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	quorum := func() {
+	quorum := func() error {
 		// Make this timeout 1.5x the timeout on RunReadIndexLoop.
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -563,24 +571,31 @@ func (n *node) checkQuorum(closer *z.Closer) {
 		defer span.End()
 		span.Annotatef(nil, "Node id: %d", n.Id)
 
-		if state, err := n.server.latestMembershipState(ctx); err == nil {
-			n.mu.Lock()
-			n.lastQuorum = time.Now()
-			n.mu.Unlock()
+		if err := n.WaitLinearizableRead(ctx); err != nil {
+			span.Annotatef(nil, "Got error during lin read: %v", err)
+			return err
+		}
+		n.mu.Lock()
+		n.lastQuorum = time.Now()
+		n.mu.Unlock()
+		span.Annotate(nil, "Updated lastQuorum")
+
+		if state, err := n.server.latestMembershipState(ctx); err != nil {
+			span.Annotatef(nil, "Got error during state fetch: %v", err)
+			return err
+		} else {
 			// Also do some connection cleanup.
 			conn.GetPools().RemoveInvalid(state)
-			span.Annotate(nil, "Updated lastQuorum")
-
-		} else if glog.V(1) {
-			span.Annotatef(nil, "Got error: %v", err)
-			glog.Warningf("Zero node: %#x unable to reach quorum. Error: %v", n.Id, err)
 		}
+		return nil
 	}
 
 	for {
 		select {
 		case <-ticker.C:
-			quorum()
+			if err := quorum(); err != nil {
+				glog.Warningf("Zero node: %#x unable to reach quorum. Error: %v", n.Id, err)
+			}
 		case <-closer.HasBeenClosed():
 			return
 		}
