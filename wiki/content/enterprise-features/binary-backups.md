@@ -39,10 +39,12 @@ via environment variables:
 Starting with [v20.07.0](https://github.com/dgraph-io/dgraph/releases/tag/v20.07.0) if the system has access to the S3 bucket, you no longer need to explicitly include these environment variables.  
 
 In AWS, you can accomplish this by doing the following:
+1. Create an [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) with an IAM Policy that grants access to the S3 bucket.
+2. Depending on whether you want to grant access to an EC2 instance, or to a pod running on [EKS](https://aws.amazon.com/eks/), you do one of these options:
+   * [Instance Profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html) can pass the IAM Role to an EC2 Instance
+   * [IAM Roles for Amazon EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) to attach the IAM Role to a running EC2 Instance
+   * [IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) to associate the IAM Role to [Kubernetes Service Account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/)
 
-* Create an [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) with a Policy that grants access to the S3 bucket
-* For service on an EC2 instance, you Could attach the [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) to an [Instance Profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html)
-* For pods on [EKS](https://aws.amazon.com/eks/), you can associate the [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) with a [Kubernetes Service Account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) using [IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html).
 
 ### Configure Minio Credentials
 
