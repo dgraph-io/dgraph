@@ -2,7 +2,7 @@
 
 ## About
 
-This script will create the required resources needed to create Simple Storage Service bucket using [`s3-bucket`](github.com/darkn3rd/s3-bucket) module.
+This script will create the required resources needed to create S3 (Simple Storage Service) bucket using [`s3-bucket`](github.com/darkn3rd/s3-bucket) module.
 
 ## Prerequisites
 

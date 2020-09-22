@@ -29,7 +29,7 @@ locals {
 
   env_vars = {
     bucket_region = var.region
-    bucket_name = var.name
+    bucket_name   = var.name
   }
 
   dgraph_secrets = templatefile("${path.module}/templates/dgraph_secrets.yaml.tmpl", local.s3_vars)
