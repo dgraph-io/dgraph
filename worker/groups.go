@@ -1089,8 +1089,6 @@ func (g *groupi) askZeroForEE() bool {
 // SubscribeForUpdates will listen for updates for the given group.
 func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group uint32,
 	closer *z.Closer) {
-	defer closer.Done()
-
 	var prefix []byte
 	if len(prefixes) > 0 {
 		prefix = prefixes[0]
