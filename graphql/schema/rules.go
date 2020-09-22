@@ -1213,7 +1213,7 @@ func customDirectiveValidation(sch *ast.Schema,
 			typ.Name, field.Name, l))
 	}
 
-	httpArg := dir.Arguments.ForName("http")
+	httpArg := dir.Arguments.ForName(httpArg)
 	dqlArg := dir.Arguments.ForName(dqlArg)
 
 	if httpArg == nil && dqlArg == nil {
@@ -1286,7 +1286,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	// Start validating children of http argument
 
 	// 4. Validating url
-	httpUrl := httpArg.Value.Children.ForName("url")
+	httpUrl := httpArg.Value.Children.ForName(httpUrl)
 	if httpUrl == nil {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
@@ -1362,7 +1362,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	}
 
 	// 5. Validating method
-	method := httpArg.Value.Children.ForName("method")
+	method := httpArg.Value.Children.ForName(httpMethod)
 	if method == nil {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
@@ -1407,8 +1407,8 @@ func customDirectiveValidation(sch *ast.Schema,
 	}
 
 	// 7. Validating graphql combination with url params, method and body
-	body := httpArg.Value.Children.ForName("body")
-	graphql := httpArg.Value.Children.ForName("graphql")
+	body := httpArg.Value.Children.ForName(httpBody)
+	graphql := httpArg.Value.Children.ForName(httpGraphql)
 	if graphql != nil {
 		if urlHasParams {
 			errs = append(errs, gqlerror.ErrorPosf(dir.Position,

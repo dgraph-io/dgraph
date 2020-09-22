@@ -125,6 +125,7 @@ type Field interface {
 	Include() bool
 	Cascade() []string
 	HasCustomDirective() (bool, map[string]bool)
+	HasLambdaDirective() bool
 	Type() Type
 	SelectionSet() []Field
 	Location() x.Location
@@ -225,6 +226,9 @@ type schema struct {
 	// something like field.Directives.ForName("custom"), which results in iterating over all the
 	// directives of the field.
 	customDirectives map[string]map[string]*ast.Directive
+	// lambdaDirectives stores the mapping of typeName->fieldName->true, if the field has @lambda.
+	// It is read-only.
+	lambdaDirectives map[string]map[string]bool
 	// Map from typename to auth rules
 	authRules map[string]*TypeAuth
 }
@@ -631,6 +635,36 @@ func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
 	return customDirectives
 }
 
+func lambdaMappings(s *ast.Schema) map[string]map[string]bool {
+	lambdaDirectives := make(map[string]map[string]bool)
+
+	for _, typ := range s.Types {
+		for _, field := range typ.Fields {
+			for i, dir := range field.Directives {
+				if dir.Name == lambdaDirective {
+					// remove lambda directive from s
+					lastIndex := len(field.Directives) - 1
+					field.Directives[i] = field.Directives[lastIndex]
+					field.Directives = field.Directives[:lastIndex]
+					// now put it into mapping
+					var fieldMap map[string]bool
+					if innerMap, ok := lambdaDirectives[typ.Name]; !ok {
+						fieldMap = make(map[string]bool)
+					} else {
+						fieldMap = innerMap
+					}
+					fieldMap[field.Name] = true
+					lambdaDirectives[typ.Name] = fieldMap
+					// break, as there can only be one @lambda
+					break
+				}
+			}
+		}
+	}
+
+	return lambdaDirectives
+}
+
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
 	// Auth rules can't be effectively validated as part of the normal rules -
@@ -647,6 +681,7 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		typeNameAst:        typeMappings(s),
 		repeatedFieldNames: repeatedFieldMappings(s, dgraphPredicate),
 		customDirectives:   customMappings(s),
+		lambdaDirectives:   lambdaMappings(s),
 		authRules:          authRules,
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
@@ -838,6 +873,10 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 		}
 	}
 	return true, rf
+}
+
+func (f *field) HasLambdaDirective() bool {
+	return f.op.inSchema.lambdaDirectives[f.GetObjectName()][f.Name()]
 }
 
 func (f *field) XIDArg() string {
@@ -1194,6 +1233,10 @@ func (q *query) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(q).HasCustomDirective()
 }
 
+func (q *query) HasLambdaDirective() bool {
+	return (*field)(q).HasLambdaDirective()
+}
+
 func (q *query) IDArgValue() (*string, uint64, error) {
 	return (*field)(q).IDArgValue()
 }
@@ -1325,6 +1368,10 @@ func (m *mutation) Cascade() []string {
 
 func (m *mutation) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(m).HasCustomDirective()
+}
+
+func (m *mutation) HasLambdaDirective() bool {
+	return (*field)(m).HasLambdaDirective()
 }
 
 func (m *mutation) Type() Type {

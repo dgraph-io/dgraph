@@ -45,12 +45,18 @@ const (
 	cascadeDirective      = "cascade"
 	cascadeArg            = "fields"
 	SubscriptionDirective = "withSubscription"
+	lambdaDirective       = "lambda"
 
 	// custom directive args and fields
-	dqlArg = "dql"
-	mode   = "mode"
-	BATCH  = "BATCH"
-	SINGLE = "SINGLE"
+	dqlArg      = "dql"
+	httpArg     = "http"
+	httpUrl     = "url"
+	httpMethod  = "method"
+	httpBody    = "body"
+	httpGraphql = "graphql"
+	mode        = "mode"
+	BATCH       = "BATCH"
+	SINGLE      = "SINGLE"
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
@@ -137,6 +143,7 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
 directive @cascade(fields: [String]) on FIELD
+directive @lambda  on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -339,7 +346,8 @@ var directiveValidators = map[string]directiveValidator{
 	deprecatedDirective:   ValidatorNoOp,
 	SubscriptionDirective: ValidatorNoOp,
 	// Just go get it printed into generated schema
-	authDirective: ValidatorNoOp,
+	authDirective:   ValidatorNoOp,
+	lambdaDirective: ValidatorNoOp,
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List

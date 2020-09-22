@@ -19,6 +19,7 @@ package schema
 import (
 	"bufio"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -173,6 +174,7 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 		return nil, gqlerror.List{gqlErr}
 	}
 
+	preProcess(doc)
 	gqlErrList := preGQLValidation(doc)
 	if gqlErrList != nil {
 		return nil, gqlErrList
@@ -241,6 +243,118 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 		authorization.SetAuthMeta(metaInfo)
 	}
 	return handler, nil
+}
+
+func setCustomHttpArgField(customHttpArg *ast.Argument, fieldName, raw string,
+	kind ast.ValueKind, overwrite bool) {
+	customHttpfield := customHttpArg.Value.Children.ForName(fieldName)
+	if customHttpfield == nil {
+		customHttpfield = &ast.Value{}
+		customHttpArg.Value.Children = append(customHttpArg.Value.Children,
+			&ast.ChildValue{
+				Name:  fieldName,
+				Value: customHttpfield,
+			})
+	}
+	if overwrite || customHttpfield.Raw == "" {
+		customHttpfield.Raw = raw
+	}
+	customHttpfield.Kind = kind
+}
+
+func applyCustomDirectiveForLambda(field *ast.FieldDefinition, parentDef *ast.Definition,
+	bodyTemplate string) {
+	//lambdaDir := field.Directives.ForName(lambdaDirective)
+	// if there is an existing custom directive, reuse http body from it
+	customDirDefn := field.Directives.ForName(customDirective)
+	// if there was no custom directive, append one.
+	if customDirDefn == nil {
+		customDirDefn = &ast.Directive{
+			Name: customDirective,
+			//ParentDefinition: parentDef,
+			//Position:         lambdaDir.Position,
+		}
+		field.Directives = append(field.Directives, customDirDefn)
+	}
+
+	customHttpArg := customDirDefn.Arguments.ForName(httpArg)
+	if customHttpArg == nil {
+		customHttpArg = &ast.Argument{Name: httpArg}
+		customDirDefn.Arguments = append(customDirDefn.Arguments, customHttpArg)
+	}
+	if customHttpArg.Value == nil {
+		customHttpArg.Value = &ast.Value{Kind: ast.ObjectValue}
+	}
+
+	setCustomHttpArgField(customHttpArg, httpUrl, x.Config.GraphqlLambdaUrl,
+		ast.StringValue, true)
+	setCustomHttpArgField(customHttpArg, httpMethod, http.MethodPost, ast.EnumValue, true)
+	if !isQueryOrMutationType(parentDef) {
+		setCustomHttpArgField(customHttpArg, mode, BATCH, ast.EnumValue, true)
+	}
+	setCustomHttpArgField(customHttpArg, httpBody, bodyTemplate, ast.StringValue, false)
+	if customHttpArg.Value.Children.ForName(httpGraphql) != nil {
+		// if the field had graphql in the user provided custom directive, then overwrite it
+		// to empty string, so we get an error later, and user will have to remove graphql.
+		setCustomHttpArgField(customHttpArg, httpGraphql, "", ast.StringValue, true)
+	}
+}
+
+func preProcess(doc *ast.SchemaDocument) {
+	for _, defn := range doc.Definitions {
+		if !(defn.Kind == ast.Object || defn.Kind == ast.Interface) {
+			continue
+		}
+
+		if isQueryOrMutationType(defn) {
+			for _, field := range defn.Fields {
+				if field.Directives.ForName(lambdaDirective) != nil {
+					var bodyTemplate strings.Builder
+					bodyTemplate.WriteString("{")
+					comma := ""
+
+					for _, arg := range field.Arguments {
+						bodyTemplate.WriteString(comma)
+						bodyTemplate.WriteString(arg.Name)
+						bodyTemplate.WriteString(": $")
+						bodyTemplate.WriteString(arg.Name)
+						comma = ", "
+					}
+
+					bodyTemplate.WriteString("}")
+
+					applyCustomDirectiveForLambda(field, defn, bodyTemplate.String())
+				}
+			}
+		} else {
+			lambdaFields := make([]*ast.FieldDefinition, 0)
+			var bodyTemplate strings.Builder
+			bodyTemplate.WriteString("{")
+			comma := ""
+
+			for _, field := range defn.Fields {
+				if field.Directives.ForName(lambdaDirective) != nil {
+					lambdaFields = append(lambdaFields, field)
+					continue
+				}
+				if field.Directives.ForName(customDirective) != nil {
+					continue
+				}
+				bodyTemplate.WriteString(comma)
+				bodyTemplate.WriteString(field.Name)
+				bodyTemplate.WriteString(": $")
+				bodyTemplate.WriteString(field.Name)
+				comma = ", "
+			}
+
+			bodyTemplate.WriteString("}")
+
+			// if there were lambda fields, append custom directive to them with correct syntax
+			for _, field := range lambdaFields {
+				applyCustomDirectiveForLambda(field, defn, bodyTemplate.String())
+			}
+		}
+	}
 }
 
 type headersConfig struct {

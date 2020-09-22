@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/types"
@@ -872,6 +874,15 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			body["query"] = fconf.RemoteGqlQuery
 			body["variables"] = map[string]interface{}{fconf.GraphqlBatchModeArgument: requestInput}
 			requestInput = body
+		} else if f.HasLambdaDirective() {
+			body := make(map[string]interface{})
+			body["resolver"] = f.GetObjectName() + "." + f.Name()
+			body["parents"] = requestInput
+			body["authHeader"] = map[string]interface{}{
+				"key": authorization.GetHeader(),
+				// TODO: figure it out later
+				//"value":
+			}
 		}
 
 		b, err := json.Marshal(requestInput)
@@ -1833,7 +1844,19 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 
 	var body string
 	if hrc.Template != nil {
-		b, err := json.Marshal(*hrc.Template)
+		jsonTemplate := *hrc.Template
+		if field.HasLambdaDirective() {
+			tempBody := make(map[string]interface{})
+			tempBody["resolver"] = field.GetObjectName() + "." + field.Name()
+			tempBody["args"] = *hrc.Template
+			tempBody["authHeader"] = map[string]interface{}{
+				"key": authorization.GetHeader(),
+				// TODO: figure it out later
+				//"value":
+			}
+			jsonTemplate = tempBody
+		}
+		b, err := json.Marshal(jsonTemplate)
 		if err != nil {
 			return emptyResult(jsonMarshalError(err, field, *hrc.Template))
 		}
