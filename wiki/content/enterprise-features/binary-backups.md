@@ -12,7 +12,7 @@ This feature was introduced in [v1.1.0](https://github.com/dgraph-io/dgraph/rele
 
 Binary backups are full backups of Dgraph that are backed up directly to cloud
 storage such as Amazon S3 or any Minio storage backend. Backups can also be
-saved to an on-premise network file system shared by all alpha instances. These
+saved to an on-premise network file system shared by all Alpha servers. These
 backups can be used to restore a new Dgraph cluster to the previous state from
 the backup. Unlike [exports]({{< relref "deploy/dgraph-administration.md#exporting-database" >}}),
 binary backups are Dgraph-specific and can be used to restore a cluster quickly.
@@ -26,7 +26,7 @@ Backup is only enabled when a valid license file is supplied to a Zero server OR
 
 ### Configure Amazon S3 Credentials
 
-To backup to Amazon S3, the Alpha must have the following AWS credentials set
+To backup to Amazon S3, the Alpha server must have the following AWS credentials set
 via environment variables:
 
  Environment Variable                        | Description
@@ -40,15 +40,15 @@ Starting with [v20.07.0](https://github.com/dgraph-io/dgraph/releases/tag/v20.07
 
 In AWS, you can accomplish this by doing the following:
 1. Create an [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) with an IAM Policy that grants access to the S3 bucket.
-2. Depending on whether you want to grant access to an EC2 instance, or to a pod running on [EKS](https://aws.amazon.com/eks/), you do one of these options:
+2. Depending on whether you want to grant access to an EC2 instance, or to a pod running on [EKS](https://aws.amazon.com/eks/), you can do one of these options:
    * [Instance Profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html) can pass the IAM Role to an EC2 Instance
    * [IAM Roles for Amazon EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) to attach the IAM Role to a running EC2 Instance
-   * [IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) to associate the IAM Role to [Kubernetes Service Account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/)
+   * [IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) to associate the IAM Role to a [Kubernetes Service Account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/)
 
 
 ### Configure Minio Credentials
 
-To backup to Minio, the Alpha must have the following Minio credentials set via
+To backup to Minio, the Alpha server must have the following Minio credentials set via
 environment variables:
 
  Environment Variable                        | Description
@@ -61,7 +61,7 @@ environment variables:
 
 To create a backup, make an HTTP POST request to `/admin` to a Dgraph
 Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin`
-endpoints, this is only accessible on the same machine as the Alpha unless
+endpoints, this is only accessible on the same machine as the Alpha server unless
 [whitelisted for admin operations]({{< relref "deploy/dgraph-administration.md#whitelisting-admin-operations" >}}).
 You can look at `BackupInput` given below for all the possible options.
 
@@ -129,15 +129,13 @@ mutation {
 }
 ```
 
-
-
 ### Backup using a MinIO Gateway
 
 #### Azure Blob Storage
 
-You can use [Azure Blob Storage](https://azure.microsoft.com/services/storage/blobs/) through the [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html).  You need to configure [storage account](https://docs.microsoft.com/azure/storage/common/storage-account-overview) and [container](https://docs.microsoft.com/azure/storage/blobs/storage-blobs-introduction#containers) to organize the blobs.
+You can use [Azure Blob Storage](https://azure.microsoft.com/services/storage/blobs/) through the [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html).  You need to configure a [storage account](https://docs.microsoft.com/azure/storage/common/storage-account-overview) and a[container](https://docs.microsoft.com/azure/storage/blobs/storage-blobs-introduction#containers) to organize the blobs.
 
-For MinIO configuration, you will need to [retrieve storage accounts keys](https://docs.microsoft.com/azure/storage/common/storage-account-keys-manage). The [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html) will use `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` to correspond to Azure Storage `AccountName` and `AccountKey`.
+For MinIO configuration, you will need to [retrieve storage accounts keys](https://docs.microsoft.com/azure/storage/common/storage-account-keys-manage). The [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html) will use `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` to correspond to Azure Storage Account `AccountName` and `AccountKey`.
 
 Once you have the `AccountName` and `AccountKey`, you can access Azure Blob Storage locally using one of these methods:
 
@@ -180,7 +178,7 @@ Once you have a `credentials.json`, you can access GCS locally using one of thes
  
 #### Test Using MinIO Browser
 
-MinIO Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that MinIO Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
+MinIO Gateway comes with an embedded web-based object browser.  After using one of the aforementioned methods to run the MinIO Gateway, you can test that MinIO Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed and can access the remote object storage.
 
 ### Disabling HTTPS for S3 and Minio backups
 
@@ -226,8 +224,8 @@ mutation {
 }
 ```
 
-A local filesystem will work only if all the Alphas have access to it (e.g all
-the Alphas are running on the same filesystems as a normal process, not a Docker
+A local filesystem will work only if all the Alpha servers have access to it (e.g all
+the Alpha servers are running on the same filesystems as a normal process, not a Docker
 container). However, an NFS is recommended so that backups work seamlessly across
 multiple machines and/or containers.
 
@@ -255,12 +253,12 @@ mutation {
 You can use the provided endpoint to automate backups, however, there are a few
 things to keep in mind.
 
-- The requests should go to a single alpha. The alpha that receives the request
+- The requests should go to a single Alpha server. The Alpha server that receives the request
 is responsible for looking up the location and determining from which point the
 backup should resume.
 
 - Versions of Dgraph starting with v20.07.1, v20.03.5, and v1.2.7 have a way to
-block multiple backup requests going to the same alpha. For previous versions,
+block multiple backup requests going to the same Alpha server. For previous versions,
 keep this in mind and avoid sending multiple requests at once. This is for the
 same reason as the point above.
 
@@ -277,19 +275,19 @@ Starting with v20.07.0, we also added support for Encrypted Backups using encryp
 
 A new flag “Encrypted” is added to the `manifest.json`. This flag indicates if the corresponding binary backup is encrypted or not. To be backward compatible, if this flag is absent, it is presumed that the corresponding backup is not encrypted.
 
-For a series of full and incremental backups, per the current design, we don't allow mixing of encrypted and unencrypted backups. As a result, all full and incremental backups in a series must either be encrypted fully or not at all. This flag helps with checking this restriction.
+For a series of full and incremental backups, per the current design, we don't allow the mixing of encrypted and unencrypted backups. As a result, all full and incremental backups in a series must either be encrypted fully or not at all. This flag helps with checking this restriction.
 
 
 ## AES And Chaining with Gzip
 
-If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data.
+If encryption is turned on an Alpha server, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data.
 
 During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
 
 
 ## Backup
 
-Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”. Starting with v20.07.0, the alpha can alternatively be configured to interface with Vault server to obtain keys.
+Backup is an online tool, meaning it is available when Alpha server is running. For encrypted backups, the Alpha server must be configured with the “encryption_key_file”. Starting with v20.07.0, the Alpha server can alternatively be configured to interface with Vault server to obtain keys.
 
 {{% notice "note" %}}
 `encryption_key_file` or `vault_*` options was used for encryption-at-rest and will now also be used for encrypted backups.
@@ -327,14 +325,14 @@ input RestoreInput {
 
 		"""
 		Path to the key file needed to decrypt the backup. This file should be accessible
-		by all alphas in the group. The backup will be written using the encryption key
+		by all Alpha servers in the group. The backup will be written using the encryption key
 		with which the cluster was started, which might be different than this key.
 		"""
 		encryptionKeyFile: String
 
 		"""
 		Vault server address where the key is stored. This server must be accessible
-		by all alphas in the group. Default "http://localhost:8200".
+		by all Alpha servers in the group. Default "http://localhost:8200".
 		"""
 		vaultAddr: String
 
@@ -429,15 +427,15 @@ field that contains the encryption key that was used to encrypt the backup.
 The restore feature will create a cluster with as many groups as the original
 cluster had at the time of the last backup. For each group, `dgraph restore`
 creates a posting directory `p<N>` corresponding to the backup group ID. For
-example, a backup for Alpha group 2 would have the name `.../r32-g2.backup`
+example, a backup for Alpha Server group 2 would have the name `.../r32-g2.backup`
 and would be loaded to posting directory `p2`.
 
 After running the restore command, the directories inside the `postings`
 directory need to be manually copied over to the machines/containers running the
-alphas before running the `dgraph alpha` command. For example, in a database
+Alpha servers before running the `dgraph alpha` command. For example, in a database
 cluster with two Alpha groups and one replica each, `p1` needs to be moved to
-the location of the first Alpha and `p2` needs to be moved to the location of
-the second Alpha.
+the location of the first Alpha server and `p2` needs to be moved to the location of
+the second Alpha server.
 
 By default, Dgraph will look for a posting directory with the name `p`, so make
 sure to rename the directories after moving them. You can also use the `-p`
