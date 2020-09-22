@@ -36,7 +36,13 @@ via environment variables:
  `AWS_SESSION_TOKEN`                         | AWS session token (if required).
 
 
-Starting with [v20.07.0](https://github.com/dgraph-io/dgraph/releases/tag/v20.07.0) if the system has access to the S3 bucket, you no longer need to explicitly include these environment variables.  In AWS, there are a few ways this can be accomplished: you would first create an [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) that grants access to the S3 bucket, and then attaching the [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) to an [instance profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html), or optionally on [EKS](https://aws.amazon.com/eks/) you can grant access to a pod by establishing a trust relationship between the [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) and Kuberetes Service account using [IRSA](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html).
+Starting with [v20.07.0](https://github.com/dgraph-io/dgraph/releases/tag/v20.07.0) if the system has access to the S3 bucket, you no longer need to explicitly include these environment variables.  
+
+In AWS, you can accomplish this by doing the following:
+
+* Create an [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) with a Policy that grants access to the S3 bucket
+* For service on an EC2 instance, you Could attach the [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) to an [Instance Profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html)
+* For pods on [EKS](https://aws.amazon.com/eks/), you can associate the [IAM Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) with a [Kubernetes Service Account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) using [IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html).
 
 ### Configure Minio Credentials
 
@@ -174,10 +180,6 @@ Once you have a `credentials.json`, you can access GCS locally using one of thes
 
 MinIO Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that MinIO Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
 
-#### Destination String for MinIO Gateway
-
-When `dgraph alpha` is running locally, the backup destination string will be `minio://localhost:9000/<bucketname>`.  If you are running Dgraph with a container in the same docker network as the gateway, then the address would based on the container name, e.g. `minio://gateway:9000/<bucketname>`. The `<bucketname>` will represent the GCS bucket or Azure Blob Storage container, depending on what gateway you are using.
-
 ### Disabling HTTPS for S3 and Minio backups
 
 By default, Dgraph assumes the destination bucket is using HTTPS. If that is not
@@ -278,7 +280,7 @@ For a series of full and incremental backups, per the current design, we don't a
 
 ## AES And Chaining with Gzip
 
-If encryption is turned on alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data.
+If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data.
 
 During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
 
