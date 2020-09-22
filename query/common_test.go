@@ -316,8 +316,8 @@ noindex_dob                    : datetime .
 noindex_alive                  : bool .
 noindex_salary                 : float .
 language                       : [string] .
-score	                       : [int] @index(int) .
-average						   : [float] @index(float) .
+score                          : [int] @index(int) .
+average                        : [float] @index(float) .
 `
 
 func populateCluster() {
