@@ -124,5 +124,4 @@ The Dgraph team maintain a number of [officially supported client libraries](htt
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
 - Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) for filing bugs or feature requests.
-- Join [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io).
 - Follow us on Twitter [@dgraphlabs](https://twitter.com/dgraphlabs).
