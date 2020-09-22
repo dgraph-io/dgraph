@@ -39,6 +39,44 @@ import (
 const versionKey = 1
 
 // DiskStorage handles disk access and writing for the RAFT write-ahead log.
+// Dir would contain wal.meta file.
+// And <start idx zero padded>.ent file.
+//
+// --- meta.wal wal.meta file ---
+// This file should only be 4KB, so it can fit nicely in one Linux page.
+// Store the raft ID in the first 8 bytes.
+// wal.meta file would have the Snapshot and the HardState. First put hard state, then put Snapshot.
+// Leave extra bytes in between to ensure they never overlap.
+// Hardstate allocate 1KB. Rest 3KB for Snapshot. So snapshot is always accessible from offset=1024.
+// Also checkpoint key goes into meta.
+//
+// --- <0000i>.ent files ---
+// This would contain the raftpb.Entry protos. It contains term, index, type and data. No need to do
+// proto.Marshal here.
+// Each file can contain 10K entries.
+// Term takes 8 bytes, Index takes 8 bytes, Type takes 8 bytes and Data we should store an offset to
+// the actual slice, which can be 8 bytes. Total = 32 bytes.
+// First 30K entries would consume 960KB.
+// Pre-allocate 1MB in each file just for these entries, and zero them out explicitly. Zeroing them
+// out would ensure that you'd know when these entries end, in case of a restart. In that case, the
+// index would be zero, so you know that's the end.
+//
+// And the data for these entries are laid out starting offset=1<<20. Those are the offsets you
+// store in the Entry for Data field.
+// After 30K entries, you rotate the file.
+//
+// --- clean up ---
+// If snapshot idx = Idx_s. Find the first wal.ent whose first Entry is less than Idx_s. This file
+// and anything above MUST be kept. All the wal.ent files lower than this file can be deleted.
+//
+// --- sync ---
+// Just do msync calls to sync the mmapped buffer. It would sync that to the disk.
+//
+// --- crashes ---
+// sync would have already flushed the mmap to disk. mmap deals with process crashes just fine. So,
+// we're good there. In case of file system crashes or disk crashes, we might need to replace this
+// node anyway. The new node would get a new WAL.
+//
 type DiskStorage struct {
 	db       *badger.DB
 	commitTs uint64
@@ -58,6 +96,7 @@ type indexRange struct {
 // Init initializes returns a properly initialized instance of DiskStorage.
 // To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
 func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
+	// TODO: Init should take a dir.
 	w := &DiskStorage{db: db,
 		id:             id,
 		gid:            gid,
