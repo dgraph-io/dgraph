@@ -33,8 +33,6 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/badger/v2"
-	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -255,58 +253,9 @@ func run() {
 
 	x.AssertTruef(opts.totalCache >= 0, "ERROR: Cache size must be non-negative")
 
-	cachePercent, err := x.GetCachePercentages(opts.cachePercentage, 2)
-	x.Check(err)
-	blockCacheSz := (cachePercent[0] * (opts.totalCache << 20)) / 100
-	indexCacheSz := (cachePercent[1] * (opts.totalCache << 20)) / 100
-
-	// Open raft write-ahead log and initialize raft node.
+	// Create and initialize write-ahead log.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.LSMOnlyOptions(opts.w).
-		WithSyncWrites(false).
-		WithTruncate(true).
-		WithValueLogFileSize(64 << 20).
-		WithBlockCacheSize(blockCacheSz).
-		WithIndexCacheSize(indexCacheSz).
-		WithLoadBloomsOnOpen(false)
-
-	compression_level := Zero.Conf.GetInt("badger.compression_level")
-	if compression_level > 0 {
-		// By default, compression is disabled in badger.
-		kvOpt.Compression = bopt.ZSTD
-		kvOpt.ZSTDCompressionLevel = compression_level
-	}
-
-	// Set loading mode options.
-	switch Zero.Conf.GetString("badger.tables") {
-	case "mmap":
-		kvOpt.TableLoadingMode = bopt.MemoryMap
-	case "ram":
-		kvOpt.TableLoadingMode = bopt.LoadToRAM
-	case "disk":
-		kvOpt.TableLoadingMode = bopt.FileIO
-	default:
-		x.Fatalf("Invalid Badger Tables options")
-	}
-	switch Zero.Conf.GetString("badger.vlog") {
-	case "mmap":
-		kvOpt.ValueLogLoadingMode = bopt.MemoryMap
-	case "disk":
-		kvOpt.ValueLogLoadingMode = bopt.FileIO
-	default:
-		x.Fatalf("Invalid Badger Value log options")
-	}
-	glog.Infof("Opening zero BadgerDB with options: %+v\n", kvOpt)
-
-	kv, err := badger.OpenManaged(kvOpt)
-	x.Checkf(err, "Error while opening WAL store")
-	defer kv.Close()
-
-	gcCloser := z.NewCloser(1) // closer for vLogGC
-	go x.RunVlogGC(kv, gcCloser)
-	defer gcCloser.SignalAndWait()
-
-	store := raftwal.Init(kv, opts.nodeId, 0)
+	store := raftwal.Init(opts.w, opts.nodeId, 0)
 
 	// Initialize the servers.
 	var st state
@@ -375,9 +324,6 @@ func run() {
 	glog.Infoln("Running Dgraph Zero...")
 	st.zero.closer.Wait()
 	glog.Infoln("Closer closed.")
-
-	err = kv.Close()
-	glog.Infof("Badger closed with err: %v\n", err)
 
 	glog.Infoln("All done. Goodbye!")
 }

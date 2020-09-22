@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"path/filepath"
 	"sync"
 
 	"github.com/dgraph-io/badger/v2"
@@ -79,10 +80,14 @@ const versionKey = 1
 //
 type DiskStorage struct {
 	db       *badger.DB
+	dir      string
 	commitTs uint64
 	id       uint64
 	gid      uint32
 	elog     trace.EventLog
+
+	meta        *metaFile
+	entryBuffer *z.Buffer
 
 	cache          *sync.Map
 	Closer         *z.Closer
@@ -93,11 +98,140 @@ type indexRange struct {
 	from, until uint64 // index range for deletion, until index is not deleted.
 }
 
+// Constants to use when writing to mmap'ed meta and entry files.
+// metaName is the name of the file used to store metadata (e.g raft ID, checkpoint).
+const metaName = "wal.meta"
+
+// metaSize is the size of the wal.meta file (4KB).
+const metaSize = 4096
+
+// raftIdOffset is the offset of the raft ID within the wal.meta file.
+const raftIdOffset = 0
+
+// checkpointOffset is the offset of the checkpoint within the wal.meta file.
+const checkpointOffset = 8
+
+//hardStateOffset is the offset of the hard sate within the wal.meta file.
+const hardStateOffset = 512
+
+// snapshotOffest is the offset of the snapshot within the wal.meta file.
+const snapshotOffset = 1024
+
+type metaFile struct {
+	buf *z.Buffer
+}
+
+func newMetaFile(dir string) (*metaFile, error) {
+	buf, err := z.NewMmapFile(metaSize, metaSize, 0, filepath.Join(dir, metaName))
+	if err != nil {
+		return nil, err
+	}
+	return &metaFile{buf}, nil
+}
+
+func (m *metaFile) RaftId() (uint64, error) {
+	b, err := m.buf.ReadAt(8, raftIdOffset)
+	if err != nil {
+		return 0, errors.Wrapf(err, "cannot read raft ID")
+	}
+	id := binary.BigEndian.Uint64(b)
+	return id, nil
+}
+
+func (m *metaFile) StoreRaftId(id uint64) error {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, id)
+	_, err := m.buf.WriteAt(b, raftIdOffset)
+	return err
+}
+
+func (m *metaFile) UpdateCheckpoint(snap *pb.Snapshot) error {
+	buf, err := snap.Marshal()
+	if err != nil {
+		return errors.Wrapf(err, "cannot marshal checkpoint")
+	}
+	_, err = m.buf.WriteSliceAt(buf, checkpointOffset)
+	return err
+}
+
+func (m *metaFile) Checkpoint() (uint64, error) {
+	val, _ := m.buf.Slice(checkpointOffset)
+	if val == nil {
+		return 0, errors.Errorf("cannot read checkpoint")
+	}
+
+	var snap pb.Snapshot
+	if err := snap.Unmarshal(val); err != nil {
+		return 0, errors.Wrapf(err, "cannot parse checkpoint")
+	}
+	return snap.Index, nil
+}
+
+func (m *metaFile) StoreHardState(hs *raftpb.HardState) error {
+	if hs == nil || raft.IsEmptyHardState(*hs) {
+		return nil
+	}
+	buf, err := hs.Marshal()
+	if err != nil {
+		return errors.Wrapf(err, "cannot marshal hard state")
+	}
+	_, err = m.buf.WriteSliceAt(buf, hardStateOffset)
+	return err
+}
+
+func (m *metaFile) HardState() (raftpb.HardState, error) {
+	var hs raftpb.HardState
+	val, _ := m.buf.Slice(hardStateOffset)
+	if val == nil {
+		return hs, errors.Errorf("cannot read hard state")
+	}
+
+	if len(val) == 0 {
+		return hs, nil
+	}
+
+	if err := hs.Unmarshal(val); err != nil {
+		return hs, errors.Wrapf(err, "cannot parse hardState")
+	}
+	return hs, nil
+}
+
+// TODO: snapshot has a data field of variable length. Will this be a problem?
+func (m *metaFile) StoreSnapshot(snap *raftpb.Snapshot) error {
+	if snap == nil || raft.IsEmptySnap(*snap) {
+		return nil
+	}
+	buf, err := snap.Marshal()
+	if err != nil {
+		return errors.Wrapf(err, "cannot marshal snapshot")
+	}
+	_, err = m.buf.WriteSliceAt(buf, snapshotOffset)
+	return err
+}
+
+func (m *metaFile) Snapshot() (raftpb.Snapshot, error) {
+	var snap raftpb.Snapshot
+	val, _ := m.buf.Slice(snapshotOffset)
+	if val == nil {
+		return snap, errors.Errorf("cannot read snapshot")
+	}
+
+	if len(val) == 0 {
+		return snap, nil
+	}
+
+	if err := snap.Unmarshal(val); err != nil {
+		return snap, errors.Wrapf(err, "cannot parse snapshot")
+	}
+	return snap, nil
+}
+
 // Init initializes returns a properly initialized instance of DiskStorage.
 // To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
-func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
+func Init(dir string, id uint64, gid uint32) *DiskStorage {
 	// TODO: Init should take a dir.
-	w := &DiskStorage{db: db,
+	w := &DiskStorage{
+		dir:            dir,
 		id:             id,
 		gid:            gid,
 		cache:          new(sync.Map),
@@ -105,15 +239,18 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 		indexRangeChan: make(chan indexRange, 16),
 	}
 
-	w.fetchMaxVersion()
-	if prev, err := RaftId(db); err != nil || prev != id {
-		x.Check(w.StoreRaftId(id))
+	var err error
+	w.meta, err = newMetaFile(dir)
+	x.Check(err)
+
+	if prev, err := w.meta.RaftId(); err != nil || prev != id || prev == 0 {
+		x.Check(w.meta.StoreRaftId(id))
 	}
 	go w.processIndexRange()
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
-	snap, err := w.Snapshot()
+	snap, err := w.meta.Snapshot()
 	x.Check(err)
 	if !raft.IsEmptySnap(snap) {
 		return w
@@ -220,32 +357,6 @@ func RaftId(db *badger.DB) (uint64, error) {
 	return id, err
 }
 
-func (w *DiskStorage) snapshotKey() []byte {
-	b := make([]byte, 14)
-	binary.BigEndian.PutUint64(b[0:8], w.id)
-	copy(b[8:10], "ss")
-	binary.BigEndian.PutUint32(b[10:14], w.gid)
-	return b
-}
-
-// HardStateKey generates the key where the hard state is stored.
-func (w *DiskStorage) HardStateKey() []byte {
-	b := make([]byte, 14)
-	binary.BigEndian.PutUint64(b[0:8], w.id)
-	copy(b[8:10], "hs")
-	binary.BigEndian.PutUint32(b[10:14], w.gid)
-	return b
-}
-
-// CheckpointKey generates the key where the checkpoint is stored.
-func (w *DiskStorage) CheckpointKey() []byte {
-	b := make([]byte, 14)
-	binary.BigEndian.PutUint64(b[0:8], w.id)
-	copy(b[8:10], "ck")
-	binary.BigEndian.PutUint32(b[10:14], w.gid)
-	return b
-}
-
 // EntryKey returns the key where the entry with the given ID is stored.
 func (w *DiskStorage) EntryKey(idx uint64) []byte {
 	b := make([]byte, 20)
@@ -274,49 +385,6 @@ func (w *DiskStorage) update(cb func(txn *badger.Txn) error) error {
 		return err
 	}
 	return txn.CommitAt(w.commitTs, nil)
-}
-
-// StoreRaftId stores the given RAFT ID in disk.
-func (w *DiskStorage) StoreRaftId(id uint64) error {
-	return w.update(func(txn *badger.Txn) error {
-		var b [8]byte
-		binary.BigEndian.PutUint64(b[:], id)
-		return txn.Set(idKey, b[:])
-	})
-}
-
-// UpdateCheckpoint writes the given snapshot to disk.
-func (w *DiskStorage) UpdateCheckpoint(snap *pb.Snapshot) error {
-	return w.update(func(txn *badger.Txn) error {
-		data, err := snap.Marshal()
-		if err != nil {
-			return err
-		}
-		return txn.Set(w.CheckpointKey(), data)
-	})
-}
-
-// Checkpoint reads the checkpoint stored in disk and returns index stored in it.
-func (w *DiskStorage) Checkpoint() (uint64, error) {
-	var applied uint64
-	err := w.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(w.CheckpointKey())
-		if err == badger.ErrKeyNotFound {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		return item.Value(func(val []byte) error {
-			var snap pb.Snapshot
-			if err := snap.Unmarshal(val); err != nil {
-				return err
-			}
-			applied = snap.Index
-			return nil
-		})
-	})
-	return applied, err
 }
 
 // Term returns the term of entry i, which must be in the range
@@ -460,26 +528,15 @@ func (w *DiskStorage) deleteRange(batch *badger.WriteBatch, from, until uint64) 
 // If snapshot is temporarily unavailable, it should return ErrSnapshotTemporarilyUnavailable,
 // so raft state machine could know that Storage needs some time to prepare
 // snapshot and call Snapshot later.
-func (w *DiskStorage) Snapshot() (snap raftpb.Snapshot, rerr error) {
+func (w *DiskStorage) Snapshot() (raftpb.Snapshot, error) {
 	if val, ok := w.cache.Load(snapshotKey); ok {
 		snap, ok := val.(*raftpb.Snapshot)
 		if ok && !raft.IsEmptySnap(*snap) {
 			return *snap, nil
 		}
 	}
-	err := w.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(w.snapshotKey())
-		if err != nil {
-			return err
-		}
-		return item.Value(func(val []byte) error {
-			return snap.Unmarshal(val)
-		})
-	})
-	if err == badger.ErrKeyNotFound {
-		return snap, nil
-	}
-	return snap, err
+
+	return w.meta.Snapshot()
 }
 
 // setSnapshot would store the snapshot. We can delete all the entries up until the snapshot
@@ -489,16 +546,13 @@ func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s *raftpb.Snapshot) 
 	if s == nil || raft.IsEmptySnap(*s) {
 		return nil
 	}
-	data, err := s.Marshal()
-	if err != nil {
-		return errors.Wrapf(err, "wal.Store: While marshal snapshot")
-	}
-	if err := batch.Set(w.snapshotKey(), data); err != nil {
+
+	if err := w.meta.StoreSnapshot(s); err != nil {
 		return err
 	}
 
 	e := raftpb.Entry{Term: s.Metadata.Term, Index: s.Metadata.Index}
-	data, err = e.Marshal()
+	data, err := e.Marshal()
 	if err != nil {
 		return err
 	}
@@ -518,18 +572,6 @@ func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s *raftpb.Snapshot) 
 	// Cache snapshot.
 	w.cache.Store(snapshotKey, proto.Clone(s))
 	return nil
-}
-
-// SetHardState saves the current HardState.
-func (w *DiskStorage) setHardState(batch *badger.WriteBatch, st *raftpb.HardState) error {
-	if st == nil || raft.IsEmptyHardState(*st) {
-		return nil
-	}
-	data, err := st.Marshal()
-	if err != nil {
-		return errors.Wrapf(err, "wal.Store: While marshal hardstate")
-	}
-	return batch.Set(w.HardStateKey(), data)
 }
 
 // reset resets the entries. Used for testing.
@@ -593,30 +635,32 @@ func (w *DiskStorage) deleteFrom(batch *badger.WriteBatch, from uint64) error {
 	return w.deleteKeys(batch, keys)
 }
 
-// HardState reads the RAFT hard state from disk and returns it.
-func (w *DiskStorage) HardState() (hd raftpb.HardState, rerr error) {
-	w.elog.Printf("HardState")
-	defer w.elog.Printf("Done")
-	err := w.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(w.HardStateKey())
-		if err != nil {
-			return err
-		}
-		return item.Value(func(val []byte) error {
-			return hd.Unmarshal(val)
-		})
-	})
-	if err == badger.ErrKeyNotFound {
-		return hd, nil
+func (w *DiskStorage) HardState() (raftpb.HardState, error) {
+	if w.meta == nil {
+		return raftpb.HardState{}, errors.Errorf("uninitialized meta file")
 	}
-	return hd, err
+	return w.meta.HardState()
+}
+
+func (w *DiskStorage) Checkpoint() (uint64, error) {
+	if w.meta == nil {
+		return 0, errors.Errorf("uninitialized meta file")
+	}
+	return w.meta.Checkpoint()
+}
+
+func (w *DiskStorage) UpdateCheckpoint(snap *pb.Snapshot) error {
+	if w.meta == nil {
+		return errors.Errorf("uninitialized meta file")
+	}
+	return w.meta.UpdateCheckpoint(snap)
 }
 
 // InitialState returns the saved HardState and ConfState information.
 func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, err error) {
 	w.elog.Printf("InitialState")
 	defer w.elog.Printf("Done")
-	hs, err = w.HardState()
+	hs, err = w.meta.HardState()
 	if err != nil {
 		return
 	}
@@ -791,7 +835,7 @@ func (w *DiskStorage) Save(h *raftpb.HardState, es []raftpb.Entry, snap *raftpb.
 	if err := w.addEntries(batch, es); err != nil {
 		return err
 	}
-	if err := w.setHardState(batch, h); err != nil {
+	if err := w.meta.StoreHardState(h); err != nil {
 		return err
 	}
 	if err := w.setSnapshot(batch, snap); err != nil {
