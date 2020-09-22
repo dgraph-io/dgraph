@@ -26,7 +26,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -153,10 +152,9 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 		cbuf.Release()
 	}()
 
-	offsets := cbuf.SliceOffsets(nil)
-	sort.Slice(offsets, func(i, j int) bool {
-		lhs := MapEntry(cbuf.Slice(offsets[i]))
-		rhs := MapEntry(cbuf.Slice(offsets[j]))
+	cbuf.SortSlice(func(ls, rs []byte) bool {
+		lhs := MapEntry(ls)
+		rhs := MapEntry(rs)
 		return less(lhs, rhs)
 	})
 
@@ -182,8 +180,10 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	}
 
 	var bufSize int64
-	for _, off := range offsets {
-		me := MapEntry(cbuf.Slice(off))
+	slice, next := []byte{}, 1
+	for next != 0 {
+		slice, next = cbuf.Slice(next)
+		me := MapEntry(slice)
 		bufSize += int64(4 + len(me))
 		if bufSize < m.opt.PartitionBufSize {
 			continue
@@ -206,13 +206,14 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	x.Check(err)
 
 	sizeBuf := make([]byte, binary.MaxVarintLen64)
-	for _, off := range offsets {
-		me := cbuf.Slice(off)
-		n := binary.PutUvarint(sizeBuf, uint64(len(me)))
+	slice, next = []byte{}, 1
+	for next != 0 {
+		slice, next = cbuf.Slice(next)
+		n := binary.PutUvarint(sizeBuf, uint64(len(slice)))
 		_, err := w.Write(sizeBuf[:n])
 		x.Check(err)
 
-		_, err = w.Write(me)
+		_, err = w.Write(slice)
 		x.Check(err)
 	}
 }

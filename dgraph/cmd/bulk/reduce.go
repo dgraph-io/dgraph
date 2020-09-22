@@ -263,7 +263,6 @@ type encodeRequest struct {
 	wg       *sync.WaitGroup
 	listCh   chan *bpb.KVList
 	splitCh  chan *bpb.KVList
-	offsets  []int
 }
 
 func (r *reducer) streamIdFor(pred string) uint32 {
@@ -286,13 +285,8 @@ func (r *reducer) streamIdFor(pred string) uint32 {
 func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
 
-	var offsets []int // Use this to avoid allocating too much memory.
 	for req := range entryCh {
-		req.offsets = offsets
-
 		r.toList(req)
-		offsets = req.offsets // We might have allocated a bigger slice, so set offsets to that.
-
 		req.wg.Done()
 	}
 }
@@ -338,7 +332,6 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	tmpWg.Add(1)
 	go r.writeTmpSplits(ci, tmpWg)
 
-	var offsets []int
 	for req := range writerCh {
 		req.wg.Add(1) // One for finishing the writes.
 		go func() {
@@ -350,17 +343,19 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		req.wg.Wait()
 
 		// Go through the countBuf.
-		offsets = req.countBuf.SliceOffsets(offsets[:0])
-		sort.Slice(offsets, func(i, j int) bool {
-			left := countEntry(req.countBuf.Slice(offsets[i]))
-			right := countEntry(req.countBuf.Slice(offsets[j]))
+		req.countBuf.SortSlice(func(ls, rs []byte) bool {
+			left := countEntry(ls)
+			right := countEntry(rs)
 			return left.less(right)
 		})
+
 		if sz := req.countBuf.Len(); sz > 1 {
 			ci.countBuf.Grow(sz)
 		}
-		for _, offset := range offsets {
-			ce := countEntry(req.countBuf.Slice(offset))
+		slice, next := []byte{}, 1
+		for next != 0 {
+			slice, next = req.countBuf.Slice(next)
+			ce := countEntry(slice)
 			ci.addCountEntry(ce)
 		}
 		req.countBuf.Release()
@@ -412,12 +407,11 @@ func bufferStats(cbuf *z.Buffer) {
 	// Just check how many keys do we have in this giant buffer.
 	keys := make(map[uint64]int64)
 	var numEntries int
-	offset := 1
-	for offset < cbuf.Len() {
-		me := MapEntry(cbuf.Slice(offset))
+	slice, next := []byte{}, 1
+	for next != 0 {
+		slice, next = cbuf.Slice(next)
+		me := MapEntry(slice)
 		keys[z.MemHash(me.Key())]++
-
-		offset += 4 + len(me)
 		numEntries++
 	}
 	keyHist := z.NewHistogramData(z.HistogramBounds(10, 32))
@@ -531,10 +525,9 @@ func (r *reducer) toList(req *encodeRequest) {
 		cbuf.Release()
 	}()
 
-	req.offsets = cbuf.SliceOffsets(req.offsets[:0])
-	sort.Slice(req.offsets, func(i, j int) bool {
-		lhs := MapEntry(cbuf.Slice(req.offsets[i]))
-		rhs := MapEntry(cbuf.Slice(req.offsets[j]))
+	cbuf.SortSlice(func(ls, rs []byte) bool {
+		lhs := MapEntry(ls)
+		rhs := MapEntry(rs)
 		return bytes.Compare(lhs.Key(), rhs.Key()) < 0
 	})
 
@@ -542,7 +535,6 @@ func (r *reducer) toList(req *encodeRequest) {
 	pl := new(pb.PostingList)
 	writeVersionTs := r.state.writeTs
 
-	var currentBatch []int
 	kvList := &bpb.KVList{}
 	trackCountIndex := make(map[string]bool)
 
@@ -562,14 +554,12 @@ func (r *reducer) toList(req *encodeRequest) {
 		freePostings = append(freePostings, p)
 	}
 
+	start, end, num := 1, 1, 0
 	appendToList := func() {
-		if len(currentBatch) == 0 {
+		if num == 0 {
 			return
 		}
-		if len(currentBatch) > 1e9 {
-			fmt.Printf("Got current batch of size: %d\n", len(currentBatch))
-		}
-		atomic.AddInt64(&r.prog.reduceEdgeCount, int64(len(currentBatch)))
+		atomic.AddInt64(&r.prog.reduceEdgeCount, int64(num))
 
 		pk, err := x.Parse(currentKey)
 		x.Check(err)
@@ -584,22 +574,25 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 			if doCount {
 				// Calculate count entries.
-				ck := x.CountKey(pk.Attr, uint32(len(currentBatch)), pk.IsReverse())
+				ck := x.CountKey(pk.Attr, uint32(num), pk.IsReverse())
 				dst := req.countBuf.SliceAllocate(countEntrySize(ck))
 				marshalCountEntry(dst, ck, pk.Uid)
 			}
 		}
 
-		sort.Slice(currentBatch, func(i, j int) bool {
-			lhs := MapEntry(cbuf.Slice(currentBatch[i]))
-			rhs := MapEntry(cbuf.Slice(currentBatch[j]))
+		fmt.Printf("Calling sort slice between: %d %d\n", start, end)
+		cbuf.SortSliceBetween(start, end, func(ls, rs []byte) bool {
+			lhs := MapEntry(ls)
+			rhs := MapEntry(rs)
 			return less(lhs, rhs)
 		})
 
 		enc := codec.Encoder{BlockSize: 256}
 		var lastUid uint64
-		for _, offset := range currentBatch {
-			me := MapEntry(cbuf.Slice(offset))
+		slice, next := []byte{}, start
+		for next != 0 && next < end {
+			slice, next = cbuf.Slice(next)
+			me := MapEntry(slice)
 			uid := me.Uid()
 			if uid == lastUid {
 				continue
@@ -680,17 +673,18 @@ func (r *reducer) toList(req *encodeRequest) {
 			freePosting(p)
 		}
 		pl.Reset()
-		// Reset the current batch.
-		currentBatch = currentBatch[:0]
 	}
 
 	var sz int
-	for _, offset := range req.offsets {
-		entry := MapEntry(cbuf.Slice(offset))
+	for end != 0 {
+		slice, next := cbuf.Slice(end)
+		entry := MapEntry(slice)
 		entryKey := entry.Key()
 
 		if !bytes.Equal(entryKey, currentKey) && currentKey != nil {
 			appendToList()
+			start, num = end, 0 // Start would start from current one.
+
 			sz += kvList.Kv[len(kvList.Kv)-1].Size()
 			if sz > 256<<20 {
 				req.listCh <- kvList
@@ -698,9 +692,9 @@ func (r *reducer) toList(req *encodeRequest) {
 				sz = 0
 			}
 		}
-
+		end = next
 		currentKey = append(currentKey[:0], entryKey...)
-		currentBatch = append(currentBatch, offset)
+		num++
 	}
 
 	appendToList()

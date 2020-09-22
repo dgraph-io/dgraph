@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"sort"
 	"sync"
 	"sync/atomic"
 
@@ -123,14 +122,14 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	list := &bpb.KVList{}
 	var listSz int
 
-	offsets := buf.SliceOffsets(nil)
-	sort.Slice(offsets, func(i, j int) bool {
-		left := countEntry(buf.Slice(offsets[i]))
-		right := countEntry(buf.Slice(offsets[j]))
+	buf.SortSlice(func(ls, rs []byte) bool {
+		left := countEntry(ls)
+		right := countEntry(rs)
 		return left.less(right)
 	})
 
-	lastCe := countEntry(buf.Slice(offsets[0]))
+	tmp, _ := buf.Slice(1)
+	lastCe := countEntry(tmp)
 	{
 		pk, err := x.Parse(lastCe.Key())
 		x.Check(err)
@@ -168,8 +167,10 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		}
 	}
 
-	for _, offset := range offsets {
-		ce := countEntry(buf.Slice(offset))
+	slice, next := []byte{}, 1
+	for next != 0 {
+		slice, next = buf.Slice(next)
+		ce := countEntry(slice)
 		if !bytes.Equal(lastCe.Key(), ce.Key()) {
 			encode()
 		}
