@@ -3253,6 +3253,28 @@ func TestBetweenCount(t *testing.T) {
 			`,
 			`{"data":{"me":[{"name":"Rick Grimes"},{"name":"Andrea"}]}}`,
 		},
+		{
+			`Test between on count equal bounds`,
+			`
+			{
+				me(func: between(count(friend), 5, 5)) {
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[{"name":"Michonne"}]}}`,
+		},
+		{
+			`Test between on count invalid bounds`,
+			`
+			{
+				me(func: between(count(friend), 3, 1)) {
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[]}}`,
+		},
 	}
 
 	for _, tc := range tests {
