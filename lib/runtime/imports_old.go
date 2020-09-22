@@ -728,8 +728,32 @@ func ext_is_validator(context unsafe.Pointer) int32 {
 //export ext_local_storage_get
 func ext_local_storage_get(context unsafe.Pointer, kind, key, keyLen, valueLen int32) int32 {
 	logger.Trace("[ext_local_storage_get] executing...")
-	logger.Warn("[ext_local_storage_get] Not yet implemented.")
-	return 0
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	keyM := memory[key : key+keyLen]
+	runtimeCtx := instanceContext.Data().(*Ctx)
+	var res []byte
+	var err error
+	switch kind {
+	case NodeStorageTypePersistent:
+		res, err = runtimeCtx.nodeStorage.PersistentStorage.Get(keyM)
+	case NodeStorageTypeLocal:
+		res, err = runtimeCtx.nodeStorage.LocalStorage.Get(keyM)
+	}
+
+	if err != nil {
+		logger.Error("[ext_local_storage_get]", "error", err)
+		return 0
+	}
+	// allocate memory for value and copy value to memory
+	ptr, err := runtimeCtx.allocator.Allocate(uint32(valueLen))
+	if err != nil {
+		logger.Error("[ext_local_storage_get]", "error", err)
+		return 0
+	}
+	copy(memory[ptr:ptr+uint32(valueLen)], res[:])
+	return int32(ptr)
 }
 
 //export ext_local_storage_compare_and_set
@@ -756,7 +780,24 @@ func ext_submit_transaction(context unsafe.Pointer, data, len int32) int32 {
 //export ext_local_storage_set
 func ext_local_storage_set(context unsafe.Pointer, kind, key, keyLen, value, valueLen int32) {
 	logger.Trace("[ext_local_storage_set] executing...")
-	logger.Warn("[ext_local_storage_set] Not yet implemented.")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	keyM := memory[key : key+keyLen]
+	valueM := memory[value : value+valueLen]
+
+	runtimeCtx := instanceContext.Data().(*Ctx)
+
+	var err error
+	switch kind {
+	case NodeStorageTypePersistent:
+		err = runtimeCtx.nodeStorage.PersistentStorage.Put(keyM, valueM)
+	case NodeStorageTypeLocal:
+		err = runtimeCtx.nodeStorage.LocalStorage.Put(keyM, valueM)
+	}
+	if err != nil {
+		logger.Error("[ext_local_storage_set]", "error", err)
+	}
 }
 
 // RegisterImports_TestRuntime registers the wasm imports for the v0.6.x substrate test runtime

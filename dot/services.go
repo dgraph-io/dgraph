@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"math/big"
 
+	database "github.com/ChainSafe/chaindb"
+
 	"github.com/ChainSafe/gossamer/dot/core"
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/rpc"
@@ -90,12 +92,17 @@ func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore)
 		return nil, err
 	}
 
+	ns := runtime.NodeStorage{
+		LocalStorage:      database.NewMemDatabase(),
+		PersistentStorage: database.NewTable(st.DB(), "offlinestorage"),
+	}
 	rtCfg := &runtime.Config{
-		Storage:  ts,
-		Keystore: ks,
-		Imports:  runtime.RegisterImports_NodeRuntime,
-		LogLvl:   lvl,
-		Role:     cfg.Core.Roles,
+		Storage:     ts,
+		Keystore:    ks,
+		Imports:     runtime.RegisterImports_NodeRuntime,
+		LogLvl:      lvl,
+		NodeStorage: ns,
+		Role:        cfg.Core.Roles,
 	}
 
 	// create runtime executor

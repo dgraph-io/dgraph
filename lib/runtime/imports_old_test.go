@@ -1132,6 +1132,118 @@ func TestExt_set_child_storage(t *testing.T) {
 	}
 }
 
+func TestExt_local_storage_set_local(t *testing.T) {
+	runtime := NewTestRuntime(t, TEST_RUNTIME)
+
+	mem := runtime.vm.Memory.Data()
+
+	key := []byte("mykey")
+	value := []byte("myvalue")
+
+	keyPtr := 0
+	keyLen := len(key)
+	valuePtr := keyPtr + keyLen
+	valueLen := len(value)
+
+	copy(mem[keyPtr:keyPtr+keyLen], key)
+	copy(mem[valuePtr:valuePtr+valueLen], value)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_local_storage_set"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err := testFunc(NodeStorageTypeLocal, keyPtr, keyLen, valuePtr, valueLen)
+	require.NoError(t, err)
+
+	resValue, err := runtime.ctx.nodeStorage.LocalStorage.Get(key)
+	require.NoError(t, err)
+	require.Equal(t, value, resValue)
+}
+
+func TestExt_local_storage_set_persistent(t *testing.T) {
+	runtime := NewTestRuntime(t, TEST_RUNTIME)
+
+	mem := runtime.vm.Memory.Data()
+
+	key := []byte("mykey")
+	value := []byte("myvalue")
+
+	keyPtr := 0
+	keyLen := len(key)
+	valuePtr := keyPtr + keyLen
+	valueLen := len(value)
+
+	copy(mem[keyPtr:keyPtr+keyLen], key)
+	copy(mem[valuePtr:valuePtr+valueLen], value)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_local_storage_set"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err := testFunc(NodeStorageTypePersistent, keyPtr, keyLen, valuePtr, valueLen)
+	require.NoError(t, err)
+
+	resValue, err := runtime.ctx.nodeStorage.PersistentStorage.Get(key)
+	require.NoError(t, err)
+	require.Equal(t, value, resValue)
+}
+
+func TestExt_local_storage_get_local(t *testing.T) {
+	runtime := NewTestRuntime(t, TEST_RUNTIME)
+	mem := runtime.vm.Memory.Data()
+
+	key := []byte("mykey")
+	value := []byte("myvalue")
+	runtime.ctx.nodeStorage.LocalStorage.Put(key, value)
+
+	keyPtr := 0
+	keyLen := len(key)
+	valueLen := len(value)
+
+	copy(mem[keyPtr:keyPtr+keyLen], key)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_local_storage_get"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	res, err := testFunc(NodeStorageTypeLocal, keyPtr, keyLen, valueLen)
+	require.Nil(t, err)
+
+	require.Equal(t, value, mem[res.ToI32():res.ToI32()+int32(valueLen)])
+}
+
+func TestExt_local_storage_get_persistent(t *testing.T) {
+	runtime := NewTestRuntime(t, TEST_RUNTIME)
+	mem := runtime.vm.Memory.Data()
+
+	key := []byte("mykey")
+	value := []byte("myvalue")
+	runtime.ctx.nodeStorage.PersistentStorage.Put(key, value)
+
+	keyPtr := 0
+	keyLen := len(key)
+	valueLen := len(value)
+
+	copy(mem[keyPtr:keyPtr+keyLen], key)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_local_storage_get"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	res, err := testFunc(NodeStorageTypePersistent, keyPtr, keyLen, valueLen)
+	require.Nil(t, err)
+
+	require.Equal(t, value, mem[res.ToI32():res.ToI32()+int32(valueLen)])
+}
+
 func TestExt_is_validator(t *testing.T) {
 	// test with validator
 	runtime := NewTestRuntimeWithRole(t, TEST_RUNTIME, byte(4))
@@ -1154,5 +1266,4 @@ func TestExt_is_validator(t *testing.T) {
 	res, err = testFunc()
 	require.NoError(t, err)
 	require.Equal(t, int32(0), res.ToI32())
-
 }
