@@ -391,19 +391,11 @@ func (r *reducer) writeSplitLists(db, tmpDb *badger.DB, writer *badger.StreamWri
 const limit = 2 << 30
 
 func (r *reducer) throttle() {
-	var paused bool
 	for {
 		sz := atomic.LoadInt64(&r.prog.numEncoding)
 		if sz < limit {
-			if paused {
-				fmt.Println("Resuming encoding...")
-			}
 			return
 		}
-		if !paused {
-			fmt.Printf("Not sending out more encoder load. Num Bytes being encoded: %d\n", sz)
-		}
-		paused = true
 		time.Sleep(time.Second)
 	}
 }
