@@ -95,7 +95,7 @@ func (r *reducer) run() error {
 				splitWriter: splitWriter,
 				tmpDb:       tmpDb,
 				splitCh:     make(chan *bpb.KVList, 2*runtime.NumCPU()),
-				countBuf:    z.NewBuffer(1024),
+				countBuf:    getBuf(),
 			}
 
 			partitionKeys := make([][]byte, 0, len(partitions))
@@ -333,17 +333,11 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 
 	count := func(req *encodeRequest) {
 		defer req.countBuf.Release()
-		if req.countBuf.Len() <= 1 {
+		if req.countBuf.IsEmpty() {
 			return
 		}
 
-		// Go through the countBuf.
-		req.countBuf.SortSlice(func(ls, rs []byte) bool {
-			left := countEntry(ls)
-			right := countEntry(rs)
-			return left.less(right)
-		})
-
+		// req.countBuf is already sorted.
 		sz := req.countBuf.Len()
 		ci.countBuf.Grow(sz)
 
@@ -420,6 +414,13 @@ func bufferStats(cbuf *z.Buffer) {
 		numEntries, len(keys), keyHist.String())
 }
 
+func getBuf() *z.Buffer {
+	cbuf, err := z.NewBufferWith(64<<20, 64<<30, z.UseCalloc)
+	x.Check(err)
+	cbuf.AutoMmapAfter(1 << 30)
+	return cbuf
+}
+
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
 	cpu := r.opt.NumGoroutines
 	fmt.Printf("Num Encoders: %d\n", cpu)
@@ -443,7 +444,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			wg:       wg,
 			listCh:   make(chan *bpb.KVList, 3),
 			splitCh:  ci.splitCh,
-			countBuf: z.NewBuffer(1 << 10),
+			countBuf: getBuf(),
 		}
 		encoderCh <- req
 		writerCh <- req
@@ -451,12 +452,6 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
-
-	getBuf := func() *z.Buffer {
-		cbuf, err := z.NewBufferWith(64<<20, 64<<30, z.UseMmap)
-		x.Check(err)
-		return cbuf
-	}
 
 	buffers := make(chan *z.Buffer, 3)
 
@@ -694,4 +689,11 @@ func (r *reducer) toList(req *encodeRequest) {
 		req.listCh <- kvList
 	}
 	close(req.listCh)
+
+	// Sort countBuf before returning to better use the goroutines.
+	req.countBuf.SortSlice(func(ls, rs []byte) bool {
+		left := countEntry(ls)
+		right := countEntry(rs)
+		return left.less(right)
+	})
 }

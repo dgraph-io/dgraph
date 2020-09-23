@@ -97,7 +97,7 @@ func (c *countIndexer) addCountEntry(ce countEntry) {
 		if c.countBuf.Len() > 0 {
 			c.wg.Add(1)
 			go c.writeIndex(c.countBuf)
-			c.countBuf = z.NewBuffer(1 << 10)
+			c.countBuf = getBuf()
 		}
 		c.cur.pred = pk.Attr
 		c.cur.rev = pk.IsReverse()
