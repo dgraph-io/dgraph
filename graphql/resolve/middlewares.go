@@ -176,7 +176,7 @@ func IpWhitelistingMW4Mutation(resolver MutationResolver) MutationResolver {
 func LoggingMWMutation(resolver MutationResolver) MutationResolver {
 	return MutationResolverFunc(func(ctx context.Context, mutation schema.Mutation) (*Resolved,
 		bool) {
-			glog.Infof("GraphQL admin mutation. Name =  %v", mutation.Name())
+		glog.Infof("GraphQL admin mutation. Name =  %v", mutation.Name())
 		return resolver.Resolve(ctx, mutation)
 	})
 }
