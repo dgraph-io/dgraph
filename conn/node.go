@@ -135,7 +135,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		Applied:     y.WaterMark{Name: fmt.Sprintf("Applied watermark")},
+		Applied:     y.WaterMark{Name: "Applied watermark"},
 		RaftContext: rc,
 		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 		confChanges: make(map[uint64]chan error),
@@ -618,11 +618,16 @@ type linReadReq struct {
 var errReadIndex = errors.Errorf(
 	"Cannot get linearized read (time expired or no configured leader)")
 
+var readIndexOk, readIndexTotal uint64
+
 // WaitLinearizableRead waits until a linearizable read can be performed.
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "WaitLinearizableRead")
 
+	if num := atomic.AddUint64(&readIndexTotal, 1); num%1000 == 0 {
+		glog.V(2).Infof("ReadIndex Total: %d\n", num)
+	}
 	indexCh := make(chan uint64, 1)
 	select {
 	case n.requestCh <- linReadReq{indexCh: indexCh}:
@@ -637,6 +642,8 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 		span.Annotatef(nil, "Received index: %d", index)
 		if index == 0 {
 			return errReadIndex
+		} else if num := atomic.AddUint64(&readIndexOk, 1); num%1000 == 0 {
+			glog.V(2).Infof("ReadIndex OK: %d\n", num)
 		}
 		err := n.Applied.WaitForMark(ctx, index)
 		span.Annotatef(nil, "Error from Applied.WaitForMark: %v", err)

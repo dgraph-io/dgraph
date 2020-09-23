@@ -256,7 +256,7 @@ func getAlpha(idx int) service {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
 	if opts.Acl {
-		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
+		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s"
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   "./acl-secret",
@@ -265,7 +265,7 @@ func getAlpha(idx int) service {
 		})
 	}
 	if opts.AclSecret != "" {
-		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
+		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s"
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   opts.AclSecret,
@@ -444,7 +444,7 @@ func main() {
 		"include ratel service")
 	cmd.PersistentFlags().IntVar(&opts.RatelPort, "ratel_port", 8000,
 		"Port to expose Ratel service")
-	cmd.PersistentFlags().StringVarP(&opts.MemLimit, "mem", "", "",
+	cmd.PersistentFlags().StringVarP(&opts.MemLimit, "mem", "", "32G",
 		"Limit memory provided to the docker containers, for example 8G.")
 
 	err := cmd.ParseFlags(os.Args)
