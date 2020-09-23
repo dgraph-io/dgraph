@@ -99,30 +99,37 @@ type indexRange struct {
 }
 
 // Constants to use when writing to mmap'ed meta and entry files.
-// metaName is the name of the file used to store metadata (e.g raft ID, checkpoint).
-const metaName = "wal.meta"
-
-// metaSize is the size of the wal.meta file (4KB).
-const metaSize = 4096
-
-// raftIdOffset is the offset of the raft ID within the wal.meta file.
-const raftIdOffset = 0
-
-// checkpointOffset is the offset of the checkpoint within the wal.meta file.
-const checkpointOffset = 8
-
-//hardStateOffset is the offset of the hard sate within the wal.meta file.
-const hardStateOffset = 512
-
-// snapshotOffest is the offset of the snapshot within the wal.meta file.
-const snapshotOffset = 1024
+const (
+	// metaName is the name of the file used to store metadata (e.g raft ID, checkpoint).
+	metaName = "wal.meta"
+	// metaFileSize is the size of the wal.meta file (4KB).
+	metaFileSize = 4096
+	// raftIdOffset is the offset of the raft ID within the wal.meta file.
+	raftIdOffset = 0
+	// checkpointOffset is the offset of the checkpoint within the wal.meta file.
+	checkpointOffset = 8
+	//hardStateOffset is the offset of the hard sate within the wal.meta file.
+	hardStateOffset = 512
+	// snapshotOffest is the offset of the snapshot within the wal.meta file.
+	snapshotOffset = 1024
+	// maxNumEntries is maximum number of entries before rotating the file.
+	maxNumEntries = 30000
+	// entrySize is the size in bytes of a single entry.
+	entrySize = 32
+	// entryFileOffset
+	entryFileOffset = 1 << 20 // 1MB
+	// entryFileSize is the initial size of the entry size.
+	entryFileSize = 4 * entryFileOffset // 4MB
+	// entryFileMaxSize is the maximum size allowed for an entry file.
+	entryFileMaxSize = 1 << 30 // 1GB
+)
 
 type metaFile struct {
 	buf *z.Buffer
 }
 
 func newMetaFile(dir string) (*metaFile, error) {
-	buf, err := z.NewMmapFile(metaSize, metaSize, 0, filepath.Join(dir, metaName))
+	buf, err := z.NewMmapFile(metaFileSize, metaFileSize, 0, filepath.Join(dir, metaName))
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +231,27 @@ func (m *metaFile) Snapshot() (raftpb.Snapshot, error) {
 		return snap, errors.Wrapf(err, "cannot parse snapshot")
 	}
 	return snap, nil
+}
+
+type entry struct {
+	Term       uint64
+	Index      uint64
+	Type       raftpb.EntryType
+	DataOffset int64
+}
+
+// entryFile represents an entryFile.
+type entryFile struct {
+	entryIdex int
+	buf       *z.Buffer
+}
+
+func (e *entryFile) GetEntry(n int) (*raftpb.Entry, error) {
+	return nil, nil
+}
+
+func (e *entryFile) AddEntry(entry *raftpb.Entry) error {
+	return nil
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
