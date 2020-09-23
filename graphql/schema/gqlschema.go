@@ -125,22 +125,22 @@ input CustomHTTP {
 }
 
 type Point {
-	Latitude: Float!
-	Longitude: Float!
+	latitude: Float!
+	longitude: Float!
 }
 
 input PointInput {
-	Latitude: Float!
-	Longitude: Float!
+	latitude: Float!
+	longitude: Float!
 }
 
 input NearFilter {
-	Distance: Float!
-	Coordinate: PointInput!
+	distance: Float!
+	coordinate: PointInput!
 }
 
 input PointGeoFilter {
-	near: NearFilter
+	near: NearFilter!
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION

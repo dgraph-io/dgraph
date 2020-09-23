@@ -1057,15 +1057,38 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// OR
 				// numLikes: { le: 10 } -> le(Post.numLikes, 10)
 				fn, val := first(dgFunc)
-				ands = append(ands, &gql.FilterTree{
-					Func: &gql.Function{
-						Name: fn,
-						Args: []gql.Arg{
-							{Value: typ.DgraphPredicate(field)},
-							{Value: maybeQuoteArg(fn, val)},
+				switch fn {
+				case "near":
+					geoParams := val.(map[string]interface{})
+					distance, _ := geoParams["distance"]
+
+					coordinate, _ := geoParams["coordinate"].(map[string]interface{})
+					lat, _ := coordinate["latitude"]
+					long, _ := coordinate["longitude"]
+
+					args := []gql.Arg{
+						{Value: typ.DgraphPredicate(field)},
+						{Value: fmt.Sprintf("[%v,%v]", long, lat)},
+						{Value: fmt.Sprintf("%v", distance)},
+					}
+
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: args,
 						},
-					},
-				})
+					})
+				default:
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(field)},
+								{Value: maybeQuoteArg(fn, val)},
+							},
+						},
+					})
+				}
 			case []interface{}:
 				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
 				ids := convertIDs(dgFunc)
