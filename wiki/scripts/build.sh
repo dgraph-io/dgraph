@@ -10,7 +10,13 @@ set -e
 
 GREEN='\033[32;1m'
 RESET='\033[0m'
-HOST=https://docs.dgraph.io
+HOST="${HOST:-https://dgraph.io/docs}"
+# Name of output public directory
+PUBLIC="${PUBLIC:-public}"
+# LOOP true makes this script run in a loop to check for updates
+LOOP="${LOOP:-true}"
+# Binary of hugo command to run.
+HUGO="${HUGO:-hugo}"
 
 # TODO - Maybe get list of released versions from Github API and filter
 # those which have docs.
