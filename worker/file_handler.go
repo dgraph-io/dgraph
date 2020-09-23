@@ -29,9 +29,9 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/ee/enc"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -255,8 +255,11 @@ func pathExist(path string) bool {
 	return !os.IsNotExist(err) && !os.IsPermission(err)
 }
 
-func (h *fileHandler) ExportBackup(backupDir, exportDir string,
+func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 	key x.SensitiveByteSlice) error {
+	if format != "json" && format != "rdf" {
+		return errors.Errorf("invalid format %s", format)
+	}
 
 	// Create exportDir and temporary folder to store the restored backup.
 	var err error
@@ -359,9 +362,9 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir string,
 
 			req := &pb.ExportRequest{
 				GroupId:     group,
-				ReadTs:      math.MaxUint64,
+				ReadTs:      manifest.Since,
 				UnixTs:      time.Now().Unix(),
-				Format:      "rdf",
+				Format:      format,
 				Destination: exportDir,
 			}
 

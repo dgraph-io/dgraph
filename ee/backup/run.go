@@ -36,10 +36,14 @@ var LsBackup x.SubCommand
 var ExportBackup x.SubCommand
 
 var opt struct {
-	backupId, location, pdir, zero string
-	key                            x.SensitiveByteSlice
-	forceZero                      bool
-	destination                    string
+	backupId    string
+	location    string
+	pdir        string
+	zero        string
+	key         x.SensitiveByteSlice
+	forceZero   bool
+	destination string
+	format      string
 }
 
 func init() {
@@ -272,6 +276,8 @@ func initExportBackup() {
 		"Sets the location of the backup. Only file URIs are supported for now.")
 	flag.StringVarP(&opt.destination, "destination", "d", "",
 		"The folder to which export the backups.")
+	flag.StringVarP(&opt.format, "format", "f", "rdf",
+		"The format of the export output. Accepts a value of either rdf or json")
 	enc.RegisterFlags(flag)
 }
 
@@ -282,5 +288,5 @@ func runExportBackup() error {
 	}
 
 	exporter := worker.BackupExporter{}
-	return exporter.ExportBackup(opt.location, opt.destination, opt.key)
+	return exporter.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
 }
