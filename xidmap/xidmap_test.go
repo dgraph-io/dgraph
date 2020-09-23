@@ -119,6 +119,13 @@ func TestXidmapMemory(t *testing.T) {
 	t.Logf("Time taken: %v", time.Since(start).Round(time.Millisecond))
 }
 
+// Benchmarks using Map
+// BenchmarkXidmapWrites-32    	 4435590	       278 ns/op
+// BenchmarkXidmapReads-32     	33248678	        34.1 ns/op
+//
+// Benchmarks using Trie
+// BenchmarkXidmapWrites-32    	16202346	       375 ns/op
+// BenchmarkXidmapReads-32     	139261450	        44.8 ns/op
 func BenchmarkXidmapWrites(b *testing.B) {
 	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
 	if err != nil {
@@ -153,7 +160,6 @@ func BenchmarkXidmapReads(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			xid := int(z.FastRand()) % N
-			// xid := atomic.AddUint64(&counter, 1)
 			xidmap.AssignUid("xid-" + strconv.Itoa(xid))
 		}
 	})

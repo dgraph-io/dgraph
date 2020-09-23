@@ -1,3 +1,19 @@
+/*
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package xidmap
 
 import (
@@ -64,8 +80,6 @@ type node struct {
 	right uint32
 }
 
-// TODO: Try using skiplists on mmap instead?
-
 var nodeSz = int(unsafe.Sizeof(node{}))
 
 func (t *Trie) get(offset uint32, key string) uint64 {
@@ -102,17 +116,12 @@ func (t *Trie) put(offset uint32, key string, uid uint64) uint32 {
 	switch {
 	case r < n.r:
 		n.left = t.put(n.left, key, uid)
-		// We need to get the node again to avoid holding a reference to arena's data struct, which
-		// might have remapped due to a call to Allocate.
-		// t.getNode(offset).left = off
 
 	case r > n.r:
 		n.right = t.put(n.right, key, uid)
-		// t.getNode(offset).right = off
 
 	case len(key[1:]) > 0:
 		n.mid = t.put(n.mid, key[1:], uid)
-		// t.getNode(offset).mid = off
 
 	default:
 		n.uid = uid

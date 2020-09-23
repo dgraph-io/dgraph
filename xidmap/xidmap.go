@@ -51,7 +51,6 @@ type shard struct {
 	block
 
 	trie *Trie
-	// uidMap map[string]uint64
 }
 
 type block struct {
@@ -82,7 +81,6 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
 			trie: NewTrie(),
-			// uidMap: make(map[string]uint64),
 		}
 	}
 	if db != nil {
@@ -107,7 +105,6 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 					uid := binary.BigEndian.Uint64(val)
 					// No need to acquire a lock. This is all serial access.
 					sh.trie.Put(key, uid)
-					// sh.uidMap[key] = uid
 					return nil
 				})
 				if err != nil {
@@ -160,8 +157,6 @@ func (m *XidMap) CheckUid(xid string) bool {
 	defer sh.RUnlock()
 	uid := sh.trie.Get(xid)
 	return uid != 0
-	// _, ok := sh.uidMap[xid]
-	// return ok
 }
 
 func (m *XidMap) SetUid(xid string, uid uint64) {
@@ -169,7 +164,6 @@ func (m *XidMap) SetUid(xid string, uid uint64) {
 	sh.Lock()
 	defer sh.Unlock()
 	sh.trie.Put(xid, uid)
-	// sh.uidMap[xid] = uid
 }
 
 // AssignUid creates new or looks up existing XID to UID mappings. It also returns if
@@ -178,7 +172,6 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh := m.shardFor(xid)
 	sh.RLock()
 	uid := sh.trie.Get(xid)
-	// uid := sh.uidMap[xid]
 	sh.RUnlock()
 	if uid > 0 {
 		return uid, false
@@ -188,15 +181,15 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	defer sh.Unlock()
 
 	uid = sh.trie.Get(xid)
-	// uid = sh.uidMap[xid]
 	if uid > 0 {
 		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
 	sh.trie.Put(xid, newUid)
-	// sh.uidMap[xid] = newUid
 
+	// TODO: Iterate over Trie in sequence and use stream write to write it out to Badger at the
+	// end. No need to write here.
 	if m.writer != nil {
 		var uidBuf [8]byte
 		binary.BigEndian.PutUint64(uidBuf[:], newUid)
@@ -261,13 +254,6 @@ func (m *XidMap) Flush() error {
 	for _, shard := range m.shards {
 		shard.trie.Release()
 	}
-	// While running bulk loader, this method is called at the completion of map phase. After this
-	// method returns xidmap of bulk loader is made nil. But xidmap still show up in memory profiles
-	// even during reduce phase. If bulk loader is running on large dataset, this occupies lot of
-	// memory and causing OOM sometimes. Making shards explicitly nil in this method fixes this.
-	// TODO: find why xidmap is not getting GCed without below line.
-	m.shards = nil
-
 	if m.writer == nil {
 		return nil
 	}

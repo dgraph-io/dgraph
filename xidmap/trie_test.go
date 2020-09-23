@@ -1,3 +1,19 @@
+/*
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package xidmap
 
 import (
@@ -32,9 +48,6 @@ func TestTrie(t *testing.T) {
 
 // $ go test -bench=BenchmarkWordsTrie --run=XXX -benchmem -memprofile mem.out
 // $ go tool pprof mem.out
-//
-// Results show that Trie uses ~450 bytes per word. While Map uses ~100 bytes per word. So, Trie
-// doesn't make sense.
 func BenchmarkWordsTrie(b *testing.B) {
 	buf := make([]byte, 32)
 

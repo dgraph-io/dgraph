@@ -142,7 +142,6 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 		WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).
 		WithValueThreshold(1 << 10 /* 1 KB */).
-		WithLogger(nil).
 		WithEncryptionKey(r.opt.EncryptionKey).
 		WithBlockCacheSize(r.opt.BlockCacheSize).
 		WithIndexCacheSize(r.opt.IndexCacheSize).
@@ -499,11 +498,11 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	}()
 
 	for cbuf := range buffers {
-		r.throttle()
-
 		if cbuf.Len() > limit/2 {
 			bufferStats(cbuf)
 		}
+		r.throttle()
+
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
 		sendReq(cbuf)
 	}
@@ -528,7 +527,6 @@ func (r *reducer) toList(req *encodeRequest) {
 		lhs := MapEntry(ls)
 		rhs := MapEntry(rs)
 		return less(lhs, rhs)
-		// return bytes.Compare(lhs.Key(), rhs.Key()) < 0
 	})
 
 	var currentKey []byte
@@ -559,7 +557,6 @@ func (r *reducer) toList(req *encodeRequest) {
 		if num == 0 {
 			return
 		}
-		// fmt.Printf("appendToList: start: %d end: %d num: %d\n", start, end, num)
 		atomic.AddInt64(&r.prog.reduceEdgeCount, int64(num))
 
 		pk, err := x.Parse(currentKey)
@@ -576,7 +573,6 @@ func (r *reducer) toList(req *encodeRequest) {
 			if doCount {
 				// Calculate count entries.
 				ck := x.CountKey(pk.Attr, uint32(num), pk.IsReverse())
-				x.AssertTrue(len(ck) > 0)
 				dst := req.countBuf.SliceAllocate(countEntrySize(ck))
 				marshalCountEntry(dst, ck, pk.Uid)
 			}
@@ -588,8 +584,6 @@ func (r *reducer) toList(req *encodeRequest) {
 		for next != 0 && (next < end || end == 0) {
 			slice, next = cbuf.Slice(next)
 			me := MapEntry(slice)
-			// TODO: Remove this.
-			x.AssertTrue(bytes.Equal(currentKey, me.Key()))
 
 			uid := me.Uid()
 			if uid == lastUid {
