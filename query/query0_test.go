@@ -3235,14 +3235,13 @@ func TestBetweenInt(t *testing.T) {
 }
 
 func TestBetweenCount(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name   string
 		query  string
 		result string
 	}{
 		{
-			`Test between on count`,
+			`Test between on valid bounds`,
 			`
 			{
 				me(func: between(count(friend), 1, 3)) {
