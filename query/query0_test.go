@@ -3234,6 +3234,55 @@ func TestBetweenInt(t *testing.T) {
 	}
 }
 
+func TestBetweenCount(t *testing.T) {
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test between on valid bounds`,
+			`
+			{
+				me(func: between(count(friend), 1, 3)) {
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[{"name":"Rick Grimes"},{"name":"Andrea"}]}}`,
+		},
+		{
+			`Test between on count equal bounds`,
+			`
+			{
+				me(func: between(count(friend), 5, 5)) {
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[{"name":"Michonne"}]}}`,
+		},
+		{
+			`Test between on count invalid bounds`,
+			`
+			{
+				me(func: between(count(friend), 3, 1)) {
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
+
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
