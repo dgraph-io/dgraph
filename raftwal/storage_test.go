@@ -52,7 +52,6 @@ func TestStorageTerm(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	ds := Init(dir, 0, 0)
-	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
@@ -101,7 +100,6 @@ func TestStorageEntries(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	ds := Init(dir, 0, 0)
-	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
 	tests := []struct {
@@ -145,7 +143,6 @@ func TestStorageLastIndex(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	ds := Init(dir, 0, 0)
-	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -174,7 +171,6 @@ func TestStorageFirstIndex(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	ds := Init(dir, 0, 0)
-	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -208,7 +204,6 @@ func TestStorageCompact(t *testing.T) {
 	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(dir, 0, 0)
-	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -258,7 +253,6 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	ds := Init(dir, 0, 0)
-	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
@@ -293,10 +287,7 @@ func TestStorageAppend(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
-	require.NoError(t, err)
 	ds := Init(dir, 0, 0)
-	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
