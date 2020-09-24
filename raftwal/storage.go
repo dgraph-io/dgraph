@@ -21,7 +21,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/dgraph-io/badger/v2"
@@ -86,8 +89,8 @@ type DiskStorage struct {
 	gid      uint32
 	elog     trace.EventLog
 
-	meta        *metaFile
-	entryBuffer *z.Buffer
+	meta      *metaFile
+	currEntry *entryLog
 
 	cache          *sync.Map
 	Closer         *z.Closer
@@ -236,21 +239,252 @@ func (m *metaFile) Snapshot() (raftpb.Snapshot, error) {
 type entry struct {
 	Term       uint64
 	Index      uint64
+	DataOffset uint64
 	Type       raftpb.EntryType
-	DataOffset int64
 }
 
-// entryFile represents an entryFile.
+func (e *entry) Bytes() []byte {
+	if e == nil {
+		return nil
+	}
+
+	b := make([]byte, entrySize)
+	binary.BigEndian.PutUint64(b, e.Term)
+	binary.BigEndian.PutUint64(b[8:], e.Index)
+	binary.BigEndian.PutUint64(b[16:], e.DataOffset)
+	binary.BigEndian.PutUint64(b[24:], uint64(e.Type))
+	return b
+}
+
+func entryFromBytes(b []byte) (*entry, error) {
+	if len(b) == 0 || len(b) < entrySize {
+		return nil, errors.Errorf("invalid byte array size")
+	}
+	e := entry{}
+	e.Term = binary.BigEndian.Uint64(b)
+	e.Index = binary.BigEndian.Uint64(b[8:])
+	e.DataOffset = binary.BigEndian.Uint64(b[16:])
+	e.Type = raftpb.EntryType(binary.BigEndian.Uint64(b[24:]))
+	return &e, nil
+}
+
+// entryFile represents a single log file.
 type entryFile struct {
-	entryIdex int
-	buf       *z.Buffer
+	firstIndex uint64
+	path       string
 }
 
-func (e *entryFile) GetEntry(n int) (*raftpb.Entry, error) {
+func getEntryFile(path string) (*entryFile, error) {
+	fd, err := os.Open(path)
 	return nil, nil
+
+	b := make([]byte, entrySize)
+	n, err := fd.Read(b)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot read first entry from file")
+	}
+	if n < entrySize {
+		return nil, errors.Errorf("read fewer than %d bytes from the file", entrySize)
+	}
+
+	e, err := entryFromBytes(b)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot parse first entry in file")
+	}
+
+	return &entryFile{firstIndex: e.Index, path: path}, nil
 }
 
-func (e *entryFile) AddEntry(entry *raftpb.Entry) error {
+func getEntryFiles(dir string) ([]*entryFile, error) {
+	entryFiles := x.WalkPathFunc(dir, func(path string, isDir bool) bool {
+		if isDir {
+			return false
+		}
+		if strings.HasSuffix(path, ".ent") {
+			return true
+		}
+		return false
+	})
+
+	files := make([]*entryFile, 0)
+	for _, path := range entryFiles {
+		f, err := getEntryFile(path)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+
+	// Sort files by the first index they store.
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].firstIndex < files[j].firstIndex
+	})
+	return files, nil
+}
+
+// entryLog represents the entire entry log. It consists of one or more
+// entryFile objects.
+type entryLog struct {
+	// files is the list of all log files ordered in ascending order by the first
+	// index in the file. The current file being written should always be accessible
+	// by looking at the last element of this slice.
+	files []*entryFile
+	// current is a buffer to the current file.
+	current *z.Buffer
+	// entryIndex is the index of the next entry to write to. When this value exceeds
+	// maxNumEntries the file will be rotated.
+	entryIndex int
+	// dir is the directory to use to store files.
+	dir string
+}
+
+func openEntryLog(dir string) (*entryLog, error) {
+	e := &entryLog{
+		dir: dir,
+	}
+	files, err := getEntryFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	e.files = files
+
+	var path string
+	var fullPath string
+	if len(files) == 0 {
+		// No existing log files. Create a new file.
+		path = fmt.Sprintf("%d", 1)
+		fullPath = filepath.Join(dir, path)
+	} else {
+		// Open the last file.
+		fullPath = filepath.Join(dir, e.files[len(e.files)-1].path)
+	}
+
+	buf, err := z.NewMmapFile(entryFileSize, entryFileMaxSize, entryFileOffset, fullPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot open file")
+	}
+	e.current = buf
+
+	// Find the first empty slot in the file. If the file was just created, the
+	// value of zero is already correct.
+	if len(files) == 0 {
+		e.entryIndex, err = e.firstEmpty()
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot find first empty slot in log file")
+		}
+	} else {
+		// Append the new file to the list of files.
+		// TODO: first index should be updated whenever the first entry in a file is updated.
+		e.files = append(e.files, &entryFile{path: path})
+	}
+
+	if err := e.zeroOut(e.entryIndex); err != nil {
+		return nil, errors.Wrapf(err, "cannot zero out log file")
+	}
+
+	return e, nil
+}
+
+func (l *entryLog) firstEmpty() (int, error) {
+	for i := 0; i < maxNumEntries; i++ {
+		entry, err := l.getEntry(i)
+		if err != nil {
+			return 0, err
+		}
+
+		if entry.Index == 0 {
+			return i, nil
+		}
+	}
+	return maxNumEntries, nil
+}
+
+func (l *entryLog) zeroOut(from int) error {
+	if from >= maxNumEntries {
+		return nil
+	}
+
+	if l.current == nil {
+		return errors.Errorf("uninitialized buffer")
+	}
+
+	// The size of the buffer containing the 30K entry objects.
+	bufSize := entrySize * maxNumEntries
+	b, err := l.current.First(entrySize * maxNumEntries)
+	if err != nil {
+		return errors.Wrapf(err, "cannot get bytes from entry file buffer")
+	}
+
+	fromByte := from * entrySize
+	zeroBuf := make([]byte, bufSize-fromByte)
+	copy(b[fromByte:], zeroBuf)
+	return nil
+}
+
+// getEntry gets the nth entry in the current log file.
+func (l *entryLog) getEntry(n int) (*entry, error) {
+	if n >= maxNumEntries {
+		return nil, errors.Errorf("there cannot be more than %d in a single file",
+			maxNumEntries)
+	}
+
+	b, err := l.current.ReadAt(n*entrySize, entrySize)
+	if err != nil {
+		return nil, err
+	}
+
+	return entryFromBytes(b)
+}
+
+func (l *entryLog) rotate(firstIndex uint64) error {
+	// TODO: this file should not exist already. Should try a new name.
+	path := filepath.Join(l.dir, fmt.Sprintf("%d", firstIndex))
+	buf, err := z.NewMmapFile(entryFileSize, entryFileMaxSize, entryFileOffset, path)
+	if err != nil {
+		return errors.Wrapf(err, "cannot open file")
+	}
+	l.current = buf
+	l.entryIndex = 0
+
+	// Append the new file to the list of files.
+	l.files = append(l.files, &entryFile{path: path, firstIndex: firstIndex})
+
+	if err := l.zeroOut(l.entryIndex); err != nil {
+		return errors.Wrapf(err, "cannot zero out log file")
+	}
+	return nil
+}
+
+func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
+	for _, re := range entries {
+		if l.entryIndex >= maxNumEntries {
+			if err := l.rotate(re.Index); err != nil {
+				return err
+			}
+		}
+		e := entry{
+			Term: re.Term,
+			Index: re.Index,
+			Type: re.Type,
+		}
+
+		// TODO: buffer does not have a method to allocate a buffer and return the byte
+		// and the offset.
+		// TODO: allocate data in file.
+
+		entryBuf := e.Bytes()
+		destBuf, err := l.current.ReadAt(l.entryIndex, entrySize)
+		if err != nil {
+			return err
+		}
+		copy(destBuf, entryBuf)
+	}
+	return nil
+}
+
+func (l *entryLog) DiscardFiles(snapshotIndex uint64) error {
+	// TODO: delete all the files below the first file with a first index
+	// less than or equal to snapshotIndex.
 	return nil
 }
 
