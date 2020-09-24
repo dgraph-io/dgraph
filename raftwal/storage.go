@@ -89,8 +89,8 @@ type DiskStorage struct {
 	gid      uint32
 	elog     trace.EventLog
 
-	meta      *metaFile
-	currEntry *entryLog
+	meta    *metaFile
+	entries *entryLog
 
 	cache          *sync.Map
 	Closer         *z.Closer
@@ -334,6 +334,8 @@ type entryLog struct {
 	// entryIndex is the index of the next entry to write to. When this value exceeds
 	// maxNumEntries the file will be rotated.
 	entryIndex int
+	// lastIndex is the value of last index written to the log.
+	lastIndex uint64
 	// dir is the directory to use to store files.
 	dir string
 }
@@ -463,14 +465,16 @@ func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 			}
 		}
 		e := entry{
-			Term: re.Term,
+			Term:  re.Term,
 			Index: re.Index,
-			Type: re.Type,
+			Type:  re.Type,
 		}
 
-		// TODO: buffer does not have a method to allocate a buffer and return the byte
-		// and the offset.
-		// TODO: allocate data in file.
+		if len(re.Data) > 0 {
+			destBuf, offset := l.current.SliceAllocateOffset(len(re.Data))
+			e.DataOffset = uint64(offset)
+			copy(destBuf, re.Data)
+		}
 
 		entryBuf := e.Bytes()
 		destBuf, err := l.current.ReadAt(l.entryIndex, entrySize)
@@ -478,6 +482,9 @@ func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 			return err
 		}
 		copy(destBuf, entryBuf)
+
+		l.entryIndex++
+		l.lastIndex = e.Index
 	}
 	return nil
 }
@@ -486,6 +493,17 @@ func (l *entryLog) DiscardFiles(snapshotIndex uint64) error {
 	// TODO: delete all the files below the first file with a first index
 	// less than or equal to snapshotIndex.
 	return nil
+}
+
+func (l *entryLog) FirstIndex() uint64 {
+	if l == nil || len(l.files) == 0 {
+		return 0
+	}
+	return l.files[0].firstIndex
+}
+
+func (l *entryLog) LastIndex() uint64 {
+	return l.lastIndex
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
@@ -503,6 +521,9 @@ func Init(dir string, id uint64, gid uint32) *DiskStorage {
 
 	var err error
 	w.meta, err = newMetaFile(dir)
+	x.Check(err)
+
+	w.entries, err = openEntryLog(dir)
 	x.Check(err)
 
 	if prev, err := w.meta.RaftId(); err != nil || prev != id || prev == 0 {
@@ -727,7 +748,7 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 		}
 	}
 
-	// Now look into Badger.
+	// Now look into the mmap WAL.
 	index, err := w.seekEntry(nil, 0, false)
 	if err == nil {
 		glog.V(2).Infof("Setting first index: %d", index+1)
