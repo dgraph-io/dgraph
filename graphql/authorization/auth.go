@@ -55,6 +55,7 @@ type AuthMeta struct {
 	VerificationKey string
 	JWKUrl          string
 	JWKSet          *jose.JSONWebKeySet
+	RefreshTime     int            `json:"-"` // Ignoring this field for now (might later include in the input JSON)
 	RSAPublicKey    *rsa.PublicKey `json:"-"` // Ignoring this field
 	Header          string
 	Namespace       string
@@ -157,7 +158,7 @@ func ParseAuthMeta(schema string) (*AuthMeta, error) {
 
 	// fetch and Store the keys from JWKUrl
 	if metaInfo.JWKUrl != "" {
-		metaInfo.JWKSet, err = fetchJWKs(metaInfo.JWKUrl)
+		metaInfo.JWKSet, metaInfo.RefreshTime, err = fetchJWKs(metaInfo.JWKUrl)
 		if err != nil {
 			return nil, errors.Errorf("Unable to fetch Keys from JWKUrl, Got error %v", err)
 		}
@@ -197,6 +198,7 @@ func SetAuthMeta(m *AuthMeta) {
 	authMeta.VerificationKey = m.VerificationKey
 	authMeta.JWKUrl = m.JWKUrl
 	authMeta.JWKSet = m.JWKSet
+	authMeta.RefreshTime = m.RefreshTime
 	authMeta.RSAPublicKey = m.RSAPublicKey
 	authMeta.Header = m.Header
 	authMeta.Namespace = m.Namespace
@@ -300,7 +302,6 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	var err error
 	// Verification through JWKUrl
 	if authMeta.JWKUrl != "" {
-		fmt.Println("Verification Through JWT")
 		token, err =
 			jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 				kid := token.Header["kid"].(string)
@@ -357,15 +358,15 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	return claims, nil
 }
 
-func fetchJWKs(jwkUrl string) (*jose.JSONWebKeySet, error) {
+func fetchJWKs(jwkUrl string) (*jose.JSONWebKeySet, int, error) {
 	req, err := http.NewRequest("GET", jwkUrl, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	data, _ := ioutil.ReadAll(resp.Body)
@@ -381,5 +382,18 @@ func fetchJWKs(jwkUrl string) (*jose.JSONWebKeySet, error) {
 	for i, jwk := range jwkArray.JWKs {
 		keySet.Keys[i].UnmarshalJSON(jwk)
 	}
-	return &keySet, nil
+
+	// Try to Parse the Remaining time in the expiry of signing keys first from the
+	// `Expires` Header and then from the `max-age` directive in the `Cache-Control` Header
+	maxAge := 0
+
+	if resp.Header["Expires"] != nil {
+		maxAge, err = ParseExpires(resp.Header["Expires"][0])
+	}
+
+	if resp.Header["Cache-Control"] != nil {
+		maxAge, err = ParseMaxAge(resp.Header["Cache-Control"][0])
+	}
+
+	return &keySet, maxAge, nil
 }
