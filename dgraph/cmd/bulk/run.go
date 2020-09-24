@@ -60,9 +60,11 @@ func init() {
 	flag.String("format", "",
 		"Specify file format (rdf or json) instead of getting it from filename.")
 	flag.Bool("encrypted", false,
-		"Flag to indicate whether schema and data files are encrypted.")
+		"Flag to indicate whether schema and data files are encrypted." + 
+		"Must be specified with --encryption_key_file or vault options")
 	flag.Bool("encrypted_out", false,
-		"Flag to indicate whether to encrypt the output.")
+		"Flag to indicate whether to encrypt the output." + 
+		"Must be specified with --encryption_key_file or vault option.")
 	flag.String("out", defaultOutDir,
 		"Location to write the final dgraph data directories.")
 	flag.Bool("replace_out", false,
@@ -169,18 +171,27 @@ func run() {
 		fmt.Printf("unable to read key %v", err)
 		return
 	}
-	if len(opt.EncryptionKey) > 0 && !opt.Encrypted && !opt.EncryptedOut {
-		opt.Encrypted = true
-		opt.EncryptedOut = true
+
+	if len(opt.EncryptionKey) == 0 {
+		if opt.Encrypted || opt.EncryptedOut {
+			fmt.Fprint(os.Stderr, "Must use --encryption_key_file or vault option(s).\n")
+			os.Exit(1)
+		}
+	} else {
+		requiredFlags := Bulk.Cmd.Flags().Changed("encrypted") &&
+			Bulk.Cmd.Flags().Changed("encrypted_out")
+		if !requiredFlags {
+			fmt.Fprint(os.Stderr, "Must specify --encrypted and --encrypted_out.\n")
+			os.Exit(1)
+		}
+		if !opt.Encrypted || !opt.EncryptedOut {
+			fmt.Fprint(os.Stderr, "Must set --encrypted and/or --encrypted_out to true.\n")
+			os.Exit(1)
+		}
 	}
-	if opt.Encrypted && len(opt.EncryptionKey) == 0 {
-		fmt.Printf("Must use --encryption_key_file or vault option(s) with --encrypted option.\n")
-		os.Exit(1)
-	}
-	if opt.EncryptedOut && len(opt.EncryptionKey) == 0 {
-		fmt.Printf("Must use --encryption_key_file or vault option(s) with --encrypted_out option.\n")
-		os.Exit(1)
-	}
+
+	fmt.Printf("Input is encrytped? %v, Output will be encrypted? %v\n", opt.Encrypted, opt.EncryptedOut)
+
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 		os.Exit(1)
