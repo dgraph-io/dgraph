@@ -184,6 +184,7 @@ func (it *pIterator) moveToNextPart() error {
 	}
 	it.plist = plist
 
+	it.uidPosting = &pb.Posting{}
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
 	// codec.SeekCurrent makes sure we skip returning afterUid during seek.
 	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
