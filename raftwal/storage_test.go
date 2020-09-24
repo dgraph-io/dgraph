@@ -39,9 +39,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft"
+	"go.etcd.io/etcd/raft/raftpb"
 	pb "go.etcd.io/etcd/raft/raftpb"
 )
 
@@ -50,9 +52,7 @@ func TestStorageTerm(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
+	ds := Init(dir, 0, 0)
 	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
@@ -101,9 +101,7 @@ func TestStorageEntries(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
+	ds := Init(dir, 0, 0)
 	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
@@ -147,9 +145,7 @@ func TestStorageLastIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
+	ds := Init(dir, 0, 0)
 	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
@@ -178,9 +174,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
+	ds := Init(dir, 0, 0)
 	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
@@ -194,7 +188,7 @@ func TestStorageFirstIndex(t *testing.T) {
 		t.Errorf("first = %d, want %d", first, 4)
 	}
 
-	batch := db.NewWriteBatchAt(ds.commitTs)
+	batch := ds.db.NewWriteBatchAt(ds.commitTs)
 	require.NoError(t, ds.deleteRange(batch, 0, 4))
 	require.NoError(t, batch.Flush())
 	ds.cache.Store(firstKey, 0)
@@ -214,7 +208,7 @@ func TestStorageCompact(t *testing.T) {
 
 	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
-	ds := Init(db, 0, 0)
+	ds := Init(dir, 0, 0)
 	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
@@ -264,9 +258,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
+	ds := Init(dir, 0, 0)
 	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
@@ -304,7 +296,7 @@ func TestStorageAppend(t *testing.T) {
 
 	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
-	ds := Init(db, 0, 0)
+	ds := Init(dir, 0, 0)
 	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
@@ -363,4 +355,70 @@ func TestStorageAppend(t *testing.T) {
 			t.Errorf("#%d: entries = %v, want %v", i, all, tt.wentries)
 		}
 	}
+}
+
+func TestMetaFile(t *testing.T) {
+	dir, err := ioutil.TempDir("", "badger-test")
+	require.NoError(t, err)
+
+	mf, err := newMetaFile(dir)
+	require.NoError(t, err)
+	id, err := mf.RaftId()
+	require.NoError(t, err)
+	require.Zero(t, id)
+
+	require.NoError(t, mf.StoreRaftId(10))
+	id, err = mf.RaftId()
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), id)
+
+	hs, err := mf.HardState()
+	require.NoError(t, err)
+	require.Zero(t, hs)
+
+	hs = raftpb.HardState{
+		Term:   10,
+		Vote:   20,
+		Commit: 30,
+	}
+	require.NoError(t, mf.StoreHardState(&hs))
+
+	hs1, err := mf.HardState()
+	require.NoError(t, err)
+	require.Equal(t, hs1, hs)
+
+	sp, err := mf.Snapshot()
+	require.NoError(t, err)
+	require.Zero(t, sp)
+
+	sp = raftpb.Snapshot{
+		Data: []byte("foo"),
+		Metadata: raftpb.SnapshotMetadata{
+			Term:  200,
+			Index: 12,
+		},
+	}
+	require.NoError(t, mf.StoreSnapshot(&sp))
+
+	sp1, err := mf.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, sp, sp1)
+}
+
+func TestEntryFile(t *testing.T) {
+	dir, err := ioutil.TempDir("", "badger-test")
+	require.NoError(t, err)
+	el, err := openEntryLog(dir)
+	require.NoError(t, err)
+	require.Zero(t, el.FirstIndex())
+	require.Zero(t, el.LastIndex())
+
+	e, err := el.getEntry(2)
+	require.NoError(t, err)
+	// THIS SHOULD FAIL.
+	// require.Nil(t, e)
+	require.NotNil(t, e)
+
+	require.NoError(t, el.AddEntries([]raftpb.Entry{{Term: 12}}))
+	spew.Dump(el.allEntries(0, 100, 10000))
 }

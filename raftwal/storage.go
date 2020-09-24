@@ -20,19 +20,19 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/gogo/protobuf/proto"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
@@ -121,7 +121,7 @@ const (
 	entrySize = 32
 	// entryFileOffset
 	entryFileOffset = 1 << 20 // 1MB
-	// entryFileSize is the initial size of the entry size.
+	// entryFileSize is the initial size of the entry file.
 	entryFileSize = 4 * entryFileOffset // 4MB
 	// entryFileMaxSize is the maximum size allowed for an entry file.
 	entryFileMaxSize = 1 << 30 // 1GB
@@ -255,7 +255,6 @@ func (e *entry) Bytes() []byte {
 	binary.BigEndian.PutUint64(b[24:], uint64(e.Type))
 	return b
 }
-
 func entryFromBytes(b []byte) (*entry, error) {
 	if len(b) == 0 || len(b) < entrySize {
 		return nil, errors.Errorf("invalid byte array size")
@@ -272,27 +271,45 @@ func entryFromBytes(b []byte) (*entry, error) {
 type entryFile struct {
 	firstIndex uint64
 	path       string
+	fd         *os.File
+	mmap       []byte
 }
 
+func (ef *entryFile) readAt(offset uint32) []byte {
+	return ef.mmap[offset:]
+}
 func getEntryFile(path string) (*entryFile, error) {
 	fd, err := os.Open(path)
-	return nil, nil
-
-	b := make([]byte, entrySize)
-	n, err := fd.Read(b)
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot read first entry from file")
-	}
-	if n < entrySize {
-		return nil, errors.Errorf("read fewer than %d bytes from the file", entrySize)
+		return nil, err
 	}
 
-	e, err := entryFromBytes(b)
+	// b := make([]byte, entrySize)
+
+	// n, err := fd.Read(b)
+	// if err != nil {
+	// 	return nil, errors.Wrapf(err, "cannot read first entry from file")
+	// }
+	// if n < entrySize {
+	// 	return nil, errors.Errorf("read fewer than %d bytes from the file", entrySize)
+	// }
+
+	// mmap the file.
+	mmap, err := z.Mmap(fd, false, entryFileMaxSize)
+	if err != nil {
+		return nil, err
+	}
+	ef := &entryFile{
+		path: path,
+		fd:   fd,
+		mmap: mmap,
+	}
+	e, err := entryFromBytes(ef.mmap)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot parse first entry in file")
 	}
-
-	return &entryFile{firstIndex: e.Index, path: path}, nil
+	ef.firstIndex = e.Index
+	return ef, nil
 }
 
 func getEntryFiles(dir string) ([]*entryFile, error) {
@@ -322,13 +339,23 @@ func getEntryFiles(dir string) ([]*entryFile, error) {
 	return files, nil
 }
 
+// get entry from a file.
+func (ef *entryFile) getEntry(idx int) (*entry, error) {
+	offset := idx * entrySize
+	buf := ef.mmap[offset : offset+entrySize]
+	return entryFromBytes(buf)
+}
+
 // entryLog represents the entire entry log. It consists of one or more
 // entryFile objects.
 type entryLog struct {
+	// need lock for files and current ?
+
 	// files is the list of all log files ordered in ascending order by the first
 	// index in the file. The current file being written should always be accessible
 	// by looking at the last element of this slice.
-	files []*entryFile
+	files      []*entryFile
+	currentFid uint64
 	// current is a buffer to the current file.
 	current *z.Buffer
 	// entryIndex is the index of the next entry to write to. When this value exceeds
@@ -354,11 +381,19 @@ func openEntryLog(dir string) (*entryLog, error) {
 	var fullPath string
 	if len(files) == 0 {
 		// No existing log files. Create a new file.
-		path = fmt.Sprintf("%d", 1)
+		path = fmt.Sprintf("%d.ent", 1)
 		fullPath = filepath.Join(dir, path)
+		e.currentFid = 1
 	} else {
+		// TODO - Test this
 		// Open the last file.
 		fullPath = filepath.Join(dir, e.files[len(e.files)-1].path)
+
+		fid, err := strconv.ParseUint(strings.Split(".ent", path)[0], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		e.currentFid = fid
 	}
 
 	buf, err := z.NewMmapFile(entryFileSize, entryFileMaxSize, entryFileOffset, fullPath)
@@ -369,7 +404,7 @@ func openEntryLog(dir string) (*entryLog, error) {
 
 	// Find the first empty slot in the file. If the file was just created, the
 	// value of zero is already correct.
-	if len(files) == 0 {
+	if len(files) != 0 {
 		e.entryIndex, err = e.firstEmpty()
 		if err != nil {
 			return nil, errors.Wrapf(err, "cannot find first empty slot in log file")
@@ -377,7 +412,10 @@ func openEntryLog(dir string) (*entryLog, error) {
 	} else {
 		// Append the new file to the list of files.
 		// TODO: first index should be updated whenever the first entry in a file is updated.
-		e.files = append(e.files, &entryFile{path: path})
+		e.files = append(e.files, &entryFile{
+			path: path,
+			mmap: buf.BytesFromStart(),
+		})
 	}
 
 	if err := e.zeroOut(e.entryIndex); err != nil {
@@ -387,6 +425,7 @@ func openEntryLog(dir string) (*entryLog, error) {
 	return e, nil
 }
 
+// firstEmtpy finds the first empty index.
 func (l *entryLog) firstEmpty() (int, error) {
 	for i := 0; i < maxNumEntries; i++ {
 		entry, err := l.getEntry(i)
@@ -423,24 +462,26 @@ func (l *entryLog) zeroOut(from int) error {
 	return nil
 }
 
-// getEntry gets the nth entry in the current log file.
+func (l *entryLog) lastFile() *entryFile {
+	return l.files[len(l.files)-1]
+}
+
+// getEntry gets the nth entry in the CURRENT log file.
 func (l *entryLog) getEntry(n int) (*entry, error) {
 	if n >= maxNumEntries {
 		return nil, errors.Errorf("there cannot be more than %d in a single file",
 			maxNumEntries)
 	}
 
-	b, err := l.current.ReadAt(n*entrySize, entrySize)
-	if err != nil {
-		return nil, err
-	}
-
-	return entryFromBytes(b)
+	start := n * entrySize
+	buf := l.lastFile().mmap[start : start+entrySize]
+	return entryFromBytes(buf)
 }
 
 func (l *entryLog) rotate(firstIndex uint64) error {
 	// TODO: this file should not exist already. Should try a new name.
 	path := filepath.Join(l.dir, fmt.Sprintf("%d", firstIndex))
+	// Buf will start writing at 1<<20
 	buf, err := z.NewMmapFile(entryFileSize, entryFileMaxSize, entryFileOffset, path)
 	if err != nil {
 		return errors.Wrapf(err, "cannot open file")
@@ -455,6 +496,118 @@ func (l *entryLog) rotate(firstIndex uint64) error {
 		return errors.Wrapf(err, "cannot zero out log file")
 	}
 	return nil
+}
+
+func (l *entryLog) numEntries() int {
+	if len(l.files) == 0 {
+		return 0
+	}
+	total := 0
+	if len(l.files) >= 1 {
+		// all files except the last one.
+		total += (len(l.files) - 1) * maxNumEntries
+	}
+	return total + l.entryIndex
+}
+
+func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
+	if lo < l.FirstIndex() {
+		return nil, errors.Errorf("low(%d) less then firstIndex (%d", lo, l.FirstIndex())
+	}
+
+	// Find lo entry.
+	fileID := sort.Search(len(l.files), func(i int) bool {
+		return l.files[i].firstIndex >= lo
+	})
+
+	var es []raftpb.Entry
+	// Start with what we found.
+	file := l.files[fileID]
+
+	sz := uint64(0)
+	// We couldn't find what we were looking for. Go one file back and look for the entry.
+	if l.files[fileID].firstIndex != lo {
+		y.AssertTrue(fileID != 0)
+
+		// Go one file back.
+		fileID--
+		file = l.files[fileID]
+		diff := lo - file.firstIndex
+		// TODO - overflow check.
+		e, err := file.getEntry(int(diff))
+		if err != nil {
+			return nil, err
+		}
+		y.AssertTrue(e.Index == lo)
+		re := raftpb.Entry{
+			Index: e.Index,
+			Term:  e.Term,
+			Type:  e.Type,
+			Data:  file.mmap[e.DataOffset:], // full length of the file.
+		}
+		// This isn't the last entry so get next entry and fix the data len.
+		if diff != 0 {
+			nextEntry, err := file.getEntry(int(diff + 1))
+			if err != nil {
+				return es, err
+			}
+			re.Data = file.mmap[e.DataOffset:nextEntry.DataOffset]
+		}
+		es = append(es, re)
+		sz += uint64(es[0].Size())
+		lo++
+	}
+
+	if sz > maxSize {
+		return es, nil
+	}
+
+	for lo < hi && fileID < len(l.files) {
+		file = l.files[fileID]
+		// Finished with this file. Move head
+		if lo-file.firstIndex == maxNumEntries {
+			fileID++
+			continue
+		}
+
+		diff := lo - file.firstIndex
+
+		if diff > l.lastIndex {
+			break
+		}
+
+		// TODO - Overflow check.
+		e, err := file.getEntry(int(diff))
+		if err != nil {
+			return es, err
+		}
+
+		rEntry := raftpb.Entry{
+			Index: e.Index,
+			Term:  e.Term,
+			Type:  e.Type,
+			// This wouldn't work. We need end of the data.!!!
+			// TODO(ibrahim): Find the end of current data block.
+			Data: file.mmap[e.DataOffset : l.current.Len()-entryFileOffset],
+		}
+
+		if diff != 0 {
+			// TODO - e could be the last entry.
+			nextEntry, err := file.getEntry(int(diff + 1))
+			if err != nil {
+				return es, err
+			}
+			rEntry.Data = file.mmap[e.DataOffset:nextEntry.DataOffset]
+		}
+		sz += uint64(rEntry.Size())
+		if sz > maxSize {
+			break
+		}
+		es = append(es, rEntry)
+		lo++
+	}
+
+	return es, nil
 }
 
 func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
@@ -473,11 +626,12 @@ func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 		if len(re.Data) > 0 {
 			destBuf, offset := l.current.SliceAllocateOffset(len(re.Data))
 			e.DataOffset = uint64(offset)
-			copy(destBuf, re.Data)
+			x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 		}
 
 		entryBuf := e.Bytes()
-		destBuf, err := l.current.ReadAt(l.entryIndex, entrySize)
+		// TODO(ibrahim): Is this correct? Shouldn't it be number of entries multiply by entryIndex?
+		destBuf, err := l.current.ReadAt(entrySize, l.entryIndex)
 		if err != nil {
 			return err
 		}
@@ -504,6 +658,33 @@ func (l *entryLog) FirstIndex() uint64 {
 
 func (l *entryLog) LastIndex() uint64 {
 	return l.lastIndex
+}
+
+func (l *entryLog) Term(idx uint64) (uint64, error) {
+	// Look at the entry files and find the entry file with entry bigger than idx.
+	// Read file before that idx.
+
+	fileIdx := sort.Search(len(l.files), func(i int) bool {
+		return l.files[i].firstIndex >= idx
+	})
+	// It is the first entry of this file. Read and return.
+	if l.files[fileIdx].firstIndex == idx {
+		e, err := l.files[fileIdx].getEntry(0)
+		if err != nil {
+			return 0, err
+		}
+		return e.Term, nil
+	}
+
+	ef := l.files[fileIdx-1]
+	// Use Idx-1 file and find the offset for the idx in the file.
+	diff := idx - ef.firstIndex
+
+	e, err := ef.getEntry(int(diff))
+	if err != nil {
+		return 0, nil
+	}
+	return e.Term, nil
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
@@ -554,34 +735,38 @@ func Init(dir string, id uint64, gid uint32) *DiskStorage {
 	return w
 }
 
-// fetchMaxVersion fetches the commitTs to be used in the raftwal. The version is
-// fetched from the special key "maxVersion-id" or from db.MaxVersion
-// API which uses the stream framework.
-func (w *DiskStorage) fetchMaxVersion() {
-	// This is a special key that is used to fetch the latest version.
-	key := []byte(fmt.Sprintf("maxVersion-%d", versionKey))
-
-	txn := w.db.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
-
-	item, err := txn.Get(key)
-	if err == nil {
-		w.commitTs = item.Version()
-		return
-	}
-	if err == badger.ErrKeyNotFound {
-		// We don't have the special key so get it using the MaxVersion API.
-		version, err := w.db.MaxVersion()
-		x.Check(err)
-
-		w.commitTs = version + 1
-		// Insert the same key back into badger for reuse.
-		x.Check(txn.Set(key, nil))
-		x.Check(txn.CommitAt(w.commitTs, nil))
-	} else {
-		x.Check(err)
-	}
+func (w *DiskStorage) Term(i uint64) (uint64, error) {
+	return w.entries.Term(i)
 }
+
+// // fetchMaxVersion fetches the commitTs to be used in the raftwal. The version is
+// // fetched from the special key "maxVersion-id" or from db.MaxVersion
+// // API which uses the stream framework.
+// func (w *DiskStorage) fetchMaxVersion() {
+// 	// This is a special key that is used to fetch the latest version.
+// 	key := []byte(fmt.Sprintf("maxVersion-%d", versionKey))
+
+// 	txn := w.db.NewTransactionAt(math.MaxUint64, true)
+// 	defer txn.Discard()
+
+// 	item, err := txn.Get(key)
+// 	if err == nil {
+// 		w.commitTs = item.Version()
+// 		return
+// 	}
+// 	if err == badger.ErrKeyNotFound {
+// 		// We don't have the special key so get it using the MaxVersion API.
+// 		version, err := w.db.MaxVersion()
+// 		x.Check(err)
+
+// 		w.commitTs = version + 1
+// 		// Insert the same key back into badger for reuse.
+// 		x.Check(txn.Set(key, nil))
+// 		x.Check(txn.CommitAt(w.commitTs, nil))
+// 	} else {
+// 		x.Check(err)
+// 	}
+// }
 
 func (w *DiskStorage) processIndexRange() {
 	defer w.Closer.Done()
@@ -590,14 +775,16 @@ func (w *DiskStorage) processIndexRange() {
 		if r.from == r.until {
 			return
 		}
-		batch := w.db.NewWriteBatchAt(w.commitTs)
-		if err := w.deleteRange(batch, r.from, r.until); err != nil {
-			glog.Errorf("deleteRange failed with error: %v, from: %d, until: %d\n",
-				err, r.from, r.until)
-		}
-		if err := batch.Flush(); err != nil {
-			glog.Errorf("processDeleteRange batch flush failed with error: %v,\n", err)
-		}
+		// TODO(ibrahim): Fix this. We don't have a way to delete entries right now.
+
+		// batch := w.db.NewWriteBatchAt(w.commitTs)
+		// if err := w.deleteRange(batch, r.from, r.until); err != nil {
+		// 	glog.Errorf("deleteRange failed with error: %v, from: %d, until: %d\n",
+		// 		err, r.from, r.until)
+		// }
+		// if err := batch.Flush(); err != nil {
+		// 	glog.Errorf("processDeleteRange batch flush failed with error: %v,\n", err)
+		// }
 	}
 
 loop:
@@ -661,75 +848,70 @@ func (w *DiskStorage) entryPrefix() []byte {
 	return b
 }
 
-func (w *DiskStorage) update(cb func(txn *badger.Txn) error) error {
-	txn := w.db.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
-	if err := cb(txn); err != nil {
-		return err
-	}
-	return txn.CommitAt(w.commitTs, nil)
-}
+// // Term returns the term of entry i, which must be in the range
+// // [FirstIndex()-1, LastIndex()]. The term of the entry before
+// // FirstIndex is retained for matching purposes even though the
+// // rest of that entry may not be available.
+// func (w *DiskStorage) Term(idx uint64) (uint64, error) {
+// 	w.elog.Printf("Term: %d", idx)
+// 	defer w.elog.Printf("Done")
+// 	first, err := w.FirstIndex()
+// 	if err != nil {
+// 		return 0, err
+// 	}
+// 	if idx < first-1 {
+// 		return 0, raft.ErrCompacted
+// 	}
 
-// Term returns the term of entry i, which must be in the range
-// [FirstIndex()-1, LastIndex()]. The term of the entry before
-// FirstIndex is retained for matching purposes even though the
-// rest of that entry may not be available.
-func (w *DiskStorage) Term(idx uint64) (uint64, error) {
-	w.elog.Printf("Term: %d", idx)
-	defer w.elog.Printf("Done")
-	first, err := w.FirstIndex()
-	if err != nil {
-		return 0, err
-	}
-	if idx < first-1 {
-		return 0, raft.ErrCompacted
-	}
-
-	var e raftpb.Entry
-	if _, err := w.seekEntry(&e, idx, false); err == errNotFound {
-		return 0, raft.ErrUnavailable
-	} else if err != nil {
-		return 0, err
-	}
-	if idx < e.Index {
-		return 0, raft.ErrCompacted
-	}
-	return e.Term, nil
-}
+// 	var e raftpb.Entry
+// 	if _, err := w.seekEntry(&e, idx, false); err == errNotFound {
+// 		return 0, raft.ErrUnavailable
+// 	} else if err != nil {
+// 		return 0, err
+// 	}
+// 	if idx < e.Index {
+// 		return 0, raft.ErrCompacted
+// 	}
+// 	return e.Term, nil
+// }
 
 var errNotFound = errors.New("Unable to find raft entry")
 
-func (w *DiskStorage) seekEntry(e *raftpb.Entry, seekTo uint64, reverse bool) (uint64, error) {
-	var index uint64
-	err := w.db.View(func(txn *badger.Txn) error {
-		opt := badger.DefaultIteratorOptions
-		opt.PrefetchValues = false
-		opt.Prefix = w.entryPrefix()
-		opt.Reverse = reverse
-		itr := txn.NewIterator(opt)
-		defer itr.Close()
+// func (w *DiskStorage) seekEntry(e *raftpb.Entry, seekTo uint64, reverse bool) (uint64, error) {
+// 	var index uint64
+// 	err := w.db.View(func(txn *badger.Txn) error {
+// 		opt := badger.DefaultIteratorOptions
+// 		opt.PrefetchValues = false
+// 		opt.Prefix = w.entryPrefix()
+// 		opt.Reverse = reverse
+// 		itr := txn.NewIterator(opt)
+// 		defer itr.Close()
 
-		itr.Seek(w.EntryKey(seekTo))
-		if !itr.Valid() {
-			return errNotFound
-		}
-		item := itr.Item()
-		index = w.parseIndex(item.Key())
-		if e == nil {
-			return nil
-		}
-		return item.Value(func(val []byte) error {
-			return e.Unmarshal(val)
-		})
-	})
-	return index, err
-}
+// 		itr.Seek(w.EntryKey(seekTo))
+// 		if !itr.Valid() {
+// 			return errNotFound
+// 		}
+// 		item := itr.Item()
+// 		index = w.parseIndex(item.Key())
+// 		if e == nil {
+// 			return nil
+// 		}
+// 		return item.Value(func(val []byte) error {
+// 			return e.Unmarshal(val)
+// 		})
+// 	})
+// 	return index, err
+// }
 
 var (
 	snapshotKey = "snapshot"
 	firstKey    = "first"
 	lastKey     = "last"
 )
+
+func (w *DiskStorage) LastIndex() (uint64, error) {
+	return w.entries.LastIndex(), nil
+}
 
 // FirstIndex returns the index of the first log entry that is
 // possibly available via Entries (older entries have been incorporated
@@ -742,32 +924,33 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 		return snap.Metadata.Index + 1, nil
 	}
 
-	if val, ok := w.cache.Load(firstKey); ok {
-		if first, ok := val.(uint64); ok {
-			return first, nil
-		}
-	}
+	return w.entries.FirstIndex(), nil
+	// if val, ok := w.cache.Load(firstKey); ok {
+	// 	if first, ok := val.(uint64); ok {
+	// 		return first, nil
+	// 	}
+	// }
 
-	// Now look into the mmap WAL.
-	index, err := w.seekEntry(nil, 0, false)
-	if err == nil {
-		glog.V(2).Infof("Setting first index: %d", index+1)
-		w.cache.Store(firstKey, index+1)
-	} else if glog.V(2) {
-		glog.Errorf("While seekEntry. Error: %v", err)
-	}
-	return index + 1, err
+	// // Now look into the mmap WAL.
+	// index, err := w.seekEntry(nil, 0, false)
+	// if err == nil {
+	// 	glog.V(2).Infof("Setting first index: %d", index+1)
+	// 	w.cache.Store(firstKey, index+1)
+	// } else if glog.V(2) {
+	// 	glog.Errorf("While seekEntry. Error: %v", err)
+	// }
+	// return index + 1, err
 }
 
-// LastIndex returns the index of the last entry in the log.
-func (w *DiskStorage) LastIndex() (uint64, error) {
-	if val, ok := w.cache.Load(lastKey); ok {
-		if last, ok := val.(uint64); ok {
-			return last, nil
-		}
-	}
-	return w.seekEntry(nil, math.MaxUint64, true)
-}
+// // LastIndex returns the index of the last entry in the log.
+// func (w *DiskStorage) LastIndex() (uint64, error) {
+// 	if val, ok := w.cache.Load(lastKey); ok {
+// 		if last, ok := val.(uint64); ok {
+// 			return last, nil
+// 		}
+// 	}
+// 	return w.seekEntry(nil, math.MaxUint64, true)
+// }
 
 // Delete all entries from [from, until), i.e. excluding until.
 // Keep the entry at the snapshot index, for simplification of logic.
@@ -955,29 +1138,47 @@ func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, 
 	return hs, snap.Metadata.ConfState, nil
 }
 
-// NumEntries returns the number of entries in the write-ahead log.
 func (w *DiskStorage) NumEntries() (int, error) {
-	first, err := w.FirstIndex()
-	if err != nil {
-		return 0, err
-	}
-	var count int
-	err = w.db.View(func(txn *badger.Txn) error {
-		opt := badger.DefaultIteratorOptions
-		opt.PrefetchValues = false
-		opt.Prefix = w.entryPrefix()
-		itr := txn.NewIterator(opt)
-		defer itr.Close()
-
-		start := w.EntryKey(first)
-		for itr.Seek(start); itr.Valid(); itr.Next() {
-			count++
-		}
-		return nil
-	})
-	return count, err
+	return w.entries.numEntries(), nil
 }
 
+// // NumEntries returns the number of entries in the write-ahead log.
+// func (w *DiskStorage) NumEntries() (int, error) {
+// 	first, err := w.FirstIndex()
+// 	if err != nil {
+// 		return 0, err
+// 	}
+// 	var count int
+// 	err = w.db.View(func(txn *badger.Txn) error {
+// 		opt := badger.DefaultIteratorOptions
+// 		opt.PrefetchValues = false
+// 		opt.Prefix = w.entryPrefix()
+// 		itr := txn.NewIterator(opt)
+// 		defer itr.Close()
+
+// 		start := w.EntryKey(first)
+// 		for itr.Seek(start); itr.Valid(); itr.Next() {
+// 			count++
+// 		}
+// 		return nil
+// 	})
+// 	return count, err
+// }
+
+// return low to high, excluding the high.
+func (w *DiskStorage) allEntriesNew(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
+	// fetch all the entry item from the entryLog
+
+	ents, err := w.entries.allEntries(lo, hi, maxSize)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = ents
+	// unmarshal them into raft.pb.Entry
+	return nil, nil
+
+}
 func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
 	err := w.db.View(func(txn *badger.Txn) error {
 		if hi-lo == 1 { // We only need one entry.
@@ -1044,18 +1245,12 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rer
 func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
 	w.elog.Printf("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
 	defer w.elog.Printf("Done")
-	first, err := w.FirstIndex()
-	if err != nil {
-		return es, err
-	}
+	first := w.entries.FirstIndex()
 	if lo < first {
 		return nil, raft.ErrCompacted
 	}
 
-	last, err := w.LastIndex()
-	if err != nil {
-		return es, err
-	}
+	last := w.entries.LastIndex()
 	if hi > last+1 {
 		return nil, raft.ErrUnavailable
 	}
@@ -1063,47 +1258,70 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 	return w.allEntries(lo, hi, maxSize)
 }
 
+// func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
+// 	w.elog.Printf("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
+// 	defer w.elog.Printf("Done")
+// 	first, err := w.FirstIndex()
+// 	if err != nil {
+// 		return es, err
+// 	}
+// 	if lo < first {
+// 		return nil, raft.ErrCompacted
+// 	}
+
+// 	last, err := w.LastIndex()
+// 	if err != nil {
+// 		return es, err
+// 	}
+// 	if hi > last+1 {
+// 		return nil, raft.ErrUnavailable
+// 	}
+
+// 	return w.allEntries(lo, hi, maxSize)
+// }
+
 // CreateSnapshot generates a snapshot with the given ConfState and data and writes it to disk.
 func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte) error {
-	glog.V(2).Infof("CreateSnapshot i=%d, cs=%+v", i, cs)
-	first, err := w.FirstIndex()
-	if err != nil {
-		return err
-	}
-	if i < first {
-		glog.Errorf("i=%d<first=%d, ErrSnapOutOfDate", i, first)
-		return raft.ErrSnapOutOfDate
-	}
+	panic("not implemented")
+	// glog.V(2).Infof("CreateSnapshot i=%d, cs=%+v", i, cs)
+	// first, err := w.FirstIndex()
+	// if err != nil {
+	// 	return err
+	// }
+	// if i < first {
+	// 	glog.Errorf("i=%d<first=%d, ErrSnapOutOfDate", i, first)
+	// 	return raft.ErrSnapOutOfDate
+	// }
 
-	var e raftpb.Entry
-	if _, err := w.seekEntry(&e, i, false); err != nil {
-		return err
-	}
-	if e.Index != i {
-		return errNotFound
-	}
+	// var e raftpb.Entry
+	// if _, err := w.seekEntry(&e, i, false); err != nil {
+	// 	return err
+	// }
+	// if e.Index != i {
+	// 	return errNotFound
+	// }
 
-	var snap raftpb.Snapshot
-	snap.Metadata.Index = i
-	snap.Metadata.Term = e.Term
-	x.AssertTrue(cs != nil)
-	snap.Metadata.ConfState = *cs
-	snap.Data = data
+	// var snap raftpb.Snapshot
+	// snap.Metadata.Index = i
+	// snap.Metadata.Term = e.Term
+	// x.AssertTrue(cs != nil)
+	// snap.Metadata.ConfState = *cs
+	// snap.Data = data
 
-	batch := w.db.NewWriteBatchAt(w.commitTs)
-	defer batch.Cancel()
-	if err := w.setSnapshot(batch, &snap); err != nil {
-		return err
-	}
+	// batch := w.db.NewWriteBatchAt(w.commitTs)
+	// defer batch.Cancel()
+	// if err := w.setSnapshot(batch, &snap); err != nil {
+	// 	return err
+	// }
 
-	if err := batch.Flush(); err != nil {
-		return err
-	}
+	// if err := batch.Flush(); err != nil {
+	// 	return err
+	// }
 
-	// deleteRange deletes all entries in the range except the last one(which is SnapshotIndex) and
-	// first index is last snapshotIndex+1, hence start index for indexRange should be (first-1).
-	// TODO: If deleteRangeChan is full, it might block mutations.
-	w.indexRangeChan <- indexRange{first - 1, snap.Metadata.Index}
+	// // deleteRange deletes all entries in the range except the last one(which is SnapshotIndex) and
+	// // first index is last snapshotIndex+1, hence start index for indexRange should be (first-1).
+	// // TODO: If deleteRangeChan is full, it might block mutations.
+	// w.indexRangeChan <- indexRange{first - 1, snap.Metadata.Index}
 	return nil
 }
 
@@ -1115,7 +1333,7 @@ func (w *DiskStorage) Save(h *raftpb.HardState, es []raftpb.Entry, snap *raftpb.
 	batch := w.db.NewWriteBatchAt(w.commitTs)
 	defer batch.Cancel()
 
-	if err := w.addEntries(batch, es); err != nil {
+	if err := w.entries.AddEntries(es); err != nil {
 		return err
 	}
 	if err := w.meta.StoreHardState(h); err != nil {
@@ -1147,10 +1365,7 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []raftpb.Entr
 		entries = entries[first-firste:]
 	}
 
-	last, err := w.LastIndex()
-	if err != nil {
-		return err
-	}
+	last := w.entries.LastIndex()
 	// firste can exceed last if Raft makes a jump.
 
 	for _, e := range entries {
