@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"unsafe"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -123,12 +122,11 @@ const (
 	entryFileSize = 4 * entryFileOffset // 4MB
 	// entryFileMaxSize is the maximum size allowed for an entry file.
 	entryFileMaxSize = 1 << 30 // 1GB
-
+	// entrySize is the size in bytes of a single entry.
+	entrySize = 32
 )
 
 var (
-	// entrySize is the size in bytes of a single entry.
-	entrySize  = int(unsafe.Sizeof(entry{}))
 	emptyEntry = entry(make([]byte, entrySize))
 )
 
@@ -275,7 +273,7 @@ func (m *metaFile) StoreSnapshot(snap *raftpb.Snapshot) error {
 		return errors.Wrapf(err, "cannot marshal snapshot")
 	}
 	if len(m.data)-snapshotOffset < len(buf) {
-		return fmt.Errorf("Unable to store snapshot of size: %d\n", len(buf))
+		return errors.Errorf("Unable to store snapshot of size: %d\n", len(buf))
 	}
 	writeSlice(m.data[snapshotOffset:], buf)
 	return nil
@@ -685,7 +683,7 @@ func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
 		}
 
 		re := currFile.GetRaftEntry(offset)
-		if re.Index >= hi {
+		if re.Index >= hi || re.Index == 0 {
 			break
 		}
 		size += uint64(re.Size())
@@ -696,7 +694,7 @@ func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
 		offset++
 
 	}
-	return nil, nil
+	return entries, nil
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.

@@ -39,7 +39,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft"
@@ -363,12 +362,11 @@ func TestMetaFile(t *testing.T) {
 
 	mf, err := newMetaFile(dir)
 	require.NoError(t, err)
-	id, err := mf.RaftId()
-	require.NoError(t, err)
+	id := mf.RaftId()
 	require.Zero(t, id)
 
-	require.NoError(t, mf.StoreRaftId(10))
-	id, err = mf.RaftId()
+	mf.StoreRaftId(10)
+	id = mf.RaftId()
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), id)
 
@@ -415,10 +413,13 @@ func TestEntryFile(t *testing.T) {
 
 	e, err := el.getEntry(2)
 	require.NoError(t, err)
-	// THIS SHOULD FAIL.
-	// require.Nil(t, e)
 	require.NotNil(t, e)
 
-	require.NoError(t, el.AddEntries([]raftpb.Entry{{Term: 12}}))
-	spew.Dump(el.allEntries(0, 100, 10000))
+	require.NoError(t, el.AddEntries([]raftpb.Entry{{Index: 1, Term: 1, Data: []byte("abc")}}))
+	entries, err := el.allEntries(0, 100, 10000)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(entries))
+	require.Equal(t, uint64(1), entries[0].Index)
+	require.Equal(t, uint64(1), entries[0].Term)
+	require.Equal(t, "abc", string(entries[0].Data))
 }
