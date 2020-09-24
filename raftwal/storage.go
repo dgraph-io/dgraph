@@ -17,7 +17,6 @@
 package raftwal
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -33,11 +32,11 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/trace"
-	"google.golang.org/protobuf/proto"
 )
 
 // versionKey is hardcoded into the special key used to fetch the maximum version from the DB.
@@ -139,6 +138,21 @@ type mmapFile struct {
 	offset int64
 }
 
+func (m *mmapFile) slice(offset int) []byte {
+	sz := binary.BigEndian.Uint32(m.data[offset:])
+	start := offset + 4
+	next := start + int(sz)
+	res := m.data[start:next]
+	return res
+}
+
+func (m *mmapFile) allocateSlice(sz int) ([]byte, int) {
+	binary.BigEndian.PutUint32(m.data[m.offset:], uint32(sz))
+	offset := int(m.offset)
+	m.offset += 4 + int64(sz)
+	return m.data[offset+4:offset+4+sz], offset
+}
+
 type metaFile struct {
 	*mmapFile
 }
@@ -195,7 +209,7 @@ func writeSlice(dst []byte, src []byte) {
 	copy(dst[4:], src)
 }
 
-func allocateSlice(dst []byte, sz int) {
+func allocateSlice(dst []byte, sz int) []byte {
 	binary.BigEndian.PutUint32(dst[:4], uint32(sz))
 	return dst[4 : 4+sz]
 }
@@ -283,13 +297,6 @@ func (m *metaFile) Snapshot() (raftpb.Snapshot, error) {
 
 type entry []byte
 
-// type entry struct {
-// 	Term       uint64
-// 	Index      uint64
-// 	DataOffset uint64
-// 	Type       raftpb.EntryType
-// }
-
 func (e entry) Term() uint64 {
 	return binary.BigEndian.Uint64(e)
 }
@@ -304,9 +311,6 @@ func (e entry) Type() uint64 {
 }
 
 func marshalEntry(b []byte, term, index, do, typ uint64) {
-	if e == nil {
-		return
-	}
 	x.AssertTrue(len(b) == entrySize)
 
 	binary.BigEndian.PutUint64(b, term)
@@ -321,9 +325,6 @@ type entryFile struct {
 	fid int64
 }
 
-// func (ef *entryFile) readAt(offset uint32) []byte {
-// 	return ef.mmap[offset:]
-// }
 func getEntryFile(path string) (*entryFile, error) {
 	mf, err := openMmapFile(path, os.O_RDWR|os.O_CREATE, 16<<30)
 	if err != nil {
@@ -376,6 +377,19 @@ func (ef *entryFile) getEntry(idx int) entry {
 	return entry(ef.data[offset : offset+entrySize])
 }
 
+func (ef *entryFile) GetRaftEntry(idx int) raftpb.Entry {
+	entry := ef.getEntry(idx)
+	re := raftpb.Entry{
+		Term: entry.Term(),
+		Index: entry.Index(),
+		Type: raftpb.EntryType(entry.Type()),
+	}
+	if entry.DataOffset() > 0 {
+		re.Data = ef.slice(int(entry.DataOffset()))
+	}
+	return re
+}
+
 func (ef *entryFile) firstEntry() entry {
 	return ef.getEntry(0)
 }
@@ -407,6 +421,22 @@ func (ef *entryFile) Term(entryIndex uint64) uint64 {
 		return e.Term()
 	}
 	return 0
+}
+
+func (ef *entryFile) Offset(entryIndex uint64) (int, bool) {
+	fi := ef.firstIndex()
+	if entryIndex < fi {
+		return 0, false
+	}
+	offset := entryIndex - fi
+	if offset > maxNumEntries {
+		return 0, false
+	}
+	e := ef.getEntry(int(offset))
+	if e.Index() == entryIndex {
+		return int(offset), true
+	}
+	return 0, false
 }
 
 // entryLog represents the entire entry log. It consists of one or more
@@ -449,26 +479,13 @@ func openEntryLog(dir string) (*entryLog, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "while creating a new entry file")
 	}
-	nextFid += 1
+	// Set the offset to entryFileOffset. Data from the entries will be written starting
+	// at the offset.
+	ef.offset = entryFileOffset
 
 	// Won't append current file to list of files.
 	e.current = ef
 	return e, nil
-}
-
-// firstEmtpy finds the first empty index.
-func (l *entryLog) firstEmpty() (int, error) {
-	for i := 0; i < maxNumEntries; i++ {
-		entry, err := l.getEntry(i)
-		if err != nil {
-			return 0, err
-		}
-
-		if entry.Index == 0 {
-			return i, nil
-		}
-	}
-	return maxNumEntries, nil
 }
 
 func (l *entryLog) lastFile() *entryFile {
@@ -476,34 +493,33 @@ func (l *entryLog) lastFile() *entryFile {
 }
 
 // getEntry gets the nth entry in the CURRENT log file.
-func (l *entryLog) getEntry(n int) (*entry, error) {
+func (l *entryLog) getEntry(n int) (entry, error) {
 	if n >= maxNumEntries {
 		return nil, errors.Errorf("there cannot be more than %d in a single file",
 			maxNumEntries)
 	}
 
 	start := n * entrySize
-	buf := l.lastFile().mmap[start : start+entrySize]
-	return entryFromBytes(buf)
+	buf := l.current.data[start : start+entrySize]
+	return entry(buf), nil
 }
 
 func (l *entryLog) rotate(firstIndex uint64) error {
-	// TODO: this file should not exist already. Should try a new name.
-	path := filepath.Join(l.dir, fmt.Sprintf("%d", firstIndex))
-	// Buf will start writing at 1<<20
-	buf, err := z.NewMmapFile(entryFileSize, entryFileMaxSize, entryFileOffset, path)
+	var nextFid int64
+	for _, ef := range l.files {
+		if nextFid < ef.fid {
+			nextFid = ef.fid
+		}
+	}
+	nextFid += 1
+	ef, err := getEntryFile(path.Join(l.dir, fmt.Sprintf("%05d.ent", nextFid)))
 	if err != nil {
-		return errors.Wrapf(err, "cannot open file")
+		return errors.Wrapf(err, "while creating a new entry file")
 	}
-	l.current = buf
-	l.entryIdx = 0
+	ef.offset = entryFileOffset
 
-	// Append the new file to the list of files.
-	l.files = append(l.files, &entryFile{path: path, firstIndex: firstIndex})
-
-	if err := l.zeroOut(l.entryIdx); err != nil {
-		return errors.Wrapf(err, "cannot zero out log file")
-	}
+	l.files = append(l.files, l.current)
+	l.current = ef
 	return nil
 }
 
@@ -519,106 +535,6 @@ func (l *entryLog) numEntries() int {
 	return total + l.entryIdx
 }
 
-func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
-	if lo < l.FirstIndex() {
-		return nil, errors.Errorf("low(%d) less then firstIndex (%d", lo, l.FirstIndex())
-	}
-
-	// Find lo entry.
-	fileID := sort.Search(len(l.files), func(i int) bool {
-		return l.files[i].firstIndex >= lo
-	})
-
-	var es []raftpb.Entry
-	// Start with what we found.
-	file := l.files[fileID]
-
-	sz := uint64(0)
-	// We couldn't find what we were looking for. Go one file back and look for the entry.
-	if l.files[fileID].firstIndex != lo {
-		x.AssertTrue(fileID != 0)
-
-		// Go one file back.
-		fileID--
-		file = l.files[fileID]
-		diff := lo - file.firstIndex
-		// TODO - overflow check.
-		e, err := file.getEntry(int(diff))
-		if err != nil {
-			return nil, err
-		}
-		x.AssertTrue(e.Index == lo)
-		re := raftpb.Entry{
-			Index: e.Index,
-			Term:  e.Term,
-			Type:  e.Type,
-			Data:  file.mmap[e.DataOffset:], // full length of the file.
-		}
-		// This isn't the last entry so get next entry and fix the data len.
-		if diff != 0 {
-			nextEntry, err := file.getEntry(int(diff + 1))
-			if err != nil {
-				return es, err
-			}
-			re.Data = file.mmap[e.DataOffset:nextEntry.DataOffset]
-		}
-		es = append(es, re)
-		sz += uint64(es[0].Size())
-		lo++
-	}
-
-	if sz > maxSize {
-		return es, nil
-	}
-
-	for lo < hi && fileID < len(l.files) {
-		file = l.files[fileID]
-		// Finished with this file. Move head
-		if lo-file.firstIndex == maxNumEntries {
-			fileID++
-			continue
-		}
-
-		diff := lo - file.firstIndex
-
-		if diff > l.lastIndex {
-			break
-		}
-
-		// TODO - Overflow check.
-		e, err := file.getEntry(int(diff))
-		if err != nil {
-			return es, err
-		}
-
-		rEntry := raftpb.Entry{
-			Index: e.Index,
-			Term:  e.Term,
-			Type:  e.Type,
-			// This wouldn't work. We need end of the data.!!!
-			// TODO(ibrahim): Find the end of current data block.
-			Data: file.mmap[e.DataOffset : l.current.Len()-entryFileOffset],
-		}
-
-		if diff != 0 {
-			// TODO - e could be the last entry.
-			nextEntry, err := file.getEntry(int(diff + 1))
-			if err != nil {
-				return es, err
-			}
-			rEntry.Data = file.mmap[e.DataOffset:nextEntry.DataOffset]
-		}
-		sz += uint64(rEntry.Size())
-		if sz > maxSize {
-			break
-		}
-		es = append(es, rEntry)
-		lo++
-	}
-
-	return es, nil
-}
-
 func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 	for _, re := range entries {
 		if l.entryIdx >= maxNumEntries {
@@ -626,28 +542,19 @@ func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 				return err
 			}
 		}
-		e := entry{
-			Term:  re.Term,
-			Index: re.Index,
-			Type:  re.Type,
-		}
 
+		var dataOffset uint64
 		if len(re.Data) > 0 {
-			destBuf, offset := l.current.SliceAllocateOffset(len(re.Data))
-			e.DataOffset = uint64(offset)
+			destBuf, offset := l.current.allocateSlice(len(re.Data))
+			dataOffset = uint64(offset)
 			x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 		}
+		e := make([]byte, entrySize)
+		marshalEntry(e, re.Term, re.Index, dataOffset, uint64(re.Type))
 
-		entryBuf := e.Bytes()
-		// TODO(ibrahim): Is this correct? Shouldn't it be number of entries multiply by entryIndex?
-		destBuf, err := l.current.ReadAt(entrySize, l.entryIdx)
-		if err != nil {
-			return err
-		}
-		copy(destBuf, entryBuf)
-
+		entryBuf := e
+		copy(l.current.data[l.entryIdx*entrySize:], entryBuf)
 		l.entryIdx++
-		l.lastIndex = e.Index
 	}
 	return nil
 }
@@ -707,6 +614,89 @@ func (l *entryLog) Term(idx uint64) (uint64, error) {
 		fileIdx--
 	}
 	return l.files[fileIdx].Term(idx), nil
+}
+
+// Offset returns the file index and the offset within that file in which the entry
+// with the given index can be found. A value of -1 for the file index means that the
+// entry is in the current file.
+func (l *entryLog) Offset(idx uint64) (int, int) {
+	// Look for the offset in the current file.
+	if offset, found := l.current.Offset(idx); found {
+		return -1, offset
+	}
+
+	// No previous files, therefore we can only go back to the start of the current file.
+	if len(l.files) == 0 {
+		return -1, 0
+	}
+
+	fileIdx := sort.Search(len(l.files), func(i int) bool {
+		return l.files[i].firstIndex() >= idx
+	})
+	if fileIdx >= len(l.files) {
+		fileIdx = len(l.files) - 1
+	}
+	for fileIdx > 0 {
+		fi := l.files[fileIdx].firstIndex()
+		if fi <= idx {
+			break
+		}
+		fileIdx--
+	}
+	// TODO what to do if found is false
+	offset, _ := l.files[fileIdx].Offset(idx)
+	return fileIdx, offset
+}
+
+func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
+	if lo < l.FirstIndex() {
+		return nil, raft.ErrCompacted
+	}
+
+	entries := make([]raftpb.Entry, 0)
+	fileIdx, offset := l.Offset(lo)
+	var size uint64
+
+	var currFile *entryFile
+	if fileIdx == -1 {
+		currFile = l.current
+	} else {
+		currFile = l.files[fileIdx]
+	}
+
+	for {
+		if offset >= maxNumEntries {
+			if fileIdx == -1 {
+				// We are looking at the current file and there are no more entries.
+				// Return what we have.
+				break
+			}
+
+			// Move to the next file.
+			fileIdx++
+			if fileIdx == len(l.files) {
+				currFile = l.current
+			} else {
+				currFile = l.files[fileIdx]
+			}
+
+			// Reset the offset to start reading the next file from the beginning.
+			offset = 0
+		}
+
+		re := currFile.GetRaftEntry(offset)
+		if re.Index >= hi {
+			break
+		}
+		size += uint64(re.Size())
+		if len(entries) > 0 && size > maxSize {
+			break
+		}
+		entries = append(entries, re)
+		offset++
+
+	}
+	return nil, nil
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
@@ -1135,14 +1125,15 @@ func (w *DiskStorage) Checkpoint() (uint64, error) {
 	if w.meta == nil {
 		return 0, errors.Errorf("uninitialized meta file")
 	}
-	return w.meta.Checkpoint()
+	return w.meta.Checkpoint(), nil
 }
 
 func (w *DiskStorage) UpdateCheckpoint(snap *pb.Snapshot) error {
 	if w.meta == nil {
 		return errors.Errorf("uninitialized meta file")
 	}
-	return w.meta.UpdateCheckpoint(snap)
+	w.meta.UpdateCheckpoint(snap.Index)
+	return nil
 }
 
 // InitialState returns the saved HardState and ConfState information.
@@ -1189,7 +1180,7 @@ func (w *DiskStorage) NumEntries() (int, error) {
 // }
 
 // return low to high, excluding the high.
-func (w *DiskStorage) allEntriesNew(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
+func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
 	// fetch all the entry item from the entryLog
 
 	ents, err := w.entries.allEntries(lo, hi, maxSize)
@@ -1197,70 +1188,68 @@ func (w *DiskStorage) allEntriesNew(lo, hi, maxSize uint64) (es []raftpb.Entry, 
 		return nil, err
 	}
 
-	_ = ents
-	// unmarshal them into raft.pb.Entry
-	return nil, nil
-
+	return ents, nil
 }
-func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
-	err := w.db.View(func(txn *badger.Txn) error {
-		if hi-lo == 1 { // We only need one entry.
-			item, err := txn.Get(w.EntryKey(lo))
-			if err != nil {
-				return err
-			}
-			return item.Value(func(val []byte) error {
-				var e raftpb.Entry
-				if err = e.Unmarshal(val); err != nil {
-					return err
-				}
-				es = append(es, e)
-				return nil
-			})
-		}
 
-		// We are opening badger in LSM only mode. In that mode the values are
-		// colocated with the keys. Hence, there is no need to prefetch values.
-		// Also, if Prefetch is set to true, then it causes latency issue with
-		// random spikes inbetween.
+// func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
+// 	err := w.db.View(func(txn *badger.Txn) error {
+// 		if hi-lo == 1 { // We only need one entry.
+// 			item, err := txn.Get(w.EntryKey(lo))
+// 			if err != nil {
+// 				return err
+// 			}
+// 			return item.Value(func(val []byte) error {
+// 				var e raftpb.Entry
+// 				if err = e.Unmarshal(val); err != nil {
+// 					return err
+// 				}
+// 				es = append(es, e)
+// 				return nil
+// 			})
+// 		}
 
-		iopt := badger.DefaultIteratorOptions
-		iopt.PrefetchValues = false
-		iopt.Prefix = w.entryPrefix()
-		itr := txn.NewIterator(iopt)
-		defer itr.Close()
+// 		// We are opening badger in LSM only mode. In that mode the values are
+// 		// colocated with the keys. Hence, there is no need to prefetch values.
+// 		// Also, if Prefetch is set to true, then it causes latency issue with
+// 		// random spikes inbetween.
 
-		start := w.EntryKey(lo)
-		end := w.EntryKey(hi) // Not included in results.
+// 		iopt := badger.DefaultIteratorOptions
+// 		iopt.PrefetchValues = false
+// 		iopt.Prefix = w.entryPrefix()
+// 		itr := txn.NewIterator(iopt)
+// 		defer itr.Close()
 
-		var size, lastIndex uint64
-		first := true
-		for itr.Seek(start); itr.Valid(); itr.Next() {
-			item := itr.Item()
-			var e raftpb.Entry
-			if err := item.Value(func(val []byte) error {
-				return e.Unmarshal(val)
-			}); err != nil {
-				return err
-			}
-			// If this Assert does not fail, then we can safely remove that strange append fix
-			// below.
-			x.AssertTrue(e.Index > lastIndex && e.Index >= lo)
-			lastIndex = e.Index
-			if bytes.Compare(item.Key(), end) >= 0 {
-				break
-			}
-			size += uint64(e.Size())
-			if size > maxSize && !first {
-				break
-			}
-			es = append(es, e)
-			first = false
-		}
-		return nil
-	})
-	return es, err
-}
+// 		start := w.EntryKey(lo)
+// 		end := w.EntryKey(hi) // Not included in results.
+
+// 		var size, lastIndex uint64
+// 		first := true
+// 		for itr.Seek(start); itr.Valid(); itr.Next() {
+// 			item := itr.Item()
+// 			var e raftpb.Entry
+// 			if err := item.Value(func(val []byte) error {
+// 				return e.Unmarshal(val)
+// 			}); err != nil {
+// 				return err
+// 			}
+// 			// If this Assert does not fail, then we can safely remove that strange append fix
+// 			// below.
+// 			x.AssertTrue(e.Index > lastIndex && e.Index >= lo)
+// 			lastIndex = e.Index
+// 			if bytes.Compare(item.Key(), end) >= 0 {
+// 				break
+// 			}
+// 			size += uint64(e.Size())
+// 			if size > maxSize && !first {
+// 				break
+// 			}
+// 			es = append(es, e)
+// 			first = false
+// 		}
+// 		return nil
+// 	})
+// 	return es, err
+// }
 
 // Entries returns a slice of log entries in the range [lo,hi).
 // MaxSize limits the total size of the log entries returned, but
