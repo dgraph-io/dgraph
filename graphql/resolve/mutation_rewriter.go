@@ -1064,6 +1064,10 @@ func rewriteObject(
 			// So for example if we had the addAuthor mutation which is also adding nested
 			// posts, then we add the link _:Post Post.author AuthorUID(srcUID) here.
 			addInverseLink(newObj, srcField, srcUID)
+			// If this object had an overwritten value for the inverse field, then we don't want to
+			// use that value as we have already added the link to the inverse field in the above
+			// function call with the parent of this object
+			deleteInverseObject(obj, srcField)
 		}
 	} else {
 		myUID = srcUID
@@ -1633,6 +1637,15 @@ func attachChild(res map[string]interface{}, parent schema.Type, child schema.Fi
 			[]interface{}{map[string]interface{}{"uid": childUID}}
 	} else {
 		res[parent.DgraphPredicate(child.Name())] = map[string]interface{}{"uid": childUID}
+	}
+}
+
+func deleteInverseObject(obj map[string]interface{}, srcField schema.FieldDefinition) {
+	if srcField != nil {
+		invField := srcField.Inverse()
+		if invField != nil && invField.Type().ListType() == nil {
+			delete(obj, invField.Name())
+		}
 	}
 }
 

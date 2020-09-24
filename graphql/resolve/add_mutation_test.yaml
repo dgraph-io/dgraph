@@ -1616,7 +1616,7 @@
             },
             {
               "uid": "_:Post4",
-              "dgraph.type": "Post",
+              "dgraph.type": ["Post"],
               "Post.title": "New Post",
               "Post.author": { "uid": "_:Author1" }
             }
@@ -1653,13 +1653,19 @@
     {
       "inp": {
         "name": "A Country",
-        "states": [ { "code": "abc", "name": "Alphabet" } ]
+        "states": [
+          { "code": "abc", "name": "Alphabet" },
+          { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
+        ]
       }
     }
 
   dgquery: |-
     query {
       State3 as State3(func: eq(State.code, "abc")) @filter(type(State)) {
+        uid
+      }
+      State6 as State6(func: eq(State.code, "def")) @filter(type(State)) {
         uid
       }
     }
@@ -1674,6 +1680,16 @@
           "uid": "_:State3"
         }
       cond: "@if(eq(len(State3), 0))"
+    - setjson: |
+        {
+          "State.code": "def",
+          "State.name": "Vowel",
+          "dgraph.type": [
+            "State"
+          ],
+          "uid": "_:State6"
+        }
+      cond: "@if(eq(len(State6), 0))"
 
   dgquerysec: |-
     query {
@@ -1682,6 +1698,12 @@
       }
       var(func: uid(State3)) {
         Country4 as State.country
+      }
+      State6 as State6(func: eq(State.code, "def")) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State6)) {
+        Country7 as State.country
       }
     }
   dgmutationssec:
@@ -1705,6 +1727,24 @@
           }
         ]
       cond: "@if(eq(len(State3), 1))"
+    - setjson: |
+        {
+          "uid" : "_:Country1",
+          "Country.states": [
+            {
+              "uid": "uid(State6)",
+              "State.country": { "uid": "_:Country1" }
+            }
+          ]
+        }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Country7)",
+            "Country.states": [ { "uid": "uid(State6)" } ]
+          }
+        ]
+      cond: "@if(eq(len(State6), 1))"
 
 - name: "Deep XID 4 level deep"
   gqlmutation: |
