@@ -23,16 +23,17 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
 
-	"github.com/vektah/gqlparser/v2/gqlerror"
-
 	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/pkg/errors"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 	"google.golang.org/grpc/metadata"
+	"gopkg.in/square/go-jose.v2"
 )
 
 type ctxKey string
@@ -52,6 +53,8 @@ var (
 
 type AuthMeta struct {
 	VerificationKey string
+	JWKUrl          string
+	JWKSet          jose.JSONWebKeySet
 	RSAPublicKey    *rsa.PublicKey `json:"-"` // Ignoring this field
 	Header          string
 	Namespace       string
@@ -63,8 +66,21 @@ type AuthMeta struct {
 // Validate required fields.
 func (a *AuthMeta) validate() error {
 	var fields string
-	if a.VerificationKey == "" {
-		fields = " `Verification key`"
+
+	// If JWKUrl is provided, we don't expect (VerificationKey, Algo),
+	// they are needed only if JWKUrl is not present there.
+	if a.JWKUrl != "" {
+		if a.VerificationKey != "" || a.Algo != "" {
+			return fmt.Errorf("Expecting either JWKUrl or (VerificationKey, Algo), both were given")
+		}
+	} else {
+		if a.VerificationKey == "" {
+			fields = " `Verification key`/`JWKUrl`"
+		}
+
+		if a.Algo == "" {
+			fields += " `Algo`"
+		}
 	}
 
 	if a.Header == "" {
@@ -73,10 +89,6 @@ func (a *AuthMeta) validate() error {
 
 	if a.Namespace == "" {
 		fields += " `Namespace`"
-	}
-
-	if a.Algo == "" {
-		fields += " `Algo`"
 	}
 
 	if len(fields) > 0 {
@@ -143,6 +155,14 @@ func ParseAuthMeta(schema string) (*AuthMeta, error) {
 		return nil, err
 	}
 
+	// fetch and Store the
+	if metaInfo.JWKUrl != "" {
+		metaInfo.JWKSet, err = fetchJWKs(metaInfo.JWKUrl)
+		if err != nil {
+			return nil, errors.Errorf("Unable to fetch Keys from JWKUrl, Got error %v", err)
+		}
+	}
+
 	if metaInfo.Algo != RSA256 {
 		return metaInfo, nil
 	}
@@ -175,6 +195,8 @@ func SetAuthMeta(m *AuthMeta) {
 	defer authMeta.Unlock()
 
 	authMeta.VerificationKey = m.VerificationKey
+	authMeta.JWKUrl = m.JWKUrl
+	authMeta.JWKSet = m.JWKSet
 	authMeta.RSAPublicKey = m.RSAPublicKey
 	authMeta.Header = m.Header
 	authMeta.Namespace = m.Namespace
@@ -274,32 +296,51 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	authMeta.RLock()
 	defer authMeta.RUnlock()
 
-	if authMeta.Algo == "" {
-		return nil, fmt.Errorf(
-			"jwt token cannot be validated because verification algorithm is not set")
-	}
+	var token *jwt.Token
+	var err error
+	// Verification through JWKUrl
+	if authMeta.JWKUrl != "" {
+		fmt.Println("Verification Through JWT")
+		token, err =
+			jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+				kid := token.Header["kid"].(string)
+				signingKeys := authMeta.JWKSet.Key(kid)
+				if len(signingKeys) == 0 {
+					return nil, errors.Errorf("Invalid kid")
+				}
+				return signingKeys[0].Key, nil
+			}, jwt.WithoutAudienceValidation())
 
-	// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we
-	// disable the `aud` claim verification at the library end using `WithoutAudienceValidation` and
-	// use our custom validation function `validateAudience`.
-	token, err :=
-		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-			algo, _ := token.Header["alg"].(string)
-			if algo != authMeta.Algo {
-				return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
-					authMeta.Algo, algo)
-			}
-			if algo == HMAC256 {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
-					return []byte(authMeta.VerificationKey), nil
+	} else {
+
+		if authMeta.Algo == "" {
+			return nil, fmt.Errorf(
+				"jwt token cannot be validated because verification algorithm is not set")
+		}
+
+		// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we
+		// disable the `aud` claim verification at the library end using `WithoutAudienceValidation` and
+		// use our custom validation function `validateAudience`.
+		token, err =
+			jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+				algo, _ := token.Header["alg"].(string)
+				if algo != authMeta.Algo {
+					return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
+						authMeta.Algo, algo)
 				}
-			} else if algo == RSA256 {
-				if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
-					return authMeta.RSAPublicKey, nil
+				if algo == HMAC256 {
+					if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
+						return []byte(authMeta.VerificationKey), nil
+					}
+				} else if algo == RSA256 {
+					if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
+						return authMeta.RSAPublicKey, nil
+					}
 				}
-			}
-			return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
-		}, jwt.WithoutAudienceValidation())
+				return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
+			}, jwt.WithoutAudienceValidation())
+
+	}
 
 	if err != nil {
 		return nil, errors.Errorf("unable to parse jwt token:%v", err)
@@ -314,4 +355,31 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 		return nil, err
 	}
 	return claims, nil
+}
+
+func fetchJWKs(jwkUrl string) (jose.JSONWebKeySet, error) {
+	req, err := http.NewRequest("GET", jwkUrl, nil)
+	if err != nil {
+		return jose.JSONWebKeySet{}, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return jose.JSONWebKeySet{}, err
+	}
+
+	data, _ := ioutil.ReadAll(resp.Body)
+
+	type JwkArray struct {
+		JWKs []json.RawMessage `json:"keys"`
+	}
+
+	var jwkArray JwkArray
+	json.Unmarshal(data, &jwkArray)
+
+	keySet := jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
+	for i, jwk := range jwkArray.JWKs {
+		keySet.Keys[i].UnmarshalJSON(jwk)
+	}
+	return keySet, nil
 }
