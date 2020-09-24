@@ -175,14 +175,24 @@ func TestStorageFirstIndex(t *testing.T) {
 	require.NoError(t, ds.reset(ents))
 
 	first, err := ds.FirstIndex()
-	// TODO: this is off by one.
-	require.Equal(t, 4, first)
+	if err != nil {
+		t.Errorf("err = %v, want nil", err)
+	}
+	if first != 4 {
+		t.Errorf("first = %d, want %d", first, 4)
+	}
 
 	// TODO: figure out a way to delete the range.
-	// require.NoError(t, ds.deleteRange(batch, 0, 4))
-	first, err = ds.FirstIndex()
-	require.NoError(t, err)
-	require.Equal(t, 5, first)
+	// require.NoError(t, ds.addEntries(ents[1:]))
+
+	// // require.NoError(t, ds.deleteRange(batch, 0, 4))
+	// first, err = ds.FirstIndex()
+	// if err != nil {
+	// 	t.Errorf("err = %v, want nil", err)
+	// }
+	// if first != 5 {
+	// 	t.Errorf("first = %d, want %d", first, 5)
+	// }
 }
 
 func TestStorageCompact(t *testing.T) {
@@ -210,7 +220,6 @@ func TestStorageCompact(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		// TODO: Figure out a way to do this deletion.
 		// first, err := ds.FirstIndex()
 		// require.NoError(t, err)
 		// err = ds.deleteRange(batch, first-1, tt.i)
@@ -224,7 +233,7 @@ func TestStorageCompact(t *testing.T) {
 			t.Errorf("#%d: index = %d, want %d", i, index, tt.windex)
 		}
 
-		all, err := ds.allEntries(0, math.MaxUint64, math.MaxUint64)
+		all, err := ds.Entries(0, math.MaxUint64, math.MaxUint64)
 		require.NoError(t, err)
 		if len(all) != tt.wlen {
 			t.Errorf("#%d: len = %d, want %d", i, len(all), tt.wlen)
@@ -316,13 +325,13 @@ func TestStorageAppend(t *testing.T) {
 		},
 	}
 
+	require.NoError(t, ds.reset(ents))
 	for i, tt := range tests {
-		require.NoError(t, ds.reset(ents))
 		err := ds.addEntries(tt.entries)
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
-		all, err := ds.allEntries(0, math.MaxUint64, math.MaxUint64)
+		all, err := ds.entries.allEntries(0, math.MaxUint64, math.MaxUint64)
 		require.NoError(t, err)
 		if !reflect.DeepEqual(all, tt.wentries) {
 			t.Errorf("#%d: entries = %v, want %v", i, all, tt.wentries)

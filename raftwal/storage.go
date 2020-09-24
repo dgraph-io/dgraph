@@ -114,7 +114,7 @@ const (
 	// entryFileOffset
 	entryFileOffset = 1 << 20 // 1MB
 	// entryFileSize is the initial size of the entry file.
-	entryFileSize = 4 * entryFileOffset // 4MB
+	entryFileSize = 16 << 30
 	// entrySize is the size in bytes of a single entry.
 	entrySize = 32
 )
@@ -138,6 +138,9 @@ func (m *mmapFile) slice(offset int) []byte {
 	sz := binary.BigEndian.Uint32(m.data[offset:])
 	start := offset + 4
 	next := start + int(sz)
+	if next > len(m.data) {
+		return []byte{}
+	}
 	res := m.data[start:next]
 	return res
 }
@@ -340,7 +343,7 @@ func (ef *entryFile) delete() error {
 }
 
 func openEntryFile(path string) (*entryFile, error) {
-	mf, err := openMmapFile(path, os.O_RDWR|os.O_CREATE, 16<<30)
+	mf, err := openMmapFile(path, os.O_RDWR|os.O_CREATE, entryFileSize)
 	if err == errNewFile {
 		zeroOut(mf.data, 0, entryFileOffset)
 	} else if err != nil {
@@ -386,6 +389,9 @@ func getEntryFiles(dir string) ([]*entryFile, error) {
 
 // get entry from a file.
 func (ef *entryFile) getEntry(idx int) entry {
+	if ef == nil {
+		return emptyEntry
+	}
 	offset := idx * entrySize
 	return entry(ef.data[offset : offset+entrySize])
 }
@@ -397,8 +403,12 @@ func (ef *entryFile) GetRaftEntry(idx int) raftpb.Entry {
 		Index: entry.Index(),
 		Type:  raftpb.EntryType(entry.Type()),
 	}
-	if entry.DataOffset() > 0 {
-		re.Data = ef.slice(int(entry.DataOffset()))
+	fmt.Printf("entry: %+v. do: %d\n", re, entry.DataOffset())
+	if entry.DataOffset() > 0 && entry.DataOffset() < entryFileSize {
+		data := ef.slice(int(entry.DataOffset()))
+		if len(data) > 0 {
+			re.Data = data
+		}
 	}
 	return re
 }
@@ -431,11 +441,13 @@ func (ef *entryFile) Term(entryIndex uint64) uint64 {
 
 func (ef *entryFile) Offset(raftIndex uint64) (int, bool) {
 	fi := ef.firstIndex()
+	// fmt.Printf("got fi: %d\n", fi)
 	if raftIndex < fi {
 		return 0, false
 	}
 	if diff := int(raftIndex - fi); diff < maxNumEntries && diff >= 0 {
 		e := ef.getEntry(diff)
+		// fmt.Printf("diff: %d. e: %v\n", diff, e.Index())
 		if e.Index() == raftIndex {
 			return diff, true
 		}
@@ -553,6 +565,7 @@ func (l *entryLog) numEntries() int {
 
 func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 	fidx, eidx := l.Offset(entries[0].Index)
+	fmt.Printf("eidx: %d. for entry: %+v\n", eidx, entries[0])
 	if eidx >= 0 {
 		if fidx == -1 {
 			zeroOut(l.current.data, entrySize*eidx, entrySize*l.nextEntryIdx)
@@ -613,10 +626,13 @@ func (l *entryLog) DiscardFiles(snapshotIndex uint64) error {
 }
 
 func (l *entryLog) FirstIndex() uint64 {
-	if l == nil || len(l.files) == 0 {
+	if l == nil {
 		return 0
 	}
-	return l.files[0].firstEntry().Index()
+	if len(l.files) == 0 {
+		return l.current.firstEntry().Index() + 1
+	}
+	return l.files[0].firstEntry().Index() + 1
 }
 
 func (l *entryLog) LastIndex() uint64 {
@@ -649,9 +665,13 @@ func (l *entryLog) getEntryFile(fidx int) *entryFile {
 
 func (l *entryLog) seekEntry(idx uint64) (entry, error) {
 	fidx, off := l.Offset(idx)
+	fmt.Printf("Got offset for %d: %d %d\n", idx, fidx, off)
 	ef := l.getEntryFile(fidx)
-	if off == -1 || ef == nil {
-		return emptyEntry, errNotFound
+	if off == -1 {
+		if idx < ef.firstEntry().Index() {
+			return emptyEntry, raft.ErrCompacted
+		}
+		return emptyEntry, raft.ErrUnavailable
 	}
 	ent := ef.getEntry(off)
 	if ent.Index() != idx {
@@ -681,9 +701,9 @@ func (l *entryLog) Term(idx uint64) (uint64, error) {
 // Offset returns the file index and the offset within that file in which the entry
 // with the given index can be found. A value of -1 for the file index means that the
 // entry is in the current file.
-func (l *entryLog) Offset(idx uint64) (int, int) {
+func (l *entryLog) Offset(raftIndex uint64) (int, int) {
 	// Look for the offset in the current file.
-	if offset, found := l.current.Offset(idx); found {
+	if offset, found := l.current.Offset(raftIndex); found {
 		return -1, offset
 	}
 
@@ -693,19 +713,19 @@ func (l *entryLog) Offset(idx uint64) (int, int) {
 	}
 
 	fileIdx := sort.Search(len(l.files), func(i int) bool {
-		return l.files[i].firstIndex() >= idx
+		return l.files[i].firstIndex() >= raftIndex
 	})
 	if fileIdx >= len(l.files) {
 		fileIdx = len(l.files) - 1
 	}
 	for fileIdx > 0 {
 		fi := l.files[fileIdx].firstIndex()
-		if fi <= idx {
+		if fi <= raftIndex {
 			break
 		}
 		fileIdx--
 	}
-	offset, found := l.files[fileIdx].Offset(idx)
+	offset, found := l.files[fileIdx].Offset(raftIndex)
 	if !found {
 		return -1, -1
 	}
@@ -734,24 +754,26 @@ func (l *entryLog) reset() error {
 	}
 	l.files = l.files[:0]
 	zeroOut(l.current.data, 0, entryFileOffset)
+	fmt.Println("resetting current data")
+	var num int
+	for _, b := range l.current.data[:entryFileOffset] {
+		x.AssertTrue(b == 0x00)
+		num++
+	}
+	fmt.Printf("Checked %d bytes\n", num)
 	l.nextEntryIdx = 0
 	return nil
 }
 
 func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
-	if lo < l.FirstIndex() {
-		return nil, raft.ErrCompacted
-	}
-
 	entries := make([]raftpb.Entry, 0)
 	fileIdx, offset := l.Offset(lo)
 	var size uint64
 
-	var currFile *entryFile
-	if fileIdx == -1 {
-		currFile = l.current
-	} else {
-		currFile = l.files[fileIdx]
+	fmt.Printf("allEntries. got fileidx: %d\n", fileIdx)
+	currFile := l.getEntryFile(fileIdx)
+	if offset == -1 {
+		offset = 0
 	}
 
 	for {
@@ -774,6 +796,7 @@ func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
 			offset = 0
 		}
 
+		fmt.Printf("offset: %d\n", offset)
 		re := currFile.GetRaftEntry(offset)
 		if re.Index >= hi || re.Index == 0 {
 			break
@@ -985,18 +1008,6 @@ func (w *DiskStorage) NumEntries() (int, error) {
 	// return w.entries.numEntries(), nil
 }
 
-// return low to high, excluding the high.
-func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
-	// fetch all the entry item from the entryLog
-
-	ents, err := w.entries.allEntries(lo, hi, maxSize)
-	if err != nil {
-		return nil, err
-	}
-
-	return ents, nil
-}
-
 // Entries returns a slice of log entries in the range [lo,hi).
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
@@ -1004,6 +1015,7 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 	w.elog.Printf("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
 	defer w.elog.Printf("Done")
 	first := w.entries.FirstIndex()
+	fmt.Printf("got first: %d. lo: %d\n", first, lo)
 	if lo < first {
 		return nil, raft.ErrCompacted
 	}
@@ -1013,7 +1025,11 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 		return nil, raft.ErrUnavailable
 	}
 
-	return w.allEntries(lo, hi, maxSize)
+	ents, err := w.entries.allEntries(lo, hi, maxSize)
+	if err != nil {
+		return nil, err
+	}
+	return ents, nil
 }
 
 // CreateSnapshot generates a snapshot with the given ConfState and data and writes it to disk.
