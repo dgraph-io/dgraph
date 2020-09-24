@@ -2,18 +2,41 @@
 title = "Schema Design"
 [menu.main]
     parent = "build-an-app-tutorial"
-    identifier = "discuss-overview"
+    identifier = "schema-design"
     weight = 2   
 +++
 
 
-Let's start with listing down the entities that are involved in a basic todo app.
-- Task
-- User
+thinking about tables and joins or documents ... here thinking about entities and graph ... in any case need to do requirements and analysis and iteration
 
-![Todo Graph](/images/graphql/tutorial/todo/todo-graph.png)
+Graphs though tend to model domains really nicely ... so lets 
 
-Equivalent GraphQL schema for the graph above would be as follow:
+## UI requiremetns
+
+
+let's look at a page ... built up of blocks ... there's multiple data requirements ...
+
+![App UI requirements](/images/graphql/tutorial/discuss/UI-components.png)
+
+## Thinking in Graphs
+
+![Graph schema sketch](/images/graphql/tutorial/discuss/schema-sketch.jpg)
+
+- design the things in and shape of our graph
+- there's two things here: the schema is itself a bit graph shaped, but it's really just a pattern for the shap of the application data graph
+- describe the kinds of entities that inhabit our graph and the relationships between them (can kinda see this like documents and links)
+- in GraphQL it'll be operations that that show the valid things you can do on the data graph
+
+### How graph queries work
+
+talk about entry points and traversals
+
+## GraphQL schema
+
+maybe this all moves to another section ??? yeah I think one just on GraphQL and operations
+FIXME: to move
+
+This is SDL & GraphQL focused
 
 ```graphql
 type Task {
@@ -25,61 +48,10 @@ type User {
 }
 ```
 
-What are the fields that these two simple entities contain?
+## GraphQL Operations
 
-We have a title and a status to check if it was completed or not in the `Task` type.
-Then the  `User` type has a username (unique identifier), name and the tasks.
+### mutations
 
-So each user can have many tasks.
-
-![Todo Graph complete](/images/graphql/tutorial/todo/todo-graph-2.png)
-*Note - ' \* ' signifies one-to-many relationship
-
-Now let's add  `@id` directive to `username ` which makes it the unique key & also add  `@hasInverse` directive to enable the above relationship between tasks and user. 
-We represent that in the GraphQL schema shown below:
-
-```graphql
-type Task {
-    id: ID!
-    title: String!
-    completed: Boolean!
-    user: User!
-}
-
-type User {
-    username: String! @id
-    name: String
-    tasks: [Task] @hasInverse(field: user)
-}
-```
-
-Save the content in a file `schema.graphql`.
-
-## Running
-
-Before we begin, make sure that you have [Docker](https://docs.docker.com/install/)
-installed on your machine.
-
-Let's begin by starting Dgraph standalone by running the command below:
-
-```
-docker run -it -p 8080:8080 dgraph/standalone:master
-```
-
-Let's load up the GraphQL schema file to Dgraph:
-
-```
-curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
-```
-
-You can access that GraphQL endpoint with any of the great GraphQL developer tools.
-Good choices include GraphQL Playground, Insomnia, GraphiQL and Altair.
-
-Set up any of them and point it at `http://localhost:8080/graphql`. If you know lots about GraphQL, you might want to explore the schema, queries and mutations that were generated from the schema.
-
-## Mutating Data
-
-Let's add a user and some todos in our Todo App.
 
 ```graphql
 mutation {
@@ -119,9 +91,7 @@ mutation {
 }
 ```
 
-## Querying Data
-
-Let's fetch the todos to list in our Todo App:
+### queries
 
 ```graphql
 query {
@@ -179,7 +149,8 @@ Running the query above should return JSON response as shown below:
 }
 ```
 
-## Querying Data with Filters
+
+#### Querying Data with Filters
 
 Before we get into querying data with filters, we will be required
 to define search indexes to the specific fields.
@@ -251,3 +222,8 @@ query {
   }
 }
 ```
+
+
+### subscriptions
+
+## What's next
