@@ -54,7 +54,7 @@ var (
 type AuthMeta struct {
 	VerificationKey string
 	JWKUrl          string
-	JWKSet          jose.JSONWebKeySet
+	JWKSet          *jose.JSONWebKeySet
 	RSAPublicKey    *rsa.PublicKey `json:"-"` // Ignoring this field
 	Header          string
 	Namespace       string
@@ -155,7 +155,7 @@ func ParseAuthMeta(schema string) (*AuthMeta, error) {
 		return nil, err
 	}
 
-	// fetch and Store the
+	// fetch and Store the keys from JWKUrl
 	if metaInfo.JWKUrl != "" {
 		metaInfo.JWKSet, err = fetchJWKs(metaInfo.JWKUrl)
 		if err != nil {
@@ -357,15 +357,15 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	return claims, nil
 }
 
-func fetchJWKs(jwkUrl string) (jose.JSONWebKeySet, error) {
+func fetchJWKs(jwkUrl string) (*jose.JSONWebKeySet, error) {
 	req, err := http.NewRequest("GET", jwkUrl, nil)
 	if err != nil {
-		return jose.JSONWebKeySet{}, err
+		return nil, err
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return jose.JSONWebKeySet{}, err
+		return nil, err
 	}
 
 	data, _ := ioutil.ReadAll(resp.Body)
@@ -381,5 +381,5 @@ func fetchJWKs(jwkUrl string) (jose.JSONWebKeySet, error) {
 	for i, jwk := range jwkArray.JWKs {
 		keySet.Keys[i].UnmarshalJSON(jwk)
 	}
-	return keySet, nil
+	return &keySet, nil
 }
