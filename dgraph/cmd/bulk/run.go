@@ -188,7 +188,7 @@ func run() {
 			os.Exit(1)
 		}
 	}
-	fmt.Printf("Input Encrypted: %v; Output Encrypted: %v\n", opt.Encrypted, opt.EncryptedOut)
+	fmt.Printf("Encrypted input: %v; Encrypted output: %v\n", opt.Encrypted, opt.EncryptedOut)
 
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
