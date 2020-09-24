@@ -434,7 +434,7 @@ func (ef *entryFile) Offset(raftIndex uint64) (int, bool) {
 	if raftIndex < fi {
 		return 0, false
 	}
-	if diff := int(raftIndex - fi); diff < maxNumEntries {
+	if diff := int(raftIndex - fi); diff < maxNumEntries && diff >= 0 {
 		e := ef.getEntry(diff)
 		if e.Index() == raftIndex {
 			return diff, true
