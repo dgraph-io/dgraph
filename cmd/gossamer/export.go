@@ -18,8 +18,10 @@ package main
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ChainSafe/gossamer/dot"
+	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
 	"github.com/urfave/cli"
@@ -65,10 +67,85 @@ func exportAction(ctx *cli.Context) error {
 		return err
 	}
 
-	file := dot.ExportConfig(cfg, config)
+	tomlCfg := dotConfigToToml(cfg)
+	file := exportConfig(tomlCfg, config)
 	// export config will exit and log error on error
 
 	logger.Info("exported toml configuration file", "path", file.Name())
 
 	return nil
+}
+
+func dotConfigToToml(dcfg *dot.Config) *Config {
+	cfg := &Config{}
+
+	cfg.Global = GlobalConfig{
+		Name:     dcfg.Global.Name,
+		ID:       dcfg.Global.ID,
+		BasePath: dcfg.Global.BasePath,
+		LogLvl:   dcfg.Global.LogLvl.String(),
+	}
+
+	cfg.Log = LogConfig{
+		CoreLvl:           dcfg.Log.CoreLvl.String(),
+		SyncLvl:           dcfg.Log.SyncLvl.String(),
+		NetworkLvl:        dcfg.Log.NetworkLvl.String(),
+		RPCLvl:            dcfg.Log.RPCLvl.String(),
+		StateLvl:          dcfg.Log.StateLvl.String(),
+		RuntimeLvl:        dcfg.Log.RuntimeLvl.String(),
+		BlockProducerLvl:  dcfg.Log.BlockProducerLvl.String(),
+		FinalityGadgetLvl: dcfg.Log.FinalityGadgetLvl.String(),
+	}
+
+	cfg.Init = InitConfig{
+		GenesisRaw: dcfg.Init.GenesisRaw,
+	}
+
+	cfg.Account = AccountConfig{
+		Key:    dcfg.Account.Key,
+		Unlock: dcfg.Account.Unlock,
+	}
+
+	cfg.Core = CoreConfig{
+		Roles:            dcfg.Core.Roles,
+		BabeAuthority:    dcfg.Core.BabeAuthority,
+		GrandpaAuthority: dcfg.Core.GrandpaAuthority,
+		BabeThreshold:    babeThresholdToString(dcfg.Core.BabeThreshold),
+		SlotDuration:     dcfg.Core.SlotDuration,
+	}
+
+	cfg.Network = NetworkConfig{
+		Port:        dcfg.Network.Port,
+		Bootnodes:   dcfg.Network.Bootnodes,
+		ProtocolID:  dcfg.Network.ProtocolID,
+		NoBootstrap: dcfg.Network.NoBootstrap,
+		NoMDNS:      dcfg.Network.NoMDNS,
+	}
+
+	cfg.RPC = RPCConfig{
+		Enabled:   dcfg.RPC.Enabled,
+		Port:      dcfg.RPC.Port,
+		Host:      dcfg.RPC.Host,
+		Modules:   dcfg.RPC.Modules,
+		WSPort:    dcfg.RPC.WSPort,
+		WSEnabled: dcfg.RPC.WSEnabled,
+	}
+
+	return cfg
+}
+
+func babeThresholdToString(threshold *big.Int) string {
+	if threshold == nil {
+		return ""
+	}
+
+	if threshold.Cmp(babe.MaxThreshold) == 0 {
+		return "max"
+	}
+
+	if threshold.Cmp(babe.MinThreshold) == 0 {
+		return "min"
+	}
+
+	return ""
 }

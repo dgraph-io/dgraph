@@ -16,6 +16,10 @@
 
 package gssmr
 
+import (
+	log "github.com/ChainSafe/log15"
+)
+
 var (
 	// GlobalConfig
 
@@ -29,7 +33,7 @@ var (
 	DefaultBasePath = string("~/.gossamer/gssmr")
 
 	// DefaultLvl is the default log level
-	DefaultLvl = string("info")
+	DefaultLvl = log.LvlInfo
 
 	// InitConfig
 

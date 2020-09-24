@@ -49,11 +49,7 @@ type Node struct {
 // InitNode initializes a new dot node from the provided dot node configuration
 // and JSON formatted genesis file.
 func InitNode(cfg *Config) error {
-	err := setupLogger(cfg)
-	if err != nil {
-		return err
-	}
-
+	setupLogger(cfg)
 	logger.Info(
 		"initializing node...",
 		"name", cfg.Global.Name,
@@ -81,7 +77,7 @@ func InitNode(cfg *Config) error {
 	}
 
 	// create new state service
-	stateSrvc := state.NewService(cfg.Global.BasePath, cfg.Global.lvl)
+	stateSrvc := state.NewService(cfg.Global.BasePath, cfg.Global.LogLvl)
 
 	var genEpochInfo *types.EpochInfo
 	if !cfg.Init.TestFirstEpoch {
@@ -206,13 +202,10 @@ func NodeInitialized(basepath string, expected bool) bool {
 
 // NewNode creates a new dot node from a dot node configuration
 func NewNode(cfg *Config, ks *keystore.GlobalKeystore, stopFunc func()) (*Node, error) {
-	err := setupLogger(cfg)
-	if err != nil {
-		return nil, err
-	}
+	setupLogger(cfg)
 
 	// if authority node, should have at least 1 key in keystore
-	if cfg.Core.Authority && (ks.Babe.Size() == 0 || ks.Gran.Size() == 0) {
+	if cfg.Core.Roles == types.AuthorityRole && (ks.Babe.Size() == 0 || ks.Gran.Size() == 0) {
 		return nil, ErrNoKeysProvided
 	}
 
@@ -315,10 +308,7 @@ func NewNode(cfg *Config, ks *keystore.GlobalKeystore, stopFunc func()) (*Node, 
 	if enabled := RPCServiceEnabled(cfg); enabled {
 
 		// create rpc service and append rpc service to node services
-		rpcSrvc, err := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, bp, rt, sysSrvc)
-		if err != nil {
-			return nil, err
-		}
+		rpcSrvc := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, bp, rt, sysSrvc)
 		nodeSrvcs = append(nodeSrvcs, rpcSrvc)
 
 	} else {

@@ -14,33 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package dot
+package types
 
-import (
-	"testing"
-
-	"github.com/ChainSafe/gossamer/lib/utils"
-
-	"github.com/stretchr/testify/require"
+const (
+	// NoNetworkRole runs a node without networking
+	NoNetworkRole = byte(0)
+	// FullNodeRole runs a full node
+	FullNodeRole = byte(1)
+	// LightClientRole runs a light client
+	LightClientRole = byte(2)
+	// AuthorityRole runs the node as a block-producing and finalizing node
+	AuthorityRole = byte(4)
 )
-
-// TestExportConfig tests exporting a toml configuration file
-func TestExportConfig(t *testing.T) {
-	cfg, cfgFile := NewTestConfigWithFile(t)
-	require.NotNil(t, cfg)
-
-	genFile := NewTestGenesisRawFile(t, cfg)
-	require.NotNil(t, genFile)
-
-	defer utils.RemoveTestDir(t)
-
-	cfg.Init.GenesisRaw = genFile.Name()
-
-	err := InitNode(cfg)
-	require.Nil(t, err)
-
-	file := ExportConfig(cfg, cfgFile.Name())
-
-	// TODO: improve dot tests #687
-	require.NotNil(t, file)
-}

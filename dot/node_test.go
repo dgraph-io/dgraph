@@ -105,7 +105,7 @@ func TestNewNode(t *testing.T) {
 	require.Nil(t, err)
 
 	// TODO: improve dot tests #687
-	cfg.Core.Authority = false
+	cfg.Core.Roles = types.FullNodeRole
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
 	cfg.Core.BabeThreshold = nil
@@ -142,7 +142,7 @@ func TestNewNode_Authority(t *testing.T) {
 	require.Equal(t, 1, ks.Babe.Size())
 
 	// TODO: improve dot tests #687
-	cfg.Core.Authority = true
+	cfg.Core.Roles = types.AuthorityRole
 	cfg.Core.BabeThreshold = nil
 
 	node, err := NewNode(cfg, ks, nil)
@@ -174,7 +174,7 @@ func TestStartNode(t *testing.T) {
 	require.Nil(t, err)
 
 	// TODO: improve dot tests #687
-	cfg.Core.Authority = false
+	cfg.Core.Roles = types.FullNodeRole
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
 	cfg.Core.BabeThreshold = nil
@@ -274,7 +274,7 @@ func TestInitNode_LoadStorageRoot(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Core.Authority = false
+	cfg.Core.Roles = types.FullNodeRole
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
 	cfg.Core.BabeThreshold = nil
@@ -335,7 +335,7 @@ func TestInitNode_LoadBalances(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Core.Authority = false
+	cfg.Core.Roles = types.FullNodeRole
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
 	cfg.Core.BabeThreshold = nil

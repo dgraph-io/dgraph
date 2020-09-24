@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/network"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
@@ -63,7 +64,7 @@ func TestCreateCoreService(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	// TODO: improve dot tests #687
-	cfg.Core.Authority = false
+	cfg.Core.Roles = types.FullNodeRole
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
 	cfg.Init.GenesisRaw = genFile.Name()
@@ -190,7 +191,7 @@ func TestCreateRPCService(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	// TODO: improve dot tests #687
-	cfg.Core.Authority = false
+	cfg.Core.Roles = types.FullNodeRole
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
 	cfg.Init.GenesisRaw = genFile.Name()
@@ -221,10 +222,7 @@ func TestCreateRPCService(t *testing.T) {
 
 	sysSrvc := createSystemService(&cfg.System)
 
-	rpcSrvc, err := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, nil, rt, sysSrvc)
-	require.Nil(t, err)
-
-	// TODO: improve dot tests #687
+	rpcSrvc := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, nil, rt, sysSrvc)
 	require.NotNil(t, rpcSrvc)
 }
 
@@ -238,7 +236,7 @@ func TestCreateBABEService(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	// TODO: improve dot tests #687
-	cfg.Core.Authority = true
+	cfg.Core.Roles = types.FullNodeRole
 	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
@@ -270,7 +268,7 @@ func TestCreateGrandpaService(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	// TODO: improve dot tests #687
-	cfg.Core.Authority = true
+	cfg.Core.Roles = types.AuthorityRole
 	cfg.Init.GenesisRaw = genFile.Name()
 
 	err := InitNode(cfg)
@@ -316,7 +314,7 @@ func TestNewWebSocketServer(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Core.Authority = false
+	cfg.Core.Roles = types.FullNodeRole
 	cfg.Core.BabeAuthority = false
 	cfg.Core.GrandpaAuthority = false
 	cfg.Init.GenesisRaw = genFile.Name()
@@ -348,9 +346,7 @@ func TestNewWebSocketServer(t *testing.T) {
 
 	sysSrvc := createSystemService(&cfg.System)
 
-	rpcSrvc, err := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, nil, rt, sysSrvc)
-	require.Nil(t, err)
-
+	rpcSrvc := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, nil, rt, sysSrvc)
 	err = rpcSrvc.Start()
 	require.Nil(t, err)
 

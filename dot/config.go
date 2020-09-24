@@ -18,17 +18,12 @@ package dot
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-	"reflect"
-	"unicode"
+	"math/big"
 
 	"github.com/ChainSafe/gossamer/chain/gssmr"
 	"github.com/ChainSafe/gossamer/chain/ksmcc"
 	"github.com/ChainSafe/gossamer/dot/types"
 	log "github.com/ChainSafe/log15"
-	"github.com/naoina/toml"
 )
 
 // TODO: create separate types for toml config and internal config, needed since we don't want to expose all
@@ -36,76 +31,76 @@ import (
 
 // Config is a collection of configurations throughout the system
 type Config struct {
-	Global  GlobalConfig     `toml:"global"`
-	Log     LogConfig        `toml:"log"`
-	Init    InitConfig       `toml:"init"`
-	Account AccountConfig    `toml:"account"`
-	Core    CoreConfig       `toml:"core"`
-	Network NetworkConfig    `toml:"network"`
-	RPC     RPCConfig        `toml:"rpc"`
-	System  types.SystemInfo `toml:"-"`
+	Global  GlobalConfig
+	Log     LogConfig
+	Init    InitConfig
+	Account AccountConfig
+	Core    CoreConfig
+	Network NetworkConfig
+	RPC     RPCConfig
+	System  types.SystemInfo
 }
 
-// GlobalConfig is to marshal/unmarshal toml global config vars
+// GlobalConfig is used for every node command
 type GlobalConfig struct {
-	Name     string `toml:"name"`
-	ID       string `toml:"id"`
-	BasePath string `toml:"basepath"`
-	LogLevel string `toml:"log"`
-	lvl      log.Lvl
+	Name     string
+	ID       string
+	BasePath string
+	LogLvl   log.Lvl
 }
 
 // LogConfig represents the log levels for individual packages
 type LogConfig struct {
-	CoreLvl           string `toml:"core"`
-	SyncLvl           string `toml:"sync"`
-	NetworkLvl        string `toml:"network"`
-	RPCLvl            string `toml:"rpc"`
-	StateLvl          string `toml:"state"`
-	RuntimeLvl        string `toml:"runtime"`
-	BlockProducerLvl  string `toml:"babe"`
-	FinalityGadgetLvl string `toml:"grandpa"`
+	CoreLvl           log.Lvl
+	SyncLvl           log.Lvl
+	NetworkLvl        log.Lvl
+	RPCLvl            log.Lvl
+	StateLvl          log.Lvl
+	RuntimeLvl        log.Lvl
+	BlockProducerLvl  log.Lvl
+	FinalityGadgetLvl log.Lvl
 }
 
 // InitConfig is the configuration for the node initialization
 type InitConfig struct {
-	GenesisRaw     string `toml:"genesis-raw"`
-	TestFirstEpoch bool   `toml:"test-first-epoch"` // TODO: separate config file options vs. internal configuration
+	GenesisRaw string
+	// TestFirstEpoch determines whether to use test data for the first epoch
+	// If set to false, node initialization will load the babe configuration from the runtime to use as first epoch data
+	TestFirstEpoch bool
 }
 
 // AccountConfig is to marshal/unmarshal account config vars
 type AccountConfig struct {
-	Key    string `toml:"key"`
-	Unlock string `toml:"unlock"`
+	Key    string // TODO: change to array
+	Unlock string // TODO: change to array
 }
 
 // NetworkConfig is to marshal/unmarshal toml network config vars
 type NetworkConfig struct {
-	Port        uint32   `toml:"port"`
-	Bootnodes   []string `toml:"bootnodes"`
-	ProtocolID  string   `toml:"protocol"`
-	NoBootstrap bool     `toml:"nobootstrap"`
-	NoMDNS      bool     `toml:"nomdns"`
+	Port        uint32
+	Bootnodes   []string
+	ProtocolID  string
+	NoBootstrap bool
+	NoMDNS      bool
 }
 
 // CoreConfig is to marshal/unmarshal toml core config vars
 type CoreConfig struct {
-	Authority        bool        `toml:"authority"`
-	Roles            byte        `toml:"roles"`
-	BabeAuthority    bool        `toml:"babe-authority"`
-	GrandpaAuthority bool        `toml:"grandpa-authority"`
-	BabeThreshold    interface{} `toml:"babe-threshold"`
-	SlotDuration     uint64      `toml:"slot-duration"`
+	Roles            byte
+	BabeAuthority    bool
+	GrandpaAuthority bool
+	BabeThreshold    *big.Int
+	SlotDuration     uint64
 }
 
 // RPCConfig is to marshal/unmarshal toml RPC config vars
 type RPCConfig struct {
-	Enabled   bool     `toml:"enabled"`
-	Port      uint32   `toml:"port"`
-	Host      string   `toml:"host"`
-	Modules   []string `toml:"modules"`
-	WSPort    uint32   `toml:"ws-port"`
-	WSEnabled bool     `toml:"ws-enabled"`
+	Enabled   bool
+	Port      uint32
+	Host      string
+	Modules   []string
+	WSPort    uint32
+	WSEnabled bool
 }
 
 // String will return the json representation for a Config
@@ -131,7 +126,17 @@ func GssmrConfig() *Config {
 			Name:     gssmr.DefaultName,
 			ID:       gssmr.DefaultID,
 			BasePath: gssmr.DefaultBasePath,
-			LogLevel: gssmr.DefaultLvl,
+			LogLvl:   gssmr.DefaultLvl,
+		},
+		Log: LogConfig{
+			CoreLvl:           gssmr.DefaultLvl,
+			SyncLvl:           gssmr.DefaultLvl,
+			NetworkLvl:        gssmr.DefaultLvl,
+			RPCLvl:            gssmr.DefaultLvl,
+			StateLvl:          gssmr.DefaultLvl,
+			RuntimeLvl:        gssmr.DefaultLvl,
+			BlockProducerLvl:  gssmr.DefaultLvl,
+			FinalityGadgetLvl: gssmr.DefaultLvl,
 		},
 		Init: InitConfig{
 			GenesisRaw: gssmr.DefaultGenesisRaw,
@@ -141,7 +146,6 @@ func GssmrConfig() *Config {
 			Unlock: gssmr.DefaultUnlock,
 		},
 		Core: CoreConfig{
-			Authority:        gssmr.DefaultAuthority,
 			Roles:            gssmr.DefaultRoles,
 			BabeAuthority:    gssmr.DefaultBabeAuthority,
 			GrandpaAuthority: gssmr.DefaultGrandpaAuthority,
@@ -173,6 +177,17 @@ func KsmccConfig() *Config {
 			Name:     ksmcc.DefaultName,
 			ID:       ksmcc.DefaultID,
 			BasePath: ksmcc.DefaultBasePath,
+			LogLvl:   ksmcc.DefaultLvl,
+		},
+		Log: LogConfig{
+			CoreLvl:           ksmcc.DefaultLvl,
+			SyncLvl:           ksmcc.DefaultLvl,
+			NetworkLvl:        ksmcc.DefaultLvl,
+			RPCLvl:            ksmcc.DefaultLvl,
+			StateLvl:          ksmcc.DefaultLvl,
+			RuntimeLvl:        ksmcc.DefaultLvl,
+			BlockProducerLvl:  ksmcc.DefaultLvl,
+			FinalityGadgetLvl: ksmcc.DefaultLvl,
 		},
 		Init: InitConfig{
 			GenesisRaw: ksmcc.DefaultGenesisRaw,
@@ -182,8 +197,7 @@ func KsmccConfig() *Config {
 			Unlock: ksmcc.DefaultUnlock,
 		},
 		Core: CoreConfig{
-			Authority: ksmcc.DefaultAuthority,
-			Roles:     ksmcc.DefaultRoles,
+			Roles: ksmcc.DefaultRoles,
 		},
 		Network: NetworkConfig{
 			Port:        ksmcc.DefaultNetworkPort,
@@ -203,75 +217,4 @@ func KsmccConfig() *Config {
 			SystemProperties: make(map[string]interface{}),
 		},
 	}
-}
-
-// LoadConfig loads the values from the toml configuration file into the provided configuration
-func LoadConfig(cfg *Config, fp string) error {
-	fp, err := filepath.Abs(fp)
-	if err != nil {
-		logger.Error("failed to create absolute path for toml configuration file", "error", err)
-		return err
-	}
-
-	file, err := os.Open(filepath.Clean(fp))
-	if err != nil {
-		logger.Error("failed to open toml configuration file", "error", err)
-		return err
-	}
-
-	var tomlSettings = toml.Config{
-		NormFieldName: func(rt reflect.Type, key string) string {
-			return key
-		},
-		FieldToKey: func(rt reflect.Type, field string) string {
-			return field
-		},
-		MissingField: func(rt reflect.Type, field string) error {
-			link := ""
-			if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
-				link = fmt.Sprintf(", see https://godoc.org/%s#%s for available fields", rt.PkgPath(), rt.Name())
-			}
-			return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
-		},
-	}
-
-	if err = tomlSettings.NewDecoder(file).Decode(&cfg); err != nil {
-		logger.Error("failed to decode configuration", "error", err)
-		return err
-	}
-
-	return nil
-}
-
-// ExportConfig exports a dot configuration to a toml configuration file
-func ExportConfig(cfg *Config, fp string) *os.File {
-	var (
-		newFile *os.File
-		err     error
-		raw     []byte
-	)
-
-	if raw, err = toml.Marshal(*cfg); err != nil {
-		logger.Error("failed to marshal configuration", "error", err)
-		os.Exit(1)
-	}
-
-	newFile, err = os.Create(filepath.Clean(fp))
-	if err != nil {
-		logger.Error("failed to create configuration file", "error", err)
-		os.Exit(1)
-	}
-
-	_, err = newFile.Write(raw)
-	if err != nil {
-		logger.Error("failed to write to configuration file", "error", err)
-		os.Exit(1)
-	}
-
-	if err := newFile.Close(); err != nil {
-		logger.Error("failed to close configuration file", "error", err)
-		os.Exit(1)
-	}
-
-	return newFile
 }

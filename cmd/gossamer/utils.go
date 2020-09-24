@@ -19,12 +19,18 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
 	"syscall"
+	"testing"
+
+	"github.com/ChainSafe/gossamer/dot"
+	"github.com/ChainSafe/gossamer/lib/utils"
 
 	log "github.com/ChainSafe/log15"
+	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli"
 	"golang.org/x/crypto/ssh/terminal"
 )
@@ -72,4 +78,52 @@ func confirmMessage(msg string) bool {
 		text = strings.Replace(text, "\n", "", -1)
 		return strings.Compare("Y", text) == 0
 	}
+}
+
+// newTestConfig returns a new test configuration using the provided basepath
+func newTestConfig(t *testing.T) *dot.Config {
+	dir := utils.NewTestDir(t)
+
+	// TODO: use default config instead of gssmr config for test config #776
+
+	cfg := &dot.Config{
+		Global: dot.GlobalConfig{
+			Name:     dot.GssmrConfig().Global.Name,
+			ID:       dot.GssmrConfig().Global.ID,
+			BasePath: dir,
+			LogLvl:   log.LvlInfo,
+		},
+		Log: dot.LogConfig{
+			CoreLvl:           log.LvlInfo,
+			SyncLvl:           log.LvlInfo,
+			NetworkLvl:        log.LvlInfo,
+			RPCLvl:            log.LvlInfo,
+			StateLvl:          log.LvlInfo,
+			RuntimeLvl:        log.LvlInfo,
+			BlockProducerLvl:  log.LvlInfo,
+			FinalityGadgetLvl: log.LvlInfo,
+		},
+		Init:    dot.GssmrConfig().Init,
+		Account: dot.GssmrConfig().Account,
+		Core:    dot.GssmrConfig().Core,
+		Network: dot.GssmrConfig().Network,
+		RPC:     dot.GssmrConfig().RPC,
+		System:  dot.GssmrConfig().System,
+	}
+
+	cfg.Init.TestFirstEpoch = true
+	return cfg
+}
+
+// newTestConfigWithFile returns a new test configuration and a temporary configuration file
+func newTestConfigWithFile(t *testing.T) (*dot.Config, *os.File) {
+	cfg := newTestConfig(t)
+
+	file, err := ioutil.TempFile(cfg.Global.BasePath, "config-")
+	require.NoError(t, err)
+
+	tomlCfg := dotConfigToToml(cfg)
+
+	cfgFile := exportConfig(tomlCfg, file.Name())
+	return cfg, cfgFile
 }

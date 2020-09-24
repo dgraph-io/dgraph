@@ -37,8 +37,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/grandpa"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
-
-	log "github.com/ChainSafe/log15"
 )
 
 // State Service
@@ -46,16 +44,10 @@ import (
 // createStateService creates the state service and initialize state database
 func createStateService(cfg *Config) (*state.Service, error) {
 	logger.Info("creating state service...")
-
-	lvl, err := log.LvlFromString(cfg.Log.StateLvl)
-	if err != nil {
-		return nil, err
-	}
-
-	stateSrvc := state.NewService(cfg.Global.BasePath, lvl)
+	stateSrvc := state.NewService(cfg.Global.BasePath, cfg.Log.StateLvl)
 
 	// start state service (initialize state database)
-	err = stateSrvc.Start()
+	err := stateSrvc.Start()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start state service: %s", err)
 	}
@@ -82,11 +74,6 @@ func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore)
 		return nil, fmt.Errorf("failed to retrieve :code from trie: %s", err)
 	}
 
-	lvl, err := log.LvlFromString(cfg.Log.RuntimeLvl)
-	if err != nil {
-		return nil, err
-	}
-
 	ts, err := st.Storage.TrieState(nil)
 	if err != nil {
 		return nil, err
@@ -100,7 +87,7 @@ func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore)
 		Storage:     ts,
 		Keystore:    ks,
 		Imports:     runtime.RegisterImports_NodeRuntime,
-		LogLvl:      lvl,
+		LogLvl:      cfg.Log.RuntimeLvl,
 		NodeStorage: ns,
 		Role:        cfg.Core.Roles,
 	}
@@ -117,7 +104,7 @@ func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore)
 func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks keystore.Keystore) (*babe.Service, error) {
 	logger.Info(
 		"creating BABE service...",
-		"authority", cfg.Core.Authority,
+		"authority", cfg.Core.BabeAuthority,
 	)
 
 	if ks.Name() != "babe" || ks.Type() != crypto.Sr25519Type {
@@ -146,18 +133,8 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks k
 		}
 	}
 
-	lvl, err := log.LvlFromString(cfg.Log.BlockProducerLvl)
-	if err != nil {
-		return nil, err
-	}
-
-	threshold, ok := cfg.Core.BabeThreshold.(*big.Int)
-	if !ok && threshold != nil {
-		return nil, errors.New("invalid BabeThreshold in configuration")
-	}
-
 	bcfg := &babe.ServiceConfig{
-		LogLvl:           lvl,
+		LogLvl:           cfg.Log.BlockProducerLvl,
 		Keypair:          kps[0].(*sr25519.Keypair),
 		Runtime:          rt,
 		BlockState:       st.Block,
@@ -165,7 +142,7 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks k
 		TransactionQueue: st.TransactionQueue,
 		EpochState:       st.Epoch,
 		StartSlot:        bestSlot + 1,
-		EpochThreshold:   threshold,
+		EpochThreshold:   cfg.Core.BabeThreshold,
 		SlotDuration:     cfg.Core.SlotDuration,
 	}
 
@@ -186,19 +163,14 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks k
 func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, verifier *babe.VerificationManager, rt *runtime.Runtime, ks *keystore.GlobalKeystore, stateSrvc *state.Service, net *network.Service) (*core.Service, error) {
 	logger.Info(
 		"creating core service...",
-		"authority", cfg.Core.Authority,
+		"authority", cfg.Core.Roles == types.AuthorityRole,
 	)
-
-	lvl, err := log.LvlFromString(cfg.Log.CoreLvl)
-	if err != nil {
-		return nil, err
-	}
 
 	handler := grandpa.NewMessageHandler(fg.(*grandpa.Service), stateSrvc.Block)
 
 	// set core configuration
 	coreConfig := &core.Config{
-		LogLvl:                  lvl,
+		LogLvl:                  cfg.Log.CoreLvl,
 		BlockState:              stateSrvc.Block,
 		StorageState:            stateSrvc.Storage,
 		TransactionQueue:        stateSrvc.TransactionQueue,
@@ -237,14 +209,9 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, syncer *sync.Se
 		"nomdns", cfg.Network.NoMDNS,
 	)
 
-	lvl, err := log.LvlFromString(cfg.Log.NetworkLvl)
-	if err != nil {
-		return nil, err
-	}
-
 	// network service configuation
 	networkConfig := network.Config{
-		LogLvl:       lvl,
+		LogLvl:       cfg.Log.NetworkLvl,
 		BlockState:   stateSrvc.Block,
 		NetworkState: stateSrvc.Network,
 		BasePath:     cfg.Global.BasePath,
@@ -269,7 +236,7 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, syncer *sync.Se
 // RPC Service
 
 // createRPCService creates the RPC service from the provided core configuration
-func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Service, networkSrvc *network.Service, bp BlockProducer, rt *runtime.Runtime, sysSrvc *system.Service) (*rpc.HTTPServer, error) {
+func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Service, networkSrvc *network.Service, bp BlockProducer, rt *runtime.Runtime, sysSrvc *system.Service) *rpc.HTTPServer {
 	logger.Info(
 		"creating rpc service...",
 		"host", cfg.RPC.Host,
@@ -280,13 +247,8 @@ func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Serv
 	)
 	rpcService := rpc.NewService()
 
-	lvl, err := log.LvlFromString(cfg.Log.RPCLvl)
-	if err != nil {
-		return nil, err
-	}
-
 	rpcConfig := &rpc.HTTPServerConfig{
-		LogLvl:              lvl,
+		LogLvl:              cfg.Log.RPCLvl,
 		BlockAPI:            stateSrvc.Block,
 		StorageAPI:          stateSrvc.Storage,
 		NetworkAPI:          networkSrvc,
@@ -303,7 +265,7 @@ func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Serv
 		Modules:             cfg.RPC.Modules,
 	}
 
-	return rpc.NewHTTPServer(rpcConfig), nil
+	return rpc.NewHTTPServer(rpcConfig)
 }
 
 // System service
@@ -330,13 +292,8 @@ func createGRANDPAService(cfg *Config, rt *runtime.Runtime, st *state.Service, d
 		return nil, errors.New("no ed25519 keys provided for GRANDPA")
 	}
 
-	lvl, err := log.LvlFromString(cfg.Log.FinalityGadgetLvl)
-	if err != nil {
-		return nil, err
-	}
-
 	gsCfg := &grandpa.Config{
-		LogLvl:        lvl,
+		LogLvl:        cfg.Log.FinalityGadgetLvl,
 		BlockState:    st.Block,
 		DigestHandler: dh,
 		SetID:         1,
@@ -361,18 +318,14 @@ func createBlockVerifier(cfg *Config, st *state.Service, rt *runtime.Runtime) (*
 	}
 
 	var threshold *big.Int
-	var ok bool
 	// TODO: remove config options, directly set storage values in genesis
-	if cfg.Core.BabeThreshold != nil {
-		threshold, ok = cfg.Core.BabeThreshold.(*big.Int)
-		if !ok {
-			return nil, errors.New("invalid BabeThreshold in configuration")
-		}
-	} else {
+	if cfg.Core.BabeThreshold == nil {
 		threshold, err = babe.CalculateThreshold(babeCfg.C1, babeCfg.C2, len(babeCfg.GenesisAuthorities))
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		threshold = cfg.Core.BabeThreshold
 	}
 
 	descriptor := &babe.Descriptor{
@@ -391,13 +344,8 @@ func createBlockVerifier(cfg *Config, st *state.Service, rt *runtime.Runtime) (*
 }
 
 func createSyncService(cfg *Config, st *state.Service, bp BlockProducer, dh *core.DigestHandler, verifier *babe.VerificationManager, rt *runtime.Runtime) (*sync.Service, error) {
-	lvl, err := log.LvlFromString(cfg.Log.SyncLvl)
-	if err != nil {
-		return nil, err
-	}
-
 	syncCfg := &sync.Config{
-		LogLvl:           lvl,
+		LogLvl:           cfg.Log.SyncLvl,
 		BlockState:       st.Block,
 		StorageState:     st.Storage,
 		TransactionQueue: st.TransactionQueue,

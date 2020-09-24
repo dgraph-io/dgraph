@@ -21,78 +21,22 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/utils"
 	log "github.com/ChainSafe/log15"
+	"github.com/naoina/toml"
 	"github.com/stretchr/testify/require"
 )
 
 // setupLogger sets up the gossamer logger
-func setupLogger(cfg *Config) error {
-	if cfg.Global.LogLevel == "" {
-		cfg.Global.LogLevel = "info"
-	}
-
+func setupLogger(cfg *Config) {
 	handler := log.StreamHandler(os.Stdout, log.TerminalFormat())
 	handler = log.CallerFileHandler(handler)
-	lvl, err := log.LvlFromString(cfg.Global.LogLevel)
-	if err != nil {
-		return err
-	}
-
-	logger.SetHandler(log.LvlFilterHandler(lvl, handler))
-	cfg.Global.lvl = lvl
-	return nil
-}
-
-// NewTestConfig returns a new test configuration using the provided basepath
-func NewTestConfig(t *testing.T) *Config {
-	dir := utils.NewTestDir(t)
-
-	// TODO: use default config instead of gssmr config for test config #776
-
-	cfg := &Config{
-		Global: GlobalConfig{
-			Name:     GssmrConfig().Global.Name,
-			ID:       GssmrConfig().Global.ID,
-			BasePath: dir,
-			LogLevel: "info",
-		},
-		Log: LogConfig{
-			CoreLvl:           "info",
-			SyncLvl:           "info",
-			NetworkLvl:        "info",
-			RPCLvl:            "info",
-			StateLvl:          "info",
-			RuntimeLvl:        "info",
-			BlockProducerLvl:  "info",
-			FinalityGadgetLvl: "info",
-		},
-		Init:    GssmrConfig().Init,
-		Account: GssmrConfig().Account,
-		Core:    GssmrConfig().Core,
-		Network: GssmrConfig().Network,
-		RPC:     GssmrConfig().RPC,
-		System:  GssmrConfig().System,
-	}
-
-	cfg.Core.BabeThreshold = ""
-	cfg.Init.TestFirstEpoch = true
-	return cfg
-}
-
-// NewTestConfigWithFile returns a new test configuration and a temporary configuration file
-func NewTestConfigWithFile(t *testing.T) (*Config, *os.File) {
-	cfg := NewTestConfig(t)
-
-	file, err := ioutil.TempFile(cfg.Global.BasePath, "config-")
-	require.NoError(t, err)
-
-	cfgFile := ExportConfig(cfg, file.Name())
-	return cfg, cfgFile
+	logger.SetHandler(log.LvlFilterHandler(cfg.Global.LogLvl, handler))
 }
 
 // NewTestGenesis returns a test genesis instance using "gssmr" raw data
@@ -201,4 +145,74 @@ func NewTestGenesisAndRuntime(t *testing.T) string {
 	require.Nil(t, err)
 
 	return genFile.Name()
+}
+
+// NewTestConfig returns a new test configuration using the provided basepath
+func NewTestConfig(t *testing.T) *Config {
+	dir := utils.NewTestDir(t)
+
+	// TODO: use default config instead of gssmr config for test config #776
+
+	cfg := &Config{
+		Global: GlobalConfig{
+			Name:     GssmrConfig().Global.Name,
+			ID:       GssmrConfig().Global.ID,
+			BasePath: dir,
+			LogLvl:   log.LvlInfo,
+		},
+		Log:     GssmrConfig().Log,
+		Init:    GssmrConfig().Init,
+		Account: GssmrConfig().Account,
+		Core:    GssmrConfig().Core,
+		Network: GssmrConfig().Network,
+		RPC:     GssmrConfig().RPC,
+		System:  GssmrConfig().System,
+	}
+
+	cfg.Init.TestFirstEpoch = true
+	return cfg
+}
+
+// NewTestConfigWithFile returns a new test configuration and a temporary configuration file
+func NewTestConfigWithFile(t *testing.T) (*Config, *os.File) {
+	cfg := NewTestConfig(t)
+
+	file, err := ioutil.TempFile(cfg.Global.BasePath, "config-")
+	require.NoError(t, err)
+
+	cfgFile := ExportConfig(cfg, file.Name())
+	return cfg, cfgFile
+}
+
+// ExportConfig exports a dot configuration to a toml configuration file
+func ExportConfig(cfg *Config, fp string) *os.File {
+	var (
+		newFile *os.File
+		err     error
+		raw     []byte
+	)
+
+	if raw, err = toml.Marshal(*cfg); err != nil {
+		logger.Error("failed to marshal configuration", "error", err)
+		os.Exit(1)
+	}
+
+	newFile, err = os.Create(filepath.Clean(fp))
+	if err != nil {
+		logger.Error("failed to create configuration file", "error", err)
+		os.Exit(1)
+	}
+
+	_, err = newFile.Write(raw)
+	if err != nil {
+		logger.Error("failed to write to configuration file", "error", err)
+		os.Exit(1)
+	}
+
+	if err := newFile.Close(); err != nil {
+		logger.Error("failed to close configuration file", "error", err)
+		os.Exit(1)
+	}
+
+	return newFile
 }

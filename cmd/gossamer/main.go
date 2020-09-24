@@ -138,7 +138,7 @@ func gossamerAction(ctx *cli.Context) error {
 		return err
 	}
 
-	cfg.Global.LogLevel = lvl.String()
+	cfg.Global.LogLvl = lvl
 
 	// expand data directory and update node configuration (performed separately
 	// from createDotConfig because dot config should not include expanded path)
@@ -232,7 +232,7 @@ func initAction(ctx *cli.Context) error {
 		return err
 	}
 
-	cfg.Global.LogLevel = lvl.String()
+	cfg.Global.LogLvl = lvl
 
 	// expand data directory and update node configuration (performed separately
 	// from createDotConfig because dot config should not include expanded path)

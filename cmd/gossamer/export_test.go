@@ -18,12 +18,12 @@ package main
 
 import (
 	"io/ioutil"
-	"path"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
+	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli"
 )
@@ -31,8 +31,7 @@ import (
 // TestExportCommand test "gossamer export --config"
 func TestExportCommand(t *testing.T) {
 	testDir := utils.NewTestDir(t)
-	testCfg := dot.NewTestConfig(t)
-
+	testCfg, testConfigFile := newTestConfigWithFile(t)
 	genFile := dot.NewTestGenesisRawFile(t, testCfg)
 
 	defer utils.RemoveTestDir(t)
@@ -43,7 +42,7 @@ func TestExportCommand(t *testing.T) {
 	testName := "testnode"
 	testBootnode := "bootnode"
 	testProtocol := "/protocol/test/0"
-	testConfig := path.Join(testDir, "config.toml")
+	testConfig := testConfigFile.Name()
 
 	testcases := []struct {
 		description string
@@ -52,25 +51,25 @@ func TestExportCommand(t *testing.T) {
 		expected    *dot.Config
 	}{
 		{
-			"Test gossamer export --config --genesis-raw --basepath --name --log",
-			[]string{"config", "genesis-raw", "basepath", "name", "log"},
-			[]interface{}{testConfig, genFile.Name(), testDir, testName, "info"},
+			"Test gossamer export --config --genesis-raw --basepath --name --log --force",
+			[]string{"config", "genesis-raw", "basepath", "name", "log", "force"},
+			[]interface{}{testConfig, genFile.Name(), testDir, testName, log.LvlInfo.String(), "true"},
 			&dot.Config{
 				Global: dot.GlobalConfig{
 					Name:     testName,
 					ID:       testCfg.Global.ID,
 					BasePath: testCfg.Global.BasePath,
-					LogLevel: "info",
+					LogLvl:   log.LvlInfo,
 				},
 				Log: dot.LogConfig{
-					CoreLvl:           "info",
-					SyncLvl:           "info",
-					NetworkLvl:        "info",
-					RPCLvl:            "info",
-					StateLvl:          "info",
-					RuntimeLvl:        "info",
-					BlockProducerLvl:  "info",
-					FinalityGadgetLvl: "info",
+					CoreLvl:           log.LvlInfo,
+					SyncLvl:           log.LvlInfo,
+					NetworkLvl:        log.LvlInfo,
+					RPCLvl:            log.LvlInfo,
+					StateLvl:          log.LvlInfo,
+					RuntimeLvl:        log.LvlInfo,
+					BlockProducerLvl:  log.LvlInfo,
+					FinalityGadgetLvl: log.LvlInfo,
 				},
 				Init: dot.InitConfig{
 					GenesisRaw: genFile.Name(),
@@ -89,22 +88,22 @@ func TestExportCommand(t *testing.T) {
 		},
 		{
 			"Test gossamer export --config --genesis-raw --bootnodes --log --force",
-			[]string{"config", "genesis-raw", "bootnodes", "log", "force"},
-			[]interface{}{testConfig, genFile.Name(), testBootnode, "info", "true"},
+			[]string{"config", "genesis-raw", "bootnodes", "name", "force"},
+			[]interface{}{testConfig, genFile.Name(), testBootnode, "gssmr", "true"},
 			&dot.Config{
 				Global: testCfg.Global,
 				Init: dot.InitConfig{
 					GenesisRaw: genFile.Name(),
 				},
 				Log: dot.LogConfig{
-					CoreLvl:           "info",
-					SyncLvl:           "info",
-					NetworkLvl:        "info",
-					RPCLvl:            "info",
-					StateLvl:          "info",
-					RuntimeLvl:        "info",
-					BlockProducerLvl:  "info",
-					FinalityGadgetLvl: "info",
+					CoreLvl:           log.LvlInfo,
+					SyncLvl:           log.LvlInfo,
+					NetworkLvl:        log.LvlInfo,
+					RPCLvl:            log.LvlInfo,
+					StateLvl:          log.LvlInfo,
+					RuntimeLvl:        log.LvlInfo,
+					BlockProducerLvl:  log.LvlInfo,
+					FinalityGadgetLvl: log.LvlInfo,
 				},
 				Account: testCfg.Account,
 				Core:    testCfg.Core,
@@ -120,28 +119,28 @@ func TestExportCommand(t *testing.T) {
 		},
 		{
 			"Test gossamer export --config --genesis-raw --protocol --log --force",
-			[]string{"config", "genesis-raw", "protocol", "log", "force"},
-			[]interface{}{testConfig, genFile.Name(), testProtocol, "info", "true"},
+			[]string{"config", "genesis-raw", "protocol", "force"},
+			[]interface{}{testConfig, genFile.Name(), testProtocol, "true"},
 			&dot.Config{
 				Global: testCfg.Global,
 				Init: dot.InitConfig{
 					GenesisRaw: genFile.Name(),
 				},
 				Log: dot.LogConfig{
-					CoreLvl:           "info",
-					SyncLvl:           "info",
-					NetworkLvl:        "info",
-					RPCLvl:            "info",
-					StateLvl:          "info",
-					RuntimeLvl:        "info",
-					BlockProducerLvl:  "info",
-					FinalityGadgetLvl: "info",
+					CoreLvl:           log.LvlInfo,
+					SyncLvl:           log.LvlInfo,
+					NetworkLvl:        log.LvlInfo,
+					RPCLvl:            log.LvlInfo,
+					StateLvl:          log.LvlInfo,
+					RuntimeLvl:        log.LvlInfo,
+					BlockProducerLvl:  log.LvlInfo,
+					FinalityGadgetLvl: log.LvlInfo,
 				},
 				Account: testCfg.Account,
 				Core:    testCfg.Core,
 				Network: dot.NetworkConfig{
 					Port:        testCfg.Network.Port,
-					Bootnodes:   []string{}, // TODO: improve cmd tests #687
+					Bootnodes:   []string{testBootnode}, // TODO: improve cmd tests #687
 					ProtocolID:  testProtocol,
 					NoBootstrap: testCfg.Network.NoBootstrap,
 					NoMDNS:      testCfg.Network.NoMDNS,
@@ -162,11 +161,11 @@ func TestExportCommand(t *testing.T) {
 
 			config := ctx.GlobalString(ConfigFlag.Name)
 
-			cfg := new(dot.Config)
-			err = dot.LoadConfig(cfg, config)
+			cfg := new(Config)
+			err = loadConfig(cfg, config)
 			require.Nil(t, err)
 
-			require.Equal(t, c.expected, cfg)
+			require.Equal(t, dotConfigToToml(c.expected), cfg)
 		})
 	}
 }

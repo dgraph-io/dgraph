@@ -21,7 +21,6 @@ key = ""
 unlock = ""
 
 [core]
-authority = false
 roles = 1
 babe-authority = false
 grandpa-authority = false

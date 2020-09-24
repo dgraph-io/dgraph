@@ -22,8 +22,10 @@ import (
 	"strings"
 
 	database "github.com/ChainSafe/chaindb"
+	"github.com/ChainSafe/gossamer/chain/gssmr"
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/genesis"
@@ -37,37 +39,52 @@ var DefaultCfg = dot.GssmrConfig() // TODO: investigate default node other than 
 
 // loadConfigFile loads a default config file if --chain is specified, a specific
 // config if --config is specified, or the default gossamer config otherwise.
-func loadConfigFile(ctx *cli.Context) (cfg *dot.Config, err error) {
+func loadConfigFile(ctx *cli.Context, cfg *Config) (err error) {
+	// check --config flag and load toml configuration from config.toml
+	if cfgPath := ctx.GlobalString(ConfigFlag.Name); cfgPath != "" {
+		logger.Info("loading toml configuration...", "config path", cfgPath)
+		if cfg == nil {
+			cfg = &Config{} // if configuration not set, create empty configuration
+		} else {
+			logger.Warn(
+				"overwriting default configuration with toml configuration values",
+				"id", cfg.Global.ID,
+				"config path", cfgPath,
+			)
+		}
+		err = loadConfig(cfg, cfgPath) // load toml values into configuration
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// createDotConfig creates a new dot configuration from the provided flag values
+func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
+	tomlCfg := &Config{}
+
 	// check --chain flag and load configuration from defaults.go
 	if id := ctx.GlobalString(ChainFlag.Name); id != "" {
 		switch id {
 		case "gssmr":
 			logger.Debug("loading default configuration...", "id", id)
-			cfg = dot.GssmrConfig() // "gssmr" = dot.GssmrConfig()
+			cfg = dot.GssmrConfig()
+			tomlCfg = dotConfigToToml(cfg)
 		case "ksmcc":
 			logger.Debug("loading default configuration...", "id", id)
-			cfg = dot.KsmccConfig() // "ksmcc" = dot.KsmccConfig()
+			cfg = dot.KsmccConfig()
+			tomlCfg = dotConfigToToml(cfg)
 		default:
 			return nil, fmt.Errorf("unknown chain id provided: %s", id)
 		}
 	}
 
-	// check --config flag and load toml configuration from config.toml
-	if config := ctx.GlobalString(ConfigFlag.Name); config != "" {
-		logger.Info("loading toml configuration...", "config", config)
-		if cfg == nil {
-			cfg = &dot.Config{} // if configuration not set, create empty dot configuration
-		} else {
-			logger.Warn(
-				"overwriting default configuration with toml configuration values",
-				"id", cfg.Global.ID,
-				"config", config,
-			)
-		}
-		err = dot.LoadConfig(cfg, config) // load toml values into dot configuration
-		if err != nil {
-			return nil, err
-		}
+	err = loadConfigFile(ctx, tomlCfg)
+	if err != nil {
+		logger.Error("failed to load toml configuration", "error", err)
+		return nil, err
 	}
 
 	// if default configuration not set, load "gssmr" default configuration
@@ -76,19 +93,8 @@ func loadConfigFile(ctx *cli.Context) (cfg *dot.Config, err error) {
 		cfg = DefaultCfg
 	}
 
-	return cfg, nil
-}
-
-// createDotConfig creates a new dot configuration from the provided flag values
-func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
-	cfg, err = loadConfigFile(ctx)
-	if err != nil {
-		logger.Error("failed to load toml configuration", "error", err)
-		return nil, err
-	}
-
 	// set log config
-	err = setLogConfig(ctx, &cfg.Global, &cfg.Log)
+	err = setLogConfig(ctx, tomlCfg, &cfg.Global, &cfg.Log)
 	if err != nil {
 		logger.Error("failed to set log configuration", "error", err)
 		return nil, err
@@ -97,13 +103,13 @@ func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	logger.Info("loaded package log configuration", "cfg", cfg.Log)
 
 	// set global configuration values
-	setDotGlobalConfig(ctx, &cfg.Global)
+	setDotGlobalConfig(ctx, tomlCfg, &cfg.Global)
 
 	// set remaining cli configuration values
-	setDotAccountConfig(ctx, &cfg.Account)
-	setDotCoreConfig(ctx, &cfg.Core)
-	setDotNetworkConfig(ctx, &cfg.Network)
-	setDotRPCConfig(ctx, &cfg.RPC)
+	setDotAccountConfig(ctx, tomlCfg.Account, &cfg.Account)
+	setDotCoreConfig(ctx, tomlCfg.Core, &cfg.Core)
+	setDotNetworkConfig(ctx, tomlCfg.Network, &cfg.Network)
+	setDotRPCConfig(ctx, tomlCfg.RPC, &cfg.RPC)
 
 	// set system info
 	setSystemInfoConfig(ctx, cfg)
@@ -112,139 +118,210 @@ func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 }
 
 // createInitConfig creates the configuration required to initialize a dot node
-func createInitConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
-	cfg, err = loadConfigFile(ctx)
+func createInitConfig(ctx *cli.Context) (*dot.Config, error) {
+	tomlCfg := &Config{}
+	cfg := dot.GssmrConfig()
+
+	err := loadConfigFile(ctx, tomlCfg)
 	if err != nil {
 		logger.Error("failed to load toml configuration", "error", err)
 		return nil, err
 	}
 
 	// set global configuration values
-	setDotGlobalConfig(ctx, &cfg.Global)
+	setDotGlobalConfig(ctx, tomlCfg, &cfg.Global)
 
 	// set log config
-	err = setLogConfig(ctx, &cfg.Global, &cfg.Log)
+	err = setLogConfig(ctx, tomlCfg, &cfg.Global, &cfg.Log)
 	if err != nil {
 		logger.Error("failed to set log configuration", "error", err)
 		return nil, err
 	}
 
 	// set init configuration values
-	setDotInitConfig(ctx, &cfg.Init)
+	setDotInitConfig(ctx, tomlCfg.Init, &cfg.Init)
 
 	// set system info
 	setSystemInfoConfig(ctx, cfg)
 
 	// ensure configuration values match genesis and overwrite with genesis
-	updateDotConfigFromGenesisJSONRaw(ctx, cfg)
+	updateDotConfigFromGenesisJSONRaw(ctx, *tomlCfg, cfg)
 
 	return cfg, nil
 }
 
-func createBuildSpecConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
-	cfg, err = loadConfigFile(ctx)
+func createBuildSpecConfig(ctx *cli.Context) (*dot.Config, error) {
+	var tomlCfg *Config
+	cfg := &dot.Config{}
+	err := loadConfigFile(ctx, tomlCfg)
 	if err != nil {
 		logger.Error("failed to load toml configuration", "error", err)
 		return nil, err
 	}
 
 	// set global configuration values
-	setDotGlobalConfig(ctx, &cfg.Global)
+	setDotGlobalConfig(ctx, tomlCfg, &cfg.Global)
 	return cfg, nil
 }
 
 // createExportConfig creates a new dot configuration from the provided flag values
 func createExportConfig(ctx *cli.Context) (*dot.Config, error) {
 	cfg := DefaultCfg // start with default configuration
+	tomlCfg := &Config{}
+
+	err := loadConfigFile(ctx, tomlCfg)
+	if err != nil {
+		logger.Error("failed to load toml configuration", "error", err)
+		return nil, err
+	}
+
+	// ensure configuration values match genesis and overwrite with genesis
+	updateDotConfigFromGenesisJSONRaw(ctx, *tomlCfg, cfg)
 
 	// set global configuration values
-	setDotGlobalConfig(ctx, &cfg.Global)
+	setDotGlobalConfig(ctx, tomlCfg, &cfg.Global)
 
 	// set log config
-	err := setLogConfig(ctx, &cfg.Global, &cfg.Log)
+	err = setLogConfig(ctx, &Config{}, &cfg.Global, &cfg.Log)
 	if err != nil {
 		logger.Error("failed to set log configuration", "error", err)
 		return nil, err
 	}
 
 	// set init configuration values
-	setDotInitConfig(ctx, &cfg.Init)
-
-	// ensure configuration values match genesis and overwrite with genesis
-	updateDotConfigFromGenesisJSONRaw(ctx, cfg)
+	setDotInitConfig(ctx, tomlCfg.Init, &cfg.Init)
 
 	// set cli configuration values
-	setDotAccountConfig(ctx, &cfg.Account)
-	setDotCoreConfig(ctx, &cfg.Core)
-	setDotNetworkConfig(ctx, &cfg.Network)
-	setDotRPCConfig(ctx, &cfg.RPC)
-
-	if cfg.Core.BabeThreshold == nil {
-		cfg.Core.BabeThreshold = ""
-	}
+	setDotAccountConfig(ctx, tomlCfg.Account, &cfg.Account)
+	setDotCoreConfig(ctx, tomlCfg.Core, &cfg.Core)
+	setDotNetworkConfig(ctx, tomlCfg.Network, &cfg.Network)
+	setDotRPCConfig(ctx, tomlCfg.RPC, &cfg.RPC)
 
 	// set system info
 	setSystemInfoConfig(ctx, cfg)
 
-	// set log config
-	cfg.Global.LogLevel = ctx.String(LogFlag.Name)
-
 	return cfg, nil
 }
 
-func setLogConfig(ctx *cli.Context, globalCfg *dot.GlobalConfig, logCfg *dot.LogConfig) error {
-	var lvl log.Lvl
-	if lvlStr := ctx.String(LogFlag.Name); lvlStr != "" {
-		if lvlToInt, err := strconv.Atoi(lvlStr); err == nil {
-			lvl = log.Lvl(lvlToInt)
-		} else if lvl, err = log.LvlFromString(lvlStr); err != nil {
-			return err
-		}
+func setLogConfig(ctx *cli.Context, cfg *Config, globalCfg *dot.GlobalConfig, logCfg *dot.LogConfig) error {
+	if cfg == nil {
+		cfg = new(Config)
 	}
 
 	if lvlStr := ctx.String(LogFlag.Name); lvlStr != "" {
-		globalCfg.LogLevel = lvl.String()
+		if lvlToInt, err := strconv.Atoi(lvlStr); err == nil {
+			lvlStr = log.Lvl(lvlToInt).String()
+		}
+		cfg.Global.LogLvl = lvlStr
+	}
+
+	if cfg.Global.LogLvl == "" {
+		cfg.Global.LogLvl = gssmr.DefaultLvl.String()
+	}
+
+	var err error
+	globalCfg.LogLvl, err = log.LvlFromString(cfg.Global.LogLvl)
+	if err != nil {
+		return err
 	}
 
 	// check and set log levels for each pkg
-	if logCfg.CoreLvl == "" {
-		logCfg.CoreLvl = globalCfg.LogLevel
+	if cfg.Log.CoreLvl == "" {
+		logCfg.CoreLvl = globalCfg.LogLvl
+	} else {
+		lvl, err := log.LvlFromString(cfg.Log.CoreLvl)
+		if err != nil {
+			return err
+		}
+
+		logCfg.CoreLvl = lvl
 	}
 
-	if logCfg.SyncLvl == "" {
-		logCfg.SyncLvl = globalCfg.LogLevel
+	if cfg.Log.SyncLvl == "" {
+		logCfg.SyncLvl = globalCfg.LogLvl
+	} else {
+		lvl, err := log.LvlFromString(cfg.Log.SyncLvl)
+		if err != nil {
+			return err
+		}
+
+		logCfg.SyncLvl = lvl
 	}
 
-	if logCfg.NetworkLvl == "" {
-		logCfg.NetworkLvl = globalCfg.LogLevel
+	if cfg.Log.NetworkLvl == "" {
+		logCfg.NetworkLvl = globalCfg.LogLvl
+	} else {
+		lvl, err := log.LvlFromString(cfg.Log.NetworkLvl)
+		if err != nil {
+			return err
+		}
+
+		logCfg.NetworkLvl = lvl
 	}
 
-	if logCfg.RPCLvl == "" {
-		logCfg.RPCLvl = globalCfg.LogLevel
+	if cfg.Log.RPCLvl == "" {
+		logCfg.RPCLvl = globalCfg.LogLvl
+	} else {
+		lvl, err := log.LvlFromString(cfg.Log.RPCLvl)
+		if err != nil {
+			return err
+		}
+
+		logCfg.RPCLvl = lvl
 	}
 
-	if logCfg.StateLvl == "" {
-		logCfg.StateLvl = globalCfg.LogLevel
+	if cfg.Log.StateLvl == "" {
+		logCfg.StateLvl = globalCfg.LogLvl
+	} else {
+		lvl, err := log.LvlFromString(cfg.Log.StateLvl)
+		if err != nil {
+			return err
+		}
+
+		logCfg.StateLvl = lvl
 	}
 
-	if logCfg.RuntimeLvl == "" {
-		logCfg.RuntimeLvl = globalCfg.LogLevel
+	if cfg.Log.RuntimeLvl == "" {
+		logCfg.RuntimeLvl = globalCfg.LogLvl
+	} else {
+		lvl, err := log.LvlFromString(cfg.Log.RuntimeLvl)
+		if err != nil {
+			return err
+		}
+
+		logCfg.RuntimeLvl = lvl
 	}
 
-	if logCfg.BlockProducerLvl == "" {
-		logCfg.BlockProducerLvl = globalCfg.LogLevel
+	if cfg.Log.BlockProducerLvl == "" {
+		logCfg.BlockProducerLvl = globalCfg.LogLvl
+	} else {
+		lvl, err := log.LvlFromString(cfg.Log.BlockProducerLvl)
+		if err != nil {
+			return err
+		}
+
+		logCfg.BlockProducerLvl = lvl
 	}
 
-	if logCfg.FinalityGadgetLvl == "" {
-		logCfg.FinalityGadgetLvl = globalCfg.LogLevel
+	if cfg.Log.FinalityGadgetLvl == "" {
+		logCfg.FinalityGadgetLvl = globalCfg.LogLvl
+	} else {
+		lvl, err := log.LvlFromString(cfg.Log.FinalityGadgetLvl)
+		if err != nil {
+			return err
+		}
+
+		logCfg.FinalityGadgetLvl = lvl
 	}
 
-	logger.Debug("set log configuration", "--log", ctx.String(LogFlag.Name), "global", globalCfg.LogLevel)
+	logger.Debug("set log configuration", "--log", ctx.String(LogFlag.Name), "global", globalCfg.LogLvl)
 	return nil
 }
 
 // setDotInitConfig sets dot.InitConfig using flag values from the cli context
-func setDotInitConfig(ctx *cli.Context, cfg *dot.InitConfig) {
+func setDotInitConfig(ctx *cli.Context, tomlCfg InitConfig, cfg *dot.InitConfig) {
+	cfg.GenesisRaw = tomlCfg.GenesisRaw
+
 	// check --genesis-raw flag and update init configuration
 	if genesis := ctx.String(GenesisRawFlag.Name); genesis != "" {
 		cfg.GenesisRaw = genesis
@@ -257,7 +334,25 @@ func setDotInitConfig(ctx *cli.Context, cfg *dot.InitConfig) {
 }
 
 // setDotGlobalConfig sets dot.GlobalConfig using flag values from the cli context
-func setDotGlobalConfig(ctx *cli.Context, cfg *dot.GlobalConfig) {
+func setDotGlobalConfig(ctx *cli.Context, tomlCfg *Config, cfg *dot.GlobalConfig) {
+	if tomlCfg != nil {
+		if tomlCfg.Global.Name != "" {
+			cfg.Name = tomlCfg.Global.Name
+		}
+
+		if tomlCfg.Global.ID != "" {
+			cfg.ID = tomlCfg.Global.ID
+		}
+
+		if tomlCfg.Global.BasePath != "" {
+			cfg.BasePath = tomlCfg.Global.BasePath
+		}
+
+		if tomlCfg.Global.LogLvl != "" {
+			cfg.LogLvl, _ = log.LvlFromString(tomlCfg.Global.LogLvl)
+		}
+	}
+
 	// check --name flag and update node configuration
 	if name := ctx.GlobalString(NameFlag.Name); name != "" {
 		cfg.Name = name
@@ -279,10 +374,9 @@ func setDotGlobalConfig(ctx *cli.Context, cfg *dot.GlobalConfig) {
 	}
 	// check --log flag
 	if lvlToInt, err := strconv.Atoi(ctx.String(LogFlag.Name)); err == nil {
-		lvl := log.Lvl(lvlToInt)
-		cfg.LogLevel = lvl.String()
+		cfg.LogLvl = log.Lvl(lvlToInt)
 	} else if lvl, err := log.LvlFromString(ctx.String(LogFlag.Name)); err == nil {
-		cfg.LogLevel = lvl.String()
+		cfg.LogLvl = lvl
 	}
 
 	logger.Debug(
@@ -294,7 +388,15 @@ func setDotGlobalConfig(ctx *cli.Context, cfg *dot.GlobalConfig) {
 }
 
 // setDotAccountConfig sets dot.AccountConfig using flag values from the cli context
-func setDotAccountConfig(ctx *cli.Context, cfg *dot.AccountConfig) {
+func setDotAccountConfig(ctx *cli.Context, tomlCfg AccountConfig, cfg *dot.AccountConfig) {
+	if tomlCfg.Key != "" {
+		cfg.Key = tomlCfg.Key
+	}
+
+	if tomlCfg.Unlock != "" {
+		cfg.Unlock = tomlCfg.Unlock
+	}
+
 	// check --key flag and update node configuration
 	if key := ctx.GlobalString(KeyFlag.Name); key != "" {
 		cfg.Key = key
@@ -313,66 +415,53 @@ func setDotAccountConfig(ctx *cli.Context, cfg *dot.AccountConfig) {
 }
 
 // setDotCoreConfig sets dot.CoreConfig using flag values from the cli context
-func setDotCoreConfig(ctx *cli.Context, cfg *dot.CoreConfig) {
+func setDotCoreConfig(ctx *cli.Context, tomlCfg CoreConfig, cfg *dot.CoreConfig) {
+	cfg.Roles = tomlCfg.Roles
+	cfg.BabeAuthority = tomlCfg.Roles == types.AuthorityRole
+	cfg.GrandpaAuthority = tomlCfg.Roles == types.AuthorityRole
+	cfg.SlotDuration = tomlCfg.SlotDuration
+
 	// check --roles flag and update node configuration
 	if roles := ctx.GlobalString(RolesFlag.Name); roles != "" {
 		// convert string to byte
 		b, err := strconv.Atoi(roles)
 		if err != nil {
 			logger.Error("failed to convert Roles to byte", "error", err)
-		} else if byte(b) == 4 {
+		} else if byte(b) == types.AuthorityRole {
 			// if roles byte is 4, act as an authority (see Table D.2)
 			logger.Debug("authority enabled", "roles", 4)
-			cfg.Authority = true
-		} else if byte(b) > 4 {
+			cfg.Roles = byte(b)
+		} else if byte(b) > types.AuthorityRole {
 			// if roles byte is greater than 4, invalid roles byte (see Table D.2)
 			logger.Error("invalid roles option provided, authority disabled", "roles", byte(b))
-			cfg.Authority = false
 		} else {
 			// if roles byte is less than 4, do not act as an authority (see Table D.2)
 			logger.Debug("authority disabled", "roles", byte(b))
-			cfg.Authority = false
-		}
-	}
-
-	// check --roles flag and update node configuration
-	if roles := ctx.GlobalString(RolesFlag.Name); roles != "" {
-		b, err := strconv.Atoi(roles)
-		if err != nil {
-			logger.Error("failed to convert Roles to byte", "error", err)
-		} else if byte(b) > 4 {
-			// if roles byte is greater than 4, invalid roles byte (see Table D.2)
-			logger.Error("invalid roles option provided", "roles", byte(b))
-		} else {
 			cfg.Roles = byte(b)
 		}
 	}
 
-	// to turn on BABE but not grandpa, cfg.Authority must be set to true
+	// to turn on BABE but not grandpa, cfg.Roles must be set to 4
 	// and cfg.GrandpaAuthority must be set to false
-	if cfg.Authority && !cfg.BabeAuthority {
+	if cfg.Roles == types.AuthorityRole && !tomlCfg.BabeAuthority {
 		cfg.BabeAuthority = false
 	}
 
-	if cfg.Authority && !cfg.GrandpaAuthority {
+	if cfg.Roles == types.AuthorityRole && !tomlCfg.GrandpaAuthority {
 		cfg.GrandpaAuthority = false
 	}
 
-	if !cfg.Authority {
+	if cfg.Roles != types.AuthorityRole {
 		cfg.BabeAuthority = false
 		cfg.GrandpaAuthority = false
 	}
 
-	if thresholdStr, ok := cfg.BabeThreshold.(string); ok {
-		switch thresholdStr {
-		case "max":
-			cfg.BabeThreshold = babe.MaxThreshold
-		case "min":
-			cfg.BabeThreshold = babe.MinThreshold
-		default:
-			cfg.BabeThreshold = nil
-		}
-	} else {
+	switch tomlCfg.BabeThreshold {
+	case "max":
+		cfg.BabeThreshold = babe.MaxThreshold
+	case "min":
+		cfg.BabeThreshold = babe.MinThreshold
+	default:
 		cfg.BabeThreshold = nil
 	}
 
@@ -385,7 +474,13 @@ func setDotCoreConfig(ctx *cli.Context, cfg *dot.CoreConfig) {
 }
 
 // setDotNetworkConfig sets dot.NetworkConfig using flag values from the cli context
-func setDotNetworkConfig(ctx *cli.Context, cfg *dot.NetworkConfig) {
+func setDotNetworkConfig(ctx *cli.Context, tomlCfg NetworkConfig, cfg *dot.NetworkConfig) {
+	cfg.Port = tomlCfg.Port
+	cfg.Bootnodes = tomlCfg.Bootnodes
+	cfg.ProtocolID = tomlCfg.ProtocolID
+	cfg.NoBootstrap = tomlCfg.NoBootstrap
+	cfg.NoMDNS = tomlCfg.NoMDNS
+
 	// check --port flag and update node configuration
 	if port := ctx.GlobalUint(PortFlag.Name); port != 0 {
 		cfg.Port = uint32(port)
@@ -427,7 +522,14 @@ func setDotNetworkConfig(ctx *cli.Context, cfg *dot.NetworkConfig) {
 }
 
 // setDotRPCConfig sets dot.RPCConfig using flag values from the cli context
-func setDotRPCConfig(ctx *cli.Context, cfg *dot.RPCConfig) {
+func setDotRPCConfig(ctx *cli.Context, tomlCfg RPCConfig, cfg *dot.RPCConfig) {
+	cfg.Enabled = tomlCfg.Enabled
+	cfg.Port = tomlCfg.Port
+	cfg.Host = tomlCfg.Host
+	cfg.Modules = tomlCfg.Modules
+	cfg.WSPort = tomlCfg.WSPort
+	cfg.WSEnabled = tomlCfg.WSEnabled
+
 	// check --rpc flag and update node configuration
 	if enabled := ctx.GlobalBool(RPCEnabledFlag.Name); enabled {
 		cfg.Enabled = true
@@ -490,7 +592,12 @@ func setSystemInfoConfig(ctx *cli.Context, cfg *dot.Config) {
 }
 
 // updateDotConfigFromGenesisJSONRaw updates the configuration based on the raw genesis file values
-func updateDotConfigFromGenesisJSONRaw(ctx *cli.Context, cfg *dot.Config) {
+func updateDotConfigFromGenesisJSONRaw(ctx *cli.Context, tomlCfg Config, cfg *dot.Config) {
+	cfg.Account.Key = tomlCfg.Account.Key
+	cfg.Account.Unlock = tomlCfg.Account.Unlock
+	cfg.Core.Roles = tomlCfg.Core.Roles
+	cfg.Core.BabeAuthority = tomlCfg.Core.Roles == types.AuthorityRole
+	cfg.Core.GrandpaAuthority = tomlCfg.Core.Roles == types.AuthorityRole
 
 	// use default genesis-raw file if genesis configuration not provided, for example,
 	// if we load a toml configuration file without a defined genesis-raw init value or

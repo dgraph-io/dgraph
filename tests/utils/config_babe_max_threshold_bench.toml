@@ -16,7 +16,6 @@ key = ""
 unlock = ""
 
 [core]
-authority = true
 roles = 4
 babe-authority = true
 grandpa-authority = true
@@ -32,5 +31,5 @@ nomdns = false
 [rpc]
 enabled = false
 host = "localhost"
-modules = ["system", "author", "chain", "state"]
+modules = ["system", "author", "chain", "state", "dev"]
 ws-enabled = false
