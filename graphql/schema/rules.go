@@ -1166,6 +1166,28 @@ func passwordValidation(sch *ast.Schema,
 	return passwordDirectiveValidation(sch, typ)
 }
 
+func lambdaDirectiveValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	// if the lambda url wasn't specified during alpha startup,
+	// just return that error. Don't confuse the user with errors from @custom yet.
+	if x.Config.GraphqlLambdaUrl == "" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(dir.Position,
+			"Type %s; Field %s: has the @lambda directive, but the "+
+				"`--graphql_lambda_url` flag wasn't specified during alpha startup.",
+			typ.Name, field.Name)}
+	}
+	// check for errors from @custom directive
+	errs := customDirectiveValidation(sch, typ, field, buildCustomDirectiveForLambda(typ, field,
+		dir), secrets)
+	for _, err := range errs {
+		err.Message = "While building @custom for @lambda: " + err.Message
+	}
+	return errs
+}
+
 func customDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,

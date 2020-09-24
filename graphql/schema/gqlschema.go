@@ -143,7 +143,7 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
 directive @cascade(fields: [String]) on FIELD
-directive @lambda  on FIELD_DEFINITION
+directive @lambda on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -347,7 +347,7 @@ var directiveValidators = map[string]directiveValidator{
 	SubscriptionDirective: ValidatorNoOp,
 	// Just go get it printed into generated schema
 	authDirective:   ValidatorNoOp,
-	lambdaDirective: ValidatorNoOp,
+	lambdaDirective: lambdaDirectiveValidation,
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List

@@ -605,64 +605,112 @@ func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) 
 	return repeatedFieldNames
 }
 
-func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
+func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directive,
+	map[string]map[string]bool) {
 	customDirectives := make(map[string]map[string]*ast.Directive)
-
-	for _, typ := range s.Types {
-		for _, field := range typ.Fields {
-			for i, dir := range field.Directives {
-				if dir.Name == customDirective {
-					// remove custom directive from s
-					lastIndex := len(field.Directives) - 1
-					field.Directives[i] = field.Directives[lastIndex]
-					field.Directives = field.Directives[:lastIndex]
-					// now put it into mapping
-					var fieldMap map[string]*ast.Directive
-					if innerMap, ok := customDirectives[typ.Name]; !ok {
-						fieldMap = make(map[string]*ast.Directive)
-					} else {
-						fieldMap = innerMap
-					}
-					fieldMap[field.Name] = dir
-					customDirectives[typ.Name] = fieldMap
-					// break, as there can only be one @custom
-					break
-				}
-			}
-		}
-	}
-
-	return customDirectives
-}
-
-func lambdaMappings(s *ast.Schema) map[string]map[string]bool {
 	lambdaDirectives := make(map[string]map[string]bool)
 
 	for _, typ := range s.Types {
 		for _, field := range typ.Fields {
 			for i, dir := range field.Directives {
-				if dir.Name == lambdaDirective {
-					// remove lambda directive from s
+				if dir.Name == customDirective || dir.Name == lambdaDirective {
+					// remove @custom/@lambda directive from s
 					lastIndex := len(field.Directives) - 1
 					field.Directives[i] = field.Directives[lastIndex]
 					field.Directives = field.Directives[:lastIndex]
-					// now put it into mapping
-					var fieldMap map[string]bool
-					if innerMap, ok := lambdaDirectives[typ.Name]; !ok {
-						fieldMap = make(map[string]bool)
+					// now put it into @custom mapping
+					var customFieldMap map[string]*ast.Directive
+					if existingCustomFieldMap, ok := customDirectives[typ.Name]; ok {
+						customFieldMap = existingCustomFieldMap
 					} else {
-						fieldMap = innerMap
+						customFieldMap = make(map[string]*ast.Directive)
 					}
-					fieldMap[field.Name] = true
-					lambdaDirectives[typ.Name] = fieldMap
-					// break, as there can only be one @lambda
+					if dir.Name == customDirective {
+						customFieldMap[field.Name] = dir
+					} else {
+						// for lambda, first update the lambda directives map
+						var lambdaFieldMap map[string]bool
+						if existingLambdaFieldMap, ok := lambdaDirectives[typ.Name]; ok {
+							lambdaFieldMap = existingLambdaFieldMap
+						} else {
+							lambdaFieldMap = make(map[string]bool)
+						}
+						lambdaFieldMap[field.Name] = true
+						lambdaDirectives[typ.Name] = lambdaFieldMap
+						// then, build a custom directive with correct semantics to be put
+						// into custom directives map
+						customFieldMap[field.Name] = buildCustomDirectiveForLambda(typ, field, dir)
+					}
+					customDirectives[typ.Name] = customFieldMap
+					// break, as there can only be one @custom/@lambda
 					break
 				}
 			}
 		}
 	}
 
-	return lambdaDirectives
+	return customDirectives, lambdaDirectives
+}
+
+func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinition,
+	lambdaDir *ast.Directive) *ast.Directive {
+	comma := ""
+	var bodyTemplate strings.Builder
+
+	appendToBodyTemplate := func(varName string) {
+		bodyTemplate.WriteString(comma)
+		bodyTemplate.WriteString(varName)
+		bodyTemplate.WriteString(": $")
+		bodyTemplate.WriteString(varName)
+		comma = ", "
+	}
+
+	// first let's construct the body template for the custom directive
+	bodyTemplate.WriteString("{")
+	if isQueryOrMutationType(defn) {
+		for _, arg := range field.Arguments {
+			appendToBodyTemplate(arg.Name)
+		}
+	} else {
+		for _, f := range defn.Fields {
+			appendToBodyTemplate(f.Name)
+		}
+	}
+	bodyTemplate.WriteString("}")
+
+	// build the children for http argument
+	httpArgChildrens := []*ast.ChildValue{
+		getChildValue(httpUrl, x.Config.GraphqlLambdaUrl, ast.StringValue, lambdaDir.Position),
+		getChildValue(httpMethod, http.MethodPost, ast.EnumValue, lambdaDir.Position),
+		getChildValue(httpBody, bodyTemplate.String(), ast.StringValue, lambdaDir.Position),
+	}
+	if !isQueryOrMutationType(defn) {
+		httpArgChildrens = append(httpArgChildrens,
+			getChildValue(mode, BATCH, ast.EnumValue, lambdaDir.Position))
+	}
+
+	// build the custom directive
+	return &ast.Directive{
+		Name: customDirective,
+		Arguments: []*ast.Argument{{
+			Name: httpArg,
+			Value: &ast.Value{
+				Kind:     ast.ObjectValue,
+				Children: httpArgChildrens,
+				Position: lambdaDir.Position,
+			},
+			Position: lambdaDir.Position,
+		}},
+		Position: lambdaDir.Position,
+	}
+}
+
+func getChildValue(name, raw string, kind ast.ValueKind, position *ast.Position) *ast.ChildValue {
+	return &ast.ChildValue{
+		Name:     name,
+		Value:    &ast.Value{Raw: raw, Kind: kind, Position: position},
+		Position: position,
+	}
 }
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
@@ -674,14 +722,15 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		return nil, err
 	}
 
+	customDirs, lambdaDirs := customAndLambdaMappings(s)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
 		schema:             s,
 		dgraphPredicate:    dgraphPredicate,
 		typeNameAst:        typeMappings(s),
 		repeatedFieldNames: repeatedFieldMappings(s, dgraphPredicate),
-		customDirectives:   customMappings(s),
-		lambdaDirectives:   lambdaMappings(s),
+		customDirectives:   customDirs,
+		lambdaDirectives:   lambdaDirs,
 		authRules:          authRules,
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
