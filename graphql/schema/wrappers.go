@@ -177,6 +177,7 @@ type Type interface {
 	EnsureNonNulls(map[string]interface{}, string) error
 	FieldOriginatedFrom(fieldName string) string
 	AuthRules() *TypeAuth
+	IsGeo() bool
 	fmt.Stringer
 }
 
@@ -1443,6 +1444,10 @@ func (m *mutation) IsAuthQuery() bool {
 
 func (t *astType) AuthRules() *TypeAuth {
 	return t.inSchema.authRules[t.DgraphName()]
+}
+
+func (t *astType) IsGeo() bool {
+	return t.Name() == "Point"
 }
 
 func (t *astType) Field(name string) FieldDefinition {

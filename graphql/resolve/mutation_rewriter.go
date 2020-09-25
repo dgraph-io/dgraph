@@ -1165,9 +1165,24 @@ func rewriteObject(
 				// or giving the data to create the object as part of a deep mutation
 				// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
 				//          like here ^^
-				frags =
-					rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
-						withAdditionalDeletes, val, deepXID, xidMetadata)
+				if fieldDef.Type().IsGeo() {
+					lat, _ := val["latitude"]
+					long, _ := val["longitude"]
+					frags = &mutationRes{
+						secondPass: []*mutationFragment{
+							newFragment(
+								map[string]interface{}{
+									"type":        "Point",
+									"coordinates": []interface{}{long, lat},
+								},
+							),
+						},
+					}
+				} else {
+					frags =
+						rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
+							withAdditionalDeletes, val, deepXID, xidMetadata)
+				}
 
 			case []interface{}:
 				// This field is either:

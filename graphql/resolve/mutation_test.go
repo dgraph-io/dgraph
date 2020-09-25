@@ -182,9 +182,6 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			if tcase.Name != "Add mutation with geo" {
-				return
-			}
 			// -- Arrange --
 			var vars map[string]interface{}
 			if tcase.GQLVariables != "" {

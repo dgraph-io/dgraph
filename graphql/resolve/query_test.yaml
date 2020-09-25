@@ -8,7 +8,7 @@
     }
   dgquery: |-
     query {
-      queryHotel(func: type(Hotel))) @filter(near(Hotel.location, [22.22,11.11], 33.33)) {
+      queryHotel(func: type(Hotel)) @filter(near(Hotel.location, [22.22,11.11], 33.33)) {
         name : Hotel.name
         dgraph.uid : uid
       }

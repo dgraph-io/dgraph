@@ -77,9 +77,7 @@ func TestSchemaString(t *testing.T) {
 	for _, testFile := range files {
 		t.Run(testFile.Name(), func(t *testing.T) {
 			inputFileName := inputDir + testFile.Name()
-			if testFile.Name() != "geo-type.graphql" {
-				return
-			}
+
 			str1, err := ioutil.ReadFile(inputFileName)
 			require.NoError(t, err)
 
