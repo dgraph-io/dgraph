@@ -229,6 +229,11 @@ if [[ :${TEST_SET}: == *:unit:* ]]; then
     else
         Info "Skipping default cluster tests because none match"
     fi
+
+    if [[ $TEST_FAILED -eq 1 ]]; then
+        echo "Some test failed. Exiting now."
+        exit $TEST_FAILED
+    fi
 fi
 
 if [[ :${TEST_SET}: == *:cluster:* ]]; then
@@ -238,28 +243,58 @@ if [[ :${TEST_SET}: == *:cluster:* ]]; then
     else
         Info "Skipping custom cluster tests because none match"
     fi
+
+    if [[ $TEST_FAILED -eq 1 ]]; then
+        echo "Some test failed. Exiting now."
+        exit $TEST_FAILED
+    fi
 fi
 
 if [[ :${TEST_SET}: == *:systest:* ]]; then
-    Info "Running posting size calculation"
-    cd posting
-    RunCmd ./size_test.sh || TestFailed
-    cd ..
+    # Info "Running posting size calculation"
+    # cd posting
+    # RunCmd ./size_test.sh || TestFailed
+    # cd ..
+
+    # if [[ $TEST_FAILED -eq 1 ]]; then
+    #     echo "Some test failed. Exiting now."
+    #     exit $TEST_FAILED
+    # fi
 
     Info "Running small load test"
     RunCmd ./contrib/scripts/load-test.sh || TestFailed
 
+    if [[ $TEST_FAILED -eq 1 ]]; then
+        echo "Some test failed. Exiting now."
+        exit $TEST_FAILED
+    fi
+
     Info "Running custom test scripts"
     RunCmd ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TestFailed
 
+    if [[ $TEST_FAILED -eq 1 ]]; then
+        echo "Some test failed. Exiting now."
+        exit $TEST_FAILED
+    fi
+
     Info "Running large bulk load test"
     RunCmd ./systest/21million/test-21million.sh || TestFailed
+
+    if [[ $TEST_FAILED -eq 1 ]]; then
+        echo "Some test failed. Exiting now."
+        exit $TEST_FAILED
+    fi
 
     # Info "Running large live load test"
     # RunCmd ./systest/21million/test-21million.sh --loader live || TestFailed
 
     Info "Running rebuilding index test"
     RunCmd ./systest/1million/test-reindex.sh || TestFailed
+
+    if [[ $TEST_FAILED -eq 1 ]]; then
+        echo "Some test failed. Exiting now."
+        exit $TEST_FAILED
+    fi
 
     Info "Running background index test"
     RunCmd ./systest/bgindex/test-bgindex.sh || TestFailed

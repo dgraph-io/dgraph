@@ -213,7 +213,7 @@ func Test21MillionDataSetSize(t *testing.T) {
 	t.Logf("calculated unit %s profied unit %s percent difference %.2f%%",
 		humanize.Bytes(uint64(calculatedSize)), humanize.Bytes(uint64(pprofSize)), percent)
 	if percent > 10 {
-		require.Fail(t, "Expected size difference is less than 8 but got %f", percent)
+		require.Fail(t, "Expected size difference is less than 8 but got", percent)
 	}
 }
 
