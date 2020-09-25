@@ -363,7 +363,7 @@ func TestMetaFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, hs1, hs)
 
-	sp, err := mf.Snapshot()
+	sp, err := mf.snapshot()
 	require.NoError(t, err)
 	require.Zero(t, sp)
 
@@ -376,7 +376,7 @@ func TestMetaFile(t *testing.T) {
 	}
 	require.NoError(t, mf.StoreSnapshot(&sp))
 
-	sp1, err := mf.Snapshot()
+	sp1, err := mf.snapshot()
 	require.NoError(t, err)
 	require.Equal(t, sp, sp1)
 }
@@ -386,7 +386,7 @@ func TestEntryFile(t *testing.T) {
 	require.NoError(t, err)
 	el, err := openEntryLog(dir)
 	require.NoError(t, err)
-	require.Equal(t, uint64(1), el.FirstIndex())
+	require.Equal(t, uint64(1), el.firstIndex())
 	require.Zero(t, el.LastIndex())
 
 	e, err := el.getEntry(2)

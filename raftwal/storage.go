@@ -109,8 +109,10 @@ const (
 	checkpointOffset = 8
 	//hardStateOffset is the offset of the hard sate within the wal.meta file.
 	hardStateOffset = 512
+	// snapshotIndex stores the index and term corresponding to the snapshot.
+	snapshotIndex = 1024
 	// snapshotOffest is the offset of the snapshot within the wal.meta file.
-	snapshotOffset = 1024
+	snapshotOffset = snapshotIndex + 16
 	// maxNumEntries is maximum number of entries before rotating the file.
 	maxNumEntries = 30000
 	// entryFileOffset
@@ -280,7 +282,7 @@ func (m *metaFile) StoreHardState(hs *raftpb.HardState) error {
 	if err != nil {
 		return errors.Wrapf(err, "cannot marshal hard state")
 	}
-	x.AssertTrue(len(buf) < snapshotOffset-hardStateOffset)
+	x.AssertTrue(len(buf) < snapshotIndex-hardStateOffset)
 	writeSlice(m.data[hardStateOffset:], buf)
 	return nil
 }
@@ -302,6 +304,9 @@ func (m *metaFile) StoreSnapshot(snap *raftpb.Snapshot) error {
 	if snap == nil || raft.IsEmptySnap(*snap) {
 		return nil
 	}
+	binary.BigEndian.PutUint64(m.data[snapshotIndex:], snap.Metadata.Index)
+	binary.BigEndian.PutUint64(m.data[snapshotIndex+8:], snap.Metadata.Term)
+
 	buf, err := snap.Marshal()
 	if err != nil {
 		return errors.Wrapf(err, "cannot marshal snapshot")
@@ -315,8 +320,11 @@ func (m *metaFile) StoreSnapshot(snap *raftpb.Snapshot) error {
 	return nil
 }
 
-// TODO: Sometimes we just need the index, not the full snapshot. So, add a way to get that quickly.
-func (m *metaFile) Snapshot() (raftpb.Snapshot, error) {
+func (m *metaFile) snapshotIndex() uint64 {
+	return binary.BigEndian.Uint64(m.data[snapshotOffset:])
+}
+
+func (m *metaFile) snapshot() (raftpb.Snapshot, error) {
 	val := readSlice(m.data, snapshotOffset)
 
 	var snap raftpb.Snapshot
@@ -703,7 +711,7 @@ func (l *entryLog) DiscardFiles(snapshotIndex uint64) error {
 	return nil
 }
 
-func (l *entryLog) FirstIndex() uint64 {
+func (l *entryLog) firstIndex() uint64 {
 	if l == nil {
 		return 0
 	}
@@ -925,8 +933,9 @@ func Init(dir string) *DiskStorage {
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
-	snap, err := w.meta.Snapshot()
+	snap, err := w.meta.snapshot()
 	x.Check(err)
+	glog.Infof("Found snapshot: %+v\n", snap)
 
 	first, _ := w.FirstIndex()
 
@@ -937,7 +946,7 @@ func Init(dir string) *DiskStorage {
 	}
 	last := w.entries.LastIndex()
 
-	fmt.Printf("Init Raft Storage with snap: %d, first: %d, last: %d\n",
+	glog.Infof("Init Raft Storage with snap: %d, first: %d, last: %d\n",
 		snap.Metadata.Index, first, last)
 	return w
 }
@@ -1014,7 +1023,7 @@ func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, 
 		return
 	}
 	var snap raftpb.Snapshot
-	snap, err = w.meta.Snapshot()
+	snap, err = w.meta.snapshot()
 	if err != nil {
 		return
 	}
@@ -1025,7 +1034,7 @@ func (w *DiskStorage) NumEntries() int {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	start := w.entries.FirstIndex()
+	start := w.entries.firstIndex()
 
 	var count int
 	for {
@@ -1048,7 +1057,7 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 
 	// glog.Infof("Entries after lock: [%d, %d) maxSize:%d", lo, hi, maxSize)
 
-	first := w.entries.FirstIndex()
+	first := w.entries.firstIndex()
 	if lo < first {
 		glog.Errorf("lo: %d <first: %d\n", lo, first)
 		return nil, raft.ErrCompacted
@@ -1096,10 +1105,10 @@ func (w *DiskStorage) firstIndex() uint64 {
 	// We are deleting index ranges in background after taking snapshot, so we should check for last
 	// snapshot in WAL(Badger) if it is not found in cache. If no snapshot is found, then we can
 	// check firstKey.
-	if snap, err := w.meta.Snapshot(); err == nil && !raft.IsEmptySnap(snap) {
-		return snap.Metadata.Index + 1
+	if si := w.meta.snapshotIndex(); si > 0 {
+		return si + 1
 	}
-	return w.entries.FirstIndex()
+	return w.entries.firstIndex()
 }
 
 // FirstIndex returns the index of the first log entry that is
@@ -1120,7 +1129,7 @@ func (w *DiskStorage) Snapshot() (raftpb.Snapshot, error) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	return w.meta.Snapshot()
+	return w.meta.snapshot()
 }
 
 // ---------------- Raft.Storage interface complete.
