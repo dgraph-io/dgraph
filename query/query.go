@@ -2539,7 +2539,7 @@ func isValidFuncName(f string) bool {
 
 func isInequalityFn(f string) bool {
 	switch f {
-	case "eq", "le", "ge", "gt", "lt":
+	case "eq", "le", "ge", "gt", "lt", "between":
 		return true
 	}
 	return false
