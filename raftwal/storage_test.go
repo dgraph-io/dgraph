@@ -33,6 +33,7 @@
 package raftwal
 
 import (
+	"crypto/rand"
 	"io/ioutil"
 	"math"
 	"os"
@@ -182,64 +183,55 @@ func TestStorageFirstIndex(t *testing.T) {
 		t.Errorf("first = %d, want %d", first, 4)
 	}
 
-	// TODO: figure out a way to delete the range.
-	// require.NoError(t, ds.addEntries(ents[1:]))
-
-	// // require.NoError(t, ds.deleteRange(batch, 0, 4))
-	// first, err = ds.FirstIndex()
-	// if err != nil {
-	// 	t.Errorf("err = %v, want nil", err)
-	// }
-	// if first != 5 {
-	// 	t.Errorf("first = %d, want %d", first, 5)
-	// }
+	// Doesn't seem like we actually need to implement Compact.
 }
 
-func TestStorageCompact(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
+// TODO: Consider if we need this.
+// func TestStorageCompact(t *testing.T) {
+// 	dir, err := ioutil.TempDir("", "badger")
+// 	require.NoError(t, err)
+// 	defer os.RemoveAll(dir)
 
-	ds := Init(dir, 0, 0)
+// 	ds := Init(dir, 0, 0)
 
-	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-	require.NoError(t, ds.reset(ents))
+// 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+// 	require.NoError(t, ds.reset(ents))
 
-	tests := []struct {
-		i uint64
+// 	tests := []struct {
+// 		i uint64
 
-		werr   error
-		windex uint64
-		wterm  uint64
-		wlen   int
-	}{
-		{2, raft.ErrCompacted, 3, 3, 3},
-		{3, raft.ErrCompacted, 3, 3, 3},
-		{4, nil, 4, 4, 2},
-		{5, nil, 5, 5, 1},
-	}
+// 		werr   error
+// 		windex uint64
+// 		wterm  uint64
+// 		wlen   int
+// 	}{
+// 		{2, raft.ErrCompacted, 3, 3, 3},
+// 		{3, raft.ErrCompacted, 3, 3, 3},
+// 		{4, nil, 4, 4, 2},
+// 		{5, nil, 5, 5, 1},
+// 	}
 
-	for i, tt := range tests {
-		// first, err := ds.FirstIndex()
-		// require.NoError(t, err)
-		// err = ds.deleteRange(batch, first-1, tt.i)
-		// if err != tt.werr {
-		// 	t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
-		// }
-		index, err := ds.FirstIndex()
-		require.NoError(t, err)
-		// Do the minus one here to get the index of the snapshot.
-		if index-1 != tt.windex {
-			t.Errorf("#%d: index = %d, want %d", i, index, tt.windex)
-		}
+// 	for i, tt := range tests {
+// 		// first, err := ds.FirstIndex()
+// 		// require.NoError(t, err)
+// 		// err = ds.deleteRange(batch, first-1, tt.i)
+// 		// if err != tt.werr {
+// 		// 	t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
+// 		// }
+// 		index, err := ds.FirstIndex()
+// 		require.NoError(t, err)
+// 		// Do the minus one here to get the index of the snapshot.
+// 		if index-1 != tt.windex {
+// 			t.Errorf("#%d: index = %d, want %d", i, index, tt.windex)
+// 		}
 
-		all, err := ds.Entries(0, math.MaxUint64, math.MaxUint64)
-		require.NoError(t, err)
-		if len(all) != tt.wlen {
-			t.Errorf("#%d: len = %d, want %d", i, len(all), tt.wlen)
-		}
-	}
-}
+// 		all, err := ds.Entries(0, math.MaxUint64, math.MaxUint64)
+// 		require.NoError(t, err)
+// 		if len(all) != tt.wlen {
+// 			t.Errorf("#%d: len = %d, want %d", i, len(all), tt.wlen)
+// 		}
+// 	}
+// }
 
 func TestStorageCreateSnapshot(t *testing.T) {
 	dir, err := ioutil.TempDir("", "badger")
@@ -325,8 +317,8 @@ func TestStorageAppend(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, ds.reset(ents))
 	for i, tt := range tests {
+		require.NoError(t, ds.reset(ents))
 		err := ds.addEntries(tt.entries)
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
@@ -387,11 +379,11 @@ func TestMetaFile(t *testing.T) {
 }
 
 func TestEntryFile(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger-test")
+	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
 	el, err := openEntryLog(dir)
 	require.NoError(t, err)
-	require.Zero(t, el.FirstIndex())
+	require.Equal(t, uint64(1), el.FirstIndex())
 	require.Zero(t, el.LastIndex())
 
 	e, err := el.getEntry(2)
@@ -405,4 +397,102 @@ func TestEntryFile(t *testing.T) {
 	require.Equal(t, uint64(1), entries[0].Index)
 	require.Equal(t, uint64(1), entries[0].Term)
 	require.Equal(t, "abc", string(entries[0].Data))
+}
+
+func TestStorageBig(t *testing.T) {
+	dir, err := ioutil.TempDir("", "raftwal")
+	require.NoError(t, err)
+	ds := Init(dir, 1, 1)
+	defer os.RemoveAll(dir)
+
+	ent := raftpb.Entry{
+		Term: 1,
+		Type: raftpb.EntryNormal,
+	}
+
+	addEntries := func(start, end uint64) {
+		t.Logf("adding entries: %d -> %d\n", start, end)
+		for idx := start; idx <= end; idx++ {
+			ent.Index = idx
+			require.NoError(t, ds.entries.AddEntries([]raftpb.Entry{ent}))
+			li, err := ds.LastIndex()
+			require.NoError(t, err)
+			require.Equal(t, idx, li)
+		}
+	}
+
+	N := uint64(100000)
+	addEntries(1, N)
+
+	check := func(start, end uint64) {
+		ents, err := ds.Entries(start, end, math.MaxInt64)
+		require.NoError(t, err)
+		require.Equal(t, end-start, uint64(len(ents)))
+		for i, e := range ents {
+			require.Equal(t, start+uint64(i), e.Index)
+		}
+	}
+	_, err = ds.Entries(0, 1, math.MaxInt64)
+	require.Equal(t, raft.ErrCompacted, err)
+
+	check(3, N)
+	check(10000, 20000)
+	check(20000, 33000)
+	check(33000, 45000)
+	check(45000, N)
+	check(N, N+1)
+
+	// Jump back a few files.
+	addEntries(N/3, N)
+	check(3, N)
+	check(10000, 20000)
+	check(20000, 33000)
+	check(33000, 45000)
+	check(45000, N)
+	check(N, N+1)
+
+	buf := make([]byte, 128)
+	rand.Read(buf)
+
+	cs := &raftpb.ConfState{}
+	require.NoError(t, ds.CreateSnapshot(N-100, cs, buf))
+	fi, err := ds.FirstIndex()
+	require.NoError(t, err)
+	require.Equal(t, N-100+1, fi)
+
+	snap, err := ds.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, N-100, snap.Metadata.Index)
+	require.Equal(t, buf, snap.Data)
+
+	require.Equal(t, 0, len(ds.entries.files))
+
+	files, err := getEntryFiles(dir)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(files))
+
+	// Jumping back.
+	ent.Index = N - 50
+	require.NoError(t, ds.entries.AddEntries([]raftpb.Entry{ent}))
+
+	start := N - 100 + 1
+	ents, err := ds.entries.allEntries(start, math.MaxInt64, math.MaxInt64)
+	require.NoError(t, err)
+	require.Equal(t, 50, len(ents))
+	for idx, ent := range ents {
+		require.Equal(t, int(start)+idx, int(ent.Index))
+	}
+
+	ent.Index = N
+	require.NoError(t, ds.entries.AddEntries([]raftpb.Entry{ent}))
+	ents, err = ds.entries.allEntries(start, math.MaxInt64, math.MaxInt64)
+	require.NoError(t, err)
+	require.Equal(t, 51, len(ents))
+	for idx, ent := range ents {
+		if idx == 50 {
+			require.Equal(t, N, ent.Index)
+		} else {
+			require.Equal(t, int(start)+idx, int(ent.Index))
+		}
+	}
 }

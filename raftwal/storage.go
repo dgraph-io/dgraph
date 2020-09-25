@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -154,9 +153,10 @@ type metaFile struct {
 	*mmapFile
 }
 
-func zeroOut(buf []byte, start, end int) {
-	buf[start] = 0x00
-	for i := start + 1; i < end; i *= 2 {
+func zeroOut(dst []byte, start, end int) {
+	buf := dst[start:end]
+	buf[0] = 0x00
+	for i := 1; i < len(buf); i *= 2 {
 		copy(buf[i:], buf[:i])
 	}
 }
@@ -342,8 +342,9 @@ func (ef *entryFile) delete() error {
 	return os.Remove(ef.fd.Name())
 }
 
-func openEntryFile(path string) (*entryFile, error) {
-	mf, err := openMmapFile(path, os.O_RDWR|os.O_CREATE, entryFileSize)
+func openEntryFile(dir string, fid int64) (*entryFile, error) {
+	fpath := entryFileName(dir, fid)
+	mf, err := openMmapFile(fpath, os.O_RDWR|os.O_CREATE, entryFileSize)
 	if err == errNewFile {
 		zeroOut(mf.data, 0, entryFileOffset)
 	} else if err != nil {
@@ -351,6 +352,7 @@ func openEntryFile(path string) (*entryFile, error) {
 	}
 	ef := &entryFile{
 		mmapFile: mf,
+		fid:      fid,
 	}
 	return ef, nil
 }
@@ -367,16 +369,23 @@ func getEntryFiles(dir string) ([]*entryFile, error) {
 	})
 
 	files := make([]*entryFile, 0)
-	for _, path := range entryFiles {
-		fid, err := strconv.ParseInt(strings.Split(".ent", path)[0], 10, 64)
+	seen := make(map[int64]struct{})
+	for _, fpath := range entryFiles {
+		_, fname := path.Split(fpath)
+		fname = strings.TrimSuffix(fname, ".ent")
+		fid, err := strconv.ParseInt(fname, 10, 64)
 		if err != nil {
-			return nil, errors.Wrapf(err, "while parsing: %s", path)
+			return nil, errors.Wrapf(err, "while parsing: %s", fpath)
 		}
-		f, err := openEntryFile(path)
+		if _, ok := seen[fid]; ok {
+			glog.Fatalf("Entry file with id: %d is repeated", fid)
+		}
+		seen[fid] = struct{}{}
+
+		f, err := openEntryFile(dir, fid)
 		if err != nil {
 			return nil, err
 		}
-		f.fid = fid
 		files = append(files, f)
 	}
 
@@ -403,7 +412,6 @@ func (ef *entryFile) GetRaftEntry(idx int) raftpb.Entry {
 		Index: entry.Index(),
 		Type:  raftpb.EntryType(entry.Type()),
 	}
-	fmt.Printf("entry: %+v. do: %d\n", re, entry.DataOffset())
 	if entry.DataOffset() > 0 && entry.DataOffset() < entryFileSize {
 		data := ef.slice(int(entry.DataOffset()))
 		if len(data) > 0 {
@@ -419,7 +427,6 @@ func (ef *entryFile) firstEntry() entry {
 func (ef *entryFile) firstIndex() uint64 {
 	return ef.getEntry(0).Index()
 }
-
 func (ef *entryFile) lastEntry() entry {
 	for i := maxNumEntries - 1; i >= 0; i-- {
 		e := ef.getEntry(i)
@@ -441,13 +448,11 @@ func (ef *entryFile) Term(entryIndex uint64) uint64 {
 
 func (ef *entryFile) Offset(raftIndex uint64) (int, bool) {
 	fi := ef.firstIndex()
-	// fmt.Printf("got fi: %d\n", fi)
 	if raftIndex < fi {
 		return 0, false
 	}
 	if diff := int(raftIndex - fi); diff < maxNumEntries && diff >= 0 {
 		e := ef.getEntry(diff)
-		// fmt.Printf("diff: %d. e: %v\n", diff, e.Index())
 		if e.Index() == raftIndex {
 			return diff, true
 		}
@@ -490,6 +495,10 @@ type entryLog struct {
 	dir string
 }
 
+func entryFileName(dir string, id int64) string {
+	return path.Join(dir, fmt.Sprintf("%05d.ent", id))
+}
+
 func openEntryLog(dir string) (*entryLog, error) {
 	e := &entryLog{
 		dir: dir,
@@ -507,7 +516,7 @@ func openEntryLog(dir string) (*entryLog, error) {
 		}
 	}
 	nextFid += 1
-	ef, err := openEntryFile(path.Join(dir, fmt.Sprintf("%05d.ent", nextFid)))
+	ef, err := openEntryFile(dir, nextFid)
 	if err != nil {
 		return nil, errors.Wrapf(err, "while creating a new entry file")
 	}
@@ -534,14 +543,17 @@ func (l *entryLog) getEntry(n int) (entry, error) {
 }
 
 func (l *entryLog) rotate(firstIndex uint64) error {
-	var nextFid int64
+	nextFid := l.current.fid
+	x.AssertTrue(nextFid > 0)
+
 	for _, ef := range l.files {
-		if nextFid < ef.fid {
+		if ef.fid > nextFid {
 			nextFid = ef.fid
 		}
 	}
+
 	nextFid += 1
-	ef, err := openEntryFile(path.Join(l.dir, fmt.Sprintf("%05d.ent", nextFid)))
+	ef, err := openEntryFile(l.dir, nextFid)
 	if err != nil {
 		return errors.Wrapf(err, "while creating a new entry file")
 	}
@@ -565,7 +577,8 @@ func (l *entryLog) numEntries() int {
 
 func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 	fidx, eidx := l.Offset(entries[0].Index)
-	fmt.Printf("eidx: %d. for entry: %+v\n", eidx, entries[0])
+
+	// fmt.Printf("fidx: %d, eidx: %d, entries: %+v\n", fidx, eidx, entries)
 	if eidx >= 0 {
 		if fidx == -1 {
 			zeroOut(l.current.data, entrySize*eidx, entrySize*l.nextEntryIdx)
@@ -573,8 +586,10 @@ func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 
 		} else {
 			x.AssertTrue(fidx != len(l.files))
-			l.current = l.files[fidx]
 			extra := l.files[fidx+1:]
+			extra = append(extra, l.current)
+			l.current = l.files[fidx]
+
 			for _, ef := range extra {
 				if err := ef.delete(); err != nil {
 					glog.Errorf("deleting file: %s. error: %v\n", ef.fd.Name(), err)
@@ -602,7 +617,7 @@ func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 				// TODO: see what happens.
 				return err
 			}
-			offset = entryFileOffset
+			l.nextEntryIdx, offset = 0, entryFileOffset
 		}
 
 		destBuf, next := l.current.allocateSlice(len(re.Data), offset)
@@ -665,7 +680,6 @@ func (l *entryLog) getEntryFile(fidx int) *entryFile {
 
 func (l *entryLog) seekEntry(idx uint64) (entry, error) {
 	fidx, off := l.Offset(idx)
-	fmt.Printf("Got offset for %d: %d %d\n", idx, fidx, off)
 	ef := l.getEntryFile(fidx)
 	if off == -1 {
 		if idx < ef.firstEntry().Index() {
@@ -734,9 +748,17 @@ func (l *entryLog) Offset(raftIndex uint64) (int, int) {
 
 func (l *entryLog) deleteBefore(raftIndex uint64) error {
 	fidx, off := l.Offset(raftIndex)
-	if off >= 0 && fidx >= 0 && fidx < len(l.files) {
-		before := l.files[:fidx]
-		l.files = l.files[fidx:]
+
+	if off >= 0 && fidx <= len(l.files) {
+		var before []*entryFile
+		if fidx == -1 { // current file
+			before = l.files
+			l.files = l.files[:0]
+		} else {
+			before = l.files[:fidx]
+			l.files = l.files[fidx:]
+		}
+
 		for _, ef := range before {
 			if err := ef.delete(); err != nil {
 				glog.Errorf("while deleting file: %s, err: %v\n", ef.fd.Name(), err)
@@ -754,13 +776,11 @@ func (l *entryLog) reset() error {
 	}
 	l.files = l.files[:0]
 	zeroOut(l.current.data, 0, entryFileOffset)
-	fmt.Println("resetting current data")
 	var num int
 	for _, b := range l.current.data[:entryFileOffset] {
 		x.AssertTrue(b == 0x00)
 		num++
 	}
-	fmt.Printf("Checked %d bytes\n", num)
 	l.nextEntryIdx = 0
 	return nil
 }
@@ -770,7 +790,6 @@ func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
 	fileIdx, offset := l.Offset(lo)
 	var size uint64
 
-	fmt.Printf("allEntries. got fileidx: %d\n", fileIdx)
 	currFile := l.getEntryFile(fileIdx)
 	if offset == -1 {
 		offset = 0
@@ -786,7 +805,7 @@ func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
 
 			// Move to the next file.
 			fileIdx++
-			if fileIdx == len(l.files) {
+			if fileIdx >= len(l.files) {
 				currFile = l.current
 			} else {
 				currFile = l.files[fileIdx]
@@ -796,7 +815,6 @@ func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
 			offset = 0
 		}
 
-		fmt.Printf("offset: %d\n", offset)
 		re := currFile.GetRaftEntry(offset)
 		if re.Index >= hi || re.Index == 0 {
 			break
@@ -856,89 +874,7 @@ func Init(dir string, id uint64, gid uint32) *DiskStorage {
 	return w
 }
 
-func (w *DiskStorage) Term(idx uint64) (uint64, error) {
-	first, err := w.FirstIndex()
-	x.Check(err)
-	if idx < first-1 {
-		return 0, raft.ErrCompacted
-	}
-
-	return w.entries.Term(idx)
-}
-
-var idKey = []byte("raftid")
-
-// RaftId reads the given badger store and returns the stored RAFT ID.
-func RaftId(db *badger.DB) (uint64, error) {
-	var id uint64
-	err := db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(idKey)
-		if err != nil {
-			return err
-		}
-		return item.Value(func(val []byte) error {
-			id = binary.BigEndian.Uint64(val)
-			return nil
-		})
-	})
-	if err == badger.ErrKeyNotFound {
-		return 0, nil
-	}
-	return id, err
-}
-
-// EntryKey returns the key where the entry with the given ID is stored.
-func (w *DiskStorage) EntryKey(idx uint64) []byte {
-	b := make([]byte, 20)
-	binary.BigEndian.PutUint64(b[0:8], w.id)
-	binary.BigEndian.PutUint32(b[8:12], w.gid)
-	binary.BigEndian.PutUint64(b[12:20], idx)
-	return b
-}
-
-func (w *DiskStorage) parseIndex(key []byte) uint64 {
-	x.AssertTrue(len(key) == 20)
-	return binary.BigEndian.Uint64(key[12:20])
-}
-
-func (w *DiskStorage) entryPrefix() []byte {
-	b := make([]byte, 12)
-	binary.BigEndian.PutUint64(b[0:8], w.id)
-	binary.BigEndian.PutUint32(b[8:12], w.gid)
-	return b
-}
-
 var errNotFound = errors.New("Unable to find raft entry")
-
-func (w *DiskStorage) LastIndex() (uint64, error) {
-	return w.entries.LastIndex(), nil
-}
-
-// FirstIndex returns the index of the first log entry that is
-// possibly available via Entries (older entries have been incorporated
-// into the latest Snapshot).
-func (w *DiskStorage) FirstIndex() (uint64, error) {
-	// We are deleting index ranges in background after taking snapshot, so we should check for last
-	// snapshot in WAL(Badger) if it is not found in cache. If no snapshot is found, then we can
-	// check firstKey.
-	if snap, err := w.Snapshot(); err == nil && !raft.IsEmptySnap(snap) {
-		return snap.Metadata.Index + 1, nil
-	}
-	return w.entries.FirstIndex(), nil
-
-	// index := w.entries.FirstIndex()
-	// glog.V(2).Infof("Setting first index: %d", index+1)
-	// w.cache.Store(firstKey, index+1)
-	// return index + 1, nil
-}
-
-// Snapshot returns the most recent snapshot.
-// If snapshot is temporarily unavailable, it should return ErrSnapshotTemporarilyUnavailable,
-// so raft state machine could know that Storage needs some time to prepare
-// snapshot and call Snapshot later.
-func (w *DiskStorage) Snapshot() (raftpb.Snapshot, error) {
-	return w.meta.Snapshot()
-}
 
 // setSnapshot would store the snapshot. We can delete all the entries up until the snapshot
 // index. But, keep the raft entry at the snapshot index, to make it easier to build the logic; like
@@ -987,6 +923,9 @@ func (w *DiskStorage) UpdateCheckpoint(snap *pb.Snapshot) error {
 	return nil
 }
 
+// Implement the Raft.Storage interface.
+// -------------------------------------
+
 // InitialState returns the saved HardState and ConfState information.
 func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, err error) {
 	w.elog.Printf("InitialState")
@@ -1015,7 +954,6 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 	w.elog.Printf("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
 	defer w.elog.Printf("Done")
 	first := w.entries.FirstIndex()
-	fmt.Printf("got first: %d. lo: %d\n", first, lo)
 	if lo < first {
 		return nil, raft.ErrCompacted
 	}
@@ -1031,6 +969,43 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 	}
 	return ents, nil
 }
+
+func (w *DiskStorage) Term(idx uint64) (uint64, error) {
+	first, err := w.FirstIndex()
+	x.Check(err)
+	if idx < first-1 {
+		return 0, raft.ErrCompacted
+	}
+
+	return w.entries.Term(idx)
+}
+
+func (w *DiskStorage) LastIndex() (uint64, error) {
+	return w.entries.LastIndex(), nil
+}
+
+// FirstIndex returns the index of the first log entry that is
+// possibly available via Entries (older entries have been incorporated
+// into the latest Snapshot).
+func (w *DiskStorage) FirstIndex() (uint64, error) {
+	// We are deleting index ranges in background after taking snapshot, so we should check for last
+	// snapshot in WAL(Badger) if it is not found in cache. If no snapshot is found, then we can
+	// check firstKey.
+	if snap, err := w.Snapshot(); err == nil && !raft.IsEmptySnap(snap) {
+		return snap.Metadata.Index + 1, nil
+	}
+	return w.entries.FirstIndex(), nil
+}
+
+// Snapshot returns the most recent snapshot.
+// If snapshot is temporarily unavailable, it should return ErrSnapshotTemporarilyUnavailable,
+// so raft state machine could know that Storage needs some time to prepare
+// snapshot and call Snapshot later.
+func (w *DiskStorage) Snapshot() (raftpb.Snapshot, error) {
+	return w.meta.Snapshot()
+}
+
+// ---------------- Raft.Storage interface complete.
 
 // CreateSnapshot generates a snapshot with the given ConfState and data and writes it to disk.
 func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte) error {
