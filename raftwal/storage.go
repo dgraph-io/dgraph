@@ -1128,10 +1128,11 @@ func (w *DiskStorage) Snapshot() (raftpb.Snapshot, error) {
 // CreateSnapshot generates a snapshot with the given ConfState and data and writes it to disk.
 func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte) error {
 	glog.V(2).Infof("CreateSnapshot i=%d, cs=%+v", i, cs)
-	first, err := w.FirstIndex()
-	if err != nil {
-		return err
-	}
+
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	first := w.firstIndex()
 	if i < first {
 		glog.Errorf("i=%d<first=%d, ErrSnapOutOfDate", i, first)
 		return raft.ErrSnapOutOfDate
@@ -1161,6 +1162,9 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 // writes then all of them can be written together. Note that when writing an Entry with Index i,
 // any previously-persisted entries with Index >= i must be discarded.
 func (w *DiskStorage) Save(h *raftpb.HardState, es []raftpb.Entry, snap *raftpb.Snapshot) error {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
 	if err := w.entries.AddEntries(es); err != nil {
 		return err
 	}
