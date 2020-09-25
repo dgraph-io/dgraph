@@ -18,7 +18,6 @@ package raftwal
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"math"
 	"os"
@@ -158,7 +157,7 @@ type metaFile struct {
 }
 
 func zeroOut(dst []byte, start, end int) {
-	fmt.Printf("ZEROING out: %d -> %d. len: %d\n", start, end, len(dst))
+	// fmt.Printf("ZEROING out: %d -> %d. len: %d\n", start, end, len(dst))
 	buf := dst[start:end]
 	buf[0] = 0x00
 	for i := 1; i < len(buf); i *= 2 {
@@ -170,7 +169,6 @@ func newMetaFile(dir string) (*metaFile, error) {
 	fname := filepath.Join(dir, metaName)
 	mf, err := openMmapFile(fname, os.O_RDWR|os.O_CREATE, metaFileSize)
 	if err == errNewFile {
-		fmt.Printf("new file: %s\n\n", fname)
 		zeroOut(mf.data, 0, snapshotOffset+4)
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "unable to open meta file")
@@ -189,7 +187,6 @@ func openMmapFile(filename string, flag int, maxSz int) (*mmapFile, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot stat file: %s", filename)
 	}
-	fmt.Printf("file: %s stat: %+v\n\n", filename, fi)
 	fileSize := fi.Size()
 	if fileSize > int64(maxSz) {
 		return nil, errors.Errorf("file size %d does not match zero or max size %d",
@@ -867,8 +864,8 @@ func Init(dir string) *DiskStorage {
 	var err error
 	w.meta, err = newMetaFile(dir)
 	x.Check(err)
-	fmt.Printf("meta: %s\n", hex.Dump(w.meta.data[1024:2048]))
-	fmt.Printf("found snapshot of size: %d\n", sliceSize(w.meta.data, snapshotOffset))
+	// fmt.Printf("meta: %s\n", hex.Dump(w.meta.data[1024:2048]))
+	// fmt.Printf("found snapshot of size: %d\n", sliceSize(w.meta.data, snapshotOffset))
 
 	w.entries, err = openEntryLog(dir)
 	x.Check(err)
@@ -1029,8 +1026,7 @@ func (w *DiskStorage) Term(idx uint64) (uint64, error) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	first, err := w.firstIndex()
-	x.Check(err)
+	first := w.firstIndex()
 	if idx < first-1 {
 		glog.Errorf("TERM for %d = %v\n", idx, raft.ErrCompacted)
 		return 0, raft.ErrCompacted
@@ -1053,14 +1049,14 @@ func (w *DiskStorage) LastIndex() (uint64, error) {
 	return li, nil
 }
 
-func (w *DiskStorage) firstIndex() (uint64, error) {
+func (w *DiskStorage) firstIndex() uint64 {
 	// We are deleting index ranges in background after taking snapshot, so we should check for last
 	// snapshot in WAL(Badger) if it is not found in cache. If no snapshot is found, then we can
 	// check firstKey.
 	if snap, err := w.meta.Snapshot(); err == nil && !raft.IsEmptySnap(snap) {
-		return snap.Metadata.Index + 1, nil
+		return snap.Metadata.Index + 1
 	}
-	return w.entries.FirstIndex(), nil
+	return w.entries.FirstIndex()
 }
 
 // FirstIndex returns the index of the first log entry that is
@@ -1070,7 +1066,7 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	return w.firstIndex()
+	return w.firstIndex(), nil
 }
 
 // Snapshot returns the most recent snapshot.
