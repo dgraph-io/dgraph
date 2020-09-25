@@ -76,3 +76,8 @@ title = "Dgraph Documentation"
   url = "/dgraph-compared-to-other-databases/"
   identifier = "dgraph-compared-to-other-databases"
   weight = 12
+[[menu.main]]
+  name = "Releases"
+  url = "/releases/"
+  identifier = "releases"
+  weight = 13
