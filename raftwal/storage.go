@@ -490,8 +490,6 @@ type entryLog struct {
 	// nextEntryIdx is the index of the next entry to write to. When this value exceeds
 	// maxNumEntries the file will be rotated.
 	nextEntryIdx int
-	// lastIndex is the value of last index written to the log.
-	lastIndex uint64
 	// dir is the directory to use to store files.
 	dir string
 }
@@ -577,6 +575,9 @@ func (l *entryLog) numEntries() int {
 }
 
 func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
+	if len(entries) == 0 {
+		return nil
+	}
 	fidx, eidx := l.offsetGe(entries[0].Index)
 
 	// fmt.Printf("fidx: %d, eidx: %d, entries: %+v\n", fidx, eidx, entries)
@@ -658,9 +659,6 @@ func (l *entryLog) LastIndex() uint64 {
 		e := l.current.getEntry(l.nextEntryIdx - 1)
 		return e.Index()
 	}
-	if len(l.files) == 0 {
-		return 0
-	}
 	for i := len(l.files) - 1; i >= 0; i-- {
 		ef := l.files[i]
 		e := ef.lastEntry()
@@ -668,7 +666,7 @@ func (l *entryLog) LastIndex() uint64 {
 			return e.Index()
 		}
 	}
-	return l.lastIndex
+	return 0
 }
 
 func (l *entryLog) getEntryFile(fidx int) *entryFile {
@@ -682,6 +680,10 @@ func (l *entryLog) getEntryFile(fidx int) *entryFile {
 }
 
 func (l *entryLog) seekEntry(raftIndex uint64) (entry, error) {
+	if raftIndex == 0 {
+		return emptyEntry, nil
+	}
+
 	fidx, off := l.offsetGe(raftIndex)
 	if off == -1 {
 		return emptyEntry, raft.ErrCompacted
@@ -717,14 +719,7 @@ func (l *entryLog) Term(idx uint64) (uint64, error) {
 	// Look at the entry files and find the entry file with entry bigger than idx.
 	// Read file before that idx.
 	ent, err := l.seekEntry(idx)
-	if err != nil {
-		return 0, err
-	}
-	t := ent.Term()
-	if t == 0 {
-		return 0, raft.ErrCompacted
-	}
-	return t, nil
+	return ent.Term(), err
 }
 
 // offsetGe returns the file index and the offset within that file in which the entry
