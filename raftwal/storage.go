@@ -128,7 +128,6 @@ var (
 type mmapFile struct {
 	data []byte
 	fd   *os.File
-	// offset int64
 }
 
 func (m *mmapFile) sync() error {
@@ -178,6 +177,22 @@ func newMetaFile(dir string) (*metaFile, error) {
 
 var errNewFile = errors.New("new file")
 
+func syncDir(dir string) error {
+	glog.V(2).Infof("Syncing dir: %s\n", dir)
+	df, err := os.Open(dir)
+	if err != nil {
+		return errors.Wrapf(err, "while opening %s", dir)
+	}
+	x.Check(err)
+	if err := df.Sync(); err != nil {
+		return errors.Wrapf(err, "while syncing %s", dir)
+	}
+	if err := df.Close(); err != nil {
+		return errors.Wrapf(err, "while closing %s", dir)
+	}
+	return nil
+}
+
 func openMmapFile(filename string, flag int, maxSz int) (*mmapFile, error) {
 	fd, err := os.OpenFile(filename, flag, 0666)
 	if err != nil {
@@ -203,6 +218,12 @@ func openMmapFile(filename string, flag int, maxSz int) (*mmapFile, error) {
 	err = nil
 	if fileSize == 0 {
 		err = errNewFile
+		dir, _ := path.Split(filename)
+		go func() {
+			if err := syncDir(dir); err != nil {
+				glog.Errorf("Error during syncDir Err: %v\n", err)
+			}
+		}()
 	}
 	return &mmapFile{
 		data: buf,
@@ -351,13 +372,21 @@ func (ef *entryFile) delete() error {
 }
 
 func openEntryFile(dir string, fid int64) (*entryFile, error) {
+	glog.V(2).Infof("opening entry file: %d\n", fid)
 	fpath := entryFileName(dir, fid)
 	mf, err := openMmapFile(fpath, os.O_RDWR|os.O_CREATE, entryFileSize)
+
 	if err == errNewFile {
+		glog.V(2).Infof("New file: %d\n", fid)
 		zeroOut(mf.data, 0, entryFileOffset)
-	} else if err != nil {
-		return nil, err
+	} else {
+		x.Check(err)
 	}
+
+	// } else if err != nil {
+	// 	return nil, err
+	// } else {
+	// }
 	ef := &entryFile{
 		mmapFile: mf,
 		fid:      fid,
@@ -394,13 +423,8 @@ func getEntryFiles(dir string) ([]*entryFile, error) {
 		if err != nil {
 			return nil, err
 		}
-		if f.firstIndex() == 0 {
-			if err := f.delete(); err != nil {
-				return nil, err
-			}
-		} else {
-			files = append(files, f)
-		}
+		glog.Infof("Found file: %d First Index: %d\n", fid, f.firstIndex())
+		files = append(files, f)
 	}
 
 	// Sort files by the first index they store.
@@ -441,18 +465,23 @@ func (ef *entryFile) firstEntry() entry {
 func (ef *entryFile) firstIndex() uint64 {
 	return ef.getEntry(0).Index()
 }
-func (ef *entryFile) lastEntry() entry {
-	for i := maxNumEntries - 1; i >= 0; i-- {
+func (ef *entryFile) firstEmptySlot() int {
+	return sort.Search(maxNumEntries, func(i int) bool {
 		e := ef.getEntry(i)
-		if e.Index() > 0 {
-			return e
-		}
+		return e.Index() == 0
+	})
+}
+func (ef *entryFile) lastEntry() entry {
+	// This would return the first pos, where e.Index() == 0.
+	pos := ef.firstEmptySlot()
+	if pos > 0 {
+		pos--
 	}
-	return emptyEntry
+	return ef.getEntry(pos)
 }
 
 func (ef *entryFile) Term(entryIndex uint64) uint64 {
-	offset := ef.offsetGe(entryIndex)
+	offset := ef.slotGe(entryIndex)
 	if offset < 0 || offset >= maxNumEntries {
 		return 0
 	}
@@ -463,11 +492,11 @@ func (ef *entryFile) Term(entryIndex uint64) uint64 {
 	return 0
 }
 
-// offsetGe would return -1 if raftIndex < firstIndex in this file.
+// slotGe would return -1 if raftIndex < firstIndex in this file.
 // Would return maxNumEntries if raftIndex > lastIndex in this file.
 // If raftIndex is found, or the entryFile has empty slots, the offset would be between
 // [0, maxNumEntries).
-func (ef *entryFile) offsetGe(raftIndex uint64) int {
+func (ef *entryFile) slotGe(raftIndex uint64) int {
 	fi := ef.firstIndex()
 	// If first index is zero, this raftindex should be in a previous file.
 	if fi == 0 {
@@ -523,23 +552,34 @@ func openEntryLog(dir string) (*entryLog, error) {
 	if err != nil {
 		return nil, err
 	}
-	e.files = files
-
+	out := files[:0]
 	var nextFid int64
-	for _, ef := range e.files {
+	for _, ef := range files {
 		if nextFid < ef.fid {
 			nextFid = ef.fid
 		}
+		if ef.firstIndex() == 0 {
+			if err := ef.delete(); err != nil {
+				return nil, err
+			}
+		} else {
+			out = append(out, ef)
+		}
 	}
-	nextFid += 1
-	ef, err := openEntryFile(dir, nextFid)
-	if err != nil {
-		return nil, errors.Wrapf(err, "while creating a new entry file")
+	e.files = out
+	if sz := len(e.files); sz > 0 {
+		e.current = e.files[sz-1]
+		e.nextEntryIdx = e.current.firstEmptySlot()
+
+		e.files = e.files[:sz-1]
+		return e, nil
 	}
 
-	// Won't append current file to list of files.
+	// No files found. Create a new file.
+	nextFid += 1
+	ef, err := openEntryFile(dir, nextFid)
 	e.current = ef
-	return e, nil
+	return e, err
 }
 
 func (l *entryLog) lastFile() *entryFile {
@@ -596,33 +636,34 @@ func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 		return nil
 	}
 	// glog.Infof("AddEntries: %+v\n", entries)
-	fidx, eidx := l.offsetGe(entries[0].Index)
+	fidx, eidx := l.slotGe(entries[0].Index)
 
 	// fmt.Printf("fidx: %d, eidx: %d, entries: %+v\n", fidx, eidx, entries)
 	if eidx >= 0 {
+		// fmt.Printf("AddEntries: fidx: %d, eidx: %d num: %d\n", fidx, eidx, len(entries))
+
 		if fidx == -1 {
 			if l.nextEntryIdx > eidx {
 				zeroOut(l.current.data, entrySize*eidx, entrySize*l.nextEntryIdx)
-				l.nextEntryIdx = eidx
 			}
-
 		} else {
-			x.AssertTrue(fidx != len(l.files))
+			x.AssertTrue(fidx < len(l.files))
 			extra := l.files[fidx+1:]
 			extra = append(extra, l.current)
 			l.current = l.files[fidx]
 
 			for _, ef := range extra {
+				glog.V(2).Infof("Deleting extra file: %d\n", ef.fid)
 				if err := ef.delete(); err != nil {
 					glog.Errorf("deleting file: %s. error: %v\n", ef.fd.Name(), err)
 				}
 			}
 			zeroOut(l.current.data, entrySize*eidx, entryFileOffset)
-			l.nextEntryIdx = eidx
-
 			l.files = l.files[:fidx]
 		}
+		l.nextEntryIdx = eidx
 	}
+
 	prev := l.nextEntryIdx - 1
 	var offset int
 	if prev >= 0 {
@@ -708,7 +749,7 @@ func (l *entryLog) seekEntry(raftIndex uint64) (entry, error) {
 		return emptyEntry, nil
 	}
 
-	fidx, off := l.offsetGe(raftIndex)
+	fidx, off := l.slotGe(raftIndex)
 	if off == -1 {
 		return emptyEntry, raft.ErrCompacted
 	} else if off >= maxNumEntries {
@@ -746,12 +787,12 @@ func (l *entryLog) Term(idx uint64) (uint64, error) {
 	return ent.Term(), err
 }
 
-// offsetGe returns the file index and the offset within that file in which the entry
+// slotGe returns the file index and the slot within that file in which the entry
 // with the given index can be found. A value of -1 for the file index means that the
 // entry is in the current file.
-func (l *entryLog) offsetGe(raftIndex uint64) (int, int) {
+func (l *entryLog) slotGe(raftIndex uint64) (int, int) {
 	// Look for the offset in the current file.
-	if offset := l.current.offsetGe(raftIndex); offset >= 0 {
+	if offset := l.current.slotGe(raftIndex); offset >= 0 {
 		return -1, offset
 	}
 
@@ -773,12 +814,12 @@ func (l *entryLog) offsetGe(raftIndex uint64) (int, int) {
 		}
 		fileIdx--
 	}
-	offset := l.files[fileIdx].offsetGe(raftIndex)
+	offset := l.files[fileIdx].slotGe(raftIndex)
 	return fileIdx, offset
 }
 
 func (l *entryLog) deleteBefore(raftIndex uint64) error {
-	fidx, off := l.offsetGe(raftIndex)
+	fidx, off := l.slotGe(raftIndex)
 
 	if off >= 0 && fidx <= len(l.files) {
 		var before []*entryFile
@@ -818,7 +859,7 @@ func (l *entryLog) reset() error {
 
 func (l *entryLog) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 	var entries []raftpb.Entry
-	fileIdx, offset := l.offsetGe(lo)
+	fileIdx, offset := l.slotGe(lo)
 	var size uint64
 
 	if offset < 0 {
@@ -886,18 +927,8 @@ func Init(dir string) *DiskStorage {
 
 	snap, err := w.meta.Snapshot()
 	x.Check(err)
-	if !raft.IsEmptySnap(snap) {
-		fmt.Printf("Found snapshot: %d\n", snap.Metadata.Index)
-		return w
-	}
 
-	first, err := w.FirstIndex()
-	// if err == errNotFound {
-	// 	ents := make([]raftpb.Entry, 1)
-	// 	x.Check(w.reset(ents))
-	// } else {
-	// 	x.Check(err)
-	// }
+	first, _ := w.FirstIndex()
 
 	// If db is not closed properly, there might be index ranges for which delete entries are not
 	// inserted. So insert delete entries for those ranges starting from 0 to (first-1).
