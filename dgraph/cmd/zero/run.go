@@ -255,7 +255,8 @@ func run() {
 
 	// Create and initialize write-ahead log.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	store := raftwal.Init(opts.w, opts.nodeId, 0)
+	store := raftwal.Init(opts.w)
+	store.SetRaftId(opts.nodeId)
 
 	// Initialize the servers.
 	var st state
@@ -314,7 +315,7 @@ func run() {
 		// Try to generate a snapshot before the shutdown.
 		st.node.trySnapshot(0)
 		// Stop Raft store.
-		store.Closer.SignalAndWait()
+		store.Sync()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
 

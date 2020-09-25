@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
@@ -35,7 +36,7 @@ type ServerState struct {
 	FinishCh chan struct{} // channel to wait for all pending reqs to finish.
 
 	Pstore   *badger.DB
-	WALstore *badger.DB
+	WALstore *raftwal.DiskStorage
 	gcCloser *z.Closer // closer for valueLogGC
 
 	needTs chan tsReq
@@ -146,21 +147,7 @@ func (s *ServerState) initStorage() {
 	{
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-		opt := badger.LSMOnlyOptions(Config.WALDir)
-		opt = setBadgerOptions(opt, true)
-		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
-		opt.BlockCacheSize = Config.WBlockCacheSize
-		opt.IndexCacheSize = Config.WIndexCacheSize
-
-		// Print the options w/o exposing key.
-		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
-		key := opt.EncryptionKey
-		opt.EncryptionKey = nil
-		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
-		opt.EncryptionKey = key
-
-		s.WALstore, err = badger.OpenManaged(opt)
-		x.Checkf(err, "Error while creating badger KV WAL store")
+		s.WALstore = raftwal.Init(Config.WALDir)
 	}
 	{
 		// Postings directory
@@ -188,9 +175,9 @@ func (s *ServerState) initStorage() {
 		opt.EncryptionKey = nil
 	}
 
-	s.gcCloser = z.NewCloser(2)
+	s.gcCloser = z.NewCloser(1)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
-	go x.RunVlogGC(s.WALstore, s.gcCloser)
+	// go x.RunVlogGC(s.WALstore, s.gcCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.

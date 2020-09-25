@@ -788,15 +788,15 @@ func run() {
 	posting.Init(db, 0)
 	defer db.Close()
 
-	if isWal {
-		if err := handleWal(db); err != nil {
-			fmt.Printf("\nGot error while handling WAL: %v\n", err)
-		}
-		fmt.Println("Done")
-		// WAL can't execute the getMinMax function, so we need to deal with it
-		// here, instead of in the select case below.
-		return
-	}
+	// if isWal {
+	// 	if err := handleWal(db); err != nil {
+	// 		fmt.Printf("\nGot error while handling WAL: %v\n", err)
+	// 	}
+	// 	fmt.Println("Done")
+	// 	// WAL can't execute the getMinMax function, so we need to deal with it
+	// 	// here, instead of in the select case below.
+	// 	return
+	// }
 
 	// Commenting the following out because on large Badger DBs, this can take a LONG time.
 	// min, max := getMinMax(db, opt.readTs)

@@ -832,11 +832,9 @@ func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
 
 // Init initializes returns a properly initialized instance of DiskStorage.
 // To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
-func Init(dir string, id uint64, gid uint32) *DiskStorage {
+func Init(dir string) *DiskStorage {
 	w := &DiskStorage{
 		dir: dir,
-		id:  id,
-		gid: gid,
 	}
 
 	var err error
@@ -845,10 +843,6 @@ func Init(dir string, id uint64, gid uint32) *DiskStorage {
 
 	w.entries, err = openEntryLog(dir)
 	x.Check(err)
-
-	if prev := w.meta.RaftId(); prev != id || prev == 0 {
-		w.meta.StoreRaftId(id)
-	}
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
@@ -872,6 +866,14 @@ func Init(dir string, id uint64, gid uint32) *DiskStorage {
 		glog.Errorf("while deleting before: %d, err: %v\n", first-1, err)
 	}
 	return w
+}
+
+// TODO: Have a way to set and request gid.
+func (w *DiskStorage) SetRaftId(raftId uint64) {
+	w.meta.StoreRaftId(raftId)
+}
+func (w *DiskStorage) RaftId() uint64 {
+	return w.meta.RaftId()
 }
 
 var errNotFound = errors.New("Unable to find raft entry")
@@ -1091,4 +1093,8 @@ func (w *DiskStorage) Sync() error {
 		return errors.Wrapf(err, "while syncing current file")
 	}
 	return nil
+}
+
+func (w *DiskStorage) Close() error {
+	return w.Sync()
 }
