@@ -453,7 +453,7 @@ func (ef *entryFile) GetRaftEntry(idx int) raftpb.Entry {
 	if entry.DataOffset() > 0 && entry.DataOffset() < entryFileSize {
 		data := ef.slice(int(entry.DataOffset()))
 		if len(data) > 0 {
-			re.Data = data
+			re.Data = append(re.Data, data...)
 		}
 	}
 	return re
