@@ -678,10 +678,12 @@ func (n *node) trySnapshot(skip uint64) {
 	glog.Infof("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
 }
 
+const tickDur = 100 * time.Millisecond
+
 func (n *node) Run() {
 	var leader bool
 	licenseApplied := false
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(tickDur)
 	defer ticker.Stop()
 
 	// snapshot can cause select loop to block while deleting entries, so run
@@ -792,7 +794,7 @@ func (n *node) Run() {
 			timer.Record("advance")
 
 			span.End()
-			if timer.Total() > 200*time.Millisecond {
+			if timer.Total() > 5*tickDur {
 				glog.Warningf(
 					"Raft.Ready took too long to process: %s."+
 						" Num entries: %d. MustSync: %v",
