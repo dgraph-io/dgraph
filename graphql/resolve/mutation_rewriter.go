@@ -996,6 +996,8 @@ func rewriteObject(
 		if xid != nil && xidString != "" {
 			xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
+			deleteInverseObject(obj, srcField)
+
 			if deepXID > 2 {
 				// Here we link the already existing node with an xid to the parent whose id is
 				// passed in srcUID. We do this linking only if there is a hasInverse relationship

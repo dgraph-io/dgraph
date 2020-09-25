@@ -1716,21 +1716,7 @@
             {
               "uid": "uid(State3)",
               "State.country": { "uid": "_:Country1" }
-            }
-          ]
-        }
-      deletejson: |
-        [
-          {
-            "uid": "uid(Country4)",
-            "Country.states": [ { "uid": "uid(State3)" } ]
-          }
-        ]
-      cond: "@if(eq(len(State3), 1))"
-    - setjson: |
-        {
-          "uid" : "_:Country1",
-          "Country.states": [
+            },
             {
               "uid": "uid(State6)",
               "State.country": { "uid": "_:Country1" }
@@ -1740,11 +1726,15 @@
       deletejson: |
         [
           {
+            "uid": "uid(Country4)",
+            "Country.states": [ { "uid": "uid(State3)" } ]
+          },
+          {
             "uid": "uid(Country7)",
             "Country.states": [ { "uid": "uid(State6)" } ]
           }
         ]
-      cond: "@if(eq(len(State6), 1))"
+      cond: "@if(eq(len(State3), 1) AND eq(len(State6), 1))"
 
 - name: "Deep XID 4 level deep"
   gqlmutation: |
