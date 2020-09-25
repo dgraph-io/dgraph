@@ -783,6 +783,7 @@ func run() {
 	// If this is a new format WAL, print and return.
 	if isWal && !opt.oldWalFormat {
 		store := raftwal.Init(dir)
+		fmt.Printf("RaftID: %+v\n", store.Uint(raftwal.RaftId))
 		start, last := printBasic(store)
 		// TODO: Do we this this?
 		pending := make(map[uint64]bool)
