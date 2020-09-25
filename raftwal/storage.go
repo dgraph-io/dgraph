@@ -465,6 +465,10 @@ func (ef *entryFile) Term(entryIndex uint64) uint64 {
 // [0, maxNumEntries).
 func (ef *entryFile) offsetGe(raftIndex uint64) int {
 	fi := ef.firstIndex()
+	// If first index is zero, this raftindex should be in a previous file.
+	if fi == 0 {
+		return -1
+	}
 	if raftIndex < fi {
 		return -1
 	}
