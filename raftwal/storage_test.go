@@ -401,7 +401,8 @@ func TestStorageBig(t *testing.T) {
 	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
 	ds := Init(dir)
-	defer os.RemoveAll(dir)
+	t.Logf("Creating dir: %s\n", dir)
+	// defer os.RemoveAll(dir)
 
 	ent := raftpb.Entry{
 		Term: 1,
@@ -422,7 +423,7 @@ func TestStorageBig(t *testing.T) {
 	N := uint64(100000)
 	addEntries(1, N)
 	num := ds.NumEntries()
-	require.Equal(t, int(N-1), num)
+	require.Equal(t, int(N), num)
 
 	check := func(start, end uint64) {
 		ents, err := ds.Entries(start, end, math.MaxInt64)
@@ -488,6 +489,18 @@ func TestStorageBig(t *testing.T) {
 	ent.Index = N
 	require.NoError(t, ds.entries.AddEntries([]raftpb.Entry{ent}))
 	ents = ds.entries.allEntries(start, math.MaxInt64, math.MaxInt64)
+	require.Equal(t, 51, len(ents))
+	for idx, ent := range ents {
+		if idx == 50 {
+			require.Equal(t, N, ent.Index)
+		} else {
+			require.Equal(t, int(start)+idx, int(ent.Index))
+		}
+	}
+	require.NoError(t, ds.Sync())
+
+	ks := Init(dir)
+	ents = ks.entries.allEntries(start, math.MaxInt64, math.MaxInt64)
 	require.Equal(t, 51, len(ents))
 	for idx, ent := range ents {
 		if idx == 50 {

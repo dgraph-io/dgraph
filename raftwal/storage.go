@@ -18,6 +18,7 @@ package raftwal
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"os"
@@ -101,7 +102,7 @@ type indexRange struct {
 const (
 	// metaName is the name of the file used to store metadata (e.g raft ID, checkpoint).
 	metaName = "wal.meta"
-	// metaFileSize is the size of the wal.meta file (4KB).
+	// metaFileSize is the size of the wal.meta file.
 	metaFileSize = 4 << 30
 	// raftIdOffset is the offset of the raft ID within the wal.meta file.
 	raftIdOffset = 0
@@ -157,6 +158,7 @@ type metaFile struct {
 }
 
 func zeroOut(dst []byte, start, end int) {
+	fmt.Printf("ZEROING out: %d -> %d. len: %d\n", start, end, len(dst))
 	buf := dst[start:end]
 	buf[0] = 0x00
 	for i := 1; i < len(buf); i *= 2 {
@@ -168,6 +170,7 @@ func newMetaFile(dir string) (*metaFile, error) {
 	fname := filepath.Join(dir, metaName)
 	mf, err := openMmapFile(fname, os.O_RDWR|os.O_CREATE, metaFileSize)
 	if err == errNewFile {
+		fmt.Printf("new file: %s\n\n", fname)
 		zeroOut(mf.data, 0, snapshotOffset+4)
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "unable to open meta file")
@@ -186,6 +189,7 @@ func openMmapFile(filename string, flag int, maxSz int) (*mmapFile, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot stat file: %s", filename)
 	}
+	fmt.Printf("file: %s stat: %+v\n\n", filename, fi)
 	fileSize := fi.Size()
 	if fileSize > int64(maxSz) {
 		return nil, errors.Errorf("file size %d does not match zero or max size %d",
@@ -280,11 +284,12 @@ func (m *metaFile) StoreSnapshot(snap *raftpb.Snapshot) error {
 	if snap == nil || raft.IsEmptySnap(*snap) {
 		return nil
 	}
-	glog.Infof("Got valid snapshot to store: %+v\n", *snap)
 	buf, err := snap.Marshal()
 	if err != nil {
 		return errors.Wrapf(err, "cannot marshal snapshot")
 	}
+	glog.V(1).Infof("Got valid snapshot to store of length: %d\n", len(buf))
+
 	if len(m.data)-snapshotOffset < len(buf) {
 		return errors.Errorf("Unable to store snapshot of size: %d\n", len(buf))
 	}
@@ -292,6 +297,7 @@ func (m *metaFile) StoreSnapshot(snap *raftpb.Snapshot) error {
 	return nil
 }
 
+// TODO: Sometimes we just need the index, not the full snapshot. So, add a way to get that quickly.
 func (m *metaFile) Snapshot() (raftpb.Snapshot, error) {
 	val := readSlice(m.data, snapshotOffset)
 
@@ -581,7 +587,7 @@ func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 	if len(entries) == 0 {
 		return nil
 	}
-	glog.Infof("AddEntries: %+v\n", entries)
+	// glog.Infof("AddEntries: %+v\n", entries)
 	fidx, eidx := l.offsetGe(entries[0].Index)
 
 	// fmt.Printf("fidx: %d, eidx: %d, entries: %+v\n", fidx, eidx, entries)
@@ -652,10 +658,16 @@ func (l *entryLog) FirstIndex() uint64 {
 	if l == nil {
 		return 0
 	}
+	var fi uint64
 	if len(l.files) == 0 {
-		return l.current.firstEntry().Index() + 1
+		fi = l.current.firstEntry().Index()
+	} else {
+		fi = l.files[0].firstEntry().Index()
 	}
-	return l.files[0].firstEntry().Index() + 1
+	if fi == 0 {
+		return 1
+	}
+	return fi
 }
 
 func (l *entryLog) LastIndex() uint64 {
@@ -851,6 +863,8 @@ func Init(dir string) *DiskStorage {
 	var err error
 	w.meta, err = newMetaFile(dir)
 	x.Check(err)
+	fmt.Printf("meta: %s\n", hex.Dump(w.meta.data[1024:2048]))
+	fmt.Printf("found snapshot of size: %d\n", sliceSize(w.meta.data, snapshotOffset))
 
 	w.entries, err = openEntryLog(dir)
 	x.Check(err)
@@ -860,6 +874,7 @@ func Init(dir string) *DiskStorage {
 	snap, err := w.meta.Snapshot()
 	x.Check(err)
 	if !raft.IsEmptySnap(snap) {
+		fmt.Printf("Found snapshot: %d\n", snap.Metadata.Index)
 		return w
 	}
 
@@ -876,6 +891,10 @@ func Init(dir string) *DiskStorage {
 	if err := w.entries.deleteBefore(first - 1); err != nil {
 		glog.Errorf("while deleting before: %d, err: %v\n", first-1, err)
 	}
+	last := w.entries.LastIndex()
+
+	fmt.Printf("Init Raft Storage with snap: %d, first: %d, last: %d\n",
+		snap.Metadata.Index, first, last)
 	return w
 }
 
@@ -979,11 +998,11 @@ func (w *DiskStorage) NumEntries() int {
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
 func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
-	glog.Infof("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
+	// glog.Infof("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	glog.Infof("Entries after lock: [%d, %d) maxSize:%d", lo, hi, maxSize)
+	// glog.Infof("Entries after lock: [%d, %d) maxSize:%d", lo, hi, maxSize)
 
 	first := w.entries.FirstIndex()
 	if lo < first {
@@ -998,7 +1017,7 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 	}
 
 	ents := w.entries.allEntries(lo, hi, maxSize)
-	glog.Infof("got entries [%d, %d): %+v\n", lo, hi, ents)
+	// glog.Infof("got entries [%d, %d): %+v\n", lo, hi, ents)
 	return ents, nil
 }
 
@@ -1017,7 +1036,7 @@ func (w *DiskStorage) Term(idx uint64) (uint64, error) {
 	if err != nil {
 		glog.Errorf("TERM for %d = %v\n", idx, err)
 	}
-	glog.Errorf("Got term: %d for index: %d\n", term, idx)
+	// glog.Errorf("Got term: %d for index: %d\n", term, idx)
 	return term, err
 }
 
@@ -1026,7 +1045,7 @@ func (w *DiskStorage) LastIndex() (uint64, error) {
 	defer w.lock.Unlock()
 
 	li := w.entries.LastIndex()
-	glog.Infof("LASTINDEX: %d\n", li)
+	// glog.Infof("LASTINDEX: %d\n", li)
 	return li, nil
 }
 
