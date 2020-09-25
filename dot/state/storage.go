@@ -28,7 +28,7 @@ import (
 	"github.com/ChainSafe/chaindb"
 )
 
-var storagePrefix = []byte("storage")
+var storagePrefix = "storage"
 var codeKey = common.CodeKey
 
 // ErrTrieDoesNotExist is returned when attempting to interact with a trie that is not stored in the StorageState
@@ -38,41 +38,18 @@ func errTrieDoesNotExist(hash common.Hash) error {
 	return fmt.Errorf("%w: %s", ErrTrieDoesNotExist, hash)
 }
 
-// StorageDB stores trie structure in an underlying database
-type StorageDB struct {
-	db chaindb.Database
-}
-
-// Put appends `storage` to the key and sets the key-value pair in the db
-func (storageDB *StorageDB) Put(key, value []byte) error {
-	key = append(storagePrefix, key...)
-	return storageDB.db.Put(key, value)
-}
-
-// Get appends `storage` to the key and retrieves the value from the db
-func (storageDB *StorageDB) Get(key []byte) ([]byte, error) {
-	key = append(storagePrefix, key...)
-	return storageDB.db.Get(key)
-}
-
 // StorageState is the struct that holds the trie, db and lock
 type StorageState struct {
 	blockState *BlockState
 	tries      map[common.Hash]*trie.Trie
 
-	db   *StorageDB
-	lock sync.RWMutex
+	baseDB chaindb.Database
+	db     chaindb.Database
+	lock   sync.RWMutex
 
 	// change notifiers
 	changed     map[byte]chan<- *KeyValue
 	changedLock sync.RWMutex
-}
-
-// NewStorageDB instantiates badgerDB instance for storing trie structure
-func NewStorageDB(db chaindb.Database) *StorageDB {
-	return &StorageDB{
-		db,
-	}
 }
 
 // NewStorageState creates a new StorageState backed by the given trie and database located at basePath.
@@ -91,7 +68,8 @@ func NewStorageState(db chaindb.Database, blockState *BlockState, t *trie.Trie) 
 	return &StorageState{
 		blockState: blockState,
 		tries:      tries,
-		db:         NewStorageDB(db),
+		baseDB:     db,
+		db:         chaindb.NewTable(db, storagePrefix),
 		changed:    make(map[byte]chan<- *KeyValue),
 	}, nil
 }
@@ -143,13 +121,13 @@ func (s *StorageState) StoreInDB(root common.Hash) error {
 		return errTrieDoesNotExist(root)
 	}
 
-	return StoreTrie(s.db.db, s.tries[root])
+	return StoreTrie(s.baseDB, s.tries[root])
 }
 
 // LoadFromDB loads an encoded trie from the DB where the key is `root`
 func (s *StorageState) LoadFromDB(root common.Hash) (*trie.Trie, error) {
 	t := trie.NewEmptyTrie()
-	err := LoadTrie(s.db.db, t, root)
+	err := LoadTrie(s.baseDB, t, root)
 	if err != nil {
 		return nil, err
 	}

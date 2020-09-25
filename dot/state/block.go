@@ -32,41 +32,13 @@ import (
 	"github.com/ChainSafe/chaindb"
 )
 
-var blockPrefix = []byte("block")
-
-// BlockDB stores block's in an underlying Database
-type BlockDB struct {
-	db chaindb.Database
-}
-
-// Put appends `block` to the key and sets the key-value pair in the db
-func (blockDB *BlockDB) Put(key, value []byte) error {
-	key = append(blockPrefix, key...)
-	return blockDB.db.Put(key, value)
-}
-
-// Get appends `block` to the key and retrieves the value from the db
-func (blockDB *BlockDB) Get(key []byte) ([]byte, error) {
-	key = append(blockPrefix, key...)
-	return blockDB.db.Get(key)
-}
-
-// Delete deletes a key from the db
-func (blockDB *BlockDB) Delete(key []byte) error {
-	key = append(blockPrefix, key...)
-	return blockDB.db.Del(key)
-}
-
-// Has appends `block` to the key and checks for existence in the db
-func (blockDB *BlockDB) Has(key []byte) (bool, error) {
-	key = append(blockPrefix, key...)
-	return blockDB.db.Has(key)
-}
+var blockPrefix = "block"
 
 // BlockState defines fields for manipulating the state of blocks, such as BlockTree, BlockDB and Header
 type BlockState struct {
 	bt                 *blocktree.BlockTree
-	db                 *BlockDB
+	baseDB             chaindb.Database
+	db                 chaindb.Database
 	lock               sync.RWMutex
 	genesisHash        common.Hash
 	highestBlockHeader *types.Header
@@ -78,13 +50,6 @@ type BlockState struct {
 	finalizedLock sync.RWMutex
 }
 
-// NewBlockDB instantiates a badgerDB instance for storing relevant BlockData
-func NewBlockDB(db chaindb.Database) *BlockDB {
-	return &BlockDB{
-		db,
-	}
-}
-
 // NewBlockState will create a new BlockState backed by the database located at basePath
 func NewBlockState(db chaindb.Database, bt *blocktree.BlockTree) (*BlockState, error) {
 	if bt == nil {
@@ -93,7 +58,8 @@ func NewBlockState(db chaindb.Database, bt *blocktree.BlockTree) (*BlockState, e
 
 	bs := &BlockState{
 		bt:        bt,
-		db:        NewBlockDB(db),
+		baseDB:    db,
+		db:        chaindb.NewTable(db, blockPrefix),
 		imported:  make(map[byte]chan<- *types.Block),
 		finalized: make(map[byte]chan<- *types.Header),
 	}
@@ -114,7 +80,8 @@ func NewBlockState(db chaindb.Database, bt *blocktree.BlockTree) (*BlockState, e
 func NewBlockStateFromGenesis(db chaindb.Database, header *types.Header) (*BlockState, error) {
 	bs := &BlockState{
 		bt:        blocktree.NewBlockTreeFromGenesis(header, db),
-		db:        NewBlockDB(db),
+		baseDB:    db,
+		db:        chaindb.NewTable(db, blockPrefix),
 		imported:  make(map[byte]chan<- *types.Block),
 		finalized: make(map[byte]chan<- *types.Header),
 	}
@@ -211,42 +178,42 @@ func (bs *BlockState) GenesisHash() common.Hash {
 // DeleteBlock deletes all instances of the block and its related data in the database
 func (bs *BlockState) DeleteBlock(hash common.Hash) error {
 	if has, _ := bs.HasHeader(hash); has {
-		err := bs.db.Delete(headerKey(hash))
+		err := bs.db.Del(headerKey(hash))
 		if err != nil {
 			return err
 		}
 	}
 
 	if has, _ := bs.HasBlockBody(hash); has {
-		err := bs.db.Delete(blockBodyKey(hash))
+		err := bs.db.Del(blockBodyKey(hash))
 		if err != nil {
 			return err
 		}
 	}
 
 	if has, _ := bs.HasArrivalTime(hash); has {
-		err := bs.db.Delete(arrivalTimeKey(hash))
+		err := bs.db.Del(arrivalTimeKey(hash))
 		if err != nil {
 			return err
 		}
 	}
 
 	if has, _ := bs.HasReceipt(hash); has {
-		err := bs.db.Delete(prefixKey(hash, receiptPrefix))
+		err := bs.db.Del(prefixKey(hash, receiptPrefix))
 		if err != nil {
 			return err
 		}
 	}
 
 	if has, _ := bs.HasMessageQueue(hash); has {
-		err := bs.db.Delete(prefixKey(hash, messageQueuePrefix))
+		err := bs.db.Del(prefixKey(hash, messageQueuePrefix))
 		if err != nil {
 			return err
 		}
 	}
 
 	if has, _ := bs.HasJustification(hash); has {
-		err := bs.db.Delete(prefixKey(hash, justificationPrefix))
+		err := bs.db.Del(prefixKey(hash, justificationPrefix))
 		if err != nil {
 			return err
 		}
@@ -739,7 +706,7 @@ func (bs *BlockState) BlocktreeAsString() string {
 }
 
 func (bs *BlockState) setBestBlockHashKey(hash common.Hash) error {
-	return StoreBestBlockHash(bs.db.db, hash)
+	return StoreBestBlockHash(bs.baseDB, hash)
 }
 
 // HasArrivalTime returns true if the db contains the block's arrival time
@@ -749,7 +716,7 @@ func (bs *BlockState) HasArrivalTime(hash common.Hash) (bool, error) {
 
 // GetArrivalTime returns the arrival time of a block given its hash
 func (bs *BlockState) GetArrivalTime(hash common.Hash) (uint64, error) {
-	arrivalTime, err := bs.db.db.Get(arrivalTimeKey(hash))
+	arrivalTime, err := bs.baseDB.Get(arrivalTimeKey(hash))
 	if err != nil {
 		return 0, err
 	}
@@ -760,7 +727,7 @@ func (bs *BlockState) GetArrivalTime(hash common.Hash) (uint64, error) {
 func (bs *BlockState) setArrivalTime(hash common.Hash, arrivalTime uint64) error {
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, arrivalTime)
-	return bs.db.db.Put(arrivalTimeKey(hash), buf)
+	return bs.baseDB.Put(arrivalTimeKey(hash), buf)
 }
 
 // babeHeaderKey = babeHeaderPrefix || epoch || slice

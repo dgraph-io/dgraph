@@ -30,14 +30,10 @@ import (
 )
 
 func TestConcurrencySetHeader(t *testing.T) {
-	db := chaindb.NewMemDatabase()
-	blockDB := NewBlockDB(db)
-
 	threads := runtime.NumCPU()
-	dbs := make([]*BlockDB, threads)
+	dbs := make([]chaindb.Database, threads)
 	for i := 0; i < threads; i++ {
-		cpy := *blockDB
-		dbs[i] = &cpy
+		dbs[i] = chaindb.NewMemDatabase()
 	}
 
 	pend := new(sync.WaitGroup)

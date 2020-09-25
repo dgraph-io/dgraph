@@ -87,8 +87,6 @@ func TestImportChannel_Multi(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	AddBlocksToState(t, bs, 1)
-
 	var wg sync.WaitGroup
 	wg.Add(num)
 
@@ -98,14 +96,16 @@ func TestImportChannel_Multi(t *testing.T) {
 			select {
 			case b := <-ch:
 				require.Equal(t, big.NewInt(1), b.Header.Number)
-				wg.Done()
 			case <-time.After(testMessageTimeout):
 				t.Error("did not receive imported block: ch=", i)
 			}
+			wg.Done()
 		}(i, ch)
 
 	}
 
+	time.Sleep(time.Millisecond * 10)
+	AddBlocksToState(t, bs, 1)
 	wg.Wait()
 
 	for _, id := range ids {
@@ -128,7 +128,6 @@ func TestFinalizedChannel_Multi(t *testing.T) {
 	}
 
 	chain, _ := AddBlocksToState(t, bs, 1)
-	bs.SetFinalizedHash(chain[0].Hash(), 0, 0)
 
 	var wg sync.WaitGroup
 	wg.Add(num)
@@ -138,14 +137,16 @@ func TestFinalizedChannel_Multi(t *testing.T) {
 		go func(i int, ch chan *types.Header) {
 			select {
 			case <-ch:
-				wg.Done()
 			case <-time.After(testMessageTimeout):
 				t.Error("did not receive finalized block: ch=", i)
 			}
+			wg.Done()
 		}(i, ch)
 
 	}
 
+	time.Sleep(time.Millisecond * 10)
+	bs.SetFinalizedHash(chain[0].Hash(), 0, 0)
 	wg.Wait()
 
 	for _, id := range ids {

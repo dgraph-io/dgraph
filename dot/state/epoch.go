@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	epochPrefix     = []byte("epoch")
+	epochPrefix     = "epoch"
 	currentEpochKey = []byte("current")
 	epochInfoPrefix = []byte("epochinfo")
 )
@@ -37,50 +37,14 @@ func epochInfoKey(epoch uint64) []byte {
 	return append(epochInfoPrefix, buf...)
 }
 
-// EpochDB stores epoch info in an underlying Database
-type EpochDB struct {
-	db chaindb.Database
-}
-
-// Put appends `epoch` to the key and sets the key-value pair in the db
-func (db *EpochDB) Put(key, value []byte) error {
-	key = append(epochPrefix, key...)
-	return db.db.Put(key, value)
-}
-
-// Get appends `epoch` to the key and retrieves the value from the db
-func (db *EpochDB) Get(key []byte) ([]byte, error) {
-	key = append(epochPrefix, key...)
-	return db.db.Get(key)
-}
-
-// Delete deletes a key from the db
-func (db *EpochDB) Delete(key []byte) error {
-	key = append(epochPrefix, key...)
-	return db.db.Del(key)
-}
-
-// Has appends `epoch` to the key and checks for existence in the db
-func (db *EpochDB) Has(key []byte) (bool, error) {
-	key = append(epochPrefix, key...)
-	return db.db.Has(key)
-}
-
-// newEpochDB instantiates a badgerDB instance for stssoring relevant epoch info
-func newEpochDB(db chaindb.Database) *EpochDB {
-	return &EpochDB{
-		db,
-	}
-}
-
 // EpochState tracks information related to each epoch
 type EpochState struct {
-	db *EpochDB
+	db chaindb.Database
 }
 
 // NewEpochStateFromGenesis returns a new EpochState given information for the first epoch, fetched from the runtime
 func NewEpochStateFromGenesis(db chaindb.Database, info *types.EpochInfo) (*EpochState, error) {
-	epochDB := newEpochDB(db)
+	epochDB := chaindb.NewTable(db, epochPrefix)
 	err := epochDB.Put(currentEpochKey, []byte{1, 0, 0, 0, 0, 0, 0, 0})
 	if err != nil {
 		return nil, err
@@ -100,9 +64,8 @@ func NewEpochStateFromGenesis(db chaindb.Database, info *types.EpochInfo) (*Epoc
 
 // NewEpochState returns a new EpochState
 func NewEpochState(db chaindb.Database) *EpochState {
-	epochDB := newEpochDB(db)
 	return &EpochState{
-		db: epochDB,
+		db: chaindb.NewTable(db, epochPrefix),
 	}
 }
 
