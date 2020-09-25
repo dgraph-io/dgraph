@@ -608,7 +608,7 @@ schemas:
         })
       }
 
-  - name: "geo type."
+  - name: "Geo field in schema."
     input: |
       type Hotel {
         id: ID!
