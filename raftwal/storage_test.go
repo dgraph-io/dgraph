@@ -51,7 +51,7 @@ func TestStorageTerm(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds := Init(dir, 0, 0)
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
@@ -99,7 +99,7 @@ func TestStorageEntries(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds := Init(dir, 0, 0)
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
 	tests := []struct {
@@ -142,7 +142,7 @@ func TestStorageLastIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds := Init(dir, 0, 0)
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -170,7 +170,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds := Init(dir, 0, 0)
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -238,7 +238,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds := Init(dir, 0, 0)
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
@@ -273,7 +273,7 @@ func TestStorageAppend(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds := Init(dir, 0, 0)
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
@@ -323,8 +323,7 @@ func TestStorageAppend(t *testing.T) {
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
-		all, err := ds.entries.allEntries(0, math.MaxUint64, math.MaxUint64)
-		require.NoError(t, err)
+		all := ds.entries.allEntries(0, math.MaxUint64, math.MaxUint64)
 		if !reflect.DeepEqual(all, tt.wentries) {
 			t.Errorf("#%d: entries = %v, want %v", i, all, tt.wentries)
 		}
@@ -391,8 +390,7 @@ func TestEntryFile(t *testing.T) {
 	require.NotNil(t, e)
 
 	require.NoError(t, el.AddEntries([]raftpb.Entry{{Index: 1, Term: 1, Data: []byte("abc")}}))
-	entries, err := el.allEntries(0, 100, 10000)
-	require.NoError(t, err)
+	entries := el.allEntries(0, 100, 10000)
 	require.Equal(t, 1, len(entries))
 	require.Equal(t, uint64(1), entries[0].Index)
 	require.Equal(t, uint64(1), entries[0].Term)
@@ -402,7 +400,7 @@ func TestEntryFile(t *testing.T) {
 func TestStorageBig(t *testing.T) {
 	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
-	ds := Init(dir, 1, 1)
+	ds := Init(dir)
 	defer os.RemoveAll(dir)
 
 	ent := raftpb.Entry{
@@ -423,6 +421,8 @@ func TestStorageBig(t *testing.T) {
 
 	N := uint64(100000)
 	addEntries(1, N)
+	num := ds.NumEntries()
+	require.Equal(t, int(N-1), num)
 
 	check := func(start, end uint64) {
 		ents, err := ds.Entries(start, end, math.MaxInt64)
@@ -441,6 +441,9 @@ func TestStorageBig(t *testing.T) {
 	check(33000, 45000)
 	check(45000, N)
 	check(N, N+1)
+
+	_, err = ds.Entries(N+1, N+10, math.MaxInt64)
+	require.Error(t, raft.ErrUnavailable, err)
 
 	// Jump back a few files.
 	addEntries(N/3, N)
@@ -476,8 +479,7 @@ func TestStorageBig(t *testing.T) {
 	require.NoError(t, ds.entries.AddEntries([]raftpb.Entry{ent}))
 
 	start := N - 100 + 1
-	ents, err := ds.entries.allEntries(start, math.MaxInt64, math.MaxInt64)
-	require.NoError(t, err)
+	ents := ds.entries.allEntries(start, math.MaxInt64, math.MaxInt64)
 	require.Equal(t, 50, len(ents))
 	for idx, ent := range ents {
 		require.Equal(t, int(start)+idx, int(ent.Index))
@@ -485,8 +487,7 @@ func TestStorageBig(t *testing.T) {
 
 	ent.Index = N
 	require.NoError(t, ds.entries.AddEntries([]raftpb.Entry{ent}))
-	ents, err = ds.entries.allEntries(start, math.MaxInt64, math.MaxInt64)
-	require.NoError(t, err)
+	ents = ds.entries.allEntries(start, math.MaxInt64, math.MaxInt64)
 	require.Equal(t, 51, len(ents))
 	for idx, ent := range ents {
 		if idx == 50 {

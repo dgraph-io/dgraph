@@ -19,6 +19,7 @@ package raftwal
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -438,28 +439,35 @@ func (ef *entryFile) lastEntry() entry {
 }
 
 func (ef *entryFile) Term(entryIndex uint64) uint64 {
-	offset, found := ef.Offset(entryIndex)
-	if !found {
+	offset := ef.offsetGe(entryIndex)
+	if offset < 0 || offset >= maxNumEntries {
 		return 0
 	}
 	e := ef.getEntry(int(offset))
-	return e.Term()
+	if e.Index() == entryIndex {
+		return e.Term()
+	}
+	return 0
 }
 
-func (ef *entryFile) Offset(raftIndex uint64) (int, bool) {
+// offsetGe would return -1 if raftIndex < firstIndex in this file.
+// Would return maxNumEntries if raftIndex > lastIndex in this file.
+// If raftIndex is found, or the entryFile has empty slots, the offset would be between
+// [0, maxNumEntries).
+func (ef *entryFile) offsetGe(raftIndex uint64) int {
 	fi := ef.firstIndex()
 	if raftIndex < fi {
-		return 0, false
+		return -1
 	}
 	if diff := int(raftIndex - fi); diff < maxNumEntries && diff >= 0 {
 		e := ef.getEntry(diff)
 		if e.Index() == raftIndex {
-			return diff, true
+			return diff
 		}
 	}
 
 	// This would find the first entry's index which has entryIndex.
-	idx := sort.Search(maxNumEntries, func(i int) bool {
+	return sort.Search(maxNumEntries, func(i int) bool {
 		e := ef.getEntry(i)
 		if e.Index() == 0 {
 			// We reached too far to the right.
@@ -467,13 +475,6 @@ func (ef *entryFile) Offset(raftIndex uint64) (int, bool) {
 		}
 		return e.Index() >= raftIndex
 	})
-	if idx == maxNumEntries {
-		return 0, false
-	}
-	if e := ef.getEntry(idx); e.Index() == raftIndex {
-		return idx, true
-	}
-	return 0, false
 }
 
 // entryLog represents the entire entry log. It consists of one or more
@@ -576,13 +577,15 @@ func (l *entryLog) numEntries() int {
 }
 
 func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
-	fidx, eidx := l.Offset(entries[0].Index)
+	fidx, eidx := l.offsetGe(entries[0].Index)
 
 	// fmt.Printf("fidx: %d, eidx: %d, entries: %+v\n", fidx, eidx, entries)
 	if eidx >= 0 {
 		if fidx == -1 {
-			zeroOut(l.current.data, entrySize*eidx, entrySize*l.nextEntryIdx)
-			l.nextEntryIdx = eidx
+			if l.nextEntryIdx > eidx {
+				zeroOut(l.current.data, entrySize*eidx, entrySize*l.nextEntryIdx)
+				l.nextEntryIdx = eidx
+			}
 
 		} else {
 			x.AssertTrue(fidx != len(l.files))
@@ -678,17 +681,29 @@ func (l *entryLog) getEntryFile(fidx int) *entryFile {
 	return l.files[fidx]
 }
 
-func (l *entryLog) seekEntry(idx uint64) (entry, error) {
-	fidx, off := l.Offset(idx)
-	ef := l.getEntryFile(fidx)
+func (l *entryLog) seekEntry(raftIndex uint64) (entry, error) {
+	fidx, off := l.offsetGe(raftIndex)
 	if off == -1 {
-		if idx < ef.firstEntry().Index() {
-			return emptyEntry, raft.ErrCompacted
-		}
+		return emptyEntry, raft.ErrCompacted
+	} else if off >= maxNumEntries {
 		return emptyEntry, raft.ErrUnavailable
 	}
+	// idx := ef.getEntry(off).Index()
+
+	// if off == -1 {
+	// 	if raftIndex < ef.firstEntry().Index() {
+	// 		return emptyEntry, raft.ErrCompacted
+	// 	}
+	// 	return emptyEntry, raft.ErrUnavailable
+	// }
+
+	ef := l.getEntryFile(fidx)
 	ent := ef.getEntry(off)
-	if ent.Index() != idx {
+	if ent.Index() == 0 {
+		// We have gone past what we wrote to the file.
+		return emptyEntry, raft.ErrUnavailable
+	}
+	if ent.Index() != raftIndex {
 		return emptyEntry, errNotFound
 	}
 	return ent, nil
@@ -712,12 +727,12 @@ func (l *entryLog) Term(idx uint64) (uint64, error) {
 	return t, nil
 }
 
-// Offset returns the file index and the offset within that file in which the entry
+// offsetGe returns the file index and the offset within that file in which the entry
 // with the given index can be found. A value of -1 for the file index means that the
 // entry is in the current file.
-func (l *entryLog) Offset(raftIndex uint64) (int, int) {
+func (l *entryLog) offsetGe(raftIndex uint64) (int, int) {
 	// Look for the offset in the current file.
-	if offset, found := l.current.Offset(raftIndex); found {
+	if offset := l.current.offsetGe(raftIndex); offset >= 0 {
 		return -1, offset
 	}
 
@@ -739,15 +754,12 @@ func (l *entryLog) Offset(raftIndex uint64) (int, int) {
 		}
 		fileIdx--
 	}
-	offset, found := l.files[fileIdx].Offset(raftIndex)
-	if !found {
-		return -1, -1
-	}
+	offset := l.files[fileIdx].offsetGe(raftIndex)
 	return fileIdx, offset
 }
 
 func (l *entryLog) deleteBefore(raftIndex uint64) error {
-	fidx, off := l.Offset(raftIndex)
+	fidx, off := l.offsetGe(raftIndex)
 
 	if off >= 0 && fidx <= len(l.files) {
 		var before []*entryFile
@@ -785,31 +797,32 @@ func (l *entryLog) reset() error {
 	return nil
 }
 
-func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
-	entries := make([]raftpb.Entry, 0)
-	fileIdx, offset := l.Offset(lo)
+func (l *entryLog) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
+	var entries []raftpb.Entry
+	fileIdx, offset := l.offsetGe(lo)
 	var size uint64
 
-	currFile := l.getEntryFile(fileIdx)
-	if offset == -1 {
+	if offset < 0 {
+		// We are at the very beginning of this thing.
 		offset = 0
 	}
 
+	currFile := l.getEntryFile(fileIdx)
 	for {
 		if offset >= maxNumEntries {
 			if fileIdx == -1 {
 				// We are looking at the current file and there are no more entries.
 				// Return what we have.
-				break
+				return entries
 			}
 
 			// Move to the next file.
 			fileIdx++
 			if fileIdx >= len(l.files) {
-				currFile = l.current
-			} else {
-				currFile = l.files[fileIdx]
+				fileIdx = -1
 			}
+			currFile = l.getEntryFile(fileIdx)
+			x.AssertTrue(currFile != nil)
 
 			// Reset the offset to start reading the next file from the beginning.
 			offset = 0
@@ -825,9 +838,8 @@ func (l *entryLog) allEntries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
 		}
 		entries = append(entries, re)
 		offset++
-
 	}
-	return entries, nil
+	return entries
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
@@ -944,9 +956,18 @@ func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, 
 	return hs, snap.Metadata.ConfState, nil
 }
 
-func (w *DiskStorage) NumEntries() (int, error) {
-	panic("Not implemented")
-	// return w.entries.numEntries(), nil
+func (w *DiskStorage) NumEntries() int {
+	start := w.entries.FirstIndex()
+
+	var count int
+	for {
+		ents := w.entries.allEntries(start, math.MaxUint64, 64<<20)
+		if len(ents) == 0 {
+			return count
+		}
+		count += len(ents)
+		start = ents[len(ents)-1].Index + 1
+	}
 }
 
 // Entries returns a slice of log entries in the range [lo,hi).
@@ -965,10 +986,7 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 		return nil, raft.ErrUnavailable
 	}
 
-	ents, err := w.entries.allEntries(lo, hi, maxSize)
-	if err != nil {
-		return nil, err
-	}
+	ents := w.entries.allEntries(lo, hi, maxSize)
 	return ents, nil
 }
 
