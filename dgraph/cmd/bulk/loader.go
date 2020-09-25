@@ -67,6 +67,7 @@ type options struct {
 	NewUids          bool
 	ClientDir        string
 	Encrypted        bool
+	EncryptedOut     bool
 
 	MapShards    int
 	ReduceShards int

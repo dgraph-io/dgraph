@@ -142,12 +142,17 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 		}
 	}
 
+	key := r.opt.EncryptionKey
+	if !r.opt.EncryptedOut {
+		key = nil
+	}
+
 	opt := badger.DefaultOptions(dir).
 		WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).
 		WithValueThreshold(1 << 10 /* 1 KB */).
 		WithLogger(nil).
-		WithEncryptionKey(r.opt.EncryptionKey).
+		WithEncryptionKey(key).
 		WithBlockCacheSize(r.opt.BlockCacheSize).
 		WithIndexCacheSize(r.opt.IndexCacheSize)
 
