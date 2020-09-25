@@ -513,4 +513,35 @@ func TestStorageBig(t *testing.T) {
 			require.Equal(t, int(start)+idx, int(ent.Index))
 		}
 	}
+
+}
+
+func TestStorageOnlySnap(t *testing.T) {
+	dir, err := ioutil.TempDir("", "raftwal")
+	require.NoError(t, err)
+	ds := Init(dir)
+	t.Logf("Creating dir: %s\n", dir)
+
+	buf := make([]byte, 128)
+	rand.Read(buf)
+	N := uint64(1000)
+
+	snap := &raftpb.Snapshot{}
+	snap.Metadata.Index = N
+	snap.Metadata.ConfState = raftpb.ConfState{}
+	snap.Data = buf
+
+	require.NoError(t, ds.meta.StoreSnapshot(snap))
+
+	out, err := ds.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, N, out.Metadata.Index)
+
+	fi, err := ds.FirstIndex()
+	require.NoError(t, err)
+	require.Equal(t, N+1, fi)
+
+	li, err := ds.LastIndex()
+	require.NoError(t, err)
+	require.Equal(t, N, li)
 }

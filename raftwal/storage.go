@@ -493,7 +493,10 @@ func (w *DiskStorage) LastIndex() (uint64, error) {
 	defer w.lock.Unlock()
 
 	li := w.entries.LastIndex()
-	// glog.Infof("LASTINDEX: %d\n", li)
+	si := w.meta.Uint(SnapshotIndex)
+	if li < si {
+		return si, nil
+	}
 	return li, nil
 }
 
