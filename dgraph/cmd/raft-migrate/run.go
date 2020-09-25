@@ -48,8 +48,9 @@ func init() {
 
 	flag := RaftMigrate.Cmd.Flags()
 	flag.StringP("old-dir", "", "", "Path to the old (z)w directory.")
-	flag.IntP("old-node-id", "", 1, "")
-	flag.IntP("old-group-id", "", 0, "")
+	flag.IntP("old-node-id", "", 1,
+		"Node ID of the old node. This will be the node ID of the new node.")
+	flag.IntP("old-group-id", "", 0, "Group ID of the old node. This is used to open the old wal.")
 	flag.StringP("new-dir", "", "", "Path to the new (z)w directory.")
 }
 
@@ -77,6 +78,8 @@ func run(conf *viper.Viper) error {
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
 
+	raftID, err := RaftId(kv)
+	x.Check(err)
 	oldWal := Init(kv, uint64(nodeId), uint32(groupId))
 
 	firstIndex, err := oldWal.FirstIndex()
@@ -103,7 +106,12 @@ func run(conf *viper.Viper) error {
 	if _, err := os.Stat(newDir); os.IsNotExist(err) {
 		os.Mkdir(newDir, 0777)
 	}
+
 	newWal := raftwal.Init(newDir)
+	fmt.Printf("Setting raftID to: %+v\n", raftID)
+	// Set the raft ID
+	newWal.SetUint(raftwal.RaftId, raftID)
+
 	fmt.Printf("Saving num of oldEntries:%+v\nsnapshot %+v\nhardstate = %+v\n",
 		len(oldEntries), snapshot, hs)
 	if err := newWal.Save(&hs, oldEntries, &snapshot); err != nil {
