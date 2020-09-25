@@ -26,8 +26,8 @@ import (
 type ToGlog struct {
 }
 
-func (rl *ToGlog) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
-func (rl *ToGlog) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
+func (rl *ToGlog) Debug(v ...interface{})                   { glog.V(2).Info(v...) }
+func (rl *ToGlog) Debugf(format string, v ...interface{})   { glog.V(2).Infof(format, v...) }
 func (rl *ToGlog) Error(v ...interface{})                   { glog.Error(v...) }
 func (rl *ToGlog) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
 func (rl *ToGlog) Info(v ...interface{})                    { glog.Info(v...) }

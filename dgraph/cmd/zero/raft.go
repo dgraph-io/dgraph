@@ -572,6 +572,7 @@ func (n *node) initAndStartNode() error {
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 	default:
+		glog.Infof("Starting a brand new node")
 		data, err := n.RaftContext.Marshal()
 		x.Check(err)
 		peers := []raft.Peer{{ID: n.Id, Context: data}}
