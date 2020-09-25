@@ -3746,3 +3746,74 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
 	// cleanup
 	deleteGqlType(t, "Person1", map[string]interface{}{}, 3, nil)
 }
+
+func addMutationWithHasInverseOverridesCorrectly(t *testing.T) {
+	params := &GraphQLParams{
+		Query: `mutation addCountry($input: [AddCountryInput!]!) {
+			addCountry(input: $input) {
+			  country {
+				name
+				states{
+				  xcode
+				  name
+				  country{
+					name
+				  }
+				}
+			  }
+			}
+		  }`,
+
+		Variables: map[string]interface{}{
+			"input": []interface{}{
+				map[string]interface{}{
+					"name": "A country",
+					"states": []interface{}{
+						map[string]interface{}{
+							"xcode": "abc",
+							"name":  "Alphabet",
+						},
+						map[string]interface{}{
+							"xcode": "def",
+							"name":  "Vowel",
+							"country": map[string]interface{}{
+								"name": "B country",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	gqlResponse := postExecutor(t, GraphqlURL, params)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+		"addCountry": {
+		  "country": [
+			{
+			  "name": "A country",
+			  "states": [
+				{
+				  "country": {
+					"name": "A country"
+				  },
+				  "name": "Alphabet",
+				  "xcode": "abc"
+				},
+				{
+				  "country": {
+					"name": "A country"
+				  },
+				  "name": "Vowel",
+				  "xcode": "def"
+				}
+			  ]
+			}
+		  ]
+		}
+	  }`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	deleteGqlType(t, "Country", map[string]interface{}{}, 4, nil)
+}
