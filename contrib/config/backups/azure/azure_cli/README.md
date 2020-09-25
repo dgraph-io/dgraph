@@ -8,7 +8,7 @@ This script will create the required resources needed to create Azure Blob Stora
 
 You need the following installed to use this automation:
 
-* [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) - Active Azure subscription has been setup.
+* [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) with an active Azure subscription configured.
 * [jq](https://stedolan.github.io/jq/) - command-line JSON process that makes it easy to parse JSON output from Azure CLI.
 * [bash](https://www.gnu.org/software/bash/) - shell environment
 

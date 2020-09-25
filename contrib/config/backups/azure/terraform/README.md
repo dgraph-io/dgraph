@@ -8,8 +8,8 @@ This script will create the required resources needed to create Azure Blob Stora
 
 You need the following installed to use this automation:
 
-* [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) - Active Azure subscription has been setup.
-* [Terraform](https://www.terraform.io/downloads.html) - tool used to provision resources and create templates
+* [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) with an active Azure subscription configured.
+* [Terraform](https://www.terraform.io/downloads.html) tool that is used to provision resources and create configuration files from templates
 
 ## Configuration
 

@@ -37,7 +37,7 @@ MINIO_ACCESS_KEY=<azure-storage-account-name>
 MINIO_SECRET_KEY=<azure-storage-account-key>
 ```
 
-These values are used to both access the [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html) using the same credentials used to access Azure Storage Account.  As a convenience, both example [terraform](terraform/README.md) and [azure_cli](azure_cli/README.md) scripts will auto-generate the `minio.env`.
+These values are used to both access the [MinIO Azure Gateway](https://docs.min.io/docs/minio-gateway-for-azure.html) using the same credentials used to access Azure Storage Account.  As a convenience, both example [Terraform](terraform/README.md) and [azure_cli](azure_cli/README.md) scripts will auto-generate the `minio.env`.
 
 #### Using Docker Compose
 
