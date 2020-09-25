@@ -30,7 +30,7 @@ Run \`helm status {{ .Release.Name }}\` for more information.
 Run \`helm delete --purge {{.Release.Name}}\` to uninstall.
 EOF
   echo "running kustomize" 1>&2
-  (cd $dir; kustomize build overlays/$env) > $chart/templates/all.yaml
+  (cd $dir; kubectl kustomize overlays/$env) > $chart/templates/all.yaml
   echo "running helm lint" 1>&2
   helm lint $chart
   echo "generated following files:"

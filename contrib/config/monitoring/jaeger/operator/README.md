@@ -13,9 +13,8 @@ The [Jaeger operator](https://github.com/jaegertracing/jaeger-operator) is an im
 
 These tools are optional if you would like to use a single command to install all the jaeger components and dgraph configured to use jaeger.
 
-* [helmfile](https://github.com/roboll/helmfile#installation) (optional)
+* [helmfile](https://github.com/roboll/helmfile#installation) 
 * [helm-diff](https://github.com/databus23/helm-diff) helm plugin: `helm plugin install https://github.com/databus23/helm-diff`
-* [kustomize](https://kubernetes-sigs.github.io/kustomize/installation/) (optional)
 
 ## Deploy
 
@@ -74,7 +73,7 @@ kubectl delete \
   --namespace observability \
   --kustomize jaeger-kustomize/overlays/badger/
 
-## Delete Jaeber Operator
+## Delete Jaeger Operator
 helm delete --namespace observability "jaeger-operator"
 ```
 
