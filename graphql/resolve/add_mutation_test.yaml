@@ -1,4 +1,37 @@
 -
+  name: "Add mutation with geo"
+  gqlmutation: |
+    mutation addHotel($hotel: AddHotelInput!) {
+      addHotel(input: [$hotel]) {
+        hotel {
+          name
+          location {
+            latitude
+            longitude
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "hotel":
+      { "name": "Taj Hotel",
+        "location": { "latitude": 11.11 , "longitude" : 22.22}
+      }
+    }
+  explanation: "A uid and type should get injected and all data transformed to
+    underlying Dgraph edge names"
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Hotel1",
+          "dgraph.type":["Hotel"],
+          "Hotel.name":"Taj Hotel",
+          "Hotel.location": {
+            "type": "Point",
+             "coordinates": [22.22, 11.11]
+          }
+        }
+
+-
   name: "Add mutation with variables"
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {

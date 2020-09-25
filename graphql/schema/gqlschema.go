@@ -125,18 +125,18 @@ input CustomHTTP {
 }
 
 type Point {
-	latitude: Float!
 	longitude: Float!
+	latitude: Float!
 }
 
-input PointInput {
-	latitude: Float!
+input PointRef {
 	longitude: Float!
+	latitude: Float!
 }
 
 input NearFilter {
 	distance: Float!
-	coordinate: PointInput!
+	coordinate: PointRef!
 }
 
 input PointGeoFilter {

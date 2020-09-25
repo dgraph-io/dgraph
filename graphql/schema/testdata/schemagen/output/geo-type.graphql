@@ -75,22 +75,22 @@ input CustomHTTP {
 }
 
 type Point {
-	Latitude: Float!
-	Longitude: Float!
+	longitude: Float!
+	latitude: Float!
 }
 
-input PointInput {
-	Latitude: Float!
-	Longitude: Float!
+input PointRef {
+	longitude: Float!
+	latitude: Float!
 }
 
 input NearFilter {
-	Distance: Float!
-	Coordinate: PointInput!
+	distance: Float!
+	coordinate: PointRef!
 }
 
 input PointGeoFilter {
-	near: NearFilter
+	near: NearFilter!
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -205,6 +205,7 @@ enum HotelOrderable {
 
 input AddHotelInput {
 	name: String!
+	location: PointRef
 }
 
 input HotelFilter {
@@ -224,11 +225,13 @@ input HotelOrder {
 
 input HotelPatch {
 	name: String
+	location: PointRef
 }
 
 input HotelRef {
 	id: ID
 	name: String
+	location: PointRef
 }
 
 input UpdateHotelInput {
