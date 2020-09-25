@@ -340,6 +340,7 @@ type entryFile struct {
 }
 
 func (ef *entryFile) delete() error {
+	glog.V(2).Infof("Deleting file: %s\n", ef.fd.Name())
 	if err := z.Munmap(ef.data); err != nil {
 		glog.Errorf("while munmap file: %s, error: %v\n", ef.fd.Name(), err)
 	}
@@ -375,7 +376,7 @@ func getEntryFiles(dir string) ([]*entryFile, error) {
 		return false
 	})
 
-	files := make([]*entryFile, 0)
+	var files []*entryFile
 	seen := make(map[int64]struct{})
 	for _, fpath := range entryFiles {
 		_, fname := path.Split(fpath)
@@ -393,7 +394,13 @@ func getEntryFiles(dir string) ([]*entryFile, error) {
 		if err != nil {
 			return nil, err
 		}
-		files = append(files, f)
+		if f.firstIndex() == 0 {
+			if err := f.delete(); err != nil {
+				return nil, err
+			}
+		} else {
+			files = append(files, f)
+		}
 	}
 
 	// Sort files by the first index they store.
@@ -841,8 +848,13 @@ func (l *entryLog) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 		}
 
 		re := currFile.GetRaftEntry(offset)
-		if re.Index >= hi || re.Index == 0 {
-			break
+		if re.Index >= hi {
+			return entries
+		}
+		if re.Index == 0 {
+			// Allow this to move to the next file.
+			offset = maxNumEntries
+			continue
 		}
 		size += uint64(re.Size())
 		if len(entries) > 0 && size > maxSize {
