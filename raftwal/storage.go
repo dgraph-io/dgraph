@@ -474,10 +474,13 @@ func (w *DiskStorage) Term(idx uint64) (uint64, error) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	first := w.firstIndex()
-	if idx < first-1 {
+	si := w.meta.Uint(SnapshotIndex)
+	if idx < si {
 		glog.Errorf("TERM for %d = %v\n", idx, raft.ErrCompacted)
 		return 0, raft.ErrCompacted
+	}
+	if idx == si {
+		return w.meta.Uint(SnapshotTerm), nil
 	}
 
 	term, err := w.entries.Term(idx)

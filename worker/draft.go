@@ -1011,15 +1011,17 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 }
 
 func (n *node) drainApplyChan() {
+	numDrained := 0
 	for {
 		select {
 		case proposals := <-n.applyCh:
-			glog.Infof("Draining %d proposals\n", len(proposals))
+			numDrained += len(proposals)
 			for _, proposal := range proposals {
 				n.Proposals.Done(proposal.Key, nil)
 				n.Applied.Done(proposal.Index)
 			}
 		default:
+			glog.Infof("Drained %d proposals\n", numDrained)
 			return
 		}
 	}

@@ -221,6 +221,8 @@ func getAlpha(idx int) service {
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
 	svc := initService(basename, idx, grpcPort)
+	// Don't make Alphas depend on each other.
+	svc.DependsOn = nil
 
 	if opts.TmpFS {
 		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/w", svc.name))
@@ -251,7 +253,9 @@ func getAlpha(idx int) service {
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
-	svc.Command += fmt.Sprintf(" --idx=%d", idx)
+
+	// Don't assign idx, let it auto-assign.
+	// svc.Command += fmt.Sprintf(" --idx=%d", idx)
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
