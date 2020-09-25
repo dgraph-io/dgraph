@@ -618,14 +618,16 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 					lastIndex := len(field.Directives) - 1
 					field.Directives[i] = field.Directives[lastIndex]
 					field.Directives = field.Directives[:lastIndex]
-					// now put it into @custom mapping
+					// get the @custom mapping for this type
 					var customFieldMap map[string]*ast.Directive
 					if existingCustomFieldMap, ok := customDirectives[typ.Name]; ok {
 						customFieldMap = existingCustomFieldMap
 					} else {
 						customFieldMap = make(map[string]*ast.Directive)
 					}
+
 					if dir.Name == customDirective {
+						// if it was @custom, put the directive at the @custom mapping for the field
 						customFieldMap[field.Name] = dir
 					} else {
 						// for lambda, first update the lambda directives map
@@ -638,9 +640,15 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 						lambdaFieldMap[field.Name] = true
 						lambdaDirectives[typ.Name] = lambdaFieldMap
 						// then, build a custom directive with correct semantics to be put
-						// into custom directives map
-						customFieldMap[field.Name] = buildCustomDirectiveForLambda(typ, field, dir)
+						// into custom directives map at this field
+						customFieldMap[field.Name] = buildCustomDirectiveForLambda(typ, field,
+							dir, func(f *ast.FieldDefinition) bool {
+								return lambdaFieldMap[f.Name] ||
+									customFieldMap[f.Name] != nil ||
+									hasCustomOrLambda(f)
+							})
 					}
+					// finally, update the custom directives map for this type
 					customDirectives[typ.Name] = customFieldMap
 					// break, as there can only be one @custom/@lambda
 					break
@@ -652,11 +660,22 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 	return customDirectives, lambdaDirectives
 }
 
+func hasCustomOrLambda(f *ast.FieldDefinition) bool {
+	for _, dir := range f.Directives {
+		if dir.Name == customDirective || dir.Name == lambdaDirective {
+			return true
+		}
+	}
+	return false
+}
+
+// buildCustomDirectiveForLambda returns custom directive for the given field to be used for @lambda
 func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinition,
-	lambdaDir *ast.Directive) *ast.Directive {
+	lambdaDir *ast.Directive, skipInBodyTemplate func(f *ast.FieldDefinition) bool) *ast.Directive {
 	comma := ""
 	var bodyTemplate strings.Builder
 
+	// this function appends a variable to the body template for @custom
 	appendToBodyTemplate := func(varName string) {
 		bodyTemplate.WriteString(comma)
 		bodyTemplate.WriteString(varName)
@@ -668,12 +687,16 @@ func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinit
 	// first let's construct the body template for the custom directive
 	bodyTemplate.WriteString("{")
 	if isQueryOrMutationType(defn) {
+		// for queries and mutations we need to put their arguments in the body template
 		for _, arg := range field.Arguments {
 			appendToBodyTemplate(arg.Name)
 		}
 	} else {
+		// for fields in other types, skip the ones in body template which have a @lambda or @custom
 		for _, f := range defn.Fields {
-			appendToBodyTemplate(f.Name)
+			if !skipInBodyTemplate(f) {
+				appendToBodyTemplate(f.Name)
+			}
 		}
 	}
 	bodyTemplate.WriteString("}")

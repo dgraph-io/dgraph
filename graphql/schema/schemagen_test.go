@@ -18,6 +18,7 @@ package schema
 
 import (
 	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -306,4 +307,11 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				"every field in this test applies @search wrongly and should raise an error")
 		})
 	}
+}
+
+func TestMain(m *testing.M) {
+	// set up the lambda url for tests
+	x.Config.GraphqlLambdaUrl = "http://localhost:8086/graphql-worker"
+	// now run the tests
+	os.Exit(m.Run())
 }

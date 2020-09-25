@@ -772,10 +772,9 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 // }
 func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
-		custom := fld.Directives.ForName(customDirective)
-		// Filtering and ordering for fields with @custom directive is handled by the remote
+		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
-		if custom != nil {
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -1422,9 +1421,9 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		custom := fld.Directives.ForName(customDirective)
-		// Fields with @custom directive should not be part of mutation input, hence we skip them.
-		if custom != nil {
+		// Fields with @custom/@lambda directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -1463,9 +1462,9 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
-		custom := fld.Directives.ForName(customDirective)
-		// Fields with @custom directive should not be part of mutation input, hence we skip them.
-		if custom != nil {
+		// Fields with @custom/@lambda directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
