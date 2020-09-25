@@ -18,10 +18,18 @@ package debug
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"log"
+	"strconv"
+	"strings"
 
+	"github.com/dgraph-io/badger/v2"
+	raftmigrate "github.com/dgraph-io/dgraph/dgraph/cmd/raft-migrate"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
+	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
@@ -46,229 +54,240 @@ func printEntry(es raftpb.Entry, pending map[uint64]bool) {
 	fmt.Printf("%s\n", buf.Bytes())
 }
 
-// func printRaft(db *badger.DB, store *raftwal.DiskStorage) {
-// 	fmt.Println()
-// 	snap, err := store.Snapshot()
-// 	if err != nil {
-// 		fmt.Printf("Got error while retrieving snapshot: %v\n", err)
-// 	} else {
-// 		fmt.Printf("Snapshot Metadata: %+v\n", snap.Metadata)
-// 		var ds pb.Snapshot
-// 		var ms pb.MembershipState
-// 		if err := ds.Unmarshal(snap.Data); err == nil {
-// 			fmt.Printf("Snapshot Alpha: %+v\n", ds)
-// 		} else if err := ms.Unmarshal(snap.Data); err == nil {
-// 			for gid, group := range ms.GetGroups() {
-// 				fmt.Printf("\nGROUP: %d\n", gid)
-// 				for _, member := range group.GetMembers() {
-// 					fmt.Printf("Member: %+v .\n", member)
-// 				}
-// 				for _, tablet := range group.GetTablets() {
-// 					fmt.Printf("Tablet: %+v .\n", tablet)
-// 				}
-// 				group.Members = nil
-// 				group.Tablets = nil
-// 				fmt.Printf("Group: %d %+v .\n", gid, group)
-// 			}
-// 			ms.Groups = nil
-// 			fmt.Printf("\nSnapshot Zero: %+v\n", ms)
-// 		} else {
-// 			fmt.Printf("Unable to unmarshal Dgraph snapshot: %v", err)
-// 		}
-// 	}
-// 	fmt.Println()
+type RaftStore interface {
+	raft.Storage
+	Checkpoint() (uint64, error)
+	HardState() (raftpb.HardState, error)
+}
 
-// 	if hs, err := store.HardState(); err != nil {
-// 		fmt.Printf("Got error while retrieving hardstate: %v\n", err)
-// 	} else {
-// 		fmt.Printf("Hardstate: %+v\n", hs)
-// 	}
+func printBasic(store RaftStore) (uint64, uint64) {
+	fmt.Println()
+	snap, err := store.Snapshot()
+	if err != nil {
+		fmt.Printf("Got error while retrieving snapshot: %v\n", err)
+	} else {
+		fmt.Printf("Snapshot Metadata: %+v\n", snap.Metadata)
+		var ds pb.Snapshot
+		var ms pb.MembershipState
+		if err := ds.Unmarshal(snap.Data); err == nil {
+			fmt.Printf("Snapshot Alpha: %+v\n", ds)
+		} else if err := ms.Unmarshal(snap.Data); err == nil {
+			for gid, group := range ms.GetGroups() {
+				fmt.Printf("\nGROUP: %d\n", gid)
+				for _, member := range group.GetMembers() {
+					fmt.Printf("Member: %+v .\n", member)
+				}
+				for _, tablet := range group.GetTablets() {
+					fmt.Printf("Tablet: %+v .\n", tablet)
+				}
+				group.Members = nil
+				group.Tablets = nil
+				fmt.Printf("Group: %d %+v .\n", gid, group)
+			}
+			ms.Groups = nil
+			fmt.Printf("\nSnapshot Zero: %+v\n", ms)
+		} else {
+			fmt.Printf("Unable to unmarshal Dgraph snapshot: %v", err)
+		}
+	}
+	fmt.Println()
 
-// 	if chk, err := store.Checkpoint(); err != nil {
-// 		fmt.Printf("Got error while retrieving checkpoint: %v\n", err)
-// 	} else {
-// 		fmt.Printf("Checkpoint: %d\n", chk)
-// 	}
+	if hs, err := store.HardState(); err != nil {
+		fmt.Printf("Got error while retrieving hardstate: %v\n", err)
+	} else {
+		fmt.Printf("Hardstate: %+v\n", hs)
+	}
 
-// 	lastIdx, err := store.LastIndex()
-// 	if err != nil {
-// 		fmt.Printf("Got error while retrieving last index: %v\n", err)
-// 		return
-// 	}
-// 	startIdx := snap.Metadata.Index + 1
-// 	fmt.Printf("Last Index: %d . Num Entries: %d .\n\n", lastIdx, lastIdx-startIdx)
+	if chk, err := store.Checkpoint(); err != nil {
+		fmt.Printf("Got error while retrieving checkpoint: %v\n", err)
+	} else {
+		fmt.Printf("Checkpoint: %d\n", chk)
+	}
 
-// 	// In case we need to truncate raft entries.
-// 	batch := db.NewWriteBatch()
-// 	defer batch.Cancel()
-// 	var numTruncates int
+	lastIdx, err := store.LastIndex()
+	if err != nil {
+		fmt.Printf("Got error while retrieving last index: %v\n", err)
+	}
+	startIdx := snap.Metadata.Index + 1
+	fmt.Printf("Last Index: %d . Num Entries: %d .\n\n", lastIdx, lastIdx-startIdx)
+	return startIdx, lastIdx
+}
 
-// 	pending := make(map[uint64]bool)
-// 	for startIdx < lastIdx-1 {
-// 		entries, err := store.Entries(startIdx, lastIdx+1, 64<<20 /* 64 MB Max Size */)
-// 		if err != nil {
-// 			fmt.Printf("Got error while retrieving entries: %v\n", err)
-// 			return
-// 		}
-// 		for _, ent := range entries {
-// 			switch {
-// 			case ent.Type == raftpb.EntryNormal && ent.Index < opt.wtruncateUntil:
-// 				if len(ent.Data) == 0 {
-// 					continue
-// 				}
-// 				ent.Data = nil
-// 				numTruncates++
-// 				k := store.EntryKey(ent.Index)
-// 				data, err := ent.Marshal()
-// 				if err != nil {
-// 					log.Fatalf("Unable to marshal entry: %+v. Error: %v", ent, err)
-// 				}
-// 				if err := batch.Set(k, data); err != nil {
-// 					log.Fatalf("Unable to set data: %+v", err)
-// 				}
-// 			default:
-// 				printEntry(ent, pending)
-// 			}
-// 			startIdx = x.Max(startIdx, ent.Index)
-// 		}
-// 	}
-// 	if err := batch.Flush(); err != nil {
-// 		fmt.Printf("Got error while flushing batch: %v\n", err)
-// 	}
-// 	if numTruncates > 0 {
-// 		fmt.Printf("==> Log entries truncated: %d\n\n", numTruncates)
-// 		err := db.Flatten(1)
-// 		fmt.Printf("Flatten done with error: %v\n", err)
-// 	}
-// }
+func printRaft(db *badger.DB, store *raftmigrate.OldDiskStorage) {
+	startIdx, lastIdx := printBasic(store)
 
-// func overwriteSnapshot(db *badger.DB, store *raftwal.DiskStorage) error {
-// 	snap, err := store.Snapshot()
-// 	x.Checkf(err, "Unable to get snapshot")
-// 	cs := snap.Metadata.ConfState
-// 	fmt.Printf("Confstate: %+v\n", cs)
+	commitTs, err := db.MaxVersion()
+	x.Check(err)
+	// In case we need to truncate raft entries.
+	batch := db.NewWriteBatchAt(commitTs)
+	defer batch.Cancel()
+	var numTruncates int
 
-// 	var dsnap pb.Snapshot
-// 	if len(snap.Data) > 0 {
-// 		x.Check(dsnap.Unmarshal(snap.Data))
-// 	}
-// 	fmt.Printf("Previous snapshot: %+v\n", dsnap)
+	pending := make(map[uint64]bool)
+	for startIdx < lastIdx-1 {
+		entries, err := store.Entries(startIdx, lastIdx+1, 64<<20 /* 64 MB Max Size */)
+		if err != nil {
+			fmt.Printf("Got error while retrieving entries: %v\n", err)
+			return
+		}
+		for _, ent := range entries {
+			switch {
+			case ent.Type == raftpb.EntryNormal && ent.Index < opt.wtruncateUntil:
+				if len(ent.Data) == 0 {
+					continue
+				}
+				ent.Data = nil
+				numTruncates++
+				k := store.EntryKey(ent.Index)
+				data, err := ent.Marshal()
+				if err != nil {
+					log.Fatalf("Unable to marshal entry: %+v. Error: %v", ent, err)
+				}
+				if err := batch.Set(k, data); err != nil {
+					log.Fatalf("Unable to set data: %+v", err)
+				}
+			default:
+				printEntry(ent, pending)
+			}
+			startIdx = x.Max(startIdx, ent.Index)
+		}
+	}
+	if err := batch.Flush(); err != nil {
+		fmt.Printf("Got error while flushing batch: %v\n", err)
+	}
+	if numTruncates > 0 {
+		fmt.Printf("==> Log entries truncated: %d\n\n", numTruncates)
+		err := db.Flatten(1)
+		fmt.Printf("Flatten done with error: %v\n", err)
+	}
+}
 
-// 	splits := strings.Split(opt.wsetSnapshot, ",")
-// 	x.AssertTruef(len(splits) == 3,
-// 		"Expected term,index,readts in string. Got: %s", splits)
-// 	term, err := strconv.Atoi(splits[0])
-// 	x.Check(err)
-// 	index, err := strconv.Atoi(splits[1])
-// 	x.Check(err)
-// 	readTs, err := strconv.Atoi(splits[2])
-// 	x.Check(err)
+func overwriteSnapshot(db *badger.DB, store *raftmigrate.OldDiskStorage) error {
+	snap, err := store.Snapshot()
+	x.Checkf(err, "Unable to get snapshot")
+	cs := snap.Metadata.ConfState
+	fmt.Printf("Confstate: %+v\n", cs)
 
-// 	ent := raftpb.Entry{
-// 		Term:  uint64(term),
-// 		Index: uint64(index),
-// 		Type:  raftpb.EntryNormal,
-// 	}
-// 	fmt.Printf("Using term: %d , index: %d , readTs : %d\n", term, index, readTs)
-// 	if dsnap.Index >= ent.Index {
-// 		fmt.Printf("Older snapshot is >= index %d", ent.Index)
-// 		return nil
-// 	}
+	var dsnap pb.Snapshot
+	if len(snap.Data) > 0 {
+		x.Check(dsnap.Unmarshal(snap.Data))
+	}
+	fmt.Printf("Previous snapshot: %+v\n", dsnap)
 
-// 	// We need to write the Raft entry first.
-// 	fmt.Printf("Setting entry: %+v\n", ent)
-// 	hs := raftpb.HardState{
-// 		Term:   ent.Term,
-// 		Commit: ent.Index,
-// 	}
-// 	fmt.Printf("Setting hard state: %+v\n", hs)
-// 	err = db.Update(func(txn *badger.Txn) error {
-// 		data, err := ent.Marshal()
-// 		if err != nil {
-// 			return err
-// 		}
-// 		if err = txn.Set(store.EntryKey(ent.Index), data); err != nil {
-// 			return err
-// 		}
+	splits := strings.Split(opt.wsetSnapshot, ",")
+	x.AssertTruef(len(splits) == 3,
+		"Expected term,index,readts in string. Got: %s", splits)
+	term, err := strconv.Atoi(splits[0])
+	x.Check(err)
+	index, err := strconv.Atoi(splits[1])
+	x.Check(err)
+	readTs, err := strconv.Atoi(splits[2])
+	x.Check(err)
 
-// 		data, err = hs.Marshal()
-// 		if err != nil {
-// 			return err
-// 		}
-// 		return txn.Set(store.HardStateKey(), data)
-// 	})
-// 	x.Check(err)
+	ent := raftpb.Entry{
+		Term:  uint64(term),
+		Index: uint64(index),
+		Type:  raftpb.EntryNormal,
+	}
+	fmt.Printf("Using term: %d , index: %d , readTs : %d\n", term, index, readTs)
+	if dsnap.Index >= ent.Index {
+		fmt.Printf("Older snapshot is >= index %d", ent.Index)
+		return nil
+	}
 
-// 	dsnap.Index = ent.Index
-// 	dsnap.ReadTs = uint64(readTs)
+	// We need to write the Raft entry first.
+	fmt.Printf("Setting entry: %+v\n", ent)
+	hs := raftpb.HardState{
+		Term:   ent.Term,
+		Commit: ent.Index,
+	}
+	fmt.Printf("Setting hard state: %+v\n", hs)
+	err = db.Update(func(txn *badger.Txn) error {
+		data, err := ent.Marshal()
+		if err != nil {
+			return err
+		}
+		if err = txn.Set(store.EntryKey(ent.Index), data); err != nil {
+			return err
+		}
+		data, err = hs.Marshal()
+		if err != nil {
+			return err
+		}
+		return txn.Set(store.HardStateKey(), data)
+	})
+	x.Check(err)
 
-// 	fmt.Printf("Setting snapshot to: %+v\n", dsnap)
-// 	data, err := dsnap.Marshal()
-// 	x.Check(err)
-// 	if err = store.CreateSnapshot(dsnap.Index, &cs, data); err != nil {
-// 		fmt.Printf("Created snapshot with error: %v\n", err)
-// 	}
-// 	return err
-// }
+	dsnap.Index = ent.Index
+	dsnap.ReadTs = uint64(readTs)
 
-// func handleWal(db *badger.DB) error {
-// 	rids := make(map[uint64]bool)
-// 	gids := make(map[uint32]bool)
+	fmt.Printf("Setting snapshot to: %+v\n", dsnap)
+	data, err := dsnap.Marshal()
+	x.Check(err)
+	if err = store.CreateSnapshot(dsnap.Index, &cs, data); err != nil {
+		fmt.Printf("Created snapshot with error: %v\n", err)
+	}
+	return err
+}
 
-// 	parseIds := func(item *badger.Item) {
-// 		key := item.Key()
-// 		switch {
-// 		case len(key) == 14:
-// 			// hard state and snapshot key.
-// 			rid := binary.BigEndian.Uint64(key[0:8])
-// 			rids[rid] = true
+func handleWal(db *badger.DB) error {
+	rids := make(map[uint64]bool)
+	gids := make(map[uint32]bool)
 
-// 			gid := binary.BigEndian.Uint32(key[10:14])
-// 			gids[gid] = true
-// 		case len(key) == 20:
-// 			// entry key.
-// 			rid := binary.BigEndian.Uint64(key[0:8])
-// 			rids[rid] = true
+	parseIds := func(item *badger.Item) {
+		key := item.Key()
+		switch {
+		case len(key) == 14:
+			// hard state and snapshot key.
+			rid := binary.BigEndian.Uint64(key[0:8])
+			rids[rid] = true
 
-// 			gid := binary.BigEndian.Uint32(key[8:12])
-// 			gids[gid] = true
-// 		default:
-// 			// Ignore other keys.
-// 		}
-// 	}
+			gid := binary.BigEndian.Uint32(key[10:14])
+			gids[gid] = true
+		case len(key) == 20:
+			// entry key.
+			rid := binary.BigEndian.Uint64(key[0:8])
+			rids[rid] = true
 
-// 	err := db.View(func(txn *badger.Txn) error {
-// 		opt := badger.DefaultIteratorOptions
-// 		opt.PrefetchValues = false
-// 		itr := txn.NewIterator(opt)
-// 		defer itr.Close()
+			gid := binary.BigEndian.Uint32(key[8:12])
+			gids[gid] = true
+		default:
+			// Ignore other keys.
+		}
+	}
 
-// 		for itr.Rewind(); itr.Valid(); itr.Next() {
-// 			parseIds(itr.Item())
-// 		}
-// 		return nil
-// 	})
-// 	if err != nil {
-// 		return err
-// 	}
-// 	fmt.Printf("rids: %v\n", rids)
-// 	fmt.Printf("gids: %v\n", gids)
+	err := db.View(func(txn *badger.Txn) error {
+		opt := badger.DefaultIteratorOptions
+		opt.PrefetchValues = false
+		itr := txn.NewIterator(opt)
+		defer itr.Close()
 
-// 	for rid := range rids {
-// 		for gid := range gids {
-// 			fmt.Printf("Iterating with Raft Id = %d Groupd Id = %d\n", rid, gid)
-// 			store := raftwal.Init(db, rid, gid)
-// 			switch {
-// 			case len(opt.wsetSnapshot) > 0:
-// 				err := overwriteSnapshot(db, store)
-// 				store.Closer.SignalAndWait()
-// 				return err
+		for itr.Rewind(); itr.Valid(); itr.Next() {
+			parseIds(itr.Item())
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("rids: %v\n", rids)
+	fmt.Printf("gids: %v\n", gids)
 
-// 			default:
-// 				printRaft(db, store)
-// 			}
-// 			store.Closer.SignalAndWait()
-// 		}
-// 	}
-// 	return nil
-// }
+	for rid := range rids {
+		for gid := range gids {
+			fmt.Printf("Iterating with Raft Id = %d Groupd Id = %d\n", rid, gid)
+			store := raftmigrate.Init(db, rid, gid)
+			switch {
+			case len(opt.wsetSnapshot) > 0:
+				err := overwriteSnapshot(db, store)
+				store.Closer.SignalAndWait()
+				return err
+
+			default:
+				printRaft(db, store)
+			}
+			store.Closer.SignalAndWait()
+		}
+	}
+	return nil
+}
