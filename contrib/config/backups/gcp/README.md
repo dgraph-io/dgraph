@@ -35,7 +35,7 @@ The Docker Compose configuration `docker-compose.yml` will require the following
  * `minio.env` - that holds `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` values.
  * `env.sh` - tha stores `PROJECT_ID` and `BACKUP_BUCKET_NAME`.
 
-For convenience, [terraform](terraform/README.md) scripts and generate random a random password.
+For convenience, [terraform](terraform/README.md) scripts and generate a random password.
 
 The `minio.env` will be used by both Dgraph alpha node(s) and the [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html) server. You will need to create a file like this:
 
