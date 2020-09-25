@@ -923,19 +923,14 @@ func (n *node) updateRaftProgress() error {
 	//
 	// Let's check what we already have. And only update if the new snap.Index is ahead of the last
 	// stored applied.
-	applied, err := n.Store.Checkpoint()
-	if err != nil {
-		return err
-	}
+	applied := n.Store.Uint(raftwal.CheckpointIndex)
 
 	snap, err := n.calculateSnapshot(applied, 3) // 3 is a randomly chosen small number.
 	if err != nil || snap == nil || snap.Index <= applied {
 		return err
 	}
 
-	if err := n.Store.UpdateCheckpoint(snap); err != nil {
-		return err
-	}
+	n.Store.SetUint(raftwal.CheckpointIndex, snap.GetIndex())
 	glog.V(2).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
 	return nil
 }

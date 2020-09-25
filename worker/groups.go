@@ -87,7 +87,7 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	}
 
 	if x.WorkerConfig.RaftId == 0 {
-		id := walStore.RaftId()
+		id := walStore.Uint(raftwal.RaftId)
 		x.WorkerConfig.RaftId = id
 
 		// If the w directory already contains raft information, ignore the proposed
@@ -137,7 +137,9 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	gr.triggerCh = make(chan struct{}, 1)
 
 	// Initialize DiskStorage and pass it along.
-	walStore.SetRaftId(x.WorkerConfig.RaftId)
+	walStore.SetUint(raftwal.RaftId, x.WorkerConfig.RaftId)
+	walStore.SetUint(raftwal.GroupId, uint64(gid))
+
 	// TODO: Store the gid as well.
 	gr.Node = newNode(walStore, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 

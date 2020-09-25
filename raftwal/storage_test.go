@@ -340,11 +340,11 @@ func TestMetaFile(t *testing.T) {
 
 	mf, err := newMetaFile(dir)
 	require.NoError(t, err)
-	id := mf.RaftId()
+	id := mf.Uint(RaftId)
 	require.Zero(t, id)
 
-	mf.StoreRaftId(10)
-	id = mf.RaftId()
+	mf.SetUint(RaftId, 10)
+	id = mf.Uint(RaftId)
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), id)
 
