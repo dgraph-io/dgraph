@@ -80,8 +80,6 @@ type Options struct {
 	AccessJwtTtl time.Duration
 	// RefreshJwtTtl is the TTL of the refresh JWT.
 	RefreshJwtTtl time.Duration
-	// AclRefreshInterval is the interval used to refresh the ACL cache.
-	AclRefreshInterval time.Duration
 }
 
 // Config holds an instance of the server options..
