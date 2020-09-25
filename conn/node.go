@@ -152,7 +152,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 
 // ReportRaftComms periodically prints the state of the node (heartbeats in and out).
 func (n *Node) ReportRaftComms() {
-	if !glog.V(3) {
+	if !glog.V(2) {
 		return
 	}
 	ticker := time.NewTicker(time.Second)
