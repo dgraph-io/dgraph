@@ -1,17 +1,11 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
-
-hosts = File.readlines("./hosts").map { |ln| i,h= ln.split(/\s+/); [h,i] }.to_h
-replicas = hosts.keys.select { |host| host.to_s.match /^zero-\d+/ }.count
-version = ENV['DGRAPH_VERSION'] || 'v20.07.1'
-## build SMB sync options hash depnding on supplied env vars
-smb_sync_opts = { type: "smb", mount_options: %w[mfsymlinks vers=3.0] }
-smb_sync_opts.merge! smb_username: ENV['SMB_USER'] if ENV['SMB_USER']
-smb_sync_opts.merge! smb_password: ENV['SMB_PASSWD'] if ENV['SMB_PASSWD']
+eval File.read("./vagrant_helper.rb")
 
 Vagrant.configure("2") do |config|
-  hosts.each do |hostname, ipaddr|
-    config.vm.define hostname do |node|
+  @hosts.each do |hostname, ipaddr|
+    default = if hostname == @primary then true else false end
+    config.vm.define hostname, primary: default do |node|
       node.vm.box = "generic/centos8"
       node.vm.hostname = "#{hostname}"
       node.vm.network "private_network", ip: ipaddr
@@ -21,20 +15,20 @@ Vagrant.configure("2") do |config|
         vbox.name = "#{hostname}"
         # enable SMB3.0 for better fileshare UX on Windows-Virtualbox
         if Vagrant::Util::Platform.windows? then
-          override.vm.synced_folder  ".", "/vagrant", smb_sync_opts
+          override.vm.synced_folder  ".", "/vagrant", @smb_sync_opts
         end
       end
 
       node.vm.provider "hyperv" do |hyperv, override|
         hyperv.vmname = "#{hostname}"
-        # enable SMB3.0 for better fileshare UX on Windows-Virtualbox
-        override.vm.synced_folder  ".", "/vagrant", smb_sync_opts
+        # enable SMB3.0 for better fileshare UX on Windows-HyperV
+        override.vm.synced_folder  ".", "/vagrant", @smb_sync_opts
       end
 
       node.vm.provision "shell" do |shell|
         shell.path = "provision.sh"
-        shell.args = [replicas]
-        shell.env = { DGRAPH_VERSION: version }
+        shell.args = [@replicas]
+        shell.env = { DGRAPH_VERSION: @version }
         shell.privileged = true
       end
     end

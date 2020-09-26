@@ -16,13 +16,23 @@ Either `cd centos8` or `cd ubuntu1804` and run:
 vagrant up
 ```
 
-#### Hyper/V Provider
+#### Using Hyper/V Provider
 
 On Windows 10 Pro with Hyper/V enabled, you can run this:
 
 ```powershell
 $Env:VAGRANT_DEFAULT_PROVIDER = "hyperv"
 vagrant up
+```
+
+### Logging Into the System
+
+You can log into the guest virtual machines with SSH.
+
+```bash
+vagrant ssh        # log into default `alpha-0`
+vagrant status     # Get Status of running systems
+vagrant ssh zero-1 # log into zero-1
 ```
 
 ### Get Health Check
@@ -55,7 +65,21 @@ vagrant ssh alpha-0 --command "sudo journalctl -u dgraph-alpha"
 vagrant destroy --force
 ```
 
-## Windows Users
+## About Automation
+
+### Configuration
+
+The configuration is a `hosts` file format, space-delimited.  This defines both the hostnames and virtual IP address used to create the virtual guests.  Vagrant in combination with the underlying virtual machine provider will create a virtual network accessible by the host.
+
+```host
+<inet_addr>   <hostname>   <default_for_vagrant_ssh>
+```
+
+#### Dgraph Version
+
+By default, the latest Dgraph version will be used to for the version.  If you want to use another version, you can set the environment variable `DGRAPH_VERSION` for the desired version.
+
+### Windows Environment
 
 On Windows, for either Hyper/V or Virtualbox providers, for convenience you can specify username `SMB_USER` and password `SMB_PASSWD` before running `vagrant up`, so that you won't get prompted 6 times for username and password.  **NOTE**: That setting password as environment variable is not considered secure.
 
@@ -78,4 +102,6 @@ vagrant up
 
 ## Resources
 
-* Vagrant API: https://www.rubydoc.info/github/hashicorp/vagrant/Vagrant/Util/Platform
+* Vagrant
+  * Util API: https://www.rubydoc.info/github/hashicorp/vagrant/Vagrant/Util/Platform
+  * Multi-Machine: https://www.vagrantup.com/docs/multi-machine
