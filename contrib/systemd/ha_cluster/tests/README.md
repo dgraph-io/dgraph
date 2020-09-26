@@ -18,7 +18,7 @@ vagrant up
 
 #### Using Hyper/V Provider
 
-On Windows 10 Pro with Hyper/V enabled, you can run this:
+On Windows 10 Pro with Hyper/V enabled, you can run this in PowerShell:
 
 ```powershell
 $Env:VAGRANT_DEFAULT_PROVIDER = "hyperv"
@@ -37,6 +37,8 @@ vagrant ssh zero-1 # log into zero-1
 
 ### Get Health Check
 
+In bash you can check the health with this:
+
 ```bash
 # test a zero virtual guest
 curl $(awk '/zero-0/{ print $1 }' hosts):6080/health
@@ -45,6 +47,8 @@ curl $(awk '/alpha-0/{ print $1 }' hosts):8080/health
 ```
 
 ### Get State of Cluster
+
+In bash you can check the state of the cluster with this:
 
 ```bash
 # get state of cluster
@@ -72,8 +76,12 @@ vagrant destroy --force
 The configuration is a `hosts` file format, space-delimited.  This defines both the hostnames and virtual IP address used to create the virtual guests.  Vagrant in combination with the underlying virtual machine provider will create a virtual network accessible by the host.
 
 ```host
-<inet_addr>   <hostname>   <default_for_vagrant_ssh>
+<inet_addr>   <hostname>
+<inet_addr>   <hostname>   <default>
+<inet_addr>   <hostname>
 ```
+
+You can use `default` for one system to be designated as the default for `vagrant ssh`
 
 #### Dgraph Version
 
@@ -81,12 +89,18 @@ By default, the latest Dgraph version will be used to for the version.  If you w
 
 ### Windows Environment
 
-On Windows, for either Hyper/V or Virtualbox providers, for convenience you can specify username `SMB_USER` and password `SMB_PASSWD` before running `vagrant up`, so that you won't get prompted 6 times for username and password.  **NOTE**: That setting password as environment variable is not considered secure.
+On Windows, for either Hyper/V or Virtualbox providers, for convenience you can specify username `SMB_USER` and password `SMB_PASSWD` before running `vagrant up`, so that you won't get prompted 6 times for username and password.  
+
+**NOTE**: That setting password as environment variable is not considered secure.
+
+To use this in PowerShell, you can do this:
 
 ```powershell
-$Env:SMB_USER = "<username>"   # e.g. $Env:USERNAME
+$Env:SMB_USER = "<username>"   # example: $Env:USERNAME
 $Env:SMB_PASSWD = "<password>"
-$Env:VAGRANT_DEFAULT_PROVIDER = "<provider>" # e.g. "hyperv", "virtualbox"
+# "hyperv" or "virtualbox"
+$Env:VAGRANT_DEFAULT_PROVIDER = "<provider>"
+
 vagrant up
 ```
 
@@ -105,3 +119,5 @@ vagrant up
 * Vagrant
   * Util API: https://www.rubydoc.info/github/hashicorp/vagrant/Vagrant/Util/Platform
   * Multi-Machine: https://www.vagrantup.com/docs/multi-machine
+  * Synced Folders: https://www.vagrantup.com/docs/synced-folders
+  * Provisioning: https://www.vagrantup.com/docs/provisioning
