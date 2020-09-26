@@ -101,7 +101,7 @@ By default, the latest Dgraph version will be used to for the version.  If you w
 
 On Windows, for either Hyper/V or Virtualbox providers, for convenience you can specify username `SMB_USER` and password `SMB_PASSWD` before running `vagrant up`, so that you won't get prompted 6 times for username and password.  
 
-> **NOTE**: Setting a password in an environment variable is not considered secure.
+> **NOTE**: Setting a password in an environment variable is not considered security best practices.
 
 To use this in PowerShell, you can do this:
 
