@@ -101,7 +101,7 @@ By default, the latest Dgraph version will be used to for the version.  If you w
 
 On Windows, for either Hyper/V or Virtualbox providers, for convenience you can specify username `SMB_USER` and password `SMB_PASSWD` before running `vagrant up`, so that you won't get prompted 6 times for username and password.  
 
-> **NOTE**: That setting password in an environment variable is not considered secure.
+> **NOTE**: Setting a password in an environment variable is not considered secure.
 
 To use this in PowerShell, you can do this:
 
@@ -121,7 +121,7 @@ vagrant up
   * [Ubuntu 18.04](https://app.vagrantup.com/generic/boxes/ubuntu1804) from [Roboxes](https://roboxes.org/)
 * Providers
   * [libvirt](https://github.com/vagrant-libvirt/vagrant-libvirt) (KVM) on Ubuntu 19.10
-  * [VirtualBox](https://www.vagrantup.com/docs/providers/virtualbox) on Win10 Home
+  * [VirtualBox](https://www.vagrantup.com/docs/providers/virtualbox) on Win10 Home, Mac OS X 10.14
   * [Hyper/V](https://www.vagrantup.com/docs/providers/hyperv) on Win10 Pro
 
 ## Resources
