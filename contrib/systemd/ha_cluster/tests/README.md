@@ -16,7 +16,7 @@ Either `cd centos8` or `cd ubuntu1804` and run:
 vagrant up
 ```
 
-#### Windows Hypver/V
+#### Hyper/V Provider
 
 On Windows 10 Pro with Hyper/V enabled, you can run this:
 
@@ -24,8 +24,6 @@ On Windows 10 Pro with Hyper/V enabled, you can run this:
 $Env:VAGRANT_DEFAULT_PROVIDER = "hyperv"
 vagrant up
 ```
-
-**NOTE**: On Hyper/V, SMB3.0 is enabled.  You will be prompted to enter user and password for each of the six systems.
 
 ### Get Health Check
 
@@ -57,6 +55,17 @@ vagrant ssh alpha-0 --command "sudo journalctl -u dgraph-alpha"
 vagrant destroy --force
 ```
 
+## Windows Users
+
+On Windows, for either Hyper/V or Virtualbox providers, for convenience you can specify username `SMB_USER` and password `SMB_PASSWD` before running `vagrant up`, so that you won't get prompted 6 times for username and password.  **NOTE**: That setting password as environment variable is not considered secure.
+
+```powershell
+$Env:SMB_USER = "<username>"   # e.g. $Env:USERNAME
+$Env:SMB_PASSWD = "<password>"
+$Env:VAGRANT_DEFAULT_PROVIDER = "<provider>" # e.g. "hyperv", "virtualbox"
+vagrant up
+```
+
 ## Environments Tested
 
 * Guest OS
@@ -66,3 +75,7 @@ vagrant destroy --force
   * [libvirt](https://github.com/vagrant-libvirt/vagrant-libvirt) (KVM) on Ubuntu 19.10
   * [VirtualBox](https://www.vagrantup.com/docs/providers/virtualbox) on Win10 Home
   * [Hyper/V](https://www.vagrantup.com/docs/providers/hyperv) on Win10 Pro
+
+## Resources
+
+* Vagrant API: https://www.rubydoc.info/github/hashicorp/vagrant/Vagrant/Util/Platform
