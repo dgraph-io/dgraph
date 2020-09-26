@@ -193,6 +193,8 @@ they form a Raft group and provide synchronous replication.
 	flag.Uint64("normalize_node_limit", 1e4,
 		"Limit for the maximum number of nodes that can be returned in a query that uses the "+
 			"normalize directive.")
+	flag.Uint64("mutations_nquad_limit", 1e6,
+		"Limit for the maximum number of nquads that can be inserted in a mutation request")
 
 	// TLS configurations
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
@@ -733,6 +735,7 @@ func run() {
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
+	x.Config.MutationsNQuadLimit = cast.ToInt(Alpha.Conf.GetString("mutations_nquad_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
 	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
