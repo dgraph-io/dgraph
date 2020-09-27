@@ -14,6 +14,8 @@ Building an app with Slash GraphQL means you can use GraphQL natively and don't 
 
 That's the process we'll walk through together in this tutorial, starting on this page by looking at what we are going to build and how to build such an app in Slash GraphQL.  Then, the tutorial moves on to schema design with GraphQL, implementing a UI, authentication and authorization, subscriptions and then advanced topics like custom logic.
 
+We'll be using the free tier on Slash GraphQL, you'll set up an account, but don't need to provide any payment details to complete the tutorial.
+
 ## What are we going to build
 
 This tutorial will walk you through building a reasonably complete message board app.  There'll be lists of posts in different categories.
@@ -70,5 +72,7 @@ We are going to build a serverless app here, ... Auth0, Netlify, Slash ... not t
 
 ## What's next
 
-Let's move on to the design process - it's graph-first, in fact, it's GraphQL-first. We'll design the GraphQL types that our app is based around, and ... we'll there's no and ... from that, you get a GraphQL API for those types; you just move on to building the app around it.
+First, we'll deploy a running Slash GraphQL backend that will host our GraphQL API.  That'll at get us something running that we can use to build out our app.
+
+Then we'll move on to the design process - it's graph-first, in fact, it's GraphQL-first. We'll design the GraphQL types that our app is based around, and ... we'll there's no and ... from that, you get a GraphQL API for those types; you just move on to building the app around it.
 

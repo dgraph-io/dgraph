@@ -3,227 +3,93 @@ title = "Schema Design"
 [menu.main]
     parent = "build-an-app-tutorial"
     identifier = "schema-design"
-    weight = 2   
+    weight = 3   
 +++
 
+*In this section: we'll start designing the schema of our app and look at how graph schemas and graph queries work.*
 
-thinking about tables and joins or documents ... here thinking about entities and graph ... in any case need to do requirements and analysis and iteration
+To design the schema for our app we won't be thinking about tables or joins or documents, we'll be thinking about the entities in our app and how they are linked to make a graph.  Any requirements or design analysis needs iteration and thinking from a number of perspectives, so we'll work through some of that process and sketch out where we are going.
 
-Graphs though tend to model domains really nicely ... so lets 
+Graphs tend to model domains like our app really nicely because they naturally model things like the subgraph of a user and their posts and the comments on those posts, or the network of friends of a user, or the kinds of posts a user tends to like, so we'll look at how those kinds of graph queries work.
 
-## UI requiremetns
+## UI requirements
 
+Most apps are more than what you can see on the screen, but that's what we are focusing on here, and thinking about that will help kick off our design process, so let's at least start by looking at where we are going for a page and see what's there.
 
-let's look at a page ... built up of blocks ... there's multiple data requirements ...
+Although a single GraphQL query can save you lots of calls and return you a subgraph of data, a complete page might be built up of blocks that have different data requirements.  For example, in a sketch of our app's UI we can already see that forming.
 
-![App UI requirements](/images/graphql/tutorial/discuss/UI-components.png)
+![App UI requirements](/images/graphql/tutorial/discuss/UI-components.gif)
+
+You can start to see the building blocks of the UI and some of the entities, like users, categories and posts that will form the data in our app.
 
 ## Thinking in Graphs
 
-![Graph schema sketch](/images/graphql/tutorial/discuss/schema-sketch.jpg)
+Designing a graph schema is about designing the things, or entities, that will form nodes in the graph, and designing the shape of the graph, or what links those entities have to other entities.
 
-- design the things in and shape of our graph
-- there's two things here: the schema is itself a bit graph shaped, but it's really just a pattern for the shap of the application data graph
-- describe the kinds of entities that inhabit our graph and the relationships between them (can kinda see this like documents and links)
-- in GraphQL it'll be operations that that show the valid things you can do on the data graph
+There's really two concepts in play here.  One is the data itself, often called the application data graph.  The other is the schema, which is itself graph shaped but really forms the pattern for the data graph.  You can think of the difference as somewhat similar to objects (or data structure definitions) verses instances in a program or a relation database schema verses rows of actual data.
 
-### How graph queries work
+Already we can start to tease out what some of the types of data and relationships in our graph are.  There's users who post posts, so we know there's a relationship between users and the posts they've made.  We know the posts are going to be assigned to some set of categories and that each post might have a stream of comments posted by users.
 
-talk about entry points and traversals
+So our schema is going to have these kinds of entities and and relationships between them.
 
-## GraphQL schema
+![Graph schema sketch](/images/graphql/tutorial/discuss/schema-inital-sketch.png)
 
-maybe this all moves to another section ??? yeah I think one just on GraphQL and operations
-FIXME: to move
+I've borrowed some notation from other data modelling patterns here.  We can see that a user is going to have some number, zero or more `0..*`, of posts and that a post can have exactly one author.  That's pretty much the modelling capability GraphQL will allow us, so let's start sketching with it for now.
 
-This is SDL & GraphQL focused
+How does that translate into the application data graph?  Let's sketch out some examples.
 
-```graphql
-type Task {
-    ...
-}
+Let's start with a single user who's posted three posts into a couple of different categories.  Our graph might start looking like this.
 
-type User {
-    ...
-}
-```
+![Graph schema sketch](/images/graphql/tutorial/discuss/first-posts-in-graph.png)
 
-## GraphQL Operations
+Then another user joins and makes some posts.  Our graph gets a bit bigger and more interesting, but the types of things in the graph and the links they can have follow what the schema sets out as the pattern --- for example we aren't linking users to categories.
 
-### mutations
+![Graph schema sketch](/images/graphql/tutorial/discuss/user2-posts-in-graph.png)
 
+Next the users read some posts and start making and replying to comments.
 
-```graphql
-mutation {
-  addUser(input: [
-    {
-      username: "alice@dgraph.io",
-      name: "Alice",
-      tasks: [
-        {
-          title: "Avoid touching your face",
-          completed: false,
-        },
-        {
-          title: "Stay safe",
-          completed: false
-        },
-        {
-          title: "Avoid crowd",
-          completed: true,
-        },
-        {
-          title: "Wash your hands often",
-          completed: true
-        }
-      ]
-    }
-  ]) {
-    user {
-      username
-      name
-      tasks {
-        id
-        title
-      }
-    }
-  }
-}
-```
+![Graph schema sketch](/images/graphql/tutorial/discuss/comments-in-graph.png)
 
-### queries
+Each node in the graph will have the data (a bit like a document) that the schema says it can have, maybe a username for users and title, text and date published for posts, and the links to other nodes (the shape of the graph) as per what the schema allows.  
 
-```graphql
-query {
-  queryTask {
-    id
-    title
-    completed
-    user {
-        username
-    }
-  }
-}
-```
+While we are still sketching things out here let's take a look at how queries will work.
 
-Running the query above should return JSON response as shown below:
+## How graph queries work
 
-```json
-{
-  "data": {
-    "queryTask": [
-      {
-        "id": "0x3",
-        "title": "Avoid touching your face",
-        "completed": false,
-        "user": {
-          "username": "alice@dgraph.io"
-        }
-      },
-      {
-        "id": "0x4",
-        "title": "Stay safe",
-        "completed": false,
-        "user": {
-          "username": "alice@dgraph.io"
-        }
-      },
-      {
-        "id": "0x5",
-        "title": "Avoid crowd",
-        "completed": true,
-        "user": {
-          "username": "alice@dgraph.io"
-        }
-      },
-      {
-        "id": "0x6",
-        "title": "Wash your hands often",
-        "completed": true,
-        "user": {
-          "username": "alice@dgraph.io"
-        }
-      }
-    ]
-  }
-}
-```
+Graph queries in GraphQL are really about entry points and traversals.  A query picks out, via a search, some nodes as a starting point and then selects data from the nodes or follows edges to traverse to other nodes.
 
+For example, to render a user's information, we might need only to find the user.  So our use of the graph might be like in the following sketch --- we'll find the user as an entry point into the graph, perhaps from searching users by username, but not traverse any further, 
 
-#### Querying Data with Filters
+![Graph schema sketch](/images/graphql/tutorial/discuss/user1-search-in-graph.png)
 
-Before we get into querying data with filters, we will be required
-to define search indexes to the specific fields.
+Often, though, even in just presenting a user's information, we need to present information like most recent activity or sum up interest in recent posts.  So it's more likely that we'll start by finding the user as an entry point and then traversing some edges in the graph to explore a subgraph of interesting data.
 
-Let's say we have to run a query on the _completed_ field, for which
-we add `@search` directive to the field, as shown in the schema below:
+![Graph schema sketch](/images/graphql/tutorial/discuss/user1-post-search-in-graph.png)
 
-```graphql
-type Task {
-  id: ID!
-  title: String!
-  completed: Boolean! @search
-  user: User!
-}
-```
+You can really start to see that traversal when it comes to rendering an individual post.  We'll need to find the post, probably by it's id when a user navigates to a url like `/post/0x123`, then we'll follow edges to the post's author and category, but we'll also need to follow the edges to all the comments, and from there to the authors of the comments.
 
-The `@search` directive is added to support the native search indexes of **Dgraph**.
+![Graph schema sketch](/images/graphql/tutorial/discuss/post2-search-in-graph.png)
 
-Resubmit the updated schema -
-```
-curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
-```
+Graphs make these kinds of data traversals really clear, as compared to table joins or navigating your way through a RESTful API.  It can also really help to jot down a quick sketch.
 
-Now, let's fetch all todos which are completed :
+It's also possible for a query to have multiple entry points and traversals from all of those entry points.  Imagine for example the query that renders the post list on the main page.  That's a query that finds multiple posts, maybe ordered by date or from particular categories, and then, for each, traverses to the author, category, etc.
 
-```graphql
-query {
-  queryTask(filter: {
-    completed: true
-  }) {
-    title
-    completed
-  }
-}
-```
+We can now begin to imagine how our graphql queries to fill out the UI are going to work.  For example, in the sketch at the top, there will be a query starting at the logged in user to find their details, a query finding all the category nodes to fill out the category dropdown, and a more complex query that will find a number of posts and make traversals to find the posts' authors and categories.
 
-Next, let's say we have to run a query on the _title_ field, for which
-we add another `@search` directive to the field, as shown in the schema below:
+## Schema
 
-```graphql
-type Task {
-    id: ID!
-    title: String! @search(by: [fulltext])
-    completed: Boolean! @search
-    user: User!
-}
-```
+From our investigation about and thinking about what we are going to show for posts and users, we can start to flesh out our schema some more.
 
-The `fulltext` search index provides the advanced search capability to perform equality
-comparison as well as matching with language-specific stemming and stopwords.
+Posts for example are going to need a title and some text for the post, both string valued.  Posts will also need some sort of date to record when they were uploaded.  They'll also need links to the author, category and a list of comments.
 
-Resubmit the updated schema -
-```
-curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
-```
+As a next iteration, I've sketched out this much.
 
-Now, let's try to fetch todos whose title has the word _"avoid"_ :
+![Graph schema sketch](/images/graphql/tutorial/discuss/schema-sketch.png)
 
-```graphql
-query {
-  queryTask(filter: {
-    title: {
-      alloftext: "avoid"
-    }
-  }) {
-    id
-    title
-    completed
-  }
-}
-```
+That's our first cut at a schema, or at the pattern our application data graph will follow.
 
-
-### subscriptions
+We'll keep iterating on this as we work through the tutorial, that's what you'd do in building an app, no use pretending like we have all the answers at the start.  Eventually, we'll want to add likes and dislikes on the posts, maybe also tags, we'll also layer in a permissions system so some categories will require permissions to view.  But those are for later sections in the tutorial. This is enough to start building with.
 
 ## What's next
+
+Next we'll make our design concrete by writing it down as a GraphQL schema and uploading that to Slash GraphQL.  That'll give us a running GraphQL API and we'll look at the queries and mutations that will form the data of our app.
