@@ -1,6 +1,12 @@
 # **Don't delete** Comments at top of schemas should work
 # See: https://github.com/dgraph-io/dgraph/issues/4227
 
+type Hotel {
+    id: ID!
+    name: String! @search(by: [exact])
+    location: Point @search
+}
+
 type Country {
         # **Don't delete** Comments in types should work
         id: ID! # **Don't delete** Comments in lines should work

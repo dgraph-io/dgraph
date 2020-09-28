@@ -3787,5 +3787,5 @@ func mutationGeoType(t *testing.T) {
 	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
 
 	// Cleanup
-	deleteGqlType(t, "Hotel", map[string]interface{}{}, 2, nil)
+	deleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
 }
