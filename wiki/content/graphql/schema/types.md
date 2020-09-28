@@ -131,37 +131,36 @@ type Comment implements Post {
 ```
 
 ### Password type
-
-A password for an entity is set with setting the schema for the attribute to be of type `password`.  Passwords cannot be queried directly, only checked for a match using the `checkTypePassword` function where `Type` is the node type.
+A password for an entity is set with setting the schema for the node type with `@secret` directive. Passwords cannot be queried directly, only checked for a match using the `checkTypePassword` function where `Type` is the node type.
 The passwords are encrypted using [bcrypt](https://en.wikipedia.org/wiki/Bcrypt).
 
-For example: to set a password, first set schema:
+For example, to set a password, first set schema:
 
 1. Cut-and-paste the following schema into a file called `schema.graphql`
-```
-type Author @secret(field: "pwd") {
-	name: String! @id
-}
-```
+    ```graphql
+    type Author @secret(field: "pwd") {
+      name: String! @id
+    }
+    ```
 
 2. Run the following curl request:
-```
-curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
-```
+    ```bash
+    curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
+    ```
 
 3. Set the password by pointing to the `graphql` endpoint (http://localhost:8080/graphql):
-```
-mutation {
-  addAuthor(input:[{name:"myname", pwd:"mypassword"}]){
-    author {
-      name
+    ```graphql
+    mutation {
+      addAuthor(input: [{name:"myname", pwd:"mypassword"}]) {
+        author {
+          name
+        }
+      }
     }
-  }
-}
-```
+    ```
 
 The output should look like:
-```
+```json
 {
   "data": {
     "addAuthor": {
@@ -176,7 +175,7 @@ The output should look like:
 ```
 
 You can check a password:
-```
+```graphql
 query {
   checkAuthorPassword(name: "myname", pwd: "mypassword") {
    name
@@ -185,7 +184,7 @@ query {
 ```
 
 output:
-```
+```json
 {
   "data": {
     "checkAuthorPassword": {
@@ -196,7 +195,7 @@ output:
 ```
 
 If the password is wrong you will get the following response:
-```
+```json
 {
   "data": {
     "checkAuthorPassword": null
