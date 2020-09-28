@@ -996,6 +996,28 @@ func rewriteObject(
 		if xid != nil && xidString != "" {
 			xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
+
+			// Inverse Link is added as a Part of asXIDReference so we delete any provided
+			// Link to the object.
+			// Example: for this mutation
+			// mutation addCountry($inp: AddCountryInput!) {
+			// 	addCountry(input: [$inp]) {
+			// 	  country {
+			// 		id
+			// 	  }
+			// 	}
+			//  }
+			// with the input:
+			//{
+			// "inp": {
+			// 	"name": "A Country",
+			// 	"states": [
+			// 	  { "code": "abc", "name": "Alphabet" },
+			// 	  { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
+			// 	]
+			//   }
+			// }
+			// we delete the link of Second state to "B Country"
 			deleteInverseObject(obj, srcField)
 
 			if deepXID > 2 {
@@ -1061,15 +1083,33 @@ func rewriteObject(
 		myUID = fmt.Sprintf("_:%s", variable)
 
 		if xid == nil || deepXID > 2 {
+			// If this object had an overwritten value for the inverse field, then we don't want to
+			// use that value as we will add the link to the inverse field in the below
+			// function call with the parent of this object
+			// for example, for this mutation:
+			// mutation addAuthor($auth: AddAuthorInput!) {
+			// addAuthor(input: [$auth]) {
+			// 	author {
+			// 		id
+			// 	}
+			// 	}
+			// }
+			// with the following input
+			//   {
+			// 	"auth": {
+			// 	  "name": "A.N. Author",
+			// 	  "posts": [ { "postID": "0x456" }, {"title": "New Post", "author": {"name": "Abhimanyu"}} ]
+			// 	}
+			//   }
+			// We delete the link of second input post with Author "name" : "Abhimanyu".
+			deleteInverseObject(obj, srcField)
+
 			// Lets link the new node that we are creating with the parent if a @hasInverse
 			// exists between the two.
 			// So for example if we had the addAuthor mutation which is also adding nested
 			// posts, then we add the link _:Post Post.author AuthorUID(srcUID) here.
 			addInverseLink(newObj, srcField, srcUID)
-			// If this object had an overwritten value for the inverse field, then we don't want to
-			// use that value as we have already added the link to the inverse field in the above
-			// function call with the parent of this object
-			deleteInverseObject(obj, srcField)
+
 		}
 	} else {
 		myUID = srcUID
