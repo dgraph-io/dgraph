@@ -1168,8 +1168,8 @@ func rewriteObject(
 				if fieldDef.Type().IsGeo() {
 					// For Geo type, the mutation json is as follows:
 					// { "type": "Point", "coordinates": [11.11, 22.22]}
-					lat, _ := val["latitude"]
-					long, _ := val["longitude"]
+					lat := val["latitude"]
+					long := val["longitude"]
 					frags = &mutationRes{
 						secondPass: []*mutationFragment{
 							newFragment(

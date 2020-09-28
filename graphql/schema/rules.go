@@ -949,10 +949,7 @@ func validateSearchArg(searchArg string,
 }
 
 func isGeoType(typ *ast.Type) bool {
-	if typ.Name() == "Point" {
-		return true
-	}
-	return false
+	return typ.Name() == "Point"
 }
 
 func searchValidation(

@@ -1065,11 +1065,11 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					//  For Geo type we have `near` filter which is written as follows:
 					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
 					geoParams := val.(map[string]interface{})
-					distance, _ := geoParams["distance"]
+					distance := geoParams["distance"]
 
 					coordinate, _ := geoParams["coordinate"].(map[string]interface{})
-					lat, _ := coordinate["latitude"]
-					long, _ := coordinate["longitude"]
+					lat := coordinate["latitude"]
+					long := coordinate["longitude"]
 
 					args := []gql.Arg{
 						{Value: typ.DgraphPredicate(field)},
