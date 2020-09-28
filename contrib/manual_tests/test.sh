@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
+
+"$DGRAPH_BIN" version
 
 readonly TEST_PATH="$PWD/_tmp"
 
@@ -20,13 +22,6 @@ readonly DATASET_1MILLION_SCHEMA_PATH="$DATA_PATH/1million.schema"
 
 source "log.sh"
 
-if [ -z "$DGRAPH_BIN" ]; then
-  log::error "\$DGRAPH_BIN is not defined."
-  exit 1
-else
-  "$DGRAPH_BIN" version
-fi
-
 function dataset::1million::download() {
   if ! [ -f "$DATASET_1MILLION_FILE_PATH" ]; then
     log::debug "Downloading from $DATASET_1MILLION_FILE_URL."
@@ -41,7 +36,13 @@ function dataset::1million::download() {
 
 function dataset::1million::verify() {
   local count_names_exp=197408
-  count_names_got=$(curl -SsX POST -H 'Content-Type: application/json' -d '{ "query": "query { test(func: has(name@.)) { count(uid) } }" }' 'localhost:8081/query' | jq '.data.test[0].count')
+  count_names_got=$(
+    curl \
+      -SsX POST \
+      -H 'Content-Type: application/json' \
+      -d '{ "query": "query { test(func: has(name@.)) { count(uid) } }" }' \
+      'localhost:8081/query' | jq '.data.test[0].count'
+  )
 
   if [ "$count_names_got" -ne "$count_names_exp" ]; then
     log::error "Could not verify 1million, expected: $count_names_exp, got: $count_names_got"
@@ -103,7 +104,12 @@ function dgraph::start_alphas() {
       portkill "$port"
     done
 
-    "$DGRAPH_BIN" alpha --cwd "$DGRAPH_PATH/alpha$i" --port_offset "$i" --zero 'localhost:5081' "${alpha_args[@]}" &>"$LOGS_PATH/alpha$i" &
+    "$DGRAPH_BIN" \
+      alpha \
+      --cwd "$DGRAPH_PATH/alpha$i" \
+      --port_offset "$i" \
+      --zero 'localhost:5081' \
+      "${alpha_args[@]}" &>"$LOGS_PATH/alpha$i" &
     sleep 1
   done
 }
@@ -300,7 +306,10 @@ function test::manual_start_encryption_acl_tls() {
   local -r n_alphas=4
 
   dgraph::start_zeros "$n_zeros"
-  dgraph::start_alphas "$n_alphas" --acl_secret_file "$ACL_SECRET_PATH" --encryption_key_file "$ENCRYPTION_KEY_PATH" --tls_dir "$TLS_PATH"
+  dgraph::start_alphas "$n_alphas" \
+    --acl_secret_file "$ACL_SECRET_PATH" \
+    --encryption_key_file "$ENCRYPTION_KEY_PATH" \
+    --tls_dir "$TLS_PATH"
 
   for i in $(seq "$n_zeros"); do
     dgraph::healthcheck_zero "$i"
@@ -322,7 +331,13 @@ function test::live_loader() {
   sleep 5
 
   log::debug 'Running live loader.'
-  "$DGRAPH_BIN" live --alpha 'localhost:9081' --cwd "$DGRAPH_PATH/live" --files "$DATASET_1MILLION_FILE_PATH" --schema "$DATASET_1MILLION_SCHEMA_PATH" --zero 'localhost:5081'
+  "$DGRAPH_BIN" \
+    live \
+    --alpha 'localhost:9081' \
+    --cwd "$DGRAPH_PATH/live" \
+    --files "$DATASET_1MILLION_FILE_PATH" \
+    --schema "$DATASET_1MILLION_SCHEMA_PATH" \
+    --zero 'localhost:5081' &>"$LOGS_PATH/live"
 
   dataset::1million::verify
 }
@@ -335,7 +350,14 @@ function test::bulk_loader() {
   sleep 5
 
   log::debug 'Running bulk loader.'
-  "$DGRAPH_BIN" bulk --cwd "$DGRAPH_PATH/bulk" --files "$DATASET_1MILLION_FILE_PATH" --schema "$DATASET_1MILLION_SCHEMA_PATH" --map_shards 1 --reduce_shards 1 --zero 'localhost:5081'
+  "$DGRAPH_BIN" \
+    bulk \
+    --cwd "$DGRAPH_PATH/bulk" \
+    --files "$DATASET_1MILLION_FILE_PATH" \
+    --schema "$DATASET_1MILLION_SCHEMA_PATH" \
+    --map_shards 1 \
+    --reduce_shards 1 \
+    --zero 'localhost:5081' &>"$LOGS_PATH/bulk"
 
   mkdir -p "$DGRAPH_PATH/alpha1"
   cp -r "$DGRAPH_PATH/bulk/out/0/p" "$DGRAPH_PATH/alpha1"
@@ -386,7 +408,12 @@ function test::bulk_loader() {
   sleep 5
 
   log::info "Restoring data."
-  "$DGRAPH_BIN" restore --cwd "$DGRAPH_PATH/restore" --location "$backup_path" --postings "$DGRAPH_PATH" --zero 'localhost:5081'
+  "$DGRAPH_BIN" \
+    restore \
+    --cwd "$DGRAPH_PATH/restore" \
+    --location "$backup_path" \
+    --postings "$DGRAPH_PATH" \
+    --zero 'localhost:5081' &>"$LOGS_PATH/restore"
 
   mkdir -p "$DGRAPH_PATH/alpha1"
   mv "$DGRAPH_PATH/p1" "$DGRAPH_PATH/alpha1/p"

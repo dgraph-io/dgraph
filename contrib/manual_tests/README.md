@@ -3,7 +3,8 @@
 To run manual tests:
 
 - Set `$DGRAPH_BIN` to the path of the Dgraph binary you want to test.
-- Set `$EXIT_ON_FAILURE` to `1` to stop testing immediately after a test fails, leaving Dgraph running and the test directory intact.
+- Set `$EXIT_ON_FAILURE` to `1` to stop testing immediately after a test fails,
+  leaving Dgraph running and the test directory intact.
 - Execute `./test.sh`.
 
 To add a new test:
