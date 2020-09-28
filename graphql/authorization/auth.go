@@ -398,30 +398,18 @@ func (a *AuthMeta) fetchJWKs() error {
 		maxAge, err = ParseMaxAge(resp.Header["Cache-Control"][0])
 	}
 	a.RefreshTime = time.Duration(maxAge) * time.Second
-	// // Reinitialise ticker if get a non zero maxAge value which
-	// // means we need to refresh the JWK keys
-	// if maxAge != 0 {
-	// 	if a.ticker == nil {
-	// 		a.ticker = time.NewTicker(a.RefreshTime)
-	// 	} else {
-	// 		a.ticker.Reset(a.RefreshTime)
-	// 	}
-	// 	fmt.Println("Ticker changed")
-	// }
 	return nil
 }
 
 // Refresh the JWKs on ticking the Ticker, but only if the
-// RefreshTime is non-zero, else skip.
+// RefreshTime is non-zero, else stop.
 func (a *AuthMeta) RefreshJWK() {
 	for {
 		select {
 		case <-a.ticker.C:
-			fmt.Println("Tick Tick")
 			if a.RefreshTime == 0 {
-				continue
+				return
 			}
-
 			// Try to Continuosly Refetch the Keys until it doesn't result in error
 			// Take a minute's gap in refetching after a failure.
 			for {
@@ -439,10 +427,6 @@ func (a *AuthMeta) RefreshJWK() {
 }
 
 func init() {
-	// Initialize ticker to a High Value
-	fmt.Println("ticker Init := ", authMeta.ticker)
 	authMeta.ticker = time.NewTicker(10 * time.Second)
-	fmt.Println(authMeta.ticker)
-	fmt.Println("Ticker Defined")
 	go authMeta.RefreshJWK()
 }
