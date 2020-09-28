@@ -3815,5 +3815,10 @@ func addMutationWithHasInverseOverridesCorrectly(t *testing.T) {
 		}
 	  }`
 	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
-	deleteGqlType(t, "Country", map[string]interface{}{}, 4, nil)
+	filter := map[string]interface{}{"name": map[string]interface{}{"eq": "A country"}}
+	deleteCountry(t, filter, 1, nil)
+	filter = map[string]interface{}{"xcode": map[string]interface{}{"eq": "abc"}}
+	deleteState(t, filter, 1, nil)
+	filter = map[string]interface{}{"xcode": map[string]interface{}{"eq": "def"}}
+	deleteState(t, filter, 1, nil)
 }
