@@ -440,7 +440,7 @@ func ResetAcl(closer *z.Closer) {
 		var groupResp groupQryResp
 		var guardiansGroupUid string
 		if err := json.Unmarshal(resp.GetJson(), &groupResp); err != nil {
-			return errors.Wrap(err, "Couldn't unmarshal response from Guardians group query")
+			return errors.Wrap(err, "Couldn't unmarshal response from guardians group query")
 		}
 		if len(groupResp.GuardiansGroup) == 0 {
 			// no guardians group found
@@ -451,7 +451,7 @@ func ResetAcl(closer *z.Closer) {
 			// we found a guardians group
 			guardiansGroupUid = groupResp.GuardiansGroup[0].Uid
 		} else {
-			return errors.Wrap(err, "Multiple Guardians group found")
+			return errors.Wrap(err, "Multiple guardians group found")
 		}
 
 		guardiansGroupUidUint, err := strconv.ParseUint(guardiansGroupUid, 0, 64)
@@ -460,8 +460,8 @@ func ResetAcl(closer *z.Closer) {
 		}
 		x.GuardiansGroupUid.Store(guardiansGroupUidUint)
 
-		glog.Infof("Guardians group uid: %d", guardiansGroupUidUint)
-		glog.Infof("Successfully upserted the guardian group")
+		glog.Infof("guardians group uid: %d", guardiansGroupUidUint)
+		glog.Infof("Successfully upserted the guardians group")
 		return nil
 	}
 
@@ -501,7 +501,7 @@ func ResetAcl(closer *z.Closer) {
 		var grootUserUid string
 		var userResp userQryResp
 		if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
-			return errors.Wrap(err, "Couldn't unmarshal response from Groot user group query")
+			return errors.Wrap(err, "Couldn't unmarshal response from groot user query")
 		}
 		if len(userResp.GrootUser) == 0 {
 			// no groot user found from query
@@ -517,11 +517,11 @@ func ResetAcl(closer *z.Closer) {
 
 		grootUserUidUint, err := strconv.ParseUint(grootUserUid, 0, 64)
 		if err != nil {
-			return errors.Wrapf(err, "Error while parsing Uid: %s of groot User", grootUserUid)
+			return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
 		}
 		x.GrootUserUid.Store(grootUserUidUint)
 		glog.Infof("groot user uid: %d", grootUserUidUint)
-		glog.Infof("Successfully upserted groot account")
+		glog.Infof("Successfully upserted groot user account")
 		return nil
 	}
 
