@@ -4,12 +4,17 @@
     query {
       queryHotel(filter: { location: { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22} } } }) {
         name
+        location {
+          latitude
+          longitude
+        }
       }
     }
   dgquery: |-
     query {
       queryHotel(func: type(Hotel)) @filter(near(Hotel.location, [22.22,11.11], 33.33)) {
         name : Hotel.name
+        location : Hotel.location
         dgraph.uid : uid
       }
     }

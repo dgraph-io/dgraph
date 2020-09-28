@@ -80,7 +80,6 @@
       }
     }
 
-
 -
   name: "Update set mutation with variables"
   gqlmutation: |

@@ -27,7 +27,7 @@
           "Hotel.name":"Taj Hotel",
           "Hotel.location": {
             "type": "Point",
-             "coordinates": [22.22, 11.11]
+            "coordinates": [22.22, 11.11]
           }
         }
 

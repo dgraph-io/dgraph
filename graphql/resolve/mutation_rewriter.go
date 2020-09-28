@@ -1166,6 +1166,8 @@ func rewriteObject(
 				// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
 				//          like here ^^
 				if fieldDef.Type().IsGeo() {
+					// For Geo type, the mutation json is as follows:
+					// { "type": "Point", "coordinates": [11.11, 22.22]}
 					lat, _ := val["latitude"]
 					long, _ := val["longitude"]
 					frags = &mutationRes{

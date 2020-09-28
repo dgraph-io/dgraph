@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
@@ -1226,6 +1227,44 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 	return errs
 }
 
+// completeGeoObject builds a json GraphQL result object for the geo type.
+// It returns a bracketed json object like { "longitude" : 12.32 , "latitude" : 123.32 }.
+func completeGeoObject(
+	path []interface{},
+	fields []schema.Field,
+	val map[string]interface{}) ([]byte, x.GqlErrorList) {
+	var buf bytes.Buffer
+	x.Check2(buf.WriteRune('{'))
+
+	coordinate, _ := val["coordinates"].([]interface{})
+	comma := ""
+
+	longitude := fmt.Sprintf("%s", coordinate[0])
+	latitude := fmt.Sprintf("%s", coordinate[1])
+	for _, field := range fields {
+		x.Check2(buf.WriteString(comma))
+		x.Check2(buf.WriteRune('"'))
+		x.Check2(buf.WriteString(field.ResponseName()))
+		x.Check2(buf.WriteString(`": `))
+
+		if field.ResponseName() == "longitude" {
+			x.Check2(buf.WriteString(longitude))
+		} else if field.ResponseName() == "latitude" {
+			x.Check2(buf.WriteString(latitude))
+		} else {
+			return nil, x.GqlErrorList{&x.GqlError{
+				Message:   "Invalid field for Geo type",
+				Locations: []x.Location{field.Location()},
+				Path:      copyPath(path),
+			}}
+		}
+		comma = ","
+	}
+
+	x.Check2(buf.WriteRune('}'))
+	return buf.Bytes(), nil
+}
+
 // completeObject builds a json GraphQL result object for the current query level.
 // It returns a bracketed json object like { f1:..., f2:..., ... }.
 //
@@ -1366,6 +1405,9 @@ func completeValue(
 				Locations: []x.Location{field.Location()},
 				Path:      copyPath(path),
 			}}
+		}
+		if field.Type().IsGeo() {
+			return completeGeoObject(path, field.SelectionSet(), val)
 		}
 
 		return completeObject(path, field.SelectionSet(), val)
