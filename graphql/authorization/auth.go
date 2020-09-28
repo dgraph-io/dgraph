@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/pkg/errors"
@@ -55,7 +56,8 @@ type AuthMeta struct {
 	VerificationKey string
 	JWKUrl          string
 	JWKSet          *jose.JSONWebKeySet
-	RefreshTime     int            `json:"-"` // Ignoring this field for now (might later include in the input JSON)
+	RefreshTime     time.Duration `json:"-"` // Ignoring this field for now (might later include in the input JSON)
+	ticker          *time.Ticker
 	RSAPublicKey    *rsa.PublicKey `json:"-"` // Ignoring this field
 	Header          string
 	Namespace       string
@@ -158,12 +160,11 @@ func ParseAuthMeta(schema string) (*AuthMeta, error) {
 
 	// fetch and Store the keys from JWKUrl
 	if metaInfo.JWKUrl != "" {
-		metaInfo.JWKSet, metaInfo.RefreshTime, err = fetchJWKs(metaInfo.JWKUrl)
+		err = metaInfo.fetchJWKs()
 		if err != nil {
 			return nil, errors.Errorf("Unable to fetch Keys from JWKUrl, Got error %v", err)
 		}
 	}
-
 	if metaInfo.Algo != RSA256 {
 		return metaInfo, nil
 	}
@@ -199,6 +200,7 @@ func SetAuthMeta(m *AuthMeta) {
 	authMeta.JWKUrl = m.JWKUrl
 	authMeta.JWKSet = m.JWKSet
 	authMeta.RefreshTime = m.RefreshTime
+	authMeta.ticker = m.ticker
 	authMeta.RSAPublicKey = m.RSAPublicKey
 	authMeta.Header = m.Header
 	authMeta.Namespace = m.Namespace
@@ -358,15 +360,15 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	return claims, nil
 }
 
-func fetchJWKs(jwkUrl string) (*jose.JSONWebKeySet, int, error) {
-	req, err := http.NewRequest("GET", jwkUrl, nil)
+func (a *AuthMeta) fetchJWKs() error {
+	req, err := http.NewRequest("GET", a.JWKUrl, nil)
 	if err != nil {
-		return nil, 0, err
+		return err
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return err
 	}
 
 	data, _ := ioutil.ReadAll(resp.Body)
@@ -378,14 +380,14 @@ func fetchJWKs(jwkUrl string) (*jose.JSONWebKeySet, int, error) {
 	var jwkArray JwkArray
 	json.Unmarshal(data, &jwkArray)
 
-	keySet := jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
+	a.JWKSet = &jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
 	for i, jwk := range jwkArray.JWKs {
-		keySet.Keys[i].UnmarshalJSON(jwk)
+		a.JWKSet.Keys[i].UnmarshalJSON(jwk)
 	}
 
 	// Try to Parse the Remaining time in the expiry of signing keys first from the
 	// `Expires` Header and then from the `max-age` directive in the `Cache-Control` Header
-	maxAge := 0
+	maxAge := int64(0)
 
 	if resp.Header["Expires"] != nil {
 		maxAge, err = ParseExpires(resp.Header["Expires"][0])
@@ -394,6 +396,43 @@ func fetchJWKs(jwkUrl string) (*jose.JSONWebKeySet, int, error) {
 	if resp.Header["Cache-Control"] != nil {
 		maxAge, err = ParseMaxAge(resp.Header["Cache-Control"][0])
 	}
+	a.RefreshTime = time.Duration(maxAge) * time.Second
+	// Reinitialise ticker if get a non zero maxAge value which
+	// means we need to refresh the JWK keys
+	if maxAge != 0 {
+		a.ticker = time.NewTicker(a.RefreshTime)
+	}
+	return nil
+}
 
-	return &keySet, maxAge, nil
+// Refresh the JWKs on ticking the Ticker, but only if the
+// RefreshTime is non-zero, else skip.
+func (a *AuthMeta) RefreshJWK() {
+	for {
+		select {
+		case <-a.ticker.C:
+			if a.RefreshTime == 0 {
+				continue
+			}
+
+			// Try to Continuosly Refetch the Keys until it doesn't result in error
+			// Take a minute's gap in refetching after a failure.
+			for {
+				a.Lock()
+				err := a.fetchJWKs()
+				a.Unlock()
+				if err == nil {
+					break
+				}
+				time.Sleep(60 * time.Second)
+			}
+
+		}
+	}
+}
+
+func init() {
+	// Initialize ticker to a High Value
+	authMeta.ticker = time.NewTicker(1000 * time.Second)
+	go authMeta.RefreshJWK()
 }
