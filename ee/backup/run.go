@@ -42,7 +42,6 @@ var opt struct {
 	zero        string
 	key         x.SensitiveByteSlice
 	forceZero   bool
-	destination string
 	format      string
 }
 
@@ -286,5 +285,5 @@ func runExportBackup() error {
 	}
 
 	exporter := worker.BackupExporter{}
-	return exporter.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
+	return exporter.ExportBackup(opt.location, "", opt.format, opt.key)
 }
