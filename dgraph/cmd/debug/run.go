@@ -18,11 +18,13 @@ package debug
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
 	"math"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/cobra"
 )
 
@@ -57,6 +60,7 @@ type flagOptions struct {
 	sizeHistogram bool
 	noKeys        bool
 	key           x.SensitiveByteSlice
+	mmapTestFile  string
 
 	// Options related to the WAL.
 	wdir           string
@@ -93,6 +97,8 @@ func init() {
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
 		"Set snapshot term,index,readts to this. Value must be comma-separated list containing"+
 			" the value for these vars in that order.")
+	flag.StringVarP(&opt.mmapTestFile, "mmap", "m", "",
+		"Run mmap test on this file.")
 	enc.RegisterFlags(flag)
 }
 
@@ -756,7 +762,58 @@ func printZeroProposal(buf *bytes.Buffer, zpr *pb.ZeroProposal) {
 	}
 }
 
+func readInt(buf []byte, pos int) int {
+	x.AssertTrue(8*pos < len(buf))
+	return int(binary.BigEndian.Uint64(buf[8*pos:]))
+}
+func storeInt(buf []byte, pos int, counter int) {
+	x.AssertTrue(8*pos < len(buf))
+	binary.BigEndian.PutUint64(buf[8*pos:], uint64(counter))
+	fmt.Printf("[mmapTest] Stored counter: %d\n", counter)
+}
+func fsize(fd *os.File) int {
+	fi, err := fd.Stat()
+	x.Check(err)
+	return int(fi.Size())
+}
+func mmapTest() {
+	fd, err := os.OpenFile(opt.mmapTestFile, os.O_RDWR|os.O_CREATE, 0666)
+	x.Check(err)
+
+	if fsize(fd) == 0 {
+		const fsz = 4 << 30
+		buf := make([]byte, 1<<20)
+		n := fsz / len(buf)
+		for i := 0; i < n; i++ {
+			x.Check2(fd.Write(buf))
+		}
+		fmt.Printf("[mmapTest] New mmap file: %s. Wrote %d blocks\n", opt.mmapTestFile, n)
+	}
+	fmt.Printf("[mmapTest] file size: %d\n", fsize(fd))
+
+	mf, err := z.Mmap(fd, true, 4<<30)
+	x.Check(err)
+	var idx, counter int
+	for {
+		counter = readInt(mf, idx)
+		if counter == 0 {
+			if idx > 0 {
+				counter = readInt(mf, idx-1)
+			}
+			fmt.Printf("[mmapTest] Last valid index: %d. Found counter: %d\n", idx-1, counter)
+			break
+		}
+		idx++
+	}
+	storeInt(mf, idx, counter+1)
+	os.Exit(1)
+}
+
 func run() {
+	if len(opt.mmapTestFile) > 0 {
+		mmapTest()
+	}
+
 	var err error
 	dir := opt.pdir
 	isWal := false
