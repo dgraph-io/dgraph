@@ -113,7 +113,7 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 
 func (b *rdfBuilder) writeRDF(subject uint64, predicate []byte, object []byte) {
 	// add subject
-	b.writeTriple([]byte(fmt.Sprintf("%#x", subject)))
+	x.Check2(b.buf.Write(x.ToHex(subject, true)))
 	x.Check(b.buf.WriteByte(' '))
 	// add predicate
 	b.writeTriple(predicate)
@@ -149,19 +149,14 @@ func (b *rdfBuilder) rdfForUIDList(subject uint64, list *pb.List, sg *SubGraph) 
 			continue
 		}
 		// Build object.
-		b.writeRDF(
-			subject,
-			[]byte(sg.fieldName()),
-			buildTriple([]byte(fmt.Sprintf("%#x", destUID))))
+		b.writeRDF(subject, []byte(sg.fieldName()), x.ToHex(destUID, true))
 	}
 }
 
 // rdfForValueList returns rdf for the value list.
 func (b *rdfBuilder) rdfForValueList(subject uint64, valueList *pb.ValueList, attr string) {
 	if attr == "uid" {
-		b.writeRDF(subject,
-			[]byte(attr),
-			buildTriple([]byte(fmt.Sprintf("%#x", subject))))
+		b.writeRDF(subject, []byte(attr), x.ToHex(subject, true))
 		return
 	}
 	for _, destValue := range valueList.Values {
