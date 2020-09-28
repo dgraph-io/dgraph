@@ -1081,6 +1081,8 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	}
 
 	fconf.ForwardHeaders = http.Header{}
+	// set application/json as the default Content-Type
+	fconf.ForwardHeaders.Set("Content-Type", "application/json")
 	secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
 	if secretHeaders != nil {
 		hc.RLock()

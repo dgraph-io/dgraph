@@ -1801,9 +1801,6 @@ func makeRequest(client *http.Client, method, url, body string,
 		return nil, err
 	}
 	req.Header = header
-	if req.Header.Get("Content-type") == "" {
-		req.Header.Set("Content-type", "application/json")
-	}
 
 	// TODO - Needs to be fixed, we shouldn't be initiating a new HTTP client everytime.
 	if client == nil {
