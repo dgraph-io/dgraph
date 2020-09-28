@@ -67,7 +67,7 @@ func createStateService(cfg *Config) (*state.Service, error) {
 	return stateSrvc, nil
 }
 
-func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore) (*runtime.Runtime, error) {
+func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore, net *network.Service) (*runtime.Runtime, error) {
 	// load runtime code from trie
 	code, err := st.Storage.GetStorage(nil, []byte(":code"))
 	if err != nil {
@@ -90,6 +90,7 @@ func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore)
 		LogLvl:      cfg.Log.RuntimeLvl,
 		NodeStorage: ns,
 		Role:        cfg.Core.Roles,
+		Network:     net,
 	}
 
 	// create runtime executor

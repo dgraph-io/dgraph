@@ -79,7 +79,7 @@ func TestSystemRPC(t *testing.T) {
 			description: "test system_network_state",
 			method:      "system_networkState",
 			expected: modules.SystemNetworkStateResponse{
-				NetworkState: common.NetworkState{
+				NetworkState: modules.NetworkStateString{
 					PeerID: "",
 				},
 			},

@@ -98,7 +98,7 @@ func TestSystemModule_NetworkState(t *testing.T) {
 
 	testNetworkState := net.NetworkState()
 
-	if res.NetworkState != testNetworkState {
+	if res.NetworkState.PeerID != testNetworkState.PeerID {
 		t.Errorf("System.NetworkState: expected: %+v got: %+v\n", testNetworkState, res.NetworkState)
 	}
 }

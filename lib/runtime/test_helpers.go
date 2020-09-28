@@ -32,6 +32,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/ChainSafe/gossamer/lib/utils"
 	log "github.com/ChainSafe/log15"
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
@@ -66,6 +67,7 @@ func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie, l
 		Imports:     importsFunc,
 		LogLvl:      lvl,
 		NodeStorage: ns,
+		Network:     new(testRuntimeNetwork),
 	}
 
 	r, err := NewRuntimeFromFile(fp, cfg)
@@ -279,4 +281,21 @@ func (trs testRuntimeStorage) GetBalance(key [32]byte) (uint64, error) {
 	}
 
 	return binary.LittleEndian.Uint64(bal), nil
+}
+
+type testRuntimeNetwork struct {
+}
+
+func (trn testRuntimeNetwork) NetworkState() common.NetworkState {
+	testAddrs := []ma.Multiaddr(nil)
+
+	// create mock multiaddress
+	addr, _ := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/7001/p2p/12D3KooWDcCNBqAemRvguPa7rtmsbn2hpgLqAz8KsMMFsF2rdCUP")
+
+	testAddrs = append(testAddrs, addr)
+
+	return common.NetworkState{
+		PeerID:     "12D3KooWDcCNBqAemRvguPa7rtmsbn2hpgLqAz8KsMMFsF2rdCUP",
+		Multiaddrs: testAddrs,
+	}
 }

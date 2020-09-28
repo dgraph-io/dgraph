@@ -454,7 +454,8 @@ func (s *Service) Health() common.Health {
 // NetworkState returns information about host needed for the rpc server and the runtime
 func (s *Service) NetworkState() common.NetworkState {
 	return common.NetworkState{
-		PeerID: s.host.id().String(),
+		PeerID:     s.host.id().String(),
+		Multiaddrs: s.host.multiaddrs(),
 	}
 }
 
