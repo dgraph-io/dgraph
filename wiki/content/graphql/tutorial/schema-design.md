@@ -34,9 +34,9 @@ So our schema is going to have these kinds of entities and and relationships bet
 
 ![Graph schema sketch](/images/graphql/tutorial/discuss/schema-inital-sketch.png)
 
-I've borrowed some notation from other data modelling patterns here.  We can see that a user is going to have some number, zero or more `0..*`, of posts and that a post can have exactly one author.  That's pretty much the modelling capability GraphQL will allow us, so let's start sketching with it for now.
+I've borrowed some notation from other data modelling patterns here.  That's pretty much the modelling capability GraphQL will allow us, so let's start sketching with it for now.
 
-How does that translate into the application data graph?  Let's sketch out some examples.
+A user is going to have some number of (zero or more `0..*`) posts and that a post can have exactly one author.  A post can be in only a single category, which, in turn, can contain many posts.  How does that translate into the application data graph?  Let's sketch out some examples.
 
 Let's start with a single user who's posted three posts into a couple of different categories.  Our graph might start looking like this.
 

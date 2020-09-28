@@ -12,7 +12,12 @@ In the schema design section, we came up with this sketch of our graph schema.
 
 ![Graph schema sketch](/images/graphql/tutorial/discuss/schema-sketch.png)
 
-Slash GraphQL generates a running GraphQL API from the description of a schema as GraphQL types, using the GraphQL SDL.  We'll start by translating our design to the SDL and then look at GraphQL queries and mutations
+Slash GraphQL generates a running GraphQL API from the description of a schema as GraphQL types, using the GraphQL SDL (Schema Definition Language).  There's really two separate things in a GraphQL schema: 
+
+* type definitions: these define the things in our graph and the shape of the graph, just like our sketches in the previous section.
+* operations: these define what you can do in the graph through the API, like the search and traversal examples in the previous section.  
+
+We'll start by translating our design sketch to the SDL and then look at the GraphQL queries and mutations Slash GraphQL generates.
 
 ## GraphQL schema
 
@@ -20,11 +25,10 @@ A GraphQL schema contains type definitions and operations (queries and mutations
 
 ### Types
 
-There's some pre-defined scalar types (`ID`, `Int`, `String`, `Float` and `DateTime`) and a schema can define any number of other types.  For example, from our schema sketch we can start to define the `Post` type as follows.
+There's some pre-defined scalar types (`Int`, `String`, `Float` and `DateTime`) and a schema can define any number of other types.  For example, we can start to define the `Post` type in the GraphQL SDL by translating from our sketch as follows.
 
 ```graphql
 type Post {
-  id: ID
   title: String
   text: String
   datePublished: DateTime
@@ -33,11 +37,11 @@ type Post {
 }
 ```
 
-A `type TypeName { ... }` definition defines a kind of node in our graph --- in this case `Post` nodes.  It also gives those nodes what GraphQL calls fields, data values.  Those can be scalar values --- in this case an `id`, `title`, `text` and `datePublished` --  or links to other nodes --- in this case the `author` edge must link to a node of type `User`.
+A `type TypeName { ... }` definition defines a kind of node in our graph --- in this case `Post` nodes.  It also gives those nodes what GraphQL calls fields, or data values.  Those fields can be scalar values --- in this case a `title`, `text` and `datePublished` --  or links to other nodes --- in this case the `author` edge must link to a node of type `User`.
 
 Edges in the graph can be either singular or multiple.  If a field is a name and a type, like `author: User`, then a post can have a single `author` edge.  If a field uses the list notation, like `comments: [Comment]`, then a post can have multiple `comments` edges.
 
-GraphQL allows the schema to mark some fields as required.  For example, we might decide that all users must have a username, but that user might not have set a preferred display name.  If the display name is null, our app will display the username instead.  In GraphQL, that's a `!` annotation on a type.  If the type is set as:
+GraphQL allows the schema to mark some fields as required.  For example, we might decide that all users must have a username, but that user might not have set a preferred display name.  If the display name is null, our app can choose to display the username instead.  In GraphQL, that's a `!` annotation on a type.  If the type is set as:
 
 ```graphql
 type User {
@@ -51,9 +55,11 @@ then, our app can be guaranteed that the GraphQL API will never return a user wi
 
 ### Search
 
-That much GraphQL SDL can be used to describe our types and the shape of our application data graph.  However, there's a bit more that we'll need for this app.  As well as the shape of the graph, we can tell Slash GraphQL some more about how to interpret the graph using GraphQL directives.  Slash GraphQL uses this information to specialise the GraphQL API to your needs.
+That much GraphQL SDL can be used to describe our types and the shape of our application data graph, and we can start to make a pretty faithful translation of the types in our schema design.  However, there's a bit more that we'll need in the API for this app.  
 
-For example, with just the type definition, Slash GraphQL doesn't know what kinds of search we'll need built into our API.  The schema tells Slash GraphQL about the search needed with the `@search` directive.  Adding search directives like this:
+As well as the shape of the graph, we can use GraphQL directives tell Slash GraphQL some more about how to interpret the graph and what features we'd like in the GraphQL API.  Slash GraphQL uses this information to specialise the GraphQL API to your needs.
+
+For example, with just the type definition, Slash GraphQL doesn't know what kinds of search we'll need built into our API.  Adding the `@search` directive to the schema tells Slash GraphQL about the search needed.  Adding search directives like this:
 
 ```graphql
 type Post {
@@ -68,25 +74,71 @@ tells Slash GraphQL that we want it to generate an API that allows for search fo
 
 ### IDs
 
-A post's `id: ID` gives each post an auto-generated 64-bit id.  For users, we'll want a bit more.  The `username` field should be unique; in fact, it should be the id for a user.  Adding the `@id` directive like `username: String! @id` tells Slash GraphQL that username should be a unique id for the user type.  It will then generate the GraphQL API such that `username` is treated as an id, and ensure that usernames are unique.
+There's two types of identifiers in Slash GraphQL: an `ID` type that gives auto-generated 64-bit IDs, and an `@id` directive that allows external IDs to be used.  The two have different purposes. For example, `ID` is best for things like posts that need a unique id, but our app doesn't care what it is, while `@id` is best for types like users where we care that the id, their username, is supplied by them and unique.
+
+```graphql
+type Post {
+  id: ID!
+  ...
+}
+
+type User {
+  username: String! @id
+  ...
+}
+```
+
+A post's `id: ID` gives each post an auto-generated ID.  For users, we'll ne a bit more.  The `username` field should be unique; in fact, it should be the id for a user.  Adding the `@id` directive like `username: String! @id` tells Slash GraphQL that username should be a unique id for the user type.  Slash GraphQL will then generate the GraphQL API such that `username` is treated as an id, and ensure that usernames are unique.
 
 ### Relationships
 
-The only remaining thing is to recognize how GraphQL handles relations. So far, our GraphQL schema says that an author has some questions and answers and that a post has an author, but the schema doesn't connect them as a two-way edge in the graph: e.g. it doesn't say that the questions I can reach from a particular author all have that author as their author.
+The only remaining thing is to recognize how GraphQL handles relations. A GraphQL schema based around types like 
 
-GraphQL schemas are always under-specified in this way. It's left up to the documentation and implementation to make the two-way connection, if it exists. Here, we'll make sure they hook up in the right way by adding the directive @hasInverse.
+```graphql
+type User {
+  ...
+  posts: [Post!]!
+}
 
+type Post {
+  ...
+  author: User!
+}
+```
+
+would specify that an author has some posts and each post has an author, but the schema doesn't connect them as a two-way edge in the graph: e.g. it doesn't say that the posts I can reach from a particular author all have that author as their author.
+
+GraphQL schemas are always under-specified in this way. It's left up to the documentation and implementation to make the two-way connection, if it exists. There might be multiple connections between two types; for example, an author might also be linked the the posts they have commented on.  So it makes sense that we need something other than just the types to connect all the edges.
+
+In Slash GraphQL, we can specify two-way edges by adding the `@hasInverse` directive.  That lets us untangle situations where there's multiple relationships, so Slash GraphQL can do the right bookkeeping for us.  In our app, for example, we might need to make sure that the relationships between the posts that a user has authored and the ones they've liked linked correctly.
+
+```graphql
+type User {
+  ...
+  posts: [Post!]! 
+  liked: [Post!]!
+}
+
+type Post {
+  ...
+  author: User! @hasInverse(field: posts)
+  likedBy: [User!]! @hasInverse(field: liked)
+}
+```
+
+The `@hasInverse` directive is only needed on one end of a two-way edge, but you can add it at both ends if that works for your documentation purposes.
 
 ### Final schema
 
-taken the drawing and translated the fields and relationships ... and then added some search that looks interesting (`@id` automatically generates search by username)
+Working through the four types in the schema sketch, and then adding `@search` directives yields this schema for our app.
 
 ```graphql
 type User {
   username: String! @id
   displayName: String
   avatarImg: String
-  posts: [Post] @hasInverse(field: author)
+  posts: [Post!]
+  comments: [Comment!]
 }
 
 type Post {
@@ -94,34 +146,46 @@ type Post {
   title: String! @search(by: [term])
   text: String! @search(by: [fulltext])
   datePublished: DateTime
-  author: User!
+  author: User!  @hasInverse(field: posts)
   category: Category! @hasInverse(field: posts)
-  comments: [Comment!]!
+  comments: [Comment!]
 }
 
 type Comment {
   id: ID!
   text: String!
   commentsOn: Post! @hasInverse(field: comments)
-  author: User!
+  author: User! @hasInverse(field: comments)
 }
 
 type Category {
   id: ID!
   name: String! @search(by: [term])
-  posts: [Post]
+  posts: [Post!]
 }
 ```
 
+Slash GraphQL is built to allow for iteration on our schema.  I'm sure you've picked up things that could be added to enhance our app, for example, adding up and down votes or likes to the posts.  We'll leave those to later sections in the tutorial and build the app like you would in working on a project of your own: start by building a working minimal version and then iterate from there.
+
+Some iterations, e.g. adding likes, will just require a schema change and Slash GraphQL will adjust.  Some, e.g. adding an `@search` to comments, can be done by extending the schema and Slash graphQL will index the data and update the API.  Some, e.g. extending the model to include a history of edits on a post, might require more complex data migrations.
+
 ## Slash GraphQL
 
-...adding the schema to slash
+With the schema defined, it's just one step to get a running GraphQL backend for our app.
+
+Copy the schema, navigate to the 'Schema' tab in Slash GraphQL, paste the schema in, and press 'Deploy'
+
+![Deploy Slash GraphQL Schema](/images/graphql/tutorial/discuss/slash-deploy-schema.png)
+
+As soon as the schema is added, Slash GraphQL has deployed a GraphQL API for our app.  Let's look at how our ideas about graphs and traversals translate into GraphQL.
 
 ## GraphQL Operations
 
 Schema and operations... follow on from our design
 
 - in GraphQL it'll be operations that that show the valid things you can do on the data graph
+
+### introspection
 
 ### mutations
 
@@ -300,3 +364,6 @@ query {
 ### subscriptions
 
 ## What's next
+
+
+Slash GraphQL generates you a pretty powerful CRUD API from your type definitions, but, because GraphQL is really about the API your app needs, you'll eventually needs ... can do more ... look at that in future sections
