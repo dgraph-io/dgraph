@@ -178,13 +178,10 @@ type UpdateUserPayload {
 #######################
 
 enum UserHasFilter {
-	name
 	age
-	cars
 }
 
 enum UserOrderable {
-	name
 	age
 }
 

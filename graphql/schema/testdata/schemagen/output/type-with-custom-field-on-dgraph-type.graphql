@@ -202,13 +202,10 @@ enum CarOrderable {
 }
 
 enum UserHasFilter {
-	name
 	age
-	cars
 }
 
 enum UserOrderable {
-	name
 	age
 }
 

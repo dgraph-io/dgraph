@@ -175,13 +175,11 @@ type UpdateUserPayload {
 enum UserHasFilter {
 	firstName
 	lastName
-	fullName
 }
 
 enum UserOrderable {
 	firstName
 	lastName
-	fullName
 }
 
 #######################
