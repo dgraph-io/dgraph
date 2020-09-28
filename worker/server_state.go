@@ -34,9 +34,10 @@ import (
 type ServerState struct {
 	FinishCh chan struct{} // channel to wait for all pending reqs to finish.
 
-	Pstore   *badger.DB
-	WALstore *badger.DB
-	gcCloser *z.Closer // closer for valueLogGC
+	Pstore            *badger.DB
+	WALstore          *badger.DB
+	gcCloser          *z.Closer // closer for valueLogGC
+	cacheHealthCloser *z.Closer // closer for cacheHealth
 
 	needTs chan tsReq
 }
@@ -191,10 +192,15 @@ func (s *ServerState) initStorage() {
 	s.gcCloser = z.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
 	go x.RunVlogGC(s.WALstore, s.gcCloser)
+
+	s.cacheHealthCloser = z.NewCloser(2)
+	go x.MonitorCacheHealth(10*time.Second, "pstore", s.Pstore, s.cacheHealthCloser)
+	go x.MonitorCacheHealth(10*time.Second, "WALstore", s.WALstore, s.cacheHealthCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.
 func (s *ServerState) Dispose() {
+	s.cacheHealthCloser.SignalAndWait()
 	s.gcCloser.SignalAndWait()
 	if err := s.Pstore.Close(); err != nil {
 		glog.Errorf("Error while closing postings store: %v", err)

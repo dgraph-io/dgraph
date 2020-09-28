@@ -306,6 +306,9 @@ func run() {
 	go x.RunVlogGC(kv, gcCloser)
 	defer gcCloser.SignalAndWait()
 
+	cacheHealthCloser := z.NewCloser(1)
+	go x.MonitorCacheHealth(10*time.Second, "WALstore", kv, cacheHealthCloser)
+	defer cacheHealthCloser.SignalAndWait()
 	store := raftwal.Init(kv, opts.nodeId, 0)
 
 	// Initialize the servers.
