@@ -132,7 +132,7 @@ func TestNodes(t *testing.T) {
 		if err == nil {
 			break
 		}
-		time.Sleep(5*time.Second)
+		time.Sleep(5 * time.Second)
 	}
 	require.NoError(t, err, "error while getting connection to group 1")
 

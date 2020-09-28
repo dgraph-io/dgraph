@@ -144,7 +144,6 @@ func IpWhitelistingMW4Query(resolver QueryResolver) QueryResolver {
 	})
 }
 
-
 func LoggingMWQuery(resolver QueryResolver) QueryResolver {
 	return QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
 		glog.Infof("GraphQL admin query. Name =  %v", query.Name())
