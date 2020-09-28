@@ -130,13 +130,22 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 		}
 	}
 
-	opt := badger.DefaultOptions(dir).WithSyncWrites(false).
-		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
-		WithLogger(nil).WithBlockCacheSize(1 << 20).
-		WithEncryptionKey(enc.ReadEncryptionKeyFile(r.opt.BadgerKeyFile)).WithCompression(bo.None)
+	opt := badger.DefaultOptions(dir).
+		WithSyncWrites(false).
+		WithTableLoadingMode(bo.MemoryMap).
+		WithValueThreshold(1 << 10 /* 1 KB */).
+		WithLogger(nil).
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(r.opt.BadgerKeyFile)).
+		WithBlockCacheSize(r.opt.BlockCacheSize).
+		WithIndexCacheSize(r.opt.IndexCacheSize)
 
+	opt.Compression = bo.None
+	opt.ZSTDCompressionLevel = 0
 	// Overwrite badger options based on the options provided by the user.
-	r.setBadgerOptions(&opt, compression)
+	if compression {
+		opt.Compression = bo.ZSTD
+		opt.ZSTDCompressionLevel = r.state.opt.BadgerCompressionLevel
+	}
 
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
@@ -159,20 +168,6 @@ func (r *reducer) createTmpBadger() *badger.DB {
 	db := r.createBadgerInternal(tmpDir, false)
 	r.tmpDbs = append(r.tmpDbs, db)
 	return db
-}
-
-func (r *reducer) setBadgerOptions(opt *badger.Options, compression bool) {
-	if !compression {
-		opt.Compression = bo.None
-		opt.ZSTDCompressionLevel = 0
-		return
-	}
-	// Set the compression level.
-	opt.ZSTDCompressionLevel = r.state.opt.BadgerCompressionLevel
-	if r.state.opt.BadgerCompressionLevel < 1 {
-		x.Fatalf("Invalid compression level: %d. It should be greater than zero",
-			r.state.opt.BadgerCompressionLevel)
-	}
 }
 
 type mapIterator struct {
