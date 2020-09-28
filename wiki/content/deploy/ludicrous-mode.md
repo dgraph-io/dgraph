@@ -22,7 +22,6 @@ It doesn't wait for mutations to be applied. When a mutation comes, it proposes 
 
 Also, Dgraph does not sync writes to disk. This increases throughput but may result in loss of unsynced writes in the event of hardware failure.
 
-
 ## What is the trade off?
 
 As mentioned in the section above, it provides amazing speed at the cost of some guarantees.
@@ -30,6 +29,11 @@ As mentioned in the section above, it provides amazing speed at the cost of some
 It can be used when we have write-heavy operations and there is a time gap between queries and mutations, or you are fine with potentially reading stale data.
 
 There are no transactions in ludicrous mode. That is, you cannot open a transaction, apply a mutation, and then decide to cancel the transaction. Every mutation request is committed to Dgraph.
+
+## How does it assign timestamps? 
+
+In normal mode, every transaction gets start timestamp, and upon commit, it gets commit timestamp. The transcations are flushed when they receive the commit timestamp. In ludicrous mode, we assign commit timestamp to be equal to start timestamp, and execute them instantly. Which is why you don't need to send a commit request for mutation. 
+These timestamps are assigned when they are ready to commit, instead of in the order of their arrival to dgraph. This is one of the trade of using ludicours mode.
 
 ## Can the cluster run with HA?
 
