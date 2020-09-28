@@ -174,10 +174,16 @@ var (
 	Nilbyte []byte
 	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
+	// GuardiansGroupUid is Uid of guardians group node.
+	GuardiansGroupUid = atomic.Value{}
+	// GrootUser Uid is Uid of groot user node.
+	GrootUserUid = atomic.Value{}
 )
 
 func init() {
 	AcceptedOrigins.Store(map[string]struct{}{})
+	GuardiansGroupUid.Store(uint64(0))
+	GrootUserUid.Store(uint64(0))
 }
 
 // UpdateCorsOrigins updates the cors allowlist with the given origins.

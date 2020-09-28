@@ -42,6 +42,35 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 	}
 	m.Edges = edges
 
+	guardianGroupUid := x.GuardiansGroupUid.Load().(uint64)
+	grootUserUid := x.GrootUserUid.Load().(uint64)
+
+	isDeleteAclOperation := false
+	for _, edge := range m.Edges {
+		// Disallow deleting of guardians group
+		if edge.Entity == guardianGroupUid && edge.Attr == "dgraph.xid" && edge.Op == pb.DirectedEdge_DEL {
+			glog.Info("Trying to delete guardians group. Operation not allowed.")
+			isDeleteAclOperation = true
+			break
+		}
+		// Disallow deleting of groot user
+		if edge.Entity == grootUserUid && edge.Attr == "dgraph.xid" && edge.Op == pb.DirectedEdge_DEL {
+			glog.Info("Trying to delete groot user. Operation not allowed.")
+			isDeleteAclOperation = true
+			break
+		}
+		// Disallow deleting groot user from guardians group
+		if edge.Entity == grootUserUid &&
+			edge.Attr == "dgraph.user.group" && edge.Op == pb.DirectedEdge_DEL &&
+			edge.ValueId == guardianGroupUid && edge.ValueType == pb.Posting_UID {
+			glog.Info("Trying to delete groot user from guardians group. Operation not allowed.")
+			isDeleteAclOperation = true
+		}
+	}
+	if isDeleteAclOperation {
+		return nil, errors.Errorf("guardians group and groot user cannot be deleted.")
+	}
+
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		if span := otrace.FromContext(ctx); span != nil {
