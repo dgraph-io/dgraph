@@ -206,7 +206,6 @@ func SetAuthMeta(m *AuthMeta) {
 	authMeta.Algo = m.Algo
 	authMeta.Audience = m.Audience
 	authMeta.ticker.Reset(m.RefreshTime)
-
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -316,7 +315,6 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 			}, jwt.WithoutAudienceValidation())
 
 	} else {
-
 		if authMeta.Algo == "" {
 			return nil, fmt.Errorf(
 				"jwt token cannot be validated because verification algorithm is not set")
@@ -343,7 +341,6 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 				}
 				return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
 			}, jwt.WithoutAudienceValidation())
-
 	}
 
 	if err != nil {
@@ -421,7 +418,6 @@ func (a *AuthMeta) RefreshJWK() {
 				}
 				time.Sleep(60 * time.Second)
 			}
-
 		}
 	}
 }
