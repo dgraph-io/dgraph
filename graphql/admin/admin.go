@@ -337,20 +337,20 @@ var (
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
 		"health":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"state":         {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
+		"state":         {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
 		"config":        commonAdminQueryMWs,
 		"listBackups":   commonAdminQueryMWs,
 		"restoreStatus": commonAdminQueryMWs,
 		"getGQLSchema":  commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"queryUser":             {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"getGroup":              {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"getCurrentUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"getUser":               {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"querySchemaHistory":    {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"getAllowedCORSOrigins": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
+		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"queryUser":             {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getGroup":              {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getCurrentUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getUser":               {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"querySchemaHistory":    {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getAllowedCORSOrigins": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
 		"backup":          commonAdminMutationMWs,
