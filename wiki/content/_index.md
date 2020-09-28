@@ -1,6 +1,7 @@
 +++
 date = "2017-03-20T19:35:35+11:00"
 title = "Dgraph Documentation"
+aliases = ["/contribute"]
 [menu.main]
   url = "/"
   name = "Home"
@@ -17,6 +18,30 @@ Designed from the ground up to be run in production, Dgraph is the native GraphQ
 <section class="toc">
   <div class="container">
     <div class="row row-no-padding">
+      <div class="col-12 col-sm-6">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="{{< relref "graphql/overview/index.md">}}">
+              GraphQL
+            </a>
+          </div>
+          <p class="section-desc">
+            Get Started with GraphQL
+          </p>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="{{< relref "slash-graphql/introduction.md">}}">
+              Slash GraphQL
+            </a>
+          </div>
+          <p class="section-desc">
+            Slash GraphQL Provides /graphql Backend for Your App
+          </p>
+        </div>
+      </div>
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
@@ -122,6 +147,18 @@ Designed from the ground up to be run in production, Dgraph is the native GraphQ
           </div>
           <p class="section-desc">
             Frequently asked questions
+          </p>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="https://dgraph.io/docs/badger">
+              Badger
+            </a>
+          </div>
+          <p class="section-desc">
+            Embeddable, persistent and fast key-value database that powers Dgraph
           </p>
         </div>
       </div>

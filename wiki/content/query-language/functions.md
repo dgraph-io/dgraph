@@ -6,14 +6,14 @@ title = "Functions"
     weight = 2 
 +++
 
-Functions allow filtering based on properties of nodes or [variables]({{<relref "#value-variables">}}).  Functions can be applied in the query root or in filters.
+Functions allow filtering based on properties of nodes or [variables]({{<relref "query-language/value-variables.md">}}).  Functions can be applied in the query root or in filters.
 
 {{% notice "note" %}}Support for filters on non-indexed predicates was added with Dgraph `v1.2.0`.
 {{% /notice %}}
 
 Comparison functions (`eq`, `ge`, `gt`, `le`, `lt`) in the query root (aka `func:`) can only
-be applied on [indexed predicates]({{< relref "#indexing">}}). Since v1.2, comparison functions
-can now be used on [@filter]({{<relref "#applying-filters">}}) directives even on predicates
+be applied on [indexed predicates]({{< relref "query-language/schema.md#indexing" >}}). Since v1.2, comparison functions
+can now be used on [@filter]({{<relref "query-language/graphql-fundamentals.md#applying-filters" >}}) directives even on predicates
 that have not been indexed.
 Filtering on non-indexed predicates can be slow for large datasets, as they require
 iterating over all of the possible values at the level where the filter is being used.
@@ -76,7 +76,7 @@ Index Required: `term`
 Matches strings that have any of the specified terms in any order; case insensitive.
 #### Usage at root
 
-Query Example: All nodes that have a `name` containing either `poison` or `peacock`.  Many of the returned nodes are movies, but people like Joan Peacock also meet the search terms because without a [cascade directive]({{< relref "#cascade-directive">}}) the query doesn't require a genre.
+Query Example: All nodes that have a `name` containing either `poison` or `peacock`.  Many of the returned nodes are movies, but people like Joan Peacock also meet the search terms because without a [cascade directive]({{< relref "query-language/cascade-directive.md">}}) the query doesn't require a genre.
 
 {{< runnable >}}
 {
@@ -364,7 +364,7 @@ Query Example: Movies with directors with `Steven` in `name` and have directed m
 
 
 
-Query Example: A movie in each genre that has over 30000 movies.  Because there is no order specified on genres, the order will be by UID.  The [count index]({{< relref "#count-index">}}) records the number of edges out of nodes and makes such queries more .
+Query Example: A movie in each genre that has over 30000 movies.  Because there is no order specified on genres, the order will be by UID.  The [count index]({{< relref "query-language/schema.md#count-index">}}) records the number of edges out of nodes and makes such queries more .
 
 {{< runnable >}}
 {

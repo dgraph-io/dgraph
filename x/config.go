@@ -30,10 +30,15 @@ type Options struct {
 	QueryEdgeLimit uint64
 	// NormalizeNodeLimit is the maximum number of nodes allowed in a normalize query.
 	NormalizeNodeLimit int
+	// MutationsNQuadLimit is maximum number of nquads that can be present in a single
+	// mutation request.
+	MutationsNQuadLimit int
 	// PollInterval is the polling interval for graphql subscription.
 	PollInterval time.Duration
-	//GraphqlExtension wiil be set to see extensions in graphql results
+	// GraphqlExtension will be set to see extensions in graphql results
 	GraphqlExtension bool
+	// GraphqlDebug will enable debug mode in GraphQL
+	GraphqlDebug bool
 }
 
 // Config stores the global instance of this package's options.
@@ -84,6 +89,8 @@ type WorkerOptions struct {
 	StartTime time.Time
 	// LudicrousMode is super fast mode with fewer guarantees.
 	LudicrousMode bool
+	// Number of mutations that can be run together in ludicrous mode
+	LudicrousConcurrency int
 	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
 	EncryptionKey SensitiveByteSlice
 	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.

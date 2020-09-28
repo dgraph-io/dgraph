@@ -38,7 +38,6 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/posting"
@@ -47,6 +46,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type node struct {
@@ -60,12 +60,12 @@ type node struct {
 	applyCh chan []*pb.Proposal
 	ctx     context.Context
 	gid     uint32
-	closer  *y.Closer
+	closer  *z.Closer
 
 	streaming int32 // Used to avoid calculating snapshot
 
 	// Used to track the ops going on in the system.
-	ops     map[op]*y.Closer
+	ops     map[op]*z.Closer
 	opsLock sync.Mutex
 
 	canCampaign bool
@@ -86,6 +86,10 @@ func (id op) String() string {
 		return "opIndexing"
 	case opRestore:
 		return "opRestore"
+	case opBackup:
+		return "opBackup"
+	case opPredMove:
+		return "opPredMove"
 	default:
 		return "opUnknown"
 	}
@@ -96,6 +100,8 @@ const (
 	opSnapshot
 	opIndexing
 	opRestore
+	opBackup
+	opPredMove
 )
 
 // startTask is used to check whether an op is already running. If a rollup is running,
@@ -104,7 +110,7 @@ const (
 // Restore operations have preference and cancel all other operations, not just rollups.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
-func (n *node) startTask(id op) (*y.Closer, error) {
+func (n *node) startTask(id op) (*z.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
 
@@ -123,7 +129,7 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		}
 	}
 
-	closer := y.NewCloser(1)
+	closer := z.NewCloser(1)
 	switch id {
 	case opRollup:
 		if len(n.ops) > 0 {
@@ -141,7 +147,18 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 			delete(n.ops, otherId)
 			otherCloser.SignalAndWait()
 		}
-	case opSnapshot, opIndexing:
+	case opBackup:
+		// Backup cancels all other operations, except for other backups since
+		// only one restore operation should be active any given moment.
+		for otherId, otherCloser := range n.ops {
+			if otherId == opBackup {
+				return nil, errors.Errorf("another backup operation is already running")
+			}
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
+			otherCloser.SignalAndWait()
+		}
+	case opSnapshot, opIndexing, opPredMove:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
 				// Remove from map and signal the closer to cancel the operation.
@@ -158,7 +175,7 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 
 	n.ops[id] = closer
 	glog.Infof("Operation started with id: %s", id)
-	go func(id op, closer *y.Closer) {
+	go func(id op, closer *z.Closer) {
 		closer.Wait()
 		stopTask(id)
 	}(id, closer)
@@ -225,11 +242,11 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// to maintain quorum health.
 		applyCh: make(chan []*pb.Proposal, 1000),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:  y.NewCloser(4), // Matches CLOSER:1
-		ops:     make(map[op]*y.Closer),
+		closer:  z.NewCloser(4), // Matches CLOSER:1
+		ops:     make(map[op]*z.Closer),
 	}
 	if x.WorkerConfig.LudicrousMode {
-		n.ex = newExecutor(&m.Applied)
+		n.ex = newExecutor(&m.Applied, x.WorkerConfig.LudicrousConcurrency)
 	}
 	return n
 }
@@ -290,7 +307,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
-		return posting.DeleteData()
+		if err := posting.DeleteData(); err != nil {
+			return err
+		}
+
+		// Clear entire cache.
+		posting.ResetCache()
+		return nil
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_ALL {
@@ -301,6 +324,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		if err := posting.DeleteAll(); err != nil {
 			return err
 		}
+
+		// Clear entire cache.
+		posting.ResetCache()
 
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema()
@@ -364,6 +390,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
 			return err
+		}
+
+		// Clear the entire cache if there is a schema update because the index rebuild
+		// will invalidate the state.
+		if len(proposal.Mutations.Schema) > 0 {
+			posting.ResetCache()
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
@@ -590,7 +622,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		defer x.UpdateDrainingMode(false)
 
 		var err error
-		var closer *y.Closer
+		var closer *z.Closer
 		closer, err = n.startTask(opRestore)
 		if err != nil {
 			return errors.Wrapf(err, "cannot start restore task")
@@ -753,6 +785,13 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
 		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 	}
+
+	// Clear all the cached lists that were touched by this transaction.
+	for _, status := range delta.Txns {
+		txn := posting.Oracle().GetTxn(status.StartTs)
+		txn.RemoveCachedKeys()
+	}
+	posting.WaitForCache()
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -917,12 +956,22 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 
 			if n.AmLeader() {
-				var calculate bool
+				// If leader doesn't have a snapshot, we should create one immediately. This is very
+				// useful when you bring up the cluster from bulk loader. If you remove an alpha and
+				// add a new alpha, the new follower won't get a snapshot if the leader doesn't have
+				// one.
+				snap, err := n.Store.Snapshot()
+				if err != nil {
+					glog.Errorf("While retrieving snapshot from Store: %v\n", err)
+					continue
+				}
+				calculate := raft.IsEmptySnap(snap) // If no snapshot, then calculate one immediately.
+
 				if chk, err := n.Store.Checkpoint(); err == nil {
 					if first, err := n.Store.FirstIndex(); err == nil {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
-						calculate = chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
+						calculate = calculate || chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
 						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
 							"snapshotAfter:%d snap:%v", first, chk, chk-first,
 							x.WorkerConfig.SnapshotAfter, calculate)
@@ -940,7 +989,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
 				if calculate {
-					if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
+					// We can set discardN argument to zero, because we already know that calculate
+					// would be true if either we absolutely needed to calculate the snapshot,
+					// or our checkpoint already crossed the SnapshotAfter threshold.
+					if err := n.proposeSnapshot(0); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					}
 				}
@@ -996,7 +1048,7 @@ func (n *node) Run() {
 	go n.ReportRaftComms()
 
 	if x.WorkerConfig.LudicrousMode {
-		closer := y.NewCloser(2)
+		closer := z.NewCloser(2)
 		defer closer.SignalAndWait()
 		go x.StoreSync(n.Store, closer)
 		go x.StoreSync(pstore, closer)

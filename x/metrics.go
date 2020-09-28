@@ -81,6 +81,8 @@ var (
 	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
+	TxnAborts = stats.Int64("txn_aborts",
+		"Number of transaction aborts", stats.UnitDimensionless)
 
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
@@ -144,6 +146,13 @@ var (
 			Name:        MaxAssignedTs.Name(),
 			Measure:     MaxAssignedTs,
 			Description: MaxAssignedTs.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        TxnAborts.Name(),
+			Measure:     TxnAborts,
+			Description: TxnAborts.Description(),
 			Aggregation: view.Count(),
 			TagKeys:     allTagKeys,
 		},

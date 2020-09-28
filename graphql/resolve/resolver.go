@@ -452,7 +452,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 							Err:   err,
 						}
 					})
-
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
 			}(q, i)
 		}
@@ -689,7 +688,9 @@ func completeDgraphResult(
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
 	// So we are only building object results.
 	var valToComplete map[string]interface{}
-	err := json.Unmarshal(dgResult, &valToComplete)
+	d := json.NewDecoder(bytes.NewBuffer(dgResult))
+	d.UseNumber()
+	err := d.Decode(&valToComplete)
 	if err != nil {
 		glog.Errorf("%+v \n Dgraph result :\n%s\n",
 			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
@@ -698,7 +699,7 @@ func completeDgraphResult(
 			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result"))
 	}
 
-	switch val := valToComplete[field.Name()].(type) {
+	switch val := valToComplete[field.DgraphAlias()].(type) {
 	case []interface{}:
 		if field.Type().ListType() == nil {
 			// Turn Dgraph list result to single object
@@ -732,7 +733,7 @@ func completeDgraphResult(
 						field.Name(), field.Type().String()).WithLocations(field.Location()))
 			}
 
-			valToComplete[field.Name()] = internalVal
+			valToComplete[field.DgraphAlias()] = internalVal
 		}
 	case interface{}:
 		// no need to error in this case, this can be returned for custom HTTP query/mutation
@@ -746,7 +747,11 @@ func completeDgraphResult(
 		// case
 	}
 
-	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.Name()])
+	// TODO: correctly handle DgraphAlias for custom field resolution, at present it uses f.Name(),
+	// it should be using f.DgraphAlias() to get values from valToComplete.
+	// It works ATM because there hasn't been a scenario where there are two fields with same
+	// name in implementing types of an interface with @custom on some field in those types.
+	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.DgraphAlias()])
 	if err != nil {
 		errs = append(errs, schema.AsGQLErrors(err)...)
 	}
@@ -852,13 +857,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			}
 
 			mu.RLock()
-			if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
-				errCh <- x.GqlErrorf("Evaluation of custom field failed while substituting "+
-					"variables into body for remote endpoint with an error: %s for field: %s "+
-					"within type: %s.", err, f.Name(), f.GetObjectName()).WithLocations(f.Location())
-				mu.RUnlock()
-				return
-			}
+			schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{}))
 			mu.RUnlock()
 			inputs[i] = temp
 		}
@@ -1270,7 +1269,6 @@ func completeObject(
 	comma := ""
 
 	x.Check2(buf.WriteRune('{'))
-
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
@@ -1296,7 +1294,7 @@ func completeObject(
 		x.Check2(buf.WriteString(f.ResponseName()))
 		x.Check2(buf.WriteString(`": `))
 
-		val := res[f.Name()]
+		val := res[f.DgraphAlias()]
 		if f.Name() == schema.Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
@@ -1354,7 +1352,7 @@ func completeValue(
 	switch val := val.(type) {
 	case map[string]interface{}:
 		switch field.Type().Name() {
-		case "String", "ID", "Boolean", "Float", "Int", "DateTime":
+		case "String", "ID", "Boolean", "Float", "Int", "Int64", "DateTime":
 			return nil, x.GqlErrorList{&x.GqlError{
 				Message:   errExpectedScalar,
 				Locations: []x.Location{field.Location()},
@@ -1463,18 +1461,19 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case bool:
 			val = strconv.FormatBool(v)
 		case string:
+		case json.Number:
+			val = v.String()
 		default:
 			return nil, valueCoercionError(v)
 		}
 	case "Boolean":
 		switch v := val.(type) {
-		case float64:
-			val = v != 0
-		case int64:
-			val = v != 0
 		case string:
 			val = len(v) > 0
 		case bool:
+		case json.Number:
+			valFloat, _ := v.Float64()
+			val = valFloat != 0
 		default:
 			return nil, valueCoercionError(v)
 		}
@@ -1483,15 +1482,13 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case float64:
 			// The spec says that we can coerce a Float value to Int, if we don't lose information.
 			// See: https: //spec.graphql.org/June2018/#sec-Float
-			// Lets try to see if this a whole number, otherwise return error because we
-			// might be losing informating by truncating it.
-			truncated := math.Trunc(v)
-			if truncated == v {
-				tv := int(truncated)
-				if tv > math.MaxInt32 || tv < math.MinInt32 {
-					return nil, valueCoercionError(v)
-				}
-				val = tv
+			// Lets try to see if this number could be converted to int32 without losing
+			// information, otherwise return error.
+			// See: https://github.com/golang/go/issues/19405 to understand why the comparison
+			// should be done after double conversion.
+			i32Val := int32(v)
+			if v == float64(i32Val) {
+				val = i32Val
 			} else {
 				return nil, valueCoercionError(v)
 			}
@@ -1502,17 +1499,17 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				val = 0
 			}
 		case string:
-			i, err := strconv.ParseFloat(v, 32)
+			i, err := strconv.ParseFloat(v, 64)
 			// An error can be encountered if we had a value that can't be fit into
-			// a 32 bit floating point number.
+			// a 64 bit floating point number..
+			// Lets try to see if this number could be converted to int32 without losing
+			// information, otherwise return error.
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
-			// Lets try to see if this a whole number, otherwise return error because we
-			// might be losing informating by truncating it.
-			truncated := math.Trunc(i)
-			if truncated == i {
-				val = int(truncated)
+			i32Val := int32(i)
+			if i == float64(i32Val) {
+				val = i32Val
 			} else {
 				return nil, valueCoercionError(v)
 			}
@@ -1521,15 +1518,53 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				return nil, valueCoercionError(v)
 			}
 		case int:
-			// numUids are added as int, so we need special handling for that. Other number values
-			// in a JSON object are automatically unmarshaled as float so they are handle above.
+			// numUids are added as int, so we need special handling for that.
 			if v > math.MaxInt32 || v < math.MinInt32 {
+				return nil, valueCoercionError(v)
+			}
+		case json.Number:
+			// We have already checked range for int32 at input validation time.
+			// So now just parse and check errors.
+			i, err := strconv.ParseFloat(v.String(), 64)
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			i32Val := int32(i)
+			if i == float64(i32Val) {
+				val = i32Val
+			} else {
 				return nil, valueCoercionError(v)
 			}
 		default:
 			return nil, valueCoercionError(v)
 		}
-
+	case "Int64":
+		switch v := val.(type) {
+		case bool:
+			if v {
+				val = 1
+			} else {
+				val = 0
+			}
+		case string:
+			i, err := strconv.ParseInt(v, 10, 64)
+			// An error can be encountered if we had a value that can't be fit into
+			// a 64 bit int or because of other parsing issues.
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			val = i
+		case json.Number:
+			// To use whole 64-bit range for int64 without any coercing,
+			// We pass int64 values as string to dgraph and parse it as integer here
+			i, err := strconv.ParseInt(v.String(), 10, 64)
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			val = i
+		default:
+			return nil, valueCoercionError(v)
+		}
 	case "Float":
 		switch v := val.(type) {
 		case bool:
@@ -1540,12 +1575,18 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			}
 		case string:
 			i, err := strconv.ParseFloat(v, 64)
+			// An error can be encountered if we had a value that can't be fit into
+			// a 64 bit floating point number or because of other parsing issues.
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
 			val = i
-		case int64:
-			val = float64(v)
+		case json.Number:
+			i, err := strconv.ParseFloat(v.String(), 64)
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			val = i
 		case float64:
 		default:
 			return nil, valueCoercionError(v)
@@ -1556,18 +1597,16 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			if _, err := types.ParseTime(v); err != nil {
 				return nil, valueCoercionError(v)
 			}
-		case float64:
-			truncated := math.Trunc(v)
-			if truncated == v {
+		case json.Number:
+			valFloat, _ := v.Float64()
+			truncated := math.Trunc(valFloat)
+			if truncated == valFloat {
 				// Lets interpret int values as unix timestamp.
 				t := time.Unix(int64(truncated), 0).UTC()
 				val = t.Format(time.RFC3339)
 			} else {
 				return nil, valueCoercionError(v)
 			}
-		case int64:
-			t := time.Unix(v, 0).UTC()
-			val = t.Format(time.RFC3339)
 		default:
 			return nil, valueCoercionError(v)
 		}

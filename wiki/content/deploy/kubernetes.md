@@ -6,10 +6,10 @@ title = "Using Kubernetes"
     weight = 6
 +++
 
-The following section covers running Dgraph with Kubernetes. We have tested Dgraph with Kubernetes 1.14 to 1.15 on [GKE](https://cloud.google.com/kubernetes-engine) and [EKS](https://aws.amazon.com/eks/).
+The following section covers running Dgraph with Kubernetes. We have tested Dgraph with Kubernetes versions 1.14 to 1.16 on [GKE](https://cloud.google.com/kubernetes-engine) and versions 1.14 to 1.17 on [EKS](https://aws.amazon.com/eks/).
 
-{{% notice "note" %}}These instructions are for running Dgraph Alpha without TLS configuration.
-Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
+{{% notice "note" %}}These instructions are for running Dgraph alpha service without TLS configuration.
+Instructions for running Dgraph alpha service with TLS refer [TLS instructions]({{< relref "deploy/tls-configuration.md" >}}).{{% /notice %}}
 
 * Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) which is used to deploy
   and manage applications on kubernetes.
@@ -17,10 +17,9 @@ Instructions for running with TLS refer [TLS instructions](#tls-configuration).{
   * For Amazon [EKS](https://aws.amazon.com/eks/), you can use [eksctl](https://eksctl.io/) to quickly provision a new cluster. If you are new to this, Amazon has an article [Getting started with eksctl](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html).
   * For Google Cloud [GKE](https://cloud.google.com/kubernetes-engine), you can use [Google Cloud SDK](https://cloud.google.com/sdk/install) and the `gcloud container clusters create` command to quickly provision a new cluster.
 
-On Amazon [EKS](https://aws.amazon.com/eks/), you would see something like this:
+Verify that you have your cluster up and running using `kubectl get nodes`. If you used `eksctl` or `gcloud container clusters create` with the default options, you should have 2-3 worker nodes ready.
 
-Verify that you have your cluster up and running using `kubectl get nodes`. If you used `kops` with
-the default options, you should have a master and two worker nodes ready.
+On Amazon [EKS](https://aws.amazon.com/eks/), you would see something like this:
 
 ```sh
 ➜  kubernetes git:(master) ✗ kubectl get nodes
@@ -177,8 +176,8 @@ dgraph-zero-2         1/1     Running   0          5m6s
 
 {{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs --follow dgraph-alpha-0` and `kubectl logs --follow dgraph-zero-0`.{{% /notice %}}
 
-### Test Dgraph HA Cluster Setup
 
+### Test Dgraph HA Cluster Setup
 Port forward from your local machine to the pod
 
 ```sh
@@ -222,25 +221,132 @@ To install the chart with the release name `my-release`:
 helm install my-release dgraph/dgraph
 ```
 
-The above command will install the latest available dgraph docker image. In order to install the older versions:
+The above command will install a recent version of the dgraph docker image. You can set the version an explicit version, such as:
 
 ```sh
-helm install my-release dgraph/dgraph --set image.tag="latest"
+helm install my-release dgraph/dgraph --set image.tag="v1.2.6"
 ```
 
+{{% notice "warning" %}}When configuring dgraph image tag, be careful not to use `latest` or `master` in a production environment. These tags may have the dgraph version change, causing a mixed version dgraph cluster that can lead to an outage and potential data loss.{{% /notice %}}
+
+#### Dgraph Configuration Files
+
+You can supply a dgraph config files (see [Config]({{< relref "deploy/config.md" >}})) for alpha and zero with Helm chart configuration values:
+
+```yaml
+# my-config-values.yaml
+alpha:
+  configFile:
+    config.yaml: |
+      alsologtostderr: true
+      badger:
+        compression_level: 3
+        tables: mmap
+        vlog: mmap
+      postings: /dgraph/data/p
+      wal: /dgraph/data/w
+      lru_mb: 2048
+zero:
+  configFile:
+    config.yaml: |
+      alsologtostderr: true
+      wal: /dgraph/data/zw
+```
+
+And then install with alpha and zero configuration using this:
+
+```sh
+helm install my-release dgraph/dgraph --values my-config-values.yaml
+```
+
+#### Exposing Alpha and Ratel Services
+
 By default zero and alpha services are exposed only within the kubernetes cluster as
-kubernetes service type `ClusterIP`. In order to expose the alpha service publicly
-you can use kubernetes service type `LoadBalancer`:
+kubernetes service type `ClusterIP`.
+
+In order to expose the alpha service and ratel service publicly you can use kubernetes service type `LoadBalancer` or an Ingress resource.
+
+##### LoadBalancer (Public Internet)
+
+To use an external load balancer, set the service type to `LoadBalancer`. 
+
+{{% notice "note" %}}For security purposes we recommend limiting access to any public endpoints, such as using a white list.{{% /notice %}}
+
+You can expose alpha service to the Internet as follows:
 
 ```sh
 helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer"
 ```
 
-Similarly, you can expose alpha and ratel service to the internet as follows:
+Similarly, you can expose alpha and ratel service to the Internet as follows:
 
 ```sh
 helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer" --set ratel.service.type="LoadBalancer"
 ```
+
+##### LoadBalancer (Private Internal Network)
+
+An external load balancer can be configured to face internally to a private subnet rather the public Internet.  This way it can be accessed securely by clients on the same network, through a VPN, or from a jump server. In Kubernetes, this is often configured through service annotations by the provider.  Here's a small list of annotations from cloud providers:
+
+|Provider    | Documentation Reference   | Annotation |
+|------------|---------------------------|------------|
+|AWS         |[Amazon EKS: Load Balancing](https://docs.aws.amazon.com/eks/latest/userguide/load-balancing.html)|`service.beta.kubernetes.io/aws-load-balancer-internal: "true"`|
+|Azure       |[AKS: Internal Load Balancer](https://docs.microsoft.com/azure/aks/internal-lb)|`service.beta.kubernetes.io/azure-load-balancer-internal: "true"`|
+|Google Cloud|[GKE: Internal Load Balancing](https://cloud.google.com/kubernetes-engine/docs/how-to/internal-load-balancing)|`cloud.google.com/load-balancer-type: "Internal"`|
+
+
+As an example, using Amazon [EKS](https://aws.amazon.com/eks/) as the provider, you could create a Helm chart configuration values like this below: 
+
+```yaml
+# my-config-values.yaml
+alpha:
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+ratel:
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+```
+
+And then expose alpha and ratel services privately:
+
+```sh
+helm install my-release dgraph/dgraph --values my-config-values.yaml
+```
+
+##### Ingress Resource
+
+You can expose alpha and ratel using an [ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) resource that can route traffic to service resources.  Before using this option you may need to install an [ingress controller](https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/) first, as is the case with [AKS](https://docs.microsoft.com/azure/aks/) and [EKS](https://aws.amazon.com/eks/), while in the case of [GKE](https://cloud.google.com/kubernetes-engine), this comes bundled with a default ingress controller.  When routing traffic based on the `hostname`, you may want to integrate an addon like [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) so that DNS records can be registered automatically when deploying dgraph.
+
+As an examples, you can configure a single ingress resource that uses [ingress-nginx](https://github.com/kubernetes/ingress-nginx) for alpha and ratel services, by creating Helm chart configuration values like this below:
+
+```yaml
+# my-config-values.yaml
+global:
+  ingress:
+    enabled: false
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    ratel_hostname: "ratel.<my-domain-name>"
+    alpha_hostname: "alpha.<my-domain-name>"
+```
+
+And then expose alpha and ratel services through an ingress:
+
+```sh
+helm install my-release dgraph/dgraph --values my-config-values.yaml
+```
+
+Afterward you can run `kubectl get ingress` to see the status and access these through their hostname, such as `http://alpha.<my-domain-name>` and `http://ratel.<my-domain-name>`
+
+
+{{% notice "tip" %}}Ingress controllers will likely have an option to configure access for private internal networks.  Consult documentation from the ingress controller provider for further information.{{% /notice %}}
+
+
+
 
 ### Upgrading the Chart
 
@@ -257,7 +363,7 @@ upgrade the configuration in multiple steps following the steps below.
 
 #### Upgrade to HA cluster setup
 
-To upgrade to an [HA cluster setup]({{< relref "#ha-cluster-setup" >}}), ensure
+To upgrade to an [HA cluster setup]({{< relref "#ha-cluster-setup-using-kubernetes" >}}), ensure
 that the shard replication setting is more than 1. When `zero.shardReplicaCount`
 is not set to an HA configuration (3 or 5), follow the steps below:
 
@@ -283,88 +389,37 @@ helm delete my-release
 Deletion of the StatefulSet doesn't cascade to deleting associated PVCs. To delete them:
 
 ```sh
-kubectl delete pvc -l release=my-release,chart=dgraph
+kubectl delete pvc --selector release=my-release
 ```
 
 ### Configuration
 
-The following table lists the configurable parameters of the dgraph chart and their default values.
+The latest configuration settings can be found:
 
-|              Parameter               |                             Description                             |                       Default                       |
-| ------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------------- |
-| `image.registry`                     | Container registry name                                             | `docker.io`                                         |
-| `image.repository`                   | Container image name                                                | `dgraph/dgraph`                                     |
-| `image.tag`                          | Container image tag                                                 | `latest`                                            |
-| `image.pullPolicy`                   | Container pull policy                                               | `Always`                                            |
-| `zero.name`                          | Zero component name                                                 | `zero`                                              |
-| `zero.updateStrategy`                | Strategy for upgrading zero nodes                                   | `RollingUpdate`                                     |
-| `zero.monitorLabel`                  | Monitor label for zero, used by prometheus.                         | `zero-dgraph-io`                                    |
-| `zero.rollingUpdatePartition`        | Partition update strategy                                           | `nil`                                               |
-| `zero.podManagementPolicy`           | Pod management policy for zero nodes                                | `OrderedReady`                                      |
-| `zero.replicaCount`                  | Number of zero nodes                                                | `3`                                                 |
-| `zero.shardReplicaCount`             | Max number of replicas per data shard                               | `5`                                                 |
-| `zero.terminationGracePeriodSeconds` | Zero server pod termination grace period                            | `60`                                                |
-| `zero.antiAffinity`                  | Zero anti-affinity policy                                           | `soft`                                              |
-| `zero.podAntiAffinitytopologyKey`    | Anti affinity topology key for zero nodes                           | `kubernetes.io/hostname`                            |
-| `zero.nodeAffinity`                  | Zero node affinity policy                                           | `{}`                                                |
-| `zero.service.type`                  | Zero node service type                                              | `ClusterIP`                                         |
-| `zero.securityContext.enabled`       | Security context for zero nodes enabled                             | `false`                                             |
-| `zero.securityContext.fsGroup`       | Group id of the zero container                                      | `1001`                                              |
-| `zero.securityContext.runAsUser`     | User ID for the zero container                                      | `1001`                                              |
-| `zero.persistence.enabled`           | Enable persistence for zero using PVC                               | `true`                                              |
-| `zero.persistence.storageClass`      | PVC Storage Class for zero volume                                   | `nil`                                               |
-| `zero.persistence.accessModes`       | PVC Access Mode for zero volume                                     | `ReadWriteOnce`                                     |
-| `zero.persistence.size`              | PVC Storage Request for zero volume                                 | `8Gi`                                               |
-| `zero.nodeSelector`                  | Node labels for zero pod assignment                                 | `{}`                                                |
-| `zero.tolerations`                   | Zero tolerations                                                    | `[]`                                                |
-| `zero.resources`                     | Zero node resources requests & limits                               | `{}`                                                |
-| `zero.livenessProbe`                 | Zero liveness probes                                                | `See values.yaml for defaults`                      |
-| `zero.readinessProbe`                | Zero readiness probes                                               | `See values.yaml for defaults`                      |
-| `alpha.name`                         | Alpha component name                                                | `alpha`                                             |
-| `alpha.updateStrategy`               | Strategy for upgrading alpha nodes                                  | `RollingUpdate`                                     |
-| `alpha.monitorLabel`                 | Monitor label for alpha, used by prometheus.                        | `alpha-dgraph-io`                                   |
-| `alpha.rollingUpdatePartition`       | Partition update strategy                                           | `nil`                                               |
-| `alpha.podManagementPolicy`          | Pod management policy for alpha nodes                               | `OrderedReady`                                      |
-| `alpha.replicaCount`                 | Number of alpha nodes                                               | `3`                                                 |
-| `alpha.terminationGracePeriodSeconds`| Alpha server pod termination grace period                           | `60`                                                |
-| `alpha.antiAffinity`                 | Alpha anti-affinity policy                                          | `soft`                                              |
-| `alpha.podAntiAffinitytopologyKey`   | Anti affinity topology key for zero nodes                           | `kubernetes.io/hostname`                            |
-| `alpha.nodeAffinity`                 | Alpha node affinity policy                                          | `{}`                                                |
-| `alpha.service.type`                 | Alpha node service type                                             | `ClusterIP`                                         |
-| `alpha.securityContext.enabled`      | Security context for alpha nodes enabled                            | `false`                                             |
-| `alpha.securityContext.fsGroup`      | Group id of the alpha container                                     | `1001`                                              |
-| `alpha.securityContext.runAsUser`    | User ID for the alpha container                                     | `1001`                                              |
-| `alpha.persistence.enabled`          | Enable persistence for alpha using PVC                              | `true`                                              |
-| `alpha.persistence.storageClass`     | PVC Storage Class for alpha volume                                  | `nil`                                               |
-| `alpha.persistence.accessModes`      | PVC Access Mode for alpha volume                                    | `ReadWriteOnce`                                     |
-| `alpha.persistence.size`             | PVC Storage Request for alpha volume                                | `8Gi`                                               |
-| `alpha.nodeSelector`                 | Node labels for alpha pod assignment                                | `{}`                                                |
-| `alpha.tolerations`                  | Alpha tolerations                                                   | `[]`                                                |
-| `alpha.resources`                    | Alpha node resources requests & limits                              | `{}`                                                |
-| `alpha.livenessProbe`                | Alpha liveness probes                                               | `See values.yaml for defaults`                      |
-| `alpha.readinessProbe`               | Alpha readiness probes                                              | `See values.yaml for defaults`                      |
-| `ratel.name`                         | Ratel component name                                                | `ratel`                                             |
-| `ratel.replicaCount`                 | Number of ratel nodes                                               | `1`                                                 |
-| `ratel.service.type`                 | Ratel service type                                                  | `ClusterIP`                                         |
-| `ratel.securityContext.enabled`      | Security context for ratel nodes enabled                            | `false`                                             |
-| `ratel.securityContext.fsGroup`      | Group id of the ratel container                                     | `1001`                                              |
-| `ratel.securityContext.runAsUser`    | User ID for the ratel container                                     | `1001`                                              |
-| `ratel.livenessProbe`                | Ratel liveness probes                                               | `See values.yaml for defaults`                      |
-| `ratel.readinessProbe`               | Ratel readiness probes                                              | `See values.yaml for defaults`                      |
+ * https://github.com/dgraph-io/charts/blob/master/charts/dgraph/README.md#configuration
 
 ## Monitoring in Kubernetes
 
 Dgraph exposes prometheus metrics to monitor the state of various components involved in the cluster, this includes dgraph alpha and zero.
 
-Follow the below mentioned steps to setup prometheus monitoring for your cluster:
+Below are instructions to setup Prometheus monitoring for your cluster.  This solution has the following parts:
 
-* Install Prometheus operator:
+* [prometheus-operator](https://coreos.com/blog/the-prometheus-operator.html) - a Kubernetes operator to install and configure Prometheus and Alert Manager.
+* [Prometheus](https://prometheus.io/) - the service that will scrape Dgraph for metrics
+* [AlertManager](https://prometheus.io/docs/alerting/latest/alertmanager/) - the service that will trigger alerts to a service (Slack, PagerDuty, etc) that you specify based on metrics exceeding threshold specified in Alert rules.
+* [Grafana](https://grafana.com/) - optional visualization solution that will use Prometheus as a source to create dashboards.
+
+### Installation through Manifests
+
+Follow the below mentioned steps to setup prometheus monitoring for your cluster.
+
+#### Install Prometheus operator
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/coreos/prometheus-operator/release-0.34/bundle.yaml
+kubectl apply --filename https://raw.githubusercontent.com/coreos/prometheus-operator/release-0.34/bundle.yaml
 ```
 
-* Ensure that the instance of `prometheus-operator` has started before continuing.
+Ensure that the instance of `prometheus-operator` has started before continuing.
 
 ```sh
 $ kubectl get deployments prometheus-operator
@@ -372,10 +427,12 @@ NAME                  DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
 prometheus-operator   1         1         1            1           3m
 ```
 
+#### Install Prometheus
+
 * Apply prometheus manifest present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/prometheus.yaml).
 
 ```sh
-$ kubectl apply -f prometheus.yaml
+$ kubectl apply --filename prometheus.yaml
 
 serviceaccount/prometheus-dgraph-io created
 clusterrole.rbac.authorization.k8s.io/prometheus-dgraph-io created
@@ -393,6 +450,8 @@ kubectl port-forward prometheus-dgraph-io-0 9090:9090
 
 The UI is accessible at port 9090. Open http://localhost:9090 in your browser to play around.
 
+#### Registering Alerts and Installing Alert Manager
+
 To register alerts from dgraph cluster with your prometheus deployment follow the steps below:
 
 * Create a kubernetes secret containing alertmanager configuration. Edit the configuration file present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/alertmanager-config.yaml)
@@ -401,7 +460,8 @@ with the required reciever configuration including the slack webhook credential 
 You can find more information about alertmanager configuration [here](https://prometheus.io/docs/alerting/configuration/).
 
 ```sh
-$ kubectl create secret generic alertmanager-alertmanager-dgraph-io --from-file=alertmanager.yaml=alertmanager-config.yaml
+$ kubectl create secret generic alertmanager-alertmanager-dgraph-io \
+    --from-file=alertmanager.yaml=alertmanager-config.yaml
 
 $ kubectl get secrets
 NAME                                            TYPE                 DATA   AGE
@@ -413,13 +473,57 @@ to use the default configured alert configuration. You can also add custom rules
 manifest.
 
 ```sh
-$ kubectl apply -f alertmanager.yaml
+$ kubectl apply --filename alertmanager.yaml
 alertmanager.monitoring.coreos.com/alertmanager-dgraph-io created
 service/alertmanager-dgraph-io created
 
-$ kubectl apply -f alert-rules.yaml
+$ kubectl apply --filename alert-rules.yaml
 prometheusrule.monitoring.coreos.com/prometheus-rules-dgraph-io created
 ```
+
+### Install Using Helm Chart
+
+There are Helm chart values that will install Prometheus, Alert Manager, and Grafana.
+
+You will first need to add the `prometheus-operator` Helm chart:
+
+```bash
+$ helm repo add stable https://kubernetes-charts.storage.googleapis.com
+```
+
+Afterward you will want to copy the Helm chart values present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/chart-values/dgraph-prometheus-operator.yaml) and edit them as appropriate, such as adding endpoints, adding alert rules, adjusting alert manager configuration, adding Grafana dashboard, etc.
+
+Once ready, install this with the following:
+
+```bash
+$ helm install my-prometheus-release \
+  --values dgraph-prometheus-operator.yaml \
+  --set grafana.adminPassword='<put-secret-password-here>' \
+  stable/prometheus-operator
+```
+
+**NOTE**: For security best practices, we want to keep secrets, such as the Grafana password outside of general configuration, so that it is not accidently checked into anywhere.  You can supply it through the command line, or create a seperate `secrets.yaml` that is never checked into a code repository:
+
+```yaml
+grafana:
+  adminPassword: <put-secret-password-here>
+```
+
+Then you can install this in a similar fashion:
+
+```bash
+$ helm install my-prometheus-release \
+  --values dgraph-prometheus-operator.yaml \
+  --values secrets.yaml \
+  stable/prometheus-operator
+```
+
+
+### Adding Dgraph Kubernetes Grafana Dashboard
+
+You can use the Grafana dashboard present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/grafana/dgraph-kubernetes-grafana-dashboard.json).  You can import this dashboard and select the Prometheus data source installed earlier.
+
+This will visualize all Dgraph Alpha and Zero Kubernetes Pods, using the regex pattern `"/dgraph-.*-[0-9]*$/`.  This can be changed by through the dashboard configuration and selecting the variable Pod.  This might be desirable when you have had multiple releases, and only want to visualize the current release.  For example, if you installed a new release `my-release-3` with the [Dgraph helm chart](https://github.com/dgraph-io/charts/), you can change the regex pattern to `"/my-release-3.*dgraph-.*-[0-9]*$/"` for the Pod variable.
 
 ## Kubernetes Storage
 
@@ -484,7 +588,7 @@ spec:
 Then, in the StatefulSet configuration you can claim this local storage in
 .spec.volumeClaimTemplate:
 
-```
+```yaml
 kind: StatefulSet
 ...
  volumeClaimTemplates:
@@ -557,7 +661,7 @@ configuration to be updated.
 ## Kubernetes and Bulk Loader
 
 You may want to initialize a new cluster with an existing data set such as data
-from the [Dgraph Bulk Loader]({{< relref "#bulk-loader" >}}). You can use [Init
+from the [Dgraph Bulk Loader]({{< relref "deploy/fast-data-loading.md#bulk-loader" >}}). You can use [Init
 Containers](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/)
 to copy the data to the pod volume before the Alpha process runs.
 

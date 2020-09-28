@@ -945,6 +945,8 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
+	require.Nil(t, ol.plist.Pack)
+	require.Equal(t, 0, len(ol.plist.Postings))
 	require.True(t, len(ol.plist.Splits) > 0)
 	verifySplits(t, ol.plist.Splits)
 
@@ -1346,7 +1348,8 @@ func TestMain(m *testing.M) {
 
 	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))
 	x.Check(err)
-	Init(ps)
+	// Not using posting list cache
+	Init(ps, 0)
 	schema.Init(ps)
 
 	r := m.Run()

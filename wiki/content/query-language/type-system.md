@@ -23,6 +23,10 @@ type Student {
 }
 ```
 
+{{% notice "note" %}}You can't define type names starting with `dgraph.`, it is reserved as the
+namespace for Dgraph's internal types/predicates. For example, defining `dgraph.Student` as a
+type is invalid.{{% /notice  %}}
+
 Types are declared along with the schema using the Alter endpoint. In order to
 properly support the above type, a predicate for each of the attributes
 in the type is also needed, such as:
@@ -142,5 +146,5 @@ err := c.Alter(context.Background(), &api.Operation{
 
 ## Expand queries and types
 
-Queries using [expand]({{< relref "#expand-predicates" >}}) (i.e.:
+Queries using [expand]({{< relref "query-language/expand-predicates.md" >}}) (i.e.:
 `expand(_all_)`) require that the nodes to be expanded have types.

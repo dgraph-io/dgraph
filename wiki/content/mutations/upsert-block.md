@@ -195,7 +195,7 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
 ```
 
 If we want to execute the mutation only when the user exists, we could use
-[Conditional Upsert]({{< relref "#conditional-upsert" >}}).
+[Conditional Upsert]({{< relref "mutations/conditional-upsert.md" >}}).
 
 ## Example of `val` Function
 

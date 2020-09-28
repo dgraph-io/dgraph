@@ -13,4 +13,4 @@ Each mutation may contain multiple RDF triples. For large data uploads many such
 ```sh
 dgraph live --help
 ```
-See also [Fast Data Loading](/deploy#fast-data-loading).
+See also [Fast Data Loading]({{< relref "deploy/fast-data-loading.md" >}}).

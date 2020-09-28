@@ -156,7 +156,7 @@ This stops the Alpha on which the command is executed and not the entire cluster
 
 ## Deleting database
 
-Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs](/query-language#delete).
+Individual triples, patterns of triples and predicates can be deleted as described in the [DQL docs]({{< relref "mutations/delete.md" >}}).
 
 To drop all data, you could send a `DropAll` request via `/alter` endpoint.
 
@@ -174,7 +174,7 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 2. Ensure it is successful
 3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
 4. Start a new Dgraph cluster using new data directories (this can be done by passing empty directories to the options `-p` and `-w` for Alphas and `-w` for Zeros)
-5. Reload the data via [bulk loader]({{< relref "#bulk-loader" >}})
+5. Reload the data via [bulk loader]({{< relref "deploy/fast-data-loading.md#bulk-loader" >}})
 6. Verify the correctness of the new Dgraph cluster. If all looks good, you can delete the old directories (export serves as an insurance)
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
@@ -200,8 +200,32 @@ When the new cluster (that uses the upgraded version of Dgraph) is up and runnin
 dgraph upgrade --acl -a localhost:9080 -u groot -p password
 ```
 
+### Upgrading from v20.03.0 to v20.07.0 for Enterprise Customers
+1. Use [binary]({{< relref "enterprise-features/binary-backups.md">}}) backup to export data from old cluster
+2. Ensure it is successful
+3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
+4. Upgrade `dgraph` binary to `v20.07.0`
+5. [Restore]({{< relref "enterprise-features/binary-backups.md#restore-from-backup">}}) from the backups using upgraded `dgraph` binary
+6. Start a new Dgraph cluster using the restored data directories
+7. Upgrade ACL data using the following command:
+    ```
+    dgraph upgrade --acl -a localhost:9080 -u groot -p password -f v20.03.0 -t v20.07.0
+    ```
+    This is required because previously the type-names `User`, `Group` and `Rule` were used by ACL.
+    They have now been renamed as `dgraph.type.User`, `dgraph.type.Group` and `dgraph.type.Rule`, to
+    keep them in dgraph's internal namespace. This upgrade just changes the type-names for the ACL
+    nodes to the new type-names.
+    
+    You can use `--dry-run` option in `dgraph upgrade` command to see a dry run of what the upgrade
+    command will do.
+8. If you have types or predicates in your schema whose names start with `dgraph.`, then
+you would need to manually alter schema to change their names to something else which isn't
+prefixed with `dgraph.`, and also do mutations to change the value of `dgraph.type` edge to the
+new type name and copy data from old predicate name to new predicate name for all the nodes which
+are affected. Then, you can drop the old types and predicates from DB.
+
 {{% notice "note" %}}
-If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section](/howto/#schema-types-scalar-uid-and-list-uid).
+If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section]({{< relref "howto/migrate-dgraph-1-1.md" >}}).
 {{% /notice %}}
 
 ## Post Installation

@@ -14,6 +14,8 @@ type Post {
 	publishByMonth: DateTime @search(by: [month])
 	publishByDay: DateTime @search(by: [day])
 	publishByHour: DateTime @search(by: [hour])
+	publishTimestamp: Int64 @search
+	numViewers: Int64 @search(by: [int64])
 	numLikes: Int @search
 	score: Float @search
 	isPublished: Boolean @search
@@ -37,10 +39,21 @@ enum PostType {
 # Extended Definitions
 #######################
 
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can represent values in range [-(2^63),(2^63 - 1)].
+"""
+scalar Int64
+
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
 scalar DateTime
 
 enum DgraphIndex {
 	int
+	int64
 	float
 	bool
 	hash
@@ -100,7 +113,7 @@ directive @auth(
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
 
 input IntFilter {
 	eq: Int
@@ -108,6 +121,14 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+}
+
+input Int64Filter {
+	eq: Int64
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
 }
 
 input FloatFilter {
@@ -176,7 +197,7 @@ type UpdatePostPayload {
 # Generated Enums
 #######################
 
-enum PostOrderable {
+enum PostHasFilter {
 	title
 	titleByEverything
 	text
@@ -187,6 +208,31 @@ enum PostOrderable {
 	publishByMonth
 	publishByDay
 	publishByHour
+	publishTimestamp
+	numViewers
+	numLikes
+	score
+	isPublished
+	postType
+	postTypeTrigram
+	postTypeRegexp
+	postTypeExact
+	postTypeHash
+	postTypeRegexpExact
+	postTypeHashRegexp
+	postTypeNone
+}
+
+enum PostOrderable {
+	title
+	titleByEverything
+	text
+	publishByYear
+	publishByMonth
+	publishByDay
+	publishByHour
+	publishTimestamp
+	numViewers
 	numLikes
 	score
 }
@@ -206,6 +252,8 @@ input AddPostInput {
 	publishByMonth: DateTime
 	publishByDay: DateTime
 	publishByHour: DateTime
+	publishTimestamp: Int64
+	numViewers: Int64
 	numLikes: Int
 	score: Float
 	isPublished: Boolean
@@ -231,6 +279,8 @@ input PostFilter {
 	publishByMonth: DateTimeFilter
 	publishByDay: DateTimeFilter
 	publishByHour: DateTimeFilter
+	publishTimestamp: Int64Filter
+	numViewers: Int64Filter
 	numLikes: IntFilter
 	score: FloatFilter
 	isPublished: Boolean
@@ -242,6 +292,7 @@ input PostFilter {
 	postTypeRegexpExact: PostType_exact_StringRegExpFilter
 	postTypeHashRegexp: PostType_hash_StringRegExpFilter
 	postTypeNone: PostType_hash
+	has: PostHasFilter
 	and: PostFilter
 	or: PostFilter
 	not: PostFilter
@@ -264,6 +315,8 @@ input PostPatch {
 	publishByMonth: DateTime
 	publishByDay: DateTime
 	publishByHour: DateTime
+	publishTimestamp: Int64
+	numViewers: Int64
 	numLikes: Int
 	score: Float
 	isPublished: Boolean
@@ -289,6 +342,8 @@ input PostRef {
 	publishByMonth: DateTime
 	publishByDay: DateTime
 	publishByHour: DateTime
+	publishTimestamp: Int64
+	numViewers: Int64
 	numLikes: Int
 	score: Float
 	isPublished: Boolean

@@ -41,6 +41,18 @@ type volume struct {
 	ReadOnly bool `yaml:"read_only"`
 }
 
+type deploy struct {
+	Resources res `yaml:",omitempty"`
+}
+
+type res struct {
+	Limits limit `yaml:",omitempty"`
+}
+
+type limit struct {
+	Memory string `yaml:",omitempty"`
+}
+
 type service struct {
 	name          string // not exported
 	Image         string
@@ -56,6 +68,7 @@ type service struct {
 	TmpFS         []string  `yaml:",omitempty"`
 	User          string    `yaml:",omitempty"`
 	Command       string    `yaml:",omitempty"`
+	Deploy        deploy    `yaml:",omitempty"`
 }
 
 type composeConfig struct {
@@ -69,6 +82,7 @@ type options struct {
 	NumAlphas     int
 	NumReplicas   int
 	LruSizeMB     int
+	Acl           bool
 	AclSecret     string
 	DataDir       string
 	DataVol       bool
@@ -84,6 +98,7 @@ type options struct {
 	WhiteList     bool
 	Ratel         bool
 	RatelPort     int
+	MemLimit      string
 }
 
 var opts options
@@ -192,6 +207,11 @@ func getZero(idx int) service {
 	} else {
 		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), basePort)
 	}
+	if len(opts.MemLimit) > 0 {
+		svc.Deploy.Resources = res{
+			Limits: limit{Memory: opts.MemLimit},
+		}
+	}
 
 	return svc
 }
@@ -235,8 +255,17 @@ func getAlpha(idx int) service {
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
+	if opts.Acl {
+		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s"
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:     "bind",
+			Source:   "./acl-secret",
+			Target:   "/secret/hmac",
+			ReadOnly: true,
+		})
+	}
 	if opts.AclSecret != "" {
-		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
+		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s"
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   opts.AclSecret,
@@ -244,13 +273,17 @@ func getAlpha(idx int) service {
 			ReadOnly: true,
 		})
 	}
-
+	if len(opts.MemLimit) > 0 {
+		svc.Deploy.Resources = res{
+			Limits: limit{Memory: opts.MemLimit},
+		}
+	}
 	return svc
 }
 
 func getJaeger() service {
 	svc := service{
-		Image:         "jaegertracing/all-in-one:latest",
+		Image:         "jaegertracing/all-in-one:1.18",
 		ContainerName: "jaeger",
 		WorkingDir:    "/working/jaeger",
 		Ports: []string{
@@ -288,7 +321,7 @@ func addMetrics(cfg *composeConfig) {
 	cfg.Volumes["grafana-volume"] = stringMap{}
 
 	cfg.Services["node-exporter"] = service{
-		Image:         "quay.io/prometheus/node-exporter",
+		Image:         "quay.io/prometheus/node-exporter:v1.0.1",
 		ContainerName: "node-exporter",
 		Pid:           "host",
 		WorkingDir:    "/working/jaeger",
@@ -301,7 +334,7 @@ func addMetrics(cfg *composeConfig) {
 	}
 
 	cfg.Services["prometheus"] = service{
-		Image:         "prom/prometheus",
+		Image:         "prom/prometheus:v2.20.1",
 		ContainerName: "prometheus",
 		Hostname:      "prometheus",
 		Ports: []string{
@@ -323,7 +356,7 @@ func addMetrics(cfg *composeConfig) {
 	}
 
 	cfg.Services["grafana"] = service{
-		Image:         "grafana/grafana",
+		Image:         "grafana/grafana:7.1.2",
 		ContainerName: "grafana",
 		Hostname:      "grafana",
 		Ports: []string{
@@ -384,6 +417,7 @@ func main() {
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount a host directory as /data in containers")
+	cmd.PersistentFlags().BoolVar(&opts.Acl, "acl", false, "Create ACL secret file and enable ACLs")
 	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
 		"enable ACL feature with specified HMAC secret file")
 	cmd.PersistentFlags().BoolVarP(&opts.UserOwnership, "user", "u", false,
@@ -404,12 +438,14 @@ func main() {
 		"use locally-compiled binary if true, otherwise use binary from docker container")
 	cmd.PersistentFlags().StringVarP(&opts.Tag, "tag", "t", "latest",
 		"Docker tag for dgraph/dgraph image. Requires -l=false to use binary from docker container.")
-	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
+	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", true,
 		"include a whitelist if true")
 	cmd.PersistentFlags().BoolVar(&opts.Ratel, "ratel", false,
 		"include ratel service")
 	cmd.PersistentFlags().IntVar(&opts.RatelPort, "ratel_port", 8000,
 		"Port to expose Ratel service")
+	cmd.PersistentFlags().StringVarP(&opts.MemLimit, "mem", "", "32G",
+		"Limit memory provided to the docker containers, for example 8G.")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
@@ -424,8 +460,8 @@ func main() {
 	if opts.NumZeros < 1 || opts.NumZeros > 99 {
 		fatal(errors.Errorf("number of zeros must be 1-99"))
 	}
-	if opts.NumAlphas < 1 || opts.NumAlphas > 99 {
-		fatal(errors.Errorf("number of alphas must be 1-99"))
+	if opts.NumAlphas < 0 || opts.NumAlphas > 99 {
+		fatal(errors.Errorf("number of alphas must be 0-99"))
 	}
 	if opts.NumReplicas%2 == 0 {
 		fatal(errors.Errorf("number of replicas must be odd"))
@@ -477,6 +513,14 @@ func main() {
 		addMetrics(&cfg)
 	}
 
+	if opts.Acl {
+		err = ioutil.WriteFile("acl-secret", []byte("12345678901234567890123456789012"), 0644)
+		x.Check2(fmt.Fprintf(os.Stdout, "Writing file: %s\n", "acl-secret"))
+		if err != nil {
+			fatal(errors.Errorf("unable to write file: %v", err))
+		}
+	}
+
 	yml, err := yaml.Marshal(cfg)
 	x.CheckfNoTrace(err)
 
@@ -488,7 +532,7 @@ func main() {
 	if opts.OutFile == "-" {
 		x.Check2(fmt.Printf("%s", doc))
 	} else {
-		x.Check2(fmt.Fprintf(os.Stderr, "Writing file: %s\n", opts.OutFile))
+		x.Check2(fmt.Fprintf(os.Stdout, "Writing file: %s\n", opts.OutFile))
 		err = ioutil.WriteFile(opts.OutFile, []byte(doc), 0644)
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))

@@ -336,7 +336,7 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	js := `
   {
-    "schema": [` + x.AclPredicates + `,` + x.GraphqlPredicates + `,
+    "schema": [` + x.CorsPredicate + "," + x.AclPredicates + `,` + x.GraphqlPredicates + `,
       {
         "predicate": "dgraph.type",
         "type": "string",
@@ -389,6 +389,15 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	js := `
   {
     "schema": [
+	  {
+		"predicate": "dgraph.cors"
+	  },
+	  {
+	    "predicate": "dgraph.graphql.schema_history"
+	  },
+	  {
+	    "predicate": "dgraph.graphql.schema_created_at"
+	  },
       {
         "predicate": "dgraph.xid"
       },
@@ -551,7 +560,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 
 	js := `
   {
-    "schema": [` + x.AclPredicates + `,` + x.GraphqlPredicates + `,
+    "schema": [` + x.CorsPredicate + `,` + x.AclPredicates + `,` + x.GraphqlPredicates + `,
       {
         "index": true,
         "predicate": "dgraph.type",
@@ -1144,18 +1153,28 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 			out: `
 			{
 				"q": [
-				  {
-					"name": "Alice 1",
-					"age": "23"
-				  },
-				  {
-					"name": "Alice 2"
-				  },
-				  {
-					"name": "Alice 3",
-					"age": "32"
-				  }
-				]
+					{
+					  "name": "Alice 1",
+					  "age": "23",
+					  "friend": [
+						{
+						  "name": "Bob"
+						}
+					  ]
+					},
+					{
+					  "name": "Alice 2",
+					  "friend": [
+						{
+						  "name": "Chris"
+						}
+					  ]
+					},
+					{
+					  "name": "Alice 3",
+					  "age": "32"
+					}
+				  ]
 			}
 			`,
 		},

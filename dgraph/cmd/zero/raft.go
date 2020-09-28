@@ -28,10 +28,10 @@ import (
 
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
@@ -44,26 +44,30 @@ type node struct {
 	*conn.Node
 	server *Server
 	ctx    context.Context
-	closer *y.Closer // to stop Run.
+	closer *z.Closer // to stop Run.
 
 	// The last timestamp when this Zero was able to reach quorum.
 	mu         sync.RWMutex
 	lastQuorum time.Time
 }
 
-func (n *node) AmLeader() bool {
+func (n *node) amLeader() bool {
 	if n.Raft() == nil {
 		return false
 	}
 	r := n.Raft()
-	if r.Status().Lead != r.Status().ID {
+	return r.Status().Lead == r.Status().ID
+}
+
+func (n *node) AmLeader() bool {
+	// Return false if the node is not the leader. Otherwise, check the lastQuorum as well.
+	if !n.amLeader() {
 		return false
 	}
-
-	// This node must be the leader, but must also be an active member of the cluster, and not
-	// hidden behind a partition. Basically, if this node was the leader and goes behind a
-	// partition, it would still think that it is indeed the leader for the duration mentioned
-	// below.
+	// This node must be the leader, but must also be an active member of
+	// the cluster, and not hidden behind a partition. Basically, if this
+	// node was the leader and goes behind a partition, it would still
+	// think that it is indeed the leader for the duration mentioned below.
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	return time.Since(n.lastQuorum) <= 5*time.Second
@@ -280,13 +284,11 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 		if tablet.Force {
 			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, tablet.Predicate)
-		} else {
-			if prev.GroupId != tablet.GroupId {
-				glog.Infof(
-					"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
-					prev.Predicate, tablet.GroupId, prev.GroupId)
-				return errTabletAlreadyServed
-			}
+		} else if prev.GroupId != tablet.GroupId {
+			glog.Infof(
+				"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
+				prev.Predicate, tablet.GroupId, prev.GroupId)
+			return errTabletAlreadyServed
 		}
 	}
 	tablet.Force = false
@@ -442,7 +444,7 @@ func (n *node) triggerLeaderChange() {
 func (n *node) proposeNewCID() {
 	// Either this is a new cluster or can't find a CID in the entries. So, propose a new ID for the cluster.
 	// CID check is needed for the case when a leader assigns a CID to the new node and the new node is proposing a CID
-	for len(n.server.membershipState().Cid) == 0 {
+	for n.server.membershipState().Cid == "" {
 		id := uuid.New().String()
 		err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
 		if err == nil {
@@ -457,8 +459,8 @@ func (n *node) proposeNewCID() {
 		time.Sleep(3 * time.Second)
 	}
 
-	// Apply trial license only if not already licensed.
-	if n.server.license() == nil {
+	// Apply trial license only if not already licensed and no enterprise license provided.
+	if n.server.license() == nil && Zero.Conf.GetString("enterprise_license") == "" {
 		if err := n.proposeTrialLicense(); err != nil {
 			glog.Errorf("while proposing trial license to cluster: %v", err)
 		}
@@ -579,10 +581,11 @@ func (n *node) initAndStartNode() error {
 
 	go n.Run()
 	go n.BatchAndSendMessages()
+	go n.ReportRaftComms()
 	return nil
 }
 
-func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
+func (n *node) updateZeroMembershipPeriodically(closer *z.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -599,7 +602,7 @@ func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 
 var startOption = otrace.WithSampler(otrace.ProbabilitySampler(0.01))
 
-func (n *node) checkQuorum(closer *y.Closer) {
+func (n *node) checkQuorum(closer *z.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -630,14 +633,18 @@ func (n *node) checkQuorum(closer *y.Closer) {
 	for {
 		select {
 		case <-ticker.C:
-			quorum()
+			// Only the leader needs to check for the quorum. The quorum is
+			// used by a leader to identify if it is behind a network partition.
+			if n.amLeader() {
+				quorum()
+			}
 		case <-closer.HasBeenClosed():
 			return
 		}
 	}
 }
 
-func (n *node) snapshotPeriodically(closer *y.Closer) {
+func (n *node) snapshotPeriodically(closer *z.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -679,7 +686,7 @@ func (n *node) Run() {
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	readStateCh := make(chan raft.ReadState, 100)
-	closer := y.NewCloser(5)
+	closer := z.NewCloser(5)
 	defer func() {
 		closer.SignalAndWait()
 		n.closer.Done()
