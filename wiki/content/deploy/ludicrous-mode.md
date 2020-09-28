@@ -32,9 +32,8 @@ There are no transactions in ludicrous mode. That is, you cannot open a transact
 
 ## How does it assign timestamps? 
 
-In normal mode, every transaction gets start timestamp, and upon commit, it gets commit timestamp. The transcations are flushed when they receive the commit timestamp. In ludicrous mode, we assign commit timestamp to be equal to start timestamp, and execute them instantly. Which is why you don't need to send a commit request for mutation. 
-These timestamps are assigned when they are ready to commit, instead of in the order of their arrival to dgraph. This is one of the trade of using ludicours mode.
-
+In normal mode, every transaction gets a `start timestamp`, and upon commit, it gets a `commit timestamp`. The transactions are flushed when they receive the `commit timestamp`.
+In ludicrous mode, we assign a `commit timestamp` equal to the `start timestamp` and execute them instantly, which is why you don't need to send a commit request for mutation. One of the trades of using ludicrous mode is that the timestamps are assigned when they're ready to be committed, instead of following the arrival's order.
 ## Can the cluster run with HA?
 
 Yes, ludicrous mode works with the cluster set up in a highly-available (HA) configuration.
