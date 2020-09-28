@@ -200,12 +200,13 @@ func SetAuthMeta(m *AuthMeta) {
 	authMeta.JWKUrl = m.JWKUrl
 	authMeta.JWKSet = m.JWKSet
 	authMeta.RefreshTime = m.RefreshTime
-	authMeta.ticker = m.ticker
 	authMeta.RSAPublicKey = m.RSAPublicKey
 	authMeta.Header = m.Header
 	authMeta.Namespace = m.Namespace
 	authMeta.Algo = m.Algo
 	authMeta.Audience = m.Audience
+	authMeta.ticker.Reset(m.RefreshTime)
+
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -397,11 +398,16 @@ func (a *AuthMeta) fetchJWKs() error {
 		maxAge, err = ParseMaxAge(resp.Header["Cache-Control"][0])
 	}
 	a.RefreshTime = time.Duration(maxAge) * time.Second
-	// Reinitialise ticker if get a non zero maxAge value which
-	// means we need to refresh the JWK keys
-	if maxAge != 0 {
-		a.ticker = time.NewTicker(a.RefreshTime)
-	}
+	// // Reinitialise ticker if get a non zero maxAge value which
+	// // means we need to refresh the JWK keys
+	// if maxAge != 0 {
+	// 	if a.ticker == nil {
+	// 		a.ticker = time.NewTicker(a.RefreshTime)
+	// 	} else {
+	// 		a.ticker.Reset(a.RefreshTime)
+	// 	}
+	// 	fmt.Println("Ticker changed")
+	// }
 	return nil
 }
 
@@ -411,6 +417,7 @@ func (a *AuthMeta) RefreshJWK() {
 	for {
 		select {
 		case <-a.ticker.C:
+			fmt.Println("Tick Tick")
 			if a.RefreshTime == 0 {
 				continue
 			}
@@ -433,6 +440,9 @@ func (a *AuthMeta) RefreshJWK() {
 
 func init() {
 	// Initialize ticker to a High Value
-	authMeta.ticker = time.NewTicker(1000 * time.Second)
+	fmt.Println("ticker Init := ", authMeta.ticker)
+	authMeta.ticker = time.NewTicker(10 * time.Second)
+	fmt.Println(authMeta.ticker)
+	fmt.Println("Ticker Defined")
 	go authMeta.RefreshJWK()
 }
