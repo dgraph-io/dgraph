@@ -55,8 +55,8 @@ var (
 type AuthMeta struct {
 	VerificationKey string
 	JWKUrl          string
-	JWKSet          *jose.JSONWebKeySet
-	RefreshTime     time.Duration `json:"-"` // Ignoring this field for now (might later include in the input JSON)
+	jwkSet          *jose.JSONWebKeySet
+	refreshTime     time.Duration
 	ticker          *time.Ticker
 	RSAPublicKey    *rsa.PublicKey `json:"-"` // Ignoring this field
 	Header          string
@@ -198,14 +198,14 @@ func SetAuthMeta(m *AuthMeta) {
 
 	authMeta.VerificationKey = m.VerificationKey
 	authMeta.JWKUrl = m.JWKUrl
-	authMeta.JWKSet = m.JWKSet
-	authMeta.RefreshTime = m.RefreshTime
+	authMeta.jwkSet = m.jwkSet
+	authMeta.refreshTime = m.refreshTime
 	authMeta.RSAPublicKey = m.RSAPublicKey
 	authMeta.Header = m.Header
 	authMeta.Namespace = m.Namespace
 	authMeta.Algo = m.Algo
 	authMeta.Audience = m.Audience
-	authMeta.ticker.Reset(m.RefreshTime)
+	authMeta.ticker.Reset(m.refreshTime)
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -307,7 +307,7 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 		token, err =
 			jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 				kid := token.Header["kid"].(string)
-				signingKeys := authMeta.JWKSet.Key(kid)
+				signingKeys := authMeta.jwkSet.Key(kid)
 				if len(signingKeys) == 0 {
 					return nil, errors.Errorf("Invalid kid")
 				}
@@ -369,7 +369,10 @@ func (a *AuthMeta) fetchJWKs() error {
 		return err
 	}
 
-	data, _ := ioutil.ReadAll(resp.Body)
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 
 	type JwkArray struct {
 		JWKs []json.RawMessage `json:"keys"`
@@ -378,9 +381,9 @@ func (a *AuthMeta) fetchJWKs() error {
 	var jwkArray JwkArray
 	json.Unmarshal(data, &jwkArray)
 
-	a.JWKSet = &jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
+	a.jwkSet = &jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
 	for i, jwk := range jwkArray.JWKs {
-		a.JWKSet.Keys[i].UnmarshalJSON(jwk)
+		a.jwkSet.Keys[i].UnmarshalJSON(jwk)
 	}
 
 	// Try to Parse the Remaining time in the expiry of signing keys first from the
@@ -394,22 +397,28 @@ func (a *AuthMeta) fetchJWKs() error {
 	if resp.Header["Cache-Control"] != nil {
 		maxAge, err = ParseMaxAge(resp.Header["Cache-Control"][0])
 	}
-	a.RefreshTime = time.Duration(maxAge) * time.Second
+	a.Lock()
+	a.refreshTime = time.Duration(maxAge) * time.Second
+	a.Unlock()
 	return nil
 }
 
 // Refresh the JWKs on ticking the Ticker, but only if the
 // RefreshTime is non-zero, else stop.
 func (a *AuthMeta) RefreshJWK() {
+	if a.JWKUrl == "" {
+		return
+	}
+
 	for {
 		select {
 		case <-a.ticker.C:
-			if a.RefreshTime == 0 {
+			if a.refreshTime == 0 {
 				return
 			}
 			// Try to Continuosly Refetch the Keys until it doesn't result in error
 			// Take a minute's gap in refetching after a failure.
-			for {
+			for i := 0; i < 3; i++ {
 				a.Lock()
 				err := a.fetchJWKs()
 				a.Unlock()
