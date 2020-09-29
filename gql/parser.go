@@ -3318,7 +3318,7 @@ func isGeoFunc(name string) bool {
 
 func IsInequalityFn(name string) bool {
 	switch name {
-	case "eq", "le", "ge", "gt", "lt":
+	case "eq", "le", "ge", "gt", "lt", "between":
 		return true
 	}
 	return false

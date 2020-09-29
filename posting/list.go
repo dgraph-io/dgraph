@@ -184,6 +184,7 @@ func (it *pIterator) moveToNextPart() error {
 	}
 	it.plist = plist
 
+	it.uidPosting = &pb.Posting{}
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
 	// codec.SeekCurrent makes sure we skip returning afterUid during seek.
 	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
@@ -359,8 +360,17 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 		// The current value should be deleted in favor of this value. This needs to
 		// be done because the fingerprint for the value is not math.MaxUint64 as is
 		// the case with the rest of the scalar predicates.
-		plist := &pb.PostingList{}
-		plist.Postings = append(plist.Postings, mpost)
+		newPlist := &pb.PostingList{}
+		newPlist.Postings = append(newPlist.Postings, mpost)
+
+		// Add the deletions in the existing plist because those postings are not picked
+		// up by iterating. Not doing so would result in delete operations that are not
+		// applied when the transaction is committed.
+		for _, post := range plist.Postings {
+			if post.Op == Del && post.Uid != mpost.Uid {
+				newPlist.Postings = append(newPlist.Postings, post)
+			}
+		}
 
 		err := l.iterate(mpost.StartTs, 0, func(obj *pb.Posting) error {
 			// Ignore values which have the same uid as they will get replaced
@@ -374,7 +384,7 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 			// for the mutation stored in mpost.
 			objCopy := proto.Clone(obj).(*pb.Posting)
 			objCopy.Op = Del
-			plist.Postings = append(plist.Postings, objCopy)
+			newPlist.Postings = append(newPlist.Postings, objCopy)
 			return nil
 		})
 		if err != nil {
@@ -383,7 +393,7 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 
 		// Update the mutation map with the new plist. Return here since the code below
 		// does not apply for predicates of type uid.
-		l.mutationMap[mpost.StartTs] = plist
+		l.mutationMap[mpost.StartTs] = newPlist
 		return nil
 	}
 
@@ -822,7 +832,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	kv := &bpb.KV{}
 	kv.Version = out.newMinTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(out.plist)
+	val, meta := MarshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 	kvs = append(kvs, kv)
@@ -843,6 +853,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
 	})
 
+	x.VerifyPostingSplits(kvs, out.plist, out.parts, l.key)
 	return kvs, nil
 }
 
@@ -867,7 +878,7 @@ func (l *List) SingleListRollup(kv *bpb.KV) error {
 
 	kv.Version = out.newMinTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(out.plist)
+	val, meta := MarshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 
@@ -885,20 +896,28 @@ func (out *rollupOutput) marshalPostingListPart(
 			hex.EncodeToString(baseKey), startUid)
 	}
 	kv.Key = key
-	val, meta := marshalPostingList(plist)
+	val, meta := MarshalPostingList(plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 
 	return kv, nil
 }
 
-func marshalPostingList(plist *pb.PostingList) ([]byte, byte) {
+func MarshalPostingList(plist *pb.PostingList) ([]byte, byte) {
 	if isPlistEmpty(plist) {
 		return nil, BitEmptyPosting
+	}
+	alloc := plist.Pack.GetAllocator()
+	if plist.Pack != nil {
+		// Set allocator to zero for marshal.
+		plist.Pack.Allocator = 0
 	}
 
 	data, err := plist.Marshal()
 	x.Check(err)
+	if plist.Pack != nil {
+		plist.Pack.Allocator = alloc
+	}
 	return data, BitCompletePosting
 }
 
@@ -1483,6 +1502,7 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 	lowPl.Pack = &pb.UidPack{
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[:midBlock],
+		Allocator: plist.Pack.Allocator,
 	}
 
 	// Generate posting list holding the second half of the current list's postings.
@@ -1490,6 +1510,7 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 	highPl.Pack = &pb.UidPack{
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[midBlock:],
+		Allocator: plist.Pack.Allocator,
 	}
 
 	// Add elements in plist.Postings to the corresponding list.

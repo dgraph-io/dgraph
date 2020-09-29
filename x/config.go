@@ -30,6 +30,9 @@ type Options struct {
 	QueryEdgeLimit uint64
 	// NormalizeNodeLimit is the maximum number of nodes allowed in a normalize query.
 	NormalizeNodeLimit int
+	// MutationsNQuadLimit is maximum number of nquads that can be present in a single
+	// mutation request.
+	MutationsNQuadLimit int
 	// PollInterval is the polling interval for graphql subscription.
 	PollInterval time.Duration
 	// GraphqlExtension will be set to see extensions in graphql results

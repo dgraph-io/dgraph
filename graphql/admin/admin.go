@@ -326,48 +326,50 @@ var (
 	commonAdminQueryMWs = resolve.QueryMiddlewares{
 		resolve.IpWhitelistingMW4Query, // good to apply ip whitelisting before Guardian auth
 		resolve.GuardianAuthMW4Query,
+		resolve.LoggingMWQuery,
 	}
 	// commonAdminMutationMWs are the middlewares which should be applied to mutations served by
 	// admin server unless some exceptional behaviour is required
 	commonAdminMutationMWs = resolve.MutationMiddlewares{
 		resolve.IpWhitelistingMW4Mutation, // good to apply ip whitelisting before Guardian auth
 		resolve.GuardianAuthMW4Mutation,
+		resolve.LoggingMWMutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":        {resolve.IpWhitelistingMW4Query}, // dgraph checks Guardian auth for health
-		"state":         {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
+		"health":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
+		"state":         {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
 		"config":        commonAdminQueryMWs,
 		"listBackups":   commonAdminQueryMWs,
 		"restoreStatus": commonAdminQueryMWs,
 		"getGQLSchema":  commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"queryGroup":            {resolve.IpWhitelistingMW4Query},
-		"queryUser":             {resolve.IpWhitelistingMW4Query},
-		"getGroup":              {resolve.IpWhitelistingMW4Query},
-		"getCurrentUser":        {resolve.IpWhitelistingMW4Query},
-		"getUser":               {resolve.IpWhitelistingMW4Query},
-		"querySchemaHistory":    {resolve.IpWhitelistingMW4Query},
-		"getAllowedCORSOrigins": {resolve.IpWhitelistingMW4Query},
+		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"queryUser":             {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getGroup":              {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getCurrentUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getUser":               {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"querySchemaHistory":    {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getAllowedCORSOrigins": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
 		"backup":          commonAdminMutationMWs,
 		"config":          commonAdminMutationMWs,
 		"draining":        commonAdminMutationMWs,
 		"export":          commonAdminMutationMWs,
-		"login":           {resolve.IpWhitelistingMW4Mutation},
+		"login":           {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 		"restore":         commonAdminMutationMWs,
 		"shutdown":        commonAdminMutationMWs,
 		"updateGQLSchema": commonAdminMutationMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"addUser":                   {resolve.IpWhitelistingMW4Mutation},
-		"addGroup":                  {resolve.IpWhitelistingMW4Mutation},
-		"updateUser":                {resolve.IpWhitelistingMW4Mutation},
-		"updateGroup":               {resolve.IpWhitelistingMW4Mutation},
-		"deleteUser":                {resolve.IpWhitelistingMW4Mutation},
-		"deleteGroup":               {resolve.IpWhitelistingMW4Mutation},
-		"replaceAllowedCORSOrigins": {resolve.IpWhitelistingMW4Mutation},
+		"addUser":                   {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"addGroup":                  {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"updateUser":                {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"updateGroup":               {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"deleteUser":                {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"deleteGroup":               {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"replaceAllowedCORSOrigins": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}

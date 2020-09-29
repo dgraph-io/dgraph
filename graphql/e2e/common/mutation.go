@@ -3652,32 +3652,173 @@ func int64BoundaryTesting(t *testing.T) {
 	//This test checks the range of Int64
 	//(2^63)=9223372036854775808
 	addPost1Params := &GraphQLParams{
-		Query: `mutation {	
-			addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },{title: "Dgraph1", numLikes: -9223372036854775808 }]) {	
-				post1 {	
-					title	
-					numLikes	
-				}	
-			}	
+		Query: `mutation {
+			addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },{title: "Dgraph1", numLikes: -9223372036854775808 }]) {
+				post1 {
+					title
+					numLikes
+				}
+			}
 		}`,
 	}
 
 	gqlResponse := addPost1Params.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	addPost1Expected := `{	
-		"addpost1": {	
-			"post1": [{	
-				"title": "Dgraph",	
-				"numLikes": 9223372036854775807	
-					
-			},{	
-				"title": "Dgraph1",	
-				"numLikes": -9223372036854775808	
-			}]	
-		}	
+	addPost1Expected := `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"numLikes": 9223372036854775807
+
+			},{
+				"title": "Dgraph1",
+				"numLikes": -9223372036854775808
+			}]
+		}
 	}`
 	testutil.CompareJSON(t, addPost1Expected, string(gqlResponse.Data))
 	filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
 	deleteGqlType(t, "post1", filter, 2, nil)
+}
+
+func nestedAddMutationWithHasInverse(t *testing.T) {
+	params := &GraphQLParams{
+		Query: `mutation addPerson1($input: [AddPerson1Input!]!) {
+			addPerson1(input: $input) {
+				person1 {
+					name
+					friends {
+						name
+						friends {
+							name
+						}
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"input": []interface{}{
+				map[string]interface{}{
+					"name": "Or",
+					"friends": []interface{}{
+						map[string]interface{}{
+							"name": "Michal",
+							"friends": []interface{}{
+								map[string]interface{}{
+									"name": "Justin",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	gqlResponse := postExecutor(t, GraphqlURL, params)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+		"addPerson1": {
+		  "person1": [
+			{
+			  "friends": [
+				{
+				  "friends": [
+					{
+					  "name": "Or"
+					},
+					{
+					  "name": "Justin"
+					}
+				  ],
+				  "name": "Michal"
+				}
+			  ],
+			  "name": "Or"
+			}
+		  ]
+		}
+	  }`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+
+	// cleanup
+	deleteGqlType(t, "Person1", map[string]interface{}{}, 3, nil)
+}
+
+func addMutationWithHasInverseOverridesCorrectly(t *testing.T) {
+	params := &GraphQLParams{
+		Query: `mutation addCountry($input: [AddCountryInput!]!) {
+			addCountry(input: $input) {
+			  country {
+				name
+				states{
+				  xcode
+				  name
+				  country{
+					name
+				  }
+				}
+			  }
+			}
+		  }`,
+
+		Variables: map[string]interface{}{
+			"input": []interface{}{
+				map[string]interface{}{
+					"name": "A country",
+					"states": []interface{}{
+						map[string]interface{}{
+							"xcode": "abc",
+							"name":  "Alphabet",
+						},
+						map[string]interface{}{
+							"xcode": "def",
+							"name":  "Vowel",
+							"country": map[string]interface{}{
+								"name": "B country",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	gqlResponse := postExecutor(t, GraphqlURL, params)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+		"addCountry": {
+		  "country": [
+			{
+			  "name": "A country",
+			  "states": [
+				{
+				  "country": {
+					"name": "A country"
+				  },
+				  "name": "Alphabet",
+				  "xcode": "abc"
+				},
+				{
+				  "country": {
+					"name": "A country"
+				  },
+				  "name": "Vowel",
+				  "xcode": "def"
+				}
+			  ]
+			}
+		  ]
+		}
+	  }`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	filter := map[string]interface{}{"name": map[string]interface{}{"eq": "A country"}}
+	deleteCountry(t, filter, 1, nil)
+	filter = map[string]interface{}{"xcode": map[string]interface{}{"eq": "abc"}}
+	deleteState(t, filter, 1, nil)
+	filter = map[string]interface{}{"xcode": map[string]interface{}{"eq": "def"}}
+	deleteState(t, filter, 1, nil)
 }

@@ -125,7 +125,15 @@ func getError(rc io.ReadCloser) error {
 }
 
 func TestNodes(t *testing.T) {
-	dg, err := testutil.GetClientToGroup("1")
+	var dg *dgo.Dgraph
+	var err error
+	for i := 0; i < 3; i++ {
+		dg, err = testutil.GetClientToGroup("1")
+		if err == nil {
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
 	require.NoError(t, err, "error while getting connection to group 1")
 
 	NodesSetup(t, dg)

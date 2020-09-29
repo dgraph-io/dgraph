@@ -38,6 +38,7 @@
     }
   jwtvar:
     USER: "foo"
+    ROLE: "admin"
   dgmutations:
     - deletejson: |
         [
@@ -75,6 +76,8 @@
         }
       }
     }
+  jwtvar:
+    ROLE: "admin"
   dgmutations:
     - deletejson: |
         [

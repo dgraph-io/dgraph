@@ -178,6 +178,31 @@ via `json.Unmarshal`.
 	}
 ```
 
+## Query for RDF response.
+
+You can get query result as a RDF response by calling `txn.QueryRDF`. The response would contain
+a `Rdf` field, which has the RDF encoded result.
+
+```go
+	// Query the balance for Alice and Bob.
+	const q = `
+		{
+			all(func: anyofterms(name, "Alice Bob")) {
+				name
+				balance
+			}
+		}
+	`
+	resp, err := txn.QueryRDF(context.Background(), q)
+	if err != nil {
+		log.Fatal(err)
+	}
+ 
+	// <0x17> <name> "Alice" .
+	// <0x17> <balance> 100 .
+	fmt.Println(resp.Rdf)
+```
+
 ## Run a mutation
 
 `txn.Mutate` would run the mutation. It takes in a `api.Mutation` object,

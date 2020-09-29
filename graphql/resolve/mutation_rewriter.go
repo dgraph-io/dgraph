@@ -996,6 +996,30 @@ func rewriteObject(
 		if xid != nil && xidString != "" {
 			xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
+
+			// Inverse Link is added as a Part of asXIDReference so we delete any provided
+			// Link to the object.
+			// Example: for this mutation
+			// mutation addCountry($inp: AddCountryInput!) {
+			// 	addCountry(input: [$inp]) {
+			// 	  country {
+			// 		id
+			// 	  }
+			// 	}
+			//  }
+			// with the input:
+			//{
+			// "inp": {
+			// 	"name": "A Country",
+			// 	"states": [
+			// 	  { "code": "abc", "name": "Alphabet" },
+			// 	  { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
+			// 	]
+			//   }
+			// }
+			// we delete the link of Second state to "B Country"
+			deleteInverseObject(obj, srcField)
+
 			if deepXID > 2 {
 				// Here we link the already existing node with an xid to the parent whose id is
 				// passed in srcUID. We do this linking only if there is a hasInverse relationship
@@ -1059,11 +1083,33 @@ func rewriteObject(
 		myUID = fmt.Sprintf("_:%s", variable)
 
 		if xid == nil || deepXID > 2 {
+			// If this object had an overwritten value for the inverse field, then we don't want to
+			// use that value as we will add the link to the inverse field in the below
+			// function call with the parent of this object
+			// for example, for this mutation:
+			// mutation addAuthor($auth: AddAuthorInput!) {
+			// addAuthor(input: [$auth]) {
+			// 	author {
+			// 		id
+			// 	}
+			// 	}
+			// }
+			// with the following input
+			//   {
+			// 	"auth": {
+			// 	  "name": "A.N. Author",
+			// 	  "posts": [ { "postID": "0x456" }, {"title": "New Post", "author": {"name": "Abhimanyu"}} ]
+			// 	}
+			//   }
+			// We delete the link of second input post with Author "name" : "Abhimanyu".
+			deleteInverseObject(obj, srcField)
+
 			// Lets link the new node that we are creating with the parent if a @hasInverse
 			// exists between the two.
 			// So for example if we had the addAuthor mutation which is also adding nested
 			// posts, then we add the link _:Post Post.author AuthorUID(srcUID) here.
 			addInverseLink(newObj, srcField, srcUID)
+
 		}
 	} else {
 		myUID = srcUID
@@ -1095,9 +1141,17 @@ func rewriteObject(
 			xidMetadata.queryExists[variable] = true
 		}
 		frag.conditions = []string{fmt.Sprintf("eq(len(%s), 0)", variable)}
-		frag.check = checkQueryResult(variable,
-			x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name()),
-			nil)
+
+		// We need to conceal the error because we might be leaking information to the user if it
+		// tries to add duplicate data to the field with @id.
+		var err error
+		if queryAuthSelector(typ) == nil {
+			err = x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
+		} else {
+			// This error will only be reported in debug mode.
+			err = x.GqlErrorf("GraphQL debug: id already exists for type %s", typ.Name())
+		}
+		frag.check = checkQueryResult(variable, err, nil)
 	}
 
 	if xid != nil && !atTopLevel {
@@ -1628,6 +1682,15 @@ func attachChild(res map[string]interface{}, parent schema.Type, child schema.Fi
 	}
 }
 
+func deleteInverseObject(obj map[string]interface{}, srcField schema.FieldDefinition) {
+	if srcField != nil {
+		invField := srcField.Inverse()
+		if invField != nil && invField.Type().ListType() == nil {
+			delete(obj, invField.Name())
+		}
+	}
+}
+
 func addInverseLink(obj map[string]interface{}, srcField schema.FieldDefinition, srcUID string) {
 	if srcField != nil {
 		invField := srcField.Inverse()
@@ -1727,7 +1790,27 @@ func squashIntoObject(label string) func(interface{}, interface{}, bool) interfa
 			}
 			asObject = cpy
 		}
-		asObject[label] = v
+
+		val := v
+
+		// If there is an existing value for the label in the object, then we should append to it
+		// instead of overwriting it if the existing value is a list. This can happen when there
+		// is @hasInverse and we are doing nested adds.
+		existing := asObject[label]
+		switch ev := existing.(type) {
+		case []interface{}:
+			switch vv := v.(type) {
+			case []interface{}:
+				ev = append(ev, vv...)
+				val = ev
+			case interface{}:
+				ev = append(ev, vv)
+				val = ev
+			default:
+			}
+		default:
+		}
+		asObject[label] = val
 		return asObject
 	}
 }

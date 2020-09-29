@@ -174,8 +174,8 @@ they form a Raft group and provide synchronous replication.
 		"Enterprise feature.")
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
-	flag.Duration("acl_cache_ttl", 30*time.Second, "The interval to refresh the acl cache. "+
-		"Enterprise feature.")
+	flag.Duration("acl_cache_ttl", 30*time.Second, "DEPRECATED: The interval to refresh the acl "+
+		"cache. Enterprise feature.")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
@@ -193,6 +193,8 @@ they form a Raft group and provide synchronous replication.
 	flag.Uint64("normalize_node_limit", 1e4,
 		"Limit for the maximum number of nodes that can be returned in a query that uses the "+
 			"normalize directive.")
+	flag.Uint64("mutations_nquad_limit", 1e6,
+		"Limit for the maximum number of nquads that can be inserted in a mutation request")
 
 	// TLS configurations
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
@@ -682,7 +684,6 @@ func run() {
 		opts.HmacSecret = hmacSecret
 		opts.AccessJwtTtl = Alpha.Conf.GetDuration("acl_access_ttl")
 		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("acl_refresh_ttl")
-		opts.AclRefreshInterval = Alpha.Conf.GetDuration("acl_cache_ttl")
 
 		glog.Info("HMAC secret loaded successfully.")
 	}
@@ -734,6 +735,7 @@ func run() {
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
+	x.Config.MutationsNQuadLimit = cast.ToInt(Alpha.Conf.GetString("mutations_nquad_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
 	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")

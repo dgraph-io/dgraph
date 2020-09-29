@@ -1600,7 +1600,7 @@
     {
       "auth": {
         "name": "A.N. Author",
-        "posts": [ { "postID": "0x456" } ]
+        "posts": [ { "postID": "0x456" }, {"title": "New Post", "author": {"name": "Abhimanyu"}} ]
       }
     }
   dgmutations:
@@ -1612,6 +1612,12 @@
           "Author.posts": [
             {
               "uid": "0x456",
+              "Post.author": { "uid": "_:Author1" }
+            },
+            {
+              "uid": "_:Post4",
+              "dgraph.type": ["Post"],
+              "Post.title": "New Post",
               "Post.author": { "uid": "_:Author1" }
             }
           ]
@@ -1647,13 +1653,19 @@
     {
       "inp": {
         "name": "A Country",
-        "states": [ { "code": "abc", "name": "Alphabet" } ]
+        "states": [
+          { "code": "abc", "name": "Alphabet" },
+          { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
+        ]
       }
     }
 
   dgquery: |-
     query {
       State3 as State3(func: eq(State.code, "abc")) @filter(type(State)) {
+        uid
+      }
+      State6 as State6(func: eq(State.code, "def")) @filter(type(State)) {
         uid
       }
     }
@@ -1668,6 +1680,16 @@
           "uid": "_:State3"
         }
       cond: "@if(eq(len(State3), 0))"
+    - setjson: |
+        {
+          "State.code": "def",
+          "State.name": "Vowel",
+          "dgraph.type": [
+            "State"
+          ],
+          "uid": "_:State6"
+        }
+      cond: "@if(eq(len(State6), 0))"
 
   dgquerysec: |-
     query {
@@ -1676,6 +1698,12 @@
       }
       var(func: uid(State3)) {
         Country4 as State.country
+      }
+      State6 as State6(func: eq(State.code, "def")) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State6)) {
+        Country7 as State.country
       }
     }
   dgmutationssec:
@@ -1688,6 +1716,10 @@
             {
               "uid": "uid(State3)",
               "State.country": { "uid": "_:Country1" }
+            },
+            {
+              "uid": "uid(State6)",
+              "State.country": { "uid": "_:Country1" }
             }
           ]
         }
@@ -1696,9 +1728,13 @@
           {
             "uid": "uid(Country4)",
             "Country.states": [ { "uid": "uid(State3)" } ]
+          },
+          {
+            "uid": "uid(Country7)",
+            "Country.states": [ { "uid": "uid(State6)" } ]
           }
         ]
-      cond: "@if(eq(len(State3), 1))"
+      cond: "@if(eq(len(State3), 1) AND eq(len(State6), 1))"
 
 - name: "Deep XID 4 level deep"
   gqlmutation: |
@@ -2413,3 +2449,61 @@
   explanation: "The add mutation should not be allowed since value of @id field is empty."
   error:
     { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }
+
+-
+  name: "Add mutation for person with @hasInverse"
+  gqlmutation: |
+    mutation($input: [AddPersonInput!]!) {
+      addPerson(input: $input) {
+        person {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Or",
+          "friends": [
+            { "name": "Michal", "friends": [{ "name": "Justin" }] }
+          ]
+        }
+      ]
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Person.friends": [
+            {
+              "Person.friends": [
+                {
+                  "uid": "_:Person1"
+                },
+                {
+                  "Person.friends": [
+                    {
+                      "uid": "_:Person2"
+                    }
+                  ],
+                  "Person.name": "Justin",
+                  "dgraph.type": [
+                    "Person"
+                  ],
+                  "uid": "_:Person3"
+                }
+              ],
+              "Person.name": "Michal",
+              "dgraph.type": [
+                "Person"
+              ],
+              "uid": "_:Person2"
+            }
+          ],
+          "Person.name": "Or",
+          "dgraph.type": [
+            "Person"
+          ],
+          "uid": "_:Person1"
+        }
+

@@ -1,0 +1,18 @@
+apiVersion: jaegertracing.io/v1
+kind: Jaeger
+metadata:
+  name: jaeger
+spec:
+  storage:
+    type: badger
+    options:
+      badger:
+        ephemeral: false
+        directory-key: /badger/key
+        directory-value: /badger/data
+  volumeMounts:
+  - name: data
+    mountPath: /badger
+  volumes:
+  - name: data
+    emptyDir: {}

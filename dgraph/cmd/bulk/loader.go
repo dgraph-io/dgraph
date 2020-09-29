@@ -67,6 +67,7 @@ type options struct {
 	NewUids          bool
 	ClientDir        string
 	Encrypted        bool
+	EncryptedOut     bool
 
 	MapShards    int
 	ReduceShards int
@@ -78,6 +79,8 @@ type options struct {
 	EncryptionKey x.SensitiveByteSlice
 	// BadgerCompressionlevel is the compression level to use while writing to badger.
 	BadgerCompressionLevel int
+	BlockCacheSize         int64
+	IndexCacheSize         int64
 }
 
 type state struct {
@@ -346,7 +349,9 @@ func (ld *loader) cleanup() {
 		x.Check(db.Close())
 	}
 	for _, db := range ld.tmpDbs {
+		opts := db.Opts()
 		x.Check(db.Close())
+		x.Check(os.RemoveAll(opts.Dir))
 	}
 	ld.prog.endSummary()
 }
