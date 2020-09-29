@@ -501,6 +501,9 @@ func (s *Server) Connect(ctx context.Context,
 			m.Id = s.nextRaftId
 			s.nextRaftId += 1
 			proposal.MaxRaftId = m.Id
+		} else if m.Id >= s.nextRaftId {
+			s.nextRaftId = m.Id + 1
+			proposal.MaxRaftId = m.Id
 		}
 
 		// We don't have this member. So, let's see if it has preference for a group.
