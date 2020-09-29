@@ -323,7 +323,6 @@ func RunAll(t *testing.T) {
 	t.Run("query nested typename", queryNestedTypename)
 	t.Run("typename for interface", typenameForInterface)
 	t.Run("query only typename", queryOnlyTypename)
-	t.Run("query alias and attribute on interface", queryAliasAndAttrOnInterface)
 	t.Run("query nested only typename", querynestedOnlyTypename)
 	t.Run("test onlytypename for interface types", onlytypenameForInterface)
 

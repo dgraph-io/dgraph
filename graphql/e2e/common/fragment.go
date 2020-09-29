@@ -161,6 +161,12 @@ func fragmentInQueryOnInterface(t *testing.T) {
 					id
 				}
 			}
+			qc2: queryCharacter {
+				... on Human {
+					name
+					n: name
+				}
+			}
 			queryThing {
 				__typename
 				... on ThingOne {
@@ -267,6 +273,14 @@ func fragmentInQueryOnInterface(t *testing.T) {
 			},
 			{
 				"id": "%s"
+			}
+		],
+		"qc2":[
+			{
+				"name": "Han",
+				"n": "Han"
+			},
+			{
 			}
 		],
 		"queryThing":[
