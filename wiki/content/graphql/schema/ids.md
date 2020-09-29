@@ -53,4 +53,6 @@ As with `ID` types, Dgraph will generate queries and mutations so you'll also be
 
 ### More to come
 
+We are currently considering allowing types other than `String` with `@id`, see [here](https://discuss.dgraph.io/t/id-with-type-int/10402)
+
 We are currently considering expanding uniqueness to include composite ids and multiple unique fields (e.g. [this](https://discuss.dgraph.io/t/support-multiple-unique-fields-in-dgraph-graphql/8512) issue).
