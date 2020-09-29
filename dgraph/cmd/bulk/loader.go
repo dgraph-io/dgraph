@@ -348,10 +348,11 @@ func (ld *loader) cleanup() {
 	for _, db := range ld.dbs {
 		x.Check(db.Close())
 	}
+	// TODO: Bring this back later.
 	for _, db := range ld.tmpDbs {
 		opts := db.Opts()
 		x.Check(db.Close())
-		x.Check(os.RemoveAll(opts.Dir))
+		fmt.Printf("Split keys stored at: %s\n", opts.Dir)
 	}
 	ld.prog.endSummary()
 }
