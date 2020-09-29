@@ -636,7 +636,6 @@ func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
 		return nil, err
 	}
 	sch.GeneratedSchema = schHandler.GQLSchema()
-	glog.Infof("%s",sch.GeneratedSchema)
 	generatedSchema, err := schema.FromString(sch.GeneratedSchema)
 	if err != nil {
 		return nil, err
