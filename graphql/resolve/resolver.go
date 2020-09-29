@@ -1246,9 +1246,9 @@ func completeGeoObject(fields []schema.Field, val map[string]interface{}) []byte
 
 		switch field.ResponseName() {
 		case "latitude":
-			x.Check2(buf.WriteString(longitude))
-		case "longitude":
 			x.Check2(buf.WriteString(latitude))
+		case "longitude":
+			x.Check2(buf.WriteString(longitude))
 		}
 
 		comma = ","
