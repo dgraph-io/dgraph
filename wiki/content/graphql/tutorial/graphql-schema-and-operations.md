@@ -181,14 +181,27 @@ As soon as the schema is added, Slash GraphQL has deployed a GraphQL API for our
 
 ## GraphQL Operations
 
-Schema and operations... follow on from our design
+The schema we developed was about the types in our domain and the shape of the application data graph.  In GraphQL, the things we can do in the graph are called operations.  Those operations are either:
 
-- in GraphQL it'll be operations that that show the valid things you can do on the data graph
+* queries --- find a starting point and traverse a subgraph,
+* mutations --- change the graph and return a result, or
+* subscriptions --- listen to changes in the graph.
+
+In GraphQL, the API can be inspected with special queries called introspection queries.  That's the best way to find out what operations you can perform in a GraphQL API.
 
 ### introspection
 
+
+![Deploy Slash GraphQL Schema](/images/graphql/tutorial/discuss/slash-schema-explorer.png)
+
+![Deploy Slash GraphQL Schema](/images/graphql/tutorial/discuss/slash-mutations.png)
+
 ### mutations
 
+
+![Deploy Slash GraphQL Schema](/images/graphql/tutorial/discuss/slash-add-a-user.png)
+
+![Deploy Slash GraphQL Schema](/images/graphql/tutorial/discuss/slash-deep-mutations.png)
 
 ```graphql
 mutation {

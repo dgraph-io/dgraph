@@ -66,7 +66,7 @@ Often, though, even in just presenting a user's information, we need to present 
 
 ![Graph schema sketch](/images/graphql/tutorial/discuss/user1-post-search-in-graph.png)
 
-You can really start to see that traversal when it comes to rendering an individual post.  We'll need to find the post, probably by it's id when a user navigates to a url like `/post/0x123`, then we'll follow edges to the post's author and category, but we'll also need to follow the edges to all the comments, and from there to the authors of the comments.
+You can really start to see that traversal when it comes to rendering an individual post.  We'll need to find the post, probably by it's id when a user navigates to a url like `/post/0x2`, then we'll follow edges to the post's author and category, but we'll also need to follow the edges to all the comments, and from there to the authors of the comments.
 
 ![Graph schema sketch](/images/graphql/tutorial/discuss/post2-search-in-graph.png)
 
