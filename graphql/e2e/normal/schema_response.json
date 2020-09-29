@@ -5,19 +5,11 @@
             "type": "string"
         },
         {
-            "predicate": "credits",
-            "type": "float"
-        },
-        {
             "predicate": "Movie.name",
             "type": "string"
         },
         {
             "predicate": "Post.category",
-            "type": "uid"
-        },
-        {
-            "predicate": "myPost.category",
             "type": "uid"
         },
         {
@@ -75,10 +67,6 @@
             "type": "float"
         },
         {
-            "predicate": "post",
-            "type": "string"
-        },
-        {
             "index": true,
             "list": true,
             "predicate": "dgraph.type",
@@ -98,15 +86,6 @@
         {
             "index": true,
             "list": true,
-            "predicate": "myPost.tags",
-            "tokenizer": [
-                "exact"
-            ],
-            "type": "string"
-        },
-        {
-            "index": true,
-            "list": true,
             "predicate": "Post.tags",
             "tokenizer": [
                 "exact"
@@ -115,14 +94,6 @@
         },
         {
             "predicate": "MovieDirector.name",
-            "type": "string"
-        },
-        {
-            "index": true,
-            "predicate": "star.ship.name",
-            "tokenizer": [
-                "term"
-            ],
             "type": "string"
         },
         {
@@ -137,14 +108,6 @@
             "list": true,
             "predicate": "Movie.director",
             "type": "uid"
-        },
-        {
-            "index": true,
-            "predicate": "text",
-            "tokenizer": [
-                "fulltext"
-            ],
-            "type": "string"
         },
         {
             "predicate": "Category.name",
@@ -164,11 +127,6 @@
             "type": "string"
         },
         {
-            "list": true,
-            "predicate": "hasStates",
-            "type": "uid"
-        },
-        {
             "predicate": "Person1.name",
             "type": "string"
         },
@@ -179,15 +137,6 @@
         {
             "index": true,
             "predicate": "Post.title",
-            "tokenizer": [
-                "fulltext",
-                "term"
-            ],
-            "type": "string"
-        },
-        {
-            "index": true,
-            "predicate": "myPost.title",
             "tokenizer": [
                 "fulltext",
                 "term"
@@ -213,12 +162,6 @@
             "upsert": true
         },
         {
-            "list": true,
-            "predicate": "directed.movies",
-            "reverse": true,
-            "type": "uid"
-        },
-        {
             "index": true,
             "predicate": "Character.name",
             "tokenizer": [
@@ -236,14 +179,6 @@
         },
         {
             "index": true,
-            "predicate": "test.dgraph.author.dob",
-            "tokenizer": [
-                "year"
-            ],
-            "type": "datetime"
-        },
-        {
-            "index": true,
             "predicate": "post1.title",
             "tokenizer": [
                 "hash",
@@ -253,17 +188,8 @@
             "upsert": true
         },
         {
-            "list": true,
-            "predicate": "test.dgraph.author.posts",
-            "type": "uid"
-        },
-        {
             "predicate": "Person.name",
             "type": "string"
-        },
-        {
-            "predicate": "post.author",
-            "type": "uid"
         },
         {
             "predicate": "Post.author",
@@ -279,14 +205,6 @@
         },
         {
             "index": true,
-            "predicate": "test.dgraph.topic",
-            "tokenizer": [
-                "exact"
-            ],
-            "type": "string"
-        },
-        {
-            "index": true,
             "predicate": "State.xcode",
             "tokenizer": [
                 "hash",
@@ -294,23 +212,6 @@
             ],
             "type": "string",
             "upsert": true
-        },
-        {
-            "index": true,
-            "predicate": "performance.character.name",
-            "tokenizer": [
-                "exact"
-            ],
-            "type": "string"
-        },
-        {
-            "index": true,
-            "predicate": "test.dgraph.author.name",
-            "tokenizer": [
-                "hash",
-                "trigram"
-            ],
-            "type": "string"
         },
         {
             "index": true,
@@ -348,21 +249,8 @@
             "type": "string"
         },
         {
-            "index": true,
-            "predicate": "myPost.postType",
-            "tokenizer": [
-                "hash",
-                "trigram"
-            ],
-            "type": "string"
-        },
-        {
             "predicate": "post1.numLikes",
             "type": "int"
-        },
-        {
-            "predicate": "test.dgraph.employee.en.ename",
-            "type": "string"
         },
         {
             "list": true,
@@ -373,18 +261,6 @@
             "list": true,
             "predicate": "Category.posts",
             "type": "uid"
-        },
-        {
-            "predicate": "职业",
-            "type": "string"
-        },
-        {
-            "index": true,
-            "predicate": "myPost.numLikes",
-            "tokenizer": [
-                "int"
-            ],
-            "type": "int"
         },
         {
             "index": true,
@@ -404,24 +280,12 @@
         },
         {
             "index": true,
-            "predicate": "myPost.numViews",
-            "tokenizer": [
-                "int"
-            ],
-            "type": "int"
-        },
-        {
-            "index": true,
             "predicate": "dgraph.graphql.xid",
             "tokenizer": [
                 "exact"
             ],
             "type": "string",
             "upsert": true
-        },
-        {
-            "predicate": "test.dgraph.author.country",
-            "type": "uid"
         },
         {
             "index": true,
@@ -446,31 +310,6 @@
             "type": "string"
         },
         {
-            "index": true,
-            "predicate": "is_published",
-            "tokenizer": [
-                "bool"
-            ],
-            "type": "bool"
-        },
-        {
-            "predicate": "pwd",
-            "type": "password"
-        },
-        {
-            "predicate": "inCountry",
-            "type": "uid"
-        },
-        {
-            "index": true,
-            "list": true,
-            "predicate": "appears_in",
-            "tokenizer": [
-                "hash"
-            ],
-            "type": "string"
-        },
-        {
             "predicate": "State.country",
             "type": "uid"
         },
@@ -479,20 +318,8 @@
             "type": "string"
         },
         {
-            "predicate": "star.ship.length",
-            "type": "float"
-        },
-        {
             "predicate": "Teacher.subject",
             "type": "string"
-        },
-        {
-            "index": true,
-            "predicate": "test.dgraph.author.reputation",
-            "tokenizer": [
-                "float"
-            ],
-            "type": "float"
         },
         {
             "predicate": "State.capital",
@@ -517,10 +344,6 @@
         {
             "predicate": "Author.country",
             "type": "uid"
-        },
-        {
-            "predicate": "roboDroid.primaryFunction",
-            "type": "string"
         },
         {
             "list": true,
@@ -670,87 +493,10 @@
         {
             "fields": [
                 {
-                    "name": "test.dgraph.author.dob"
-                },
-                {
-                    "name": "test.dgraph.author.posts"
-                },
-                {
-                    "name": "test.dgraph.author.name"
-                },
-                {
-                    "name": "test.dgraph.author.country"
-                },
-                {
-                    "name": "test.dgraph.author.reputation"
-                }
-            ],
-            "name": "test.dgraph.author"
-        },
-        {
-            "fields": [
-                {
                     "name": "Person.name"
                 }
             ],
             "name": "Person"
-        },
-        {
-            "fields": [
-                {
-                    "name": "test.dgraph.employee.en.ename"
-                }
-            ],
-            "name": "test.dgraph.employee.en"
-        },
-        {
-            "fields": [
-                {
-                    "name": "text"
-                },
-                {
-                    "name": "myPost.category"
-                },
-                {
-                    "name": "myPost.tags"
-                },
-                {
-                    "name": "post.author"
-                },
-                {
-                    "name": "myPost.title"
-                },
-                {
-                    "name": "test.dgraph.topic"
-                },
-                {
-                    "name": "myPost.postType"
-                },
-                {
-                    "name": "is_published"
-                },
-                {
-                    "name": "myPost.numLikes"
-                },
-                {
-                    "name": "myPost.numViews"
-                }
-            ],
-            "name": "myPost"
-        },
-        {
-            "fields": [
-                {
-                    "name": "performance.character.name"
-                },
-                {
-                    "name": "appears_in"
-                },
-                {
-                    "name": "roboDroid.primaryFunction"
-                }
-            ],
-            "name": "roboDroid"
         },
         {
             "fields": [
@@ -850,17 +596,6 @@
         {
             "fields": [
                 {
-                    "name": "star.ship.name"
-                },
-                {
-                    "name": "star.ship.length"
-                }
-            ],
-            "name": "star.ship"
-        },
-        {
-            "fields": [
-                {
                     "name": "dgraph.graphql.schema_history"
                 },
                 {
@@ -882,17 +617,6 @@
                 }
             ],
             "name": "ThingTwo"
-        },
-        {
-            "fields": [
-                {
-                    "name": "post"
-                },
-                {
-                    "name": "职业"
-                }
-            ],
-            "name": "Message"
         },
         {
             "fields": [
@@ -934,17 +658,6 @@
                 }
             ],
             "name": "Thing"
-        },
-        {
-            "fields": [
-                {
-                    "name": "performance.character.name"
-                },
-                {
-                    "name": "appears_in"
-                }
-            ],
-            "name": "performance.character"
         },
         {
             "fields": [
