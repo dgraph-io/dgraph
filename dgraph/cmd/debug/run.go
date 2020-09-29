@@ -90,7 +90,8 @@ func init() {
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
-	flag.BoolVar(&opt.oldWalFormat, "old-wal", false, "Denotes that the directory pointed by --wal is a wal directory in old format.")
+	flag.BoolVar(&opt.oldWalFormat, "old-wal", false,
+		"Denotes that the directory pointed by --wal is a wal directory in old format.")
 	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0,
 		"Remove data from Raft entries until but not including this index.")
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
@@ -784,14 +785,18 @@ func run() {
 	if isWal && !opt.oldWalFormat {
 		store := raftwal.Init(dir)
 		fmt.Printf("RaftID: %+v\n", store.Uint(raftwal.RaftId))
-		start, last := printBasic(store)
-		// TODO: Do we this this?
+
+		// TODO: Fix the pending logic.
 		pending := make(map[uint64]bool)
-		// TODO: maybe cap this?
-		entries, err := store.Entries(start, last+1, math.MaxUint64)
-		x.Check(err)
-		for _, e := range entries {
-			printEntry(e, pending)
+
+		start, last := printBasic(store)
+		for start < last-1 {
+			entries, err := store.Entries(start, last+1, 64<<20)
+			x.Check(err)
+			for _, e := range entries {
+				printEntry(e, pending)
+				start = x.Max(start, e.Index)
+			}
 		}
 		fmt.Println("Done")
 		return

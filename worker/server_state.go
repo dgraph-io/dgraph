@@ -63,7 +63,7 @@ func InitServerState() {
 	x.WorkerConfig.ProposedGroupId = groupId
 }
 
-func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
+func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).
 		WithTruncate(true).
 		WithLogger(&x.ToGlog{}).
@@ -80,30 +80,16 @@ func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
 
 	var badgerTables string
 	var badgerVlog string
-	if wal {
-		// Settings for the write-ahead log.
-		badgerTables = Config.BadgerWalTables
-		badgerVlog = Config.BadgerWalVlog
-		glog.Infof("Setting WAL Dir Compression Level: %d", Config.WALDirCompressionLevel)
-		// Default value of WALDirCompressionLevel is 0 so compression will always
-		// be disabled, unless it is explicitly enabled by setting the value to greater than 0.
-		if Config.WALDirCompressionLevel != 0 {
-			// By default, compression is disabled in badger.
-			opt.Compression = options.ZSTD
-			opt.ZSTDCompressionLevel = Config.WALDirCompressionLevel
-		}
-	} else {
-		// Settings for the data directory.
-		badgerTables = Config.BadgerTables
-		badgerVlog = Config.BadgerVlog
-		glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
-		// Default value of postingDirCompressionLevel is 3 so compression will always
-		// be enabled, unless it is explicitly disabled by setting the value to 0.
-		if Config.PostingDirCompressionLevel != 0 {
-			// By default, compression is disabled in badger.
-			opt.Compression = options.ZSTD
-			opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
-		}
+	// Settings for the data directory.
+	badgerTables = Config.BadgerTables
+	badgerVlog = Config.BadgerVlog
+	glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
+	// Default value of postingDirCompressionLevel is 3 so compression will always
+	// be enabled, unless it is explicitly disabled by setting the value to 0.
+	if Config.PostingDirCompressionLevel != 0 {
+		// By default, compression is disabled in badger.
+		opt.Compression = options.ZSTD
+		opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
 	}
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
@@ -159,7 +145,7 @@ func (s *ServerState) initStorage() {
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithBlockCacheSize(Config.PBlockCacheSize).
 			WithIndexCacheSize(Config.PIndexCacheSize)
-		opt = setBadgerOptions(opt, false)
+		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
@@ -177,13 +163,11 @@ func (s *ServerState) initStorage() {
 
 	s.gcCloser = z.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
-
-	go x.MonitorCacheHealth(10*time.Second, "pstore", s.Pstore, s.cacheHealthCloser)
+	go x.MonitorCacheHealth(10*time.Second, "pstore", s.Pstore, s.gcCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.
 func (s *ServerState) Dispose() {
-	s.cacheHealthCloser.SignalAndWait()
 	s.gcCloser.SignalAndWait()
 	if err := s.Pstore.Close(); err != nil {
 		glog.Errorf("Error while closing postings store: %v", err)

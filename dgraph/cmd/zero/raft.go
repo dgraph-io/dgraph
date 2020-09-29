@@ -746,7 +746,7 @@ func (n *node) Run() {
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
 			span.Annotatef(nil, "Saved to storage")
-			if !x.WorkerConfig.LudicrousMode && rd.MustSync {
+			if x.WorkerConfig.HardSync && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %v", err)
 				}

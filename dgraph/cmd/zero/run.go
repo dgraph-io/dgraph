@@ -53,9 +53,9 @@ type options struct {
 	w                 string
 	rebalanceInterval time.Duration
 	LudicrousMode     bool
+	hardSync          bool
 
-	totalCache      int64
-	cachePercentage string
+	totalCache int64
 }
 
 var opts options
@@ -80,8 +80,8 @@ instances to achieve high-availability.
 	Zero.EnvPrefix = "DGRAPH_ZERO"
 
 	flag := Zero.Cmd.Flags()
-	flag.String("my", "",
-		"addr:port of this server, so other Dgraph alphas can talk to this.")
+	x.FillCommonFlags(flag)
+
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
 	flag.Uint64("idx", 1, "Unique node index for this server. idx cannot be 0.")
@@ -90,34 +90,7 @@ instances to achieve high-availability.
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
-	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
-	flag.Bool("enable_sentry", true, "Turn on/off sending events to Sentry. (default on)")
-
-	// OpenCensus flags.
-	flag.Float64("trace", 0.01, "The ratio of queries to trace.")
-	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
-	// See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
-	// about the status of supporting annotation logs through the datadog exporter
-	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
-		" exporter does not support annotation logs and would discard them.")
-	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-
-	// Cache flags
-	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
-	flag.String("cache_percentage", "100,0",
-		"Cache percentages summing up to 100 for various caches (FORMAT: blockCache,indexCache).")
-
-	// Badger flags
-	flag.String("badger.tables", "mmap",
-		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for write-ahead log directory "+
-			"write-ahead directory. Option sequence consume most to least RAM while providing "+
-			"best to worst read performance respectively")
-	flag.String("badger.vlog", "mmap",
-		"[mmap, disk] Specifies how Badger Value log is stored for the write-ahead log directory "+
-			"log directory. mmap consumes more RAM, but provides better performance.")
-	flag.Int("badger.compression_level", 0,
-		"The compression level for Badger. A higher value uses more resources. Off by default.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -190,6 +163,7 @@ func run() {
 	}
 
 	x.PrintVersion()
+
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		myAddr:            Zero.Conf.GetString("my"),
@@ -199,9 +173,7 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
-		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
-		cachePercentage:   Zero.Conf.GetString("cache_percentage"),
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 
@@ -209,8 +181,15 @@ func run() {
 		log.Fatalf("ERROR: idx flag cannot be 0. Please try again with idx as a positive integer")
 	}
 
+	survive := Zero.Conf.GetString("survive")
+	x.AssertTruef(survive == "process" || survive == "filesystem", "Invalid survival mode: %s", survive)
+
 	x.WorkerConfig = x.WorkerOptions{
 		LudicrousMode: Zero.Conf.GetBool("ludicrous_mode"),
+		HardSync:      survive == "filesystem",
+	}
+	if x.WorkerConfig.LudicrousMode {
+		x.WorkerConfig.HardSync = false
 	}
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
