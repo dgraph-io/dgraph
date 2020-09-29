@@ -11,4 +11,4 @@ services:
       - type: bind
         source: ../../
         target: /dgraph
-    command: /dgraph/contrib/build/build.sh
+    command: /dgraph/contrib/docker-build/build.sh
