@@ -101,7 +101,7 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	case "disk":
 		opt.TableLoadingMode = options.FileIO
 	default:
-		x.Fatalf("Invalid Badger Tables options")
+		glog.Fatalf("Invalid Badger Tables options")
 	}
 
 	glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
