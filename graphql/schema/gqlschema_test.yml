@@ -126,6 +126,15 @@ invalid_schemas:
       {"message":"String is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":1, "column":6}]},
     ]
 
+  - name: "Point is reserved word"
+    input: |
+      type Point {
+        id: ID!
+      }
+    errlist: [
+      { "message": "Point is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations": [ { "line": 1, "column": 6 } ] },
+    ]
+
   -
     name: "More than 1 errors"
     input: |

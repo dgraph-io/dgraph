@@ -440,7 +440,11 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				case ast.Object, ast.Interface:
 					if isGeoType(f.Type) {
 						typStr = "geo"
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", []string{"geo"})
+						var indexes []string
+						if f.Directives.ForName(searchDirective) != nil {
+							indexes = append(indexes, "geo")
+						}
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
 					} else {
 						typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 					}

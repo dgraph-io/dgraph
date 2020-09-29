@@ -1229,10 +1229,7 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 
 // completeGeoObject builds a json GraphQL result object for the geo type.
 // It returns a bracketed json object like { "longitude" : 12.32 , "latitude" : 123.32 }.
-func completeGeoObject(
-	path []interface{},
-	fields []schema.Field,
-	val map[string]interface{}) ([]byte, x.GqlErrorList) {
+func completeGeoObject(fields []schema.Field, val map[string]interface{}) []byte {
 	var buf bytes.Buffer
 	x.Check2(buf.WriteRune('{'))
 
@@ -1247,22 +1244,18 @@ func completeGeoObject(
 		x.Check2(buf.WriteString(field.ResponseName()))
 		x.Check2(buf.WriteString(`": `))
 
-		if field.ResponseName() == "longitude" {
+		switch field.ResponseName() {
+		case "latitude":
 			x.Check2(buf.WriteString(longitude))
-		} else if field.ResponseName() == "latitude" {
+		case "longitude":
 			x.Check2(buf.WriteString(latitude))
-		} else {
-			return nil, x.GqlErrorList{&x.GqlError{
-				Message:   "Invalid field for Geo type",
-				Locations: []x.Location{field.Location()},
-				Path:      copyPath(path),
-			}}
 		}
+
 		comma = ","
 	}
 
 	x.Check2(buf.WriteRune('}'))
-	return buf.Bytes(), nil
+	return buf.Bytes()
 }
 
 // completeObject builds a json GraphQL result object for the current query level.
@@ -1407,7 +1400,7 @@ func completeValue(
 			}}
 		}
 		if field.Type().IsGeo() {
-			return completeGeoObject(path, field.SelectionSet(), val)
+			return completeGeoObject(field.SelectionSet(), val), nil
 		}
 
 		return completeObject(path, field.SelectionSet(), val)

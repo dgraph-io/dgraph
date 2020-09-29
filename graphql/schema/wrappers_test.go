@@ -132,10 +132,6 @@ type Starship {
 		"Employee": map[string]string{
 			"ename": "Employee.ename",
 		},
-		"Point": map[string]string{
-			"latitude":  "Point.latitude",
-			"longitude": "Point.longitude",
-		},
 		"Character":              character,
 		"UpdateCharacterPayload": character,
 		"DeleteCharacterPayload": character,
@@ -257,10 +253,6 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 		"DeletePostPayload":   post,
 		"Employee": map[string]string{
 			"ename": "dgraph.employee.en.ename",
-		},
-		"Point": map[string]string{
-			"latitude":  "Point.latitude",
-			"longitude": "Point.longitude",
 		},
 		"Character":              character,
 		"UpdateCharacterPayload": character,

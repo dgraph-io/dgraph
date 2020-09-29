@@ -18,8 +18,7 @@
         "location": { "latitude": 11.11 , "longitude" : 22.22}
       }
     }
-  explanation: "A uid and type should get injected and all data transformed to
-    underlying Dgraph edge names"
+  explanation: "Add mutation should convert the Point type mutation to corresponding Dgraph JSON mutation"
   dgmutations:
     - setjson: |
         { "uid":"_:Hotel1",

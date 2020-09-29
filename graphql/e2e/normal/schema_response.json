@@ -1,282 +1,38 @@
 {
     "schema": [
         {
-            "index": true,
-            "list": true,
-            "predicate": "dgraph.cors",
-            "tokenizer": [
-              "exact"
-            ],
-            "type": "string",
-            "upsert": true
-        },
-        {
-            "predicate": "Author.country",
-            "type": "uid"
-        },
-        {
-            "predicate": "Author.dob",
-            "type": "datetime",
-            "index": true,
-            "tokenizer": [
-                "year"
-            ]
-        },
-        {
-            "predicate": "Author.name",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash",
-                "trigram"
-            ]
-        },
-        {
-            "predicate": "Author.posts",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Author.reputation",
-            "type": "float",
-            "index": true,
-            "tokenizer": [
-                "float"
-            ]
-        },
-        {
-            "predicate": "Category.name",
+            "predicate": "dgraph.graphql.schema_history",
             "type": "string"
         },
         {
-            "predicate": "Category.posts",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Character.appearsIn",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "list": true
-        },
-        {
-            "predicate": "Character.name",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ]
-        },
-        {
-            "predicate": "Comment1.id",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "Comment1.replies",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Country.name",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash",
-                "trigram"
-            ]
-        },
-        {
-            "predicate": "Country.states",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Droid.primaryFunction",
-            "type": "string"
-        },
-        {
-            "predicate": "Employee.ename",
-            "type": "string"
-        },
-        {
-            "predicate": "Human.starships",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Human.totalCredits",
+            "predicate": "credits",
             "type": "float"
-        },
-        {
-            "predicate": "Movie.director",
-            "type": "uid",
-            "list": true
         },
         {
             "predicate": "Movie.name",
             "type": "string"
         },
         {
-            "predicate": "MovieDirector.directed",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "MovieDirector.name",
-            "type": "string"
-        },
-        {
-            "predicate": "People.name",
-            "type": "string"
-        },
-        {
-            "predicate": "People.xid",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "Person.name",
-            "type": "string"
-        },
-        {
-            "predicate": "Person1.name",
-            "type": "string"
-        },
-        {
-            "predicate": "Person1.friends",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Post.author",
-            "type": "uid"
-        },
-        {
             "predicate": "Post.category",
             "type": "uid"
         },
         {
-            "predicate": "Post.isPublished",
-            "type": "bool",
-            "index": true,
-            "tokenizer": [
-                "bool"
-            ]
+            "predicate": "myPost.category",
+            "type": "uid"
         },
         {
-            "predicate": "Post.numLikes",
-            "type": "int",
             "index": true,
-            "tokenizer": [
-                "int"
-            ]
-        },
-        {
-            "predicate": "Post.numViews",
-            "type": "int",
-            "index": true,
-            "tokenizer": [
-                "int"
-            ]
-        },
-        {
-            "predicate": "Post.postType",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash",
-                "trigram"
-            ]
-        },
-        {
-            "predicate": "Post.tags",
-            "type": "string",
-            "index": true,
+            "list": true,
+            "predicate": "dgraph.cors",
             "tokenizer": [
                 "exact"
             ],
-            "list": true
-        },
-        {
-            "predicate": "Post.text",
             "type": "string",
-            "index": true,
-            "tokenizer": [
-                "fulltext"
-            ]
-        },
-        {
-            "predicate": "Post.title",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "fulltext",
-                "term"
-            ]
-        },
-        {
-            "predicate": "Post.topic",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ]
-        },
-        {
-            "predicate": "Post1.comments",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Post1.id",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
             "upsert": true
         },
         {
-            "predicate": "post1.title",
-            "type": "string",
-            "index": true,
-            "tokenizer": ["trigram", "hash"],
-            "upsert": true
-        },
-        {
-            "predicate": "post1.numLikes",
-            "type": "int"
-        },
-        {
-            "predicate": "Starship.length",
-            "type": "float"
-        },
-        {
-            "predicate": "Starship.name",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "term"
-            ]
-        },
-        {
-            "predicate": "State.capital",
-            "type": "string"
-        },
-        {
-            "predicate": "State.country",
+            "list": true,
+            "predicate": "Author.posts",
             "type": "uid"
         },
         {
@@ -284,39 +40,474 @@
             "type": "string"
         },
         {
-            "predicate": "State.xcode",
-            "type": "string",
+            "list": true,
+            "predicate": "Comment1.replies",
+            "type": "uid"
+        },
+        {
             "index": true,
+            "predicate": "People.xid",
+            "tokenizer": [
+                "hash"
+            ],
+            "type": "string",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "Author.name",
             "tokenizer": [
                 "hash",
                 "trigram"
             ],
-            "upsert": true
-        },
-        {
-            "predicate": "Student.taughtBy",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Teacher.subject",
             "type": "string"
         },
         {
-            "predicate": "Teacher.teaches",
-            "type": "uid",
-            "list": true
+            "index": true,
+            "predicate": "Author.reputation",
+            "tokenizer": [
+                "float"
+            ],
+            "type": "float"
+        },
+        {
+            "predicate": "Human.totalCredits",
+            "type": "float"
+        },
+        {
+            "predicate": "post",
+            "type": "string"
+        },
+        {
+            "index": true,
+            "list": true,
+            "predicate": "dgraph.type",
+            "tokenizer": [
+                "exact"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "Author.dob",
+            "tokenizer": [
+                "year"
+            ],
+            "type": "datetime"
+        },
+        {
+            "index": true,
+            "list": true,
+            "predicate": "myPost.tags",
+            "tokenizer": [
+                "exact"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "list": true,
+            "predicate": "Post.tags",
+            "tokenizer": [
+                "exact"
+            ],
+            "type": "string"
+        },
+        {
+            "predicate": "MovieDirector.name",
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "star.ship.name",
+            "tokenizer": [
+                "term"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "Starship.name",
+            "tokenizer": [
+                "term"
+            ],
+            "type": "string"
+        },
+        {
+            "list": true,
+            "predicate": "Movie.director",
+            "type": "uid"
+        },
+        {
+            "index": true,
+            "predicate": "text",
+            "tokenizer": [
+                "fulltext"
+            ],
+            "type": "string"
+        },
+        {
+            "predicate": "Category.name",
+            "type": "string"
+        },
+        {
+            "list": true,
+            "predicate": "Post1.comments",
+            "type": "uid"
+        },
+        {
+            "index": true,
+            "predicate": "Post.text",
+            "tokenizer": [
+                "fulltext"
+            ],
+            "type": "string"
+        },
+        {
+            "list": true,
+            "predicate": "hasStates",
+            "type": "uid"
+        },
+        {
+            "predicate": "Person1.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Droid.primaryFunction",
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "Post.title",
+            "tokenizer": [
+                "fulltext",
+                "term"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "myPost.title",
+            "tokenizer": [
+                "fulltext",
+                "term"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "Comment1.id",
+            "tokenizer": [
+                "hash"
+            ],
+            "type": "string",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "User.name",
+            "tokenizer": [
+                "hash"
+            ],
+            "type": "string",
+            "upsert": true
+        },
+        {
+            "list": true,
+            "predicate": "directed.movies",
+            "reverse": true,
+            "type": "uid"
+        },
+        {
+            "index": true,
+            "predicate": "Character.name",
+            "tokenizer": [
+                "exact"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "Hotel.name",
+            "tokenizer": [
+                "exact"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "test.dgraph.author.dob",
+            "tokenizer": [
+                "year"
+            ],
+            "type": "datetime"
+        },
+        {
+            "index": true,
+            "predicate": "post1.title",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string",
+            "upsert": true
+        },
+        {
+            "list": true,
+            "predicate": "test.dgraph.author.posts",
+            "type": "uid"
+        },
+        {
+            "predicate": "Person.name",
+            "type": "string"
+        },
+        {
+            "predicate": "post.author",
+            "type": "uid"
+        },
+        {
+            "predicate": "Post.author",
+            "type": "uid"
+        },
+        {
+            "index": true,
+            "predicate": "Post.topic",
+            "tokenizer": [
+                "exact"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "test.dgraph.topic",
+            "tokenizer": [
+                "exact"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "State.xcode",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "performance.character.name",
+            "tokenizer": [
+                "exact"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "test.dgraph.author.name",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "Country.name",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
+        },
+        {
+            "list": true,
+            "predicate": "Human.starships",
+            "type": "uid"
+        },
+        {
+            "predicate": "User.password",
+            "type": "password"
+        },
+        {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+        },
+        {
+            "predicate": "dgraph.graphql.schema",
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "Post.postType",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "myPost.postType",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
+        },
+        {
+            "predicate": "post1.numLikes",
+            "type": "int"
+        },
+        {
+            "predicate": "test.dgraph.employee.en.ename",
+            "type": "string"
+        },
+        {
+            "list": true,
+            "predicate": "MovieDirector.directed",
+            "type": "uid"
+        },
+        {
+            "list": true,
+            "predicate": "Category.posts",
+            "type": "uid"
+        },
+        {
+            "predicate": "职业",
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "myPost.numLikes",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int"
+        },
+        {
+            "index": true,
+            "predicate": "Post.numLikes",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int"
+        },
+        {
+            "index": true,
+            "predicate": "Post.numViews",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int"
+        },
+        {
+            "index": true,
+            "predicate": "myPost.numViews",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int"
+        },
+        {
+            "index": true,
+            "predicate": "dgraph.graphql.xid",
+            "tokenizer": [
+                "exact"
+            ],
+            "type": "string",
+            "upsert": true
+        },
+        {
+            "predicate": "test.dgraph.author.country",
+            "type": "uid"
+        },
+        {
+            "index": true,
+            "list": true,
+            "predicate": "Character.appearsIn",
+            "tokenizer": [
+                "hash"
+            ],
+            "type": "string"
+        },
+        {
+            "predicate": "Employee.ename",
+            "type": "string"
+        },
+        {
+            "list": true,
+            "predicate": "Person1.friends",
+            "type": "uid"
+        },
+        {
+            "predicate": "ThingOne.usedBy",
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "is_published",
+            "tokenizer": [
+                "bool"
+            ],
+            "type": "bool"
+        },
+        {
+            "predicate": "pwd",
+            "type": "password"
+        },
+        {
+            "predicate": "inCountry",
+            "type": "uid"
+        },
+        {
+            "index": true,
+            "list": true,
+            "predicate": "appears_in",
+            "tokenizer": [
+                "hash"
+            ],
+            "type": "string"
+        },
+        {
+            "predicate": "State.country",
+            "type": "uid"
         },
         {
             "predicate": "Thing.name",
             "type": "string"
         },
         {
-            "predicate": "ThingOne.color",
+            "predicate": "star.ship.length",
+            "type": "float"
+        },
+        {
+            "predicate": "Teacher.subject",
             "type": "string"
         },
         {
-            "predicate": "ThingOne.usedBy",
+            "index": true,
+            "predicate": "test.dgraph.author.reputation",
+            "tokenizer": [
+                "float"
+            ],
+            "type": "float"
+        },
+        {
+            "predicate": "State.capital",
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "Hotel.location",
+            "tokenizer": [
+                "geo"
+            ],
+            "type": "geo"
+        },
+        {
+            "predicate": "ThingTwo.owner",
             "type": "string"
         },
         {
@@ -324,70 +515,298 @@
             "type": "string"
         },
         {
-            "predicate": "ThingTwo.owner",
+            "predicate": "Author.country",
+            "type": "uid"
+        },
+        {
+            "predicate": "roboDroid.primaryFunction",
             "type": "string"
         },
         {
-            "predicate": "User.name",
-            "type": "string",
+            "list": true,
+            "predicate": "Teacher.teaches",
+            "type": "uid"
+        },
+        {
+            "predicate": "People.name",
+            "type": "string"
+        },
+        {
+            "predicate": "ThingOne.color",
+            "type": "string"
+        },
+        {
+            "list": true,
+            "predicate": "Student.taughtBy",
+            "type": "uid"
+        },
+        {
+            "predicate": "Starship.length",
+            "type": "float"
+        },
+        {
             "index": true,
+            "predicate": "Post1.id",
             "tokenizer": [
                 "hash"
             ],
+            "type": "string",
             "upsert": true
         },
         {
-            "predicate": "User.password",
-            "type": "password"
-        },
-        {
-            "predicate": "dgraph.graphql.schema",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.schema_created_at",
-            "type": "datetime"
-		},
-        {
-            "predicate": "dgraph.graphql.schema_history",
-            "type": "string"
-		},
-        {
-            "predicate": "dgraph.graphql.xid",
-            "type": "string",
             "index": true,
+            "predicate": "Post.isPublished",
             "tokenizer": [
-                "exact"
+                "bool"
             ],
-            "upsert": true
+            "type": "bool"
         },
         {
-            "predicate": "dgraph.type",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true
+            "list": true,
+            "predicate": "Country.states",
+            "type": "uid"
         }
     ],
     "types": [
         {
             "fields": [
                 {
-                    "name": "Author.name"
+                    "name": "People.xid"
                 },
                 {
-                    "name": "Author.dob"
+                    "name": "People.name"
+                },
+                {
+                    "name": "Student.taughtBy"
+                }
+            ],
+            "name": "Student"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema"
+                },
+                {
+                    "name": "dgraph.graphql.xid"
+                }
+            ],
+            "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Movie.director"
+                },
+                {
+                    "name": "Movie.name"
+                }
+            ],
+            "name": "Movie"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Employee.ename"
+                }
+            ],
+            "name": "Employee"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Post.category"
+                },
+                {
+                    "name": "Post.tags"
+                },
+                {
+                    "name": "Post.text"
+                },
+                {
+                    "name": "Post.author"
+                },
+                {
+                    "name": "Post.title"
+                },
+                {
+                    "name": "Post.topic"
+                },
+                {
+                    "name": "Post.postType"
+                },
+                {
+                    "name": "Post.numLikes"
+                },
+                {
+                    "name": "Post.numViews"
+                },
+                {
+                    "name": "Post.isPublished"
+                }
+            ],
+            "name": "Post"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Human.totalCredits"
+                },
+                {
+                    "name": "Human.starships"
+                },
+                {
+                    "name": "Character.name"
+                },
+                {
+                    "name": "Employee.ename"
+                },
+                {
+                    "name": "Character.appearsIn"
+                }
+            ],
+            "name": "Human"
+        },
+        {
+            "fields": [
+                {
+                    "name": "test.dgraph.author.dob"
+                },
+                {
+                    "name": "test.dgraph.author.posts"
+                },
+                {
+                    "name": "test.dgraph.author.name"
+                },
+                {
+                    "name": "test.dgraph.author.country"
+                },
+                {
+                    "name": "test.dgraph.author.reputation"
+                }
+            ],
+            "name": "test.dgraph.author"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Person.name"
+                }
+            ],
+            "name": "Person"
+        },
+        {
+            "fields": [
+                {
+                    "name": "test.dgraph.employee.en.ename"
+                }
+            ],
+            "name": "test.dgraph.employee.en"
+        },
+        {
+            "fields": [
+                {
+                    "name": "text"
+                },
+                {
+                    "name": "myPost.category"
+                },
+                {
+                    "name": "myPost.tags"
+                },
+                {
+                    "name": "post.author"
+                },
+                {
+                    "name": "myPost.title"
+                },
+                {
+                    "name": "test.dgraph.topic"
+                },
+                {
+                    "name": "myPost.postType"
+                },
+                {
+                    "name": "is_published"
+                },
+                {
+                    "name": "myPost.numLikes"
+                },
+                {
+                    "name": "myPost.numViews"
+                }
+            ],
+            "name": "myPost"
+        },
+        {
+            "fields": [
+                {
+                    "name": "performance.character.name"
+                },
+                {
+                    "name": "appears_in"
+                },
+                {
+                    "name": "roboDroid.primaryFunction"
+                }
+            ],
+            "name": "roboDroid"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Comment1.replies"
+                },
+                {
+                    "name": "Comment1.id"
+                }
+            ],
+            "name": "Comment1"
+        },
+        {
+            "fields": [
+                {
+                    "name": "State.name"
+                },
+                {
+                    "name": "State.xcode"
+                },
+                {
+                    "name": "State.capital"
+                },
+                {
+                    "name": "State.country"
+                }
+            ],
+            "name": "State"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Post1.comments"
+                },
+                {
+                    "name": "Post1.id"
+                }
+            ],
+            "name": "Post1"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Author.posts"
+                },
+                {
+                    "name": "Author.name"
                 },
                 {
                     "name": "Author.reputation"
                 },
                 {
-                    "name": "Author.country"
+                    "name": "Author.dob"
                 },
                 {
-                    "name": "Author.posts"
+                    "name": "Author.country"
                 }
             ],
             "name": "Author"
@@ -395,13 +814,13 @@
         {
             "fields": [
                 {
-                    "name": "Category.name"
+                    "name": "Starship.name"
                 },
                 {
-                    "name": "Category.posts"
+                    "name": "Starship.length"
                 }
             ],
-            "name": "Category"
+            "name": "Starship"
         },
         {
             "fields": [
@@ -409,21 +828,82 @@
                     "name": "Character.name"
                 },
                 {
+                    "name": "Droid.primaryFunction"
+                },
+                {
                     "name": "Character.appearsIn"
                 }
             ],
-            "name": "Character"
+            "name": "Droid"
         },
         {
             "fields": [
                 {
-                    "name": "Comment1.id"
+                    "name": "post1.title"
                 },
                 {
-                    "name": "Comment1.replies"
+                    "name": "post1.numLikes"
                 }
             ],
-            "name": "Comment1"
+            "name": "post1"
+        },
+        {
+            "fields": [
+                {
+                    "name": "star.ship.name"
+                },
+                {
+                    "name": "star.ship.length"
+                }
+            ],
+            "name": "star.ship"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },
+                {
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
+        },
+        {
+            "fields": [
+                {
+                    "name": "ThingTwo.color"
+                },
+                {
+                    "name": "ThingTwo.owner"
+                },
+                {
+                    "name": "Thing.name"
+                }
+            ],
+            "name": "ThingTwo"
+        },
+        {
+            "fields": [
+                {
+                    "name": "post"
+                },
+                {
+                    "name": "职业"
+                }
+            ],
+            "name": "Message"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Hotel.name"
+                },
+                {
+                    "name": "Hotel.location"
+                }
+            ],
+            "name": "Hotel"
         },
         {
             "fields": [
@@ -439,55 +919,85 @@
         {
             "fields": [
                 {
+                    "name": "Category.name"
+                },
+                {
+                    "name": "Category.posts"
+                }
+            ],
+            "name": "Category"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Thing.name"
+                }
+            ],
+            "name": "Thing"
+        },
+        {
+            "fields": [
+                {
+                    "name": "performance.character.name"
+                },
+                {
+                    "name": "appears_in"
+                }
+            ],
+            "name": "performance.character"
+        },
+        {
+            "fields": [
+                {
                     "name": "Character.name"
                 },
                 {
                     "name": "Character.appearsIn"
-                },
-                {
-                    "name": "Droid.primaryFunction"
                 }
             ],
-            "name": "Droid"
+            "name": "Character"
         },
         {
             "fields": [
                 {
-                    "name": "Employee.ename"
+                    "name": "People.xid"
+                },
+                {
+                    "name": "People.name"
+                },
+                {
+                    "name": "Teacher.subject"
+                },
+                {
+                    "name": "Teacher.teaches"
                 }
             ],
-            "name": "Employee"
+            "name": "Teacher"
         },
         {
             "fields": [
                 {
-                    "name": "Employee.ename"
+                    "name": "User.name"
                 },
                 {
-                    "name": "Character.name"
-                },
-                {
-                    "name": "Character.appearsIn"
-                },
-                {
-                    "name": "Human.starships"
-                },
-                {
-                    "name": "Human.totalCredits"
+                    "name": "User.password"
                 }
             ],
-            "name": "Human"
+            "name": "User"
         },
         {
             "fields": [
                 {
-                    "name": "Movie.name"
+                    "name": "ThingOne.usedBy"
                 },
                 {
-                    "name": "Movie.director"
+                    "name": "ThingOne.color"
+                },
+                {
+                    "name": "Thing.name"
                 }
             ],
-            "name": "Movie"
+            "name": "ThingOne"
         },
         {
             "fields": [
@@ -514,14 +1024,6 @@
         {
             "fields": [
                 {
-                    "name": "Person.name"
-                }
-            ],
-            "name": "Person"
-        },
-        {
-            "fields": [
-                {
                     "name": "Person1.name"
                 },
                 {
@@ -529,190 +1031,6 @@
                 }
             ],
             "name": "Person1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Post.title"
-                },
-                {
-                    "name": "Post.text"
-                },
-                {
-                    "name": "Post.tags"
-                },
-                {
-                    "name": "Post.topic"
-                },
-                {
-                    "name": "Post.numLikes"
-                },
-                {
-                    "name": "Post.numViews"
-                },
-                {
-                    "name": "Post.isPublished"
-                },
-                {
-                    "name": "Post.postType"
-                },
-                {
-                    "name": "Post.author"
-                },
-                {
-                    "name": "Post.category"
-                }
-            ],
-            "name": "Post"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Post1.id"
-                },
-                {
-                    "name": "Post1.comments"
-                }
-            ],
-            "name": "Post1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "post1.title"
-                },
-                {
-                    "name": "post1.numLikes"
-                }
-            ],
-            "name": "post1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Starship.name"
-                },
-                {
-                    "name": "Starship.length"
-                }
-            ],
-            "name": "Starship"
-        },
-        {
-            "fields": [
-                {
-                    "name": "State.xcode"
-                },
-                {
-                    "name": "State.name"
-                },
-                {
-                    "name": "State.capital"
-                },
-                {
-                    "name": "State.country"
-                }
-            ],
-            "name": "State"
-        },
-        {
-            "fields": [
-                {
-                    "name": "People.xid"
-                },
-                {
-                    "name": "People.name"
-                },
-                {
-                    "name": "Student.taughtBy"
-                }
-            ],
-            "name": "Student"
-        },
-        {
-            "fields": [
-                {
-                    "name": "People.xid"
-                },
-                {
-                    "name": "People.name"
-                },
-                {
-                    "name": "Teacher.subject"
-                },
-                {
-                    "name": "Teacher.teaches"
-                }
-            ],
-            "name": "Teacher"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Thing.name"
-                }
-            ],
-            "name": "Thing"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Thing.name"
-                },
-                {
-                    "name": "ThingOne.color"
-                },
-                {
-                    "name": "ThingOne.usedBy"
-                }
-            ],
-            "name": "ThingOne"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Thing.name"
-                },
-                {
-                    "name": "ThingTwo.color"
-                },
-                {
-                    "name": "ThingTwo.owner"
-                }
-            ],
-            "name": "ThingTwo"
-        },
-        {
-            "fields": [
-                {
-                    "name": "User.name"
-                },
-                {
-                    "name": "User.password"
-                }
-            ],
-            "name": "User"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema"
-                },
-                {
-                    "name": "dgraph.graphql.xid"
-                }
-            ],
-            "name": "dgraph.graphql"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema_history"
-                },{
-                    "name": "dgraph.graphql.schema_created_at"
-                }
-            ],
-            "name": "dgraph.graphql.history"
         }
     ]
 }

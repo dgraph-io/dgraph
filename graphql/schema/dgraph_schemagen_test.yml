@@ -614,11 +614,14 @@ schemas:
         id: ID!
         name: String!
         location: Point @search
+        landmark: Point
       }
     output: |
       type Hotel {
         Hotel.name
         Hotel.location
+        Hotel.landmark
       }
       Hotel.name: string .
       Hotel.location: geo @index(geo) .
+      Hotel.landmark: geo .
