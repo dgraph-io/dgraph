@@ -910,7 +910,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				errCh <- schema.AppendGQLErrs(errs, keyNotFoundError(f, fconf.RemoteGqlQueryName))
 				return
 			}
-		} else if err := json.Unmarshal(b, &customErr); err == nil {
+		} else if err := json.Unmarshal(b, &customErr); err == nil && len(customErr.Errors)!=0 {
 			errCh<-customErr.Errors
 			return
 
@@ -1009,7 +1009,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 						keyNotFoundError(f, fconf.RemoteGqlQueryName))
 					return
 				}
-			} else if err := json.Unmarshal(b, &customErr); err == nil {
+			} else if err := json.Unmarshal(b, &customErr); err == nil && len(customErr.Errors)!=0 {
 				errCh<-customErr.Errors
 				return
 
@@ -1869,7 +1869,7 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		}
 		var customErr  RESTErr
 
-		if err := json.Unmarshal(b, &customErr); err != nil {
+		if err := json.Unmarshal(b, &customErr); err != nil || len(customErr.Errors)==0 {
 			if err := json.Unmarshal(b, &result); err != nil {
 				return emptyResult(jsonUnmarshalError(err, field))
 			}
