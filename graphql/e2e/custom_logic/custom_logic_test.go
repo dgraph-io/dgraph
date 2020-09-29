@@ -2808,3 +2808,35 @@ func TestCustomDQL(t *testing.T) {
 		]
 	  }`, string(result.Data))
 }
+
+func TestCustomGetQuerywithError(t *testing.T) {
+	schema := customTypes + `
+	 type Query {
+		 myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+				 url: "http://mock:8888/favMoviesError/$id?name=$name&num=$num",
+				 method: "GET"
+		 })
+	 }`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	query := `
+	 query {
+		 myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
+			 id
+			 name
+			 director {
+				 id
+				 name
+			 }
+		 }
+	 }`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	fmt.Printf("%+v",result)
+	require.Equal(t, "Rest API returns Error",result.Errors )
+
+}

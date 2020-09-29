@@ -223,35 +223,44 @@ func verifyGraphqlRequest(r *http.Request, expectedRequest expectedGraphqlReques
 }
 
 func getDefaultResponse() []byte {
-	//resTemplate := `[
-	//		{
-	//			"id": "0x3",
-	//			"name": "Star Wars",
-	//			"director": [
-	//				{
-	//					"id": "0x4",
-	//					"name": "George Lucas"
-	//				}
-	//			]
-	//		},
-	//		{
-	//			"id": "0x5",
-	//			"name": "Star Trek",
-	//			"director": [
-	//				{
-	//					"id": "0x6",
-	//					"name": "J.J. Abrams"
-	//				}
-	//			]
-	//		}
-	//	]`
 	resTemplate := `[
 			{
-				"message": "jatin"
+				"id": "0x3",
+				"name": "Star Wars",
+				"director": [
+					{
+						"id": "0x4",
+						"name": "George Lucas"
+					}
+				]
+			},
+			{
+				"id": "0x5",
+				"name": "Star Trek",
+				"director": [
+					{
+						"id": "0x6",
+						"name": "J.J. Abrams"
+					}
+				]
 			}
-			
 		]`
+
 	return []byte(resTemplate)
+}
+
+func getFavMoviesErrorHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodGet,
+		urlSuffix: "/0x123?name=Author&num=10",
+		body:      "",
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+	check2(w.Write([]byte(`{"errors":[{"message": "Rest API returns Error"}]}`)))
 }
 
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
@@ -673,20 +682,18 @@ func userNamesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//append uname to the id and return it.
+	// append uname to the id and return it.
 	res := make([]interface{}, 0, len(inputBody))
 	for i := 0; i < len(inputBody); i++ {
-	//	res = append(res, "uname-"+inputBody[i].ID)
 		res = append(res, "uname-"+inputBody[i].ID)
 	}
-   // res=append(res,"\"Errors\": [{\"message\": \"Record already exists.\"}]")
+
 	b, err := json.Marshal(res)
 	if err != nil {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
 	check2(fmt.Fprint(w, string(b)))
-	check2(w.Write([]byte(`{"errors":[{"message": "Record already exists."}]}`)))
 }
 
 type tinput struct {
@@ -772,7 +779,7 @@ func userNameHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
 		"Github-Api-Token": []string{"some-api-token"},
 	}, r.Header); err != nil {
 		check2(w.Write([]byte(err.Error())))
-	 	return
+		return
 	}
 	check2(fmt.Fprint(w, `"foo"`))
 }
@@ -1217,6 +1224,7 @@ func main() {
 
 	// for queries
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
+	http.HandleFunc("/favMoviesError/", getFavMoviesErrorHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/favMoviesPostWithBody/", postFavMoviesWithBodyHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
