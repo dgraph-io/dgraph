@@ -260,7 +260,7 @@ func getFavMoviesErrorHandler(w http.ResponseWriter, r *http.Request) {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write([]byte(`{"errors":[{"message": "Rest API returns Error"}]}`)))
+	check2(w.Write([]byte(`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query"}]}`)))
 }
 
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
@@ -410,6 +410,21 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
           "name": "Mov2"
         }
     ]`)))
+}
+
+func favMoviesCreateErrorHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/favMoviesCreateError",
+		body:      `{"movies":[{"director":[{"name":"Dir1"}],"name":"Mov1"},{"name":"Mov2"}]}`,
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	check2(w.Write([]byte(`{"errors":[{"message": "Rest API returns Error for FavoriteMoviesCreate query"}]}`)))
 }
 
 func favMoviesCreateWithNullBodyHandler(w http.ResponseWriter, r *http.Request) {
@@ -850,6 +865,10 @@ func userNameHandler(w http.ResponseWriter, r *http.Request) {
 	nameHandler(w, r, &inputBody)
 }
 
+func userNameDefaultErrorHandler(w http.ResponseWriter, r *http.Request) {
+	check2(w.Write([]byte(`{"errors":[{"message": "Rest API returns Error for field name"}]}`)))
+}
+
 func userNameWithoutAddressHandler(w http.ResponseWriter, r *http.Request) {
 	expectedRequest := expectedRequest{
 		body: `{"uid":"0x5"}`,
@@ -1233,6 +1252,7 @@ func main() {
 
 	// for mutations
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
+	http.HandleFunc("/favMoviesCreateError", favMoviesCreateErrorHandler)
 	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)
 	http.HandleFunc("/favMoviesDelete/", favMoviesDeleteHandler)
 	http.HandleFunc("/favMoviesCreateWithNullBody", favMoviesCreateWithNullBodyHandler)
@@ -1247,6 +1267,7 @@ func main() {
 
 	// for testing single mode
 	http.HandleFunc("/userName", userNameHandler)
+	http.HandleFunc("/userNameError", userNameDefaultErrorHandler)
 	http.HandleFunc("/userNameWithoutAddress", userNameWithoutAddressHandler)
 	http.HandleFunc("/checkHeadersForUserName", userNameHandlerWithHeaders)
 	http.HandleFunc("/car", carHandler)

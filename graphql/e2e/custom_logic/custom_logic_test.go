@@ -2836,7 +2836,154 @@ func TestCustomGetQuerywithError(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	fmt.Printf("%+v",result)
-	require.Equal(t, "Rest API returns Error",result.Errors )
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message: "Rest API returns Error for myFavoriteMovies query",
+		},
+	}, result.Errors)
+
+}
+
+func TestCustomFieldsWithRestError(t *testing.T) {
+	schema := `
+type Car @remote {
+		id: ID! 
+		name: String!
+	}
+
+	type User {
+		id: String! @id @search(by: [hash, regexp])
+		name: String
+			@custom(
+				http: {
+					url: "http://mock:8888//userNameError"
+					method: "GET"
+					body: "{uid: $id}"
+					mode: SINGLE,
+				}
+			)
+		age: Int! @search
+		cars: Car
+		@custom(
+			http: {
+			url: "http://mock:8888/cars"
+			method: "GET"
+			body: "{uid: $id}"
+			mode: BATCH,
+			}
+	      )		
+  	}
+  `
+
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `mutation addUser {
+			 addUser(input: [{ id:"0x1", age: 10 }]) {
+				 user {
+					 id
+					 age
+				 }
+			 }
+		 }`,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	queryUser := `
+	query ($id: String!){
+		queryUser(filter: {id: {eq: $id}}) {
+           id
+		   name
+           age
+           cars{
+			name
+          }
+		}
+     }`
+
+	params = &common.GraphQLParams{
+		Query:     queryUser,
+		Variables: map[string]interface{}{"id": "0x1"},
+	}
+
+	result = params.ExecuteAsPost(t, alphaURL)
+
+	expected := `
+	{
+      "queryUser": [
+        {
+          "id": "0x1",
+          "name": null,
+		  "age": 10,
+          "cars": {
+          "name": "car-0x1"
+        }	
+        }
+      ]
+    }`
+
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message: "Rest API returns Error for field name",
+		},
+	}, result.Errors)
+
+	require.JSONEq(t, expected, string(result.Data))
+
+}
+
+func TestCustomPostMutationWithError(t *testing.T) {
+	schema := customTypes + `
+	input MovieDirectorInput {
+		id: ID
+		name: String
+		directed: [MovieInput]
+	}
+	input MovieInput {
+		id: ID
+		name: String
+		director: [MovieDirectorInput]
+	}
+	type Mutation {
+        createMyFavouriteMovies(input: [MovieInput!]): [Movie] @custom(http: {
+			url: "http://mock:8888/favMoviesCreateError",
+			method: "POST",
+			body: "{ movies: $input}"
+        })
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation createMovies($movs: [MovieInput!]) {
+			createMyFavouriteMovies(input: $movs) {
+				id
+				name
+				director {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"movs": []interface{}{
+				map[string]interface{}{
+					"name":     "Mov1",
+					"director": []interface{}{map[string]interface{}{"name": "Dir1"}},
+				},
+				map[string]interface{}{"name": "Mov2"},
+			}},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message: "Rest API returns Error for FavoriteMoviesCreate query",
+		},
+	}, result.Errors)
 
 }
