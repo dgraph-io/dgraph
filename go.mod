@@ -2,8 +2,7 @@ module github.com/dgraph-io/dgraph
 
 go 1.12
 
-// replace github.com/dgraph-io/ristretto => /home/martinmr/go/src/github.com/dgraph-io/ristretto
-// replace go.etcd.io/etcd => /home/mrjn/go/src/go.etcd.io/etcd
+// replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0

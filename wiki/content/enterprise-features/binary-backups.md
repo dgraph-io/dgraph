@@ -322,6 +322,12 @@ input RestoreInput {
 		If missing, it defaults to the latest series.
 		"""
 		backupId: String
+        
+		"""
+		Number of the backup within the backup series to be restored. Backups with a greater value
+		will be ignored. If the value is zero or is missing, the entire series will be restored.
+		"""
+		backupNum: Int
 
 		"""
 		Path to the key file needed to decrypt the backup. This file should be accessible

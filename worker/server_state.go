@@ -175,13 +175,15 @@ func (s *ServerState) initStorage() {
 		opt.EncryptionKey = nil
 	}
 
-	s.gcCloser = z.NewCloser(1)
+	s.gcCloser = z.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
-	// go x.RunVlogGC(s.WALstore, s.gcCloser)
+
+	go x.MonitorCacheHealth(10*time.Second, "pstore", s.Pstore, s.cacheHealthCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.
 func (s *ServerState) Dispose() {
+	s.cacheHealthCloser.SignalAndWait()
 	s.gcCloser.SignalAndWait()
 	if err := s.Pstore.Close(); err != nil {
 		glog.Errorf("Error while closing postings store: %v", err)
