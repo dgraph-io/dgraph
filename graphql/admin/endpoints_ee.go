@@ -71,7 +71,7 @@ const adminTypes = `
 
 		"""
 		Number of the backup within the backup series to be restored. Backups with a greater value
-		will be ignored. If the value is missing, the entire series will be restored.
+		will be ignored. If the value is zero or missing, the entire series will be restored.
 		"""
 		backupNum: Int
 

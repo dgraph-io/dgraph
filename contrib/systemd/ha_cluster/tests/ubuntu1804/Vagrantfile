@@ -1,21 +1,34 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
-hosts = File.readlines("./hosts").map { |ln| i,h= ln.split(/\s+/); [h,i] }.to_h
-replicas = hosts.keys.select { |host| host.to_s.match /^zero-\d+/ }.count
-version = ENV['DGRAPH_VERSION'] || 'v20.07.0'
+eval File.read("./vagrant_helper.rb")
 
 Vagrant.configure("2") do |config|
-  hosts.each do |hostname, ipaddr|
-    config.vm.define hostname do |node|
+  @hosts.each do |hostname, ipaddr|
+    default = if hostname == @primary then true else false end
+    config.vm.define hostname, primary: default do |node|
       node.vm.box = "generic/ubuntu1804"
       node.vm.hostname = "#{hostname}"
       node.vm.network "private_network", ip: ipaddr
       node.vm.synced_folder ".", "/vagrant"
 
+      node.vm.provider "virtualbox" do |vbox, override|
+        vbox.name = "#{hostname}"
+        # enable SMB3.0 for better fileshare UX on Windows-Virtualbox
+        if Vagrant::Util::Platform.windows? then
+          override.vm.synced_folder  ".", "/vagrant", @smb_sync_opts
+        end
+      end
+
+      node.vm.provider "hyperv" do |hyperv, override|
+        hyperv.vmname = "#{hostname}"
+        # enable SMB3.0 for better fileshare UX on Windows-HyperV
+        override.vm.synced_folder  ".", "/vagrant", @smb_sync_opts
+      end
+
       node.vm.provision "shell" do |shell|
         shell.path = "provision.sh"
-        shell.args = [replicas]
-        shell.env = { DGRAPH_VERSION: version }
+        shell.args = [@replicas]
+        shell.env = { DGRAPH_VERSION: @version }
         shell.privileged = true
       end
     end

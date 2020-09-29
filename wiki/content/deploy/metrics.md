@@ -61,6 +61,7 @@ The health metrics let you track to check the availability of an Dgraph Alpha in
  Metrics                          | Description
  -------                          | -----------
  `dgraph_alpha_health_status`     | **Only applicable to Dgraph Alpha**. Value is 1 when the Alpha is ready to accept requests; otherwise 0.
+ `dgraph_max_assigned_ts`         | **Only applicable to Dgraph Alpha**. This will show the latest max assigned timestamp. All alphas (within the same alpha group) should show the same timestamp if they are in sync.
 
 ## Go Metrics
 

@@ -553,11 +553,19 @@ func dgraphDirectiveTypeValidation(schema *ast.Schema, typ *ast.Definition) gqle
 			dir.Position,
 			"Type %s; type argument for @dgraph directive should not be empty.", typ.Name)}
 	}
+
 	if typeArg.Value.Kind != ast.StringValue {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; type argument for @dgraph directive should of type String.", typ.Name)}
 	}
+
+	if isReservedKeyWord(typeArg.Value.Raw) {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; type argument '%s' for @dgraph directive is a reserved keyword.", typ.Name, typeArg.Value.Raw)}
+	}
+
 	return nil
 }
 
@@ -1058,6 +1066,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 			typ.Name, field.Name))
 		return errs
 	}
+
 	if predArg.Value.Kind != ast.StringValue {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
@@ -1065,6 +1074,15 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 			typ.Name, field.Name))
 		return errs
 	}
+
+	if isReservedKeyWord(predArg.Value.Raw) {
+		errs = append(errs, gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: pred argument '%s' for @dgraph directive is a reserved keyword.",
+			typ.Name, field.Name, predArg.Value.Raw))
+		return errs
+	}
+
 	if strings.HasPrefix(predArg.Value.Raw, "~") || strings.HasPrefix(predArg.Value.Raw, "<~") {
 		if sch.Types[typ.Name].Kind == ast.Interface {
 			// We don't want to consider the field of an interface but only the fields with
@@ -1873,7 +1891,11 @@ func isReservedKeyWord(name string) bool {
 		"Point":        true,
 	}
 
-	if isScalar(name) || isQueryOrMutation(name) || reservedTypeNames[name] {
+	caseInsensitiveKeywords := map[string]bool{
+		"as": true, // this is reserved keyword because DQL uses this for variables
+	}
+
+	if isScalar(name) || isQueryOrMutation(name) || reservedTypeNames[name] || caseInsensitiveKeywords[strings.ToLower(name)] {
 		return true
 	}
 
