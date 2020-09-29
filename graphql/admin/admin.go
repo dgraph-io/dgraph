@@ -271,6 +271,51 @@ const (
 		lruMb: Float
 	}
 
+	input RemoveNodeInput {
+		nodeId: Int!
+		groupId: Int!
+	}
+
+	type RemoveNodePayload {
+		response: Response
+	}
+
+	input MoveTabletInput {
+		tablet: String!
+		groupId: Int!
+	}
+
+	type MoveTabletPayload {
+		response: Response
+	}
+
+	enum AssignKind {
+		UID
+		TIMESTAMP
+	}
+
+	input AssignInput {
+		what: AssignKind!
+		num: Int!
+	}
+
+	type AssignedIds {
+		startId: Int
+		endId: Int
+	}
+
+	type AssignPayload {
+		response: AssignedIds
+	}
+
+	input EnterpriseLicenseInput {
+		license: String!
+	}
+
+	type EnterpriseLicensePayload {
+		response: Response
+	}
+
 	` + adminTypes + `
 
 	type Query {
@@ -314,6 +359,11 @@ const (
 		config(input: ConfigInput!): ConfigPayload
 		
 		replaceAllowedCORSOrigins(origins: [String]): Cors
+
+		removeNode(input: RemoveNodeInput!): RemoveNodePayload
+		moveTablet(input: MoveTableInput!): MoveTabletPayload
+		assign(input: AssignInput!): AssignPayload
+		enterpriseLicense(input: EnterpriseLicenseInput!): EnterpriseLicensePayload
 
 		` + adminMutations + `
 	}
