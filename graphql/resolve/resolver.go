@@ -890,9 +890,9 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		var errs error
 		var result []interface{}
 		type RESTErr struct{
-			errors x.GqlErrorList `json:"errors,omitempty"`
+			Errors x.GqlErrorList `json:"errors,omitempty"`
 		}
-		var customErr =RESTErr{}
+		var customErr RESTErr
 		if graphql {
 			resp := &graphqlResp{}
 			err = json.Unmarshal(b, resp)
@@ -911,7 +911,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				return
 			}
 		} else if err := json.Unmarshal(b, &customErr); err == nil {
-			errCh<-customErr.errors
+			errCh<-customErr.Errors
 			return
 
 		} else if err := json.Unmarshal(b, &result); err != nil {
@@ -1865,11 +1865,11 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 
 		var result interface{}
 		type RESTErr struct{
-			errors x.GqlErrorList `json:"errors,omitempty"`
+			Errors x.GqlErrorList `json:"errors,omitempty"`
 		}
 		var customErr  RESTErr
 
-		if err := json.Unmarshal(b, &customErr.errors); err != nil {
+		if err := json.Unmarshal(b, &customErr); err != nil {
 			if err := json.Unmarshal(b, &result); err != nil {
 				return emptyResult(jsonUnmarshalError(err, field))
 			}
@@ -1879,7 +1879,7 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		return &Resolved{
 			Data:  map[string]interface{}{field.Name(): result},
 			Field: field,
-			Err: customErr.errors,
+			Err: customErr.Errors,
 
 		}
 	}
