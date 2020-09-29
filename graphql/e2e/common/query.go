@@ -1343,6 +1343,42 @@ func queryOnlyTypename(t *testing.T) {
 	cleanUp(t, []*country{newCountry1, newCountry2, newCountry3}, []*author{}, []*post{})
 }
 
+func queryAliasAndAttrOnInterface(t *testing.T) {
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+
+	queryCharacterParams := &GraphQLParams{
+		Query: `query {
+				queryCharacter (filter: {
+					appearsIn: {
+						eq: [EMPIRE]
+					}
+				}) {
+					name
+					... on Human {
+						name
+						n: name
+			                }
+				}
+			}`,
+	}
+
+	expected := `{
+		"queryCharacter": [
+		  {
+			"name": "Han",
+			"n": "Han"
+		  }
+		]
+	  }`
+
+	gqlResponse := queryCharacterParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+
+	cleanupStarwars(t, newStarship.ID, humanID, "")
+}
+
 func querynestedOnlyTypename(t *testing.T) {
 
 	newCountry := addCountry(t, postExecutor)
