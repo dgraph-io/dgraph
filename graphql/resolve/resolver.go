@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/vektah/gqlparser/v2/ast"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/api"
@@ -1268,6 +1269,11 @@ func completeObject(
 	var buf bytes.Buffer
 	comma := ""
 
+	// Below map keeps track of fields which have been seen as part of
+	// interface to avoid double entry in the resulting response
+	// var seenField map[string]string
+	seenField := make(map[string]string)
+
 	x.Check2(buf.WriteRune('{'))
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
@@ -1285,6 +1291,9 @@ func completeObject(
 		if len(dgraphTypes) > 0 {
 			includeField = f.IncludeInterfaceField(dgraphTypes)
 		}
+		if _, ok := seenField[f.Name()]; ok {
+			includeField = false
+		}
 		if !includeField {
 			continue
 		}
@@ -1293,6 +1302,13 @@ func completeObject(
 		x.Check2(buf.WriteRune('"'))
 		x.Check2(buf.WriteString(f.ResponseName()))
 		x.Check2(buf.WriteString(`": `))
+
+		if f.GetObjectKind() == ast.Interface {
+			seenField[f.Name()] = "INTERFACE"
+		}
+		if f.GetObjectKind() == ast.Object {
+			seenField[f.Name()] = "OBJECT"
+		}
 
 		val := res[f.DgraphAlias()]
 		if f.Name() == schema.Typename {
