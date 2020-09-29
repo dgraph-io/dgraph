@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
@@ -793,7 +794,7 @@ func mmapTest() {
 
 	mf, err := z.Mmap(fd, true, 4<<30)
 	x.Check(err)
-	var idx, counter int
+	var idx, counter, last int
 	for {
 		counter = readInt(mf, idx)
 		if counter == 0 {
@@ -803,9 +804,19 @@ func mmapTest() {
 			fmt.Printf("[mmapTest] Last valid index: %d. Found counter: %d\n", idx-1, counter)
 			break
 		}
+		x.AssertTruef(counter == last+1, "counter: %d last: %d\n", counter, last)
+		last = counter
 		idx++
 	}
-	storeInt(mf, idx, counter+1)
+	fmt.Printf("[mmapTest] writing counters now...\n")
+	time.Sleep(2 * time.Second)
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	for range ticker.C {
+		counter++
+		storeInt(mf, idx, counter)
+		idx++
+	}
 	os.Exit(1)
 }
 
