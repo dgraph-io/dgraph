@@ -406,6 +406,7 @@ func (a *AuthMeta) fetchJWKs() error {
 // Refresh the JWKs on ticking the Ticker, but only if the
 // RefreshTime is non-zero, else stop.
 func (a *AuthMeta) RefreshJWK() {
+	// If there is no jwkUrl then just return
 	if a.JWKUrl == "" {
 		return
 	}
@@ -413,6 +414,8 @@ func (a *AuthMeta) RefreshJWK() {
 	for {
 		select {
 		case <-a.ticker.C:
+			// refreshTime = 0 means that we couldn't parse any valid value for token
+			// expiry time. In that case, it just ends the process of regular refresh
 			if a.refreshTime == 0 {
 				return
 			}
