@@ -71,10 +71,9 @@ var (
 )
 
 // entryLog represents the entire entry log. It consists of one or more
-// entryFile objects.
+// entryFile objects. This object is not lock protected but it's used by
+// DiskStorage, which has a lock protecting the calls to this object.
 type entryLog struct {
-	// need lock for files and current ?
-
 	// files is the list of all log files ordered in ascending order by the first
 	// index in the file. The current file being written should always be accessible
 	// by looking at the last element of this slice.
@@ -145,39 +144,40 @@ func (l *entryLog) getEntry(n int) (entry, error) {
 	return entry(buf), nil
 }
 
+// rotate the current entryFile and create a new empty one.
 func (l *entryLog) rotate(firstIndex uint64) error {
+	// Select the name for the new file based on the names of the existing files.
 	nextFid := l.current.fid
 	x.AssertTrue(nextFid > 0)
-
 	for _, ef := range l.files {
 		if ef.fid > nextFid {
 			nextFid = ef.fid
 		}
 	}
-
 	nextFid += 1
+
 	ef, err := openEntryFile(l.dir, nextFid)
 	if err != nil {
 		return errors.Wrapf(err, "while creating a new entry file")
 	}
 
+	// Move the existing current file to the end of the list of files and
+	// update the current file to the file that was just created.
 	l.files = append(l.files, l.current)
 	l.current = ef
 	return nil
 }
 
+// numEntries returns the number of entries in the log.
 func (l *entryLog) numEntries() int {
-	if len(l.files) == 0 {
-		return 0
-	}
+	// Assume that all the files except the last one are completely filled with maxNumEntries.
 	total := 0
-	if len(l.files) >= 1 {
-		// all files except the last one.
-		total += (len(l.files) - 1) * maxNumEntries
-	}
+	total += (len(l.files) - 1) * maxNumEntries
 	return total + l.nextEntryIdx
 }
 
+// AddEntries adds the entries to the log. If there are entries in the log with the same index
+// they will be overwritten and the entries after that zeroed out from the log.
 func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 	if len(entries) == 0 {
 		return nil
@@ -185,15 +185,22 @@ func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 	// glog.Infof("AddEntries: %+v\n", entries)
 	fidx, eidx := l.slotGe(entries[0].Index)
 
-	// fmt.Printf("fidx: %d, eidx: %d, entries: %+v\n", fidx, eidx, entries)
+	// The first entry in the input is already in the log. We must remove the existing entry
+	// and all the entries after from the log.
 	if eidx >= 0 {
-		// fmt.Printf("AddEntries: fidx: %d, eidx: %d num: %d\n", fidx, eidx, len(entries))
-
 		if fidx == -1 {
+			// The existing entry was found in the current file. We only have to zero out
+			// from the entries after the one in which the entry was found.
 			if l.nextEntryIdx > eidx {
 				zeroOut(l.current.data, entrySize*eidx, entrySize*l.nextEntryIdx)
 			}
 		} else {
+			// The existing entry was found in one of the previous file.
+			// The logic must do the following.
+			// 1. Delete all the files after the one in which the entry was found.
+			// 2. Zero out all the entries after the slot in which the entry was found
+			//    in the file in which it was found.
+			// 3. Update the pointer to the current file and the list of previous files.
 			x.AssertTrue(fidx < len(l.files))
 			extra := l.files[fidx+1:]
 			extra = append(extra, l.current)
@@ -211,39 +218,46 @@ func (l *entryLog) AddEntries(entries []raftpb.Entry) error {
 		l.nextEntryIdx = eidx
 	}
 
+	// Look at the previous entry to find the right offset at which to start writing the value of
+	// the Data field for each entry.
 	prev := l.nextEntryIdx - 1
 	var offset int
 	if prev >= 0 {
+		// There was a previous entry. Retrieve the offset and the size data from that entry to
+		// calculate the next offset.
 		e := l.current.getEntry(prev)
 		offset = int(e.DataOffset())
 		offset += sliceSize(l.current.data, offset)
 	} else {
+		// At the start of the file so use entryFileOffset.
 		offset = entryFileOffset
 	}
 
 	for _, re := range entries {
 		if l.nextEntryIdx >= maxNumEntries {
 			if err := l.rotate(re.Index); err != nil {
-				// TODO: see what happens.
 				return err
 			}
 			l.nextEntryIdx, offset = 0, entryFileOffset
 		}
 
+		// Write re.Data to a new slice at the end of the file.
 		destBuf, next := l.current.allocateSlice(len(re.Data), offset)
 		x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 
+		// Write the entry at the given slot.
 		buf, err := l.getEntry(l.nextEntryIdx)
 		x.Check(err)
 		marshalEntry(buf, re.Term, re.Index, uint64(offset), uint64(re.Type))
 
-		// Update for next entry.
+		// Update values for the next entry.
 		offset = next
 		l.nextEntryIdx++
 	}
 	return nil
 }
 
+// firstIndex returns the first index available in the entry log.
 func (l *entryLog) firstIndex() uint64 {
 	if l == nil {
 		return 0
@@ -254,12 +268,16 @@ func (l *entryLog) firstIndex() uint64 {
 	} else {
 		fi = l.files[0].firstEntry().Index()
 	}
+
+	// If fi is zero return one because RAFT expects the first index to always
+	// be greater than zero.
 	if fi == 0 {
 		return 1
 	}
 	return fi
 }
 
+// LastIndex returns the last index in the log.
 func (l *entryLog) LastIndex() uint64 {
 	if l.nextEntryIdx-1 >= 0 {
 		e := l.current.getEntry(l.nextEntryIdx - 1)
@@ -275,6 +293,8 @@ func (l *entryLog) LastIndex() uint64 {
 	return 0
 }
 
+// getEntryFile returns a pointer to the right entryFile. A value of -1 is
+// meant to represent the current file, which is not yet stored in l.files.
 func (l *entryLog) getEntryFile(fidx int) *entryFile {
 	if fidx == -1 {
 		return l.current
@@ -285,6 +305,7 @@ func (l *entryLog) getEntryFile(fidx int) *entryFile {
 	return l.files[fidx]
 }
 
+// seekEntry returns the entry with the given raftIndex if it exists.
 func (l *entryLog) seekEntry(raftIndex uint64) (entry, error) {
 	if raftIndex == 0 {
 		return emptyEntry, nil
@@ -292,15 +313,17 @@ func (l *entryLog) seekEntry(raftIndex uint64) (entry, error) {
 
 	fidx, off := l.slotGe(raftIndex)
 	if off == -1 {
+		// The entry is not in the log because it was already processed and compacted.
 		return emptyEntry, raft.ErrCompacted
 	} else if off >= maxNumEntries {
+		// The log has not advanced past the given raftIndex.
 		return emptyEntry, raft.ErrUnavailable
 	}
 
 	ef := l.getEntryFile(fidx)
 	ent := ef.getEntry(off)
 	if ent.Index() == 0 {
-		// We have gone past what we wrote to the file.
+		// The log has not advanced past the given raftIndex.
 		return emptyEntry, raft.ErrUnavailable
 	}
 	if ent.Index() != raftIndex {
@@ -340,6 +363,9 @@ func (l *entryLog) slotGe(raftIndex uint64) (int, int) {
 	if fileIdx >= len(l.files) {
 		fileIdx = len(l.files) - 1
 	}
+
+	// Go through the list of files in reverse index to find the right file.
+	// Stop when the file's first index is less than or equal to raftIndex.
 	for fileIdx > 0 {
 		fi := l.files[fileIdx].firstIndex()
 		if fi <= raftIndex {
@@ -351,6 +377,7 @@ func (l *entryLog) slotGe(raftIndex uint64) (int, int) {
 	return fileIdx, offset
 }
 
+// deleteBefore deletes all the files before the one containing the given raftIndex.
 func (l *entryLog) deleteBefore(raftIndex uint64) error {
 	fidx, off := l.slotGe(raftIndex)
 
@@ -373,6 +400,7 @@ func (l *entryLog) deleteBefore(raftIndex uint64) error {
 	return nil
 }
 
+// reset clears the entry log, including deleting the previous files.
 func (l *entryLog) reset() error {
 	for _, ef := range l.files {
 		if err := ef.delete(); err != nil {
@@ -381,22 +409,18 @@ func (l *entryLog) reset() error {
 	}
 	l.files = l.files[:0]
 	zeroOut(l.current.data, 0, entryFileOffset)
-	var num int
-	for _, b := range l.current.data[:entryFileOffset] {
-		x.AssertTrue(b == 0x00)
-		num++
-	}
 	l.nextEntryIdx = 0
 	return nil
 }
 
+// allEntries returns all the entries in the range [lo, hi).
 func (l *entryLog) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 	var entries []raftpb.Entry
 	fileIdx, offset := l.slotGe(lo)
 	var size uint64
 
 	if offset < 0 {
-		// We are at the very beginning of this thing.
+		// Start from the beginning of the entry file.
 		offset = 0
 	}
 
@@ -404,8 +428,8 @@ func (l *entryLog) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 	for {
 		if offset >= maxNumEntries {
 			if fileIdx == -1 {
-				// We are looking at the current file and there are no more entries.
-				// Return what we have.
+				// Iteration is looking at the current file and there are no more entries.
+				// Return what we have now.
 				return entries
 			}
 
@@ -425,11 +449,15 @@ func (l *entryLog) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 		if re.Index >= hi {
 			return entries
 		}
+
 		if re.Index == 0 {
-			// Allow this to move to the next file.
+			// This entry and all the following ones in this file are empty.
+			// Setting the offset to maxNumEntries will trigger a move to the next
+			// file in the next iteration.
 			offset = maxNumEntries
 			continue
 		}
+
 		size += uint64(re.Size())
 		if len(entries) > 0 && size > maxSize {
 			break
@@ -446,9 +474,12 @@ type entryFile struct {
 	fid int64
 }
 
+// openEntryFile opens an entryFile in the given director. The filename is constructed
+// based on the value of fid.
 func openEntryFile(dir string, fid int64) (*entryFile, error) {
 	glog.V(2).Infof("opening entry file: %d\n", fid)
 	fpath := entryFileName(dir, fid)
+	// Open the file in read-write mode and create it if it doesn't exist yet.
 	mf, err := openMmapFile(fpath, os.O_RDWR|os.O_CREATE, entryFileSize)
 
 	if err == errNewFile {
@@ -465,6 +496,8 @@ func openEntryFile(dir string, fid int64) (*entryFile, error) {
 	return ef, nil
 }
 
+// getEntryFile reads all the "*.ent" files in the directory and returns a list
+// of entryFiles sorted by the first index in each file.
 func getEntryFiles(dir string) ([]*entryFile, error) {
 	entryFiles := x.WalkPathFunc(dir, func(path string, isDir bool) bool {
 		if isDir {
@@ -505,7 +538,7 @@ func getEntryFiles(dir string) ([]*entryFile, error) {
 	return files, nil
 }
 
-// get entry from a file.
+// getEntry gets the entry at the slot with index idx.
 func (ef *entryFile) getEntry(idx int) entry {
 	if ef == nil {
 		return emptyEntry
@@ -514,6 +547,8 @@ func (ef *entryFile) getEntry(idx int) entry {
 	return entry(ef.data[offset : offset+entrySize])
 }
 
+// GetRaftEntry gets the entry at the index idx, reads the data from the appropriate
+// offset and converts it to a raftpb.Entry object.
 func (ef *entryFile) GetRaftEntry(idx int) raftpb.Entry {
 	entry := ef.getEntry(idx)
 	re := raftpb.Entry{
@@ -533,15 +568,20 @@ func (ef *entryFile) GetRaftEntry(idx int) raftpb.Entry {
 func (ef *entryFile) firstEntry() entry {
 	return ef.getEntry(0)
 }
+
 func (ef *entryFile) firstIndex() uint64 {
 	return ef.getEntry(0).Index()
 }
+
+// firstEmptySlot returns the index of the first empty slot in the file.
 func (ef *entryFile) firstEmptySlot() int {
 	return sort.Search(maxNumEntries, func(i int) bool {
 		e := ef.getEntry(i)
 		return e.Index() == 0
 	})
 }
+
+// lastEntry returns the last valid entry in the file.
 func (ef *entryFile) lastEntry() entry {
 	// This would return the first pos, where e.Index() == 0.
 	pos := ef.firstEmptySlot()
@@ -551,13 +591,14 @@ func (ef *entryFile) lastEntry() entry {
 	return ef.getEntry(pos)
 }
 
-func (ef *entryFile) Term(entryIndex uint64) uint64 {
-	offset := ef.slotGe(entryIndex)
+// Term returns the term of the entry with the given raftIndex.
+func (ef *entryFile) Term(raftIndex uint64) uint64 {
+	offset := ef.slotGe(raftIndex)
 	if offset < 0 || offset >= maxNumEntries {
 		return 0
 	}
 	e := ef.getEntry(int(offset))
-	if e.Index() == entryIndex {
+	if e.Index() == raftIndex {
 		return e.Term()
 	}
 	return 0
@@ -569,13 +610,15 @@ func (ef *entryFile) Term(entryIndex uint64) uint64 {
 // [0, maxNumEntries).
 func (ef *entryFile) slotGe(raftIndex uint64) int {
 	fi := ef.firstIndex()
-	// If first index is zero, this raftindex should be in a previous file.
-	if fi == 0 {
+	// If first index is zero or the first index is less than raftIndex, this
+	// raftindex should be in a previous file.
+	if fi == 0 || raftIndex < fi {
 		return -1
 	}
-	if raftIndex < fi {
-		return -1
-	}
+
+	// Look at the entry at slot diff. If the log has entries for all indices between
+	// fi and raftIndex without any gaps, the entry should be there. This is an
+	// optimization to avoid having to perform the search below.
 	if diff := int(raftIndex - fi); diff < maxNumEntries && diff >= 0 {
 		e := ef.getEntry(diff)
 		if e.Index() == raftIndex {
@@ -583,17 +626,18 @@ func (ef *entryFile) slotGe(raftIndex uint64) int {
 		}
 	}
 
-	// This would find the first entry's index which has entryIndex.
+	// Find the first entry which has in index >= to raftIndex.
 	return sort.Search(maxNumEntries, func(i int) bool {
 		e := ef.getEntry(i)
 		if e.Index() == 0 {
-			// We reached too far to the right.
+			// We reached too far to the right and found an empty slot.
 			return true
 		}
 		return e.Index() >= raftIndex
 	})
 }
 
+// delete unmaps and deletes the file.
 func (ef *entryFile) delete() error {
 	glog.V(2).Infof("Deleting file: %s\n", ef.fd.Name())
 	if err := z.Munmap(ef.data); err != nil {

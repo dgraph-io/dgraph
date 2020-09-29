@@ -18,6 +18,7 @@ package raftwal
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"os"
 	"path"
@@ -116,7 +117,7 @@ func getOffset(info MetaInfo) int {
 	case SnapshotTerm:
 		return snapshotIndex + 8
 	default:
-		panic("Invalid info" + string(info))
+		panic("Invalid info: " + fmt.Sprint(info))
 	}
 }
 
@@ -136,6 +137,8 @@ const (
 	maxNumEntries = 30000
 )
 
+// mmapFile represents an mmapd file and includes both the buffer to the data
+// and the file descriptor.
 type mmapFile struct {
 	data []byte
 	fd   *os.File
@@ -146,6 +149,7 @@ func (m *mmapFile) sync() error {
 	return unix.Msync(m.data, unix.MS_SYNC)
 }
 
+// slice returns the slice at the given offset.
 func (m *mmapFile) slice(offset int) []byte {
 	sz := binary.BigEndian.Uint32(m.data[offset:])
 	start := offset + 4
@@ -157,15 +161,18 @@ func (m *mmapFile) slice(offset int) []byte {
 	return res
 }
 
+// allocateSlice allocates a slice of the given size at the given offset.
 func (m *mmapFile) allocateSlice(sz, offset int) ([]byte, int) {
 	binary.BigEndian.PutUint32(m.data[offset:], uint32(sz))
 	return m.data[offset+4 : offset+4+sz], offset + 4 + sz
 }
 
+// metaFile stores the RAFT metadata (e.g RAFT ID, snapshot, hard state).
 type metaFile struct {
 	*mmapFile
 }
 
+// zeroOut zeroes out all the bytes in the range [start, end).
 func zeroOut(dst []byte, start, end int) {
 	// fmt.Printf("ZEROING out: %d -> %d. len: %d\n", start, end, len(dst))
 	buf := dst[start:end]
@@ -175,8 +182,10 @@ func zeroOut(dst []byte, start, end int) {
 	}
 }
 
+// newMetaFile opens the meta file in the given directory.
 func newMetaFile(dir string) (*metaFile, error) {
 	fname := filepath.Join(dir, metaName)
+	// Open the file in read-write mode and creates it if it doesn't exist.
 	mf, err := openMmapFile(fname, os.O_RDWR|os.O_CREATE, metaFileSize)
 	if err == errNewFile {
 		zeroOut(mf.data, 0, snapshotOffset+4)
