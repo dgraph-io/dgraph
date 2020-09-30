@@ -1,3 +1,3 @@
-FROM gcr.io/distroless/base
+FROM golang:1.14
 COPY ./bank /
 CMD ["/bank"]
