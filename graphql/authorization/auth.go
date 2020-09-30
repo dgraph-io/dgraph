@@ -306,14 +306,17 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	if authMeta.JWKUrl != "" {
 		token, err =
 			jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-				kid := token.Header["kid"].(string)
-				signingKeys := authMeta.jwkSet.Key(kid)
+				kid := token.Header["kid"]
+				if kid == nil {
+					return nil, errors.Errorf("kid not present in JWT")
+				}
+
+				signingKeys := authMeta.jwkSet.Key(kid.(string))
 				if len(signingKeys) == 0 {
 					return nil, errors.Errorf("Invalid kid")
 				}
 				return signingKeys[0].Key, nil
 			}, jwt.WithoutAudienceValidation())
-
 	} else {
 		if authMeta.Algo == "" {
 			return nil, fmt.Errorf(

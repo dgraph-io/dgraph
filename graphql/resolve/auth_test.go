@@ -243,6 +243,49 @@ func TestAudienceClaim(t *testing.T) {
 	}
 }
 
+func TestInvalidAuthInfo(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+	authSchema, err := testutil.AppendJWKAndVerificationKey(sch)
+	require.NoError(t, err)
+	_, err = schema.NewHandler(string(authSchema), false)
+	require.Error(t, err, fmt.Errorf("Expecting either JWKUrl or (VerificationKey, Algo), both were given"))
+}
+
+//Todo(Minhaj): Add a testcase for token without Expiry
+func TestVerificationWithJWKUrl(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+
+	authSchema, err := testutil.AppendAuthInfoWithJWKUrl(sch)
+	require.NoError(t, err)
+	test.LoadSchemaFromString(t, string(authSchema))
+	testutil.SetAuthMeta(string(authSchema))
+
+	// Verify that authorization information is set correctly.
+	metainfo := authorization.GetAuthMeta()
+	require.Equal(t, metainfo.Algo, "")
+	require.Equal(t, metainfo.Header, "X-Test-Auth")
+	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
+	require.Equal(t, metainfo.VerificationKey, "")
+	require.Equal(t, metainfo.JWKUrl, "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
+
+	testCase := struct {
+		name  string
+		token string
+	}{
+		name:  `Token without expiry value`,
+		token: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE2NzUwM2UwYWVjNTJkZGZiODk2NTIxYjkxN2ZiOGUyMGMxZjMzMDAiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZmlyLXByb2plY3QxLTI1OWU3IiwiYXVkIjoiZmlyLXByb2plY3QxLTI1OWU3IiwiYXV0aF90aW1lIjoxNjAxNDQ0NjM0LCJ1c2VyX2lkIjoiMTdHb3h2dU5CWlc5YTlKU3Z3WXhROFc0bjE2MyIsInN1YiI6IjE3R294dnVOQlpXOWE5SlN2d1l4UThXNG4xNjMiLCJpYXQiOjE2MDE0NDQ2MzQsImV4cCI6MTYwMTQ0ODIzNCwiZW1haWwiOiJtaW5oYWpAZGdyYXBoLmlvIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJmaXJlYmFzZSI6eyJpZGVudGl0aWVzIjp7ImVtYWlsIjpbIm1pbmhhakBkZ3JhcGguaW8iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJwYXNzd29yZCJ9fQ.q5YmOzOUkZHNjlz53hgLNSVg-brIU9tLJ4jLC0_Xurl5wEbyZ6D_KQ9-UFqbl2HR6R1V5kpaf6eDFR3c83i1PpCbJ4LTjHAf_njQvL75ByERld23lZtKZyEeE6ujdFXL8ne4fI2qenD1Xeqx9AnXbLf7U_CvZpbX3l1wj7p0Lpn7qixi0AztuLSJMLkMfFpaiwyFZQivi4cqtnI25VIsK6a4KIpl1Sk0AHT-lv9PRadd_JDjWAIzD0SfhpZOskaeA9PljVMp-Y3Xscwg_Qc6u1MIBPg1jKO-ngjhWkgEWBoz5F836P7phT60LVBHhYuk-jRN6HSSNWQ3ineuN-jBkg",
+	}
+
+	md := metadata.New(map[string]string{"authorizationJwt": testCase.token})
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+
+	_, err = authorization.ExtractCustomClaims(ctx)
+	require.True(t, strings.Contains(err.Error(), "token is expired"))
+
+}
+
 // TODO(arijit): Generate the JWT token instead of using pre generated token.
 func TestJWTExpiry(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
