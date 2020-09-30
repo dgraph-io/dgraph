@@ -82,8 +82,8 @@ func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 		cfg.AuthData = []*types.Authority{auth}
 	}
 
-	if cfg.TransactionQueue == nil {
-		cfg.TransactionQueue = state.NewTransactionQueue()
+	if cfg.TransactionState == nil {
+		cfg.TransactionState = state.NewTransactionState()
 	}
 
 	if cfg.BlockState == nil || cfg.StorageState == nil || cfg.EpochState == nil {
@@ -198,10 +198,8 @@ func TestRunLottery_False(t *testing.T) {
 }
 
 func TestBabeAnnounceMessage(t *testing.T) {
-	TransactionQueue := state.NewTransactionQueue()
-
 	cfg := &ServiceConfig{
-		TransactionQueue: TransactionQueue,
+		TransactionState: state.NewTransactionState(),
 		LogLvl:           log.LvlInfo,
 	}
 

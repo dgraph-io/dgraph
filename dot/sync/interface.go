@@ -22,7 +22,6 @@ import (
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/transaction"
 )
 
 // BlockState is the interface for the block state
@@ -48,12 +47,9 @@ type StorageState interface {
 	StoreTrie(root common.Hash, ts *state.TrieState) error
 }
 
-// TransactionQueue is the interface for transaction queue methods
-type TransactionQueue interface {
+// TransactionState is the interface for transaction queue methods
+type TransactionState interface {
 	RemoveExtrinsic(ext types.Extrinsic)
-	Pop() *transaction.ValidTransaction
-	Push(vt *transaction.ValidTransaction) (common.Hash, error)
-	Peek() *transaction.ValidTransaction
 }
 
 // BlockProducer is the interface that a block production service must implement

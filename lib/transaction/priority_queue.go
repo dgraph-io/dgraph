@@ -24,14 +24,14 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 )
 
-// ErrTransactionExists is returned when trying to add a transaction to the pool that already exists
-var ErrTransactionExists = errors.New("transaction is already in pool")
+// ErrTransactionExists is returned when trying to add a transaction to the queue that already exists
+var ErrTransactionExists = errors.New("transaction is already in queue")
 
 // PriorityQueue implements a priority queue using a double linked list
 type PriorityQueue struct {
 	head  *node
 	mutex sync.Mutex
-	pool  Pool
+	txs   map[common.Hash]*ValidTransaction
 }
 
 type node struct {
@@ -46,7 +46,7 @@ func NewPriorityQueue() *PriorityQueue {
 	pq := PriorityQueue{
 		head:  nil,
 		mutex: sync.Mutex{},
-		pool:  make(map[common.Hash]*ValidTransaction),
+		txs:   make(map[common.Hash]*ValidTransaction),
 	}
 
 	return &pq
@@ -59,7 +59,7 @@ func (q *PriorityQueue) RemoveExtrinsic(ext types.Extrinsic) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
-	if q.pool[hash] == nil {
+	if q.txs[hash] == nil {
 		return
 	}
 
@@ -79,7 +79,7 @@ func (q *PriorityQueue) RemoveExtrinsic(ext types.Extrinsic) {
 		}
 	}
 
-	delete(q.pool, hash)
+	delete(q.txs, hash)
 }
 
 // Pop removes the head of the queue and returns it
@@ -92,7 +92,7 @@ func (q *PriorityQueue) Pop() *ValidTransaction {
 	head := q.head
 	q.head = head.child
 
-	delete(q.pool, head.hash)
+	delete(q.txs, head.hash)
 
 	return head.data
 }
@@ -134,13 +134,13 @@ func (q *PriorityQueue) Push(vt *ValidTransaction) (common.Hash, error) {
 	curr := q.head
 
 	hash := vt.Extrinsic.Hash()
-	if q.pool[hash] != nil {
+	if q.txs[hash] != nil {
 		return hash, ErrTransactionExists
 	}
 
 	if curr == nil {
 		q.head = &node{data: vt, hash: hash}
-		q.pool[hash] = vt
+		q.txs[hash] = vt
 		return hash, nil
 	}
 
@@ -161,7 +161,7 @@ func (q *PriorityQueue) Push(vt *ValidTransaction) (common.Hash, error) {
 			}
 			curr.parent = newNode
 
-			q.pool[hash] = vt
+			q.txs[hash] = vt
 			return hash, nil
 		} else if curr.child == nil {
 			newNode := &node{
@@ -171,7 +171,7 @@ func (q *PriorityQueue) Push(vt *ValidTransaction) (common.Hash, error) {
 			}
 			curr.child = newNode
 
-			q.pool[hash] = vt
+			q.txs[hash] = vt
 			return hash, nil
 		}
 	}

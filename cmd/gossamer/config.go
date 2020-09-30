@@ -80,17 +80,17 @@ func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 			return nil, fmt.Errorf("unknown chain id provided: %s", id)
 		}
 	}
+	// if default configuration not set, load "gssmr" default configuration
+	if cfg == nil {
+		logger.Info("loading default configuration...", "id", "gssmr")
+		cfg = DefaultCfg
+		tomlCfg = dotConfigToToml(cfg)
+	}
 
 	err = loadConfigFile(ctx, tomlCfg)
 	if err != nil {
 		logger.Error("failed to load toml configuration", "error", err)
 		return nil, err
-	}
-
-	// if default configuration not set, load "gssmr" default configuration
-	if cfg == nil {
-		logger.Info("loading default configuration...", "id", "gssmr")
-		cfg = DefaultCfg
 	}
 
 	// set log config

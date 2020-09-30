@@ -62,12 +62,9 @@ type StorageState interface {
 	TrieState(root *common.Hash) (*state.TrieState, error)
 }
 
-// TransactionQueue is the interface for transaction queue methods
-type TransactionQueue interface {
-	Push(vt *transaction.ValidTransaction) (common.Hash, error)
-	Pop() *transaction.ValidTransaction
-	Peek() *transaction.ValidTransaction
-	RemoveExtrinsic(ext types.Extrinsic)
+// TransactionState is the interface for transaction state methods
+type TransactionState interface {
+	AddToPool(vt *transaction.ValidTransaction) common.Hash
 }
 
 // FinalityGadget is the interface that a finality gadget must implement

@@ -97,7 +97,7 @@ func createTestBlock(t *testing.T, babeService *Service, parent *types.Header, e
 
 	for _, ext := range exts {
 		vtx := transaction.NewValidTransaction(ext, &transaction.Validity{})
-		_, _ = babeService.transactionQueue.Push(vtx)
+		_, _ = babeService.transactionState.Push(vtx)
 	}
 
 	slot := Slot{
@@ -122,10 +122,8 @@ func createTestBlock(t *testing.T, babeService *Service, parent *types.Header, e
 }
 
 func TestBuildBlock_ok(t *testing.T) {
-	transactionQueue := state.NewTransactionQueue()
-
 	cfg := &ServiceConfig{
-		TransactionQueue: transactionQueue,
+		TransactionState: state.NewTransactionState(),
 		LogLvl:           log.LvlDebug,
 	}
 
@@ -170,10 +168,8 @@ func TestBuildBlock_ok(t *testing.T) {
 
 func TestBuildBlock_failing(t *testing.T) {
 	t.Skip()
-	transactionQueue := state.NewTransactionQueue()
-
 	cfg := &ServiceConfig{
-		TransactionQueue: transactionQueue,
+		TransactionState: state.NewTransactionState(),
 	}
 
 	var err error
@@ -197,13 +193,13 @@ func TestBuildBlock_failing(t *testing.T) {
 	// add a valid transaction
 	txa := []byte{3, 16, 110, 111, 111, 116, 1, 64, 103, 111, 115, 115, 97, 109, 101, 114, 95, 105, 115, 95, 99, 111, 111, 108}
 	vtx := transaction.NewValidTransaction(types.Extrinsic(txa), &transaction.Validity{})
-	babeService.transactionQueue.Push(vtx)
+	babeService.transactionState.Push(vtx)
 
 	// add a transaction that can't be included (transfer from account with no balance)
 	// https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/transaction-pool/src/tests.rs#L95
 	txb := []byte{1, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125, 142, 175, 4, 21, 22, 135, 115, 99, 38, 201, 254, 161, 126, 37, 252, 82, 135, 97, 54, 147, 201, 18, 144, 156, 178, 38, 170, 71, 148, 242, 106, 72, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 5, 113, 87, 87, 40, 221, 120, 247, 252, 137, 201, 74, 231, 222, 101, 85, 108, 102, 39, 31, 190, 210, 14, 215, 124, 19, 160, 180, 203, 54, 110, 167, 163, 149, 45, 12, 108, 80, 221, 65, 238, 57, 237, 199, 16, 10, 33, 185, 8, 244, 184, 243, 139, 5, 87, 252, 245, 24, 225, 37, 154, 163, 142}
 	vtx = transaction.NewValidTransaction(types.Extrinsic(txb), &transaction.Validity{})
-	babeService.transactionQueue.Push(vtx)
+	babeService.transactionState.Push(vtx)
 
 	zeroHash, err := common.HexToHash("0x00")
 	require.NoError(t, err)
@@ -226,7 +222,7 @@ func TestBuildBlock_failing(t *testing.T) {
 	require.Equal(t, "cannot build extrinsics: error applying extrinsic: Apply error, type: Payment",
 		err.Error(), "Did not receive expected error text")
 
-	txc := babeService.transactionQueue.Peek()
+	txc := babeService.transactionState.Peek()
 	if !bytes.Equal(txc.Extrinsic, txa) {
 		t.Fatal("did not readd valid transaction to queue")
 	}

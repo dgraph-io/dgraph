@@ -46,7 +46,7 @@ type HTTPServerConfig struct {
 	CoreAPI             modules.CoreAPI
 	BlockProducerAPI    modules.BlockProducerAPI
 	RuntimeAPI          modules.RuntimeAPI
-	TransactionQueueAPI modules.TransactionQueueAPI
+	TransactionQueueAPI modules.TransactionStateAPI
 	RPCAPI              modules.RPCAPI
 	SystemAPI           modules.SystemAPI
 	Host                string

@@ -45,7 +45,7 @@ type Service struct {
 	// State interfaces
 	blockState       BlockState // retrieve our current head of chain from BlockState
 	storageState     StorageState
-	transactionQueue TransactionQueue
+	transactionState TransactionState
 	blockProducer    BlockProducer
 
 	// Synchronization variables
@@ -69,7 +69,7 @@ type Config struct {
 	BlockState       BlockState
 	StorageState     StorageState
 	BlockProducer    BlockProducer
-	TransactionQueue TransactionQueue
+	TransactionState TransactionState
 	Runtime          *runtime.Runtime
 	Verifier         Verifier
 	DigestHandler    DigestHandler
@@ -109,7 +109,7 @@ func NewService(cfg *Config) (*Service, error) {
 		blockProducer:    cfg.BlockProducer,
 		synced:           true,
 		highestSeenBlock: big.NewInt(0),
-		transactionQueue: cfg.TransactionQueue,
+		transactionState: cfg.TransactionState,
 		runtime:          cfg.Runtime,
 		verifier:         cfg.Verifier,
 		digestHandler:    cfg.DigestHandler,
@@ -401,7 +401,7 @@ func (s *Service) handleBody(body *types.Body) error {
 	}
 
 	for _, ext := range exts {
-		s.transactionQueue.RemoveExtrinsic(ext)
+		s.transactionState.RemoveExtrinsic(ext)
 	}
 
 	return err

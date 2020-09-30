@@ -20,12 +20,8 @@ import (
 	"encoding/binary"
 
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/scale"
 )
-
-// Pool represents the transaction pool
-type Pool map[common.Hash]*ValidTransaction
 
 // Validity struct see: https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/sr-primitives/src/transaction_validity.rs#L178
 type Validity struct {

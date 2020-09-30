@@ -293,7 +293,9 @@ func NewNode(cfg *Config, ks *keystore.GlobalKeystore, stopFunc func()) (*Node, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create core service: %s", err)
 	}
-	networkSrvc.SetMessageHandler(coreSrvc)
+	if networkSrvc != nil {
+		networkSrvc.SetMessageHandler(coreSrvc)
+	}
 	nodeSrvcs = append(nodeSrvcs, coreSrvc)
 
 	// System Service

@@ -77,8 +77,8 @@ func newTestSyncer(t *testing.T, cfg *Config) *Service {
 		cfg.Runtime = runtime.NewTestRuntime(t, runtime.SUBSTRATE_TEST_RUNTIME)
 	}
 
-	if cfg.TransactionQueue == nil {
-		cfg.TransactionQueue = stateSrvc.TransactionQueue
+	if cfg.TransactionState == nil {
+		cfg.TransactionState = stateSrvc.Transaction
 	}
 
 	if cfg.Verifier == nil {
@@ -221,7 +221,7 @@ func TestRemoveIncludedExtrinsics(t *testing.T) {
 		Validity:  nil,
 	}
 
-	syncer.transactionQueue.Push(tx)
+	syncer.transactionState.(*state.TransactionState).Push(tx)
 
 	exts := []types.Extrinsic{ext}
 	body, err := types.NewBodyFromExtrinsics(exts)
@@ -238,7 +238,7 @@ func TestRemoveIncludedExtrinsics(t *testing.T) {
 	_, _, err = syncer.processBlockResponseData(msg)
 	require.NoError(t, err)
 
-	inQueue := syncer.transactionQueue.Pop()
+	inQueue := syncer.transactionState.(*state.TransactionState).Pop()
 	require.Nil(t, inQueue, "queue should be empty")
 }
 
@@ -376,7 +376,7 @@ func TestExecuteBlock(t *testing.T) {
 
 	bcfg := &babe.ServiceConfig{
 		Runtime:          syncer.runtime,
-		TransactionQueue: syncer.transactionQueue,
+		TransactionState: syncer.transactionState.(*state.TransactionState),
 		Keypair:          kp,
 		BlockState:       syncer.blockState.(*state.BlockState),
 		EpochThreshold:   babe.MaxThreshold,
@@ -424,7 +424,7 @@ func TestExecuteBlock_WithExtrinsic(t *testing.T) {
 
 	bcfg := &babe.ServiceConfig{
 		Runtime:          syncer.runtime,
-		TransactionQueue: syncer.transactionQueue,
+		TransactionState: syncer.transactionState.(*state.TransactionState),
 		Keypair:          kp,
 		BlockState:       syncer.blockState.(*state.BlockState),
 		EpochThreshold:   babe.MaxThreshold,
@@ -437,7 +437,7 @@ func TestExecuteBlock_WithExtrinsic(t *testing.T) {
 	require.NoError(t, err)
 
 	tx := transaction.NewValidTransaction(enc, new(transaction.Validity))
-	_, err = syncer.transactionQueue.Push(tx)
+	_, err = syncer.transactionState.(*state.TransactionState).Push(tx)
 	require.NoError(t, err)
 
 	builder := newBlockBuilder(t, bcfg)

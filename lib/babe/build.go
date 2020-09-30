@@ -190,7 +190,7 @@ func (b *Service) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 				return nil, err
 			}
 			// remove invalid extrinsic from queue
-			b.transactionQueue.Pop()
+			b.transactionState.Pop()
 
 			// re-add previously popped extrinsics back to queue
 			b.addToQueue(included)
@@ -202,7 +202,7 @@ func (b *Service) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 		b.logger.Trace("build block applied extrinsic", "extrinsic", next)
 
 		// keep track of included transactions; re-add them to queue later if block building fails
-		t := b.transactionQueue.Pop()
+		t := b.transactionState.Pop()
 		included = append(included, t)
 		next = b.nextReadyExtrinsic()
 	}
@@ -280,7 +280,7 @@ func (b *Service) buildBlockInherents(slot Slot) error {
 
 func (b *Service) addToQueue(txs []*transaction.ValidTransaction) {
 	for _, t := range txs {
-		hash, err := b.transactionQueue.Push(t)
+		hash, err := b.transactionState.Push(t)
 		if err != nil {
 			b.logger.Trace("Failed to add transaction to queue", "error", err)
 		} else {
@@ -291,7 +291,7 @@ func (b *Service) addToQueue(txs []*transaction.ValidTransaction) {
 
 // nextReadyExtrinsic peeks from the transaction queue. it does not remove any transactions from the queue
 func (b *Service) nextReadyExtrinsic() types.Extrinsic {
-	transaction := b.transactionQueue.Peek()
+	transaction := b.transactionState.Peek()
 	if transaction == nil {
 		return nil
 	}

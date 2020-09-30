@@ -46,7 +46,7 @@ type Service struct {
 	// State interfaces
 	blockState       BlockState
 	storageState     StorageState
-	transactionQueue TransactionQueue
+	transactionState TransactionState
 
 	// Current runtime and hash of the current runtime code
 	rt       *runtime.Runtime
@@ -83,7 +83,7 @@ type Config struct {
 	LogLvl                  log.Lvl
 	BlockState              BlockState
 	StorageState            StorageState
-	TransactionQueue        TransactionQueue
+	TransactionState        TransactionState
 	Network                 Network
 	Keystore                *keystore.GlobalKeystore
 	Runtime                 *runtime.Runtime
@@ -162,7 +162,7 @@ func NewService(cfg *Config) (*Service, error) {
 		blkRec:                  cfg.NewBlocks,
 		blockState:              cfg.BlockState,
 		storageState:            cfg.StorageState,
-		transactionQueue:        cfg.TransactionQueue,
+		transactionState:        cfg.TransactionState,
 		net:                     cfg.Network,
 		isBlockProducer:         cfg.IsBlockProducer,
 		blockProducer:           cfg.BlockProducer,

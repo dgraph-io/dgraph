@@ -51,9 +51,9 @@ type BlockProducerAPI interface {
 	SetEpochThreshold(*big.Int)
 }
 
-// TransactionQueueAPI ...
-type TransactionQueueAPI interface {
-	Push(*transaction.ValidTransaction) (common.Hash, error)
+// TransactionStateAPI ...
+type TransactionStateAPI interface {
+	AddToPool(*transaction.ValidTransaction) common.Hash
 	Pop() *transaction.ValidTransaction
 	Peek() *transaction.ValidTransaction
 	Pending() []*transaction.ValidTransaction

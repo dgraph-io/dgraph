@@ -50,7 +50,7 @@ type Service struct {
 	// Storage interfaces
 	blockState       BlockState
 	storageState     StorageState
-	transactionQueue TransactionQueue
+	transactionState TransactionState
 	epochState       EpochState
 
 	// BABE authority keypair
@@ -81,7 +81,7 @@ type ServiceConfig struct {
 	LogLvl           log.Lvl
 	BlockState       BlockState
 	StorageState     StorageState
-	TransactionQueue TransactionQueue
+	TransactionState TransactionState
 	EpochState       EpochState
 	Keypair          *sr25519.Keypair
 	Runtime          *runtime.Runtime
@@ -125,7 +125,7 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		epochState:       cfg.EpochState,
 		keypair:          cfg.Keypair,
 		rt:               cfg.Runtime,
-		transactionQueue: cfg.TransactionQueue,
+		transactionState: cfg.TransactionState,
 		slotToProof:      make(map[uint64]*VrfOutputAndProof),
 		blockChan:        make(chan types.Block),
 		authorityData:    cfg.AuthData,
@@ -488,6 +488,14 @@ func (b *Service) handleSlot(slotNum uint64) error {
 	if err != nil {
 		b.logger.Error("failed to get parent trie", "parent state root", parent.StateRoot, "error", err)
 		return err
+	}
+
+	// if transaction queue is empty, call MaintainPool to add some txs to the queue
+	head := b.transactionState.Peek()
+	if head == nil {
+		if err = b.transactionState.MaintainPool(); err != nil {
+			b.logger.Error("failed to maintain transaction pool", "error", err)
+		}
 	}
 
 	b.rt.SetContext(ts)

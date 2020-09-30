@@ -33,7 +33,7 @@ type AuthorModule struct {
 	logger     log.Logger
 	coreAPI    CoreAPI
 	runtimeAPI RuntimeAPI
-	txQueueAPI TransactionQueueAPI
+	txStateAPI TransactionStateAPI
 }
 
 // KeyInsertRequest is used as model for the JSON
@@ -81,7 +81,7 @@ type ExtrinsicStatus struct {
 type ExtrinsicHashResponse string
 
 // NewAuthorModule creates a new Author module.
-func NewAuthorModule(logger log.Logger, coreAPI CoreAPI, runtimeAPI RuntimeAPI, txQueueAPI TransactionQueueAPI) *AuthorModule {
+func NewAuthorModule(logger log.Logger, coreAPI CoreAPI, runtimeAPI RuntimeAPI, txStateAPI TransactionStateAPI) *AuthorModule {
 	if logger == nil {
 		logger = log.New("service", "RPC", "module", "author")
 	}
@@ -90,7 +90,7 @@ func NewAuthorModule(logger log.Logger, coreAPI CoreAPI, runtimeAPI RuntimeAPI, 
 		logger:     logger.New("module", "author"),
 		coreAPI:    coreAPI,
 		runtimeAPI: runtimeAPI,
-		txQueueAPI: txQueueAPI,
+		txStateAPI: txStateAPI,
 	}
 }
 
@@ -132,7 +132,7 @@ func (cm *AuthorModule) HasKey(r *http.Request, req *[]string, res *bool) error 
 
 // PendingExtrinsics Returns all pending extrinsics
 func (cm *AuthorModule) PendingExtrinsics(r *http.Request, req *EmptyRequest, res *PendingExtrinsicsResponse) error {
-	pending := cm.txQueueAPI.Pending()
+	pending := cm.txStateAPI.Pending()
 	resp := [][]byte{}
 	for _, tx := range pending {
 		enc, err := tx.Encode()
@@ -180,13 +180,7 @@ func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *Ex
 	vtx := transaction.NewValidTransaction(ext, txv)
 
 	if cm.coreAPI.IsBlockProducer() {
-		var hash common.Hash
-		hash, err = cm.txQueueAPI.Push(vtx)
-		if err != nil {
-			cm.logger.Trace("submitted extrinsic failed to push transaction to queue", "error", err)
-			return err
-		}
-
+		hash := cm.txStateAPI.AddToPool(vtx)
 		*res = ExtrinsicHashResponse(hash.String())
 		cm.logger.Trace("submitted extrinsic", "tx", vtx, "hash", hash.String())
 	}
@@ -194,7 +188,7 @@ func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *Ex
 	//broadcast
 	err = cm.coreAPI.HandleSubmittedExtrinsic(ext)
 	if err != nil {
-		cm.logger.Trace("submitted extrinsic failed to submit Extrinsic to network", "error", err)
+		cm.logger.Trace("failed to submit extrinsic to network", "error", err)
 	}
 
 	return err

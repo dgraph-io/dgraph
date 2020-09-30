@@ -23,11 +23,11 @@ import (
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/network"
+	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
-	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
@@ -118,7 +118,7 @@ func TestHandleRuntimeChanges(t *testing.T) {
 	cfg := &Config{
 		Runtime:          rt,
 		Keystore:         ks,
-		TransactionQueue: transaction.NewPriorityQueue(),
+		TransactionState: state.NewTransactionState(),
 		IsBlockProducer:  false,
 	}
 

@@ -34,14 +34,14 @@ var logger = log.New("pkg", "state")
 
 // Service is the struct that holds storage, block and network states
 type Service struct {
-	dbPath           string
-	db               chaindb.Database
-	isMemDB          bool // set to true if using an in-memory database; only used for testing.
-	Storage          *StorageState
-	Block            *BlockState
-	Network          *NetworkState
-	TransactionQueue *TransactionQueue
-	Epoch            *EpochState
+	dbPath      string
+	db          chaindb.Database
+	isMemDB     bool // set to true if using an in-memory database; only used for testing.
+	Storage     *StorageState
+	Block       *BlockState
+	Network     *NetworkState
+	Transaction *TransactionState
+	Epoch       *EpochState
 }
 
 // NewService create a new instance of Service
@@ -247,7 +247,7 @@ func (s *Service) Start() error {
 	s.Network = NewNetworkState()
 
 	// create transaction queue
-	s.TransactionQueue = NewTransactionQueue()
+	s.Transaction = NewTransactionState()
 
 	// create epoch state
 	s.Epoch = NewEpochState(db)

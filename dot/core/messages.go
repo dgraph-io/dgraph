@@ -44,12 +44,8 @@ func (s *Service) ProcessTransactionMessage(msg *network.TransactionMessage) err
 
 		if s.isBlockProducer {
 			// push to the transaction queue of BABE session
-			hash, err := s.transactionQueue.Push(vtx)
-			if err != nil {
-				s.logger.Trace("Failed to push transaction to queue", "error", err)
-			} else {
-				s.logger.Trace("Added transaction to queue", "hash", hash)
-			}
+			hash := s.transactionState.AddToPool(vtx)
+			s.logger.Trace("Added transaction to queue", "hash", hash)
 		}
 	}
 
