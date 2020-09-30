@@ -389,8 +389,8 @@ func TestEntryFile(t *testing.T) {
 	require.Equal(t, uint64(1), el.firstIndex())
 	require.Zero(t, el.LastIndex())
 
-	e, err := el.getEntry(2)
-	require.NoError(t, err)
+	e, err := el.seekEntry(2)
+	require.Error(t, err)
 	require.NotNil(t, e)
 
 	require.NoError(t, el.AddEntries([]raftpb.Entry{{Index: 1, Term: 1, Data: []byte("abc")}}))
@@ -432,7 +432,7 @@ func TestStorageBig(t *testing.T) {
 	check := func(start, end uint64) {
 		ents, err := ds.Entries(start, end, math.MaxInt64)
 		require.NoError(t, err)
-		require.Equal(t, end-start, uint64(len(ents)))
+		require.Equal(t, int(end-start), len(ents))
 		for i, e := range ents {
 			require.Equal(t, start+uint64(i), e.Index)
 		}
@@ -445,6 +445,14 @@ func TestStorageBig(t *testing.T) {
 	check(20000, 33000)
 	check(33000, 45000)
 	check(45000, N)
+
+	// Around file boundaries.
+	check(1, N)
+	check(30000, N)
+	check(30001, N)
+	check(60000, N)
+	check(60001, N)
+	check(60000, 90000)
 	check(N, N+1)
 
 	_, err = ds.Entries(N+1, N+10, math.MaxInt64)

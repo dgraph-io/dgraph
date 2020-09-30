@@ -78,6 +78,7 @@ func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 		}
 
 		re := currFile.GetRaftEntry(offset)
+		// fmt.Printf("Got raft entry: %v\n", re.Index)
 		if re.Index >= hi {
 			return entries
 		}
@@ -247,8 +248,14 @@ func (l *wal) slotGe(raftIndex uint64) (int, int) {
 	fileIdx := sort.Search(len(l.files), func(i int) bool {
 		return l.files[i].firstIndex() >= raftIndex
 	})
-	if fileIdx >= len(l.files) {
-		fileIdx = len(l.files) - 1
+	// fileIdx points to the first log file, whose firstIndex is >= raftIndex.
+	// If the firstIndex == raftIndex, then return.
+	if fileIdx < len(l.files) && l.files[fileIdx].firstIndex() == raftIndex {
+		return fileIdx, 0
+	}
+	// Otherwise, go back one file to the file which has firstIndex < raftIndex.
+	if fileIdx > 0 {
+		fileIdx--
 	}
 
 	offset := l.files[fileIdx].slotGe(raftIndex)
