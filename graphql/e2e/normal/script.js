@@ -37,7 +37,7 @@ async function rank({parents}) {
     const idRepMap = {};
     idRepList.sort((a, b) => a.rep > b.rep ? -1 : 1)
         .forEach((a, i) => idRepMap[a.id] = i + 1)
-    return parents.map(p => parent.id)
+    return parents.map(p => idRepMap[p.id])
 }
 
 self.addMultiParentGraphQLResolvers({
