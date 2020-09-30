@@ -865,7 +865,7 @@ func userNameHandler(w http.ResponseWriter, r *http.Request) {
 	nameHandler(w, r, &inputBody)
 }
 
-func userNameDefaultErrorHandler(w http.ResponseWriter, r *http.Request) {
+func userNameErrorHandler(w http.ResponseWriter, r *http.Request) {
 	check2(w.Write([]byte(`{"errors":[{"message": "Rest API returns Error for field name"}]}`)))
 }
 
@@ -1267,7 +1267,7 @@ func main() {
 
 	// for testing single mode
 	http.HandleFunc("/userName", userNameHandler)
-	http.HandleFunc("/userNameError", userNameDefaultErrorHandler)
+	http.HandleFunc("/userNameError", userNameErrorHandler)
 	http.HandleFunc("/userNameWithoutAddress", userNameWithoutAddressHandler)
 	http.HandleFunc("/checkHeadersForUserName", userNameHandlerWithHeaders)
 	http.HandleFunc("/car", carHandler)

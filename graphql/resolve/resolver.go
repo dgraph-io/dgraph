@@ -916,7 +916,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 
 		} else if err := json.Unmarshal(b, &result); err != nil {
 			errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-            return
+			return
 		}
 
 		if len(result) != len(vals) {
@@ -1862,25 +1862,21 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 
 	// this means it had body and not graphql, so just unmarshal it and return
 	if hrc.RemoteGqlQueryName == "" {
-
 		var result interface{}
 		type RESTErr struct{
 			Errors x.GqlErrorList `json:"errors,omitempty"`
 		}
 		var customErr  RESTErr
-
 		if err := json.Unmarshal(b, &customErr); err != nil || len(customErr.Errors)==0 {
 			if err := json.Unmarshal(b, &result); err != nil {
 				return emptyResult(jsonUnmarshalError(err, field))
 			}
 
 		}
-
 		return &Resolved{
 			Data:  map[string]interface{}{field.Name(): result},
 			Field: field,
 			Err: customErr.Errors,
-
 		}
 	}
 
@@ -1906,7 +1902,6 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		Err:   resp.Errors,
 	}
 }
-
 
 func (h *httpQueryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
 	return (*httpResolver)(h).Resolve(ctx, query)

@@ -2809,7 +2809,7 @@ func TestCustomDQL(t *testing.T) {
 	  }`, string(result.Data))
 }
 
-func TestCustomGetQuerywithError(t *testing.T) {
+func TestCustomGetQuerywithRESTError(t *testing.T) {
 	schema := customTypes + `
 	 type Query {
 		 myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
@@ -2846,7 +2846,7 @@ func TestCustomGetQuerywithError(t *testing.T) {
 
 func TestCustomFieldsWithRestError(t *testing.T) {
 	schema := `
-type Car @remote {
+    type Car @remote {
 		id: ID! 
 		name: String!
 	}
@@ -2895,14 +2895,14 @@ type Car @remote {
 	queryUser := `
 	query ($id: String!){
 		queryUser(filter: {id: {eq: $id}}) {
-           id
-		   name
-           age
-           cars{
+			id
 			name
-          }
+			age
+			cars{
+				name
+			}
 		}
-     }`
+	}`
 
 	params = &common.GraphQLParams{
 		Query:     queryUser,
@@ -2917,9 +2917,9 @@ type Car @remote {
         {
           "id": "0x1",
           "name": null,
-		  "age": 10,
+          "age": 10,
           "cars": {
-          "name": "car-0x1"
+            "name": "car-0x1"
         }	
         }
       ]
@@ -2935,7 +2935,7 @@ type Car @remote {
 
 }
 
-func TestCustomPostMutationWithError(t *testing.T) {
+func TestCustomPostMutationWithRESTError(t *testing.T) {
 	schema := customTypes + `
 	input MovieDirectorInput {
 		id: ID
