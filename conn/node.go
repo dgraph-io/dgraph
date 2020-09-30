@@ -319,11 +319,7 @@ func (n *Node) PastLife() (uint64, bool, error) {
 		restart = true
 	}
 
-	var num int
-	num, rerr = n.Store.NumEntries()
-	if rerr != nil {
-		return 0, false, rerr
-	}
+	num := n.Store.NumEntries()
 	glog.Infof("Group %d found %d entries\n", n.RaftContext.Group, num)
 	// We'll always have at least one entry.
 	if num > 1 {

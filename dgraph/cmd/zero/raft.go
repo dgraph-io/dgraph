@@ -572,6 +572,7 @@ func (n *node) initAndStartNode() error {
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 	default:
+		glog.Infof("Starting a brand new node")
 		data, err := n.RaftContext.Marshal()
 		x.Check(err)
 		peers := []raft.Peer{{ID: n.Id, Context: data}}
@@ -677,10 +678,12 @@ func (n *node) trySnapshot(skip uint64) {
 	glog.Infof("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
 }
 
+const tickDur = 100 * time.Millisecond
+
 func (n *node) Run() {
 	var leader bool
 	licenseApplied := false
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(tickDur)
 	defer ticker.Stop()
 
 	// snapshot can cause select loop to block while deleting entries, so run
@@ -698,7 +701,7 @@ func (n *node) Run() {
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)
-	if opts.LudicrousMode {
+	if !x.WorkerConfig.HardSync {
 		closer.AddRunning(1)
 		go x.StoreSync(n.Store, closer)
 	}
@@ -743,7 +746,7 @@ func (n *node) Run() {
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
 			span.Annotatef(nil, "Saved to storage")
-			if !x.WorkerConfig.LudicrousMode && rd.MustSync {
+			if x.WorkerConfig.HardSync && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %v", err)
 				}
@@ -791,7 +794,7 @@ func (n *node) Run() {
 			timer.Record("advance")
 
 			span.End()
-			if timer.Total() > 200*time.Millisecond {
+			if timer.Total() > 5*tickDur {
 				glog.Warningf(
 					"Raft.Ready took too long to process: %s."+
 						" Num entries: %d. MustSync: %v",
