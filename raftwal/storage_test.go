@@ -180,62 +180,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	first, err := ds.FirstIndex()
 	require.NoError(t, err)
 	require.Equal(t, uint64(3), first)
-	// if err != nil {
-	// 	t.Errorf("err = %v, want nil", err)
-	// }
-	// if first != 3 {
-	// 	t.Errorf("first = %d, want %d", first, 3)
-	// }
-
-	// Doesn't seem like we actually need to implement Compact.
 }
-
-// TODO: Consider if we need this.
-// func TestStorageCompact(t *testing.T) {
-// 	dir, err := ioutil.TempDir("", "badger")
-// 	require.NoError(t, err)
-// 	defer os.RemoveAll(dir)
-
-// 	ds := Init(dir, 0, 0)
-
-// 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-// 	require.NoError(t, ds.reset(ents))
-
-// 	tests := []struct {
-// 		i uint64
-
-// 		werr   error
-// 		windex uint64
-// 		wterm  uint64
-// 		wlen   int
-// 	}{
-// 		{2, raft.ErrCompacted, 3, 3, 3},
-// 		{3, raft.ErrCompacted, 3, 3, 3},
-// 		{4, nil, 4, 4, 2},
-// 		{5, nil, 5, 5, 1},
-// 	}
-
-// 	for i, tt := range tests {
-// 		// first, err := ds.FirstIndex()
-// 		// require.NoError(t, err)
-// 		// err = ds.deleteRange(batch, first-1, tt.i)
-// 		// if err != tt.werr {
-// 		// 	t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
-// 		// }
-// 		index, err := ds.FirstIndex()
-// 		require.NoError(t, err)
-// 		// Do the minus one here to get the index of the snapshot.
-// 		if index-1 != tt.windex {
-// 			t.Errorf("#%d: index = %d, want %d", i, index, tt.windex)
-// 		}
-
-// 		all, err := ds.Entries(0, math.MaxUint64, math.MaxUint64)
-// 		require.NoError(t, err)
-// 		if len(all) != tt.wlen {
-// 			t.Errorf("#%d: len = %d, want %d", i, len(all), tt.wlen)
-// 		}
-// 	}
-// }
 
 func TestStorageCreateSnapshot(t *testing.T) {
 	dir, err := ioutil.TempDir("", "badger")
@@ -258,6 +203,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 		{5, nil, pb.Snapshot{Data: data, Metadata: pb.SnapshotMetadata{Index: 5, Term: 5, ConfState: *cs}}},
 	}
 
+	// TODO: Add compacted test here.
 	for i, tt := range tests {
 		require.NoError(t, ds.reset(ents))
 		err := ds.CreateSnapshot(tt.i, cs, data)

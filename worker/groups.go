@@ -140,7 +140,6 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	walStore.SetUint(raftwal.RaftId, x.WorkerConfig.RaftId)
 	walStore.SetUint(raftwal.GroupId, uint64(gid))
 
-	// TODO: Store the gid as well.
 	gr.Node = newNode(walStore, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")

@@ -78,11 +78,9 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	// saved by disabling it.
 	opt.DetectConflicts = false
 
-	var badgerTables string
-	var badgerVlog string
 	// Settings for the data directory.
-	badgerTables = Config.BadgerTables
-	badgerVlog = Config.BadgerVlog
+	badgerTables := Config.BadgerTables
+	badgerVlog := Config.BadgerVlog
 	glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
 	// Default value of postingDirCompressionLevel is 3 so compression will always
 	// be enabled, unless it is explicitly disabled by setting the value to 0.
@@ -134,6 +132,7 @@ func (s *ServerState) initStorage() {
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
 		s.WALstore = raftwal.Init(Config.WALDir)
+		// TODO: Add encryption back to WALStore.
 	}
 	{
 		// Postings directory
