@@ -519,9 +519,9 @@ func main() {
 		"enable zeros and alphas in ludicrous mode.")
 	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot_after", "",
 		"create a new Raft snapshot after this many number of Raft entries.")
-	cmd.PersistentFlags().StringVar(&opts.AlphaFlags, "alpha_flags", "",
+	cmd.PersistentFlags().StringVar(&opts.AlphaFlags, "extra_alpha_flags", "",
 		"extra flags for alphas.")
-	cmd.PersistentFlags().StringVar(&opts.ZeroFlags, "zero_flags", "",
+	cmd.PersistentFlags().StringVar(&opts.ZeroFlags, "extra_zero_flags", "",
 		"extra flags for zeros.")
 	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", false,
 		"set container names in docker compose.")
