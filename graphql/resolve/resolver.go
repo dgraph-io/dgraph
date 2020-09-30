@@ -1302,9 +1302,6 @@ func completeObject(
 		x.Check2(buf.WriteString(`": `))
 
 		seenField[f.ResponseName()] = true
-		// if f.GetObjectKind() == ast.Interface || f.GetObjectKind() == ast.Object {
-		// 	seenField[f.ResponseName()] = true
-		// }
 
 		val := res[f.DgraphAlias()]
 		if f.Name() == schema.Typename {
