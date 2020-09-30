@@ -35,7 +35,7 @@ func TestMetricTxnAborts(t *testing.T) {
 	}
 	`
 
-	// Create initial 'dgraph_txn_aborts' metric
+	// Create initial 'dgraph_txn_aborts_total' metric
 	mr1, err := mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
 	mr2, err := mutationWithTs(mt, "application/rdf", false, false, 0)
@@ -49,12 +49,12 @@ func TestMetricTxnAborts(t *testing.T) {
 	_, body, err := runRequest(req)
 	require.NoError(t, err)
 	metricsMap, err := extractMetrics(string(body))
-	requiredMetric := "dgraph_txn_aborts"
+	requiredMetric := "dgraph_txn_aborts_total"
 	txnAbort, ok := metricsMap[requiredMetric]
 	require.True(t, ok, "the required metric '%s' is not found", requiredMetric)
 	txnAbort1, _ := strconv.Atoi(txnAbort.(string))
 
-	// Create second 'dgraph_txn_aborts' metric
+	// Create second 'dgraph_txn_aborts_total' metric
 	mr1, err = mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
 	mr2, err = mutationWithTs(mt, "application/rdf", false, false, 0)
@@ -68,8 +68,8 @@ func TestMetricTxnAborts(t *testing.T) {
 	_, body, err = runRequest(req)
 	require.NoError(t, err)
 	metricsMap, err = extractMetrics(string(body))
-	requiredMetric = "dgraph_txn_aborts"
-	txnAbort, ok = metricsMap["dgraph_txn_aborts"]
+	requiredMetric = "dgraph_txn_aborts_total"
+	txnAbort, ok = metricsMap["dgraph_txn_aborts_total"]
 	txnAbort2, _ := strconv.Atoi(txnAbort.(string))
 
 	require.Equal(t, txnAbort1+1, txnAbort2, "txnAbort was not incremented")
