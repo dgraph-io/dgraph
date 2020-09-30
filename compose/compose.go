@@ -56,7 +56,7 @@ type limit struct {
 type service struct {
 	name          string // not exported
 	Image         string
-	ContainerName string    `yaml:"container_name"`
+	ContainerName string    `yaml:"container_name,omitempty"`
 	Hostname      string    `yaml:",omitempty"`
 	Pid           string    `yaml:",omitempty"`
 	WorkingDir    string    `yaml:"working_dir,omitempty"`
@@ -78,33 +78,34 @@ type composeConfig struct {
 }
 
 type options struct {
-	NumZeros      int
-	NumAlphas     int
-	NumReplicas   int
-	LruSizeMB     int
-	Acl           bool
-	AclSecret     string
-	DataDir       string
-	DataVol       bool
-	TmpFS         bool
-	UserOwnership bool
-	Jaeger        bool
-	Metrics       bool
-	PortOffset    int
-	Verbosity     int
-	Vmodule       string
-	OutFile       string
-	LocalBin      bool
-	Tag           string
-	WhiteList     bool
-	Ratel         bool
-	RatelPort     int
-	MemLimit      string
-	TlsDir        string
-	ExposePorts   bool
-	Encryption    bool
-	LudicrousMode bool
-	SnapshotAfter string
+	NumZeros       int
+	NumAlphas      int
+	NumReplicas    int
+	LruSizeMB      int
+	Acl            bool
+	AclSecret      string
+	DataDir        string
+	DataVol        bool
+	TmpFS          bool
+	UserOwnership  bool
+	Jaeger         bool
+	Metrics        bool
+	PortOffset     int
+	Verbosity      int
+	Vmodule        string
+	OutFile        string
+	LocalBin       bool
+	Tag            string
+	WhiteList      bool
+	Ratel          bool
+	RatelPort      int
+	MemLimit       string
+	TlsDir         string
+	ExposePorts    bool
+	Encryption     bool
+	LudicrousMode  bool
+	SnapshotAfter  string
+	ContainerNames bool
 
 	// Extra flags
 	AlphaFlags string
@@ -120,6 +121,13 @@ const (
 
 func name(prefix string, idx int) string {
 	return fmt.Sprintf("%s%d", prefix, idx)
+}
+
+func containerName(s string) string {
+	if opts.ContainerNames {
+		return s
+	}
+	return ""
 }
 
 func toPort(i int) string {
@@ -141,7 +149,7 @@ func initService(basename string, idx, grpcPort int) service {
 
 	svc.name = name(basename, idx)
 	svc.Image = "dgraph/dgraph:" + opts.Tag
-	svc.ContainerName = svc.name
+	svc.ContainerName = containerName(svc.name)
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
 	if idx > 1 {
 		svc.DependsOn = append(svc.DependsOn, name(basename, idx-1))
@@ -337,7 +345,7 @@ func getAlpha(idx int) service {
 func getJaeger() service {
 	svc := service{
 		Image:         "jaegertracing/all-in-one:1.18",
-		ContainerName: "jaeger",
+		ContainerName: containerName("jaeger"),
 		WorkingDir:    "/working/jaeger",
 		Ports: []string{
 			toPort(14268),
@@ -360,7 +368,7 @@ func getRatel() service {
 	}
 	svc := service{
 		Image:         "dgraph/dgraph:" + opts.Tag,
-		ContainerName: "ratel",
+		ContainerName: containerName("ratel"),
 		Ports: []string{
 			toPort(opts.RatelPort),
 		},
@@ -375,7 +383,7 @@ func addMetrics(cfg *composeConfig) {
 
 	cfg.Services["node-exporter"] = service{
 		Image:         "quay.io/prometheus/node-exporter:v1.0.1",
-		ContainerName: "node-exporter",
+		ContainerName: containerName("node-exporter"),
 		Pid:           "host",
 		WorkingDir:    "/working/jaeger",
 		Volumes: []volume{{
@@ -388,7 +396,7 @@ func addMetrics(cfg *composeConfig) {
 
 	cfg.Services["prometheus"] = service{
 		Image:         "prom/prometheus:v2.20.1",
-		ContainerName: "prometheus",
+		ContainerName: containerName("prometheus"),
 		Hostname:      "prometheus",
 		Ports: []string{
 			toPort(9090),
@@ -410,7 +418,7 @@ func addMetrics(cfg *composeConfig) {
 
 	cfg.Services["grafana"] = service{
 		Image:         "grafana/grafana:7.1.2",
-		ContainerName: "grafana",
+		ContainerName: containerName("grafana"),
 		Hostname:      "grafana",
 		Ports: []string{
 			toPort(3000),
@@ -515,6 +523,8 @@ func main() {
 		"extra flags for alphas.")
 	cmd.PersistentFlags().StringVar(&opts.ZeroFlags, "zero_flags", "",
 		"extra flags for zeros.")
+	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", false,
+		"set container names in docker compose.")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
