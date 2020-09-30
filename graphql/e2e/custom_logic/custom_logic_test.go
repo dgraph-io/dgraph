@@ -2899,7 +2899,7 @@ func TestCustomFieldsWithRestError(t *testing.T) {
 			name
 			age
 			cars{
-				name
+			  name
 			}
 		}
 	}`
