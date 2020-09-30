@@ -66,6 +66,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	}
 
 	var writer badgerWriter
+	var flushed bool
 	if snap.SinceTs == 0 {
 		sw := pstore.NewStreamWriter()
 		if err := sw.Prepare(); err != nil {
@@ -73,6 +74,15 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		}
 
 		writer = sw
+		defer func() {
+			if flushed {
+				return
+			}
+			// Flush the writer if it has not been flushed so that we can unblock the writes.
+			if err := writer.Flush(); err != nil {
+				glog.Errorf("write flush failed: %s", err)
+			}
+		}()
 	} else {
 		writer = pstore.NewManagedWriteBatch()
 	}
@@ -105,6 +115,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	if err := writer.Flush(); err != nil {
 		return 0, err
 	}
+	flushed = true
 
 	if err := deleteStalePreds(ctx, done); err != nil {
 		return count, err
