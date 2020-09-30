@@ -75,6 +75,9 @@ const (
 		"and as much other data as possible returned."
 
 	errInternal = "Internal error"
+
+	errExpectedNonNull = "Non-nullable field '%s' (type %s) was not present in result from Dgraph.  " +
+		"GraphQL error propagation triggered."
 )
 
 // A ResolverFactory finds the right resolver for a query/mutation.
@@ -1229,11 +1232,18 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 
 // completeGeoObject builds a json GraphQL result object for the geo type.
 // It returns a bracketed json object like { "longitude" : 12.32 , "latitude" : 123.32 }.
-func completeGeoObject(fields []schema.Field, val map[string]interface{}) []byte {
+func completeGeoObject(field schema.Field, val map[string]interface{}, path []interface{}) ([]byte, x.GqlErrorList) {
 	var buf bytes.Buffer
 	x.Check2(buf.WriteRune('{'))
 
 	coordinate, _ := val["coordinates"].([]interface{})
+	if coordinate == nil {
+		gqlErr := x.GqlErrorf(errExpectedNonNull, field.Name(), field.Type()).WithLocations(field.Location())
+		gqlErr.Path = copyPath(path)
+		return nil, x.GqlErrorList{gqlErr}
+	}
+
+	fields := field.SelectionSet()
 	comma := ""
 
 	longitude := fmt.Sprintf("%s", coordinate[0])
@@ -1255,7 +1265,7 @@ func completeGeoObject(fields []schema.Field, val map[string]interface{}) []byte
 	}
 
 	x.Check2(buf.WriteRune('}'))
-	return buf.Bytes()
+	return buf.Bytes(), nil
 }
 
 // completeObject builds a json GraphQL result object for the current query level.
@@ -1409,7 +1419,7 @@ func completeValue(
 			}}
 		}
 		if field.Type().IsGeo() {
-			return completeGeoObject(field.SelectionSet(), val), nil
+			return completeGeoObject(field, val, path)
 		}
 
 		return completeObject(path, field.SelectionSet(), val)
@@ -1444,12 +1454,8 @@ func completeValue(
 				return []byte("null"), nil
 			}
 
-			gqlErr := x.GqlErrorf(
-				"Non-nullable field '%s' (type %s) was not present in result from Dgraph.  "+
-					"GraphQL error propagation triggered.", field.Name(), field.Type()).
-				WithLocations(field.Location())
+			gqlErr := x.GqlErrorf(errExpectedNonNull, field.Name(), field.Type()).WithLocations(field.Location())
 			gqlErr.Path = copyPath(path)
-
 			return nil, x.GqlErrorList{gqlErr}
 		}
 
