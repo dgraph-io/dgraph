@@ -125,6 +125,51 @@ func fragmentInQuery(t *testing.T) {
 	cleanupStarwars(t, result.QueryStarship[0].ID, "", "")
 }
 
+/*
+qcRep1: queryCharacter {
+				name
+				... on Human {
+					name
+					totalCredits
+				}
+				... on Droid {
+					name
+					primaryFunction
+				}
+			}
+			qcRep2: queryCharacter {
+				... on Human {
+					totalCredits
+				}
+				name
+				... on Droid {
+					primaryFunction
+				}
+			}
+*/
+
+/*
+"qcRep1": [
+            {
+				"name": "Han"
+                "totalCredits": 10,
+            },
+            {
+                "name": "R2-D2",
+                "primaryFunction": "Robot"
+            }
+		],
+		"qcRep2": [
+            {
+                "totalCredits": 10,
+                "name": "Han"
+            },
+            {
+                "name": "R2-D2",
+                "primaryFunction": "Robot"
+            }
+		],
+*/
 func fragmentInQueryOnInterface(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
@@ -159,6 +204,27 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				}
 				... on Droid {
 					id
+				}
+			}
+			qcRep1: queryCharacter {
+				name
+				... on Human {
+					name
+					totalCredits
+				}
+				... on Droid {
+					name
+					primaryFunction
+				}
+			}
+			qcRep2: queryCharacter {
+				... on Human {
+					totalCredits
+				}
+				name
+				... on Droid {
+					primaryFunction
+					name
 				}
 			}
 			queryThing {
@@ -268,6 +334,26 @@ func fragmentInQueryOnInterface(t *testing.T) {
 			{
 				"id": "%s"
 			}
+		],
+		"qcRep1": [
+            {
+				"name": "Han",
+                "totalCredits": 10
+            },
+            {
+                "name": "R2-D2",
+                "primaryFunction": "Robot"
+            }
+		],
+		"qcRep2": [
+            {
+                "totalCredits": 10,
+                "name": "Han"
+            },
+            {
+                "name": "R2-D2",
+                "primaryFunction": "Robot"
+            }
 		],
 		"queryThing":[
 			{

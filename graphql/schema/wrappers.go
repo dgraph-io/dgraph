@@ -135,7 +135,6 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
-	GetObjectKind() ast.DefinitionKind
 	IsAuthQuery() bool
 	CustomHTTPConfig() (FieldHTTPConfig, error)
 	EnumValues() []string
@@ -930,9 +929,6 @@ func (f *field) GetObjectName() string {
 	return f.field.ObjectDefinition.Name
 }
 
-func (f *field) GetObjectKind() ast.DefinitionKind {
-	return f.field.ObjectDefinition.Kind
-}
 func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, error) {
 	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	httpArg := custom.Arguments.ForName("http")
@@ -1226,9 +1222,6 @@ func (q *query) GetObjectName() string {
 	return q.field.ObjectDefinition.Name
 }
 
-func (q *query) GetObjectKind() ast.DefinitionKind {
-	return q.field.ObjectDefinition.Kind
-}
 func (q *query) CustomHTTPConfig() (FieldHTTPConfig, error) {
 	return getCustomHTTPConfig((*field)(q), true)
 }
@@ -1409,9 +1402,6 @@ func (m *mutation) GetObjectName() string {
 	return m.field.ObjectDefinition.Name
 }
 
-func (m *mutation) GetObjectKind() ast.DefinitionKind {
-	return m.field.ObjectDefinition.Kind
-}
 func (m *mutation) MutationType() MutationType {
 	return mutationType(m.Name(), m.op.inSchema.customDirectives["Mutation"][m.Name()])
 }
