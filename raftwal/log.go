@@ -14,7 +14,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft/raftpb"
-	"golang.org/x/sys/unix"
 )
 
 // WAL is divided up into entryFiles. Each entry file stores maxNumEntries in
@@ -65,8 +64,7 @@ type mmapFile struct {
 }
 
 func (m *mmapFile) sync() error {
-	// TODO: Switch this to z.Msync.
-	return unix.Msync(m.data, unix.MS_SYNC)
+	return z.Msync(m.data)
 }
 
 // slice returns the slice at the given offset.
