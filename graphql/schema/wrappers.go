@@ -645,7 +645,8 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 							dir, func(f *ast.FieldDefinition) bool {
 								return lambdaFieldMap[f.Name] ||
 									customFieldMap[f.Name] != nil ||
-									hasCustomOrLambda(f)
+									hasCustomOrLambda(f) ||
+									!isScalar(f.Type.Name())
 							})
 					}
 					// finally, update the custom directives map for this type
@@ -693,6 +694,7 @@ func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinit
 		}
 	} else {
 		// for fields in other types, skip the ones in body template which have a @lambda or @custom
+		// or are not scalar
 		for _, f := range defn.Fields {
 			if !skipInBodyTemplate(f) {
 				appendToBodyTemplate(f.Name)

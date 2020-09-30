@@ -37,6 +37,8 @@ type Author @dgraph(type: "test.dgraph.author") {
         reputation: Float @search
         country: Country
         posts: [Post!] @hasInverse(field: author)
+		bio: String @lambda
+		rank: Int @lambda
 }
 
 type Post @dgraph(type: "myPost") {
@@ -183,4 +185,12 @@ type Person1 {
     id: ID!
     name: String!
     friends: [Person1] @hasInverse(field: friends)
+}
+
+type Query {
+	authorsByName(name: String!): [Author] @lambda
+}
+
+type Mutation {
+	newAuthor(name: String!): ID! @lambda
 }
