@@ -280,8 +280,6 @@ func run() {
 		st.node.closer.SignalAndWait()
 		// Try to generate a snapshot before the shutdown.
 		st.node.trySnapshot(0)
-		// Stop Raft store.
-		store.Sync()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
 
@@ -292,5 +290,7 @@ func run() {
 	st.zero.closer.Wait()
 	glog.Infoln("Closer closed.")
 
+	err = store.Close()
+	glog.Infof("Raft WAL closed with err: %v\n", err)
 	glog.Infoln("All done. Goodbye!")
 }

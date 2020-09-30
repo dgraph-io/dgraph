@@ -158,10 +158,9 @@ they form a Raft group and provide synchronous replication.
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
 	flag.Duration("acl_cache_ttl", 30*time.Second, "DEPRECATED: The interval to refresh the acl "+
-		"cache. Enterprise feature.")
+		"cache. Enterprise feature.") // TODO: Remove this flag.
 
-	// TODO: Remove this flag.
-	flag.Float64P("lru_mb", "l", -1,
+	flag.Float64P("lru_mb", "l", -1, // TODO: Remove this flag.
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
 	flag.String("mutations", "allow",

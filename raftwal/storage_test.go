@@ -327,7 +327,7 @@ func TestStorageAppend(t *testing.T) {
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
-		all := ds.entries.allEntries(0, math.MaxUint64, math.MaxUint64)
+		all := ds.wal.allEntries(0, math.MaxUint64, math.MaxUint64)
 		if !reflect.DeepEqual(all, tt.wentries) {
 			t.Errorf("#%d: entries = %v, want %v", i, all, tt.wentries)
 		}
@@ -384,7 +384,7 @@ func TestMetaFile(t *testing.T) {
 func TestEntryFile(t *testing.T) {
 	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
-	el, err := openEntryLog(dir)
+	el, err := openWal(dir)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), el.firstIndex())
 	require.Zero(t, el.LastIndex())
@@ -417,7 +417,7 @@ func TestStorageBig(t *testing.T) {
 		t.Logf("adding entries: %d -> %d\n", start, end)
 		for idx := start; idx <= end; idx++ {
 			ent.Index = idx
-			require.NoError(t, ds.entries.AddEntries([]raftpb.Entry{ent}))
+			require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
 			li, err := ds.LastIndex()
 			require.NoError(t, err)
 			require.Equal(t, idx, li)
@@ -473,26 +473,26 @@ func TestStorageBig(t *testing.T) {
 	require.Equal(t, N-100, snap.Metadata.Index)
 	require.Equal(t, buf, snap.Data)
 
-	require.Equal(t, 0, len(ds.entries.files))
+	require.Equal(t, 0, len(ds.wal.files))
 
-	files, err := getEntryFiles(dir)
+	files, err := getLogFiles(dir)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(files))
 
 	// Jumping back.
 	ent.Index = N - 50
-	require.NoError(t, ds.entries.AddEntries([]raftpb.Entry{ent}))
+	require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
 
 	start := N - 100 + 1
-	ents := ds.entries.allEntries(start, math.MaxInt64, math.MaxInt64)
+	ents := ds.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
 	require.Equal(t, 50, len(ents))
 	for idx, ent := range ents {
 		require.Equal(t, int(start)+idx, int(ent.Index))
 	}
 
 	ent.Index = N
-	require.NoError(t, ds.entries.AddEntries([]raftpb.Entry{ent}))
-	ents = ds.entries.allEntries(start, math.MaxInt64, math.MaxInt64)
+	require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
+	ents = ds.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
 	require.Equal(t, 51, len(ents))
 	for idx, ent := range ents {
 		if idx == 50 {
@@ -504,7 +504,7 @@ func TestStorageBig(t *testing.T) {
 	require.NoError(t, ds.Sync())
 
 	ks := Init(dir)
-	ents = ks.entries.allEntries(start, math.MaxInt64, math.MaxInt64)
+	ents = ks.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
 	require.Equal(t, 51, len(ents))
 	for idx, ent := range ents {
 		if idx == 50 {

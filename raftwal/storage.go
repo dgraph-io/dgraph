@@ -17,12 +17,9 @@
 package raftwal
 
 import (
-	"encoding/binary"
-	"fmt"
 	"math"
 	"os"
 	"path"
-	"path/filepath"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -32,51 +29,49 @@ import (
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/trace"
-	"golang.org/x/sys/unix"
 )
 
 // versionKey is hardcoded into the special key used to fetch the maximum version from the DB.
 const versionKey = 1
 
 // DiskStorage handles disk access and writing for the RAFT write-ahead log.
-// Dir would contain wal.meta file.
-// And <start idx zero padded>.ent file.
+// Dir contains wal.meta file and <start idx zero padded>.wal files.
 //
-// --- meta.wal wal.meta file ---
-// This file should only be 4KB, so it can fit nicely in one Linux page.
-// Store the raft ID in the first 8 bytes.
-// wal.meta file would have the Snapshot and the HardState. First put hard state, then put Snapshot.
-// Leave extra bytes in between to ensure they never overlap.
-// Hardstate allocate 1KB. Rest 3KB for Snapshot. So snapshot is always accessible from offset=1024.
-// Also checkpoint key goes into meta.
+// === wal.meta file ===
+// This file is generally around 4KB, so it can fit nicely in one Linux page.
 //
-// --- <0000i>.ent files ---
-// This would contain the raftpb.Entry protos. It contains term, index, type and data. No need to do
-// proto.Marshal here.
-// Each file can contain 10K entries.
-// Term takes 8 bytes, Index takes 8 bytes, Type takes 8 bytes and Data we should store an offset to
-// the actual slice, which can be 8 bytes. Total = 32 bytes.
-// First 30K entries would consume 960KB.
+//   Layout:
+// 00-08 Bytes: Raft ID
+// 08-16 Bytes: Group ID
+// 16-24 Bytes: Checkpoint Index
+// 512 Bytes: Hard State (Marshalled)
+// 1024-1032 Bytes: Snapshot Index
+// 1032-1040 Bytes: Snapshot Term
+// 1040 Bytes: Snapshot (Marshalled)
+//
+// --- <0000i>.wal files ---
+// These files contain raftpb.Entry protos. Each entry is composed of term, index, type and data.
+//
+// Term takes 8 bytes. Index takes 8 bytes. Type takes 8 bytes. And for data, we store an offset to
+// the actual slice, which is 8 bytes. Size of entry = 32 bytes.
+// First 30K entries would consume 960KB, hence fitting on the first MB of the file (logFileOffset).
+//
 // Pre-allocate 1MB in each file just for these entries, and zero them out explicitly. Zeroing them
-// out would ensure that you'd know when these entries end, in case of a restart. In that case, the
-// index would be zero, so you know that's the end.
+// out ensures that we know when these entries end, in case of a restart.
 //
-// And the data for these entries are laid out starting offset=1<<20. Those are the offsets you
+// And the data for these entries are laid out starting logFileOffset. Those are the offsets you
 // store in the Entry for Data field.
-// After 30K entries, you rotate the file.
+// After 30K entries, we rotate the file.
 //
 // --- clean up ---
-// If snapshot idx = Idx_s. Find the first wal.ent whose first Entry is less than Idx_s. This file
-// and anything above MUST be kept. All the wal.ent files lower than this file can be deleted.
+// If snapshot idx = Idx_s. We find the first log file whose first entry is
+// less than Idx_s. This file and anything above MUST be kept. All the log
+// files lower than this file can be deleted.
 //
 // --- sync ---
-// Just do msync calls to sync the mmapped buffer. It would sync that to the disk.
-//
-// --- crashes ---
-// sync would have already flushed the mmap to disk. mmap deals with process crashes just fine. So,
-// we're good there. In case of file system crashes or disk crashes, we might need to replace this
-// node anyway. The new node would get a new WAL.
-//
+// mmap fares well with process crashes without doing anything. In case
+// HardSync is set, msync is called after every write, which flushes those
+// writes to disk.
 type DiskStorage struct {
 	dir      string
 	commitTs uint64
@@ -84,118 +79,23 @@ type DiskStorage struct {
 	gid      uint32
 	elog     trace.EventLog
 
-	meta    *metaFile
-	entries *entryLog
-	lock    sync.Mutex
+	meta *metaFile
+	wal  *wal
+	lock sync.Mutex
 }
 
 type indexRange struct {
 	from, until uint64 // index range for deletion, until index is not deleted.
 }
 
-type MetaInfo int
-
-const (
-	RaftId MetaInfo = iota
-	GroupId
-	CheckpointIndex
-	SnapshotIndex
-	SnapshotTerm
-)
-
-// getOffset returns offsets in wal.meta file.
-func getOffset(info MetaInfo) int {
-	switch info {
-	case RaftId:
-		return 0
-	case GroupId:
-		return 8
-	case CheckpointIndex:
-		return 16
-	case SnapshotIndex:
-		return snapshotIndex
-	case SnapshotTerm:
-		return snapshotIndex + 8
-	default:
-		panic("Invalid info: " + fmt.Sprint(info))
-	}
-}
-
-// Constants to use when writing to mmap'ed meta and entry files.
-const (
-	// metaName is the name of the file used to store metadata (e.g raft ID, checkpoint).
-	metaName = "wal.meta"
-	// metaFileSize is the size of the wal.meta file.
-	metaFileSize = 4 << 30
-	//hardStateOffset is the offset of the hard sate within the wal.meta file.
-	hardStateOffset = 512
-	// snapshotIndex stores the index and term corresponding to the snapshot.
-	snapshotIndex = 1024
-	// snapshotOffest is the offset of the snapshot within the wal.meta file.
-	snapshotOffset = snapshotIndex + 16
-	// maxNumEntries is maximum number of entries before rotating the file.
-	maxNumEntries = 30000
-)
-
-// mmapFile represents an mmapd file and includes both the buffer to the data
-// and the file descriptor.
-type mmapFile struct {
-	data []byte
-	fd   *os.File
-}
-
-func (m *mmapFile) sync() error {
-	// TODO: Switch this to z.Msync. And probably use MS_SYNC
-	return unix.Msync(m.data, unix.MS_SYNC)
-}
-
-// slice returns the slice at the given offset.
-func (m *mmapFile) slice(offset int) []byte {
-	sz := binary.BigEndian.Uint32(m.data[offset:])
-	start := offset + 4
-	next := start + int(sz)
-	if next > len(m.data) {
-		return []byte{}
-	}
-	res := m.data[start:next]
-	return res
-}
-
-// allocateSlice allocates a slice of the given size at the given offset.
-func (m *mmapFile) allocateSlice(sz, offset int) ([]byte, int) {
-	binary.BigEndian.PutUint32(m.data[offset:], uint32(sz))
-	return m.data[offset+4 : offset+4+sz], offset + 4 + sz
-}
-
-// metaFile stores the RAFT metadata (e.g RAFT ID, snapshot, hard state).
-type metaFile struct {
-	*mmapFile
-}
-
 // zeroOut zeroes out all the bytes in the range [start, end).
 func zeroOut(dst []byte, start, end int) {
-	// fmt.Printf("ZEROING out: %d -> %d. len: %d\n", start, end, len(dst))
 	buf := dst[start:end]
 	buf[0] = 0x00
 	for i := 1; i < len(buf); i *= 2 {
 		copy(buf[i:], buf[:i])
 	}
 }
-
-// newMetaFile opens the meta file in the given directory.
-func newMetaFile(dir string) (*metaFile, error) {
-	fname := filepath.Join(dir, metaName)
-	// Open the file in read-write mode and creates it if it doesn't exist.
-	mf, err := openMmapFile(fname, os.O_RDWR|os.O_CREATE, metaFileSize)
-	if err == errNewFile {
-		zeroOut(mf.data, 0, snapshotOffset+4)
-	} else if err != nil {
-		return nil, errors.Wrapf(err, "unable to open meta file")
-	}
-	return &metaFile{mmapFile: mf}, nil
-}
-
-var errNewFile = errors.New("new file")
 
 func syncDir(dir string) error {
 	glog.V(2).Infof("Syncing dir: %s\n", dir)
@@ -213,6 +113,9 @@ func syncDir(dir string) error {
 	return nil
 }
 
+// openMmapFile opens an existing file or creates a new file. If the file is
+// created, it would truncate the file to maxSz. In both cases, it would mmap
+// the file to maxSz and returned it.
 func openMmapFile(filename string, flag int, maxSz int) (*mmapFile, error) {
 	fd, err := os.OpenFile(filename, flag, 0666)
 	if err != nil {
@@ -241,7 +144,7 @@ func openMmapFile(filename string, flag int, maxSz int) (*mmapFile, error) {
 		dir, _ := path.Split(filename)
 		go func() {
 			if err := syncDir(dir); err != nil {
-				glog.Errorf("Error during syncDir Err: %v\n", err)
+				glog.Errorf("Error during syncDir: %v\n", err)
 			}
 		}()
 	}
@@ -249,98 +152,6 @@ func openMmapFile(filename string, flag int, maxSz int) (*mmapFile, error) {
 		data: buf,
 		fd:   fd,
 	}, err
-}
-
-func writeSlice(dst []byte, src []byte) {
-	binary.BigEndian.PutUint32(dst[:4], uint32(len(src)))
-	copy(dst[4:], src)
-}
-
-func allocateSlice(dst []byte, sz int) []byte {
-	binary.BigEndian.PutUint32(dst[:4], uint32(sz))
-	return dst[4 : 4+sz]
-}
-
-func sliceSize(dst []byte, offset int) int {
-	sz := binary.BigEndian.Uint32(dst[offset:])
-	return 4 + int(sz)
-}
-
-func readSlice(dst []byte, offset int) []byte {
-	b := dst[offset:]
-	sz := binary.BigEndian.Uint32(b)
-	return b[4 : 4+sz]
-}
-
-func (m *metaFile) bufAt(info MetaInfo) []byte {
-	pos := getOffset(info)
-	return m.data[pos : pos+8]
-}
-func (m *metaFile) Uint(info MetaInfo) uint64 {
-	return binary.BigEndian.Uint64(m.bufAt(info))
-}
-func (m *metaFile) SetUint(info MetaInfo, id uint64) {
-	binary.BigEndian.PutUint64(m.bufAt(info), id)
-}
-
-func (m *metaFile) StoreHardState(hs *raftpb.HardState) error {
-	if hs == nil || raft.IsEmptyHardState(*hs) {
-		return nil
-	}
-	buf, err := hs.Marshal()
-	if err != nil {
-		return errors.Wrapf(err, "cannot marshal hard state")
-	}
-	x.AssertTrue(len(buf) < snapshotIndex-hardStateOffset)
-	writeSlice(m.data[hardStateOffset:], buf)
-	return nil
-}
-
-func (m *metaFile) HardState() (raftpb.HardState, error) {
-	val := readSlice(m.data, hardStateOffset)
-	var hs raftpb.HardState
-
-	if len(val) == 0 {
-		return hs, nil
-	}
-	if err := hs.Unmarshal(val); err != nil {
-		return hs, errors.Wrapf(err, "cannot parse hardState")
-	}
-	return hs, nil
-}
-
-func (m *metaFile) StoreSnapshot(snap *raftpb.Snapshot) error {
-	if snap == nil || raft.IsEmptySnap(*snap) {
-		return nil
-	}
-	m.SetUint(SnapshotIndex, snap.Metadata.Index)
-	m.SetUint(SnapshotTerm, snap.Metadata.Term)
-
-	buf, err := snap.Marshal()
-	if err != nil {
-		return errors.Wrapf(err, "cannot marshal snapshot")
-	}
-	glog.V(1).Infof("Got valid snapshot to store of length: %d\n", len(buf))
-
-	if len(m.data)-snapshotOffset < len(buf) {
-		return errors.Errorf("Unable to store snapshot of size: %d\n", len(buf))
-	}
-	writeSlice(m.data[snapshotOffset:], buf)
-	return nil
-}
-
-func (m *metaFile) snapshot() (raftpb.Snapshot, error) {
-	val := readSlice(m.data, snapshotOffset)
-
-	var snap raftpb.Snapshot
-	if len(val) == 0 {
-		return snap, nil
-	}
-
-	if err := snap.Unmarshal(val); err != nil {
-		return snap, errors.Wrapf(err, "cannot parse snapshot")
-	}
-	return snap, nil
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
@@ -356,7 +167,7 @@ func Init(dir string) *DiskStorage {
 	// fmt.Printf("meta: %s\n", hex.Dump(w.meta.data[1024:2048]))
 	// fmt.Printf("found snapshot of size: %d\n", sliceSize(w.meta.data, snapshotOffset))
 
-	w.entries, err = openEntryLog(dir)
+	w.wal, err = openWal(dir)
 	x.Check(err)
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
@@ -372,29 +183,21 @@ func Init(dir string) *DiskStorage {
 
 	// If db is not closed properly, there might be index ranges for which delete entries are not
 	// inserted. So insert delete entries for those ranges starting from 0 to (first-1).
-	if err := w.entries.deleteBefore(first - 1); err != nil {
-		glog.Errorf("while deleting before: %d, err: %v\n", first-1, err)
-	}
-	last := w.entries.LastIndex()
+	w.wal.deleteBefore(first - 1)
+	last := w.wal.LastIndex()
 
 	glog.Infof("Init Raft Storage with snap: %d, first: %d, last: %d\n",
 		snap.Metadata.Index, first, last)
 	return w
 }
 
-func (w *DiskStorage) SetUint(info MetaInfo, id uint64) {
-	w.meta.SetUint(info, id)
-}
-func (w *DiskStorage) Uint(info MetaInfo) uint64 {
-	return w.meta.Uint(info)
-}
-
-var errNotFound = errors.New("Unable to find raft entry")
+func (w *DiskStorage) SetUint(info MetaInfo, id uint64) { w.meta.SetUint(info, id) }
+func (w *DiskStorage) Uint(info MetaInfo) uint64        { return w.meta.Uint(info) }
 
 // reset resets the entries. Used for testing.
 func (w *DiskStorage) reset(es []raftpb.Entry) error {
 	// Clean out the state.
-	if err := w.entries.reset(); err != nil {
+	if err := w.wal.reset(); err != nil {
 		return err
 	}
 	return w.addEntries(es)
@@ -439,11 +242,11 @@ func (w *DiskStorage) NumEntries() int {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	start := w.entries.firstIndex()
+	start := w.wal.firstIndex()
 
 	var count int
 	for {
-		ents := w.entries.allEntries(start, math.MaxUint64, 64<<20)
+		ents := w.wal.allEntries(start, math.MaxUint64, 64<<20)
 		if len(ents) == 0 {
 			return count
 		}
@@ -462,19 +265,19 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 
 	// glog.Infof("Entries after lock: [%d, %d) maxSize:%d", lo, hi, maxSize)
 
-	first := w.entries.firstIndex()
+	first := w.wal.firstIndex()
 	if lo < first {
 		glog.Errorf("lo: %d <first: %d\n", lo, first)
 		return nil, raft.ErrCompacted
 	}
 
-	last := w.entries.LastIndex()
+	last := w.wal.LastIndex()
 	if hi > last+1 {
 		glog.Errorf("hi: %d > last+1: %d\n", hi, last+1)
 		return nil, raft.ErrUnavailable
 	}
 
-	ents := w.entries.allEntries(lo, hi, maxSize)
+	ents := w.wal.allEntries(lo, hi, maxSize)
 	// glog.Infof("got entries [%d, %d): %+v\n", lo, hi, ents)
 	return ents, nil
 }
@@ -492,7 +295,7 @@ func (w *DiskStorage) Term(idx uint64) (uint64, error) {
 		return w.meta.Uint(SnapshotTerm), nil
 	}
 
-	term, err := w.entries.Term(idx)
+	term, err := w.wal.Term(idx)
 	if err != nil {
 		glog.Errorf("TERM for %d = %v\n", idx, err)
 	}
@@ -504,7 +307,7 @@ func (w *DiskStorage) LastIndex() (uint64, error) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	li := w.entries.LastIndex()
+	li := w.wal.LastIndex()
 	si := w.meta.Uint(SnapshotIndex)
 	if li < si {
 		return si, nil
@@ -513,18 +316,13 @@ func (w *DiskStorage) LastIndex() (uint64, error) {
 }
 
 func (w *DiskStorage) firstIndex() uint64 {
-	// We are deleting index ranges in background after taking snapshot, so we should check for last
-	// snapshot in WAL(Badger) if it is not found in cache. If no snapshot is found, then we can
-	// check firstKey.
 	if si := w.Uint(SnapshotIndex); si > 0 {
 		return si + 1
 	}
-	return w.entries.firstIndex()
+	return w.wal.firstIndex()
 }
 
-// FirstIndex returns the index of the first log entry that is
-// possibly available via Entries (older entries have been incorporated
-// into the latest Snapshot).
+// FirstIndex returns the first index. It is typically SnapshotIndex+1.
 func (w *DiskStorage) FirstIndex() (uint64, error) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
@@ -532,10 +330,10 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 	return w.firstIndex(), nil
 }
 
-// Snapshot returns the most recent snapshot.
-// If snapshot is temporarily unavailable, it should return ErrSnapshotTemporarilyUnavailable,
-// so raft state machine could know that Storage needs some time to prepare
-// snapshot and call Snapshot later.
+// Snapshot returns the most recent snapshot.  If snapshot is temporarily
+// unavailable, it should return ErrSnapshotTemporarilyUnavailable, so raft
+// state machine could know that Storage needs some time to prepare snapshot
+// and call Snapshot later.
 func (w *DiskStorage) Snapshot() (raftpb.Snapshot, error) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
@@ -558,7 +356,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 		return raft.ErrSnapOutOfDate
 	}
 
-	e, err := w.entries.seekEntry(i)
+	e, err := w.wal.seekEntry(i)
 	if err != nil {
 		return err
 	}
@@ -574,7 +372,8 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 		return err
 	}
 	// Now we delete all the files which are below the snapshot index.
-	return w.entries.deleteBefore(snap.Metadata.Index)
+	w.wal.deleteBefore(snap.Metadata.Index)
+	return nil
 }
 
 // Save would write Entries, HardState and Snapshot to persistent storage in order, i.e. Entries
@@ -585,7 +384,7 @@ func (w *DiskStorage) Save(h *raftpb.HardState, es []raftpb.Entry, snap *raftpb.
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	if err := w.entries.AddEntries(es); err != nil {
+	if err := w.wal.AddEntries(es); err != nil {
 		return err
 	}
 	if err := w.meta.StoreHardState(h); err != nil {
@@ -618,7 +417,7 @@ func (w *DiskStorage) addEntries(entries []raftpb.Entry) error {
 	}
 
 	// AddEntries would zero out all the entries starting entries[0].Index before writing.
-	if err := w.entries.AddEntries(entries); err != nil {
+	if err := w.wal.AddEntries(entries); err != nil {
 		return errors.Wrapf(err, "while adding entries")
 	}
 	return nil
@@ -629,12 +428,13 @@ func (w *DiskStorage) Sync() error {
 	if err := w.meta.sync(); err != nil {
 		return errors.Wrapf(err, "while syncing meta")
 	}
-	if err := w.entries.current.sync(); err != nil {
+	if err := w.wal.current.sync(); err != nil {
 		return errors.Wrapf(err, "while syncing current file")
 	}
 	return nil
 }
 
+// Close closes the DiskStorage.
 func (w *DiskStorage) Close() error {
 	return w.Sync()
 }
