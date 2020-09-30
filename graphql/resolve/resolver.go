@@ -889,7 +889,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		// To collect errors from remote GraphQL endpoint and those encountered during execution.
 		var errs error
 		var result []interface{}
-		type RESTErr struct{
+		type RESTErr struct {
 			Errors x.GqlErrorList `json:"errors,omitempty"`
 		}
 		var customErr RESTErr
@@ -910,8 +910,8 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				errCh <- schema.AppendGQLErrs(errs, keyNotFoundError(f, fconf.RemoteGqlQueryName))
 				return
 			}
-		} else if err := json.Unmarshal(b, &customErr); err == nil && len(customErr.Errors)!=0 {
-			errCh<-customErr.Errors
+		} else if err := json.Unmarshal(b, &customErr); err == nil && len(customErr.Errors) != 0 {
+			errCh <- customErr.Errors
 			return
 
 		} else if err := json.Unmarshal(b, &result); err != nil {
@@ -987,7 +987,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			}
 
 			var result interface{}
-			type RESTErr struct{
+			type RESTErr struct {
 				Errors x.GqlErrorList `json:"errors,omitempty"`
 			}
 			var customErr RESTErr
@@ -1009,8 +1009,8 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 						keyNotFoundError(f, fconf.RemoteGqlQueryName))
 					return
 				}
-			} else if err := json.Unmarshal(b, &customErr); err == nil && len(customErr.Errors)!=0 {
-				errCh<-customErr.Errors
+			} else if err := json.Unmarshal(b, &customErr); err == nil && len(customErr.Errors) != 0 {
+				errCh <- customErr.Errors
 				return
 
 			} else if err := json.Unmarshal(b, &result); err != nil {
@@ -1863,11 +1863,11 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	// this means it had body and not graphql, so just unmarshal it and return
 	if hrc.RemoteGqlQueryName == "" {
 		var result interface{}
-		type RESTErr struct{
+		type RESTErr struct {
 			Errors x.GqlErrorList `json:"errors,omitempty"`
 		}
-		var customErr  RESTErr
-		if err := json.Unmarshal(b, &customErr); err != nil || len(customErr.Errors)==0 {
+		var customErr RESTErr
+		if err := json.Unmarshal(b, &customErr); err != nil || len(customErr.Errors) == 0 {
 			if err := json.Unmarshal(b, &result); err != nil {
 				return emptyResult(jsonUnmarshalError(err, field))
 			}
@@ -1876,7 +1876,7 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		return &Resolved{
 			Data:  map[string]interface{}{field.Name(): result},
 			Field: field,
-			Err: customErr.Errors,
+			Err:   customErr.Errors,
 		}
 	}
 
