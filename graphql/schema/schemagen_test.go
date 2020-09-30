@@ -310,7 +310,7 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	// set up the lambda url for tests
+	// set up the lambda url for unit tests
 	x.Config.GraphqlLambdaUrl = "http://localhost:8086/graphql-worker"
 	// now run the tests
 	os.Exit(m.Run())

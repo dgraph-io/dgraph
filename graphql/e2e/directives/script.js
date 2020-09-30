@@ -2,7 +2,7 @@ const bio = ({parent: {name, dob}}) => `My name is ${name} and I was born on ${d
 
 async function authorsByName({args, dql}) {
     const results = await dql.query(`{
-        queryAuthor(func: type(Author)) @filter(eq(test.dgraph.author.name, "${args.name}")) {
+        queryAuthor(func: type(test.dgraph.author)) @filter(eq(test.dgraph.author.name, "${args.name}")) {
             name: test.dgraph.author.name
             dob: test.dgraph.author.dob
             reputation: test.dgraph.author.reputation
