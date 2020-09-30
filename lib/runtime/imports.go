@@ -82,9 +82,20 @@ import (
 )
 
 //export ext_kill_child_storage
-func ext_kill_child_storage(context unsafe.Pointer, a, b C.int32_t) {
+func ext_kill_child_storage(context unsafe.Pointer, storageKeyData, storageKeyLen C.int32_t) {
 	logger.Trace("[ext_kill_child_storage] executing...")
-	logger.Warn("[ext_kill_child_storage] not yet implemented")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	runtimeCtx := instanceContext.Data().(*Ctx)
+	s := runtimeCtx.storage
+
+	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
+
+	err := s.DeleteChildStorage(keyToChild)
+	if err != nil {
+		logger.Error("[ext_kill_child_storage]", "error", err)
+	}
 }
 
 //export ext_sandbox_memory_new
@@ -121,10 +132,40 @@ func ext_sandbox_instance_teardown(context unsafe.Pointer, a C.int32_t) {
 }
 
 //export ext_get_allocated_child_storage
-func ext_get_allocated_child_storage(context unsafe.Pointer, a, b, c, d, e C.int32_t) C.int32_t {
+func ext_get_allocated_child_storage(context unsafe.Pointer, storageKeyData, storageKeyLen, keyData, keyLen, writtenOut C.int32_t) int32 {
 	logger.Trace("[ext_get_allocated_child_storage] executing...")
-	logger.Warn("[ext_get_allocated_child_storage] not yet implemented")
-	return 0
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	runtimeCtx := instanceContext.Data().(*Ctx)
+	s := runtimeCtx.storage
+
+	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
+	key := memory[keyData : keyData+keyLen]
+
+	value, err := s.GetChildStorage(keyToChild, key)
+	if err != nil {
+		logger.Error("[ext_get_allocated_child_storage]", "error", err)
+		return 0
+	}
+	valueLen := uint32(len(value))
+	if valueLen == 0 {
+		copy(memory[writtenOut:writtenOut+4], []byte{0xff, 0xff, 0xff, 0xff})
+		return 0
+	}
+
+	// copy length to memory
+	byteLen := make([]byte, 4)
+	binary.LittleEndian.PutUint32(byteLen, valueLen)
+	copy(memory[writtenOut:writtenOut+4], byteLen)
+
+	resPtr, err := runtimeCtx.allocator.Allocate(valueLen)
+	if err != nil {
+		logger.Error("[ext_get_allocated_child_storage]", "error", err)
+		return 0
+	}
+	copy(memory[resPtr:resPtr+valueLen], value)
+	return int32(resPtr)
 }
 
 //export ext_child_storage_root

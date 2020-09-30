@@ -283,6 +283,10 @@ func (trs testRuntimeStorage) GetBalance(key [32]byte) (uint64, error) {
 	return binary.LittleEndian.Uint64(bal), nil
 }
 
+func (trs testRuntimeStorage) DeleteChildStorage(key []byte) error {
+	return trs.trie.DeleteFromChild(key)
+}
+
 type testRuntimeNetwork struct {
 }
 

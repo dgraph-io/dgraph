@@ -33,6 +33,7 @@ type Storage interface {
 	Entries() map[string][]byte
 	SetBalance(key [32]byte, balance uint64) error
 	GetBalance(key [32]byte) (uint64, error)
+	DeleteChildStorage(key []byte) error
 }
 
 // BasicNetwork interface for functions used by runtime network state function

@@ -137,3 +137,10 @@ func (s *TrieState) GetBalance(key [32]byte) (uint64, error) {
 
 	return binary.LittleEndian.Uint64(bal), nil
 }
+
+// DeleteChildStorage deletes child storage from the trie
+func (s *TrieState) DeleteChildStorage(key []byte) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.t.DeleteFromChild(key)
+}
