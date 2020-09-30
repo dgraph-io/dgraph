@@ -66,7 +66,6 @@ function dgraph::killall() {
 
 function dgraph::start_zeros() {
   local -r n="$1"
-  local -r zero_args=("${@:2}")
 
   for i in $(seq "$n"); do
     log::debug "Starting Zero $i."
@@ -84,14 +83,13 @@ function dgraph::start_zeros() {
       zero_args_default+=(--peer 'localhost:5081')
     fi
 
-    "$DGRAPH_BIN" zero "${zero_args_default[@]}" "${zero_args[@]}" &>"$LOGS_PATH/zero$i" &
+    "$DGRAPH_BIN" zero "${zero_args_default[@]}" "${@:2}" &>"$LOGS_PATH/zero$i" &
     sleep 1
   done
 }
 
 function dgraph::start_alphas() {
   local -r n="$1"
-  local -r alpha_args=("${@:2}")
 
   for i in $(seq "$n"); do
     log::debug "Starting Alpha $i."
@@ -109,7 +107,7 @@ function dgraph::start_alphas() {
       --cwd "$DGRAPH_PATH/alpha$i" \
       --port_offset "$i" \
       --zero 'localhost:5081' \
-      "${alpha_args[@]}" &>"$LOGS_PATH/alpha$i" &
+      "${@:2}" &>"$LOGS_PATH/alpha$i" &
     sleep 1
   done
 }
@@ -440,7 +438,7 @@ function dgraph::run_tests() {
       log::error "$test failed."
       ((failed += 1))
 
-      if [ "$EXIT_ON_FAILURE" -eq 1 ]; then
+      if [ "${EXIT_ON_FAILURE:-0}" -eq 1 ]; then
         return 1
       fi
     fi
