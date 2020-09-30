@@ -194,7 +194,11 @@ they form a Raft group and provide synchronous replication.
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
 	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. This returns auth errors to clients. We do not recommend turning it on for production.")
+
+	// Ludicrous mode
+	flag.Bool("ludicrous_mode", false, "Run Dgraph in ludicrous mode.")
 	flag.Int("ludicrous_concurrency", 2000, "Number of concurrent threads in ludicrous mode")
+
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
 
@@ -662,8 +666,6 @@ func run() {
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
-		Tracing:              Alpha.Conf.GetFloat64("trace"),
-		MyAddr:               Alpha.Conf.GetString("my"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
 		RaftId:               cast.ToUint64(Alpha.Conf.GetString("idx")),
 		WhiteListedIPRanges:  ips,
@@ -676,6 +678,8 @@ func run() {
 		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
 		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
 	}
+	x.WorkerConfig.Parse(Alpha.Conf)
+
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
 		return

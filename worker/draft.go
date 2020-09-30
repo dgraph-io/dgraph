@@ -1046,7 +1046,7 @@ func (n *node) Run() {
 	go n.checkpointAndClose(done)
 	go n.ReportRaftComms()
 
-	if x.WorkerConfig.LudicrousMode {
+	if !x.WorkerConfig.HardSync {
 		closer := z.NewCloser(2)
 		defer closer.SignalAndWait()
 		go x.StoreSync(n.Store, closer)

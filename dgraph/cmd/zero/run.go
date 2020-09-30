@@ -45,15 +45,12 @@ import (
 
 type options struct {
 	bindall           bool
-	myAddr            string
 	portOffset        int
 	nodeId            uint64
 	numReplicas       int
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
-	LudicrousMode     bool
-	hardSync          bool
 
 	totalCache int64
 }
@@ -114,7 +111,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.MaxConcurrentStreams(1000),
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}))
 
-	rc := pb.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
+	rc := pb.RaftContext{Id: opts.nodeId, Addr: x.WorkerConfig.MyAddr, Group: 0}
 	m := conn.NewNode(&rc, store)
 
 	// Zero followers should not be forwarding proposals to the leader, to avoid txn commits which
@@ -166,7 +163,6 @@ func run() {
 
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
-		myAddr:            Zero.Conf.GetString("my"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
 		nodeId:            uint64(Zero.Conf.GetInt("idx")),
 		numReplicas:       Zero.Conf.GetInt("replicas"),
@@ -180,17 +176,7 @@ func run() {
 	if opts.nodeId == 0 {
 		log.Fatalf("ERROR: idx flag cannot be 0. Please try again with idx as a positive integer")
 	}
-
-	survive := Zero.Conf.GetString("survive")
-	x.AssertTruef(survive == "process" || survive == "filesystem", "Invalid survival mode: %s", survive)
-
-	x.WorkerConfig = x.WorkerOptions{
-		LudicrousMode: Zero.Conf.GetBool("ludicrous_mode"),
-		HardSync:      survive == "filesystem",
-	}
-	if x.WorkerConfig.LudicrousMode {
-		x.WorkerConfig.HardSync = false
-	}
+	x.WorkerConfig.Parse(Zero.Conf)
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
@@ -221,8 +207,8 @@ func run() {
 	if opts.bindall {
 		addr = "0.0.0.0"
 	}
-	if opts.myAddr == "" {
-		opts.myAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
+	if x.WorkerConfig.MyAddr == "" {
+		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
 
 	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")

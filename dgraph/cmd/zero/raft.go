@@ -701,7 +701,7 @@ func (n *node) Run() {
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)
-	if opts.LudicrousMode {
+	if !x.WorkerConfig.HardSync {
 		closer.AddRunning(1)
 		go x.StoreSync(n.Store, closer)
 	}

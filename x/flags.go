@@ -32,7 +32,6 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 		" exporter does not support annotation logs and would discard them.")
 
 	// Performance flags.
-	flag.Bool("ludicrous_mode", false, "Run Dgraph in ludicrous mode.")
 	flag.String("survive", "process",
 		`Choose between "process" or "filesystem".
 		If set to "process", there would be no data loss in case of process crash, but the

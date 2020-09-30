@@ -19,6 +19,8 @@ package x
 import (
 	"net"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 // Options stores the options for this package.
@@ -104,3 +106,18 @@ type WorkerOptions struct {
 
 // WorkerConfig stores the global instance of the worker package's options.
 var WorkerConfig WorkerOptions
+
+func (w *WorkerOptions) Parse(conf *viper.Viper) {
+	w.MyAddr = conf.GetString("my")
+	w.Tracing = conf.GetFloat64("trace")
+
+	if w.LudicrousMode {
+		w.HardSync = false
+
+	} else {
+		survive := conf.GetString("survive")
+		AssertTruef(survive == "process" || survive == "filesystem",
+			"Invalid survival mode: %s", survive)
+		w.HardSync = survive == "filesystem"
+	}
+}
