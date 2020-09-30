@@ -253,6 +253,13 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 }
 
 func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error {
+	// Pause rollups during snapshot streaming.
+	closer, err := groups().Node.startTask(opSnapshot)
+	if err != nil {
+		return err
+	}
+	defer closer.Done()
+
 	n := groups().Node
 	if n == nil || n.Raft() == nil {
 		return conn.ErrNoNode
