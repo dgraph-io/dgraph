@@ -18,5 +18,6 @@ EXPOSE 9080
 
 RUN mkdir /dgraph
 WORKDIR /dgraph
+ADD symbols.sym.tsv /dgraph
 
 CMD ["dgraph"] # Shows the dgraph version and commands available.
