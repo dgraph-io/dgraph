@@ -105,6 +105,10 @@ type options struct {
 	Encryption    bool
 	LudicrousMode bool
 	SnapshotAfter string
+
+	// Extra flags
+	AlphaFlags string
+	ZeroFlags  string
 }
 
 var opts options
@@ -227,7 +231,9 @@ func getZero(idx int) service {
 			Limits: limit{Memory: opts.MemLimit},
 		}
 	}
-
+	if opts.ZeroFlags != "" {
+		svc.Command += " " + opts.ZeroFlags
+	}
 	return svc
 }
 
@@ -320,6 +326,9 @@ func getAlpha(idx int) service {
 			Target:   "/secret/tls",
 			ReadOnly: true,
 		})
+	}
+	if opts.AlphaFlags != "" {
+		svc.Command += " " + opts.AlphaFlags
 	}
 
 	return svc
@@ -502,6 +511,10 @@ func main() {
 		"enable zeros and alphas in ludicrous mode.")
 	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot_after", "",
 		"create a new Raft snapshot after this many number of Raft entries.")
+	cmd.PersistentFlags().StringVar(&opts.AlphaFlags, "alpha_flags", "",
+		"extra flags for alphas.")
+	cmd.PersistentFlags().StringVar(&opts.ZeroFlags, "zero_flags", "",
+		"extra flags for zeros.")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
