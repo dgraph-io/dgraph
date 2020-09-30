@@ -205,7 +205,7 @@ func SetAuthMeta(m *AuthMeta) {
 	authMeta.Namespace = m.Namespace
 	authMeta.Algo = m.Algo
 	authMeta.Audience = m.Audience
-	authMeta.ticker.Reset(m.refreshTime)
+	authMeta.ticker = time.NewTicker(m.refreshTime)
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
