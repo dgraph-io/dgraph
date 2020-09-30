@@ -95,6 +95,7 @@ type options struct {
 	Vmodule        string
 	OutFile        string
 	LocalBin       bool
+	Image          string
 	Tag            string
 	WhiteList      bool
 	Ratel          bool
@@ -148,7 +149,7 @@ func initService(basename string, idx, grpcPort int) service {
 	var svc service
 
 	svc.name = name(basename, idx)
-	svc.Image = "dgraph/dgraph:" + opts.Tag
+	svc.Image = opts.Image + ":" + opts.Tag
 	svc.ContainerName = containerName(svc.name)
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
 	if idx > 1 {
@@ -367,7 +368,7 @@ func getRatel() service {
 		portFlag = fmt.Sprintf(" -port=%d", opts.RatelPort)
 	}
 	svc := service{
-		Image:         "dgraph/dgraph:" + opts.Tag,
+		Image:         opts.Image + ":" + opts.Tag,
 		ContainerName: containerName("ratel"),
 		Ports: []string{
 			toPort(opts.RatelPort),
@@ -497,8 +498,10 @@ func main() {
 		"./docker-compose.yml", "name of output file")
 	cmd.PersistentFlags().BoolVarP(&opts.LocalBin, "local", "l", true,
 		"use locally-compiled binary if true, otherwise use binary from docker container")
+	cmd.PersistentFlags().StringVar(&opts.Image, "image", "dgraph/dgraph",
+		"Docker image for alphas and zeros.")
 	cmd.PersistentFlags().StringVarP(&opts.Tag, "tag", "t", "latest",
-		"Docker tag for dgraph/dgraph image. Requires -l=false to use binary from docker container.")
+		"Docker tag for the --image image. Requires -l=false to use binary from docker container.")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", true,
 		"include a whitelist if true")
 	cmd.PersistentFlags().BoolVar(&opts.Ratel, "ratel", false,
