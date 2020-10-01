@@ -1213,6 +1213,24 @@
     }
 
 -
+  name: "Between filter"
+  gqlquery: |
+    query {
+      queryPost(filter: { numLikes: { between : { min: 10, max: 20 }}}) {
+        title
+        text
+      }
+    }
+  dgquery: |-
+    query {
+      queryPost(func: type(Post)) @filter((between(Post.numLikes, 10, 20))) {
+        title: Post.title
+        text: Post.text
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "Filter with id inside and argument doesn't use uid func at root."
   gqlquery: |
     query {

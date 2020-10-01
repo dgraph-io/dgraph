@@ -74,6 +74,26 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 """
 scalar DateTime
 
+input IntPair{
+	min: Int
+	max: Int
+}
+
+input FloatPair{
+	min: Float
+	max: Float
+}
+
+input Int64Pair{
+	min: Int64
+	max: Int64
+}
+
+input DateTimePair{
+	min: DateTime
+	max: DateTime
+}
+
 enum DgraphIndex {
 	int
 	int64
@@ -144,6 +164,7 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+	between: IntPair
 }
 
 input Int64Filter {
@@ -152,6 +173,7 @@ input Int64Filter {
 	lt: Int64
 	ge: Int64
 	gt: Int64
+	between: Int64Pair
 }
 
 input FloatFilter {
@@ -160,6 +182,7 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
+	between: FloatPair
 }
 
 input DateTimeFilter {
@@ -168,6 +191,7 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
+	between: DateTimePair
 }
 
 input StringTermFilter {

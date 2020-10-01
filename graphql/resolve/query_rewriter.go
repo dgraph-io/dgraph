@@ -1050,13 +1050,18 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 		default:
 			// It's a base case like:
 			// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
-
+			fmt.Println("field", field)
 			switch dgFunc := filter[field].(type) {
+			case map[string]map[string]interface{}:
+				// add code for between here
+
 			case map[string]interface{}:
 				// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title, "GraphQL")
 				// OR
 				// numLikes: { le: 10 } -> le(Post.numLikes, 10)
 				fn, val := first(dgFunc)
+				fmt.Println(typ.DgraphPredicate(field))
+				fmt.Println(maybeQuoteArg(fn, val))
 				ands = append(ands, &gql.FilterTree{
 					Func: &gql.Function{
 						Name: fn,
@@ -1066,6 +1071,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 						},
 					},
 				})
+
 			case []interface{}:
 				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
 				ids := convertIDs(dgFunc)
