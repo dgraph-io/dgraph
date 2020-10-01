@@ -249,6 +249,11 @@ func getDefaultResponse() []byte {
 	return []byte(resTemplate)
 }
 
+func getRestError(w http.ResponseWriter, err []byte) {
+	w.WriteHeader(http.StatusBadRequest)
+	check2(w.Write(err))
+}
+
 func getFavMoviesErrorHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodGet,
@@ -260,7 +265,8 @@ func getFavMoviesErrorHandler(w http.ResponseWriter, r *http.Request) {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write([]byte(`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query"}]}`)))
+
+	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query","locations": [ { "line": 5, "column": 4 } ],"path": ["Movies","name"]}]}`))
 }
 
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
@@ -423,8 +429,7 @@ func favMoviesCreateErrorHandler(w http.ResponseWriter, r *http.Request) {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-
-	check2(w.Write([]byte(`{"errors":[{"message": "Rest API returns Error for FavoriteMoviesCreate query"}]}`)))
+	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for FavoriteMoviesCreate query"}]}`))
 }
 
 func favMoviesCreateWithNullBodyHandler(w http.ResponseWriter, r *http.Request) {
@@ -866,7 +871,7 @@ func userNameHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func userNameErrorHandler(w http.ResponseWriter, r *http.Request) {
-	check2(w.Write([]byte(`{"errors":[{"message": "Rest API returns Error for field name"}]}`)))
+	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for field name"}]}`))
 }
 
 func userNameWithoutAddressHandler(w http.ResponseWriter, r *http.Request) {

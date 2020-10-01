@@ -472,7 +472,7 @@ func TestCustomQueryWithNonExistentURLShouldReturnError(t *testing.T) {
 	require.Equal(t, x.GqlErrorList{
 		{
 			Message: "Evaluation of custom field failed because external request returned an " +
-				"error: unexpected status code: 404 for field: myFavoriteMovies within" +
+				"error: unexpected Error with status code: 404 for field: myFavoriteMovies within" +
 				" type: Query.",
 			Locations: []x.Location{{Line: 3, Column: 3}},
 		},
@@ -557,10 +557,10 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 
 	expectedErrors := x.GqlErrorList{
 		&x.GqlError{Message: "Evaluation of custom field failed because external request " +
-			"returned an error: unexpected status code: 404 for field: cars within type: Person.",
+			"returned an error: unexpected Error with status code: 404 for field: cars within type: Person.",
 			Locations: []x.Location{{Line: 6, Column: 4}}},
 		&x.GqlError{Message: "Evaluation of custom field failed because external request returned" +
-			" an error: unexpected status code: 404 for field: bikes within type: Person.",
+			" an error: unexpected Error with status code: 404 for field: bikes within type: Person.",
 			Locations: []x.Location{{Line: 9, Column: 4}}},
 	}
 	require.Contains(t, result.Errors, expectedErrors[0])
@@ -2838,7 +2838,9 @@ func TestCustomGetQuerywithRESTError(t *testing.T) {
 	result := params.ExecuteAsPost(t, alphaURL)
 	require.Equal(t, x.GqlErrorList{
 		{
-			Message: "Rest API returns Error for myFavoriteMovies query",
+			Message:   "Rest API returns Error for myFavoriteMovies query",
+			Locations: []x.Location{{Line: 5, Column: 4}},
+			Path:      []interface{}{"Movies", "name"},
 		},
 	}, result.Errors)
 
