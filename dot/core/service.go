@@ -29,6 +29,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/services"
+	"github.com/ChainSafe/gossamer/lib/transaction"
 
 	log "github.com/ChainSafe/log15"
 )
@@ -240,6 +241,8 @@ func (s *Service) StorageRoot() (common.Hash, error) {
 
 func (s *Service) handleBlocks(ctx context.Context) {
 	for {
+		prev := s.blockState.BestBlockHash()
+
 		select {
 		case block := <-s.blockAddCh:
 			if block == nil {
@@ -249,6 +252,11 @@ func (s *Service) handleBlocks(ctx context.Context) {
 			err := s.storageState.StoreInDB(block.Header.StateRoot)
 			if err != nil {
 				log.Warn("failed to store storage trie in database", "error", err)
+			}
+
+			err = s.handleChainReorg(prev, block.Header.Hash())
+			if err != nil {
+				log.Warn("failed to re-add transactions to chain upon re-org", "error", err)
 			}
 
 			err = s.handleRuntimeChanges(block.Header)
@@ -397,6 +405,55 @@ func (s *Service) handleRuntimeChanges(header *types.Header) error {
 		err = s.verifier.SetRuntimeChangeAtBlock(header, s.rt)
 		if err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+// handleChainReorg checks if there is a chain re-org (ie. new chain head is on a different chain than the
+// previous chain head). If there is a re-org, it moves the transactions that were included on the previous
+// chain back into the transaction pool.
+func (s *Service) handleChainReorg(prev, curr common.Hash) error {
+	ancestor, err := s.blockState.HighestCommonAncestor(prev, curr)
+	if err != nil {
+		return err
+	}
+
+	// if the highest common ancestor of the previous chain head and current chain head is the previous chain head,
+	// then the current chain head is the descendant of the previous and thus are on the same chain
+	if ancestor == prev {
+		return nil
+	}
+
+	subchain, err := s.blockState.SubChain(ancestor, prev)
+	if err != nil {
+		return err
+	}
+
+	// for each block in the previous chain, re-add its extrinsics back into the pool
+	for _, hash := range subchain {
+		body, err := s.blockState.GetBlockBody(hash)
+		if err != nil {
+			continue
+		}
+
+		exts, err := body.AsExtrinsics()
+		if err != nil {
+			continue
+		}
+
+		for _, ext := range exts {
+			s.logger.Trace("validating transaction on re-org chain", "extrinsic", ext)
+
+			txv, err := s.rt.ValidateTransaction(ext)
+			if err != nil {
+				s.logger.Trace("failed to validate transaction", "extrinsic", ext)
+				continue
+			}
+
+			vtx := transaction.NewValidTransaction(ext, txv)
+			s.transactionState.AddToPool(vtx)
 		}
 	}
 

@@ -51,6 +51,9 @@ type BlockState interface {
 	UnregisterImportedChannel(id byte)
 	RegisterFinalizedChannel(ch chan<- *types.Header) (byte, error)
 	UnregisterFinalizedChannel(id byte)
+	HighestCommonAncestor(a, b common.Hash) (common.Hash, error)
+	SubChain(start, end common.Hash) ([]common.Hash, error)
+	GetBlockBody(hash common.Hash) (*types.Body, error)
 }
 
 // StorageState interface for storage state methods

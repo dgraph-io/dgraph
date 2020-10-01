@@ -219,6 +219,10 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 		cfg.StorageState = stateSrvc.Storage
 	}
 
+	if cfg.TransactionState == nil {
+		cfg.TransactionState = stateSrvc.Transaction
+	}
+
 	if cfg.ConsensusMessageHandler == nil {
 		cfg.ConsensusMessageHandler = &mockConsensusMessageHandler{}
 	}

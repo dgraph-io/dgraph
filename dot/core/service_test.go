@@ -25,18 +25,25 @@ import (
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
+	"github.com/ChainSafe/gossamer/lib/runtime/extrinsic"
+	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 )
 
 func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) []*types.Header {
-	previousHash := blockState.BestBlockHash()
-	previousNum, err := blockState.BestBlockNumber()
-	require.Nil(t, err)
+	return addTestBlocksToStateWithParent(t, blockState.BestBlockHash(), depth, blockState)
+}
+
+func addTestBlocksToStateWithParent(t *testing.T, previousHash common.Hash, depth int, blockState BlockState) []*types.Header {
+	prevHeader, err := blockState.(*state.BlockState).GetHeader(previousHash)
+	require.NoError(t, err)
+	previousNum := prevHeader.Number
 
 	headers := []*types.Header{}
 
@@ -53,7 +60,7 @@ func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) []*typ
 		previousHash = block.Header.Hash()
 
 		err := blockState.AddBlock(block)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		headers = append(headers, block.Header)
 	}
 
@@ -191,4 +198,95 @@ func TestService_HasKey_UnknownType(t *testing.T) {
 	res, err := svc.HasKey(kr.Alice().Public().Hex(), "xxxx")
 	require.EqualError(t, err, "unknown key type: xxxx")
 	require.False(t, res)
+}
+
+func TestHandleChainReorg_NoReorg(t *testing.T) {
+	s := NewTestService(t, nil)
+	addTestBlocksToState(t, 4, s.blockState.(*state.BlockState))
+
+	head, err := s.blockState.BestBlockHeader()
+	require.NoError(t, err)
+
+	err = s.handleChainReorg(head.ParentHash, head.Hash())
+	require.NoError(t, err)
+}
+
+func TestHandleChainReorg_WithReorg_NoTransactions(t *testing.T) {
+	s := NewTestService(t, nil)
+	height := 5
+	branch := 3
+	branches := map[int]int{branch: 1}
+	state.AddBlocksToStateWithFixedBranches(t, s.blockState.(*state.BlockState), height, branches, 0)
+
+	leaves := s.blockState.(*state.BlockState).Leaves()
+	require.Equal(t, 2, len(leaves))
+
+	head := s.blockState.BestBlockHash()
+	var other common.Hash
+	if leaves[0] == head {
+		other = leaves[1]
+	} else {
+		other = leaves[0]
+	}
+
+	err := s.handleChainReorg(other, head)
+	require.NoError(t, err)
+}
+
+func TestHandleChainReorg_WithReorg_Transactions(t *testing.T) {
+	cfg := &Config{
+		// TODO: change to NODE_RUNTIME
+		Runtime: runtime.NewTestRuntime(t, runtime.SUBSTRATE_TEST_RUNTIME),
+	}
+
+	s := NewTestService(t, cfg)
+	height := 5
+	branch := 3
+	addTestBlocksToState(t, height, s.blockState.(*state.BlockState))
+
+	// create extrinsic
+	ext := extrinsic.NewIncludeDataExt([]byte("nootwashere"))
+	tx, err := ext.Encode()
+	require.NoError(t, err)
+
+	validity, err := s.rt.ValidateTransaction(tx)
+	require.NoError(t, err)
+
+	// get common ancestor
+	ancestor, err := s.blockState.(*state.BlockState).GetBlockByNumber(big.NewInt(int64(branch - 1)))
+	require.NoError(t, err)
+
+	// build "re-org" chain
+	body, err := types.NewBodyFromExtrinsics([]types.Extrinsic{tx})
+	require.NoError(t, err)
+
+	block := &types.Block{
+		Header: &types.Header{
+			ParentHash: ancestor.Header.Hash(),
+			Number:     big.NewInt(0).Add(ancestor.Header.Number, big.NewInt(1)),
+			Digest:     [][]byte{{1}},
+		},
+		Body: body,
+	}
+
+	err = s.blockState.AddBlock(block)
+	require.NoError(t, err)
+
+	leaves := s.blockState.(*state.BlockState).Leaves()
+	require.Equal(t, 2, len(leaves))
+
+	head := s.blockState.BestBlockHash()
+	var other common.Hash
+	if leaves[0] == head {
+		other = leaves[1]
+	} else {
+		other = leaves[0]
+	}
+
+	err = s.handleChainReorg(other, head)
+	require.NoError(t, err)
+
+	pending := s.transactionState.(*state.TransactionState).Pending()
+	require.Equal(t, 1, len(pending))
+	require.Equal(t, transaction.NewValidTransaction(tx, validity), pending[0])
 }
