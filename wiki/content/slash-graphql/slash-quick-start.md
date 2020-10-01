@@ -11,9 +11,10 @@ Welcome to [Slash GraphQL](https://dgraph.io/slash-graphql), the world’s most 
 
 In this guide, we will create a database for a small app from the ground up using Slash GraphQL. The easy steps you will learn in this tutorial are fundamental to use Slash GraphQL, and mastering it will give you a better understanding of the powerful features available.
 
-### About the ToDo App
+### About the "to-do" App
 
-As our example app for this guide, we'll be building a simple **ToDo List** that supports adding and completing tasks for multiple users. With the help of this small app, in this article you'll learn to:
+As our example app for this guide, we'll build a simple **"to-do" list** that supports adding and completing tasks for multiple users.
+With the help of this small app, in this article you'll learn to:
 
 * [Create a Slash GraphQL schema](#the-schema)
 * [Apply GraphQL mutations and populate data](#graphql-mutations)
@@ -22,7 +23,7 @@ As our example app for this guide, we'll be building a simple **ToDo List** that
 
 ## The Schema
 
-The schema for our simple ToDo app has just two types: `Tasks` and `Users`. The schema itself is pretty simple: it's a standard GraphQL schema, with a few additional directives \(such as `@search`\) which are specific to Slash GraphQL.
+The schema for our "to-do" app has only two types: `Tasks` and `Users`. The schema itself is pretty simple: it's a standard GraphQL schema, with a few additional directives \(such as `@search`\) which are specific to Slash GraphQL.
 
 Let's define the Slash GraphQL schema for our app:
 
@@ -43,7 +44,9 @@ type User {
 
 The `Task` type has four fields: `id`, `title`, `completed` , and `user`. The `title` field has the `@search` directive on it, which tells Slash GraphQL that this field can be used in full-text search queries.
 
-The `User` type uses the `username` field as an ID, and we will put the user's email address into that field.
+The `User` type has three fields: `username` (the email address of the user), `name`, and `tasks`. 
+The `username` field has the `@id` declaration, so this field is a unique identifier for objects of this type. 
+The `tasks` field associates each user with any number of `Task` objects.
 
 Let's paste the code into the [Schema tab](https://slash.dgraph.io/_/schema) of Slash GraphQL and click **Update Schema**:
 
@@ -200,7 +203,8 @@ The query's results are shown below. If you look carefully, you'll see that Slas
 
 ## Authorization
 
-Now that we have a working schema, let's update the original code and add some access authorization. We'll update the schema so that users can only read their tasks back. \(E.g. Frodo won't be able to read Luke's ToDo tasks\)
+Now that we have a working schema, let's update the original code and add some access authorization. We'll update the schema 
+so that users can only read tasks that they own (for example, this change would prevent Frodo from reading Luke's tasks).
 
 ```graphql
 type Task @auth(
@@ -227,7 +231,7 @@ type User {
 # Dgraph.Authorization {"Header":"X-Auth-Token","Namespace":"https://dgraph.io/jwt/claims","Algo":"RS256","Audience":["Q1nC2kLsN6KQTX1UPdiBS6AhXRx9KwKl"],"VerificationKey":"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAp/qw/KXH23bpOuhXzsDp\ndo9bGNqjd/OkH2LkCT0PKFx5i/lmvFXdd04fhJD0Z0K3pUe7xHcRn1pIbZWlhwOR\n7siaCh9L729OQjnrxU/aPOKwsD19YmLWwTeVpE7vhDejhnRaJ7Pz8GImX/z/Xo50\nPFSYdX28Fb3kssfo+cMBz2+7h1prKeLZyDk30ItK9MMj9S5y+UKHDwfLV/ZHSd8m\nVVEYRXUNNzLsxD2XaEC5ym2gCjEP1QTgago0iw3Bm2rNAMBePgo4OMgYjH9wOOuS\nVnyvHhZdwiZAd1XtJSehORzpErgDuV2ym3mw1G9mrDXDzX9vr5l5CuBc3BjnvcFC\nFwIDAQAB\n-----END PUBLIC KEY-----"}
 ```
 
-Slash GraphQL allows you to pass JWT with custom claims as a header, and will apply rules to control who can query or modify the data in your database. The `@auth` directive controls how these rules \(filters generated from the JWT token\) are applied.
+Slash GraphQL allows you to pass JSON Web Tokens (JWTs) with custom claims as a header, and will apply rules to control who can query or modify the data in your database. The `@auth` directive controls how these rules \(filters generated from the JWT token\) are applied.
 
 In our schema, we specify that one can only query tasks if the tasks' user has a `username` that matches `$USER`, a field in the JWT token.
 
@@ -262,3 +266,6 @@ Once you have logged in, you should see something like:
 
 Congratulations! You have completed the Slash GraphQL quick-start guide, and you are ready to use the world’s most advanced, hosted GraphQL backend in your applications.
 
+## Next Steps
+
+To learn more about the Slash GraphQL managed service, see [Administering your Backend](/slash-graphql/admin/) and [Advanced Queries](/slash-graphql/advanced-queries/).
