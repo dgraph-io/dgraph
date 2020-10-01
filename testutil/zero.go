@@ -138,7 +138,7 @@ func GetNodesInGroup(gid string) ([]string, error) {
 	}
 
 	nodes := make([]string, 0)
-	for id, _ := range group.Members {
+	for id := range group.Members {
 		nodes = append(nodes, id)
 	}
 	return nodes, nil
