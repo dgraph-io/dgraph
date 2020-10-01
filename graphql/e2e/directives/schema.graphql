@@ -92,6 +92,7 @@ interface Character @dgraph(type: "performance.character") {
         id: ID!
         name: String! @search(by: [exact])
         appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
+		bio: String @lambda
 }
 
 type Human implements Character & Employee {
