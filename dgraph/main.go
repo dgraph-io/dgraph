@@ -17,7 +17,9 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
+	"os"
 	"runtime"
 	"time"
 
@@ -33,6 +35,7 @@ func main() {
 	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
 	// benchmark notes are located in badger-bench/randread.
 	runtime.GOMAXPROCS(128)
+	fmt.Printf("Page Size: %d\n", os.Getpagesize())
 
 	absDiff := func(a, b uint64) uint64 {
 		if a > b {

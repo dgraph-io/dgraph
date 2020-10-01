@@ -1148,7 +1148,9 @@ type DB interface {
 
 func StoreSync(db DB, closer *z.Closer) {
 	defer closer.Done()
-	ticker := time.NewTicker(1 * time.Second)
+	// We technically don't need to call this due to mmap being able to survive process crashes.
+	// But, once a minute is infrequent enough that we won't lose any performance due to this.
+	ticker := time.NewTicker(time.Minute)
 	for {
 		select {
 		case <-ticker.C:
@@ -1238,38 +1240,13 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 }
 
 // ParseCompressionLevel returns compression level(int) given the compression level(string)
-func ParseCompressionLevel(compressionLevel string) (int, error) {
-	x, err := strconv.Atoi(compressionLevel)
-	if err != nil {
-		return 0, errors.Errorf("ERROR: unable to parse compression level(%s)", compressionLevel)
-	}
+func ParseCompressionLevel(level string) int {
+	x, err := strconv.Atoi(level)
+	Check(err)
 	if x < 0 {
-		return 0, errors.Errorf("ERROR: compression level(%s) cannot be negative", compressionLevel)
+		glog.Fatalf("ERROR: compression level(%s) cannot be negative", level)
 	}
-	return x, nil
-}
-
-// GetCompressionLevels returns the slice of compression levels given the "," (comma) separated
-// compression levels(integers) string.
-func GetCompressionLevels(compressionLevelsString string) ([]int, error) {
-	compressionLevels := strings.Split(compressionLevelsString, ",")
-	// Validity checks
-	if len(compressionLevels) != 1 && len(compressionLevels) != 2 {
-		return nil, errors.Errorf("ERROR: expected single integer or two comma separated integers")
-	}
-	var compressionLevelsInt []int
-	for _, cLevel := range compressionLevels {
-		x, err := ParseCompressionLevel(cLevel)
-		if err != nil {
-			return nil, err
-		}
-		compressionLevelsInt = append(compressionLevelsInt, x)
-	}
-	// Append the same compression level in case only one level was passed.
-	if len(compressionLevelsInt) == 1 {
-		compressionLevelsInt = append(compressionLevelsInt, compressionLevelsInt[0])
-	}
-	return compressionLevelsInt, nil
+	return x
 }
 
 // ToHex converts a uint64 to a hex byte array. If rdf is true it will

@@ -37,6 +37,8 @@ services:
   mock:
     build:
       context: ./cmd
+    labels:
+      cluster: test
     ports:
     - 8888:8888
 
