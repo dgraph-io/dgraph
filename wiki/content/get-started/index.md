@@ -80,11 +80,11 @@ Once Dgraph is running, you can access **Ratel** at [`http://localhost:8000`](ht
 It allows browser-based queries, mutations and visualizations.
 
 You can run the mutations and queries below from either curl in the command line
-or by pasting the mutation data in the **Ratel**.
+or by pasting the mutation data in **Ratel**.
 {{% /notice %}}
 
 #### Dataset
-The dataset is a movie graph, where and the graph nodes are
+The dataset is a movie graph, where the graph nodes are
 entities of the type directors, actors, genres, or movies.
 
 #### Storing data in the graph

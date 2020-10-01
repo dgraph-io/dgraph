@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -62,6 +63,7 @@ type flagOptions struct {
 	wdir           string
 	wtruncateUntil uint64
 	wsetSnapshot   string
+	oldWalFormat   bool
 }
 
 func init() {
@@ -88,6 +90,8 @@ func init() {
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
+	flag.BoolVar(&opt.oldWalFormat, "old-wal", false,
+		"Denotes that the directory pointed by --wal is a wal directory in old format.")
 	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0,
 		"Remove data from Raft entries until but not including this index.")
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
@@ -777,12 +781,28 @@ func run() {
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
 
-	var db *badger.DB
-	if isWal {
-		db, err = badger.Open(bopts)
-	} else {
-		db, err = badger.OpenManaged(bopts)
+	// If this is a new format WAL, print and return.
+	if isWal && !opt.oldWalFormat {
+		store := raftwal.Init(dir)
+		fmt.Printf("RaftID: %+v\n", store.Uint(raftwal.RaftId))
+
+		// TODO: Fix the pending logic.
+		pending := make(map[uint64]bool)
+
+		start, last := printBasic(store)
+		for start < last-1 {
+			entries, err := store.Entries(start, last+1, 64<<20)
+			x.Check(err)
+			for _, e := range entries {
+				printEntry(e, pending)
+				start = x.Max(start, e.Index)
+			}
+		}
+		fmt.Println("Done")
+		return
 	}
+
+	db, err := badger.OpenManaged(bopts)
 	x.Check(err)
 	// Not using posting list cache
 	posting.Init(db, 0)

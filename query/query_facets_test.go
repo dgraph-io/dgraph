@@ -29,9 +29,9 @@ var (
 
 func populateClusterWithFacets() error {
 	// Return immediately if the setup has been performed already.
-	// if facetSetupDone {
-	// 	return nil
-	// }
+	if facetSetupDone {
+		return nil
+	}
 
 	triples := `
 		<1> <name> "Michelle"@en (origin = "french") .

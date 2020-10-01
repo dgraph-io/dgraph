@@ -22,7 +22,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200921173231-cde0cedc431e
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
-	github.com/dgraph-io/ristretto v0.0.4-0.20200915135229-0f2ad8c2c06a
+	github.com/dgraph-io/ristretto v0.0.4-0.20200930145743-646c5f3caa33
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
@@ -36,7 +36,7 @@ require (
 	github.com/golang/protobuf v1.3.5
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
-	github.com/google/go-cmp v0.4.0
+	github.com/google/go-cmp v0.5.0
 	github.com/google/uuid v1.0.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
@@ -49,7 +49,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.2.1
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
-	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
 	github.com/prometheus/common v0.4.1 // indirect
 	github.com/prometheus/procfs v0.0.0-20190517135640-51af30a78b0e // indirect
 	github.com/spf13/cast v1.3.0
@@ -66,9 +65,8 @@ require (
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
-	golang.org/x/sys v0.0.0-20200515095857-1151b9dac4a9
+	golang.org/x/sys v0.0.0-20200918174421-af09f7315aff
 	golang.org/x/text v0.3.2
-	google.golang.org/genproto v0.0.0-20190516172635-bb713bdc0e52 // indirect
 	google.golang.org/grpc v1.23.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/ini.v1 v1.48.0 // indirect

@@ -69,16 +69,11 @@ func (p *progress) report() {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 
-	count := 0
-
+	z.StatsPrint() // Just print once.
 	for {
 		select {
 		case <-t.C:
 			p.reportOnce()
-			count++
-			if count%60 == 1 {
-				z.StatsPrint()
-			}
 		case <-p.shutdown:
 			p.shutdown <- struct{}{}
 			return
