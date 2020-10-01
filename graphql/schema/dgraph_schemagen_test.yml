@@ -615,13 +615,34 @@ schemas:
         name: String!
         location: Point @search
         landmark: Point
+        office: Point  @search(by: [point])
+        area1: Polygon @search
+        area2: Polygon
+        area3: Polygon @search(by: [polygon])
+        branches1: MultiPolygon @search
+        branches2: MultiPolygon
+        branches3: MultiPolygon @search(by: [multiPolygon])
       }
     output: |
       type Hotel {
         Hotel.name
         Hotel.location
         Hotel.landmark
+        Hotel.office
+        Hotel.area1
+        Hotel.area2
+        Hotel.area3
+        Hotel.branches1
+        Hotel.branches2
+        Hotel.branches3
       }
       Hotel.name: string .
       Hotel.location: geo @index(geo) .
       Hotel.landmark: geo .
+      Hotel.office: geo @index(geo) .
+      Hotel.area1: geo @index(geo) .
+      Hotel.area2: geo .
+      Hotel.area3: geo @index(geo) .
+      Hotel.branches1: geo @index(geo) .
+      Hotel.branches2: geo .
+      Hotel.branches3: geo @index(geo) .

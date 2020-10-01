@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -26,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -980,6 +982,45 @@ func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}
 	}
 }
 
+func writeMultiPolygon(multipolygon map[string]interface{}, buf *bytes.Buffer) {
+	polygons, _ := multipolygon["polygons"].([]interface{})
+	x.Check2(buf.WriteString("["))
+	comma := ""
+	for _, v := range polygons {
+		polygon := v.(map[string]interface{})
+		x.Check2(buf.WriteString(comma))
+		writePolygon(polygon, buf)
+		comma = ","
+	}
+	x.Check2(buf.WriteString("]"))
+}
+
+func writePolygon(polygon map[string]interface{}, buf *bytes.Buffer) {
+	coordinates, _ := polygon["coordinates"].([]interface{})
+	x.Check2(buf.WriteString("["))
+	comma1 := ""
+	for _, vc := range coordinates {
+		ring := vc.(map[string]interface{})
+		points, _ := ring["points"].([]interface{})
+		x.Check2(buf.WriteString(comma1))
+		x.Check2(buf.WriteString("["))
+		comma2 := ""
+		for _, p := range points {
+			point := p.(map[string]interface{})
+			x.Check2(buf.WriteString(
+				fmt.Sprintf("%s[%v,%v]", comma2, point["longitude"], point["latitude"])))
+			comma2 = ","
+		}
+		x.Check2(buf.WriteString("]"))
+		comma1 = ","
+	}
+	x.Check2(buf.WriteString("]"))
+}
+
+func writePoint(point map[string]interface{}) string {
+	return fmt.Sprintf("[%v,%v]", point["longitude"], point["latitude"])
+}
+
 // buildFilter builds a Dgraph gql.FilterTree from a GraphQL 'filter' arg.
 //
 // All the 'filter' args built by the GraphQL layer look like
@@ -1062,18 +1103,18 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				fn, val := first(dgFunc)
 				switch fn {
 				case "near":
-					//  For Geo type we have `near` filter which is written as follows:
+					// For Geo type we have `near` filter which is written as follows:
 					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
 					geoParams := val.(map[string]interface{})
 					distance := geoParams["distance"]
 
 					coordinate, _ := geoParams["coordinate"].(map[string]interface{})
-					lat := coordinate["latitude"]
-					long := coordinate["longitude"]
-
+					if coordinate == nil {
+						return nil
+					}
 					args := []gql.Arg{
 						{Value: typ.DgraphPredicate(field)},
-						{Value: fmt.Sprintf("[%v,%v]", long, lat)},
+						{Value: writePoint(coordinate)},
 						{Value: fmt.Sprintf("%v", distance)},
 					}
 
@@ -1081,6 +1122,68 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 						Func: &gql.Function{
 							Name: fn,
 							Args: args,
+						},
+					})
+				case "within":
+					// For Geo type we have `within` filter which is written as follows:
+					// { within: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					geoParams := val.(map[string]interface{})
+					polygon, _ := geoParams["polygon"].(map[string]interface{})
+					if polygon == nil {
+						return nil
+					}
+
+					var buf bytes.Buffer
+					writePolygon(polygon, &buf)
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(field)},
+								{Value: buf.String()},
+							},
+						},
+					})
+				case "contains":
+					// For Geo type we have `contains` filter which is either point or polygon and is written as follows:
+					// For point: { contains: { point: { latitude: 11.11, longitude: 22.22 }}}
+					// For polygon: { contains: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					geoParams := val.(map[string]interface{})
+					var res string
+					if polygon, ok := geoParams["polygon"].(map[string]interface{}); ok {
+						var buf bytes.Buffer
+						writePolygon(polygon, &buf)
+						res = buf.String()
+					} else if point, ok := geoParams["point"].(map[string]interface{}); ok {
+						res = writePoint(point)
+					}
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(field)},
+								{Value: res},
+							},
+						},
+					})
+				case "intersects":
+					// For Geo type we have `contains` filter which is either multi-polygon or polygon and is written as follows:
+					// For multi-polygon : { intersect: { multiPolygon: { coordinates: [{ coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] }] } } }
+					// For polygon: { intersect: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					geoParams := val.(map[string]interface{})
+					var buf bytes.Buffer
+					if polygon, ok := geoParams["polygon"].(map[string]interface{}); ok {
+						writePolygon(polygon, &buf)
+					} else if multiPolygon, ok := geoParams["multiPolygon"].(map[string]interface{}); ok {
+						writeMultiPolygon(multiPolygon, &buf)
+					}
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(field)},
+								{Value: buf.String()},
+							},
 						},
 					})
 				default:

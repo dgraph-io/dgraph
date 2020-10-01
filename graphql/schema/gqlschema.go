@@ -140,7 +140,53 @@ input NearFilter {
 }
 
 input PointGeoFilter {
-	near: NearFilter!
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -250,33 +296,37 @@ var numUids = &ast.FieldDefinition{
 // search arg -> supported GraphQL type
 // == supported Dgraph index -> GraphQL type it applies to
 var supportedSearches = map[string]searchTypeIndex{
-	"int":      {"Int", "int"},
-	"int64":    {"Int64", "int"},
-	"float":    {"Float", "float"},
-	"bool":     {"Boolean", "bool"},
-	"hash":     {"String", "hash"},
-	"exact":    {"String", "exact"},
-	"term":     {"String", "term"},
-	"fulltext": {"String", "fulltext"},
-	"trigram":  {"String", "trigram"},
-	"regexp":   {"String", "trigram"},
-	"year":     {"DateTime", "year"},
-	"month":    {"DateTime", "month"},
-	"day":      {"DateTime", "day"},
-	"hour":     {"DateTime", "hour"},
-	"geo":      {"Point", "geo"},
+	"int":          {"Int", "int"},
+	"int64":        {"Int64", "int"},
+	"float":        {"Float", "float"},
+	"bool":         {"Boolean", "bool"},
+	"hash":         {"String", "hash"},
+	"exact":        {"String", "exact"},
+	"term":         {"String", "term"},
+	"fulltext":     {"String", "fulltext"},
+	"trigram":      {"String", "trigram"},
+	"regexp":       {"String", "trigram"},
+	"year":         {"DateTime", "year"},
+	"month":        {"DateTime", "month"},
+	"day":          {"DateTime", "day"},
+	"hour":         {"DateTime", "hour"},
+	"point":        {"Point", "geo"},
+	"polygon":      {"Polygon", "geo"},
+	"multiPolygon": {"MultiPolygon", "geo"},
 }
 
-// GraphQL scalar type -> default search arg
+// GraphQL scalar/object type -> default search arg
 // used if the schema specifies @search without an arg
 var defaultSearches = map[string]string{
-	"Boolean":  "bool",
-	"Int":      "int",
-	"Int64":    "int64",
-	"Float":    "float",
-	"String":   "term",
-	"DateTime": "year",
-	"Point":    "geo",
+	"Boolean":      "bool",
+	"Int":          "int",
+	"Int64":        "int64",
+	"Float":        "float",
+	"String":       "term",
+	"DateTime":     "year",
+	"Point":        "point",
+	"Polygon":      "polygon",
+	"MultiPolygon": "multiPolygon",
 }
 
 // graphqlSpecScalars holds all the scalar types supported by the graphql spec.
@@ -313,33 +363,38 @@ var enumDirectives = map[string]bool{
 
 // index name -> GraphQL input filter for that index
 var builtInFilters = map[string]string{
-	"bool":     "Boolean",
-	"int":      "IntFilter",
-	"int64":    "Int64Filter",
-	"float":    "FloatFilter",
-	"year":     "DateTimeFilter",
-	"month":    "DateTimeFilter",
-	"day":      "DateTimeFilter",
-	"hour":     "DateTimeFilter",
-	"term":     "StringTermFilter",
-	"trigram":  "StringRegExpFilter",
-	"regexp":   "StringRegExpFilter",
-	"fulltext": "StringFullTextFilter",
-	"exact":    "StringExactFilter",
-	"hash":     "StringHashFilter",
-	"geo":      "PointGeoFilter",
+	"bool":         "Boolean",
+	"int":          "IntFilter",
+	"int64":        "Int64Filter",
+	"float":        "FloatFilter",
+	"year":         "DateTimeFilter",
+	"month":        "DateTimeFilter",
+	"day":          "DateTimeFilter",
+	"hour":         "DateTimeFilter",
+	"term":         "StringTermFilter",
+	"trigram":      "StringRegExpFilter",
+	"regexp":       "StringRegExpFilter",
+	"fulltext":     "StringFullTextFilter",
+	"exact":        "StringExactFilter",
+	"hash":         "StringHashFilter",
+	"point":        "PointGeoFilter",
+	"polygon":      "PolygonGeoFilter",
+	"multiPolygon": "PolygonGeoFilter",
 }
 
-// GraphQL scalar -> Dgraph scalar
-var scalarToDgraph = map[string]string{
-	"ID":       "uid",
-	"Boolean":  "bool",
-	"Int":      "int",
-	"Int64":    "int",
-	"Float":    "float",
-	"String":   "string",
-	"DateTime": "dateTime",
-	"Password": "password",
+// GraphQL in-built type -> Dgraph scalar
+var inbuiltTypeToDgraph = map[string]string{
+	"ID":           "uid",
+	"Boolean":      "bool",
+	"Int":          "int",
+	"Int64":        "int",
+	"Float":        "float",
+	"String":       "string",
+	"DateTime":     "dateTime",
+	"Password":     "password",
+	"Point":        "geo",
+	"Polygon":      "geo",
+	"MultiPolygon": "geo",
 }
 
 func ValidatorNoOp(
@@ -722,7 +777,7 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 
 		// Ordering and pagination, however, only makes sense for fields of
 		// list types (not scalar lists).
-		if _, scalar := scalarToDgraph[fld.Type.Name()]; !scalar && fld.Type.Elem != nil {
+		if _, scalar := inbuiltTypeToDgraph[fld.Type.Name()]; !scalar && fld.Type.Elem != nil {
 			addOrderArgument(schema, fld)
 
 			// Pagination even makes sense when there's no orderables because

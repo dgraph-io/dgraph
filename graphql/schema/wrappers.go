@@ -1447,7 +1447,7 @@ func (t *astType) AuthRules() *TypeAuth {
 }
 
 func (t *astType) IsGeo() bool {
-	return t.Name() == "Point"
+	return t.Name() == "Point" || t.Name() == "Polygon" || t.Name() == "MultiPolygon"
 }
 
 func (t *astType) Field(name string) FieldDefinition {

@@ -960,7 +960,10 @@ func validateSearchArg(searchArg string,
 }
 
 func isGeoType(typ *ast.Type) bool {
-	return typ.Name() == "Point"
+	if typ.Name() == "Point" || typ.Name() == "Polygon" || typ.Name() == "MultiPolygon" {
+		return true
+	}
+	return false
 }
 
 func searchValidation(
@@ -1871,7 +1874,7 @@ func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 }
 
 func isScalar(s string) bool {
-	_, ok := scalarToDgraph[s]
+	_, ok := inbuiltTypeToDgraph[s]
 	return ok
 }
 

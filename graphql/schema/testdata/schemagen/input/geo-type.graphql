@@ -2,4 +2,6 @@ type Hotel {
     id: ID!
     name: String!
     location: Point @search
+    area: Polygon @search
+    branches: MultiPolygon @search
 }
