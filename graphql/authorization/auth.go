@@ -56,8 +56,7 @@ type AuthMeta struct {
 	VerificationKey string
 	JWKUrl          string
 	jwkSet          *jose.JSONWebKeySet
-	refreshTime     time.Duration
-	ticker          *time.Ticker
+	expiryTime      time.Time
 	RSAPublicKey    *rsa.PublicKey `json:"-"` // Ignoring this field
 	Header          string
 	Namespace       string
@@ -158,13 +157,13 @@ func ParseAuthMeta(schema string) (*AuthMeta, error) {
 		return nil, err
 	}
 
-	// fetch and Store the keys from JWKUrl
-	if metaInfo.JWKUrl != "" {
-		err = metaInfo.fetchJWKs()
-		if err != nil {
-			return nil, errors.Errorf("Unable to fetch Keys from JWKUrl, Got error %v", err)
-		}
-	}
+	// // fetch and Store the keys from JWKUrl
+	// if metaInfo.JWKUrl != "" {
+	// 	err = metaInfo.FetchJWKs()
+	// 	if err != nil {
+	// 		return nil, errors.Errorf("Unable to fetch Keys from JWKUrl, Got error %v", err)
+	// 	}
+	// }
 	if metaInfo.Algo != RSA256 {
 		return metaInfo, nil
 	}
@@ -199,15 +198,12 @@ func SetAuthMeta(m *AuthMeta) {
 	authMeta.VerificationKey = m.VerificationKey
 	authMeta.JWKUrl = m.JWKUrl
 	authMeta.jwkSet = m.jwkSet
-	authMeta.refreshTime = m.refreshTime
+	authMeta.expiryTime = m.expiryTime
 	authMeta.RSAPublicKey = m.RSAPublicKey
 	authMeta.Header = m.Header
 	authMeta.Namespace = m.Namespace
 	authMeta.Algo = m.Algo
 	authMeta.Audience = m.Audience
-	if m.refreshTime > 0 {
-		authMeta.ticker = time.NewTicker(m.refreshTime)
-	}
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -306,6 +302,14 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	var err error
 	// Verification through JWKUrl
 	if authMeta.JWKUrl != "" {
+
+		if authMeta.IsExpired() {
+			err = authMeta.RefreshJWK()
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		token, err =
 			jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 				kid := token.Header["kid"]
@@ -363,7 +367,7 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	return claims, nil
 }
 
-func (a *AuthMeta) fetchJWKs() error {
+func (a *AuthMeta) FetchJWKs() error {
 	req, err := http.NewRequest("GET", a.JWKUrl, nil)
 	if err != nil {
 		return err
@@ -391,55 +395,47 @@ func (a *AuthMeta) fetchJWKs() error {
 		a.jwkSet.Keys[i].UnmarshalJSON(jwk)
 	}
 
-	// Try to Parse the Remaining time in the expiry of signing keys first from the
-	// `Expires` Header and then from the `max-age` directive in the `Cache-Control` Header
+	// Try to Parse the Remaining time in the expiry of signing keys
+	// from the `max-age` directive in the `Cache-Control` Header
 	maxAge := int64(0)
-
-	if resp.Header["Expires"] != nil {
-		maxAge, err = ParseExpires(resp.Header["Expires"][0])
-	}
 
 	if resp.Header["Cache-Control"] != nil {
 		maxAge, err = ParseMaxAge(resp.Header["Cache-Control"][0])
 	}
-	a.Lock()
-	a.refreshTime = time.Duration(maxAge) * time.Second
-	a.Unlock()
+
+	if maxAge == 0 {
+		a.expiryTime = time.Time{}
+	} else {
+		a.expiryTime = time.Now().Add(time.Duration(maxAge) * time.Second)
+	}
+
 	return nil
 }
 
-// Refresh the JWKs on ticking the Ticker, but only if the
-// RefreshTime is non-zero, else stop.
-func (a *AuthMeta) RefreshJWK() {
-	// If there is no jwkUrl then just return
+func (a *AuthMeta) RefreshJWK() error {
+	fmt.Println("Starting Refresh")
+	// If there is no jwkUrl then return with error
 	if a.JWKUrl == "" {
-		return
+		return errors.Errorf("No JWKUrl supplied")
 	}
-
-	for {
-		select {
-		case <-a.ticker.C:
-			// refreshTime = 0 means that we couldn't parse any valid value for token
-			// expiry time. In that case, it just ends the process of regular refresh
-			if a.refreshTime == 0 {
-				return
-			}
-			// Try to Continuosly Refetch the Keys until it doesn't result in error
-			// Take a minute's gap in refetching after a failure.
-			for i := 0; i < 3; i++ {
-				a.Lock()
-				err := a.fetchJWKs()
-				a.Unlock()
-				if err == nil {
-					break
-				}
-				time.Sleep(60 * time.Second)
-			}
+	var err error
+	for i := 0; i < 3; i++ {
+		err = a.FetchJWKs()
+		if err == nil {
+			return nil
 		}
+		time.Sleep(10 * time.Second)
 	}
+	return err
 }
 
-func init() {
-	authMeta.ticker = time.NewTicker(10 * time.Second)
-	go authMeta.RefreshJWK()
+// To check whether JWKs are expired or not
+// if expiryTime is equal to 0 which means there
+// is no expiry time of the JWKs, so it always
+// returns false
+func (a *AuthMeta) IsExpired() bool {
+	if a.expiryTime.Equal(time.Time{}) {
+		return false
+	}
+	return time.Now().After(a.expiryTime)
 }
