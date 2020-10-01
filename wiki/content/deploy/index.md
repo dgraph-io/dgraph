@@ -11,7 +11,6 @@ For a single server setup, recommended for new users, please see [Get Started](/
 {{% /notice %}}
 
 ## Install Dgraph
-
 ### Docker
 
 ```sh
