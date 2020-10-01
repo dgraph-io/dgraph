@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 
@@ -1052,25 +1053,63 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 			// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
 			fmt.Println("field", field)
 			switch dgFunc := filter[field].(type) {
-			case map[string]map[string]interface{}:
-				// add code for between here
-
+			////case map[string]map[string]interface{}:
+			//	// add code for between here
+			//	_, val := first(dgFunc)
+			//	v := reflect.ValueOf(val)
+			//	fmt.Println(v.Kind())
+			//	if v.Kind() == reflect.Map {
+			//		fmt.Println("Yes it is")
+			//	}
 			case map[string]interface{}:
 				// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title, "GraphQL")
 				// OR
 				// numLikes: { le: 10 } -> le(Post.numLikes, 10)
 				fn, val := first(dgFunc)
-				fmt.Println(typ.DgraphPredicate(field))
+				v := reflect.ValueOf(val)
 				fmt.Println(maybeQuoteArg(fn, val))
-				ands = append(ands, &gql.FilterTree{
-					Func: &gql.Function{
-						Name: fn,
-						Args: []gql.Arg{
-							{Value: typ.DgraphPredicate(field)},
-							{Value: maybeQuoteArg(fn, val)},
+				if v.Kind() == reflect.Map {
+					//ands = append(ands, &gql.FilterTree{
+					//	Func: &gql.Function{
+					//		Name: fn,
+					//		Args: []gql.Arg{
+					//			{Value: typ.DgraphPredicate(field)},
+					//			{Value: maybeQuoteArg(fn, val)},
+					//		},
+					//	},
+					//})
+					//
+
+					args := []gql.Arg{
+						gql.Arg{Value: typ.DgraphPredicate(field)},
+					}
+					for _, key := range v.MapKeys() {
+						fmt.Println(key)
+						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v.MapIndex(key))})
+
+					}
+					fmt.Println(args)
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(field)},
+								{Value: maybeQuoteArg(fn, val)},
+							},
 						},
-					},
-				})
+					})
+
+				} else {
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(field)},
+								{Value: maybeQuoteArg(fn, val)},
+							},
+						},
+					})
+				}
 
 			case []interface{}:
 				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
