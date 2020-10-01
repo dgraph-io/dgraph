@@ -96,6 +96,8 @@ github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200930222650-e889d0193abd h1:M1+VG
 github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200930222650-e889d0193abd/go.mod h1:2uGEvGm+JSDLd5UAaKIFSbXDcYyeH0fWJP4N2HMMYMI=
 github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201001022639-13430e13f966 h1:gk3p+Yq45VmOIRU07OxSZg6vqOFtpHPbk0FtADABXqk=
 github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201001022639-13430e13f966/go.mod h1:2uGEvGm+JSDLd5UAaKIFSbXDcYyeH0fWJP4N2HMMYMI=
+github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201001023202-f9911728f699 h1:zZpIX+0FTgN+Vn26g7R6w1DVpe/kNgJD10FzSXn/72A=
+github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201001023202-f9911728f699/go.mod h1:2uGEvGm+JSDLd5UAaKIFSbXDcYyeH0fWJP4N2HMMYMI=
 github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6 h1:toHzMCdCUgYsjM0cW9+wafnKFXfp1HizIJUyzihN+vk=
 github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6/go.mod h1:rHa+h3kI4M8ASOirxyIyNeXBfHFgeskVUum2OrDMN3U=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b h1:PDEhlwHpkEQ5WBfOOKZCNZTXFDGyCEWTYDhxGQbyIpk=
