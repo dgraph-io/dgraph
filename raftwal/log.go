@@ -42,7 +42,8 @@ const (
 	// maxNumEntries is maximum number of entries before rotating the file.
 	maxNumEntries = 30000
 	// logFileOffset is offset in the log file where data is stored.
-	logFileOffset = 1 << 20 // 1MB
+	logFileOffset = 1 << 20            // 1MB
+	ivOffset      = logFileOffset - 20 // offset for the plain text something.
 	// logFileSize is the initial size of the log file.
 	logFileSize = 16 << 30
 	// entrySize is the size in bytes of a single entry.
@@ -155,6 +156,7 @@ func (lf *logFile) GetRaftEntry(idx int) raftpb.Entry {
 	if entry.DataOffset() > 0 && entry.DataOffset() < logFileSize {
 		data := lf.slice(int(entry.DataOffset()))
 		if len(data) > 0 {
+			// TODO: Decrypt the data as required.
 			// Copy the data over to allow the mmaped file to be deleted later.
 			re.Data = append(re.Data, data...)
 		}

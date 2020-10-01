@@ -137,6 +137,7 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 					glog.Errorf("deleting file: %s. error: %v\n", ef.fd.Name(), err)
 				}
 			}
+			// change to ivOffset.
 			zeroOut(l.current.data, entrySize*eidx, logFileOffset)
 			l.files = l.files[:fidx]
 		}
@@ -167,6 +168,7 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		}
 
 		// Write re.Data to a new slice at the end of the file.
+		// TODO: Encrypt the re.data if required.
 		destBuf, next := l.current.allocateSlice(len(re.Data), offset)
 		x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 
