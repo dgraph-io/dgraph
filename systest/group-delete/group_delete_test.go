@@ -40,7 +40,16 @@ import (
 func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	require.NoError(t, c.Alter(ctx, &api.Operation{DropAll: true}))
+	// Retry DropAll to make sure the nodes is up and running.
+	var err error
+	for i := 0; i < 3; i ++ {
+		if err =c.Alter(ctx, &api.Operation{DropAll: true}); err != nil {
+			time.Sleep(5*time.Second)
+			continue
+		}
+		break
+	}
+	require.NoError(t, err, "error while dropping all the data")
 
 	schema, err := ioutil.ReadFile(`../data/goldendata.schema`)
 	require.NoError(t, err)
@@ -149,7 +158,10 @@ func TestNodes(t *testing.T) {
 		t.Errorf("moving tablets failed")
 	}
 
-	resp, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=3&id=3")
+	groupNodes, err := testutil.GetNodesInGroup("3")
+	require.NoError(t, err)
+	resp, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=3&id=" +
+		groupNodes[0])
 	require.NoError(t, err)
 	require.NoError(t, getError(resp.Body))
 
@@ -183,7 +195,10 @@ func TestNodes(t *testing.T) {
 		t.Errorf("moving tablets failed")
 	}
 
-	resp, err = http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=2&id=2")
+	groupNodes, err = testutil.GetNodesInGroup("2")
+	require.NoError(t, err)
+	resp, err = http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=2&id=" +
+		groupNodes[0])
 	require.NoError(t, err)
 	require.NoError(t, getError(resp.Body))
 
