@@ -1,4 +1,7 @@
-const bio = ({parent: {name, dob}}) => `My name is ${name} and I was born on ${dob}.`
+const authorBio = ({parent: {name, dob}}) => `My name is ${name} and I was born on ${dob}.`
+const characterBio = ({parent: {name}}) => `My name is ${name}.`
+const humanBio = ({parent: {name, totalCredits}}) => `My name is ${name}. I have ${totalCredits} credits.`
+const droidBio = ({parent: {name, primaryFunction}}) => `My name is ${name}. My primary function is ${primaryFunction}.`
 
 async function authorsByName({args, dql}) {
     const results = await dql.query(`{
@@ -25,7 +28,10 @@ async function newAuthor({args, graphql}) {
 }
 
 self.addGraphQLResolvers({
-    "Author.bio": bio,
+    "Author.bio": authorBio,
+    "Character.bio": characterBio,
+    "Human.bio": humanBio,
+    "Droid.bio": droidBio,
     "Query.authorsByName": authorsByName,
     "Mutation.newAuthor": newAuthor
 })

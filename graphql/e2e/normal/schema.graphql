@@ -92,6 +92,7 @@ interface Character {
         id: ID!
         name: String! @search(by: [exact])
         appearsIn: [Episode!] @search
+        bio: String @lambda
 }
 
 type Human implements Character & Employee {

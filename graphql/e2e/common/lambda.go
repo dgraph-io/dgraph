@@ -60,6 +60,77 @@ func lambdaOnTypeField(t *testing.T) {
 	testutil.CompareJSON(t, expectedResponse, string(resp.Data))
 }
 
+func lambdaOnInterfaceField(t *testing.T) {
+	starship := addStarship(t)
+	humanID := addHuman(t, starship.ID)
+	droidID := addDroid(t)
+
+	// when querying bio on Character (interface) we should get the bio constructed by the lambda
+	// registered on Character.bio
+	query := `
+		query {
+			queryCharacter {
+				name
+				bio
+			}
+		}`
+	params := &GraphQLParams{Query: query}
+	resp := params.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+
+	expectedResponse := `{
+		"queryCharacter": [
+			{
+				"name":"Han",
+				"bio":"My name is Han."
+			},
+			{
+				"name":"R2-D2",
+				"bio":"My name is R2-D2."
+			}
+		]
+	}`
+	testutil.CompareJSON(t, expectedResponse, string(resp.Data))
+
+	// TODO: this should work. At present there is a bug with @custom on interface field resolved
+	// through a fragment on one of its types. We need to fix that first, then uncomment this test.
+
+	// when querying bio on Human & Droid (type) we should get the bio constructed by the lambda
+	// registered on Human.bio and Droid.bio respectively
+	/*query = `
+		query {
+			queryCharacter {
+				name
+				... on Human {
+					bio
+				}
+				... on Droid {
+					bio
+				}
+			}
+		}`
+	params = &GraphQLParams{Query: query}
+	resp = params.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+
+	expectedResponse = `{
+		"queryCharacter": [
+			{
+				"name":"Han",
+				"bio":"My name is Han. I have 10 credits."
+			},
+			{
+				"name":"R2-D2",
+				"bio":"My name is R2-D2. My primary function is Robot."
+			}
+		]
+	}`
+	testutil.CompareJSON(t, expectedResponse, string(resp.Data))*/
+
+	// cleanup
+	cleanupStarwars(t, starship.ID, humanID, droidID)
+}
+
 func lambdaOnQueryUsingDql(t *testing.T) {
 	query := `
 		query {

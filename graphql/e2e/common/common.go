@@ -392,6 +392,7 @@ func RunAll(t *testing.T) {
 
 	// lambda tests
 	t.Run("lambda on type field", lambdaOnTypeField)
+	t.Run("lambda on interface field", lambdaOnInterfaceField)
 	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
 }
