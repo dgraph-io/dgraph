@@ -1903,7 +1903,6 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	if !ok {
 		return emptyResult(resp.Errors)
 	}
-
 	return &Resolved{
 		Data:  map[string]interface{}{field.Name(): data},
 		Field: field,

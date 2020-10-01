@@ -2922,7 +2922,7 @@ func TestCustomFieldsWithRestError(t *testing.T) {
           "age": 10,
           "cars": {
             "name": "car-0x1"
-        }	
+          }	
         }
       ]
     }`
