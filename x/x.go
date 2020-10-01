@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v2"
+	bo "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto"
@@ -1237,6 +1238,20 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 	}
 
 	return cachePercent, nil
+}
+
+// ParseCompression returns badger.compressionType given the compression type (string)
+func ParseCompression(cType string) bo.CompressionType {
+	switch cType {
+	case "zstd":
+		return bo.ZSTD
+	case "snappy":
+		return bo.Snappy
+	case "none":
+		return bo.None
+	}
+	glog.Fatalf("ERROR: compression type (%s) invalid", cType)
+	return 0
 }
 
 // ParseCompressionLevel returns compression level(int) given the compression level(string)
