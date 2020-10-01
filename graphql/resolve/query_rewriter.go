@@ -752,7 +752,7 @@ func addSelectionSetFrom(
 		}
 
 		var selectionAuth []*gql.GraphQuery
-		if !f.Type().IsGeo() {
+		if !f.Type().IsPoint() {
 			selectionAuth = addSelectionSetFrom(child, f, auth)
 		}
 		addedFields[f.Name()] = true

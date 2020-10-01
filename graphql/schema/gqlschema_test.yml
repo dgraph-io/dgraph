@@ -12,6 +12,17 @@ invalid_schemas:
       {"message":"Type P; is invalid, a type must have atleast one field that is not of ID! type and doesn't have @custom directive.", "locations":[{"line":1, "column":6}]}
     ]
 
+  - name: "Geo field with invalid argument in @search."
+    input: |
+      type Hotel {
+        id: ID!
+        name: String!
+        location: Point @search(by: [int])
+      }
+    errlist: [
+      {"message":"Type Hotel; Field location: has the @search directive but the argument int doesn't apply to field type Point.  Search by int applies to fields of type Int. Fields of type Point are searchable by just @search.", "locations":[ { "line": 4, "column":20}]},
+    ]
+
   -
     name: "UID as a field name"
     input: |

@@ -31,6 +31,30 @@
         }
 
 -
+  name: "Add mutation with geo without longitude"
+  gqlmutation: |
+    mutation addHotel($hotel: AddHotelInput!) {
+      addHotel(input: [$hotel]) {
+        hotel {
+          name
+          location {
+            latitude
+            longitude
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "hotel":
+      { "name": "Taj Hotel",
+        "location": { "latitude": 11.11 }
+      }
+    }
+  explanation: "Add mutation for Point type mutation should have both latitude and longitude"
+  validationerror:
+    { "message": "input: variable.hotel.location.longitude must be defined" }
+
+-
   name: "Add mutation with variables"
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {

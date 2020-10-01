@@ -437,7 +437,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
 				case ast.Object, ast.Interface:
-					if isGeoType(f.Type) {
+					if isPointType(f.Type) {
 						typStr = "geo"
 						var indexes []string
 						if f.Directives.ForName(searchDirective) != nil {

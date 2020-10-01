@@ -1211,8 +1211,8 @@ func rewriteObject(
 				// or giving the data to create the object as part of a deep mutation
 				// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
 				//          like here ^^
-				if fieldDef.Type().IsGeo() {
-					// For Geo type, the mutation json is as follows:
+				if fieldDef.Type().IsPoint() {
+					// For Point type, the mutation json in Dgraph is as follows:
 					// { "type": "Point", "coordinates": [11.11, 22.22]}
 					lat := val["latitude"]
 					long := val["longitude"]

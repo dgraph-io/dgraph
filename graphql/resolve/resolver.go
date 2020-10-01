@@ -1418,7 +1418,7 @@ func completeValue(
 				Path:      copyPath(path),
 			}}
 		}
-		if field.Type().IsGeo() {
+		if field.Type().IsPoint() {
 			return completeGeoObject(field, val, path)
 		}
 

@@ -177,7 +177,7 @@ type Type interface {
 	EnsureNonNulls(map[string]interface{}, string) error
 	FieldOriginatedFrom(fieldName string) string
 	AuthRules() *TypeAuth
-	IsGeo() bool
+	IsPoint() bool
 	fmt.Stringer
 }
 
@@ -1446,7 +1446,7 @@ func (t *astType) AuthRules() *TypeAuth {
 	return t.inSchema.authRules[t.DgraphName()]
 }
 
-func (t *astType) IsGeo() bool {
+func (t *astType) IsPoint() bool {
 	return t.Name() == "Point"
 }
 
