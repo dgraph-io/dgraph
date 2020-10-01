@@ -116,7 +116,7 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored for the postings."+
 			"mmap consumes more RAM, but provides better performance.")
-	flag.String("badger.compression", "none",
+	flag.String("badger.compression", "zstd",
 		"[none, zstd, snappy] Specifies the compression algorithm for the postings directory.")
 	flag.String("badger.compression_level", "3",
 		"Specifies the compression level for the postings directory. A higher value"+
