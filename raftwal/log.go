@@ -121,7 +121,7 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 
 	if err == errNewFile {
 		glog.V(2).Infof("New file: %d\n", fid)
-		zeroOut(mf.data, 0, logFileOffset)
+		z.ZeroOut(mf.data, 0, logFileOffset)
 	} else {
 		x.Check(err)
 	}

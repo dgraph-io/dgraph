@@ -88,15 +88,6 @@ type indexRange struct {
 	from, until uint64 // index range for deletion, until index is not deleted.
 }
 
-// zeroOut zeroes out all the bytes in the range [start, end).
-func zeroOut(dst []byte, start, end int) {
-	buf := dst[start:end]
-	buf[0] = 0x00
-	for i := 1; i < len(buf); i *= 2 {
-		copy(buf[i:], buf[:i])
-	}
-}
-
 func syncDir(dir string) error {
 	glog.V(2).Infof("Syncing dir: %s\n", dir)
 	df, err := os.Open(dir)

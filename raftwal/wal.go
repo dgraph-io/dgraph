@@ -20,6 +20,7 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
@@ -117,7 +118,7 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 			// The existing entry was found in the current file. We only have to zero out
 			// from the entries after the one in which the entry was found.
 			if l.nextEntryIdx > eidx {
-				zeroOut(l.current.data, entrySize*eidx, entrySize*l.nextEntryIdx)
+				z.ZeroOut(l.current.data, entrySize*eidx, entrySize*l.nextEntryIdx)
 			}
 		} else {
 			// The existing entry was found in one of the previous file.
@@ -137,7 +138,7 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 					glog.Errorf("deleting file: %s. error: %v\n", ef.fd.Name(), err)
 				}
 			}
-			zeroOut(l.current.data, entrySize*eidx, logFileOffset)
+			z.ZeroOut(l.current.data, entrySize*eidx, logFileOffset)
 			l.files = l.files[:fidx]
 		}
 		l.nextEntryIdx = eidx
@@ -333,7 +334,7 @@ func (l *wal) reset() error {
 		}
 	}
 	l.files = l.files[:0]
-	zeroOut(l.current.data, 0, logFileOffset)
+	z.ZeroOut(l.current.data, 0, logFileOffset)
 	l.nextEntryIdx = 0
 	return nil
 }

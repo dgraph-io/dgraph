@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
@@ -100,7 +101,7 @@ func newMetaFile(dir string) (*metaFile, error) {
 	// Open the file in read-write mode and creates it if it doesn't exist.
 	mf, err := openMmapFile(fname, os.O_RDWR|os.O_CREATE, metaFileSize)
 	if err == errNewFile {
-		zeroOut(mf.data, 0, snapshotOffset+4)
+		z.ZeroOut(mf.data, 0, snapshotOffset+4)
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "unable to open meta file")
 	}
