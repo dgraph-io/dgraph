@@ -343,7 +343,34 @@ On first starting with a blank database:
 
 ## Adding a Schema
 
-Given a blank database, running the `/admin` mutation:
+There are two ways you can add a schema:
+- Using `/admin/schema`
+- Using the `updateGQLSchema` mutation on `/admin` 
+
+### Using `/admin/schema`
+
+The `/admin/schema` endpoint provides a simplified method to add and update schemas.
+
+Given a blank database, to create a schema you only need to call the `/admin/schema` endpoint with the required schema definition. For example:
+
+```graphql
+type Person { 
+	name: String 
+}
+```
+
+If you have the schema definition stored in a `schema.graphql` file, you can use `curl` like this:
+```
+curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
+```
+
+On successful execution, the `/admin/schema` endpoint will give you a JSON response with a success code.
+
+### Using `updateGQLSchema`
+
+Another option to add a schema is the `updateGQLSchema` mutation. 
+
+Given a blank database, running this mutation on the `/admin` endpoint
 
 ```graphql
 mutation {
@@ -360,26 +387,12 @@ mutation {
 
 would cause the following:
 
-* The `/graphql` endpoint would refresh and now serves the GraphQL schema generated from type `type Person { name: String }`: that's Dgraph type `Person` and predicate `Person.name: string .`; see [here](/graphql/dgraph) for how to customize the generated schema.
+* The `/graphql` endpoint would refresh and serve the GraphQL schema generated from type `type Person { name: String }`: that's Dgraph type `Person` and predicate `Person.name: string .` (see [this article](/graphql/dgraph) on how to customize the generated schema)
 * The schema of the underlying Dgraph instance would be altered to allow for the new `Person` type and `name` predicate.
 * The `/admin` endpoint for `health` would return that a schema is being served.
 * The mutation returns `"schema": "type Person { name: String }"` and the generated GraphQL schema for `generatedSchema` (this is the schema served at `/graphql`).
 * Querying the `/admin` endpoint for `getGQLSchema` would return the new schema.
 
-### Using `/admin/schema`
-
-Dgraph also provides a simplified way to add and update schemas, using the `/admin/schema` endpoint. 
-
-To create the same schema as in the previous example, we only need to call the `/admin/schema` endpoint with the following definition:
-
-```graphql
-type Person { 
-	name: String 
-}
-```
-
-On successful execution, the `/admin/schema` endpoint will post back the types it’s currently serving a schema for, 
-which should be the same as the input schema.
 
 ## Migrating a Schema
 
@@ -401,9 +414,11 @@ changes the GraphQL definition of `Person` and results in the following:
 
 ## Removing from Schema
 
-Adding a schema through GraphQL doesn't remove existing data (it would remove indexes).  For example, starting from the schema in the previous section and running `updateGQLSchema` with the initial `type Person { name: String }` would have the following effects:
+Adding a schema through GraphQL doesn't remove existing data (it only removes indexes).
+
+For example, starting from the schema in the previous section and running `updateGQLSchema` with the initial `type Person { name: String }` would have the following effects:
 
 * The `/graphql` endpoint would refresh to serve the schema built from this type.
-* Thus field `dob` would no longer be accessible and there'd be no search available on `name`.
+* Thus, field `dob` would no longer be accessible and there'd be no search available on `name`.
 * The search index on `name` in Dgraph would be removed.
-* The predicate `dob` in Dgraph is left untouched - the predicate remains and no data is deleted.
+* The predicate `dob` in Dgraph would be left untouched (the predicate remains and no data is deleted).
