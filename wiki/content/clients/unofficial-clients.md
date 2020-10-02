@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Unofficial Dgraph Clients"
+weight = 7
 [menu.main]
     parent = "clients"
-    weight = 7
 +++
 
 {{% notice "note" %}}
