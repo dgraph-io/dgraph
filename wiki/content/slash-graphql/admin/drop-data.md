@@ -1,8 +1,8 @@
 +++
 title = "Dropping Data from your Backend"
+weight = 5   
 [menu.main]
     parent = "slash-graphql-admin"
-    weight = 5   
 +++
 
 It is possible to drop all data from your Slash GraphQL backend, and start afresh while retaining the same endpoint. Be careful, as this operation is not reversible, and all data will be lost. It is highly recommended that you [export](/slash-graphql/admin/import-export) your data before you drop your data.
