@@ -53,7 +53,6 @@ const (
 
 var (
 	emptyEntry = entry(make([]byte, entrySize))
-	errNewFile = errors.New("new file")
 )
 
 type entry []byte
@@ -72,38 +71,9 @@ func marshalEntry(b []byte, term, index, do, typ uint64) {
 	binary.BigEndian.PutUint64(b[24:], typ)
 }
 
-// mmapFile represents an mmapd file and includes both the buffer to the data
-// and the file descriptor.
-type mmapFile struct {
-	data []byte
-	fd   *os.File
-}
-
-func (m *mmapFile) sync() error {
-	return z.Msync(m.data)
-}
-
-// slice returns the slice at the given offset.
-func (m *mmapFile) slice(offset int) []byte {
-	sz := binary.BigEndian.Uint32(m.data[offset:])
-	start := offset + 4
-	next := start + int(sz)
-	if next > len(m.data) {
-		return []byte{}
-	}
-	res := m.data[start:next]
-	return res
-}
-
-// allocateSlice allocates a slice of the given size at the given offset.
-func (m *mmapFile) allocateSlice(sz, offset int) ([]byte, int) {
-	binary.BigEndian.PutUint32(m.data[offset:], uint32(sz))
-	return m.data[offset+4 : offset+4+sz], offset + 4 + sz
-}
-
 // logFile represents a single log file.
 type logFile struct {
-	*mmapFile
+	*z.MmapFile
 	fid int64
 }
 
@@ -117,17 +87,17 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 	glog.V(2).Infof("opening log file: %d\n", fid)
 	fpath := logFname(dir, fid)
 	// Open the file in read-write mode and create it if it doesn't exist yet.
-	mf, err := openMmapFile(fpath, os.O_RDWR|os.O_CREATE, logFileSize)
+	mf, err := z.OpenMmapFile(fpath, os.O_RDWR|os.O_CREATE, logFileSize)
 
-	if err == errNewFile {
+	if err == z.NewFile {
 		glog.V(2).Infof("New file: %d\n", fid)
-		z.ZeroOut(mf.data, 0, logFileOffset)
+		z.ZeroOut(mf.Data, 0, logFileOffset)
 	} else {
 		x.Check(err)
 	}
 
 	lf := &logFile{
-		mmapFile: mf,
+		MmapFile: mf,
 		fid:      fid,
 	}
 	return lf, nil
@@ -140,7 +110,7 @@ func (lf *logFile) getEntry(idx int) entry {
 	}
 	x.AssertTrue(idx < maxNumEntries)
 	offset := idx * entrySize
-	return entry(lf.data[offset : offset+entrySize])
+	return entry(lf.Data[offset : offset+entrySize])
 }
 
 // GetRaftEntry gets the entry at the index idx, reads the data from the appropriate
@@ -153,7 +123,7 @@ func (lf *logFile) GetRaftEntry(idx int) raftpb.Entry {
 		Type:  raftpb.EntryType(int32(entry.Type())),
 	}
 	if entry.DataOffset() > 0 && entry.DataOffset() < logFileSize {
-		data := lf.slice(int(entry.DataOffset()))
+		data := lf.Slice(int(entry.DataOffset()))
 		if len(data) > 0 {
 			// Copy the data over to allow the mmaped file to be deleted later.
 			re.Data = append(re.Data, data...)
@@ -220,14 +190,12 @@ func (lf *logFile) slotGe(raftIndex uint64) int {
 
 // delete unmaps and deletes the file.
 func (lf *logFile) delete() error {
-	glog.V(2).Infof("Deleting file: %s\n", lf.fd.Name())
-	if err := z.Munmap(lf.data); err != nil {
-		glog.Errorf("while munmap file: %s, error: %v\n", lf.fd.Name(), err)
+	glog.V(2).Infof("Deleting file: %s\n", lf.Fd.Name())
+	err := lf.Delete()
+	if err != nil {
+		glog.Errorf("while deleting file: %s, error: %v\n", lf.Fd.Name(), err)
 	}
-	if err := lf.fd.Truncate(0); err != nil {
-		glog.Errorf("while truncate file: %s, error: %v\n", lf.fd.Name(), err)
-	}
-	return os.Remove(lf.fd.Name())
+	return err
 }
 
 // getLogFiles returns all the log files in the directory sorted by the first
