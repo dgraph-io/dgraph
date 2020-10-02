@@ -1,9 +1,10 @@
 +++
 title = "Reserved Names"
+weight = 1
 [menu.main]
     parent = "schema"
-    weight = 1   
 +++
+
 The following names are reserved and can't be used to define any other identifiers:
 
 - `Int`

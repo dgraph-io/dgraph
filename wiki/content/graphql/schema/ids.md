@@ -1,8 +1,8 @@
 +++
 title = "IDs"
+weight = 3
 [menu.main]
     parent = "schema"
-    weight = 3   
 +++
 
 There's two types of identity built into Dgraph.  Those are accessed via the `ID` scalar type and the `@id` directive.

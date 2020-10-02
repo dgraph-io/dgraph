@@ -1,9 +1,9 @@
 +++
 title = "Overview"
+weight = 1
 [menu.main]
     parent = "graphql-queries"
     identifier = "queries-overview"
-    weight = 1   
 +++
 
 How to use queries to fetch data from Dgraph.
