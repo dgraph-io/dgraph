@@ -32,7 +32,9 @@ GraphQL schema introspection is enabled by default, but can be disabled with the
 
 Dgraph's GraphQL runs in Dgraph and presents a GraphQL schema where the queries and mutations are executed in the Dgraph cluster.  So the GraphQL schema is backed by Dgraph's schema.
 
-**Warning: this means if you have a Dgraph instance and change its GraphQL schema, the schema of the underlying Dgraph will also be changed!**
+{{% notice "warning" %}}
+this means that if you have a Dgraph instance and change its GraphQL schema, the schema of the underlying Dgraph will also be changed!
+{{% /notice %}}
 
 ## Endpoints
 
