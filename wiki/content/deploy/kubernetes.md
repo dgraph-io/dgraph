@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Using Kubernetes"
+weight = 6
 [menu.main]
     parent = "deploy"
-    weight = 6
 +++
 
 The following section covers running Dgraph with Kubernetes. We have tested Dgraph with Kubernetes versions 1.14 to 1.16 on [GKE](https://cloud.google.com/kubernetes-engine) and versions 1.14 to 1.17 on [EKS](https://aws.amazon.com/eks/).
