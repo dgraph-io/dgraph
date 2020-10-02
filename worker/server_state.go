@@ -75,25 +75,34 @@ func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
 	// saved by disabling it.
 	opt.DetectConflicts = false
 
-	glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
-	// Default value of badgerCompressionLevel is 3 so compression will always
-	// be enabled, unless it is explicitly disabled by setting the value to 0.
-	if Config.BadgerCompressionLevel != 0 {
-		// By default, compression is disabled in badger.
-		opt.Compression = options.ZSTD
-		opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
-	}
-
 	var badgerTables string
 	var badgerVlog string
 	if wal {
 		// Settings for the write-ahead log.
 		badgerTables = Config.BadgerWalTables
 		badgerVlog = Config.BadgerWalVlog
+
+		glog.Infof("Setting WAL Dir Compression Level: %d", Config.WALDirCompressionLevel)
+		// Default value of WALDirCompressionLevel is 0 so compression will always
+		// be disabled, unless it is explicitly enabled by setting the value to greater than 0.
+		if Config.WALDirCompressionLevel != 0 {
+			// By default, compression is disabled in badger.
+			opt.Compression = options.ZSTD
+			opt.ZSTDCompressionLevel = Config.WALDirCompressionLevel
+		}
 	} else {
 		// Settings for the data directory.
 		badgerTables = Config.BadgerTables
 		badgerVlog = Config.BadgerVlog
+
+		glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
+		// Default value of postingDirCompressionLevel is 3 so compression will always
+		// be enabled, unless it is explicitly disabled by setting the value to 0.
+		if Config.PostingDirCompressionLevel != 0 {
+			// By default, compression is disabled in badger.
+			opt.Compression = options.ZSTD
+			opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
+		}
 	}
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
@@ -150,7 +159,7 @@ func (s *ServerState) initStorage() {
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
 		opt.EncryptionKey = key
 
-		s.WALstore, err = badger.Open(opt)
+		s.WALstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV WAL store")
 	}
 	{

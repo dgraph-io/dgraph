@@ -117,8 +117,13 @@ they form a Raft group and provide synchronous replication.
 			"log directory. mmap consumes more RAM, but provides better performance. If you pass "+
 			"two values separated by a comma the first value will be used for the postings "+
 			"directory and the second for the w directory.")
-	flag.Int("badger.compression_level", 3,
-		"The compression level for Badger. A higher value uses more resources.")
+	flag.String("badger.compression_level", "3,0",
+		"Specifies the compression level for the postings and write-ahead log "+
+			"directory. A higher value uses more resources. The value of 0 disables "+
+			"compression. If you pass two values separated by a comma the first "+
+			"value will be used for the postings directory (p) and the second for "+
+			"the wal directory (w). If a single value is passed the value is used "+
+			"as compression level for both directories.")
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -201,6 +206,8 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
+	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. "+
+		"This returns auth errors to clients. We do not recommend turning it on for production.")
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
@@ -603,14 +610,21 @@ func run() {
 	wstoreBlockCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
 	wstoreIndexCacheSize := (cachePercent[4] * (totalCache << 20)) / 100
 
+	compressionLevelString := Alpha.Conf.GetString("badger.compression_level")
+	compressionLevels, err := x.GetCompressionLevels(compressionLevelString)
+	x.Check(err)
+	postingDirCompressionLevel := compressionLevels[0]
+	walDirCompressionLevel := compressionLevels[1]
+
 	opts := worker.Options{
-		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-		PostingDir:             Alpha.Conf.GetString("postings"),
-		WALDir:                 Alpha.Conf.GetString("wal"),
-		PBlockCacheSize:        pstoreBlockCacheSize,
-		PIndexCacheSize:        pstoreIndexCacheSize,
-		WBlockCacheSize:        wstoreBlockCacheSize,
-		WIndexCacheSize:        wstoreIndexCacheSize,
+		PostingDir:                 Alpha.Conf.GetString("postings"),
+		WALDir:                     Alpha.Conf.GetString("wal"),
+		PostingDirCompressionLevel: postingDirCompressionLevel,
+		WALDirCompressionLevel:     walDirCompressionLevel,
+		PBlockCacheSize:            pstoreBlockCacheSize,
+		PIndexCacheSize:            pstoreIndexCacheSize,
+		WBlockCacheSize:            wstoreBlockCacheSize,
+		WIndexCacheSize:            wstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
@@ -709,6 +723,7 @@ func run() {
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
+	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

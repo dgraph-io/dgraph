@@ -24,6 +24,76 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
+- name: "Delete with inverse field and RBAC true"
+  gqlquery: |
+    mutation {
+      deleteTweets(
+        filter: {
+          text: {anyoftext: "abc"}
+        }) {
+        tweets {
+          text
+        }
+      }
+    }
+  jwtvar:
+    USER: "foo"
+    ROLE: "admin"
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "User.tweets" : [{"uid":"uid(x)"}],
+            "uid" : "uid(User2)"
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteTweets(func: uid(TweetsRoot)) {
+        uid
+        User2 as Tweets.user
+      }
+      TweetsRoot as var(func: uid(Tweets1))
+      Tweets1 as var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "abc"))
+      tweets(func: uid(Tweets3)) {
+        text : Tweets.text
+        dgraph.uid : uid
+      }
+      Tweets3 as var(func: uid(Tweets4))
+      Tweets4 as var(func: uid(x))
+    }
+
+- name: "Delete with inverse field and RBAC false"
+  gqlquery: |
+    mutation {
+      deleteTweets(
+        filter: {
+          text: {anyoftext: "abc"}
+        }) {
+        tweets {
+          text
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "admin"
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" }
+        ]
+  dgquery: |-
+    query {
+      x as deleteTweets()
+      tweets(func: uid(Tweets1)) {
+        text : Tweets.text
+        dgraph.uid : uid
+      }
+      Tweets1 as var(func: uid(Tweets2))
+      Tweets2 as var(func: uid(x))
+    }
+
 - name: "Delete with deep auth"
   gqlquery: |
     mutation deleteTicket($filter: TicketFilter!) {
@@ -288,6 +358,10 @@
           {
             "Ticket.assignedTo" : [ {"uid":"uid(x)"} ],
             "uid" : "uid(Ticket4)"
+          },
+          {
+            "Tweets.user" : {"uid":"uid(x)"},
+            "uid" : "uid(Tweets5)"
           }
         ]
   dgquery: |-
@@ -295,6 +369,7 @@
       x as deleteUser(func: uid(UserRoot)) {
         uid
         Ticket4 as User.tickets
+        Tweets5 as User.tweets
       }
       UserRoot as var(func: uid(User1)) @filter((uid(UserAuth2) AND uid(UserAuth3)))
       User1 as var(func: type(User)) @filter(eq(User.username, "userxyz"))
@@ -395,7 +470,7 @@
         random : Log.random
         dgraph.uid : uid
       }
-      Log2 as var(func: uid(Log3), orderasc: Log.logs)
+      Log2 as var(func: uid(Log3))
       Log3 as var(func: uid(x))
     }
 

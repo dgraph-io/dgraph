@@ -23,6 +23,21 @@ type User @auth(
   tickets: [Ticket] @hasInverse(field: assignedTo)
   secrets: [UserSecret]
   issues: [Issue]
+  tweets: [Tweets] @hasInverse(field: user)
+}
+
+type Tweets @auth (
+    query: { rule: "{$ROLE: { eq: \"admin\" } }"},
+    add: { rule: "{$USER: { eq: \"foo\" } }"},
+    delete: { rule: "{$USER: { eq: \"foo\" } }"},
+    update: { rule: "{$USER: { eq: \"foo\" } }"}
+){
+    id: String! @id
+    text: String! @search(by: [fulltext])
+    user: User
+    timestamp: DateTime! @search
+    score: Int @search
+    streams: String @search
 }
 
 type UserSecret @auth(
@@ -537,34 +552,35 @@ type AdminTask @auth(
 ) {
     id: ID!
     name: String @search(by: [exact, term, fulltext, regexp])
-    occurrances: [TaskOccurance] @hasInverse(field: adminTask)
+    occurrences: [TaskOccurrence] @hasInverse(field: adminTask)
     forContact: Contact @hasInverse(field: adminTasks)
 }
 
 type Task {
     id: ID!
     name: String @search(by: [exact, term, fulltext, regexp])
-    occurrances: [TaskOccurance] @hasInverse(field: task)
+    occurrences: [TaskOccurrence] @hasInverse(field: task)
     forContact: Contact @hasInverse(field: tasks)
 }
 
-type TaskOccurance @auth(
-    query: { and : [
-        {rule: "{$TaskOccuranceRole: { eq: \"ADMINISTRATOR\"}}"},
-        {rule: """
-        query($TaskOccuranceRole: String!) {
-            queryTaskOccurance(filter: {role: { eq: $TaskOccuranceRole}}) {
-                __typename
+type TaskOccurrence @auth(
+    query: { or : [ { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
+        {and : [
+            {rule: "{$TaskOccuranceRole: { eq: \"ADMINISTRATOR\"}}"},
+            {rule: """
+            query($TaskOccuranceRole: String!) {
+                queryTaskOccurrence(filter: {role: { eq: $TaskOccuranceRole}}) {
+                    __typename
+                }
             }
-        }
-        """}
-] }
+            """}
+] } ] }
 ) {
     id: ID!
     due: DateTime @search
     comp: DateTime @search
-    task: Task @hasInverse(field: occurrances)
-    adminTask: AdminTask @hasInverse(field: occurrances)
+    task: Task @hasInverse(field: occurrences)
+    adminTask: AdminTask @hasInverse(field: occurrences)
     isPublic: Boolean @search
     role: String @search(by: [exact, term, fulltext, regexp])
 }
