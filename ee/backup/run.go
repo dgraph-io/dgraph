@@ -32,14 +32,22 @@ var Restore x.SubCommand
 // LsBackup is the sub-command used to list the backups in a folder.
 var LsBackup x.SubCommand
 
+var ExportBackup x.SubCommand
+
 var opt struct {
-	backupId, location, pdir, zero, keyfile string
-	forceZero                               bool
+	backupId    string
+	location    string
+	pdir        string
+	zero        string
+	keyfile     string
+	forceZero   bool
+	format      string
 }
 
 func init() {
 	initRestore()
 	initBackupLs()
+	initExportBackup()
 }
 
 func initRestore() {
@@ -242,4 +250,33 @@ func runLsbackupCmd() error {
 	}
 
 	return nil
+}
+
+func initExportBackup() {
+	ExportBackup.Cmd = &cobra.Command{
+		Use:   "export_backup",
+		Short: "Export data inside single full or incremental backup.",
+		Long:  ``,
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(ExportBackup.Conf).Stop()
+			if err := runExportBackup(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	flag := ExportBackup.Cmd.Flags()
+	flag.StringVarP(&opt.location, "location", "l", "",
+		"Sets the location of the backup. Only file URIs are supported for now.")
+	flag.StringVarP(&opt.format, "format", "f", "rdf",
+		"The format of the export output. Accepts a value of either rdf or json")
+	flag.StringVarP(&opt.keyfile, "encryption_key_file", "", "",
+		"Path of the key needed to decrypt the backup.")
+}
+
+func runExportBackup() error {
+	exporter := worker.BackupExporter{}
+	return exporter.ExportBackup(opt.location, "", opt.format, opt.keyfile)
 }
