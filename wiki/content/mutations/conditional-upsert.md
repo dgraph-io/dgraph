@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Conditional Upsert"
+weight = 12
 [menu.main]
     parent = "mutations"
-    weight = 12
 +++
 
 The upsert block also allows specifying conditional mutation blocks using an `@if`
