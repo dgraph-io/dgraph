@@ -20,8 +20,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/golang/glog"
-
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -54,8 +52,6 @@ type Options struct {
 	MutationsMode int
 	// AuthToken is the token to be passed for Alter HTTP requests.
 	AuthToken string
-	// AllottedMemory is the estimated size taken by the LRU cache.
-	AllottedMemory float64
 
 	// PBlockCacheSize is the size of block cache for pstore
 	PBlockCacheSize int64
@@ -85,7 +81,6 @@ func SetConfiguration(newConfig *Options) {
 
 	posting.Config.Lock()
 	defer posting.Config.Unlock()
-	posting.Config.AllottedMemory = Config.AllottedMemory
 }
 
 // MinAllottedMemory is the minimum amount of memory needed for the LRU cache.
@@ -100,18 +95,4 @@ func (opt *Options) validate() {
 	wd, err := filepath.Abs(opt.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
-	if opt.AllottedMemory < 0 {
-		if allottedMemory := 0.25 * float64(AvailableMemory); allottedMemory > MinAllottedMemory {
-			opt.AllottedMemory = allottedMemory
-			glog.Infof(
-				"LRU memory (--lru_mb) set to %vMB, 25%% of the total RAM found (%vMB)\n"+
-					"For more information on --lru_mb please read "+
-					"https://dgraph.io/docs/deploy/#config\n",
-				opt.AllottedMemory, AvailableMemory)
-		}
-	}
-	x.AssertTruefNoTrace(opt.AllottedMemory >= MinAllottedMemory,
-		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f\n"+
-			"For more information on --lru_mb please read https://dgraph.io/docs/deploy/#config",
-		MinAllottedMemory, opt.AllottedMemory)
 }

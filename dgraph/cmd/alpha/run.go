@@ -157,9 +157,6 @@ they form a Raft group and provide synchronous replication.
 		"Enterprise feature.")
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
-	flag.Float64P("lru_mb", "l", -1, // TODO: Remove this flag.
-		"Estimated memory the LRU cache can take. "+
-			"Actual usage by the process would be more than specified here.")
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
 
@@ -616,7 +613,6 @@ func run() {
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
-		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 
 	opts.BadgerTables = Alpha.Conf.GetString("badger.tables")
