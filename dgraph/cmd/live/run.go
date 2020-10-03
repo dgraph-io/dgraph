@@ -523,7 +523,6 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 
 		var err error
 		db, err = badger.Open(badger.DefaultOptions(opt.clientDir).
-			WithTableLoadingMode(bopt.MemoryMap).
 			WithCompression(bopt.ZSTD).
 			WithSyncWrites(false).
 			WithLoadBloomsOnOpen(false).

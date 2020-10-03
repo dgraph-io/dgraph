@@ -79,7 +79,7 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	opt.DetectConflicts = false
 
 	// Settings for the data directory.
-	badgerTables := Config.BadgerTables
+	// badgerTables := Config.BadgerTables
 	// badgerVlog := Config.BadgerVlog
 	glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
 	// Default value of postingDirCompressionLevel is 3 so compression will always
@@ -90,17 +90,17 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 		opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
 	}
 
-	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
-	switch badgerTables {
-	case "mmap":
-		opt.TableLoadingMode = options.MemoryMap
-	case "ram":
-		opt.TableLoadingMode = options.LoadToRAM
-	case "disk":
-		opt.TableLoadingMode = options.FileIO
-	default:
-		glog.Fatalf("Invalid Badger Tables options")
-	}
+	// glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
+	// switch badgerTables {
+	// case "mmap":
+	// 	opt.TableLoadingMode = options.MemoryMap
+	// case "ram":
+	// 	opt.TableLoadingMode = options.LoadToRAM
+	// case "disk":
+	// 	opt.TableLoadingMode = options.FileIO
+	// default:
+	// 	glog.Fatalf("Invalid Badger Tables options")
+	// }
 
 	// glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
 	// switch badgerVlog {

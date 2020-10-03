@@ -28,7 +28,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
@@ -774,7 +773,6 @@ func run() {
 	}
 
 	bopts := badger.DefaultOptions(dir).
-		WithTableLoadingMode(options.MemoryMap).
 		WithReadOnly(opt.readOnly).
 		WithEncryptionKey(opt.key)
 
