@@ -287,6 +287,10 @@ func (trs testRuntimeStorage) DeleteChildStorage(key []byte) error {
 	return trs.trie.DeleteFromChild(key)
 }
 
+func (trs testRuntimeStorage) ClearChildStorage(keyToChild, key []byte) error {
+	return trs.trie.ClearFromChild(keyToChild, key)
+}
+
 type testRuntimeNetwork struct {
 }
 

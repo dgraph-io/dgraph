@@ -176,9 +176,20 @@ func ext_child_storage_root(context unsafe.Pointer, a, b, c C.int32_t) C.int32_t
 }
 
 //export ext_clear_child_storage
-func ext_clear_child_storage(context unsafe.Pointer, a, b, c, d C.int32_t) {
+func ext_clear_child_storage(context unsafe.Pointer, storageKeyData, storageKeyLen, keyData, keyLen C.int32_t) {
 	logger.Trace("[ext_clear_child_storage] executing...")
-	logger.Warn("[ext_clear_child_storage] not yet implemented")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	runtimeCtx := instanceContext.Data().(*Ctx)
+	s := runtimeCtx.storage
+
+	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
+	key := memory[keyData : keyData+keyLen]
+	err := s.ClearChildStorage(keyToChild, key)
+	if err != nil {
+		logger.Error("[ext_clear_child_storage]", "error", err)
+	}
 }
 
 //export ext_secp256k1_ecdsa_recover_compressed

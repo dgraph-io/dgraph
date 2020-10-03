@@ -92,6 +92,61 @@ func Test_ext_kill_child_storage(t *testing.T) {
 	require.Equal(t, []byte(nil), checkDelete)
 }
 
+func Test_ext_clear_child_storage(t *testing.T) {
+	runtime := NewTestRuntime(t, TEST_RUNTIME)
+	mem := runtime.vm.Memory.Data()
+	// set child storage
+	storageKey := []byte("childstore1")
+	childKey := []byte("key1")
+	value := []byte("value")
+	err := runtime.ctx.storage.SetChild(storageKey, trie.NewEmptyTrie())
+	require.Nil(t, err)
+
+	storageKeyLen := uint32(len(storageKey))
+	storageKeyPtr, err := runtime.malloc(storageKeyLen)
+	require.NoError(t, err)
+
+	childKeyLen := uint32(len(childKey))
+	childKeyPtr, err := runtime.malloc(childKeyLen)
+	require.NoError(t, err)
+
+	valueLen := uint32(len(value))
+	valuePtr, err := runtime.malloc(valueLen)
+	require.NoError(t, err)
+
+	copy(mem[storageKeyPtr:storageKeyPtr+storageKeyLen], storageKey)
+	copy(mem[childKeyPtr:childKeyPtr+childKeyLen], childKey)
+	copy(mem[valuePtr:valuePtr+valueLen], value)
+
+	// call wasm function to set child storage
+	testFunc, ok := runtime.vm.Exports["test_ext_set_child_storage"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(int32(storageKeyPtr), int32(storageKeyLen), int32(childKeyPtr), int32(childKeyLen), int32(valuePtr), int32(valueLen))
+	require.Nil(t, err)
+
+	// confirm set
+	checkValue, err := runtime.ctx.storage.GetChildStorage(storageKey, childKey)
+	require.NoError(t, err)
+	require.Equal(t, value, checkValue)
+
+	// call wasm function to clear child storage
+	testClear, ok := runtime.vm.Exports["test_ext_clear_child_storage"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testClear(int32(storageKeyPtr), int32(storageKeyLen), int32(childKeyPtr), int32(childKeyLen))
+	require.NoError(t, err)
+
+	// confirm value is deleted
+	checkDelete, err := runtime.ctx.storage.GetChildStorage(storageKey, childKey)
+	require.NoError(t, err)
+	require.Equal(t, []byte(nil), checkDelete)
+}
+
 func Test_ext_get_allocated_child_storage(t *testing.T) {
 	runtime := NewTestRuntime(t, TEST_RUNTIME)
 	mem := runtime.vm.Memory.Data()

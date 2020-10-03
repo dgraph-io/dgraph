@@ -144,3 +144,10 @@ func (s *TrieState) DeleteChildStorage(key []byte) error {
 	defer s.lock.Unlock()
 	return s.t.DeleteFromChild(key)
 }
+
+// ClearChildStorage removes the child storage entry from the trie
+func (s *TrieState) ClearChildStorage(keyToChild, key []byte) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.t.ClearFromChild(keyToChild, key)
+}

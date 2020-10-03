@@ -104,3 +104,15 @@ func (t *Trie) DeleteFromChild(keyToChild []byte) error {
 	key := append(ChildStorageKeyPrefix, keyToChild...)
 	return t.Delete(key)
 }
+
+// ClearFromChild removes the child storage entry
+func (t *Trie) ClearFromChild(keyToChild, key []byte) error {
+	child, err := t.GetChild(keyToChild)
+	if err != nil {
+		return err
+	}
+	if child == nil {
+		return fmt.Errorf("child trie does not exist at key %s%s", ChildStorageKeyPrefix, keyToChild)
+	}
+	return child.Delete(key)
+}
