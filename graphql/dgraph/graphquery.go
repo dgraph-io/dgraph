@@ -155,6 +155,9 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 		x.Check2(b.WriteString(fmt.Sprintf("%s(%s)", f.Name, f.Args[0].Value)))
 	case len(f.Args) == 2:
 		x.Check2(b.WriteString(fmt.Sprintf("%s(%s, %s)", f.Name, f.Args[0].Value, f.Args[1].Value)))
+	case len(f.Args) == 3:
+		fmt.Printf("%s(%s, %s, %s)", f.Name, f.Args[0].Value, f.Args[1].Value, f.Args[2].Value)
+		x.Check2(b.WriteString(fmt.Sprintf("%s(%s, %s, %s)", f.Name, f.Args[0].Value, f.Args[1].Value, f.Args[2].Value)))
 	}
 }
 

@@ -951,6 +951,8 @@ func idFilter(filter map[string]interface{}, idField schema.FieldDefinition) []u
 }
 
 func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}) {
+	fmt.Println(q)
+	fmt.Println("adding filter", filter)
 	if len(filter) == 0 {
 		return
 	}
@@ -973,7 +975,9 @@ func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}
 		delete(filter, idName)
 	}
 	q.Filter = buildFilter(typ, filter)
+	fmt.Println("q.Filter", q.Filter)
 	if filterAtRoot {
+		fmt.Println("here")
 		addTypeFilter(q, typ)
 	}
 }
@@ -1049,57 +1053,38 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					Child: []*gql.FilterTree{not},
 				})
 		default:
-			// It's a base case like:
-			// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
-			fmt.Println("field", field)
+			//// It's a base case like:
+			//// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
+			//// numLikes: { between : { min : 10,  max:100 }}
 			switch dgFunc := filter[field].(type) {
-			////case map[string]map[string]interface{}:
-			//	// add code for between here
-			//	_, val := first(dgFunc)
-			//	v := reflect.ValueOf(val)
-			//	fmt.Println(v.Kind())
-			//	if v.Kind() == reflect.Map {
-			//		fmt.Println("Yes it is")
-			//	}
 			case map[string]interface{}:
 				// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title, "GraphQL")
 				// OR
 				// numLikes: { le: 10 } -> le(Post.numLikes, 10)
+				// OR
+				// numLikes: {between: {min: 10, max:100}} -> between(Post.numLikes, 10, 100)
 				fn, val := first(dgFunc)
-				v := reflect.ValueOf(val)
-				fmt.Println(maybeQuoteArg(fn, val))
-				if v.Kind() == reflect.Map {
-					//ands = append(ands, &gql.FilterTree{
-					//	Func: &gql.Function{
-					//		Name: fn,
-					//		Args: []gql.Arg{
-					//			{Value: typ.DgraphPredicate(field)},
-					//			{Value: maybeQuoteArg(fn, val)},
-					//		},
-					//	},
-					//})
-					//
 
+				v := reflect.ValueOf(val)
+				if v.Kind() == reflect.Map {
+					// between:{min:10, max: 100}, val = map[min:10, max:100]
 					args := []gql.Arg{
 						gql.Arg{Value: typ.DgraphPredicate(field)},
 					}
 					for _, key := range v.MapKeys() {
-						fmt.Println(key)
 						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v.MapIndex(key))})
 
 					}
-					fmt.Println(args)
+
 					ands = append(ands, &gql.FilterTree{
 						Func: &gql.Function{
 							Name: fn,
-							Args: []gql.Arg{
-								{Value: typ.DgraphPredicate(field)},
-								{Value: maybeQuoteArg(fn, val)},
-							},
+							Args: args,
 						},
 					})
-
+					fmt.Println(ands[0].Func.Name)
 				} else {
+					fn, val := first(dgFunc)
 					ands = append(ands, &gql.FilterTree{
 						Func: &gql.Function{
 							Name: fn,
@@ -1110,7 +1095,6 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 						},
 					})
 				}
-
 			case []interface{}:
 				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
 				ids := convertIDs(dgFunc)
