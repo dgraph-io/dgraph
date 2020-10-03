@@ -1317,7 +1317,7 @@ func (n *node) calculateTabletSizes() {
 		total += size
 	}
 
-	tableInfos := pstore.Tables(false)
+	tableInfos := pstore.Tables()
 	previousLeft := ""
 	var previousSize int64
 	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
