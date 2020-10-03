@@ -532,7 +532,7 @@ func setupServer(closer *z.Closer) {
 			exportHandler(w, r, adminServer)
 		}))))
 
-	http.Handle("/admin/config/lru_mb", allowedMethodsHandler(allowedMethods{
+	http.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
 		http.MethodGet: true,
 		http.MethodPut: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

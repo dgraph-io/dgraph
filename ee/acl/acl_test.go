@@ -2587,7 +2587,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			name: "config update has guardian auth",
 			query: `
 					mutation {
-					  config(input: {lruMb: 1}) {
+					  config(input: {lruMb: -1}) {
 						response {
 						  code
 						  message
@@ -2597,7 +2597,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "config",
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
-				Message:   "resolving config failed because lru_mb must be at least 1024\n",
+				Message:   "resolving config failed because lru_mb must be non-negative\n",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"config": null}`,

@@ -126,10 +126,10 @@ func BlockingStop() {
 	workerServer.Stop()
 }
 
-// UpdateLruMb updates the value of lru_mb
-func UpdateLruMb(memoryMB float64) error {
-	if memoryMB < MinAllottedMemory {
-		return errors.Errorf("lru_mb must be at least %.0f\n", MinAllottedMemory)
+// UpdateCacheMb updates the value of cache_mb and updates the corresponding cache sizes.
+func UpdateCacheMb(memoryMB float64) error {
+	if memoryMB < 0 {
+		return errors.Errorf("cache_mb must be non-negative.")
 	}
 
 	posting.Config.Lock()
