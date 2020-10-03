@@ -29,11 +29,14 @@ import (
 var memory, memErr = wasm.NewMemory(17, 0)
 var logger = log.New("pkg", "runtime")
 
+// NodeStorageType type to identify offchain storage type
+type NodeStorageType byte
+
 // NodeStorageTypePersistent flag to identify offchain storage as persistent (db)
-const NodeStorageTypePersistent int32 = 1
+const NodeStorageTypePersistent NodeStorageType = 1
 
 // NodeStorageTypeLocal flog to identify offchain storage as local (memory)
-const NodeStorageTypeLocal int32 = 2
+const NodeStorageTypeLocal NodeStorageType = 2
 
 // NodeStorage struct for storage of runtime offchain worker data
 type NodeStorage struct {

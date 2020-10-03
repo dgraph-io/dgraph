@@ -60,6 +60,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"reflect"
 	"unsafe"
 
 	"github.com/ChainSafe/gossamer/lib/common"
@@ -735,7 +736,7 @@ func ext_local_storage_get(context unsafe.Pointer, kind, key, keyLen, valueLen i
 	runtimeCtx := instanceContext.Data().(*Ctx)
 	var res []byte
 	var err error
-	switch kind {
+	switch NodeStorageType(kind) {
 	case NodeStorageTypePersistent:
 		res, err = runtimeCtx.nodeStorage.PersistentStorage.Get(keyM)
 	case NodeStorageTypeLocal:
@@ -757,10 +758,43 @@ func ext_local_storage_get(context unsafe.Pointer, kind, key, keyLen, valueLen i
 }
 
 //export ext_local_storage_compare_and_set
-func ext_local_storage_compare_and_set(context unsafe.Pointer, kind, key, keyLen, oldValue, oldValueLen, newValue, newValueLen int32) int32 {
+func ext_local_storage_compare_and_set(context unsafe.Pointer, kind, keyPtr, keyLen, oldValuePtr, oldValueLen, newValuePtr, newValueLen int32) int32 {
 	logger.Trace("[ext_local_storage_compare_and_set] executing...")
-	logger.Warn("[ext_local_storage_compare_and_set] Not yet implemented.")
-	return 0
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+
+	key := memory[keyPtr : keyPtr+keyLen]
+	runtimeCtx := instanceContext.Data().(*Ctx)
+	var storedValue []byte
+	var err error
+	var nodeStorage BasicStorage
+
+	switch NodeStorageType(kind) {
+	case NodeStorageTypePersistent:
+		nodeStorage = runtimeCtx.nodeStorage.PersistentStorage
+		storedValue, err = nodeStorage.Get(key)
+	case NodeStorageTypeLocal:
+		nodeStorage = runtimeCtx.nodeStorage.LocalStorage
+		storedValue, err = nodeStorage.Get(key)
+	}
+
+	if err != nil {
+		logger.Error("[ext_local_storage_compare_and_set]", "error", err)
+		return 1
+	}
+
+	oldValue := memory[oldValuePtr : oldValuePtr+oldValueLen]
+
+	if reflect.DeepEqual(storedValue, oldValue) {
+		newValue := memory[newValuePtr : newValuePtr+newValueLen]
+		err := nodeStorage.Put(key, newValue)
+		if err != nil {
+			logger.Error("[ext_local_storage_compare_and_set]", "error", err)
+			return 1
+		}
+		return 0
+	}
+	return 1
 }
 
 //export ext_network_state
@@ -814,7 +848,7 @@ func ext_local_storage_set(context unsafe.Pointer, kind, key, keyLen, value, val
 	runtimeCtx := instanceContext.Data().(*Ctx)
 
 	var err error
-	switch kind {
+	switch NodeStorageType(kind) {
 	case NodeStorageTypePersistent:
 		err = runtimeCtx.nodeStorage.PersistentStorage.Put(keyM, valueM)
 	case NodeStorageTypeLocal:
