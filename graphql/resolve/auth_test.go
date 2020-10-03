@@ -260,7 +260,6 @@ func TestVerificationWithJWKUrl(t *testing.T) {
 	authSchema, err := testutil.AppendAuthInfoWithJWKUrl(sch)
 	require.NoError(t, err)
 	test.LoadSchemaFromString(t, string(authSchema))
-	testutil.SetAuthMeta(string(authSchema))
 
 	// Verify that authorization information is set correctly.
 	metainfo := authorization.GetAuthMeta()
@@ -274,7 +273,7 @@ func TestVerificationWithJWKUrl(t *testing.T) {
 		name  string
 		token string
 	}{
-		name:  `Token without expiry value`,
+		name:  `Expired Token`,
 		token: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE2NzUwM2UwYWVjNTJkZGZiODk2NTIxYjkxN2ZiOGUyMGMxZjMzMDAiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZmlyLXByb2plY3QxLTI1OWU3IiwiYXVkIjoiZmlyLXByb2plY3QxLTI1OWU3IiwiYXV0aF90aW1lIjoxNjAxNDQ0NjM0LCJ1c2VyX2lkIjoiMTdHb3h2dU5CWlc5YTlKU3Z3WXhROFc0bjE2MyIsInN1YiI6IjE3R294dnVOQlpXOWE5SlN2d1l4UThXNG4xNjMiLCJpYXQiOjE2MDE0NDQ2MzQsImV4cCI6MTYwMTQ0ODIzNCwiZW1haWwiOiJtaW5oYWpAZGdyYXBoLmlvIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJmaXJlYmFzZSI6eyJpZGVudGl0aWVzIjp7ImVtYWlsIjpbIm1pbmhhakBkZ3JhcGguaW8iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJwYXNzd29yZCJ9fQ.q5YmOzOUkZHNjlz53hgLNSVg-brIU9tLJ4jLC0_Xurl5wEbyZ6D_KQ9-UFqbl2HR6R1V5kpaf6eDFR3c83i1PpCbJ4LTjHAf_njQvL75ByERld23lZtKZyEeE6ujdFXL8ne4fI2qenD1Xeqx9AnXbLf7U_CvZpbX3l1wj7p0Lpn7qixi0AztuLSJMLkMfFpaiwyFZQivi4cqtnI25VIsK6a4KIpl1Sk0AHT-lv9PRadd_JDjWAIzD0SfhpZOskaeA9PljVMp-Y3Xscwg_Qc6u1MIBPg1jKO-ngjhWkgEWBoz5F836P7phT60LVBHhYuk-jRN6HSSNWQ3ineuN-jBkg",
 	}
 

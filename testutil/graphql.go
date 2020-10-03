@@ -239,7 +239,7 @@ func AppendJWKAndVerificationKey(schema []byte) ([]byte, error) {
 }
 
 func SetAuthMeta(strSchema string) *authorization.AuthMeta {
-	authMeta, err := authorization.ParseAuthMeta(strSchema)
+	authMeta, err := authorization.Parse(strSchema)
 	if err != nil {
 		panic(err)
 	}

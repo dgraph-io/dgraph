@@ -157,13 +157,6 @@ func ParseAuthMeta(schema string) (*AuthMeta, error) {
 		return nil, err
 	}
 
-	// // fetch and Store the keys from JWKUrl
-	// if metaInfo.JWKUrl != "" {
-	// 	err = metaInfo.FetchJWKs()
-	// 	if err != nil {
-	// 		return nil, errors.Errorf("Unable to fetch Keys from JWKUrl, Got error %v", err)
-	// 	}
-	// }
 	if metaInfo.Algo != RSA256 {
 		return metaInfo, nil
 	}
@@ -303,10 +296,10 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	// Verification through JWKUrl
 	if authMeta.JWKUrl != "" {
 
-		if authMeta.IsExpired() {
-			err = authMeta.RefreshJWK()
+		if authMeta.isExpired() {
+			err = authMeta.refreshJWK()
 			if err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, "while refreshing JWK from the URL")
 			}
 		}
 
@@ -388,8 +381,10 @@ func (a *AuthMeta) FetchJWKs() error {
 	}
 
 	var jwkArray JwkArray
-	json.Unmarshal(data, &jwkArray)
-
+	err = json.Unmarshal(data, &jwkArray)
+	if err != nil {
+		return err
+	}
 	a.jwkSet = &jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
 	for i, jwk := range jwkArray.JWKs {
 		a.jwkSet.Keys[i].UnmarshalJSON(jwk)
@@ -412,9 +407,11 @@ func (a *AuthMeta) FetchJWKs() error {
 	return nil
 }
 
-func (a *AuthMeta) RefreshJWK() error {
-	fmt.Println("Starting Refresh")
+func (a *AuthMeta) refreshJWK() error {
 	// If there is no jwkUrl then return with error
+	a.Lock()
+	defer a.Unlock()
+
 	if a.JWKUrl == "" {
 		return errors.Errorf("No JWKUrl supplied")
 	}
@@ -433,8 +430,8 @@ func (a *AuthMeta) RefreshJWK() error {
 // if expiryTime is equal to 0 which means there
 // is no expiry time of the JWKs, so it always
 // returns false
-func (a *AuthMeta) IsExpired() bool {
-	if a.expiryTime.Equal(time.Time{}) {
+func (a *AuthMeta) isExpired() bool {
+	if a.expiryTime.IsZero() {
 		return false
 	}
 	return time.Now().After(a.expiryTime)
