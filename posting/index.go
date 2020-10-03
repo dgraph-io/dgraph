@@ -613,6 +613,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
 		WithLogRotatesToFlush(10).
+		WithBlockCacheSize(100 * (1<<20)).
 		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
