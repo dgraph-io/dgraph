@@ -92,25 +92,25 @@ func sliceSize(dst []byte, offset int) int {
 
 // metaFile stores the RAFT metadata (e.g RAFT ID, snapshot, hard state).
 type metaFile struct {
-	*mmapFile
+	*z.MmapFile
 }
 
 // newMetaFile opens the meta file in the given directory.
 func newMetaFile(dir string) (*metaFile, error) {
 	fname := filepath.Join(dir, metaName)
 	// Open the file in read-write mode and creates it if it doesn't exist.
-	mf, err := openMmapFile(fname, os.O_RDWR|os.O_CREATE, metaFileSize)
-	if err == errNewFile {
-		z.ZeroOut(mf.data, 0, snapshotOffset+4)
+	mf, err := z.OpenMmapFile(fname, os.O_RDWR|os.O_CREATE, metaFileSize)
+	if err == z.NewFile {
+		z.ZeroOut(mf.Data, 0, snapshotOffset+4)
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "unable to open meta file")
 	}
-	return &metaFile{mmapFile: mf}, nil
+	return &metaFile{MmapFile: mf}, nil
 }
 
 func (m *metaFile) bufAt(info MetaInfo) []byte {
 	pos := getOffset(info)
-	return m.data[pos : pos+8]
+	return m.Data[pos : pos+8]
 }
 func (m *metaFile) Uint(info MetaInfo) uint64 {
 	return binary.BigEndian.Uint64(m.bufAt(info))
@@ -128,12 +128,12 @@ func (m *metaFile) StoreHardState(hs *raftpb.HardState) error {
 		return errors.Wrapf(err, "cannot marshal hard state")
 	}
 	x.AssertTrue(len(buf) < snapshotIndex-hardStateOffset)
-	writeSlice(m.data[hardStateOffset:], buf)
+	writeSlice(m.Data[hardStateOffset:], buf)
 	return nil
 }
 
 func (m *metaFile) HardState() (raftpb.HardState, error) {
-	val := readSlice(m.data, hardStateOffset)
+	val := readSlice(m.Data, hardStateOffset)
 	var hs raftpb.HardState
 
 	if len(val) == 0 {
@@ -158,15 +158,15 @@ func (m *metaFile) StoreSnapshot(snap *raftpb.Snapshot) error {
 	}
 	glog.V(1).Infof("Got valid snapshot to store of length: %d\n", len(buf))
 
-	if len(m.data)-snapshotOffset < len(buf) {
+	if len(m.Data)-snapshotOffset < len(buf) {
 		return errors.Errorf("Unable to store snapshot of size: %d\n", len(buf))
 	}
-	writeSlice(m.data[snapshotOffset:], buf)
+	writeSlice(m.Data[snapshotOffset:], buf)
 	return nil
 }
 
 func (m *metaFile) snapshot() (raftpb.Snapshot, error) {
-	val := readSlice(m.data, snapshotOffset)
+	val := readSlice(m.Data, snapshotOffset)
 
 	var snap raftpb.Snapshot
 	if len(val) == 0 {
