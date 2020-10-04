@@ -73,7 +73,7 @@ func (a *AuthMeta) validate() error {
 	// they are needed only if JWKUrl is not present there.
 	if a.JWKUrl != "" {
 		if a.VerificationKey != "" || a.Algo != "" {
-			return fmt.Errorf("Expecting either JWKUrl or (VerificationKey, Algo), both were given")
+			return fmt.Errorf("expecting either JWKUrl or (VerificationKey, Algo), both were given")
 		}
 	} else {
 		if a.VerificationKey == "" {
@@ -387,12 +387,15 @@ func (a *AuthMeta) FetchJWKs() error {
 	}
 	a.jwkSet = &jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
 	for i, jwk := range jwkArray.JWKs {
-		a.jwkSet.Keys[i].UnmarshalJSON(jwk)
+		err = a.jwkSet.Keys[i].UnmarshalJSON(jwk)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Try to Parse the Remaining time in the expiry of signing keys
 	// from the `max-age` directive in the `Cache-Control` Header
-	maxAge := int64(0)
+	var maxAge int64
 
 	if resp.Header["Cache-Control"] != nil {
 		maxAge, err = ParseMaxAge(resp.Header["Cache-Control"][0])
