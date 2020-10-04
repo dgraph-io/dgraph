@@ -2587,7 +2587,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			name: "config update has guardian auth",
 			query: `
 					mutation {
-					  config(input: {lruMb: -1}) {
+					  config(input: {cacheMb: -1}) {
 						response {
 						  code
 						  message
@@ -2607,7 +2607,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			query: `
 					query {
 					  config {
-						lruMb
+						cacheMb
 					  }
 					}`,
 			queryName:          "config",

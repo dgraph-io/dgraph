@@ -172,14 +172,14 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request, adminServer w
 	}
 	gqlReq := &schema.Request{
 		Query: `
-		mutation config($lruMb: Float) {
-		  config(input: {lruMb: $lruMb}) {
+		mutation config($cacheMb: Float) {
+		  config(input: {cacheMb: $cacheMb}) {
 			response {
 			  code
 			}
 		  }
 		}`,
-		Variables: map[string]interface{}{"lruMb": memoryMB},
+		Variables: map[string]interface{}{"cacheMb": memoryMB},
 	}
 	resp := resolveWithAdminServer(gqlReq, r, adminServer)
 
@@ -196,19 +196,19 @@ func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request, adminServer w
 		Query: `
 		query {
 		  config {
-			lruMb
+			cacheMb
 		  }
 		}`,
 	}
 	resp := resolveWithAdminServer(gqlReq, r, adminServer)
 	var data struct {
 		Config struct {
-			LruMb float64
+			CacheMb float64
 		}
 	}
 	x.Check(json.Unmarshal(resp.Data.Bytes(), &data))
 
-	if _, err := fmt.Fprintln(w, data.Config.LruMb); err != nil {
+	if _, err := fmt.Fprintln(w, data.Config.CacheMb); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
