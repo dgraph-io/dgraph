@@ -50,7 +50,6 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	}
 
 	opt := badger.DefaultOptions(pdir).
-		WithReadOnly(true).
 		WithEncryptionKey(k)
 	return badger.OpenManaged(opt)
 }
