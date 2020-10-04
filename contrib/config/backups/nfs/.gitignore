@@ -1,12 +1,9 @@
-env.sh
-.vagrant
-
-## Files Atomatically Generated
-env.sh
-
 ## Vagrant files
 .vagrant
 
 ## Terraform Files
 .terraform
 terraform.tfstate*
+
+## Configurations auto-generated
+env.sh
