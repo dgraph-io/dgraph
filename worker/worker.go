@@ -127,14 +127,22 @@ func BlockingStop() {
 }
 
 // UpdateCacheMb updates the value of cache_mb and updates the corresponding cache sizes.
-func UpdateCacheMb(memoryMB float64) error {
+func UpdateCacheMb(memoryMB int64) error {
 	if memoryMB < 0 {
 		return errors.Errorf("cache_mb must be non-negative.")
 	}
 
-	posting.Config.Lock()
-	posting.Config.AllottedMemory = memoryMB
-	posting.Config.Unlock()
+	cachePercent, err := x.GetCachePercentages(Config.CachePercentage, 4)
+	if err != nil {
+		return err
+	}
+	plCacheSize := (cachePercent[0] * (memoryMB << 20)) / 100
+	blockCacheSize := (cachePercent[1] * (memoryMB << 20)) / 100
+	indexCacheSize := (cachePercent[2] * (memoryMB << 20)) / 100
+
+	posting.UpdateMaxCost(plCacheSize)
+	pstore.UpdateCacheMaxCost(badger.BlockCache, blockCacheSize)
+	pstore.UpdateCacheMaxCost(badger.IndexCache, indexCacheSize)
 	return nil
 }
 

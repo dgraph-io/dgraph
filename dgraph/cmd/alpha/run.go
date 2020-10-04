@@ -607,12 +607,13 @@ func run() {
 		PostingDir:                 Alpha.Conf.GetString("postings"),
 		WALDir:                     Alpha.Conf.GetString("wal"),
 		PostingDirCompressionLevel: level,
+		CachePercentage:            cachePercentage,
 		PBlockCacheSize:            pstoreBlockCacheSize,
 		PIndexCacheSize:            pstoreIndexCacheSize,
 		WalCache:                   walCache,
 
-		MutationsMode:  worker.AllowMutations,
-		AuthToken:      Alpha.Conf.GetString("auth_token"),
+		MutationsMode: worker.AllowMutations,
+		AuthToken:     Alpha.Conf.GetString("auth_token"),
 	}
 
 	opts.BadgerTables = Alpha.Conf.GetString("badger.tables")

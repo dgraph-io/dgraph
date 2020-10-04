@@ -20,7 +20,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -66,6 +65,12 @@ type Options struct {
 	AccessJwtTtl time.Duration
 	// RefreshJwtTtl is the TTL of the refresh JWT.
 	RefreshJwtTtl time.Duration
+
+	// CachePercentage is the comma-separated list of cache percentages
+	// used to split the total cache size among the multiple caches.
+	CachePercentage string
+	// CacheMb is the total memory allocated between all the caches.
+	CacheMb int64
 }
 
 // Config holds an instance of the server options..
@@ -78,9 +83,6 @@ func SetConfiguration(newConfig *Options) {
 	}
 	newConfig.validate()
 	Config = *newConfig
-
-	posting.Config.Lock()
-	defer posting.Config.Unlock()
 }
 
 // MinAllottedMemory is the minimum amount of memory needed for the LRU cache.
