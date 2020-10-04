@@ -199,7 +199,7 @@ they form a Raft group and provide synchronous replication.
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
 
 	// Cache flags
-	flag.String("cache_percentage", "0,100,0,0",
+	flag.String("cache_percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
 }
