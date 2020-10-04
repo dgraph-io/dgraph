@@ -65,6 +65,8 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice) LoadR
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 				WithSyncWrites(false).
 				WithValueThreshold(1 << 10).
+				WithBlockCacheSize(100 * (1 << 20)).
+				WithIndexCacheSize(100 * (1 << 20)).
 				WithNumVersionsToKeep(math.MaxInt32).
 				WithEncryptionKey(key))
 			if err != nil {

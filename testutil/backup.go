@@ -50,6 +50,8 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	}
 
 	opt := badger.DefaultOptions(pdir).
+		WithBlockCacheSize(10 * (1 << 20)).
+		WithIndexCacheSize(10 * (1 << 20)).
 		WithEncryptionKey(k)
 	return badger.OpenManaged(opt)
 }
