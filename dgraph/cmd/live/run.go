@@ -525,6 +525,8 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		db, err = badger.Open(badger.DefaultOptions(opt.clientDir).
 			WithCompression(bopt.ZSTD).
 			WithSyncWrites(false).
+			WithBlockCacheSize(100 * (1 << 20)).
+			WithIndexCacheSize(100 * (1 << 20)).
 			WithZSTDCompressionLevel(3))
 		x.Checkf(err, "Error while creating badger KV posting store")
 
