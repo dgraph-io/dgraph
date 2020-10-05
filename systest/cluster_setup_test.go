@@ -89,7 +89,6 @@ func (d *DgraphCluster) StartZeroOnly() error {
 func (d *DgraphCluster) StartAlphaOnly() error {
 	d.dgraph = exec.Command(testutil.DgraphBinaryPath(),
 		"alpha",
-		"--lru_mb=4096",
 		"--zero", ":"+d.zeroPort,
 		"--port_offset", strconv.Itoa(d.alphaPortOffset),
 		"--custom_tokenizers", d.TokenizerPluginsArg,
@@ -132,7 +131,6 @@ func (d *DgraphCluster) AddNode(dir string) (Node, error) {
 	o := strconv.Itoa(freePort(x.PortInternal))
 	dgraph := exec.Command(testutil.DgraphBinaryPath(),
 		"alpha",
-		"--lru_mb=4096",
 		"--zero", ":"+d.zeroPort,
 		"--port_offset", o,
 	)
