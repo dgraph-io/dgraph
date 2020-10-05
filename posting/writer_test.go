@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
@@ -35,7 +36,7 @@ func BenchmarkWriter(b *testing.B) {
 	createKVList := func() bpb.KVList {
 		var KVList bpb.KVList
 		for i := 0; i < 5000000; i++ {
-			n := &bpb.KV{Key: []byte(string(i)), Value: val, Version: 5}
+			n := &bpb.KV{Key: []byte(fmt.Sprint(i)), Value: val, Version: 5}
 			KVList.Kv = append(KVList.Kv, n)
 		}
 		return KVList
