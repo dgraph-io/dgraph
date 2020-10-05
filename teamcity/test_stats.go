@@ -103,8 +103,6 @@ func doGetRequest(url string) []byte {
 	return bodyBytes
 }
 
-// "https://teamcity.dgraph.io/app/rest/builds/?locator=branch:refs/heads/master,buildType:Dgraph_Ci" all builds that ran on draph master
-
 // Fetch the status of all the tests that ran for the given buildId
 func fetchTestsForBuild(buildID int, ch chan<- map[string]TestData) {
 	url := fmt.Sprintf("https://teamcity.dgraph.io/app/rest/testOccurrences?locator=build:id:%d", buildID)
@@ -179,9 +177,13 @@ func outputTestsStats(buildType string, days int) {
 		log.Fatalln("No builds found")
 	}
 	ch := make(chan map[string]TestData)
+
+	// Get the tests for the latest build first
 	go fetchTestsForBuild(buildDataList[0].ID, ch)
 	latestTestsMap := <-ch
 	testStatsMap := make(map[string]TestStats)
+
+	// For the tests that ran in the latest run, update the stats
 	for testName := range latestTestsMap {
 		var testStats TestStats
 		testStats.Name = testName
@@ -193,10 +195,12 @@ func outputTestsStats(buildType string, days int) {
 		testStats.TotalRuns++
 		testStatsMap[testName] = testStats
 	}
-	// Find the tests that fail the most percentage wise and output top 10
+
+	// Compute test stats for all the builds before the latest build
 	for i := 1; i < len(buildDataList); i++ {
 		go fetchTestsForBuild(buildDataList[i].ID, ch)
 	}
+
 	for i := 1; i < len(buildDataList); i++ {
 		currentTestsMap := <-ch
 		for k := range latestTestsMap {
@@ -214,7 +218,7 @@ func outputTestsStats(buildType string, days int) {
 			testStatsMap[k] = testStats
 		}
 	}
-
+	// Sort the test in ascending order of flakiness = failures / total runs
 	var allFlakyTests []FlakyStats
 	for k := range latestTestsMap {
 		var flakyStats FlakyStats
