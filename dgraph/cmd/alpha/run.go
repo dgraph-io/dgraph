@@ -116,10 +116,10 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored for the postings."+
 			"mmap consumes more RAM, but provides better performance.")
-	flag.String("badger.compression", "zstd:3",
+	flag.String("badger.compression", "snappy",
 		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
-			"level for the postings directory. A higher value of level uses more resources."+
-			"Level with value 0 disables compression.")
+			"level (if applicable) for the postings directory. none would disable compression,"+
+			" while zstd:1 would set zstd compression at level 1.")
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.

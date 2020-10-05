@@ -1251,8 +1251,8 @@ func ParseCompression(cStr string) (bo.CompressionType, int) {
 	if len(cStrSplit) == 2 {
 		level, err = strconv.Atoi(cStrSplit[1])
 		Check(err)
-		if level < 0 {
-			glog.Fatalf("ERROR: compression level(%v) cannot be negative", level)
+		if level <= 0 {
+			glog.Fatalf("ERROR: compression level(%v) must be greater than zero", level)
 		}
 	} else if len(cStrSplit) > 2 {
 		glog.Fatalf("ERROR: Invalid badger.compression argument")
