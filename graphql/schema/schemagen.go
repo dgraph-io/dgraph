@@ -223,9 +223,7 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
 	// then Fetch the JWKs from the JWKUrl
 	if metaInfo != nil && metaInfo.JWKUrl != "" {
-		metaInfo.Lock()
 		fetchErr := metaInfo.FetchJWKs()
-		metaInfo.Unlock()
 		if fetchErr != nil {
 			return nil, fetchErr
 		}

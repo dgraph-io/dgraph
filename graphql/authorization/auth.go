@@ -184,6 +184,42 @@ func GetAuthMeta() *AuthMeta {
 	return authMeta
 }
 
+func (a *AuthMeta) jwkURL() string {
+	a.RLock()
+	defer a.RUnlock()
+	return a.JWKUrl
+}
+
+func (a *AuthMeta) algo() string {
+	a.RLock()
+	defer a.RUnlock()
+	return a.Algo
+}
+
+func (a *AuthMeta) namespace() string {
+	a.RLock()
+	defer a.RUnlock()
+	return a.Namespace
+}
+
+func (a *AuthMeta) getJWKSet() *jose.JSONWebKeySet {
+	a.RLock()
+	defer a.RUnlock()
+	return a.jwkSet
+}
+
+func (a *AuthMeta) verificationKey() string {
+	a.RLock()
+	defer a.RUnlock()
+	return a.VerificationKey
+}
+
+func (a *AuthMeta) rsaPublicKey() *rsa.PublicKey {
+	a.RLock()
+	defer a.RUnlock()
+	return a.RSAPublicKey
+}
+
 func SetAuthMeta(m *AuthMeta) {
 	authMeta.Lock()
 	defer authMeta.Unlock()
@@ -233,7 +269,7 @@ func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 	}
 
 	// Unmarshal the auth variables for a particular namespace.
-	if authValue, ok := result[authMeta.Namespace]; ok {
+	if authValue, ok := result[authMeta.namespace()]; ok {
 		if authJson, ok := authValue.(string); ok {
 			if err := json.Unmarshal([]byte(authJson), &c.AuthVariables); err != nil {
 				return err
@@ -288,14 +324,12 @@ func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
 }
 
 func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
-	authMeta.RLock()
-	defer authMeta.RUnlock()
+	jwkURL := authMeta.jwkURL()
 
 	var token *jwt.Token
 	var err error
 	// Verification through JWKUrl
-	if authMeta.JWKUrl != "" {
-
+	if jwkURL != "" {
 		if authMeta.isExpired() {
 			err = authMeta.refreshJWK()
 			if err != nil {
@@ -310,14 +344,16 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 					return nil, errors.Errorf("kid not present in JWT")
 				}
 
-				signingKeys := authMeta.jwkSet.Key(kid.(string))
+				set := authMeta.getJWKSet()
+				signingKeys := set.Key(kid.(string))
 				if len(signingKeys) == 0 {
 					return nil, errors.Errorf("Invalid kid")
 				}
 				return signingKeys[0].Key, nil
 			}, jwt.WithoutAudienceValidation())
 	} else {
-		if authMeta.Algo == "" {
+		amAlgo := authMeta.algo()
+		if amAlgo == "" {
 			return nil, fmt.Errorf(
 				"jwt token cannot be validated because verification algorithm is not set")
 		}
@@ -328,17 +364,17 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 		token, err =
 			jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 				algo, _ := token.Header["alg"].(string)
-				if algo != authMeta.Algo {
+				if algo != amAlgo {
 					return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
-						authMeta.Algo, algo)
+						amAlgo, algo)
 				}
 				if algo == HMAC256 {
 					if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
-						return []byte(authMeta.VerificationKey), nil
+						return []byte(authMeta.verificationKey()), nil
 					}
 				} else if algo == RSA256 {
 					if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
-						return authMeta.RSAPublicKey, nil
+						return authMeta.rsaPublicKey(), nil
 					}
 				}
 				return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
@@ -360,7 +396,16 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	return claims, nil
 }
 
+// FetchJWKs fetches the JSON Web Key set from a JWKUrl. It acquires a Lock over a as some of the
+// properties of AuthMeta are modified in the process.
 func (a *AuthMeta) FetchJWKs() error {
+	a.Lock()
+	defer a.Unlock()
+
+	if a.JWKUrl == "" {
+		return errors.Errorf("No JWKUrl supplied")
+	}
+
 	req, err := http.NewRequest("GET", a.JWKUrl, nil)
 	if err != nil {
 		return err
@@ -385,6 +430,7 @@ func (a *AuthMeta) FetchJWKs() error {
 	if err != nil {
 		return err
 	}
+
 	a.jwkSet = &jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
 	for i, jwk := range jwkArray.JWKs {
 		err = a.jwkSet.Keys[i].UnmarshalJSON(jwk)
@@ -411,13 +457,6 @@ func (a *AuthMeta) FetchJWKs() error {
 }
 
 func (a *AuthMeta) refreshJWK() error {
-	// If there is no jwkUrl then return with error
-	a.Lock()
-	defer a.Unlock()
-
-	if a.JWKUrl == "" {
-		return errors.Errorf("No JWKUrl supplied")
-	}
 	var err error
 	for i := 0; i < 3; i++ {
 		err = a.FetchJWKs()
@@ -434,6 +473,9 @@ func (a *AuthMeta) refreshJWK() error {
 // is no expiry time of the JWKs, so it always
 // returns false
 func (a *AuthMeta) isExpired() bool {
+	a.RLock()
+	defer a.RUnlock()
+
 	if a.expiryTime.IsZero() {
 		return false
 	}
