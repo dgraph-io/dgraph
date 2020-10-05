@@ -290,13 +290,16 @@ Backup is an online tool, meaning it is available when alpha is running. For enc
 `encryption_key_file` or `vault_*` options was used for encryption-at-rest and will now also be used for encrypted backups.
 {{% /notice %}}
 
-## Restore from Backup
-To restore from a backup, execute the following mutation on `/admin` endpoint.
+## Online restore
+
+To restore from a backup to a live cluster, execute a mutation on the `/admin`
+endpoint with the following format.
 
 ```graphql
 mutation{
   restore(input:{
     location: "/path/to/backup/directory",
+    backupId: "id_of_backup_to_restore"'
   }){
     message
     code 
@@ -304,7 +307,16 @@ mutation{
   }
 }
 ```
-Restore can be performed from Amazon S3 / Minio or from Local Directory. Below is the `RestoreInput` to be passed into the mutation. 
+
+Online restores only require you to send this request. The UID and timestamp
+leases are updated accordingly. The latest backup to be restored should contain
+the same number of groups in its manifest.json file as the cluster to which it
+is being restored.
+
+Restore can be performed from Amazon S3 / Minio or from a local directory. Below
+is the documentation for the fields inside `RestoreInput` that can be passed into
+the mutation.
+
 ```graphql
 input RestoreInput {
 
@@ -379,10 +391,10 @@ input RestoreInput {
 }
 ```
 
-## Restore using `dgraph restore`
+## Offline restore using `dgraph restore`
 
 {{% notice "note" %}}
-`dgraph restore` is being deprecated, please use GraphQL api for Restoring from Backup.
+`dgraph restore` is being deprecated, please use GraphQL API for Restoring from Backup.
 {{% /notice %}}
 
 The restore utility is a standalone tool today. A new flag `--encryption_key_file` is added to the restore utility so it can decrypt the backup. This file must contain the same key that was used for encryption during backup.
