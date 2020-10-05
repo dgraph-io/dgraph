@@ -18,7 +18,6 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -283,7 +282,15 @@ const (
 	}
 
 	input RemoveNodeInput {
+
+		"""
+		ID of the node to be removed.
+		"""
 		nodeId: Int64!
+
+		"""
+		ID of the group from which the node is to be removed.
+		"""
 		groupId: Int64!
 	}
 
@@ -292,7 +299,15 @@ const (
 	}
 
 	input MoveTabletInput {
+
+		"""
+		Name of the predicate to move.
+		"""
 		tablet: String!
+
+		"""
+		ID of the destination group where the predicate is to be moved.
+		"""
 		groupId: Int64!
 	}
 
@@ -306,13 +321,33 @@ const (
 	}
 
 	input AssignInput {
+
+		"""
+		Choose what to assign: UID or TIMESTAMP.
+		"""
 		what: AssignKind!
+
+		"""
+		How many to assign.
+		"""
 		num: Int64!
 	}
 
 	type AssignedIds {
+
+		"""
+		The first UID or TIMESTAMP assigned.
+		"""
 		startId: Int64
+
+		"""
+		The last UID or TIMESTAMP assigned.
+		"""
 		endId: Int64
+
+		"""
+		TIMESTAMP for read-only transactions.
+		"""
 		readOnly: Int64
 	}
 
@@ -321,6 +356,10 @@ const (
 	}
 
 	input EnterpriseLicenseInput {
+
+		"""
+		The contents of license file as a String.
+		"""
 		license: String!
 	}
 
@@ -372,9 +411,24 @@ const (
 		
 		replaceAllowedCORSOrigins(origins: [String]): Cors
 
+		"""
+		Remove a node from the cluster.
+		"""
 		removeNode(input: RemoveNodeInput!): RemoveNodePayload
+
+		"""
+		Move a predicate from one group to another.
+		"""
 		moveTablet(input: MoveTabletInput!): MoveTabletPayload
+
+		"""
+		Lease UIDs or Timestamps in advance.
+		"""
 		assign(input: AssignInput!): AssignPayload
+
+		"""
+		Apply enterprise license.
+		"""
 		enterpriseLicense(input: EnterpriseLicenseInput!): EnterpriseLicensePayload
 
 		` + adminMutations + `
@@ -928,15 +982,7 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	mainHealthStore.up()
 }
 
-// getTypeInput unmarshalls the `input` argument from the given mutation to the provided inputRef.
-func getTypeInput(m schema.Mutation, inputRef interface{}) error {
-	inputArg := m.ArgValue(schema.InputArgName)
-	inputBytes, err := json.Marshal(inputArg)
-	if err != nil {
-		return schema.GQLWrapf(err, "couldn't get input argument")
-	}
-
-	err = json.Unmarshal(inputBytes, inputRef)
+func inputArgError(err error) error {
 	return schema.GQLWrapf(err, "couldn't get input argument")
 }
 

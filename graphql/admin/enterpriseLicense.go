@@ -18,6 +18,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -30,12 +31,12 @@ type enterpriseLicenseInput struct {
 }
 
 func resolveEnterpriseLicense(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-	var input enterpriseLicenseInput
-	if err := getTypeInput(m, &input); err != nil {
+	input, err := getEnterpriseLicenseInput(m)
+	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
-	if _, err := worker.ApplyLicenseOverNetwork(ctx, &pb.ApplyLicenseRequest{License: []byte(input.
+	if _, err = worker.ApplyLicenseOverNetwork(ctx, &pb.ApplyLicenseRequest{License: []byte(input.
 		License)}); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
@@ -44,4 +45,17 @@ func resolveEnterpriseLicense(ctx context.Context, m schema.Mutation) (*resolve.
 		Data:  map[string]interface{}{m.Name(): response("Success", "License applied.")},
 		Field: m,
 	}, true
+}
+
+func getEnterpriseLicenseInput(m schema.Mutation) (*enterpriseLicenseInput,
+	error) {
+	inputArg := m.ArgValue(schema.InputArgName)
+	inputBytes, err := json.Marshal(inputArg)
+	if err != nil {
+		return nil, inputArgError(err)
+	}
+
+	var input enterpriseLicenseInput
+	err = json.Unmarshal(inputBytes, &input)
+	return &input, inputArgError(err)
 }

@@ -2711,7 +2711,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					" = Group: [2147483640] is not a known group.",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
-			guardianData: `{"moveTablet": {"response": {"code": "Failure", "message": "ErrInvalidRequest"}}}`,
+			guardianData: `{"moveTablet": null}`,
 		},
 		{
 			name: "assign has guardian auth",
@@ -2728,7 +2728,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "assign",
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
-				Message: "resolving assign failed because  rpc error: code = Unknown desc" +
+				Message: "resolving assign failed because rpc error: code = Unknown desc" +
 					" = Nothing to be leased",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},

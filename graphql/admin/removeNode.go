@@ -43,7 +43,7 @@ func resolveRemoveNode(ctx context.Context, m schema.Mutation) (*resolve.Resolve
 		return resolve.EmptyResult(m, err), false
 	}
 
-	if _, err := worker.RemoveNodeOverNetwork(ctx, &pb.RemoveNodeRequest{NodeId: input.NodeId,
+	if _, err = worker.RemoveNodeOverNetwork(ctx, &pb.RemoveNodeRequest{NodeId: input.NodeId,
 		GroupId: input.GroupId}); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}

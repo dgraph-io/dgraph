@@ -42,22 +42,18 @@ func resolveMoveTablet(ctx context.Context, m schema.Mutation) (*resolve.Resolve
 		return resolve.EmptyResult(m, err), false
 	}
 
-	// move tablet won't return a nil status, unless there was some gRPC connection issue
+	// gRPC call returns a nil status if the error is non-nil
 	status, err := worker.MoveTabletOverNetwork(ctx, &pb.MoveTabletRequest{Tablet: input.Tablet,
 		DstGroup: input.GroupId})
-
-	code := "Success"
-	resolverSucceeded := true
 	if err != nil {
-		code = "Failure"
-		resolverSucceeded = false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response(code, status.GetMsg())},
+		Data:  map[string]interface{}{m.Name(): response("Success", status.GetMsg())},
 		Field: m,
 		Err:   schema.GQLWrapLocationf(err, m.Location(), "resolving %s failed", m.Name()),
-	}, resolverSucceeded
+	}, true
 }
 
 func getMoveTabletInput(m schema.Mutation) (*moveTabletInput, error) {
@@ -79,10 +75,6 @@ func getMoveTabletInput(m schema.Mutation) (*moveTabletInput, error) {
 	inputRef.GroupId = gId
 
 	return inputRef, nil
-}
-
-func inputArgError(err error) error {
-	return schema.GQLWrapf(err, "couldn't get input argument")
 }
 
 func getInt64FieldAsUint32(val interface{}) (uint32, error) {
