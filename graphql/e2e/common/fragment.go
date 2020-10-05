@@ -179,6 +179,11 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				... on Droid {
 					primaryFunction
 					name
+			qc2: queryCharacter {
+				... on Human {
+					name
+					n: name
+
 				}
 			}
 			queryThing {
@@ -308,6 +313,13 @@ func fragmentInQueryOnInterface(t *testing.T) {
                 "name": "R2-D2",
                 "primaryFunction": "Robot"
             }
+		"qc2":[
+			{
+				"name": "Han",
+				"n": "Han"
+			},
+			{
+			}
 		],
 		"queryThing":[
 			{
