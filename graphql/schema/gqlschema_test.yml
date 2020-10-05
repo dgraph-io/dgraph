@@ -2398,6 +2398,47 @@ invalid_schemas:
     {"message": "Subscription is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations": [{"line":1, "column":6}]},
     ]
 
+  -
+    name: "as is reserved keyword - type Name"
+    input: |
+      type As {
+        id: ID!
+        name: String
+      }
+    errlist: [
+      { "message": "As is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations": [ { "line": 1, "column": 6 } ] },
+    ]
+
+  - name: "as is reserved keyword - field name"
+    input: |
+      type X {
+        as: ID!
+        name: String
+      }
+    errlist: [
+      { "message": "Type X; Field as: as is a reserved keyword and you cannot declare a field with this name.", "locations": [ { "line": 2, "column": 3 } ] },
+    ]
+
+  - name: "as is reserved keyword - type name using @dgraph directive"
+    input: |
+      type X @dgraph(type:"as") {
+        id: ID!
+        name: String
+      }
+    errlist: [
+      { "message": "Type X; type argument 'as' for @dgraph directive is a reserved keyword.", "locations": [ { "line": 1, "column": 9 } ] },
+    ]
+
+  - name: "as is reserved keyword - field name using @dgraph directive"
+    input: |
+      type X {
+        id: ID!
+        name: String @dgraph(pred:"as")
+      }
+    errlist: [
+      { "message": "Type X; Field name: pred argument 'as' for @dgraph directive is a reserved keyword.", "locations": [ { "line": 3, "column": 17 } ] },
+    ]
+
 
 valid_schemas:
   - name: "@auth on interface implementation"
