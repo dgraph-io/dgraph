@@ -173,7 +173,7 @@ func main() {
 		Use:     "test_stats",
 		Short:   "Tests stats from TeamCity",
 		Long:    "Aggregate stats for tests that run on TeamCity",
-		Example: "$ test_stats -d=30",
+		Example: "$ teamcity test_stats -d=30",
 		Run: func(cmd *cobra.Command, args []string) {
 			now := time.Now()
 			now.AddDate(0, 0, -days)
@@ -239,9 +239,9 @@ func main() {
 			}
 		},
 	}
-	cmd.Flags().IntVarP(&days, "Past days for which stats are required", "d", 7, "Last d days stats")
+	cmd.Flags().IntVarP(&days, "days", "d", 7, "Past days for which stats are to be computed")
 
-	var rootCmd = &cobra.Command{Use: "app"}
+	var rootCmd = &cobra.Command{Use: "teamcity"}
 	rootCmd.AddCommand(cmd)
 	rootCmd.Execute()
 }
