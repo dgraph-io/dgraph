@@ -17,9 +17,30 @@
 package runtime
 
 import (
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 )
+
+// Instance is the interface a runtime instance must implement
+type Instance interface {
+	Stop()
+	NodeStorage() NodeStorage
+	NetworkService() BasicNetwork
+
+	SetContext(s Storage) // used to set the TrieState before a runtime call
+	Version() (*VersionAPI, error)
+	Metadata() ([]byte, error)
+	BabeConfiguration() (*types.BabeConfiguration, error)
+	GrandpaAuthorities() ([]*types.Authority, error)
+	ValidateTransaction(e types.Extrinsic) (*transaction.Validity, error)
+	InitializeBlock(header *types.Header) error
+	InherentExtrinsics(data []byte) ([]byte, error)
+	ApplyExtrinsic(data types.Extrinsic) ([]byte, error)
+	FinalizeBlock() (*types.Header, error)
+	ExecuteBlock(block *types.Block) ([]byte, error)
+}
 
 // Storage interface
 type Storage interface {

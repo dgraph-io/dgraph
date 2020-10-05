@@ -51,7 +51,7 @@ type Service struct {
 	// Synchronization variables
 	synced           bool
 	highestSeenBlock *big.Int // highest block number we have seen
-	runtime          *runtime.Runtime
+	runtime          runtime.Instance
 
 	// BABE verification
 	verifier Verifier
@@ -70,7 +70,7 @@ type Config struct {
 	StorageState     StorageState
 	BlockProducer    BlockProducer
 	TransactionState TransactionState
-	Runtime          *runtime.Runtime
+	Runtime          runtime.Instance
 	Verifier         Verifier
 	DigestHandler    DigestHandler
 }
@@ -467,20 +467,7 @@ func (s *Service) handleBlock(block *types.Block) error {
 //  It doesn't seem to return data on success (although the spec say it should return
 //  a boolean value that indicate success.  will error if the call isn't successful
 func (s *Service) executeBlock(block *types.Block) ([]byte, error) {
-	// copy block since we're going to modify it
-	b := block.DeepCopy()
-
-	b.Header.Digest = [][]byte{}
-	bdEnc, err := b.Encode()
-	if err != nil {
-		return nil, err
-	}
-
-	return s.runtime.Exec(runtime.CoreExecuteBlock, bdEnc)
-}
-
-func (s *Service) executeBlockBytes(bd []byte) ([]byte, error) {
-	return s.runtime.Exec(runtime.CoreExecuteBlock, bd)
+	return s.runtime.ExecuteBlock(block)
 }
 
 func (s *Service) handleDigests(header *types.Header) error {

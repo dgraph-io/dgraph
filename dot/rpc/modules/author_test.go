@@ -10,6 +10,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
+	"github.com/ChainSafe/gossamer/lib/runtime/wasmer"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	log "github.com/ChainSafe/log15"
@@ -254,7 +255,7 @@ func TestAuthorModule_HasKey_InvalidKeyType(t *testing.T) {
 func newCoreService(t *testing.T) *core.Service {
 	// setup service
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, runtime.NODE_RUNTIME, tt, log.LvlInfo)
+	rt := wasmer.NewTestInstanceWithTrie(t, wasmer.NODE_RUNTIME, tt, log.LvlInfo)
 	ks := keystore.NewGlobalKeystore()
 
 	// insert alice key for testing
@@ -274,6 +275,6 @@ func newCoreService(t *testing.T) *core.Service {
 
 func setupAuthModule(t *testing.T, txq *state.TransactionState) *AuthorModule {
 	cs := newCoreService(t)
-	rt := runtime.NewTestRuntime(t, runtime.NODE_RUNTIME)
+	rt := wasmer.NewTestInstance(t, wasmer.NODE_RUNTIME)
 	return NewAuthorModule(nil, cs, rt, txq)
 }

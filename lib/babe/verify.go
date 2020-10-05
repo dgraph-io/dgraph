@@ -45,7 +45,7 @@ type VerificationManager struct {
 }
 
 // NewVerificationManagerFromRuntime returns a new VerificationManager
-func NewVerificationManagerFromRuntime(blockState BlockState, rt *runtime.Runtime) (*VerificationManager, error) {
+func NewVerificationManagerFromRuntime(blockState BlockState, rt runtime.Instance) (*VerificationManager, error) {
 	descriptor, err := descriptorFromRuntime(rt)
 	if err != nil {
 		return nil, err
@@ -83,7 +83,7 @@ func NewVerificationManager(blockState BlockState, descriptor *Descriptor) (*Ver
 
 // SetRuntimeChangeAtBlock sets a runtime change at the given block
 // Blocks that are descendants of this block will be verified using the given runtime
-func (v *VerificationManager) SetRuntimeChangeAtBlock(header *types.Header, rt *runtime.Runtime) error {
+func (v *VerificationManager) SetRuntimeChangeAtBlock(header *types.Header, rt runtime.Instance) error {
 	descriptor, err := descriptorFromRuntime(rt)
 	if err != nil {
 		return err
@@ -198,7 +198,7 @@ func (v *VerificationManager) VerifyBlock(header *types.Header) (bool, error) {
 	return verifier.verifyAuthorshipRight(header)
 }
 
-func descriptorFromRuntime(rt *runtime.Runtime) (*Descriptor, error) {
+func descriptorFromRuntime(rt runtime.Instance) (*Descriptor, error) {
 	cfg, err := rt.BabeConfiguration()
 	if err != nil {
 		return nil, err

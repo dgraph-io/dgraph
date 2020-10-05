@@ -28,8 +28,8 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
-	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/runtime/extrinsic"
+	"github.com/ChainSafe/gossamer/lib/runtime/wasmer"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	log "github.com/ChainSafe/log15"
@@ -114,7 +114,7 @@ func TestAnnounceBlock(t *testing.T) {
 
 func TestHandleRuntimeChanges(t *testing.T) {
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, runtime.NODE_RUNTIME, tt, log.LvlTrace)
+	rt := wasmer.NewTestInstanceWithTrie(t, wasmer.NODE_RUNTIME, tt, log.LvlTrace)
 
 	kp, err := sr25519.GenerateKeypair()
 	require.Nil(t, err)
@@ -131,10 +131,10 @@ func TestHandleRuntimeChanges(t *testing.T) {
 
 	s := NewTestService(t, cfg)
 
-	_, err = runtime.GetRuntimeBlob(runtime.TESTS_FP, runtime.TEST_WASM_URL)
+	_, err = wasmer.GetRuntimeBlob(wasmer.TESTS_FP, wasmer.TEST_WASM_URL)
 	require.Nil(t, err)
 
-	testRuntime, err := ioutil.ReadFile(runtime.TESTS_FP)
+	testRuntime, err := ioutil.ReadFile(wasmer.TESTS_FP)
 	require.Nil(t, err)
 
 	ts, err := s.storageState.TrieState(nil)
@@ -236,7 +236,7 @@ func TestHandleChainReorg_WithReorg_NoTransactions(t *testing.T) {
 func TestHandleChainReorg_WithReorg_Transactions(t *testing.T) {
 	cfg := &Config{
 		// TODO: change to NODE_RUNTIME
-		Runtime: runtime.NewTestRuntime(t, runtime.SUBSTRATE_TEST_RUNTIME),
+		Runtime: wasmer.NewTestInstance(t, wasmer.SUBSTRATE_TEST_RUNTIME),
 	}
 
 	s := NewTestService(t, cfg)

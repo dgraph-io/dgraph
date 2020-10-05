@@ -13,7 +13,7 @@ type BlockProducer interface {
 	services.Service
 
 	GetBlockChannel() <-chan types.Block
-	SetRuntime(*runtime.Runtime) error
+	SetRuntime(runtime.Instance) error
 	Pause() error
 	Resume() error
 	Authorities() []*types.Authority

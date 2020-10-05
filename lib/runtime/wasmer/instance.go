@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package runtime
+package wasmer
 
 import (
 	"fmt"
@@ -22,6 +22,8 @@ import (
 	"sync"
 
 	"github.com/ChainSafe/gossamer/lib/keystore"
+	"github.com/ChainSafe/gossamer/lib/runtime"
+
 	log "github.com/ChainSafe/log15"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
@@ -29,62 +31,37 @@ import (
 var memory, memErr = wasm.NewMemory(17, 0)
 var logger = log.New("pkg", "runtime")
 
-// NodeStorageType type to identify offchain storage type
-type NodeStorageType byte
-
-// NodeStorageTypePersistent flag to identify offchain storage as persistent (db)
-const NodeStorageTypePersistent NodeStorageType = 1
-
-// NodeStorageTypeLocal flog to identify offchain storage as local (memory)
-const NodeStorageTypeLocal NodeStorageType = 2
-
-// NodeStorage struct for storage of runtime offchain worker data
-type NodeStorage struct {
-	LocalStorage      BasicStorage
-	PersistentStorage BasicStorage
-}
-
-// Ctx struct
-type Ctx struct {
-	storage     Storage
-	allocator   *FreeingBumpHeapAllocator
-	keystore    *keystore.GenericKeystore
-	validator   bool
-	nodeStorage NodeStorage
-	network     BasicNetwork
-}
-
-// Config represents a runtime configuration
+// Config represents a wasmer configuration
 type Config struct {
-	Storage     Storage
+	Storage     runtime.Storage
 	Keystore    *keystore.GenericKeystore
 	Imports     func() (*wasm.Imports, error)
 	LogLvl      log.Lvl
 	Role        byte
-	NodeStorage NodeStorage
-	Network     BasicNetwork
+	NodeStorage runtime.NodeStorage
+	Network     runtime.BasicNetwork
 }
 
-// Runtime struct
-type Runtime struct {
+// Instance represents a go-wasmer instance
+type Instance struct {
 	vm    wasm.Instance
-	ctx   *Ctx
+	ctx   *runtime.Context
 	mutex sync.Mutex
 }
 
-// NewRuntimeFromFile instantiates a runtime from a .wasm file
-func NewRuntimeFromFile(fp string, cfg *Config) (*Runtime, error) {
+// NewInstanceFromFile instantiates a runtime from a .wasm file
+func NewInstanceFromFile(fp string, cfg *Config) (*Instance, error) {
 	// Reads the WebAssembly module as bytes.
 	bytes, err := wasm.ReadBytes(fp)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewRuntime(bytes, cfg)
+	return NewInstance(bytes, cfg)
 }
 
-// NewRuntime instantiates a runtime from raw wasm bytecode
-func NewRuntime(code []byte, cfg *Config) (*Runtime, error) {
+// NewInstance instantiates a runtime from raw wasm bytecode
+func NewInstance(code []byte, cfg *Config) (*Instance, error) {
 	// if cfg.LogLvl set to < 0, then don't change package log level
 	if cfg.LogLvl >= 0 {
 		h := log.StreamHandler(os.Stdout, log.TerminalFormat())
@@ -111,26 +88,26 @@ func NewRuntime(code []byte, cfg *Config) (*Runtime, error) {
 		instance.Memory = memory
 	}
 
-	memAllocator := NewAllocator(instance.Memory.Data(), 0)
+	memAllocator := runtime.NewAllocator(instance.Memory.Data(), 0)
 
 	validator := false
 	if cfg.Role == byte(4) {
 		validator = true
 	}
 
-	runtimeCtx := &Ctx{
-		storage:     cfg.Storage,
-		allocator:   memAllocator,
-		keystore:    cfg.Keystore,
-		validator:   validator,
-		nodeStorage: cfg.NodeStorage,
-		network:     cfg.Network,
+	runtimeCtx := &runtime.Context{
+		Storage:     cfg.Storage,
+		Allocator:   memAllocator,
+		Keystore:    cfg.Keystore,
+		Validator:   validator,
+		NodeStorage: cfg.NodeStorage,
+		Network:     cfg.Network,
 	}
 
-	logger.Debug("NewRuntime", "runtimeCtx", runtimeCtx)
+	logger.Debug("NewInstance", "runtimeCtx", runtimeCtx)
 	instance.SetContextData(runtimeCtx)
 
-	r := Runtime{
+	r := Instance{
 		vm:  instance,
 		ctx: runtimeCtx,
 	}
@@ -138,27 +115,32 @@ func NewRuntime(code []byte, cfg *Config) (*Runtime, error) {
 	return &r, nil
 }
 
+// SetContext sets the runtime's storage. It should be set before calls to the below functions.
+func (r *Instance) SetContext(s runtime.Storage) {
+	r.ctx.Storage = s
+}
+
 // Stop func
-func (r *Runtime) Stop() {
+func (r *Instance) Stop() {
 	r.vm.Close()
 }
 
 // Store func
-func (r *Runtime) Store(data []byte, location int32) {
+func (r *Instance) store(data []byte, location int32) {
 	mem := r.vm.Memory.Data()
 	copy(mem[location:location+int32(len(data))], data)
 }
 
 // Load load
-func (r *Runtime) Load(location, length int32) []byte {
+func (r *Instance) load(location, length int32) []byte {
 	mem := r.vm.Memory.Data()
 	return mem[location : location+length]
 }
 
 // Exec func
-func (r *Runtime) Exec(function string, data []byte) ([]byte, error) {
-	if r.ctx.storage == nil {
-		return nil, ErrNilStorage
+func (r *Instance) exec(function string, data []byte) ([]byte, error) {
+	if r.ctx.Storage == nil {
+		return nil, runtime.ErrNilStorage
 	}
 
 	ptr, err := r.malloc(uint32(len(data)))
@@ -177,7 +159,7 @@ func (r *Runtime) Exec(function string, data []byte) ([]byte, error) {
 	defer r.mutex.Unlock()
 
 	// Store the data into memory
-	r.Store(data, int32(ptr))
+	r.store(data, int32(ptr))
 	datalen := int32(len(data))
 
 	runtimeFunc, ok := r.vm.Exports[function]
@@ -193,25 +175,25 @@ func (r *Runtime) Exec(function string, data []byte) ([]byte, error) {
 	length := int32(resi >> 32)
 	offset := int32(resi)
 
-	rawdata := r.Load(offset, length)
+	rawdata := r.load(offset, length)
 
 	return rawdata, err
 }
 
-func (r *Runtime) malloc(size uint32) (uint32, error) {
-	return r.ctx.allocator.Allocate(size)
+func (r *Instance) malloc(size uint32) (uint32, error) {
+	return r.ctx.Allocator.Allocate(size)
 }
 
-func (r *Runtime) free(ptr uint32) error {
-	return r.ctx.allocator.Deallocate(ptr)
+func (r *Instance) free(ptr uint32) error {
+	return r.ctx.Allocator.Deallocate(ptr)
 }
 
 // NodeStorage to get reference to runtime node service
-func (r *Runtime) NodeStorage() NodeStorage {
-	return r.ctx.nodeStorage
+func (r *Instance) NodeStorage() runtime.NodeStorage {
+	return r.ctx.NodeStorage
 }
 
 // NetworkService to get referernce to runtime network service
-func (r *Runtime) NetworkService() BasicNetwork {
-	return r.ctx.network
+func (r *Instance) NetworkService() runtime.BasicNetwork {
+	return r.ctx.Network
 }

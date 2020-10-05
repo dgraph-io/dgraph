@@ -28,6 +28,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
+	"github.com/ChainSafe/gossamer/lib/runtime/wasmer"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/ChainSafe/gossamer/lib/utils"
 	log "github.com/ChainSafe/log15"
@@ -50,7 +51,7 @@ var firstEpochInfo = &types.EpochInfo{
 
 type mockVerifier struct{}
 
-func (v *mockVerifier) SetRuntimeChangeAtBlock(header *types.Header, rt *runtime.Runtime) error {
+func (v *mockVerifier) SetRuntimeChangeAtBlock(header *types.Header, rt runtime.Instance) error {
 	return nil
 }
 
@@ -88,7 +89,7 @@ func (bp *mockBlockProducer) GetBlockChannel() <-chan types.Block {
 }
 
 // SetRuntime mocks setting runtime
-func (bp *mockBlockProducer) SetRuntime(rt *runtime.Runtime) error {
+func (bp *mockBlockProducer) SetRuntime(rt runtime.Instance) error {
 	return nil
 }
 
@@ -177,7 +178,7 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 	}
 
 	if cfg.Runtime == nil {
-		cfg.Runtime = runtime.NewTestRuntime(t, runtime.NODE_RUNTIME)
+		cfg.Runtime = wasmer.NewTestInstance(t, wasmer.NODE_RUNTIME)
 	}
 
 	if cfg.Keystore == nil {

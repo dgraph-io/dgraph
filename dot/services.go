@@ -37,6 +37,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/grandpa"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
+	"github.com/ChainSafe/gossamer/lib/runtime/wasmer"
 )
 
 // State Service
@@ -67,7 +68,7 @@ func createStateService(cfg *Config) (*state.Service, error) {
 	return stateSrvc, nil
 }
 
-func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore, net *network.Service) (*runtime.Runtime, error) {
+func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore, net *network.Service) (runtime.Instance, error) {
 	// load runtime code from trie
 	code, err := st.Storage.GetStorage(nil, []byte(":code"))
 	if err != nil {
@@ -83,10 +84,10 @@ func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore,
 		LocalStorage:      database.NewMemDatabase(),
 		PersistentStorage: database.NewTable(st.DB(), "offlinestorage"),
 	}
-	rtCfg := &runtime.Config{
+	rtCfg := &wasmer.Config{
 		Storage:     ts,
 		Keystore:    ks,
-		Imports:     runtime.RegisterImports_NodeRuntime,
+		Imports:     wasmer.RegisterImports_NodeRuntime,
 		LogLvl:      cfg.Log.RuntimeLvl,
 		NodeStorage: ns,
 		Role:        cfg.Core.Roles,
@@ -94,7 +95,7 @@ func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore,
 	}
 
 	// create runtime executor
-	rt, err := runtime.NewRuntime(code, rtCfg)
+	rt, err := wasmer.NewInstance(code, rtCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create runtime executor: %s", err)
 	}
@@ -102,7 +103,7 @@ func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore,
 	return rt, nil
 }
 
-func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks keystore.Keystore) (*babe.Service, error) {
+func createBABEService(cfg *Config, rt runtime.Instance, st *state.Service, ks keystore.Keystore) (*babe.Service, error) {
 	logger.Info(
 		"creating BABE service...",
 		"authority", cfg.Core.BabeAuthority,
@@ -160,8 +161,7 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks k
 // Core Service
 
 // createCoreService creates the core service from the provided core configuration
-//func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, verifier *babe.VerificationManager, rt *runtime.Runtime, ks *keystore.Keystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message) (*core.Service, error) {
-func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, verifier *babe.VerificationManager, rt *runtime.Runtime, ks *keystore.GlobalKeystore, stateSrvc *state.Service, net *network.Service) (*core.Service, error) {
+func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, verifier *babe.VerificationManager, rt runtime.Instance, ks *keystore.GlobalKeystore, stateSrvc *state.Service, net *network.Service) (*core.Service, error) {
 	logger.Info(
 		"creating core service...",
 		"authority", cfg.Core.Roles == types.AuthorityRole,
@@ -237,7 +237,7 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, syncer *sync.Se
 // RPC Service
 
 // createRPCService creates the RPC service from the provided core configuration
-func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Service, networkSrvc *network.Service, bp BlockProducer, rt *runtime.Runtime, sysSrvc *system.Service) *rpc.HTTPServer {
+func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Service, networkSrvc *network.Service, bp BlockProducer, rt runtime.Instance, sysSrvc *system.Service) *rpc.HTTPServer {
 	logger.Info(
 		"creating rpc service...",
 		"host", cfg.RPC.Host,
@@ -276,7 +276,7 @@ func createSystemService(cfg *types.SystemInfo) *system.Service {
 }
 
 // createGRANDPAService creates a new GRANDPA service
-func createGRANDPAService(cfg *Config, rt *runtime.Runtime, st *state.Service, dh *core.DigestHandler, ks keystore.Keystore) (*grandpa.Service, error) {
+func createGRANDPAService(cfg *Config, rt runtime.Instance, st *state.Service, dh *core.DigestHandler, ks keystore.Keystore) (*grandpa.Service, error) {
 	ad, err := rt.GrandpaAuthorities()
 	if err != nil {
 		return nil, err
@@ -306,7 +306,7 @@ func createGRANDPAService(cfg *Config, rt *runtime.Runtime, st *state.Service, d
 	return grandpa.NewService(gsCfg)
 }
 
-func createBlockVerifier(cfg *Config, st *state.Service, rt *runtime.Runtime) (*babe.VerificationManager, error) {
+func createBlockVerifier(cfg *Config, st *state.Service, rt runtime.Instance) (*babe.VerificationManager, error) {
 	// load BABE verification data from runtime
 	babeCfg, err := rt.BabeConfiguration()
 	if err != nil {
@@ -344,7 +344,7 @@ func createBlockVerifier(cfg *Config, st *state.Service, rt *runtime.Runtime) (*
 	return ver, nil
 }
 
-func createSyncService(cfg *Config, st *state.Service, bp BlockProducer, dh *core.DigestHandler, verifier *babe.VerificationManager, rt *runtime.Runtime) (*sync.Service, error) {
+func createSyncService(cfg *Config, st *state.Service, bp BlockProducer, dh *core.DigestHandler, verifier *babe.VerificationManager, rt runtime.Instance) (*sync.Service, error) {
 	syncCfg := &sync.Config{
 		LogLvl:           cfg.Log.SyncLvl,
 		BlockState:       st.Block,

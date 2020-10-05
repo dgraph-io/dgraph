@@ -28,6 +28,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
+	"github.com/ChainSafe/gossamer/lib/runtime/wasmer"
 	"github.com/ChainSafe/gossamer/lib/services"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 
@@ -50,7 +51,7 @@ type Service struct {
 	transactionState TransactionState
 
 	// Current runtime and hash of the current runtime code
-	rt       *runtime.Runtime
+	rt       runtime.Instance
 	codeHash common.Hash
 
 	// Block production variables
@@ -87,7 +88,7 @@ type Config struct {
 	TransactionState        TransactionState
 	Network                 Network
 	Keystore                *keystore.GlobalKeystore
-	Runtime                 *runtime.Runtime
+	Runtime                 runtime.Instance
 	BlockProducer           BlockProducer
 	IsBlockProducer         bool
 	FinalityGadget          FinalityGadget
@@ -381,16 +382,16 @@ func (s *Service) handleRuntimeChanges(header *types.Header) error {
 			return err
 		}
 
-		cfg := &runtime.Config{
+		cfg := &wasmer.Config{
 			Storage:     ts,
 			Keystore:    s.keys.Acco.(*keystore.GenericKeystore),
-			Imports:     runtime.RegisterImports_NodeRuntime,
+			Imports:     wasmer.RegisterImports_NodeRuntime,
 			LogLvl:      -1, // don't change runtime package log level
 			NodeStorage: s.rt.NodeStorage(),
 			Network:     s.rt.NetworkService(),
 		}
 
-		s.rt, err = runtime.NewRuntime(code, cfg)
+		s.rt, err = wasmer.NewInstance(code, cfg)
 		if err != nil {
 			return err
 		}
@@ -474,28 +475,13 @@ func (s *Service) HasKey(pubKeyStr string, keyType string) (bool, error) {
 
 // GetRuntimeVersion gets the current RuntimeVersion
 func (s *Service) GetRuntimeVersion() (*runtime.VersionAPI, error) {
-	//TODO ed, change this so that it can lookup runtime by block hash
-	version := &runtime.VersionAPI{
-		RuntimeVersion: &runtime.Version{},
-		API:            nil,
-	}
-
 	ts, err := s.storageState.TrieState(nil)
 	if err != nil {
 		return nil, err
 	}
+
 	s.rt.SetContext(ts)
-
-	ret, err := s.rt.Exec(runtime.CoreVersion, []byte{})
-	if err != nil {
-		return nil, err
-	}
-	err = version.Decode(ret)
-	if err != nil {
-		return nil, err
-	}
-
-	return version, nil
+	return s.rt.Version()
 }
 
 // IsBlockProducer returns true if node is a block producer
@@ -512,5 +498,5 @@ func (s *Service) HandleSubmittedExtrinsic(ext types.Extrinsic) error {
 
 //GetMetadata calls runtime Metadata_metadata function
 func (s *Service) GetMetadata() ([]byte, error) {
-	return s.rt.Exec(runtime.Metadata_metadata, []byte{})
+	return s.rt.Metadata()
 }

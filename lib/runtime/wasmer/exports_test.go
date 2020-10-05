@@ -1,4 +1,4 @@
-package runtime
+package wasmer
 
 import (
 	"math/big"
@@ -39,7 +39,7 @@ func TestGrandpaAuthorities(t *testing.T) {
 	err = tt.Put(TestAuthorityDataKey, value)
 	require.NoError(t, err)
 
-	rt := NewTestRuntimeWithTrie(t, NODE_RUNTIME, tt, log.LvlTrace)
+	rt := NewTestInstanceWithTrie(t, NODE_RUNTIME, tt, log.LvlTrace)
 
 	auths, err := rt.GrandpaAuthorities()
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestGrandpaAuthorities(t *testing.T) {
 }
 
 func TestConfigurationFromRuntime_noAuth(t *testing.T) {
-	rt := NewTestRuntime(t, NODE_RUNTIME)
+	rt := NewTestInstance(t, NODE_RUNTIME)
 
 	cfg, err := rt.BabeConfiguration()
 	if err != nil {
@@ -117,7 +117,7 @@ func TestConfigurationFromRuntime_withAuthorities(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rt := NewTestRuntimeWithTrie(t, NODE_RUNTIME, tt, log.LvlTrace)
+	rt := NewTestInstanceWithTrie(t, NODE_RUNTIME, tt, log.LvlTrace)
 
 	cfg, err := rt.BabeConfiguration()
 	if err != nil {
@@ -149,7 +149,7 @@ func TestConfigurationFromRuntime_withAuthorities(t *testing.T) {
 }
 
 func TestInitializeBlock(t *testing.T) {
-	rt := NewTestRuntime(t, NODE_RUNTIME)
+	rt := NewTestInstance(t, NODE_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),
@@ -166,7 +166,7 @@ func TestFinalizeBlock(t *testing.T) {
 	// need to move inherents to a different package for use with BABE and runtime
 	t.Skip()
 
-	rt := NewTestRuntime(t, NODE_RUNTIME)
+	rt := NewTestInstance(t, NODE_RUNTIME)
 
 	header := &types.Header{
 		ParentHash: trie.EmptyHash,
@@ -209,7 +209,7 @@ func TestFinalizeBlock(t *testing.T) {
 // this will likely result in some of them being removed (need to determine what extrinsic types are valid)
 func TestValidateTransaction_AuthoritiesChange(t *testing.T) {
 	// TODO: update AuthoritiesChange to need to be signed by an authority
-	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
 
 	alice := kr.Alice().Public().Encode()
 	bob := kr.Bob().Public().Encode()
@@ -241,7 +241,7 @@ func TestValidateTransaction_AuthoritiesChange(t *testing.T) {
 }
 
 func TestValidateTransaction_IncludeData(t *testing.T) {
-	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
 
 	ext := extrinsic.NewIncludeDataExt([]byte("nootwashere"))
 	tx, err := ext.Encode()
@@ -263,7 +263,7 @@ func TestValidateTransaction_IncludeData(t *testing.T) {
 }
 
 func TestValidateTransaction_StorageChange(t *testing.T) {
-	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
 
 	ext := extrinsic.NewStorageChangeExt([]byte("testkey"), optional.NewBytes(true, []byte("testvalue")))
 	enc, err := ext.Encode()
@@ -284,7 +284,7 @@ func TestValidateTransaction_StorageChange(t *testing.T) {
 }
 
 func TestValidateTransaction_Transfer(t *testing.T) {
-	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
 
 	alice := kr.Alice().Public().Encode()
 	bob := kr.Bob().Public().Encode()
@@ -318,7 +318,7 @@ func TestValidateTransaction_Transfer(t *testing.T) {
 
 func TestApplyExtrinsic_AuthoritiesChange(t *testing.T) {
 	// TODO: update AuthoritiesChange to need to be signed by an authority
-	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
 
 	alice := kr.Alice().Public().Encode()
 	bob := kr.Bob().Public().Encode()
@@ -349,7 +349,7 @@ func TestApplyExtrinsic_AuthoritiesChange(t *testing.T) {
 }
 
 func TestApplyExtrinsic_IncludeData(t *testing.T) {
-	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),
@@ -371,7 +371,7 @@ func TestApplyExtrinsic_IncludeData(t *testing.T) {
 }
 
 func TestApplyExtrinsic_StorageChange_Set(t *testing.T) {
-	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),
@@ -388,7 +388,7 @@ func TestApplyExtrinsic_StorageChange_Set(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []byte{0, 0}, res)
 
-	val, err := rt.ctx.storage.Get([]byte("testkey"))
+	val, err := rt.ctx.Storage.Get([]byte("testkey"))
 	require.NoError(t, err)
 	require.Equal(t, []byte("testvalue"), val)
 
@@ -400,14 +400,14 @@ func TestApplyExtrinsic_StorageChange_Set(t *testing.T) {
 	}
 	require.NoError(t, err)
 
-	val, err = rt.ctx.storage.Get([]byte("testkey"))
+	val, err = rt.ctx.Storage.Get([]byte("testkey"))
 	require.NoError(t, err)
 	// TODO: why does calling finalize_block modify the storage?
 	require.NotEqual(t, []byte("testvalue"), val)
 }
 
 func TestApplyExtrinsic_StorageChange_Delete(t *testing.T) {
-	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),
@@ -425,14 +425,14 @@ func TestApplyExtrinsic_StorageChange_Delete(t *testing.T) {
 
 	require.Equal(t, []byte{0, 0}, res)
 
-	val, err := rt.ctx.storage.Get([]byte("testkey"))
+	val, err := rt.ctx.Storage.Get([]byte("testkey"))
 	require.NoError(t, err)
 	require.Equal(t, []byte(nil), val)
 }
 
 // TODO, this test replaced by TestApplyExtrinsic_Transfer_NoBalance_UncheckedExt, should this be removed?
 func TestApplyExtrinsic_Transfer_NoBalance(t *testing.T) {
-	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),
@@ -464,7 +464,7 @@ func TestApplyExtrinsic_Transfer_NoBalance(t *testing.T) {
 
 // TODO, this test replaced by TestApplyExtrinsic_Transfer_WithBalance_UncheckedExtrinsic, should this be removed?
 func TestApplyExtrinsic_Transfer_WithBalance(t *testing.T) {
-	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),
@@ -479,7 +479,7 @@ func TestApplyExtrinsic_Transfer_WithBalance(t *testing.T) {
 	bb := [32]byte{}
 	copy(bb[:], bob)
 
-	rt.ctx.storage.SetBalance(ab, 2000)
+	rt.ctx.Storage.SetBalance(ab, 2000)
 
 	transfer := extrinsic.NewTransfer(ab, bb, 1000, 0)
 	ext, err := transfer.AsSignedExtrinsic(kr.Alice().Private().(*sr25519.PrivateKey))
@@ -495,11 +495,11 @@ func TestApplyExtrinsic_Transfer_WithBalance(t *testing.T) {
 	require.Equal(t, []byte{0, 0}, res)
 
 	// TODO: not sure if alice's balance is getting decremented properly, seems like it's always getting set to the transfer amount
-	bal, err := rt.ctx.storage.GetBalance(ab)
+	bal, err := rt.ctx.Storage.GetBalance(ab)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1000), bal)
 
-	bal, err = rt.ctx.storage.GetBalance(bb)
+	bal, err = rt.ctx.Storage.GetBalance(bb)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1000), bal)
 }

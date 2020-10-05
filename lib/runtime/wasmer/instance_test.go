@@ -14,17 +14,19 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package runtime
+package wasmer
 
 import (
 	"testing"
 
+	"github.com/ChainSafe/gossamer/lib/runtime"
+
 	"github.com/stretchr/testify/require"
 )
 
-func TestExecVersion_NodeRuntime(t *testing.T) {
+func TestInstance_Version_NodeRuntime(t *testing.T) {
 	// https://github.com/paritytech/substrate/blob/7b1d822446982013fa5b7ad5caff35ca84f8b7d0/core/test-runtime/src/lib.rs#L73
-	expected := &Version{
+	expected := &runtime.Version{
 		Spec_name:         []byte("node"),
 		Impl_name:         []byte("substrate-node"),
 		Authoring_version: 10,
@@ -32,13 +34,13 @@ func TestExecVersion_NodeRuntime(t *testing.T) {
 		Impl_version:      193,
 	}
 
-	runtime := NewTestRuntime(t, NODE_RUNTIME)
+	instance := NewTestInstance(t, NODE_RUNTIME)
 
-	ret, err := runtime.Exec(CoreVersion, []byte{})
+	ret, err := instance.exec(runtime.CoreVersion, []byte{})
 	require.Nil(t, err)
 
-	version := &VersionAPI{
-		RuntimeVersion: &Version{},
+	version := &runtime.VersionAPI{
+		RuntimeVersion: &runtime.Version{},
 		API:            nil,
 	}
 	version.Decode(ret)
@@ -53,9 +55,9 @@ func TestExecVersion_NodeRuntime(t *testing.T) {
 	require.Equal(t, expected, version.RuntimeVersion)
 }
 
-func TestExecVersion_Old(t *testing.T) {
+func TestInstance_Version_TestRuntime(t *testing.T) {
 	// https://github.com/paritytech/substrate/blob/7b1d822446982013fa5b7ad5caff35ca84f8b7d0/core/test-runtime/src/lib.rs#L73
-	expected := &Version{
+	expected := &runtime.Version{
 		Spec_name:         []byte("test"),
 		Impl_name:         []byte("parity-test"),
 		Authoring_version: 1,
@@ -63,13 +65,13 @@ func TestExecVersion_Old(t *testing.T) {
 		Impl_version:      1,
 	}
 
-	runtime := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
+	instance := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
 
-	ret, err := runtime.Exec(CoreVersion, []byte{})
+	ret, err := instance.exec(runtime.CoreVersion, []byte{})
 	require.Nil(t, err)
 
-	version := &VersionAPI{
-		RuntimeVersion: &Version{},
+	version := &runtime.VersionAPI{
+		RuntimeVersion: &runtime.Version{},
 		API:            nil,
 	}
 	version.Decode(ret)
@@ -84,15 +86,15 @@ func TestExecVersion_Old(t *testing.T) {
 	require.Equal(t, expected, version.RuntimeVersion)
 }
 
-// test used for ensuring runtime Exec calls can me made concurrently
+// test used for ensuring runtime exec calls can me made concurrently
 func TestConcurrentRuntimeCalls(t *testing.T) {
-	runtime := NewTestRuntime(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, TEST_RUNTIME)
 
-	// Execute 2 concurrent calls to the runtime
+	// execute 2 concurrent calls to the runtime
 	go func() {
-		_, _ = runtime.Exec(CoreVersion, []byte{})
+		_, _ = instance.exec(runtime.CoreVersion, []byte{})
 	}()
 	go func() {
-		_, _ = runtime.Exec(CoreVersion, []byte{})
+		_, _ = instance.exec(runtime.CoreVersion, []byte{})
 	}()
 }

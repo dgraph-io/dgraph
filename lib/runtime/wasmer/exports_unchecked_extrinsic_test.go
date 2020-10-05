@@ -1,4 +1,4 @@
-package runtime
+package wasmer
 
 import (
 	"math/big"
@@ -6,17 +6,18 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/runtime/extrinsic"
 	"github.com/stretchr/testify/require"
 )
 
 func TestApplyExtrinsic_Transfer_NoBalance_UncheckedExt(t *testing.T) {
-	rt := NewTestRuntime(t, NODE_RUNTIME)
-	rtVerB, err := rt.Exec(CoreVersion, []byte{})
+	rt := NewTestInstance(t, NODE_RUNTIME)
+	rtVerB, err := rt.exec(runtime.CoreVersion, []byte{})
 	require.Nil(t, err)
 
-	rtVer := &VersionAPI{
-		RuntimeVersion: &Version{},
+	rtVer := &runtime.VersionAPI{
+		RuntimeVersion: &runtime.Version{},
 		API:            nil,
 	}
 	rtVer.Decode(rtVerB)
@@ -75,12 +76,12 @@ func TestApplyExtrinsic_Transfer_NoBalance_UncheckedExt(t *testing.T) {
 }
 
 func TestApplyExtrinsic_Transfer_WithBalance_UncheckedExtrinsic(t *testing.T) {
-	rt := NewTestRuntime(t, NODE_RUNTIME)
-	rtVerB, err := rt.Exec(CoreVersion, []byte{})
+	rt := NewTestInstance(t, NODE_RUNTIME)
+	rtVerB, err := rt.exec(runtime.CoreVersion, []byte{})
 	require.Nil(t, err)
 
-	rtVer := &VersionAPI{
-		RuntimeVersion: &Version{},
+	rtVer := &runtime.VersionAPI{
+		RuntimeVersion: &runtime.Version{},
 		API:            nil,
 	}
 	rtVer.Decode(rtVerB)
@@ -106,7 +107,7 @@ func TestApplyExtrinsic_Transfer_WithBalance_UncheckedExtrinsic(t *testing.T) {
 	bb := [32]byte{}
 	copy(bb[:], bob)
 
-	rt.ctx.storage.SetBalance(ab, 2000)
+	rt.ctx.Storage.SetBalance(ab, 2000)
 
 	var nonce uint64 = 0
 	tranCallData := struct {
@@ -142,7 +143,7 @@ func TestApplyExtrinsic_Transfer_WithBalance_UncheckedExtrinsic(t *testing.T) {
 	require.Equal(t, []byte{1, 2, 0, 1}, res) // 0x01020001 represents Apply error, Type: Payment: Inability to pay some fees
 
 	// TODO: not sure why balances aren't getting adjusted properly, because of AncientBirthBlock?
-	bal, err := rt.ctx.storage.GetBalance(ab)
+	bal, err := rt.ctx.Storage.GetBalance(ab)
 	require.NoError(t, err)
 	require.Equal(t, uint64(2000), bal)
 

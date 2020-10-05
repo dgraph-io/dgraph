@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package runtime
+package wasmer
 
 // #include <stdlib.h>
 //
@@ -66,6 +66,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/scale"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
@@ -85,13 +86,13 @@ func ext_malloc(context unsafe.Pointer, size int32) int32 {
 	logger.Trace("[ext_malloc] executing...", "size", size)
 	instanceContext := wasm.IntoInstanceContext(context)
 	data := instanceContext.Data()
-	runtimeCtx, ok := data.(*Ctx)
+	runtimeCtx, ok := data.(*runtime.Context)
 	if !ok {
 		panic(fmt.Sprintf("%#v", data))
 	}
 
 	// Allocate memory
-	res, err := runtimeCtx.allocator.Allocate(uint32(size))
+	res, err := runtimeCtx.Allocator.Allocate(uint32(size))
 	if err != nil {
 		logger.Error("[ext_malloc]", "Error:", err)
 		panic(err)
@@ -104,10 +105,10 @@ func ext_malloc(context unsafe.Pointer, size int32) int32 {
 func ext_free(context unsafe.Pointer, addr int32) {
 	logger.Trace("[ext_free] executing...", "addr", addr)
 	instanceContext := wasm.IntoInstanceContext(context)
-	runtimeCtx := instanceContext.Data().(*Ctx)
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
 
 	// Deallocate memory
-	err := runtimeCtx.allocator.Deallocate(uint32(addr))
+	err := runtimeCtx.Allocator.Deallocate(uint32(addr))
 	if err != nil {
 		logger.Error("[ext_free] Error:", "Error", err)
 		panic(err)
@@ -141,8 +142,8 @@ func ext_get_storage_into(context unsafe.Pointer, keyData, keyLen, valueData, va
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	s := runtimeCtx.storage
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	s := runtimeCtx.Storage
 
 	key := memory[keyData : keyData+keyLen]
 	val, err := s.Get(key)
@@ -173,8 +174,8 @@ func ext_set_storage(context unsafe.Pointer, keyData, keyLen, valueData, valueLe
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	s := runtimeCtx.storage
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	s := runtimeCtx.Storage
 
 	key := memory[keyData : keyData+keyLen]
 	val := memory[valueData : valueData+valueLen]
@@ -192,8 +193,8 @@ func ext_set_child_storage(context unsafe.Pointer, storageKeyData, storageKeyLen
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	s := runtimeCtx.storage
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	s := runtimeCtx.Storage
 
 	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
 	key := memory[keyData : keyData+keyLen]
@@ -211,8 +212,8 @@ func ext_get_child_storage_into(context unsafe.Pointer, storageKeyData, storageK
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	s := runtimeCtx.storage
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	s := runtimeCtx.Storage
 
 	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
 	key := memory[keyData : keyData+keyLen]
@@ -234,8 +235,8 @@ func ext_storage_root(context unsafe.Pointer, resultPtr int32) {
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	s := runtimeCtx.storage
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	s := runtimeCtx.Storage
 
 	root, err := s.Root()
 	if err != nil {
@@ -261,8 +262,8 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	s := runtimeCtx.storage
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	s := runtimeCtx.Storage
 
 	key := memory[keyData : keyData+keyLen]
 	logger.Trace("[ext_get_allocated_storage]", "key", fmt.Sprintf("0x%x", key))
@@ -287,7 +288,7 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 	}
 
 	// allocate memory for value and copy value to memory
-	ptr, err := runtimeCtx.allocator.Allocate(uint32(len(val)))
+	ptr, err := runtimeCtx.Allocator.Allocate(uint32(len(val)))
 	if err != nil {
 		logger.Error("[ext_get_allocated_storage]", "error", err)
 		copy(memory[writtenOut:writtenOut+4], []byte{0xff, 0xff, 0xff, 0xff})
@@ -331,13 +332,13 @@ func ext_clear_storage(context unsafe.Pointer, keyData, keyLen int32) {
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	s := runtimeCtx.storage
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	s := runtimeCtx.Storage
 
 	key := memory[keyData : keyData+keyLen]
 	err := s.Delete(key)
 	if err != nil {
-		logger.Error("[ext_storage_root]", "error", err)
+		logger.Error("[ext_clear_storage]", "error", err)
 	}
 }
 
@@ -348,8 +349,8 @@ func ext_clear_prefix(context unsafe.Pointer, prefixData, prefixLen int32) {
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	s := runtimeCtx.storage
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	s := runtimeCtx.Storage
 
 	prefix := memory[prefixData : prefixData+prefixLen]
 	entries := s.Entries()
@@ -487,7 +488,7 @@ func ext_sr25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
 
 	// TODO: key types not yet implemented
 	// id := memory[idData:idData+4]
@@ -501,7 +502,7 @@ func ext_sr25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 
 	logger.Trace("ext_sr25519_generate", "address", kp.Public().Address())
 
-	runtimeCtx.keystore.Insert(kp)
+	runtimeCtx.Keystore.Insert(kp)
 
 	copy(memory[out:out+32], kp.Public().Encode())
 }
@@ -512,11 +513,11 @@ func ext_ed25519_public_keys(context unsafe.Pointer, idData, resultLen int32) in
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
 
-	keys := runtimeCtx.keystore.Ed25519PublicKeys()
+	keys := runtimeCtx.Keystore.Ed25519PublicKeys()
 	// TODO: when do deallocate?
-	offset, err := runtimeCtx.allocator.Allocate(uint32(len(keys) * 32))
+	offset, err := runtimeCtx.Allocator.Allocate(uint32(len(keys) * 32))
 	if err != nil {
 		logger.Error("[ext_ed25519_public_keys]", "error", err)
 		return -1
@@ -538,11 +539,11 @@ func ext_sr25519_public_keys(context unsafe.Pointer, idData, resultLen int32) in
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
 
-	keys := runtimeCtx.keystore.Sr25519PublicKeys()
+	keys := runtimeCtx.Keystore.Sr25519PublicKeys()
 
-	offset, err := runtimeCtx.allocator.Allocate(uint32(len(keys) * 32))
+	offset, err := runtimeCtx.Allocator.Allocate(uint32(len(keys) * 32))
 	if err != nil {
 		logger.Error("[ext_sr25519_public_keys]", "error", err)
 		return -1
@@ -564,7 +565,7 @@ func ext_ed25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLe
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
 
 	pubkeyBytes := memory[pubkeyData : pubkeyData+32]
 	pubkey, err := ed25519.NewPublicKey(pubkeyBytes)
@@ -573,7 +574,7 @@ func ext_ed25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLe
 		return 1
 	}
 
-	signingKey := runtimeCtx.keystore.GetKeypair(pubkey)
+	signingKey := runtimeCtx.Keystore.GetKeypair(pubkey)
 	if signingKey == nil {
 		logger.Error("[ext_ed25519_sign] could not find key in keystore", "public key", pubkey)
 		return 1
@@ -598,7 +599,7 @@ func ext_sr25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLe
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
 
 	pubkeyBytes := memory[pubkeyData : pubkeyData+32]
 	pubkey, err := sr25519.NewPublicKey(pubkeyBytes)
@@ -607,7 +608,7 @@ func ext_sr25519_sign(context unsafe.Pointer, idData, pubkeyData, msgData, msgLe
 		return 1
 	}
 
-	signingKey := runtimeCtx.keystore.GetKeypair(pubkey)
+	signingKey := runtimeCtx.Keystore.GetKeypair(pubkey)
 
 	if signingKey == nil {
 		logger.Error("[ext_sr25519_sign] could not find key in keystore", "public key", pubkey)
@@ -654,7 +655,7 @@ func ext_ed25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
 
 	// TODO: key types not yet implemented
 	// id := memory[idData:idData+4]
@@ -668,7 +669,7 @@ func ext_ed25519_generate(context unsafe.Pointer, idData, seed, seedLen, out int
 
 	logger.Trace("ext_ed25519_generate", "address", kp.Public().Address())
 
-	runtimeCtx.keystore.Insert(kp)
+	runtimeCtx.Keystore.Insert(kp)
 
 	copy(memory[out:out+32], kp.Public().Encode())
 }
@@ -719,8 +720,8 @@ func ext_is_validator(context unsafe.Pointer) int32 {
 	logger.Trace("[ext_is_validator] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	if runtimeCtx.validator {
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	if runtimeCtx.Validator {
 		return 1
 	}
 	return 0
@@ -733,14 +734,14 @@ func ext_local_storage_get(context unsafe.Pointer, kind, key, keyLen, valueLen i
 	memory := instanceContext.Memory().Data()
 
 	keyM := memory[key : key+keyLen]
-	runtimeCtx := instanceContext.Data().(*Ctx)
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
 	var res []byte
 	var err error
-	switch NodeStorageType(kind) {
-	case NodeStorageTypePersistent:
-		res, err = runtimeCtx.nodeStorage.PersistentStorage.Get(keyM)
-	case NodeStorageTypeLocal:
-		res, err = runtimeCtx.nodeStorage.LocalStorage.Get(keyM)
+	switch runtime.NodeStorageType(kind) {
+	case runtime.NodeStorageTypePersistent:
+		res, err = runtimeCtx.NodeStorage.PersistentStorage.Get(keyM)
+	case runtime.NodeStorageTypeLocal:
+		res, err = runtimeCtx.NodeStorage.LocalStorage.Get(keyM)
 	}
 
 	if err != nil {
@@ -748,7 +749,7 @@ func ext_local_storage_get(context unsafe.Pointer, kind, key, keyLen, valueLen i
 		return 0
 	}
 	// allocate memory for value and copy value to memory
-	ptr, err := runtimeCtx.allocator.Allocate(uint32(valueLen))
+	ptr, err := runtimeCtx.Allocator.Allocate(uint32(valueLen))
 	if err != nil {
 		logger.Error("[ext_local_storage_get]", "error", err)
 		return 0
@@ -764,17 +765,17 @@ func ext_local_storage_compare_and_set(context unsafe.Pointer, kind, keyPtr, key
 	memory := instanceContext.Memory().Data()
 
 	key := memory[keyPtr : keyPtr+keyLen]
-	runtimeCtx := instanceContext.Data().(*Ctx)
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
 	var storedValue []byte
 	var err error
-	var nodeStorage BasicStorage
+	var nodeStorage runtime.BasicStorage
 
-	switch NodeStorageType(kind) {
-	case NodeStorageTypePersistent:
-		nodeStorage = runtimeCtx.nodeStorage.PersistentStorage
+	switch runtime.NodeStorageType(kind) {
+	case runtime.NodeStorageTypePersistent:
+		nodeStorage = runtimeCtx.NodeStorage.PersistentStorage
 		storedValue, err = nodeStorage.Get(key)
-	case NodeStorageTypeLocal:
-		nodeStorage = runtimeCtx.nodeStorage.LocalStorage
+	case runtime.NodeStorageTypeLocal:
+		nodeStorage = runtimeCtx.NodeStorage.LocalStorage
 		storedValue, err = nodeStorage.Get(key)
 	}
 
@@ -802,12 +803,12 @@ func ext_network_state(context unsafe.Pointer, writtenOut int32) int32 {
 	logger.Trace("[ext_network_state] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	if runtimeCtx.network == nil {
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	if runtimeCtx.Network == nil {
 		return 0
 	}
 
-	nsEnc, err := scale.Encode(runtimeCtx.network.NetworkState())
+	nsEnc, err := scale.Encode(runtimeCtx.Network.NetworkState())
 	if err != nil {
 		logger.Error("[ext_network_state]", "error", err)
 		return 0
@@ -820,7 +821,7 @@ func ext_network_state(context unsafe.Pointer, writtenOut int32) int32 {
 	copy(memory[writtenOut:writtenOut+4], buf)
 
 	// allocate memory for value and copy value to memory
-	ptr, err := runtimeCtx.allocator.Allocate(nsEncLen)
+	ptr, err := runtimeCtx.Allocator.Allocate(nsEncLen)
 	if err != nil {
 		logger.Error("[ext_network_state]", "error", err)
 		return 0
@@ -845,14 +846,14 @@ func ext_local_storage_set(context unsafe.Pointer, kind, key, keyLen, value, val
 	keyM := memory[key : key+keyLen]
 	valueM := memory[value : value+valueLen]
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
 
 	var err error
-	switch NodeStorageType(kind) {
-	case NodeStorageTypePersistent:
-		err = runtimeCtx.nodeStorage.PersistentStorage.Put(keyM, valueM)
-	case NodeStorageTypeLocal:
-		err = runtimeCtx.nodeStorage.LocalStorage.Put(keyM, valueM)
+	switch runtime.NodeStorageType(kind) {
+	case runtime.NodeStorageTypePersistent:
+		err = runtimeCtx.NodeStorage.PersistentStorage.Put(keyM, valueM)
+	case runtime.NodeStorageTypeLocal:
+		err = runtimeCtx.NodeStorage.LocalStorage.Put(keyM, valueM)
 	}
 	if err != nil {
 		logger.Error("[ext_local_storage_set]", "error", err)

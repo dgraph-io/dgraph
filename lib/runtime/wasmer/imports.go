@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package runtime
+package wasmer
 
 // #include <stdlib.h>
 //
@@ -77,6 +77,8 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/ChainSafe/gossamer/lib/runtime"
+
 	"github.com/OneOfOne/xxhash"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
@@ -87,8 +89,8 @@ func ext_kill_child_storage(context unsafe.Pointer, storageKeyData, storageKeyLe
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	s := runtimeCtx.storage
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	s := runtimeCtx.Storage
 
 	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
 
@@ -137,8 +139,8 @@ func ext_get_allocated_child_storage(context unsafe.Pointer, storageKeyData, sto
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	s := runtimeCtx.storage
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	s := runtimeCtx.Storage
 
 	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
 	key := memory[keyData : keyData+keyLen]
@@ -159,7 +161,7 @@ func ext_get_allocated_child_storage(context unsafe.Pointer, storageKeyData, sto
 	binary.LittleEndian.PutUint32(byteLen, valueLen)
 	copy(memory[writtenOut:writtenOut+4], byteLen)
 
-	resPtr, err := runtimeCtx.allocator.Allocate(valueLen)
+	resPtr, err := runtimeCtx.Allocator.Allocate(valueLen)
 	if err != nil {
 		logger.Error("[ext_get_allocated_child_storage]", "error", err)
 		return 0
@@ -181,8 +183,8 @@ func ext_clear_child_storage(context unsafe.Pointer, storageKeyData, storageKeyL
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
-	runtimeCtx := instanceContext.Data().(*Ctx)
-	s := runtimeCtx.storage
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+	s := runtimeCtx.Storage
 
 	keyToChild := memory[storageKeyData : storageKeyData+storageKeyLen]
 	key := memory[keyData : keyData+keyLen]

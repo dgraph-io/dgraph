@@ -32,8 +32,8 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common/variadic"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/genesis"
-	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/runtime/extrinsic"
+	"github.com/ChainSafe/gossamer/lib/runtime/wasmer"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
@@ -74,7 +74,7 @@ func newTestSyncer(t *testing.T, cfg *Config) *Service {
 	}
 
 	if cfg.Runtime == nil {
-		cfg.Runtime = runtime.NewTestRuntime(t, runtime.SUBSTRATE_TEST_RUNTIME)
+		cfg.Runtime = wasmer.NewTestInstance(t, wasmer.SUBSTRATE_TEST_RUNTIME)
 	}
 
 	if cfg.TransactionState == nil {
@@ -242,23 +242,6 @@ func TestRemoveIncludedExtrinsics(t *testing.T) {
 	require.Nil(t, inQueue, "queue should be empty")
 }
 
-func TestCoreExecuteBlockData_bytes(t *testing.T) {
-	syncer := newTestSyncer(t, nil)
-
-	// from bob test
-	data, err := hex.DecodeString("ac558d2fa7ea8924147de3ede2ab0ff83ba4ad50b388ef14cfee21887e87185ff00812e3eb9ccf2955b647062349e0e33cbb0d9e936f8185f11a545236d2b41aaf03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c1113140000")
-
-	// from TestWatchForResponses
-	//data, err := hex.DecodeString("a0bc81cac20fbff59e86f0bf373782757db7016a9b3b07c343a81841facc4f82017db9db5ed9967b80143100189ba69d9e4deab85ac3570e5df25686cabe32964a0400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000")
-	require.Nil(t, err)
-
-	res, err := syncer.executeBlockBytes(data)
-	require.Nil(t, err) // expect error since header.ParentHash is empty
-
-	// if execute block return a non-empty byte array, something when wrong
-	require.Equal(t, []byte{}, res)
-}
-
 func TestCoreExecuteBlock(t *testing.T) {
 	syncer := newTestSyncer(t, nil)
 	ph, err := hex.DecodeString("972a70b03bb1764fa0c9b631cb825860567ae6098f1ef2261f3cbbd34b000057")
@@ -331,7 +314,7 @@ func TestHandleBlockResponse_BlockData(t *testing.T) {
 
 func newBlockBuilder(t *testing.T, cfg *babe.ServiceConfig) *babe.Service { //nolint
 	if cfg.Runtime == nil {
-		cfg.Runtime = runtime.NewTestRuntime(t, runtime.SUBSTRATE_TEST_RUNTIME)
+		cfg.Runtime = wasmer.NewTestInstance(t, wasmer.SUBSTRATE_TEST_RUNTIME)
 	}
 
 	if cfg.Keypair == nil {
@@ -358,14 +341,14 @@ func TestExecuteBlock(t *testing.T) {
 	// skip until block builder is separate from BABE
 
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt, log.LvlTrace)
+	rt := wasmer.NewTestInstanceWithTrie(t, wasmer.SUBSTRATE_TEST_RUNTIME, tt, log.LvlTrace)
 
 	// load authority into runtime
 	kp, err := sr25519.GenerateKeypair()
 	require.NoError(t, err)
 
 	pubkey := kp.Public().Encode()
-	err = tt.Put(runtime.TestAuthorityDataKey, append([]byte{4}, pubkey...))
+	err = tt.Put(wasmer.TestAuthorityDataKey, append([]byte{4}, pubkey...))
 	require.NoError(t, err)
 
 	cfg := &Config{
@@ -406,14 +389,14 @@ func TestExecuteBlock_WithExtrinsic(t *testing.T) {
 	// skip until block builder is separate from BABE
 
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt, log.LvlTrace)
+	rt := wasmer.NewTestInstanceWithTrie(t, wasmer.SUBSTRATE_TEST_RUNTIME, tt, log.LvlTrace)
 
 	// load authority into runtime
 	kp, err := sr25519.GenerateKeypair()
 	require.NoError(t, err)
 
 	pubkey := kp.Public().Encode()
-	err = tt.Put(runtime.TestAuthorityDataKey, append([]byte{4}, pubkey...))
+	err = tt.Put(wasmer.TestAuthorityDataKey, append([]byte{4}, pubkey...))
 	require.NoError(t, err)
 
 	cfg := &Config{

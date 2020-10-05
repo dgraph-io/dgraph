@@ -1,4 +1,20 @@
-package runtime
+// Copyright 2019 ChainSafe Systems (ON) Corp.
+// This file is part of gossamer.
+//
+// The gossamer library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The gossamer library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
+
+package wasmer
 
 import (
 	"bytes"
@@ -10,9 +26,8 @@ import (
 )
 
 func Test_ext_twox_256(t *testing.T) {
-	runtime := NewTestRuntime(t, TEST_RUNTIME)
-
-	mem := runtime.vm.Memory.Data()
+	instance := NewTestInstance(t, TEST_RUNTIME)
+	mem := instance.vm.Memory.Data()
 
 	data := []byte("hello")
 	pos := 170
@@ -20,7 +35,7 @@ func Test_ext_twox_256(t *testing.T) {
 	copy(mem[pos:pos+len(data)], data)
 
 	// call wasm function
-	testFunc, ok := runtime.vm.Exports["test_ext_twox_256"]
+	testFunc, ok := instance.vm.Exports["test_ext_twox_256"]
 	if !ok {
 		t.Fatal("could not find exported function")
 	}
@@ -38,25 +53,25 @@ func Test_ext_twox_256(t *testing.T) {
 }
 
 func Test_ext_kill_child_storage(t *testing.T) {
-	runtime := NewTestRuntime(t, TEST_RUNTIME)
-	mem := runtime.vm.Memory.Data()
+	instance := NewTestInstance(t, TEST_RUNTIME)
+	mem := instance.vm.Memory.Data()
 	// set child storage
 	storageKey := []byte("childstore1")
 	childKey := []byte("key1")
 	value := []byte("value")
-	err := runtime.ctx.storage.SetChild(storageKey, trie.NewEmptyTrie())
+	err := instance.ctx.Storage.SetChild(storageKey, trie.NewEmptyTrie())
 	require.Nil(t, err)
 
 	storageKeyLen := uint32(len(storageKey))
-	storageKeyPtr, err := runtime.malloc(storageKeyLen)
+	storageKeyPtr, err := instance.malloc(storageKeyLen)
 	require.NoError(t, err)
 
 	childKeyLen := uint32(len(childKey))
-	childKeyPtr, err := runtime.malloc(childKeyLen)
+	childKeyPtr, err := instance.malloc(childKeyLen)
 	require.NoError(t, err)
 
 	valueLen := uint32(len(value))
-	valuePtr, err := runtime.malloc(valueLen)
+	valuePtr, err := instance.malloc(valueLen)
 	require.NoError(t, err)
 
 	copy(mem[storageKeyPtr:storageKeyPtr+storageKeyLen], storageKey)
@@ -64,7 +79,7 @@ func Test_ext_kill_child_storage(t *testing.T) {
 	copy(mem[valuePtr:valuePtr+valueLen], value)
 
 	// call wasm function to set child storage
-	testFunc, ok := runtime.vm.Exports["test_ext_set_child_storage"]
+	testFunc, ok := instance.vm.Exports["test_ext_set_child_storage"]
 	if !ok {
 		t.Fatal("could not find exported function")
 	}
@@ -73,12 +88,12 @@ func Test_ext_kill_child_storage(t *testing.T) {
 	require.Nil(t, err)
 
 	// confirm set
-	checkValue, err := runtime.ctx.storage.GetChildStorage(storageKey, childKey)
+	checkValue, err := instance.ctx.Storage.GetChildStorage(storageKey, childKey)
 	require.NoError(t, err)
 	require.Equal(t, value, checkValue)
 
 	// call wasm function to kill child storage
-	testDelete, ok := runtime.vm.Exports["test_ext_kill_child_storage"]
+	testDelete, ok := instance.vm.Exports["test_ext_kill_child_storage"]
 	if !ok {
 		t.Fatal("could not find exported function")
 	}
@@ -87,31 +102,31 @@ func Test_ext_kill_child_storage(t *testing.T) {
 	require.NoError(t, err)
 
 	// confirm value is deleted
-	checkDelete, err := runtime.ctx.storage.GetChildStorage(storageKey, childKey)
+	checkDelete, err := instance.ctx.Storage.GetChildStorage(storageKey, childKey)
 	require.EqualError(t, err, "child trie does not exist at key :child_storage:default:"+string(storageKey))
 	require.Equal(t, []byte(nil), checkDelete)
 }
 
 func Test_ext_clear_child_storage(t *testing.T) {
-	runtime := NewTestRuntime(t, TEST_RUNTIME)
-	mem := runtime.vm.Memory.Data()
+	instance := NewTestInstance(t, TEST_RUNTIME)
+	mem := instance.vm.Memory.Data()
 	// set child storage
 	storageKey := []byte("childstore1")
 	childKey := []byte("key1")
 	value := []byte("value")
-	err := runtime.ctx.storage.SetChild(storageKey, trie.NewEmptyTrie())
+	err := instance.ctx.Storage.SetChild(storageKey, trie.NewEmptyTrie())
 	require.Nil(t, err)
 
 	storageKeyLen := uint32(len(storageKey))
-	storageKeyPtr, err := runtime.malloc(storageKeyLen)
+	storageKeyPtr, err := instance.malloc(storageKeyLen)
 	require.NoError(t, err)
 
 	childKeyLen := uint32(len(childKey))
-	childKeyPtr, err := runtime.malloc(childKeyLen)
+	childKeyPtr, err := instance.malloc(childKeyLen)
 	require.NoError(t, err)
 
 	valueLen := uint32(len(value))
-	valuePtr, err := runtime.malloc(valueLen)
+	valuePtr, err := instance.malloc(valueLen)
 	require.NoError(t, err)
 
 	copy(mem[storageKeyPtr:storageKeyPtr+storageKeyLen], storageKey)
@@ -119,7 +134,7 @@ func Test_ext_clear_child_storage(t *testing.T) {
 	copy(mem[valuePtr:valuePtr+valueLen], value)
 
 	// call wasm function to set child storage
-	testFunc, ok := runtime.vm.Exports["test_ext_set_child_storage"]
+	testFunc, ok := instance.vm.Exports["test_ext_set_child_storage"]
 	if !ok {
 		t.Fatal("could not find exported function")
 	}
@@ -128,12 +143,12 @@ func Test_ext_clear_child_storage(t *testing.T) {
 	require.Nil(t, err)
 
 	// confirm set
-	checkValue, err := runtime.ctx.storage.GetChildStorage(storageKey, childKey)
+	checkValue, err := instance.ctx.Storage.GetChildStorage(storageKey, childKey)
 	require.NoError(t, err)
 	require.Equal(t, value, checkValue)
 
 	// call wasm function to clear child storage
-	testClear, ok := runtime.vm.Exports["test_ext_clear_child_storage"]
+	testClear, ok := instance.vm.Exports["test_ext_clear_child_storage"]
 	if !ok {
 		t.Fatal("could not find exported function")
 	}
@@ -142,39 +157,39 @@ func Test_ext_clear_child_storage(t *testing.T) {
 	require.NoError(t, err)
 
 	// confirm value is deleted
-	checkDelete, err := runtime.ctx.storage.GetChildStorage(storageKey, childKey)
+	checkDelete, err := instance.ctx.Storage.GetChildStorage(storageKey, childKey)
 	require.NoError(t, err)
 	require.Equal(t, []byte(nil), checkDelete)
 }
 
 func Test_ext_get_allocated_child_storage(t *testing.T) {
-	runtime := NewTestRuntime(t, TEST_RUNTIME)
-	mem := runtime.vm.Memory.Data()
+	instance := NewTestInstance(t, TEST_RUNTIME)
+	mem := instance.vm.Memory.Data()
 
 	// set child storage
 	storageKey := []byte("childstore1")
 	childKey := []byte("key1")
-	err := runtime.ctx.storage.SetChild(storageKey, trie.NewEmptyTrie())
+	err := instance.ctx.Storage.SetChild(storageKey, trie.NewEmptyTrie())
 	require.Nil(t, err)
 
 	storageKeyLen := uint32(len(storageKey))
-	storageKeyPtr, err := runtime.malloc(storageKeyLen)
+	storageKeyPtr, err := instance.malloc(storageKeyLen)
 	require.NoError(t, err)
 
 	childKeyLen := uint32(len(childKey))
-	childKeyPtr, err := runtime.malloc(childKeyLen)
+	childKeyPtr, err := instance.malloc(childKeyLen)
 	require.NoError(t, err)
 
 	copy(mem[storageKeyPtr:storageKeyPtr+storageKeyLen], storageKey)
 	copy(mem[childKeyPtr:childKeyPtr+childKeyLen], childKey)
 
 	// call wasm function to get child value (should be not found since we haven't set it yet)
-	getValueFunc, ok := runtime.vm.Exports["test_ext_get_allocated_child_storage"]
+	getValueFunc, ok := instance.vm.Exports["test_ext_get_allocated_child_storage"]
 	if !ok {
 		t.Fatal("could not find exported function")
 	}
 
-	writtenOut, err := runtime.malloc(4)
+	writtenOut, err := instance.malloc(4)
 	require.NoError(t, err)
 	res, err := getValueFunc(int32(storageKeyPtr), int32(storageKeyLen), int32(childKeyPtr), int32(childKeyLen), int32(writtenOut))
 	require.NoError(t, err)
@@ -184,12 +199,12 @@ func Test_ext_get_allocated_child_storage(t *testing.T) {
 	// store the child value
 	value := []byte("value")
 	valueLen := uint32(len(value))
-	valuePtr, err := runtime.malloc(valueLen)
+	valuePtr, err := instance.malloc(valueLen)
 	require.NoError(t, err)
 	copy(mem[valuePtr:valuePtr+valueLen], value)
 
 	// call wasm function to set child storage
-	setValueFunc, ok := runtime.vm.Exports["test_ext_set_child_storage"]
+	setValueFunc, ok := instance.vm.Exports["test_ext_set_child_storage"]
 	if !ok {
 		t.Fatal("could not find exported function")
 	}
