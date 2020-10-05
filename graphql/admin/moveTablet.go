@@ -18,6 +18,10 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
+
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -33,20 +37,66 @@ type moveTabletInput struct {
 }
 
 func resolveMoveTablet(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-	var input moveTabletInput
-	err := getTypeInput(m, &input)
+	input, err := getMoveTabletInput(m)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
-	var status *pb.Status
-	if status, err = worker.MoveTabletOverNetwork(ctx,
-		&pb.MoveTabletRequest{Tablet: input.Tablet, DstGroup: input.GroupId}); err != nil {
-		return resolve.EmptyResult(m, err), false
+	// move tablet won't return a nil status, unless there was some gRPC connection issue
+	status, err := worker.MoveTabletOverNetwork(ctx, &pb.MoveTabletRequest{Tablet: input.Tablet,
+		DstGroup: input.GroupId})
+
+	code := "Success"
+	resolverSucceeded := true
+	if err != nil {
+		code = "Failure"
+		resolverSucceeded = false
 	}
 
 	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response("Success", status.GetMsg())},
+		Data:  map[string]interface{}{m.Name(): response(code, status.GetMsg())},
 		Field: m,
-	}, true
+		Err:   schema.GQLWrapLocationf(err, m.Location(), "resolving %s failed", m.Name()),
+	}, resolverSucceeded
+}
+
+func getMoveTabletInput(m schema.Mutation) (*moveTabletInput, error) {
+	inputArg, ok := m.ArgValue(schema.InputArgName).(map[string]interface{})
+	if !ok {
+		return nil, inputArgError(errors.Errorf("can't convert input to map"))
+	}
+
+	inputRef := &moveTabletInput{}
+	inputRef.Tablet, ok = inputArg["tablet"].(string)
+	if !ok {
+		return nil, inputArgError(errors.Errorf("can't convert input.tablet to string"))
+	}
+
+	gId, err := getInt64FieldAsUint32(inputArg["groupId"])
+	if err != nil {
+		return nil, inputArgError(schema.GQLWrapf(err, "can't convert input.groupId to uint32"))
+	}
+	inputRef.GroupId = gId
+
+	return inputRef, nil
+}
+
+func inputArgError(err error) error {
+	return schema.GQLWrapf(err, "couldn't get input argument")
+}
+
+func getInt64FieldAsUint32(val interface{}) (uint32, error) {
+	gId := uint64(0)
+	var err error
+
+	switch v := val.(type) {
+	case string:
+		gId, err = strconv.ParseUint(v, 10, 32)
+	case json.Number:
+		gId, err = strconv.ParseUint(v.String(), 10, 32)
+	default:
+		err = errors.Errorf("got unexpected value type")
+	}
+
+	return uint32(gId), err
 }

@@ -1554,6 +1554,8 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				return nil, valueCoercionError(v)
 			}
 			val = i
+		case int64:
+			// this case is for admin, nothing to do here
 		case json.Number:
 			// To use whole 64-bit range for int64 without any coercing,
 			// We pass int64 values as string to dgraph and parse it as integer here

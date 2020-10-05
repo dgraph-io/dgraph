@@ -19,6 +19,8 @@ package admin
 import (
 	"context"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -26,21 +28,19 @@ import (
 )
 
 const (
-	UID       assignKind = "UID"
-	TIMESTAMP assignKind = "TIMESTAMP"
+	UID       = "UID"
+	TIMESTAMP = "TIMESTAMP"
 )
 
-type assignKind string
 type assignInput struct {
-	What assignKind
+	What string
 	// TODO: once we have type for uint64 available in admin schema,
 	// update the type of this field from Int64 with the new type name in admin schema.
 	Num uint64
 }
 
 func resolveAssign(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-	var input assignInput
-	err := getTypeInput(m, &input)
+	input, err := getAssignInput(m)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
@@ -82,4 +82,25 @@ func resolveAssign(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}},
 		Field: m,
 	}, true
+}
+
+func getAssignInput(m schema.Mutation) (*assignInput, error) {
+	inputArg, ok := m.ArgValue(schema.InputArgName).(map[string]interface{})
+	if !ok {
+		return nil, inputArgError(errors.Errorf("can't convert input to map"))
+	}
+
+	inputRef := &assignInput{}
+	inputRef.What, ok = inputArg["what"].(string)
+	if !ok {
+		return nil, inputArgError(errors.Errorf("can't convert input.what to string"))
+	}
+
+	num, err := getInt64FieldAsUint64(inputArg["num"])
+	if err != nil {
+		return nil, inputArgError(schema.GQLWrapf(err, "can't convert input.num to uint64"))
+	}
+	inputRef.Num = num
+
+	return inputRef, nil
 }

@@ -2675,6 +2675,86 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			guardianData: `{"restore": {"code": "Failure"}}`,
 		},
 		{
+			name: "removeNode has guardian auth",
+			query: `
+					mutation {
+					  removeNode(input: {nodeId: 1, groupId: 2147483640}) {
+						response {
+							code
+						}
+					  }
+					}`,
+			queryName:          "removeNode",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message: "resolving removeNode failed because No group with groupId 2147483640" +
+					" found",
+				Locations: []x.Location{{Line: 3, Column: 8}},
+			}},
+			guardianData: `{"removeNode": null}`,
+		},
+		{
+			name: "moveTablet has guardian auth",
+			query: `
+					mutation {
+					  moveTablet(input: {tablet: "non_existent_pred", groupId: 2147483640}) {
+						response {
+							code
+							message
+						}
+					  }
+					}`,
+			queryName:          "moveTablet",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message: "resolving moveTablet failed because Group: [2147483640] is not a" +
+					" known group.",
+				Locations: []x.Location{{Line: 3, Column: 8}},
+			}},
+			guardianData: `{"moveTablet": {"response": {"code": "Failure", "message": "ErrInvalidRequest"}}}`,
+		},
+		{
+			name: "assign has guardian auth",
+			query: `
+					mutation {
+					  assign(input: {what: UID, num: 0}) {
+						response {
+							startId
+							endId
+							readOnly
+						}
+					  }
+					}`,
+			queryName:          "assign",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message: "resolving assign failed because Nothing to be leased" +
+					" found",
+				Locations: []x.Location{{Line: 3, Column: 8}},
+			}},
+			guardianData: `{"assign": null}`,
+		},
+		{
+			name: "enterpriseLicense has guardian auth",
+			query: `
+					mutation {
+					  enterpriseLicense(input: {license: ""}) {
+						response {
+							code
+						}
+					  }
+					}`,
+			queryName:          "enterpriseLicense",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message: "resolving enterpriseLicense failed because rpc error: code = Unknown" +
+					" desc = while extracting enterprise details from the license: while decoding" +
+					" license file: EOF",
+				Locations: []x.Location{{Line: 3, Column: 8}},
+			}},
+			guardianData: `{"enterpriseLicense": null}`,
+		},
+		{
 			name: "getGQLSchema has guardian auth",
 			query: `
 					query {

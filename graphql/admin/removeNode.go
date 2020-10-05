@@ -18,7 +18,11 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
+
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -34,8 +38,8 @@ type removeNodeInput struct {
 }
 
 func resolveRemoveNode(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-	var input removeNodeInput
-	if err := getTypeInput(m, &input); err != nil {
+	input, err := getRemoveNodeInput(m)
+	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
@@ -49,4 +53,42 @@ func resolveRemoveNode(ctx context.Context, m schema.Mutation) (*resolve.Resolve
 			fmt.Sprintf("Removed node with group: %v, idx: %v", input.GroupId, input.NodeId))},
 		Field: m,
 	}, true
+}
+
+func getRemoveNodeInput(m schema.Mutation) (*removeNodeInput, error) {
+	inputArg, ok := m.ArgValue(schema.InputArgName).(map[string]interface{})
+	if !ok {
+		return nil, inputArgError(errors.Errorf("can't convert input to map"))
+	}
+
+	inputRef := &removeNodeInput{}
+	nodeId, err := getInt64FieldAsUint64(inputArg["tablet"])
+	if err != nil {
+		return nil, inputArgError(schema.GQLWrapf(err, "can't convert input.nodeId to uint64"))
+	}
+	inputRef.NodeId = nodeId
+
+	gId, err := getInt64FieldAsUint32(inputArg["groupId"])
+	if err != nil {
+		return nil, inputArgError(schema.GQLWrapf(err, "can't convert input.groupId to uint32"))
+	}
+	inputRef.GroupId = gId
+
+	return inputRef, nil
+}
+
+func getInt64FieldAsUint64(val interface{}) (uint64, error) {
+	gId := uint64(0)
+	var err error
+
+	switch v := val.(type) {
+	case string:
+		gId, err = strconv.ParseUint(v, 10, 64)
+	case json.Number:
+		gId, err = strconv.ParseUint(v.String(), 10, 64)
+	default:
+		err = errors.Errorf("got unexpected value type")
+	}
+
+	return gId, err
 }
