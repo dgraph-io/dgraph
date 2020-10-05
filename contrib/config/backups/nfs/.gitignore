@@ -3,7 +3,8 @@
 
 ## Terraform Files
 .terraform
-terraform.tfstate*
+*terraform.tfstate*
+terraform.tfvars
 
 ## Configurations auto-generated
 env.sh
