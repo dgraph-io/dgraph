@@ -233,13 +233,16 @@ func main() {
 				return mostFlaky[i].Percent > mostFlaky[j].Percent
 			})
 			println("Tests that have failed:")
-			for i := 0; i < 50; i++ {
-				temp := testStatsMap[mostFlaky[i].Name]
-				fmt.Printf("%s %d %d\n", mostFlaky[i].Name, temp.Failure, temp.TotalRuns)
+			for i := 0; i < len(mostFlaky); i++ {
+				testStat := testStatsMap[mostFlaky[i].Name]
+				if testStat.Failure == 0 {
+					break
+				}
+				fmt.Printf("%s %d %d\n", mostFlaky[i].Name, testStat.Failure, testStat.TotalRuns)
 			}
 		},
 	}
-	cmd.Flags().IntVarP(&days, "days", "d", 7, "Past days for which stats are to be computed")
+	cmd.Flags().IntVarP(&days, "days", "d", 7, "Past days for which stats are to be computedg")
 
 	var rootCmd = &cobra.Command{Use: "teamcity"}
 	rootCmd.AddCommand(cmd)
