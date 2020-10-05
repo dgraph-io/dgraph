@@ -94,6 +94,8 @@ instances to achieve high-availability.
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
 	flag.Bool("enable_sentry", true, "Turn on/off sending events to Sentry. (default on)")
+	flag.Bool("enable_admin_http", true,
+		"Turn on/off the admin endpoints exposed over HTTP port for Zero.")
 
 	// OpenCensus flags.
 	flag.Float64("trace", 0.01, "The ratio of queries to trace.")
@@ -317,11 +319,14 @@ func run() {
 	st.serveHTTP(httpListener)
 
 	http.HandleFunc("/health", st.pingResponse)
-	http.HandleFunc("/state", st.getState)
-	http.HandleFunc("/removeNode", st.removeNode)
-	http.HandleFunc("/moveTablet", st.moveTablet)
-	http.HandleFunc("/assign", st.assign)
-	http.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
+	// the following endpoints are disabled only if the flag is explicitly set to false
+	if Zero.Conf.GetBool("enable_admin_http") {
+		http.HandleFunc("/state", st.getState)
+		http.HandleFunc("/removeNode", st.removeNode)
+		http.HandleFunc("/moveTablet", st.moveTablet)
+		http.HandleFunc("/assign", st.assign)
+		http.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
+	}
 	zpages.Handle(http.DefaultServeMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
