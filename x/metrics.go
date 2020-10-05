@@ -82,7 +82,7 @@ var (
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
 	// TxnAborts records count of aborted transactions.
-	TxnAborts = stats.Int64("txn_aborts",
+	TxnAborts = stats.Int64("txn_aborts_total",
 		"Number of transaction aborts", stats.UnitDimensionless)
 	// PBlockHitRatio records the hit ratio of posting store block cache.
 	PBlockHitRatio = stats.Float64("hit_ratio_postings_block",
