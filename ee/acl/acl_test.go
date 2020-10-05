@@ -2687,8 +2687,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "removeNode",
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
-				Message: "resolving removeNode failed because No group with groupId 2147483640" +
-					" found",
+				Message: "resolving removeNode failed because rpc error: code = Unknown desc = No" +
+					" group with groupId 2147483640 found",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"removeNode": null}`,
@@ -2707,8 +2707,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "moveTablet",
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
-				Message: "resolving moveTablet failed because Group: [2147483640] is not a" +
-					" known group.",
+				Message: "resolving moveTablet failed because rpc error: code = Unknown desc" +
+					" = Group: [2147483640] is not a known group.",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"moveTablet": {"response": {"code": "Failure", "message": "ErrInvalidRequest"}}}`,
@@ -2728,8 +2728,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "assign",
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
-				Message: "resolving assign failed because Nothing to be leased" +
-					" found",
+				Message: "resolving assign failed because  rpc error: code = Unknown desc" +
+					" = Nothing to be leased",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"assign": null}`,

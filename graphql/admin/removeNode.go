@@ -62,7 +62,7 @@ func getRemoveNodeInput(m schema.Mutation) (*removeNodeInput, error) {
 	}
 
 	inputRef := &removeNodeInput{}
-	nodeId, err := getInt64FieldAsUint64(inputArg["tablet"])
+	nodeId, err := getInt64FieldAsUint64(inputArg["nodeId"])
 	if err != nil {
 		return nil, inputArgError(schema.GQLWrapf(err, "can't convert input.nodeId to uint64"))
 	}
