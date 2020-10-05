@@ -302,6 +302,7 @@ const (
 	type AssignedIds {
 		startId: Int
 		endId: Int
+		readOnly: Int
 	}
 
 	type AssignPayload {
@@ -361,7 +362,7 @@ const (
 		replaceAllowedCORSOrigins(origins: [String]): Cors
 
 		removeNode(input: RemoveNodeInput!): RemoveNodePayload
-		moveTablet(input: MoveTableInput!): MoveTabletPayload
+		moveTablet(input: MoveTabletInput!): MoveTabletPayload
 		assign(input: AssignInput!): AssignPayload
 		enterpriseLicense(input: EnterpriseLicenseInput!): EnterpriseLicensePayload
 
@@ -410,6 +411,7 @@ var (
 		"login":           {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 		"restore":         commonAdminMutationMWs,
 		"shutdown":        commonAdminMutationMWs,
+		"assign":          commonAdminMutationMWs,
 		"updateGQLSchema": commonAdminMutationMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
@@ -608,6 +610,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		"login":    resolveLogin,
 		"restore":  resolveRestore,
 		"shutdown": resolveShutdown,
+		"assign":   resolveAssign,
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).

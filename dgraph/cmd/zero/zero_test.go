@@ -30,8 +30,8 @@ func TestRemoveNode(t *testing.T) {
 			Groups: map[uint32]*pb.Group{1: {Members: map[uint64]*pb.Member{}}},
 		},
 	}
-	err := server.removeNode(context.TODO(), 3, 1)
+	_, err := server.RemoveNode(context.TODO(), &pb.RemoveNodeRequest{NodeId: 3, GroupId: 1})
 	require.Error(t, err)
-	err = server.removeNode(context.TODO(), 1, 2)
+	_, err = server.RemoveNode(context.TODO(), &pb.RemoveNodeRequest{NodeId: 1, GroupId: 2})
 	require.Error(t, err)
 }

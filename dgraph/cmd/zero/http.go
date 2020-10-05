@@ -119,7 +119,8 @@ func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := st.zero.removeNode(context.Background(), nodeId, uint32(groupId)); err != nil {
+	if _, err := st.zero.RemoveNode(context.Background(), &pb.RemoveNodeRequest{NodeId: nodeId,
+		GroupId: uint32(groupId)}); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
@@ -164,45 +165,21 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dstGroup := uint32(groupId)
-	knownGroups := st.zero.KnownGroups()
-	var isKnown bool
-	for _, grp := range knownGroups {
-		if grp == dstGroup {
-			isKnown = true
-			break
+
+	var resp *pb.Status
+	var err error
+	if resp, err = st.zero.MoveTablet(context.Background(), &pb.MoveTabletRequest{Tablet: tablet,
+		DstGroup: dstGroup}); err != nil {
+		if resp.GetMsg() == x.ErrorInvalidRequest {
+			w.WriteHeader(http.StatusBadRequest)
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			x.SetStatus(w, x.Error, err.Error())
 		}
-	}
-	if !isKnown {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("Group: [%d] is not a known group.",
-			dstGroup))
 		return
 	}
-
-	tab := st.zero.ServingTablet(tablet)
-	if tab == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("No tablet found for: %s", tablet))
-		return
-	}
-
-	srcGroup := tab.GroupId
-	if srcGroup == dstGroup {
-		w.WriteHeader(http.StatusInternalServerError)
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			fmt.Sprintf("Tablet: [%s] is already being served by group: [%d]", tablet, srcGroup))
-		return
-	}
-
-	if err := st.zero.movePredicate(tablet, srcGroup, dstGroup); err != nil {
-		glog.Errorf("While moving predicate %s from %d -> %d. Error: %v",
-			tablet, srcGroup, dstGroup, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		x.SetStatus(w, x.Error, err.Error())
-		return
-	}
-	_, err := fmt.Fprintf(w, "Predicate: [%s] moved from group [%d] to [%d]",
-		tablet, srcGroup, dstGroup)
+	_, err = fmt.Fprintf(w, resp.GetMsg())
 	if err != nil {
 		glog.Warningf("Error while writing response: %+v", err)
 	}
