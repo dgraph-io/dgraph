@@ -117,8 +117,7 @@ func TestDevModule_SetBABEEpochThreshold(t *testing.T) {
 	var res string
 	err := m.SetBABEEpochThreshold(nil, &req, &res)
 	require.NoError(t, err)
-
-	require.Equal(t, "set BABE Epoch Threshold to 123", res)
+	require.Equal(t, "set BABE threshold to 123", res)
 }
 
 func TestDevModule_SetBABERandomness(t *testing.T) {

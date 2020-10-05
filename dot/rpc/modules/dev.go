@@ -90,8 +90,8 @@ func (m *DevModule) SetBABEEpochThreshold(r *http.Request, req *string, res *str
 	if !ok {
 		return fmt.Errorf("error setting threshold")
 	}
-	m.blockProducerAPI.SetEpochThreshold(n)
-	*res = fmt.Sprintf("set BABE Epoch Threshold to %v", n)
+	m.blockProducerAPI.SetThreshold(n)
+	*res = fmt.Sprintf("set BABE threshold to %v", n)
 
 	return nil
 }

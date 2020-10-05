@@ -19,5 +19,5 @@ type BlockProducer interface {
 	Authorities() []*types.Authority
 	SetAuthorities([]*types.Authority) error
 	SetRandomness([types.RandomnessLength]byte)
-	SetEpochThreshold(*big.Int)
+	SetThreshold(*big.Int)
 }

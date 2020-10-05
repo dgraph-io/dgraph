@@ -90,7 +90,7 @@ func addAuthorshipProof(t *testing.T, babeService *Service, slotNumber uint64) {
 
 func createTestBlock(t *testing.T, babeService *Service, parent *types.Header, exts [][]byte, slotNumber uint64) (*types.Block, Slot) {
 	// create proof that we can authorize this block
-	babeService.epochThreshold = maxThreshold
+	babeService.threshold = maxThreshold
 	babeService.authorityIndex = 0
 
 	addAuthorshipProof(t, babeService, slotNumber)
@@ -180,7 +180,7 @@ func TestBuildBlock_failing(t *testing.T) {
 	}
 
 	// create proof that we can authorize this block
-	babeService.epochThreshold = big.NewInt(0)
+	babeService.threshold = big.NewInt(0)
 	var slotNumber uint64 = 1
 
 	outAndProof, err := babeService.runLottery(slotNumber)

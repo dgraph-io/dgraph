@@ -119,7 +119,7 @@ func TestVerificationManager_SetAuthorityChangeAtBlock(t *testing.T) {
 
 func TestVerificationManager_VerifyBlock(t *testing.T) {
 	babeService := createTestService(t, &ServiceConfig{
-		EpochThreshold: maxThreshold,
+		Threshold: maxThreshold,
 	})
 	descriptor := babeService.Descriptor()
 
@@ -136,7 +136,7 @@ func TestVerificationManager_VerifyBlock(t *testing.T) {
 
 func TestVerificationManager_VerifyBlock_Branches(t *testing.T) {
 	babeService := createTestService(t, &ServiceConfig{
-		EpochThreshold: maxThreshold,
+		Threshold: maxThreshold,
 	})
 	descriptor := babeService.Descriptor()
 
@@ -216,7 +216,7 @@ func TestVerifySlotWinner(t *testing.T) {
 	babeService := createTestService(t, cfg)
 
 	// create proof that we can authorize this block
-	babeService.epochThreshold = maxThreshold
+	babeService.threshold = maxThreshold
 	babeService.authorityIndex = 0
 	var slotNumber uint64 = 1
 

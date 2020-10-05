@@ -143,7 +143,7 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks k
 		TransactionState: st.Transaction,
 		EpochState:       st.Epoch,
 		StartSlot:        bestSlot + 1,
-		EpochThreshold:   cfg.Core.BabeThreshold,
+		Threshold:        cfg.Core.BabeThreshold,
 		SlotDuration:     cfg.Core.SlotDuration,
 	}
 

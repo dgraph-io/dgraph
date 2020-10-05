@@ -107,8 +107,8 @@ func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 	require.NoError(t, err)
 
 	babeService.config = babeCfg
-	if cfg.EpochThreshold == nil {
-		babeService.epochThreshold = maxThreshold
+	if cfg.Threshold == nil {
+		babeService.threshold = maxThreshold
 	}
 
 	return babeService
@@ -171,7 +171,7 @@ func TestCalculateThreshold_Failing(t *testing.T) {
 
 func TestRunLottery(t *testing.T) {
 	babeService := createTestService(t, nil)
-	babeService.epochThreshold = maxThreshold
+	babeService.threshold = maxThreshold
 
 	outAndProof, err := babeService.runLottery(0)
 	if err != nil {
@@ -185,7 +185,7 @@ func TestRunLottery(t *testing.T) {
 
 func TestRunLottery_False(t *testing.T) {
 	babeService := createTestService(t, nil)
-	babeService.epochThreshold = big.NewInt(0)
+	babeService.threshold = big.NewInt(0)
 
 	outAndProof, err := babeService.runLottery(0)
 	if err != nil {
@@ -227,7 +227,7 @@ func TestBabeAnnounceMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	babeService.epochThreshold = maxThreshold
+	babeService.threshold = maxThreshold
 
 	newBlocks := babeService.GetBlockChannel()
 	block := <-newBlocks
@@ -347,14 +347,14 @@ func TestService_SetAuthorities_WrongKey(t *testing.T) {
 	require.Equal(t, aBefore, aAfter)
 }
 
-func TestService_SetEpochThreshold(t *testing.T) {
+func TestService_SetThreshold(t *testing.T) {
 	bs := createTestService(t, &ServiceConfig{})
-	etBefore := bs.epochThreshold
+	etBefore := bs.threshold
 	newThreshold := big.NewInt(1000)
 
-	bs.SetEpochThreshold(newThreshold)
+	bs.SetThreshold(newThreshold)
 
-	etAfter := bs.epochThreshold
+	etAfter := bs.threshold
 	require.NotEqual(t, etBefore, etAfter)
 	require.Equal(t, newThreshold, etAfter)
 }

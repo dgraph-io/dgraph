@@ -48,7 +48,7 @@ type BlockProducerAPI interface {
 	Resume() error
 	SetAuthorities(data []*types.Authority) error
 	SetRandomness([types.RandomnessLength]byte)
-	SetEpochThreshold(*big.Int)
+	SetThreshold(*big.Int)
 }
 
 // TransactionStateAPI ...

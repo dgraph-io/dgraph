@@ -31,6 +31,8 @@ func TestInherentExtrinsics_Timestamp(t *testing.T) {
 		in, err := scale.Encode(ext)
 		require.NoError(t, err)
 
+		t.Log(in)
+
 		ret, err := rt.ApplyExtrinsic(in)
 		require.NoError(t, err)
 		require.Equal(t, []byte{0, 0}, ret)

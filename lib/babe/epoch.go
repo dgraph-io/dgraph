@@ -149,14 +149,14 @@ func (b *Service) runLottery(slot uint64) (*VrfOutputAndProof, error) {
 	}
 
 	outputInt := big.NewInt(0).SetBytes(output[:])
-	if b.epochThreshold == nil {
-		err = b.setEpochThreshold()
+	if b.threshold == nil {
+		err = b.setThreshold()
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if outputInt.Cmp(b.epochThreshold) < 0 {
+	if outputInt.Cmp(b.threshold) < 0 {
 		outbytes := [sr25519.VrfOutputLength]byte{}
 		copy(outbytes[:], output)
 		proofbytes := [sr25519.VrfProofLength]byte{}

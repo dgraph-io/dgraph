@@ -64,7 +64,7 @@ type Service struct {
 	randomness     [types.RandomnessLength]byte
 	authorityIndex uint64
 	authorityData  []*types.Authority
-	epochThreshold *big.Int // validator threshold
+	threshold      *big.Int // validator threshold
 	startSlot      uint64
 	slotToProof    map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
 
@@ -86,7 +86,7 @@ type ServiceConfig struct {
 	Keypair          *sr25519.Keypair
 	Runtime          *runtime.Runtime
 	AuthData         []*types.Authority
-	EpochThreshold   *big.Int // for development purposes
+	Threshold        *big.Int // for development purposes
 	SlotDuration     uint64   // for development purposes; in milliseconds
 	StartSlot        uint64   // slot to start at
 }
@@ -129,7 +129,7 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		slotToProof:      make(map[uint64]*VrfOutputAndProof),
 		blockChan:        make(chan types.Block),
 		authorityData:    cfg.AuthData,
-		epochThreshold:   cfg.EpochThreshold,
+		threshold:        cfg.Threshold,
 		startSlot:        cfg.StartSlot,
 		pause:            make(chan struct{}),
 	}
@@ -161,14 +161,14 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		return nil, err
 	}
 
-	logger.Debug("created BABE service", "authorities", AuthorityData(babeService.authorityData), "authority index", babeService.authorityIndex, "threshold", babeService.epochThreshold)
+	logger.Debug("created BABE service", "authorities", AuthorityData(babeService.authorityData), "authority index", babeService.authorityIndex, "threshold", babeService.threshold)
 	return babeService, nil
 }
 
 // Start starts BABE block authoring
 func (b *Service) Start() error {
-	if b.epochThreshold == nil {
-		err := b.setEpochThreshold()
+	if b.threshold == nil {
+		err := b.setThreshold()
 		if err != nil {
 			return err
 		}
@@ -238,7 +238,21 @@ func (b *Service) SetRuntime(rt *runtime.Runtime) error {
 
 	var err error
 	b.config, err = b.rt.BabeConfiguration()
-	return err
+	if err != nil {
+		return err
+	}
+
+	b.authorityData, err = types.BABEAuthorityRawToAuthority(b.config.GenesisAuthorities)
+	if err != nil {
+		return err
+	}
+
+	err = b.setAuthorityIndex()
+	if err != nil {
+		return err
+	}
+
+	return b.setThreshold()
 }
 
 // GetBlockChannel returns the channel where new blocks are passed
@@ -251,7 +265,7 @@ func (b *Service) Descriptor() *Descriptor {
 	return &Descriptor{
 		AuthorityData: b.authorityData,
 		Randomness:    b.randomness,
-		Threshold:     b.epochThreshold,
+		Threshold:     b.threshold,
 	}
 }
 
@@ -278,9 +292,9 @@ func (b *Service) SetAuthorities(data []*types.Authority) error {
 	return b.setAuthorityIndex()
 }
 
-// SetEpochThreshold sets Epoch Threshold for BABE producer
-func (b *Service) SetEpochThreshold(a *big.Int) {
-	b.epochThreshold = a
+// SetThreshold sets the threshold for a block producer
+func (b *Service) SetThreshold(a *big.Int) {
+	b.threshold = a
 }
 
 // SetRandomness sets randomness for BABE service
@@ -531,18 +545,18 @@ func (b *Service) vrfSign(input []byte) (out []byte, proof []byte, err error) {
 }
 
 // sets the slot lottery threshold for the current epoch
-func (b *Service) setEpochThreshold() error {
+func (b *Service) setThreshold() error {
 	var err error
 	if b.config == nil {
 		return errors.New("cannot set threshold: no babe config")
 	}
 
-	b.epochThreshold, err = CalculateThreshold(b.config.C1, b.config.C2, len(b.Authorities()))
+	b.threshold, err = CalculateThreshold(b.config.C1, b.config.C2, len(b.Authorities()))
 	if err != nil {
 		return err
 	}
 
-	b.logger.Debug("set epoch threshold", "threshold", b.epochThreshold.Bytes())
+	b.logger.Debug("set threshold", "threshold", b.threshold.Bytes())
 	return nil
 }
 
