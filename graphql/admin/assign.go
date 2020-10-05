@@ -18,7 +18,6 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -34,8 +33,8 @@ const (
 type assignKind string
 type assignInput struct {
 	What assignKind
-	// admin schema mentions this as Int, because we don't have Int64 or Uint64 in admin schema.
-	// need to introduce Uint64/Int64 in admin schema?
+	// TODO: once we have type for uint64 available in admin schema,
+	// update the type of this field from Int64 with the new type name in admin schema.
 	Num uint64
 }
 
@@ -83,15 +82,4 @@ func resolveAssign(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}},
 		Field: m,
 	}, true
-}
-
-func getTypeInput(m schema.Mutation, inputRef interface{}) error {
-	inputArg := m.ArgValue(schema.InputArgName)
-	inputBytes, err := json.Marshal(inputArg)
-	if err != nil {
-		return schema.GQLWrapf(err, "couldn't get input argument")
-	}
-
-	err = json.Unmarshal(inputBytes, inputRef)
-	return schema.GQLWrapf(err, "couldn't get input argument")
 }

@@ -18,6 +18,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -47,6 +48,16 @@ const (
 
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `
+	"""
+	The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+	Int64 can represent values in range [-(2^63),(2^63 - 1)].
+	"""
+	scalar Int64
+
+	"""
+	The DateTime scalar type represents date and time as a string in RFC3339 format.
+	For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+	"""
 	scalar DateTime
 
 	"""
@@ -272,8 +283,8 @@ const (
 	}
 
 	input RemoveNodeInput {
-		nodeId: Int!
-		groupId: Int!
+		nodeId: Int64!
+		groupId: Int64!
 	}
 
 	type RemoveNodePayload {
@@ -282,7 +293,7 @@ const (
 
 	input MoveTabletInput {
 		tablet: String!
-		groupId: Int!
+		groupId: Int64!
 	}
 
 	type MoveTabletPayload {
@@ -296,13 +307,13 @@ const (
 
 	input AssignInput {
 		what: AssignKind!
-		num: Int!
+		num: Int64!
 	}
 
 	type AssignedIds {
-		startId: Int
-		endId: Int
-		readOnly: Int
+		startId: Int64
+		endId: Int64
+		readOnly: Int64
 	}
 
 	type AssignPayload {
@@ -404,15 +415,18 @@ var (
 		"getAllowedCORSOrigins": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
-		"backup":          commonAdminMutationMWs,
-		"config":          commonAdminMutationMWs,
-		"draining":        commonAdminMutationMWs,
-		"export":          commonAdminMutationMWs,
-		"login":           {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"restore":         commonAdminMutationMWs,
-		"shutdown":        commonAdminMutationMWs,
-		"assign":          commonAdminMutationMWs,
-		"updateGQLSchema": commonAdminMutationMWs,
+		"backup":            commonAdminMutationMWs,
+		"config":            commonAdminMutationMWs,
+		"draining":          commonAdminMutationMWs,
+		"export":            commonAdminMutationMWs,
+		"login":             {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"restore":           commonAdminMutationMWs,
+		"shutdown":          commonAdminMutationMWs,
+		"removeNode":        commonAdminMutationMWs,
+		"moveTablet":        commonAdminMutationMWs,
+		"assign":            commonAdminMutationMWs,
+		"enterpriseLicense": commonAdminMutationMWs,
+		"updateGQLSchema":   commonAdminMutationMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"addUser":                   {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
@@ -603,14 +617,17 @@ func newAdminResolver(
 func newAdminResolverFactory() resolve.ResolverFactory {
 
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
-		"backup":   resolveBackup,
-		"config":   resolveUpdateConfig,
-		"draining": resolveDraining,
-		"export":   resolveExport,
-		"login":    resolveLogin,
-		"restore":  resolveRestore,
-		"shutdown": resolveShutdown,
-		"assign":   resolveAssign,
+		"backup":            resolveBackup,
+		"config":            resolveUpdateConfig,
+		"draining":          resolveDraining,
+		"export":            resolveExport,
+		"login":             resolveLogin,
+		"restore":           resolveRestore,
+		"shutdown":          resolveShutdown,
+		"removeNode":        resolveRemoveNode,
+		"moveTablet":        resolveMoveTablet,
+		"assign":            resolveAssign,
+		"enterpriseLicense": resolveEnterpriseLicense,
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
@@ -909,6 +926,18 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 
 	// reset status to up, as now we are serving the new schema
 	mainHealthStore.up()
+}
+
+// getTypeInput unmarshalls the `input` argument from the given mutation to the provided inputRef.
+func getTypeInput(m schema.Mutation, inputRef interface{}) error {
+	inputArg := m.ArgValue(schema.InputArgName)
+	inputBytes, err := json.Marshal(inputArg)
+	if err != nil {
+		return schema.GQLWrapf(err, "couldn't get input argument")
+	}
+
+	err = json.Unmarshal(inputBytes, inputRef)
+	return schema.GQLWrapf(err, "couldn't get input argument")
 }
 
 func response(code, msg string) map[string]interface{} {

@@ -74,6 +74,7 @@ func (s *Server) rebalanceTablets() {
 
 // MoveTablet can be used to move a tablet to a specific group.
 // It takes in tablet and destination group as argument.
+// It returns a *pb.Status to be used by the `/moveTablet` HTTP handler in Zero.
 func (s *Server) MoveTablet(ctx context.Context, req *pb.MoveTabletRequest) (*pb.Status, error) {
 	if !s.Node.AmLeader() {
 		return &pb.Status{Code: 1, Msg: x.Error}, errNotLeader
