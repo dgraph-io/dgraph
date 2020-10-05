@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
@@ -74,39 +73,11 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	// saved by disabling it.
 	opt.DetectConflicts = false
 
-	// Settings for the data directory.
-	// badgerTables := Config.BadgerTables
-	// badgerVlog := Config.BadgerVlog
 	glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
-	// Default value of postingDirCompressionLevel is 3 so compression will always
-	// be enabled, unless it is explicitly disabled by setting the value to 0.
-	if Config.PostingDirCompressionLevel != 0 {
-		// By default, compression is disabled in badger.
-		opt.Compression = options.ZSTD
-		opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
-	}
+	opt.Compression = Config.PostingDirCompression
+	opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
 
-	// glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
-	// switch badgerTables {
-	// case "mmap":
-	// 	opt.TableLoadingMode = options.MemoryMap
-	// case "ram":
-	// 	opt.TableLoadingMode = options.LoadToRAM
-	// case "disk":
-	// 	opt.TableLoadingMode = options.FileIO
-	// default:
-	// 	glog.Fatalf("Invalid Badger Tables options")
-	// }
-
-	// glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
-	// switch badgerVlog {
-	// case "mmap":
-	// 	opt.ValueLogLoadingMode = options.MemoryMap
-	// case "disk":
-	// 	opt.ValueLogLoadingMode = options.FileIO
-	// default:
-	// 	x.Fatalf("Invalid Badger Value log options")
-	// }
+	// Settings for the data directory.
 	return opt
 }
 

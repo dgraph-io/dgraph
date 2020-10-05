@@ -472,7 +472,7 @@ func TestCustomQueryWithNonExistentURLShouldReturnError(t *testing.T) {
 	require.Equal(t, x.GqlErrorList{
 		{
 			Message: "Evaluation of custom field failed because external request returned an " +
-				"error: unexpected status code: 404 for field: myFavoriteMovies within" +
+				"error: unexpected error with: 404 for field: myFavoriteMovies within" +
 				" type: Query.",
 			Locations: []x.Location{{Line: 3, Column: 3}},
 		},
@@ -557,10 +557,10 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 
 	expectedErrors := x.GqlErrorList{
 		&x.GqlError{Message: "Evaluation of custom field failed because external request " +
-			"returned an error: unexpected status code: 404 for field: cars within type: Person.",
+			"returned an error: unexpected error with: 404 for field: cars within type: Person.",
 			Locations: []x.Location{{Line: 6, Column: 4}}},
 		&x.GqlError{Message: "Evaluation of custom field failed because external request returned" +
-			" an error: unexpected status code: 404 for field: bikes within type: Person.",
+			" an error: unexpected error with: 404 for field: bikes within type: Person.",
 			Locations: []x.Location{{Line: 9, Column: 4}}},
 	}
 	require.Contains(t, result.Errors, expectedErrors[0])
@@ -2807,4 +2807,185 @@ func TestCustomDQL(t *testing.T) {
 		  }
 		]
 	  }`, string(result.Data))
+}
+
+func TestCustomGetQuerywithRESTError(t *testing.T) {
+	schema := customTypes + `
+	 type Query {
+		 myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+				 url: "http://mock:8888/favMoviesError/$id?name=$name&num=$num",
+				 method: "GET"
+		 })
+	 }`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	query := `
+	 query {
+		 myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
+			 id
+			 name
+			 director {
+				 id
+				 name
+			 }
+		 }
+	 }`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message:   "Rest API returns Error for myFavoriteMovies query",
+			Locations: []x.Location{{Line: 5, Column: 4}},
+			Path:      []interface{}{"Movies", "name"},
+		},
+	}, result.Errors)
+
+}
+
+func TestCustomFieldsWithRestError(t *testing.T) {
+	schema := `
+    type Car @remote {
+		id: ID! 
+		name: String!
+	}
+
+	type User {
+		id: String! @id @search(by: [hash, regexp])
+		name: String
+			@custom(
+				http: {
+					url: "http://mock:8888//userNameError"
+					method: "GET"
+					body: "{uid: $id}"
+					mode: SINGLE,
+				}
+			)
+		age: Int! @search
+		cars: Car
+		@custom(
+			http: {
+			url: "http://mock:8888/cars"
+			method: "GET"
+			body: "{uid: $id}"
+			mode: BATCH,
+			}
+	      )		
+  	}
+  `
+
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `mutation addUser {
+			 addUser(input: [{ id:"0x1", age: 10 }]) {
+				 user {
+					 id
+					 age
+				 }
+			 }
+		 }`,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	queryUser := `
+	query ($id: String!){
+		queryUser(filter: {id: {eq: $id}}) {
+			id
+			name
+			age
+			cars{
+			  name
+			}
+		}
+	}`
+
+	params = &common.GraphQLParams{
+		Query:     queryUser,
+		Variables: map[string]interface{}{"id": "0x1"},
+	}
+
+	result = params.ExecuteAsPost(t, alphaURL)
+
+	expected := `
+	{
+      "queryUser": [
+        {
+          "id": "0x1",
+          "name": null,
+          "age": 10,
+          "cars": {
+            "name": "car-0x1"
+          }	
+        }
+      ]
+    }`
+
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message: "Rest API returns Error for field name",
+		},
+	}, result.Errors)
+
+	require.JSONEq(t, expected, string(result.Data))
+
+}
+
+func TestCustomPostMutationWithRESTError(t *testing.T) {
+	schema := customTypes + `
+	input MovieDirectorInput {
+		id: ID
+		name: String
+		directed: [MovieInput]
+	}
+	input MovieInput {
+		id: ID
+		name: String
+		director: [MovieDirectorInput]
+	}
+	type Mutation {
+        createMyFavouriteMovies(input: [MovieInput!]): [Movie] @custom(http: {
+			url: "http://mock:8888/favMoviesCreateError",
+			method: "POST",
+			body: "{ movies: $input}"
+        })
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation createMovies($movs: [MovieInput!]) {
+			createMyFavouriteMovies(input: $movs) {
+				id
+				name
+				director {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"movs": []interface{}{
+				map[string]interface{}{
+					"name":     "Mov1",
+					"director": []interface{}{map[string]interface{}{"name": "Dir1"}},
+				},
+				map[string]interface{}{"name": "Mov2"},
+			}},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message: "Rest API returns Error for FavoriteMoviesCreate query",
+		},
+	}, result.Errors)
+
 }
