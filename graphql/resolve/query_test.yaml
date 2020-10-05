@@ -1216,7 +1216,7 @@
   name: "Between filter"
   gqlquery: |
     query {
-      queryPost(filter: { numLikes: { between : { min: 10, max: 20 }}}) {
+      queryPost(filter: { numLikes: { between : { min :10, max: 20 }}}) {
         title
         text
       }

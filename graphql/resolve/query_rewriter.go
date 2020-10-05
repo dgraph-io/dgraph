@@ -951,8 +951,6 @@ func idFilter(filter map[string]interface{}, idField schema.FieldDefinition) []u
 }
 
 func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}) {
-	fmt.Println(q)
-	fmt.Println("adding filter", filter)
 	if len(filter) == 0 {
 		return
 	}
@@ -975,9 +973,7 @@ func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}
 		delete(filter, idName)
 	}
 	q.Filter = buildFilter(typ, filter)
-	fmt.Println("q.Filter", q.Filter)
 	if filterAtRoot {
-		fmt.Println("here")
 		addTypeFilter(q, typ)
 	}
 }
@@ -1082,7 +1078,6 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 							Args: args,
 						},
 					})
-					fmt.Println(ands[0].Func.Name)
 				} else {
 					fn, val := first(dgFunc)
 					ands = append(ands, &gql.FilterTree{
