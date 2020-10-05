@@ -20,8 +20,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"math/bits"
-
-	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
 
 // This module implements a freeing-bump allocator
@@ -40,7 +38,7 @@ const MaxPossibleAllocation = 16777216 // 2^24 bytes
 type FreeingBumpHeapAllocator struct {
 	bumper      uint32
 	heads       [HeadsQty]uint32
-	heap        *wasm.Memory
+	heap        []byte
 	maxHeapSize uint32
 	ptrOffset   uint32
 	TotalSize   uint32
@@ -59,11 +57,11 @@ type FreeingBumpHeapAllocator struct {
 //   hence a padding might be added to align `ptrOffset` properly.
 //
 // * returns a pointer to an initilized FreeingBumpHeapAllocator
-func NewAllocator(mem *wasm.Memory, ptrOffset uint32) *FreeingBumpHeapAllocator {
+func NewAllocator(mem []byte, ptrOffset uint32) *FreeingBumpHeapAllocator {
 	fbha := new(FreeingBumpHeapAllocator)
-	currentSize := mem.Length()
+	currentSize := len(mem)
 	// we don't include offset memory in the heap
-	heapSize := currentSize - ptrOffset
+	heapSize := uint32(currentSize) - ptrOffset
 
 	padding := ptrOffset % alignment
 	if padding != 0 {
@@ -149,18 +147,18 @@ func (fbha *FreeingBumpHeapAllocator) bump(qty uint32) uint32 {
 }
 
 func (fbha *FreeingBumpHeapAllocator) setHeap(ptr uint32, value uint8) {
-	fbha.heap.Data()[fbha.ptrOffset+ptr] = value
+	fbha.heap[fbha.ptrOffset+ptr] = value
 }
 
 func (fbha *FreeingBumpHeapAllocator) setHeap4bytes(ptr uint32, value []byte) {
-	copy(fbha.heap.Data()[fbha.ptrOffset+ptr:fbha.ptrOffset+ptr+4], value)
+	copy(fbha.heap[fbha.ptrOffset+ptr:fbha.ptrOffset+ptr+4], value)
 }
 func (fbha *FreeingBumpHeapAllocator) getHeap4bytes(ptr uint32) []byte {
-	return fbha.heap.Data()[fbha.ptrOffset+ptr : fbha.ptrOffset+ptr+4]
+	return fbha.heap[fbha.ptrOffset+ptr : fbha.ptrOffset+ptr+4]
 }
 
 func (fbha *FreeingBumpHeapAllocator) getHeapByte(ptr uint32) byte {
-	return fbha.heap.Data()[fbha.ptrOffset+ptr]
+	return fbha.heap[fbha.ptrOffset+ptr]
 }
 
 func getItemSizeFromIndex(index uint) uint {

@@ -21,9 +21,6 @@ import (
 	"math"
 	"reflect"
 	"testing"
-
-	"github.com/stretchr/testify/require"
-	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
 
 const pageSize = 65536
@@ -269,33 +266,11 @@ var allTests = []testHolder{
 	{offset: 19, tests: heapShouldBeZeroAfterFreeWithOffsetFiveTimes},
 }
 
-// utility function to create a wasm.Memory instance for testing
-//   it checks if simple.wasm has been downloaded from git repo, if not if fetchs it for building the test wasm blob
-func NewWasmMemory(t *testing.T) *wasm.Memory {
-	testRuntimeFilePath, testRuntimeURL := GetAbsolutePath(SIMPLE_WASM_FP), SIMPLE_RUNTIME_URL
-
-	_, err := GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL)
-	require.Nil(t, err, "Fail: could not get simple wasm runtime")
-
-	// Reads the WebAssembly simple.wasm mock wasm blob.
-	//  note the wasm blob can be any valid wasm blob that will create a new wasm instance in this case we're using
-	//  test blob from https://github.com/wasmerio/go-ext-wasm/tree/master/wasmer/test/testdata/examples/simple.wasm
-	bytes, err := wasm.ReadBytes(SIMPLE_WASM_FP)
-	require.Nil(t, err, "Fail: could ReadBytes for simple wasm runtime")
-
-	instance, err := wasm.NewInstance(bytes)
-	require.Nil(t, err, "Fail: could not NewInstance simple wasm runtime")
-
-	return instance.Memory
-}
-
 // iterates allTests and runs tests on them based on data contained in
 //  test holder
 func TestAllocator(t *testing.T) {
 	for _, test := range allTests {
-		mem := NewWasmMemory(t)
-
-		allocator := NewAllocator(mem, test.offset)
+		allocator := NewAllocator(make([]byte, 1<<16), test.offset)
 
 		for _, theTest := range test.tests {
 			switch v := theTest.test.(type) {
@@ -341,11 +316,8 @@ func compareState(allocator FreeingBumpHeapAllocator, state allocatorState, resu
 // test that allocator should no allocate memory if the allocate
 //  request is larger than current size
 func TestShouldNotAllocateIfTooLarge(t *testing.T) {
-	// given
-	mem := NewWasmMemory(t)
-
-	currentSize := mem.Length()
-
+	mem := make([]byte, 1<<16)
+	currentSize := uint32(len(mem))
 	fbha := NewAllocator(mem, 0)
 
 	// when
@@ -363,10 +335,8 @@ func TestShouldNotAllocateIfTooLarge(t *testing.T) {
 // test that the allocator should not allocate memory if
 //  it's already full
 func TestShouldNotAllocateIfFull(t *testing.T) {
-	// given
-	mem := NewWasmMemory(t)
-
-	currentSize := mem.Length()
+	mem := make([]byte, 1<<16)
+	currentSize := uint32(len(mem))
 	fbha := NewAllocator(mem, 0)
 
 	ptr1, err := fbha.Allocate((currentSize / 2) - 8)
@@ -394,13 +364,14 @@ func TestShouldNotAllocateIfFull(t *testing.T) {
 // test to confirm that allocator can allocate the MaxPossibleAllocation
 func TestShouldAllocateMaxPossibleAllocationSize(t *testing.T) {
 	// given, grow heap memory so that we have at least MaxPossibleAllocation available
-	mem := NewWasmMemory(t)
+	mem := make([]byte, 1<<16)
 
-	pagesNeeded := (MaxPossibleAllocation / pageSize) - (mem.Length() / pageSize) + 1
-	err := mem.Grow(pagesNeeded)
-	if err != nil {
-		t.Error(err)
-	}
+	pagesNeeded := (MaxPossibleAllocation / pageSize) - (len(mem) / pageSize) + 1
+	// err := mem.Grow(pagesNeeded)
+	// if err != nil {
+	// 	t.Error(err)
+	// }
+	mem = make([]byte, len(mem)+pagesNeeded*65*1024)
 	fbha := NewAllocator(mem, 0)
 
 	// when
@@ -418,10 +389,7 @@ func TestShouldAllocateMaxPossibleAllocationSize(t *testing.T) {
 
 // test that allocator should not allocate memory if request is too large
 func TestShouldNotAllocateIfRequestSizeTooLarge(t *testing.T) {
-	// given
-	mem := NewWasmMemory(t)
-
-	fbha := NewAllocator(mem, 0)
+	fbha := NewAllocator(make([]byte, 1<<16), 0)
 
 	// when
 	_, err := fbha.Allocate(MaxPossibleAllocation + 1)

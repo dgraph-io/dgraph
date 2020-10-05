@@ -111,7 +111,7 @@ func NewRuntime(code []byte, cfg *Config) (*Runtime, error) {
 		instance.Memory = memory
 	}
 
-	memAllocator := NewAllocator(instance.Memory, 0)
+	memAllocator := NewAllocator(instance.Memory.Data(), 0)
 
 	validator := false
 	if cfg.Role == byte(4) {
