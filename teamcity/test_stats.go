@@ -180,18 +180,18 @@ func outputTestsStats(buildType string, days int) {
 	}
 	ch := make(chan map[string]TestData)
 	go fetchTestsForBuild(buildDataList[0].ID, ch)
-	testsMap := <-ch
+	latestTestsMap := <-ch
 	testStatsMap := make(map[string]TestStats)
-	for k := range testsMap {
+	for testName := range latestTestsMap {
 		var testStats TestStats
-		testStats.Name = k
-		if testsMap[k].Status == SUCCESS {
+		testStats.Name = testName
+		if latestTestsMap[testName].Status == SUCCESS {
 			testStats.Success++
-		} else if testsMap[k].Status == FAILURE {
+		} else if latestTestsMap[testName].Status == FAILURE {
 			testStats.Failure++
 		}
 		testStats.TotalRuns++
-		testStatsMap[k] = testStats
+		testStatsMap[testName] = testStats
 	}
 	// Find the tests that fail the most percentage wise and output top 10
 	for i := 1; i < len(buildDataList); i++ {
@@ -199,39 +199,39 @@ func outputTestsStats(buildType string, days int) {
 	}
 	for i := 1; i < len(buildDataList); i++ {
 		currentTestsMap := <-ch
-		for k := range testsMap {
+		for k := range latestTestsMap {
 			test, found := currentTestsMap[k]
 			if !found {
 				continue
 			}
-			var temp = testStatsMap[k]
+			var testStats = testStatsMap[k]
 			if test.Status == SUCCESS {
-				temp.Success++
+				testStats.Success++
 			} else if test.Status == FAILURE {
-				temp.Failure++
+				testStats.Failure++
 			}
-			temp.TotalRuns++
-			testStatsMap[k] = temp
+			testStats.TotalRuns++
+			testStatsMap[k] = testStats
 		}
 	}
 
-	var mostFlaky []FlakyStats
-	for k := range testsMap {
+	var allFlakyTests []FlakyStats
+	for k := range latestTestsMap {
 		var flakyStats FlakyStats
 		flakyStats.Name = k
 		flakyStats.Percent = float64(testStatsMap[k].Failure) / float64(testStatsMap[k].TotalRuns)
-		mostFlaky = append(mostFlaky, flakyStats)
+		allFlakyTests = append(allFlakyTests, flakyStats)
 	}
-	sort.Slice(mostFlaky, func(i, j int) bool {
-		return mostFlaky[i].Percent > mostFlaky[j].Percent
+	sort.Slice(allFlakyTests, func(i, j int) bool {
+		return allFlakyTests[i].Percent > allFlakyTests[j].Percent
 	})
 	println("Tests that have failed:")
-	for i := 0; i < len(mostFlaky); i++ {
-		testStat := testStatsMap[mostFlaky[i].Name]
+	for i := 0; i < len(allFlakyTests); i++ {
+		testStat := testStatsMap[allFlakyTests[i].Name]
 		if testStat.Failure == 0 {
 			break
 		}
-		fmt.Printf("%s Failures=%d  Total Runs=%d\n", mostFlaky[i].Name, testStat.Failure, testStat.TotalRuns)
+		fmt.Printf("%s Failures=%d  Total Runs=%d\n", allFlakyTests[i].Name, testStat.Failure, testStat.TotalRuns)
 	}
 }
 
