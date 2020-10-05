@@ -1881,7 +1881,7 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 				return emptyResult(jsonUnmarshalError(err, field))
 			}
 		} else if err := json.Unmarshal(b, &rerr); err != nil {
-			err = errors.Errorf("unexpected error: %v", status)
+			err = errors.Errorf("unexpected error with: %v", status)
 			rerr.Errors = x.GqlErrorList{externalRequestError(err, field)}
 		}
 

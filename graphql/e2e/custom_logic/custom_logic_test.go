@@ -472,7 +472,7 @@ func TestCustomQueryWithNonExistentURLShouldReturnError(t *testing.T) {
 	require.Equal(t, x.GqlErrorList{
 		{
 			Message: "Evaluation of custom field failed because external request returned an " +
-				"error: unexpected error: 404 for field: myFavoriteMovies within" +
+				"error: unexpected error with: 404 for field: myFavoriteMovies within" +
 				" type: Query.",
 			Locations: []x.Location{{Line: 3, Column: 3}},
 		},
