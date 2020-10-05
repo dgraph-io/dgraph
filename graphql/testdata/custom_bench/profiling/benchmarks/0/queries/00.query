@@ -1,0 +1,6 @@
+query {
+	queryCuisine {
+		id
+		name
+	}
+}
