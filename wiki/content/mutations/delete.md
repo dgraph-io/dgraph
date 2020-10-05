@@ -6,16 +6,16 @@ title = "Delete"
     weight = 7
 +++
 
-A delete mutation, signified with the `delete` keyword, removes triples from the store.
+A delete mutation, signified with the `delete` keyword, removes triples from the store. Note that you can only delete nodes if your data is typed using the `dgraph.type`predicate. For more imformation on setting the type of a node, see [Setting the type of a node](https://dgraph.io/docs/query-language/type-system/#setting-the-type-of-a-node).
 
-For example, if the store contained
+For example, if the store contained the following:
 ```RDF
 <0xf11168064b01135b> <name> "Lewis Carrol"
 <0xf11168064b01135b> <died> "1998"
 <0xf11168064b01135b> <dgraph.type> "Person" .
 ```
 
-Then delete mutation
+Then, the following delete mutation deletes erroneous data and removes it from indexes if present:
 
 ```sh
 {
@@ -24,8 +24,6 @@ Then delete mutation
   }
 }
 ```
-
-Deletes the erroneous data and removes it from indexes if present.
 
 For a particular node `N`, all data for predicate `P` (and corresponding indexing) is removed with the pattern `S P *`.
 
