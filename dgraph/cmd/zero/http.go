@@ -160,8 +160,8 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	groupId, ok := intFromQueryParam(w, r, "group")
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf(
-			"Query parameter 'group' should contain a valid integer."))
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"Query parameter 'group' should contain a valid integer.")
 		return
 	}
 	dstGroup := uint32(groupId)
@@ -179,7 +179,7 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	_, err = fmt.Fprintf(w, resp.GetMsg())
+	_, err = fmt.Fprint(w, resp.GetMsg())
 	if err != nil {
 		glog.Warningf("Error while writing response: %+v", err)
 	}
