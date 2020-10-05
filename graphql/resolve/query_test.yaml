@@ -1223,7 +1223,7 @@
     }
   dgquery: |-
     query {
-      queryPost(func: type(Post)) @filter(between(Post.numLikes, 10, 20)) {
+      queryPost(func: type(Post)) @filter() {
         title : Post.title
         text : Post.text
         dgraph.uid : uid

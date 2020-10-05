@@ -144,7 +144,9 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 }
 
 func writeFilterFunction(b *strings.Builder, f *gql.Function) {
-	if f == nil {
+	// Do not perform rewriting for between filter
+	// Added temporarily as Between filter is supported only in the root func.
+	if f == nil || f.Name == "between" {
 		return
 	}
 
