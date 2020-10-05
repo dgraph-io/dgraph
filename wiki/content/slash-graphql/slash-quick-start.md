@@ -9,7 +9,7 @@ title = "Slash Quick Start"
 
 Welcome to [Slash GraphQL](https://dgraph.io/slash-graphql), the world’s most advanced, hosted GraphQL backend. By now, you should have created your first deployment, and you're looking for a quick-start guide to test it out. Don't worry, in this document we got you covered.
 
-In this guide, we will create a database for a small app from the ground up using Slash GraphQL. The easy steps you will learn in this tutorial are fundamental to using Slash GraphQL, and mastering it will give you a better understanding of the powerful features available.
+In this guide, we will create a database for a small app from the ground up using Slash GraphQL. The easy steps you will learn in this tutorial are fundamental to using Slash GraphQL, and mastering them will give you a better understanding of the powerful features available.
 
 ### About the "to-do" App
 
