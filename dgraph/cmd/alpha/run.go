@@ -118,8 +118,8 @@ they form a Raft group and provide synchronous replication.
 			"mmap consumes more RAM, but provides better performance.")
 	flag.String("badger.compression", "zstd:3",
 		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
-			"level for the postings directory. A higher value uses more resources. The value of"+
-			"0 disables compression.")
+			"level for the postings directory. A higher value of level uses more resources."+
+			"Level with value 0 disables compression.")
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
