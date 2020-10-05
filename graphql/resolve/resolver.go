@@ -894,7 +894,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		// To collect errors from remote GraphQL endpoint and those encountered during execution.
 		var errs error
 		var result []interface{}
-		var customErr restErr
+		var rerr restErr
 		if graphql {
 			resp := &graphqlResp{}
 			err = json.Unmarshal(b, resp)
@@ -912,19 +912,21 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				errCh <- schema.AppendGQLErrs(errs, keyNotFoundError(f, fconf.RemoteGqlQueryName))
 				return
 			}
-		} else if status >= 200 && status < 300 {
-			if err = json.Unmarshal(b, &result); err != nil {
-				errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-				return
-			}
 		} else {
-			if err = json.Unmarshal(b, &customErr); err != nil {
-				err = errors.Errorf("unexpected Error with status code: %v", status)
-				errCh <- x.GqlErrorList{externalRequestError(err, f)}
-				return
+			if status >= 200 && status < 300 {
+				if err = json.Unmarshal(b, &result); err != nil {
+					errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+					return
+				}
 			} else {
-				errCh <- customErr.Errors
-				return
+				if err = json.Unmarshal(b, &rerr); err != nil {
+					err = errors.Errorf("unexpected error with: %v", status)
+					errCh <- x.GqlErrorList{externalRequestError(err, f)}
+					return
+				} else {
+					errCh <- rerr.Errors
+					return
+				}
 			}
 		}
 		if len(result) != len(vals) {
@@ -995,7 +997,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			}
 
 			var result interface{}
-			var customErr restErr
+			var rerr restErr
 			var errs error
 			if graphql {
 				resp := &graphqlResp{}
@@ -1014,19 +1016,21 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 						keyNotFoundError(f, fconf.RemoteGqlQueryName))
 					return
 				}
-			} else if status >= 200 && status < 300 {
-				if err = json.Unmarshal(b, &result); err != nil {
-					errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-					return
-				}
 			} else {
-				if err = json.Unmarshal(b, &customErr); err != nil {
-					err = errors.Errorf("unexpected Error with status code: %v", status)
-					errCh <- x.GqlErrorList{externalRequestError(err, f)}
-					return
+				if status >= 200 && status < 300 {
+					if err = json.Unmarshal(b, &result); err != nil {
+						errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+						return
+					}
 				} else {
-					errCh <- customErr.Errors
-					return
+					if err = json.Unmarshal(b, &rerr); err != nil {
+						err = errors.Errorf("unexpected error with: %v", status)
+						errCh <- x.GqlErrorList{externalRequestError(err, f)}
+						return
+					} else {
+						errCh <- rerr.Errors
+						return
+					}
 				}
 			}
 			mu.Lock()
@@ -1871,20 +1875,20 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	// this means it had body and not graphql, so just unmarshal it and return
 	if hrc.RemoteGqlQueryName == "" {
 		var result interface{}
-		var customErr restErr
+		var rerr restErr
 		if status >= 200 && status < 300 {
 			if err := json.Unmarshal(b, &result); err != nil {
 				return emptyResult(jsonUnmarshalError(err, field))
 			}
-		} else if err := json.Unmarshal(b, &customErr); err != nil {
-			err = errors.Errorf("unexpected Error with status code: %v", status)
-			customErr.Errors = x.GqlErrorList{externalRequestError(err, field)}
+		} else if err := json.Unmarshal(b, &rerr); err != nil {
+			err = errors.Errorf("unexpected error: %v", status)
+			rerr.Errors = x.GqlErrorList{externalRequestError(err, field)}
 		}
 
 		return &Resolved{
 			Data:  map[string]interface{}{field.Name(): result},
 			Field: field,
-			Err:   customErr.Errors,
+			Err:   rerr.Errors,
 		}
 	}
 
