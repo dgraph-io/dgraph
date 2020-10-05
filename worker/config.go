@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"time"
 
+	bo "github.com/dgraph-io/badger/v2/options"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -42,6 +44,8 @@ type Options struct {
 	// BadgerVlog is the name of the mode used to load the badger value log for the p directory.
 	BadgerVlog string
 
+	// PostingDirCompression is the compression algorithem used to compression Postings directory.
+	PostingDirCompression bo.CompressionType
 	// PostingDirCompressionLevel is the ZSTD compression level used by Postings directory. A
 	// higher value means more CPU intensive compression and better compression
 	// ratio.

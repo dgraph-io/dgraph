@@ -161,6 +161,12 @@ func fragmentInQueryOnInterface(t *testing.T) {
 					id
 				}
 			}
+			qc2: queryCharacter {
+				... on Human {
+					name
+					n: name
+				}
+			}
 			qcRep1: queryCharacter {
 				name
 				... on Human {
@@ -182,11 +188,9 @@ func fragmentInQueryOnInterface(t *testing.T) {
 					name
 				}
 			}
-			qc2: queryCharacter {
-				... on Human {
-					name
-					n: name
-				}
+			qcRep3: queryCharacter {
+				...characterName1
+				...characterName2
 			}
 			queryThing {
 				__typename
@@ -245,6 +249,12 @@ func fragmentInQueryOnInterface(t *testing.T) {
 		fragment droidAppearsIn on Droid {
 			appearsIn
 		}
+		fragment characterName1 on Character {
+			name
+		}
+		fragment characterName2 on Character {
+			name
+		}
 		`,
 	}
 
@@ -296,6 +306,14 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				"id": "%s"
 			}
 		],
+		"qc2":[
+			{
+				"name": "Han",
+				"n": "Han"
+			},
+			{
+			}
+		],
 		"qcRep1": [
             {
 				"name": "Han",
@@ -316,13 +334,13 @@ func fragmentInQueryOnInterface(t *testing.T) {
                 "primaryFunction": "Robot"
             }
 		],
-		"qc2":[
-			{
-				"name": "Han",
-				"n": "Han"
-			},
-			{
-			}
+		"qcRep3": [
+            {
+                "name": "Han"
+            },
+            {
+                "name": "R2-D2"
+            }
 		],
 		"queryThing":[
 			{
