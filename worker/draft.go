@@ -780,6 +780,11 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 			return errors.Wrapf(err, "while flushing to disk")
 		}
 	}
+	if x.WorkerConfig.HardSync {
+		if err := pstore.Sync(); err != nil {
+			glog.Errorf("Error while calling Sync while commitOrAbort: %v", err)
+		}
+	}
 
 	g := groups()
 	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
