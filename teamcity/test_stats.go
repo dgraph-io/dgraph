@@ -137,8 +137,8 @@ func fetchTestsForBuild(buildID int, ch chan<- map[string]TestData) {
 	ch <- testDataMap
 }
 
-func fetchAllBuildsSince(date string) []BuildData {
-	url := fmt.Sprintf("https://teamcity.dgraph.io/app/rest/builds/?locator=branch:refs/heads/master,buildType:Dgraph_Ci,sinceDate:%s", date)
+func fetchAllBuildsSince(buildType string, date string) []BuildData {
+	url := fmt.Sprintf("https://teamcity.dgraph.io/app/rest/builds/?locator=branch:refs/heads/master,buildType:%s,sinceDate:%s", buildType, date)
 	url = strings.ReplaceAll(url, "+", "%2B")
 	var buildDatas []BuildData
 	for {
@@ -167,82 +167,88 @@ func fetchAllBuildsSince(date string) []BuildData {
 	return buildDatas
 }
 
+func outputTestsStats(buildType string, days int) {
+	now := time.Now()
+	since := now.AddDate(0, 0, -days)
+	sinceString := since.Format("20060102T150405+0000")
+
+	buildDataList := fetchAllBuildsSince(buildType, sinceString)
+
+	// Get the tests that ran on the last build
+	if len(buildDataList) == 0 {
+		log.Fatalln("No builds found")
+	}
+	ch := make(chan map[string]TestData)
+	go fetchTestsForBuild(buildDataList[0].ID, ch)
+	testsMap := <-ch
+	testStatsMap := make(map[string]TestStats)
+	for k := range testsMap {
+		var testStats TestStats
+		testStats.Name = k
+		if testsMap[k].Status == SUCCESS {
+			testStats.Success++
+		} else if testsMap[k].Status == FAILURE {
+			testStats.Failure++
+		}
+		testStats.TotalRuns++
+		testStatsMap[k] = testStats
+	}
+	// Find the tests that fail the most percentage wise and output top 10
+	for i := 1; i < len(buildDataList); i++ {
+		go fetchTestsForBuild(buildDataList[i].ID, ch)
+	}
+	for i := 1; i < len(buildDataList); i++ {
+		currentTestsMap := <-ch
+		for k := range testsMap {
+			test, found := currentTestsMap[k]
+			if !found {
+				continue
+			}
+			var temp = testStatsMap[k]
+			if test.Status == SUCCESS {
+				temp.Success++
+			} else if test.Status == FAILURE {
+				temp.Failure++
+			}
+			temp.TotalRuns++
+			testStatsMap[k] = temp
+		}
+	}
+
+	var mostFlaky []FlakyStats
+	for k := range testsMap {
+		var flakyStats FlakyStats
+		flakyStats.Name = k
+		flakyStats.Percent = float64(testStatsMap[k].Failure) / float64(testStatsMap[k].TotalRuns)
+		mostFlaky = append(mostFlaky, flakyStats)
+	}
+	sort.Slice(mostFlaky, func(i, j int) bool {
+		return mostFlaky[i].Percent > mostFlaky[j].Percent
+	})
+	println("Tests that have failed:")
+	for i := 0; i < len(mostFlaky); i++ {
+		testStat := testStatsMap[mostFlaky[i].Name]
+		if testStat.Failure == 0 {
+			break
+		}
+		fmt.Printf("%s Failures=%d  Total Runs=%d\n", mostFlaky[i].Name, testStat.Failure, testStat.TotalRuns)
+	}
+}
+
 func main() {
 	var days int
+	var buildType string
 	var cmd = &cobra.Command{
 		Use:     "test_stats",
 		Short:   "Tests stats from TeamCity",
 		Long:    "Aggregate stats for tests that run on TeamCity",
-		Example: "$ teamcity test_stats -d=30",
+		Example: "$ teamcity test_stats -d=30 -b=Dgraph_Ci # fetches stats for last month",
 		Run: func(cmd *cobra.Command, args []string) {
-			now := time.Now()
-			now.AddDate(0, 0, -days)
-
-			since := "20200829T225042+0000"
-			buildDataList := fetchAllBuildsSince(since)
-
-			// Get the tests that ran on the last build
-			if len(buildDataList) == 0 {
-				log.Fatalln("No builds found")
-			}
-			ch := make(chan map[string]TestData)
-			go fetchTestsForBuild(buildDataList[0].ID, ch)
-			testsMap := <-ch
-			testStatsMap := make(map[string]TestStats)
-			for k := range testsMap {
-				var testStats TestStats
-				testStats.Name = k
-				if testsMap[k].Status == SUCCESS {
-					testStats.Success++
-				} else if testsMap[k].Status == FAILURE {
-					testStats.Failure++
-				}
-				testStats.TotalRuns++
-				testStatsMap[k] = testStats
-			}
-			// Find the tests that fail the most percentage wise and output top 10
-			for i := 1; i < len(buildDataList); i++ {
-				go fetchTestsForBuild(buildDataList[i].ID, ch)
-			}
-			for i := 1; i < len(buildDataList); i++ {
-				currentTestsMap := <-ch
-				for k := range testsMap {
-					test, found := currentTestsMap[k]
-					if !found {
-						continue
-					}
-					var temp = testStatsMap[k]
-					if test.Status == SUCCESS {
-						temp.Success++
-					} else if test.Status == FAILURE {
-						temp.Failure++
-					}
-					temp.TotalRuns++
-					testStatsMap[k] = temp
-				}
-			}
-
-			var mostFlaky []FlakyStats
-			for k := range testsMap {
-				var flakyStats FlakyStats
-				flakyStats.Name = k
-				flakyStats.Percent = float64(testStatsMap[k].Failure) / float64(testStatsMap[k].TotalRuns)
-				mostFlaky = append(mostFlaky, flakyStats)
-			}
-			sort.Slice(mostFlaky, func(i, j int) bool {
-				return mostFlaky[i].Percent > mostFlaky[j].Percent
-			})
-			println("Tests that have failed:")
-			for i := 0; i < len(mostFlaky); i++ {
-				testStat := testStatsMap[mostFlaky[i].Name]
-				if testStat.Failure == 0 {
-					break
-				}
-				fmt.Printf("%s %d %d\n", mostFlaky[i].Name, testStat.Failure, testStat.TotalRuns)
-			}
+			outputTestsStats(buildType, days)
 		},
 	}
-	cmd.Flags().IntVarP(&days, "days", "d", 7, "Past days for which stats are to be computedg")
+	cmd.Flags().IntVarP(&days, "days", "d", 7, "Past days for which stats are to be computed")
+	cmd.Flags().StringVarP(&buildType, "build_type", "b", "Dgraph_Ci", "Build Type for which stats need to be computed")
 
 	var rootCmd = &cobra.Command{Use: "teamcity"}
 	rootCmd.AddCommand(cmd)
