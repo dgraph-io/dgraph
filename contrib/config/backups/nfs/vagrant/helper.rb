@@ -21,12 +21,3 @@ uri = URI.parse("https://get.dgraph.io/latest")
 response = Net::HTTP.get_response(uri)
 latest = JSON.parse(response.body)["tag_name"]
 @version = ENV['DGRAPH_VERSION'] || latest
-
-## Inline Provisioning Scripts
-
-# @configure = <<-SCRIPT
-# cat <<-EOF
-# export NFS_PATH="/srv/nfs"
-# export NFS_SERVER="#{ipaddr}"
-# EOF
-# SCRIPT

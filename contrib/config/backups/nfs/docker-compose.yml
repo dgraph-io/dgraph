@@ -20,7 +20,7 @@ services:
     volumes:
       - type: volume
         source: nfsmount
-        target: /data/
+        target: /data/backups
         volume:
           nocopy: true
   ratel:
@@ -35,5 +35,5 @@ volumes:
     driver: local
     driver_opts:
       type: nfs
-      o: addr={NFS_SERVER},rw,nolock,soft,nointr,nfsvers=3
+      o: addr=${NFS_SERVER},rw,nolock,soft,nointr,nfsvers=4
       device: ":${NFS_PATH}"

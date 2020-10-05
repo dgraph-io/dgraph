@@ -38,9 +38,49 @@ Optionally, if you would like to use Dgraph in a virtual machine, you can bring 
 ## Launch Dgraph VM
 vagrant up nfs-client
 ## Log into nfs client system
-vagrant ssh nfs-client
+vagrant ssh
 ## Change direcotry to configuration
 cd /vagrant
 ```
 
-After this you can follow the same docker instructions to access NFS.
+After this you can follow use [Docker Compose Usage](#docker-compose-usage) to access NFS.
+
+#### Vagrant Cleanup
+
+```bash
+vagrant destroy
+```
+
+## Docker Compose Usage
+
+### Setup Env Vars
+
+Create a file named `env.sh` and configure the IP address (or DNS name) and exported NFS shared file path:
+
+```bash
+export NFS_PATH="<exported-nfs-share>"
+export NFS_SERVER="<server-ip-address>"
+```
+
+### Start Docker Compose with NFS Volume
+
+```bash
+## Source required enviroments variables
+. env.sh
+## Start Docker Compose
+docker-compose up --detach
+```
+
+### Access Ratel UI
+
+* Ratel UI: http://localhost:8000
+  * configuration for Alpha is http://localhost:8080
+
+### Cleanup
+
+When finished, you can remove containers and volume resource with:
+
+```bash
+docker-compose stop && docker-compose rm
+docker volume ls | grep -q nfs_mount || docker volume rm nfs_nfsmount > /dev/null
+```
