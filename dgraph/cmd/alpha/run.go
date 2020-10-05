@@ -116,11 +116,10 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored for the postings."+
 			"mmap consumes more RAM, but provides better performance.")
-	flag.String("badger.compression", "zstd",
-		"[none, zstd, snappy] Specifies the compression algorithm for the postings directory.")
-	flag.String("badger.compression_level", "3",
-		"Specifies the compression level for the postings directory. A higher value"+
-			" uses more resources. The value of 0 disables compression.")
+	flag.String("badger.compression", "zstd:3",
+		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
+			"level for the postings directory. A higher value uses more resources. The value of"+
+			"0 disables compression.")
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -607,13 +606,12 @@ func run() {
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
 	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
-	level := x.ParseCompressionLevel(Alpha.Conf.GetString("badger.compression_level"))
-	ctype := x.ParseCompression(Alpha.Conf.GetString("badger.compression"))
+	ctype, clevel := x.ParseCompression(Alpha.Conf.GetString("badger.compression"))
 	opts := worker.Options{
 		PostingDir:                 Alpha.Conf.GetString("postings"),
 		WALDir:                     Alpha.Conf.GetString("wal"),
 		PostingDirCompression:      ctype,
-		PostingDirCompressionLevel: level,
+		PostingDirCompressionLevel: clevel,
 		PBlockCacheSize:            pstoreBlockCacheSize,
 		PIndexCacheSize:            pstoreIndexCacheSize,
 		WalCache:                   walCache,
