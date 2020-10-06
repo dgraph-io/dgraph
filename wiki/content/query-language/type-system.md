@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Type System"
+weight = 21
 [menu.main]
     parent = "query-language"
-    weight = 21
 +++
 
 Dgraph supports a type system that can be used to categorize nodes and query

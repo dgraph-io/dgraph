@@ -1,9 +1,9 @@
 +++
 title = "And, Or and Not"
+weight = 3
 [menu.main]
     parent = "graphql-queries"
     name = "And, Or and Not"
-    weight = 3   
 +++
 
 Every search filter contains `and`, `or` and `not`.
