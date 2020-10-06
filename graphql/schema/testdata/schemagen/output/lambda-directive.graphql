@@ -2,9 +2,11 @@
 # Input Schema
 #######################
 
-type Author @secret(field: "pwd") {
-	name: String! @id
-	token: String
+type User {
+	id: ID!
+	firstName: String!
+	lastName: String!
+	fullName: String @lambda
 }
 
 #######################
@@ -150,19 +152,19 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
-type DeleteAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	msg: String
 	numUids: Int
 }
 
-type UpdateAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
@@ -170,55 +172,54 @@ type UpdateAuthorPayload {
 # Generated Enums
 #######################
 
-enum AuthorHasFilter {
-	name
-	token
+enum UserHasFilter {
+	firstName
+	lastName
 }
 
-enum AuthorOrderable {
-	name
-	token
+enum UserOrderable {
+	firstName
+	lastName
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddAuthorInput {
-	name: String!
-	token: String
-	pwd: String!
+input AddUserInput {
+	firstName: String!
+	lastName: String!
 }
 
-input AuthorFilter {
-	name: StringHashFilter
-	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
-	not: AuthorFilter
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
 }
 
-input AuthorOrder {
-	asc: AuthorOrderable
-	desc: AuthorOrderable
-	then: AuthorOrder
+input UserFilter {
+	id: [ID!]
+	has: UserHasFilter
+	and: UserFilter
+	or: UserFilter
+	not: UserFilter
 }
 
-input AuthorPatch {
-	token: String
-	pwd: String
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
 }
 
-input AuthorRef {
-	name: String
-	token: String
-	pwd: String
+input UserPatch {
+	firstName: String
+	lastName: String
 }
 
-input UpdateAuthorInput {
-	filter: AuthorFilter!
-	set: AuthorPatch
-	remove: AuthorPatch
+input UserRef {
+	id: ID
+	firstName: String
+	lastName: String
 }
 
 #######################
@@ -226,9 +227,9 @@ input UpdateAuthorInput {
 #######################
 
 type Query {
-	getAuthor(name: String!): Author
-	checkAuthorPassword(name: String!, pwd: String!): Author
-	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	queryUserNames(id: [ID!]!): [String] @lambda
+	getUser(id: ID!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 }
 
 #######################
@@ -236,8 +237,9 @@ type Query {
 #######################
 
 type Mutation {
-	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
-	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
-	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	createUser(firstName: String!, lastName: String!): User @lambda
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 
