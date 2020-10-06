@@ -20,11 +20,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 
 	"github.com/pkg/errors"
 
@@ -222,6 +223,18 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	// present in a single line.
 	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
 	authInfo := `# Dgraph.Authorization {"VerificationKey":"` + string(keyData) + `","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"RS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}`
+	return append(schema, []byte(authInfo)...), nil
+}
+
+func AppendAuthInfoWithJWKUrl(schema []byte) ([]byte, error) {
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurl":"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":["fir-project1-259e7"]}`
+	return append(schema, []byte(authInfo)...), nil
+}
+
+// Add JWKUrl and (VerificationKey, Algo) in the same Authorization JSON
+// Adding Dummy values as this should result in validation error
+func AppendJWKAndVerificationKey(schema []byte) ([]byte, error) {
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"some-key","Header":"X-Test-Auth","jwkurl":"some-url", "Namespace":"https://xyz.io/jwt/claims","Algo":"algo","Audience":["fir-project1-259e7"]}`
 	return append(schema, []byte(authInfo)...), nil
 }
 

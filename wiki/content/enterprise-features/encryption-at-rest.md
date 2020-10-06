@@ -46,7 +46,7 @@ Here is an example that starts one Zero server and one Alpha server with the enc
 
 ```bash
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1
-dgraph alpha --encryption_key_file ./enc_key_file --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
+dgraph alpha --encryption_key_file ./enc_key_file --my=localhost:7080 --zero=localhost:5080
 ```
 
 If multiple Alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option to
@@ -64,7 +64,7 @@ Alternatively, for encryption keys sitting on Vault server, here is an example. 
 Next, here is an example of using Dgraph with a Vault server that holds the encryption key.
 ```bash
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1
-dgraph alpha --vault_addr https://localhost:8200 --vault_roleid_file ./roleid --vault_secretid_file ./secretid --vault_field enc_key_name --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
+dgraph alpha --vault_addr https://localhost:8200 --vault_roleid_file ./roleid --vault_secretid_file ./secretid --vault_field enc_key_name --my=localhost:7080 --zero=localhost:5080
 ```
 
 If multiple Alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option or the `--vault_*` options to

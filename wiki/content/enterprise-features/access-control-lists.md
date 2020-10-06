@@ -42,7 +42,7 @@ Here is an example that starts one zero server and one alpha server with the ACL
 
 ```bash
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
-dgraph alpha --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080 --logtostderr -v=3 --acl_secret_file ./hmac-secret
+dgraph alpha --my=localhost:7080 --zero=localhost:5080 --logtostderr -v=3 --acl_secret_file ./hmac-secret
 ```
 
 If you are using docker-compose, a sample cluster can be set up by:

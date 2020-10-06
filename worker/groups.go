@@ -1023,6 +1023,9 @@ func (g *groupi) processOracleDeltaStream() {
 				if err == nil {
 					break
 				}
+				if g.Ctx().Err() != nil {
+					break
+				}
 				glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+
 					" Error=%v. Retrying...\n", delta.MaxAssigned, len(delta.Txns), err)
 			}
