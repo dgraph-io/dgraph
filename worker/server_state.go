@@ -78,18 +78,13 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	// saved by disabling it.
 	opt.DetectConflicts = false
 
+	glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
+	opt.Compression = Config.PostingDirCompression
+	opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
+
 	// Settings for the data directory.
 	badgerTables := Config.BadgerTables
 	badgerVlog := Config.BadgerVlog
-	glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
-	// Default value of postingDirCompressionLevel is 3 so compression will always
-	// be enabled, unless it is explicitly disabled by setting the value to 0.
-	if Config.PostingDirCompressionLevel != 0 {
-		// By default, compression is disabled in badger.
-		opt.Compression = options.ZSTD
-		opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
-	}
-
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch badgerTables {
 	case "mmap":

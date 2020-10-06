@@ -39,7 +39,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero:5080
+    command: dgraph alpha --my=alpha1:7080 --zero=zero:5080
   alpha2:
     image: dgraph/dgraph:latest
     hostname: "alpha2"
@@ -55,7 +55,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero:5080 -o 1
+    command: dgraph alpha --my=alpha2:7081 --zero=zero:5080 -o 1
   alpha3:
     image: dgraph/dgraph:latest
     hostname: "alpha3"
@@ -71,7 +71,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero:5080 -o 2
+    command: dgraph alpha --my=alpha3:7082 --zero=zero:5080 -o 2
   ratel:
     image: dgraph/dgraph:latest
     hostname: "ratel"

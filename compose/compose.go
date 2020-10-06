@@ -81,7 +81,6 @@ type options struct {
 	NumZeros       int
 	NumAlphas      int
 	NumReplicas    int
-	LruSizeMB      int
 	Acl            bool
 	AclSecret      string
 	DataDir        string
@@ -280,7 +279,6 @@ func getAlpha(idx int) service {
 
 	svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+getOffset(idx))
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
-	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 
@@ -473,8 +471,6 @@ func main() {
 		"number of alphas in dgraph cluster")
 	cmd.PersistentFlags().IntVarP(&opts.NumReplicas, "num_replicas", "r", 3,
 		"number of alpha replicas in dgraph cluster")
-	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
-		"approximate size of LRU cache")
 	cmd.PersistentFlags().BoolVar(&opts.DataVol, "data_vol", false,
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
@@ -546,9 +542,6 @@ func main() {
 	}
 	if opts.NumReplicas%2 == 0 {
 		fatal(errors.Errorf("number of replicas must be odd"))
-	}
-	if opts.LruSizeMB < 1024 {
-		fatal(errors.Errorf("LRU cache size must be >= 1024 MB"))
 	}
 	if opts.DataVol && opts.DataDir != "" {
 		fatal(errors.Errorf("only one of --data_vol and --data_dir may be used at a time"))

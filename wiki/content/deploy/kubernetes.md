@@ -245,7 +245,6 @@ alpha:
         vlog: mmap
       postings: /dgraph/data/p
       wal: /dgraph/data/w
-      lru_mb: 2048
 zero:
   configFile:
     config.yaml: |
