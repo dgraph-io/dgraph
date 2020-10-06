@@ -19,7 +19,6 @@ package subscription_test
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgraph/x"
 	"testing"
 	"time"
 
@@ -191,7 +190,6 @@ func TestSubscriptionAuth(t *testing.T) {
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
-	x.Config.PollInterval = 0
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -334,14 +332,12 @@ func TestSubscriptionAuth(t *testing.T) {
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res)
-	x.Config.PollInterval = time.Second
 }
 
 func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
-	x.Config.PollInterval = 0
 
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
@@ -440,15 +436,13 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res)
-	x.Config.PollInterval = time.Second
 }
 
-func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndependently(t *testing.T) {
+func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
-	x.Config.PollInterval = 0
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -473,6 +467,81 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 		"USER": "jatin",
 		"ROLE": "USER",
 	}
+
+	add = &common.GraphQLParams{
+		Query: `mutation{
+              addTodo(input: [
+                 {text : "GraphQL is exciting!!",
+                  owner : "jatin"}
+               ])
+             {
+               todo{
+                    text
+                    owner
+               }
+           }
+         }`,
+	}
+
+	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	require.Nil(t, addResult.Errors)
+
+	jwtToken, err := metaInfo.GetSignedToken("secret", -1)
+	require.NoError(t, err)
+
+	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
+	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
+		Query: `subscription{
+			queryTodo{
+                owner
+                text
+			}
+		}`,
+	}, payload)
+	require.Nil(t, err)
+
+	res, err := subscriptionClient.RecvMsg()
+	require.NoError(t, err)
+
+	var resp common.GraphQLResponse
+	err = json.Unmarshal(res, &resp)
+	require.NoError(t, err)
+
+	require.Nil(t, resp.Errors)
+	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
+		string(resp.Data))
+}
+
+func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndependently(t *testing.T) {
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+
+	add := &common.GraphQLParams{
+		Query: `mutation updateGQLSchema($sch: String!) {
+			updateGQLSchema(input: { set: { schema: $sch }}) {
+				gqlSchema {
+					schema
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": schAuth},
+	}
+	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second * 2)
+
+	metaInfo := &testutil.AuthMeta{
+		PublicKey: "secret",
+		Namespace: "https://dgraph.io",
+		Algo:      "HS256",
+		Header:    "Authorization",
+	}
+	metaInfo.AuthVars = map[string]interface{}{
+		"USER": "jatin",
+		"ROLE": "USER",
+	}
+
 	add = &common.GraphQLParams{
 		Query: `mutation{
               addTodo(input: [
@@ -605,14 +674,12 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res) // 2nd subscription should get the empty response as subscription has expired.
-	x.Config.PollInterval = time.Second
 }
 
 func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndependently(t *testing.T) {
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
-	x.Config.PollInterval = 0
 
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
@@ -653,6 +720,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
            }
          }`,
 	}
+
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
@@ -720,8 +788,10 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
+
 	err = json.Unmarshal(res, &resp)
 	require.NoError(t, err)
+
 	require.Nil(t, resp.Errors)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"pawan","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
@@ -746,8 +816,8 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	require.NoError(t, err)
 	time.Sleep(time.Second)
-
 	// 1st subscription should get the empty response as subscription has expired
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
@@ -814,5 +884,78 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res)
-	x.Config.PollInterval = time.Second
+}
+
+func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+
+	add := &common.GraphQLParams{
+		Query: `mutation updateGQLSchema($sch: String!) {
+			updateGQLSchema(input: { set: { schema: $sch }}) {
+				gqlSchema {
+					schema
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": schAuth},
+	}
+	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second * 2)
+
+	metaInfo := &testutil.AuthMeta{
+		PublicKey: "secret",
+		Namespace: "https://dgraph.io",
+		Algo:      "HS256",
+		Header:    "authorization",
+	}
+	metaInfo.AuthVars = map[string]interface{}{
+		"USER": "jatin",
+		"ROLE": "USER",
+	}
+
+	add = &common.GraphQLParams{
+		Query: `mutation{
+              addTodo(input: [
+                 {text : "GraphQL is exciting!!",
+                  owner : "jatin"}
+               ])
+             {
+               todo{
+                    text
+                    owner
+               }
+           }
+         }`,
+	}
+
+	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	require.Nil(t, addResult.Errors)
+
+	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
+	require.NoError(t, err)
+
+	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
+	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
+		Query: `subscription{
+			queryTodo{
+                owner
+                text
+			}
+		}`,
+	}, payload)
+	require.Nil(t, err)
+
+	res, err := subscriptionClient.RecvMsg()
+	require.NoError(t, err)
+
+	var resp common.GraphQLResponse
+	err = json.Unmarshal(res, &resp)
+	require.NoError(t, err)
+
+	require.Nil(t, resp.Errors)
+	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
+		string(resp.Data))
 }
