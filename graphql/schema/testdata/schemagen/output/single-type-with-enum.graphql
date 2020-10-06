@@ -87,6 +87,7 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
 directive @cascade on FIELD
+directive @lambda on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int

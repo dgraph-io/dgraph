@@ -37,6 +37,8 @@ type Author {
         reputation: Float @search
         country: Country
         posts: [Post!] @hasInverse(field: author)
+        bio: String @lambda
+        rank: Int @lambda
 }
 
 type Post {
@@ -89,6 +91,7 @@ interface Character {
         id: ID!
         name: String! @search(by: [exact])
         appearsIn: [Episode!] @search
+        bio: String @lambda
 }
 
 type Human implements Character & Employee {
@@ -177,4 +180,12 @@ type Person1 {
         id: ID!
         name: String!
         friends: [Person1] @hasInverse(field: friends)
+}
+
+type Query {
+        authorsByName(name: String!): [Author] @lambda
+}
+
+type Mutation {
+        newAuthor(name: String!): ID! @lambda
 }

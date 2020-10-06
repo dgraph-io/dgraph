@@ -425,13 +425,12 @@ func nameCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 
 		if isQueryOrMutationType(defn) {
 			for _, fld := range defn.Fields {
-				// If we find any query or mutation field defined without a @custom directive, that
-				// is an error for us.
-				custom := fld.Directives.ForName(customDirective)
-				if custom == nil {
+				// If we find any query or mutation field defined without a @custom/@lambda
+				// directive, that is an error for us.
+				if !hasCustomOrLambda(fld) {
 					errMesg = "GraphQL Query and Mutation types are only allowed to have fields " +
-						"with @custom directive. Other fields are built automatically for you. " +
-						"Found " + defn.Name + " " + fld.Name + " without @custom."
+						"with @custom/@lambda directive. Other fields are built automatically for" +
+						" you. Found " + defn.Name + " " + fld.Name + " without @custom/@lambda."
 					break
 				}
 			}
@@ -581,8 +580,7 @@ func nonIdFieldsCheck(schema *ast.Schema, typ *ast.Definition) gqlerror.List {
 
 	hasNonIdField := false
 	for _, field := range typ.Fields {
-		custom := field.Directives.ForName(customDirective)
-		if isIDField(typ, field) || custom != nil {
+		if isIDField(typ, field) || hasCustomOrLambda(field) {
 			continue
 		}
 		hasNonIdField = true
@@ -591,7 +589,8 @@ func nonIdFieldsCheck(schema *ast.Schema, typ *ast.Definition) gqlerror.List {
 
 	if !hasNonIdField {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(typ.Position, "Type %s; is invalid, a type must have atleast "+
-			"one field that is not of ID! type and doesn't have @custom directive.", typ.Name)}
+			"one field that is not of ID! type and doesn't have @custom/@lambda directive.",
+			typ.Name)}
 	}
 	return nil
 }
@@ -605,8 +604,7 @@ func remoteTypeValidation(schema *ast.Schema, typ *ast.Definition) gqlerror.List
 		for _, field := range typ.Fields {
 			// If the field is being resolved through a custom directive, then we don't care if
 			// the type for the field is a remote or a non-remote type.
-			custom := field.Directives.ForName(customDirective)
-			if custom != nil {
+			if hasCustomOrLambda(field) {
 				continue
 			}
 			t := field.Type.Name()
@@ -615,7 +613,7 @@ func remoteTypeValidation(schema *ast.Schema, typ *ast.Definition) gqlerror.List
 			if remoteDir != nil {
 				return []*gqlerror.Error{gqlerror.ErrorPosf(field.Position, "Type %s; "+
 					"field %s; is of a type that has @remote directive. Those would need to be "+
-					"resolved by a @custom directive.", typ.Name, field.Name)}
+					"resolved by a @custom/@lambda directive.", typ.Name, field.Name)}
 			}
 		}
 
@@ -633,11 +631,10 @@ func remoteTypeValidation(schema *ast.Schema, typ *ast.Definition) gqlerror.List
 
 	// This means that the type was a remote type.
 	for _, field := range typ.Fields {
-		custom := field.Directives.ForName(customDirective)
-		if custom != nil {
+		if hasCustomOrLambda(field) {
 			return []*gqlerror.Error{gqlerror.ErrorPosf(field.Position, "Type %s; "+
-				"field %s; can't have @custom directive as a @remote type can't have fields with"+
-				" @custom directive.", typ.Name, field.Name)}
+				"field %s; can't have @custom/@lambda directive as a @remote type can't have"+
+				" fields with @custom/@lambda directive.", typ.Name, field.Name)}
 		}
 
 	}
@@ -1181,6 +1178,28 @@ func passwordValidation(sch *ast.Schema,
 	return passwordDirectiveValidation(sch, typ)
 }
 
+func lambdaDirectiveValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	// if the lambda url wasn't specified during alpha startup,
+	// just return that error. Don't confuse the user with errors from @custom yet.
+	if x.Config.GraphqlLambdaUrl == "" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(dir.Position,
+			"Type %s; Field %s: has the @lambda directive, but the "+
+				"`--graphql_lambda_url` flag wasn't specified during alpha startup.",
+			typ.Name, field.Name)}
+	}
+	// reuse @custom directive validation
+	errs := customDirectiveValidation(sch, typ, field, buildCustomDirectiveForLambda(typ, field,
+		dir, func(f *ast.FieldDefinition) bool { return false }), secrets)
+	for _, err := range errs {
+		err.Message = "While building @custom for @lambda: " + err.Message
+	}
+	return errs
+}
+
 func customDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
@@ -1228,7 +1247,7 @@ func customDirectiveValidation(sch *ast.Schema,
 			typ.Name, field.Name, l))
 	}
 
-	httpArg := dir.Arguments.ForName("http")
+	httpArg := dir.Arguments.ForName(httpArg)
 	dqlArg := dir.Arguments.ForName(dqlArg)
 
 	if httpArg == nil && dqlArg == nil {
@@ -1301,7 +1320,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	// Start validating children of http argument
 
 	// 4. Validating url
-	httpUrl := httpArg.Value.Children.ForName("url")
+	httpUrl := httpArg.Value.Children.ForName(httpUrl)
 	if httpUrl == nil {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
@@ -1377,7 +1396,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	}
 
 	// 5. Validating method
-	method := httpArg.Value.Children.ForName("method")
+	method := httpArg.Value.Children.ForName(httpMethod)
 	if method == nil {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
@@ -1422,8 +1441,8 @@ func customDirectiveValidation(sch *ast.Schema,
 	}
 
 	// 7. Validating graphql combination with url params, method and body
-	body := httpArg.Value.Children.ForName("body")
-	graphql := httpArg.Value.Children.ForName("graphql")
+	body := httpArg.Value.Children.ForName(httpBody)
+	graphql := httpArg.Value.Children.ForName(httpGraphql)
 	if graphql != nil {
 		if urlHasParams {
 			errs = append(errs, gqlerror.ErrorPosf(dir.Position,
@@ -1689,11 +1708,11 @@ func customDirectiveValidation(sch *ast.Schema,
 						fname, typName))
 				}
 
-				if fd.Directives.ForName(customDirective) != nil {
+				if hasCustomOrLambda(fd) {
 					errs = append(errs, gqlerror.ErrorPosf(errPos,
 						"Type %s; Field %s; @custom directive, %s can't use another field with "+
-							"@custom directive, found field `%s` with @custom.", typ.Name,
-						field.Name, errIn, fname))
+							"@custom/@lambda directive, found field `%s` with @custom/@lambda.",
+						typ.Name, field.Name, errIn, fname))
 				}
 
 				if fname == idField || fname == xidField {

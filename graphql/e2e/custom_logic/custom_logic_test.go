@@ -230,7 +230,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	require.Nilf(t, result.Errors, "%s", result.Errors)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
 }
@@ -269,7 +269,7 @@ func TestCustomNameForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	require.Nilf(t, result.Errors, "%s", result.Errors)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
 }
