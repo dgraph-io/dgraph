@@ -1,7 +1,6 @@
 +++
 title = "GraphQL+-: Tips and Tricks"
 [menu.main]
-  url = "/tips/"
   identifier = "tips"
   parent = "dql"
   weight = 5
