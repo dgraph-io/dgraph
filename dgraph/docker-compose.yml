@@ -78,7 +78,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha1:7180 --zero=zero1:5180,zero2:5182,zero3:5183 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s --auth_token itIsSecret
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha1:7180 --zero=zero1:5180,zero2:5182,zero3:5183 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
 
   alpha2:
     image: dgraph/dgraph:latest
