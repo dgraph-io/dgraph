@@ -325,7 +325,9 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	ext := make(map[string]interface{})
 	ext["code"] = code
 	qr.Errors = append(qr.Errors, &GqlError{Message: msg, Extensions: ext})
+	AddCorsHeaders(w)
 	if js, err := json.Marshal(qr); err == nil {
+		w.Header().Set("Content-Type", "application/json")
 		if _, err := w.Write(js); err != nil {
 			glog.Errorf("Error while writing: %+v", err)
 		}
