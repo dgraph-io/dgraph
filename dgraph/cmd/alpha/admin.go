@@ -172,7 +172,7 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request, adminServer w
 	}
 	gqlReq := &schema.Request{
 		Query: `
-		mutation config($cacheMb: Float) {
+		mutation config($cacheMb: Int) {
 		  config(input: {cacheMb: $cacheMb}) {
 			response {
 			  code

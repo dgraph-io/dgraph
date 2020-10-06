@@ -2597,7 +2597,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "config",
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
-				Message:   "resolving config failed because lru_mb must be non-negative\n",
+				Message:   "resolving config failed because cache_mb must be non-negative",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"config": null}`,
