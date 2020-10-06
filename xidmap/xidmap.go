@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v2"
+	// bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -43,6 +44,7 @@ type XidMap struct {
 	maxUidSeen uint64
 
 	// Optionally, these can be set to persist the mappings.
+	// writer *badger.StreamWriter
 	writer *badger.WriteBatch
 }
 
@@ -85,11 +87,9 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	}
 	if db != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
-		//
-		// TODO: We don't need to write to Badger upfront like this. With Trie, we can iterate over
-		// the trie and write to Badger at the end. In fact, we might even be able to use
-		// streamwriter for it.
 		xm.writer = db.NewWriteBatch()
+		// xm.writer = db.NewStreamWriter()
+		// x.Check(xm.writer.Prepare())
 
 		err := db.View(func(txn *badger.Txn) error {
 			var count int
@@ -187,16 +187,6 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 
 	newUid := sh.assign(m.newRanges)
 	sh.trie.Put(xid, newUid)
-
-	// TODO: Iterate over Trie in sequence and use stream write to write it out to Badger at the
-	// end. No need to write here.
-	if m.writer != nil {
-		var uidBuf [8]byte
-		binary.BigEndian.PutUint64(uidBuf[:], newUid)
-		if err := m.writer.Set([]byte(xid), uidBuf[:]); err != nil {
-			x.Panic(err)
-		}
-	}
 	return newUid, true
 }
 
@@ -249,11 +239,40 @@ func (m *XidMap) AllocateUid() uint64 {
 	return sh.assign(m.newRanges)
 }
 
+func (m *XidMap) WriteToBadger() error {
+	if m.writer == nil {
+		return nil
+	}
+	return nil
+}
+
 // Flush must be called if DB is provided to XidMap.
 func (m *XidMap) Flush() error {
 	for _, shard := range m.shards {
+		var err error
+		if m.writer != nil {
+			shard.Lock()
+			err = shard.trie.Iterate(func(key string, uid uint64) error {
+				var uidBuf [8]byte
+				binary.BigEndian.PutUint64(uidBuf[:], uid)
+				// kvs := &bpb.KVList{Kv: []*bpb.KV{{
+				// 	Key: []byte(key),
+				// 	Value: uidBuf[:],
+				// }}}
+				// if err := m.writer.Write(kvs); err != nil {
+				// 	return err
+				// }
+				return m.writer.Set([]byte(key), uidBuf[:])
+			})
+			shard.Unlock()
+		}
+
 		shard.trie.Release()
+		if err != nil {
+			return err
+		}
 	}
+
 	if m.writer == nil {
 		return nil
 	}
