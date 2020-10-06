@@ -89,9 +89,6 @@ func SetConfiguration(newConfig *Options) {
 	Config = *newConfig
 }
 
-// MinAllottedMemory is the minimum amount of memory needed for the LRU cache.
-const MinAllottedMemory = 1024.0
-
 // AvailableMemory is the total size of the memory we were able to identify.
 var AvailableMemory int64
 
