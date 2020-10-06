@@ -1,11 +1,13 @@
 #!/bin/bash
 cd "$(dirname "$0")" || exit
 
+# Note: Never start this without committing the changes. As this will checkout between several branches. Any staged change can bring issues.
+
 export HUGO_CANONIFYURLS=false
-HOST="http://localhost/docs" \
+HOST="http://localhost/docs" \ #If you are using Docker in a VM, please change this to the machine\'s IP.
     PUBLIC="./public/docs" \
     LOOP=false \
     ./build.sh
 
 cd ..
-docker-compose up
+docker-compose up --remove-orphans --force-recreate
