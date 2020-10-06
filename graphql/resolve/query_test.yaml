@@ -1,4 +1,22 @@
 -
+  name: "in filter"
+  gqlquery: |
+    query {
+      queryState(filter: {code: {in: ["abc", "def", "ghi"]}}) {
+        code
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryState(func: type(State)) @filter(eq(State.code, "abc", "def", "ghi")) {
+        code : State.code
+        name : State.name
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "ID query"
   gqlquery: |
     query {

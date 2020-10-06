@@ -186,6 +186,7 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
@@ -194,6 +195,7 @@ input StringExactFilter {
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 `
 )

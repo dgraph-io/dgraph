@@ -1056,14 +1056,29 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title, "GraphQL")
 				// OR
 				// numLikes: { le: 10 } -> le(Post.numLikes, 10)
+
 				fn, val := first(dgFunc)
+				args := []gql.Arg{
+					{Value: typ.DgraphPredicate(field)},
+				}
+				switch fn {
+				// in takes List of Scalars as argument, for eg:
+				// code : { in: {"abc", "def", "ghi"} } -> eq(State.code,"abc","def","ghi")
+				case "in":
+					vals := val.([]interface{})
+					fn = "eq"
+
+					for _, v := range vals {
+						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
+					}
+
+				default:
+					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, val)})
+				}
 				ands = append(ands, &gql.FilterTree{
 					Func: &gql.Function{
 						Name: fn,
-						Args: []gql.Arg{
-							{Value: typ.DgraphPredicate(field)},
-							{Value: maybeQuoteArg(fn, val)},
-						},
+						Args: args,
 					},
 				})
 			case []interface{}:
