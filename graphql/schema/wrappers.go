@@ -605,6 +605,25 @@ func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) 
 	return repeatedFieldNames
 }
 
+// customAndLambdaMappings does following things:
+// * If there is @custom on any field, it removes the directive from the list of directives on
+//	 that field. Instead, it puts it in a map of typeName->fieldName->custom directive definition.
+//	 This mapping is returned as the first return value, which is later used to determine if some
+//	 field has custom directive or not, and accordingly construct the HTTP request for the field.
+// * If there is @lambda on any field, it removes the directive from the list of directives on
+//	 that field. Instead, it puts it in a map of typeName->fieldName->bool. This mapping is returned
+//	 as the second return value, which is later used to determine if some field has lambda directive
+//	 or not. An appropriate @custom directive is also constructed for the field with @lambda and
+//	 put into the first mapping. Both of these mappings together are used to construct the HTTP
+//	 request for @lambda field. Internally, @lambda is just @custom(http: {
+//	   url: "<graphql_lambda_url: a-fixed-pre-defined-url>",
+//	   method: POST,
+//	   body: "<all-the-args-for-a-query-or-mutation>/<all-the-scalar-fields-from-parent-type-for-a
+//	   -@lambda-on-field>"
+//	   mode: BATCH (set only if @lambda was on a non query/mutation field)
+//	 })
+//	 So, by constructing an appropriate custom directive for @lambda fields,
+//	 we just reuse logic from @custom.
 func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directive,
 	map[string]map[string]bool) {
 	customDirectives := make(map[string]map[string]*ast.Directive)
@@ -643,10 +662,11 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 						// into custom directives map at this field
 						customFieldMap[field.Name] = buildCustomDirectiveForLambda(typ, field,
 							dir, func(f *ast.FieldDefinition) bool {
-								return lambdaFieldMap[f.Name] ||
-									customFieldMap[f.Name] != nil ||
-									hasCustomOrLambda(f) ||
-									!isScalar(f.Type.Name())
+								// Need to skip the fields which have a @custom/@lambda from
+								// going in body template. The field itself may not have the
+								// directive anymore because the directive may have been removed by
+								// this function already. So, using these maps to find the same.
+								return lambdaFieldMap[f.Name] || customFieldMap[f.Name] != nil
 							})
 					}
 					// finally, update the custom directives map for this type
@@ -671,6 +691,14 @@ func hasCustomOrLambda(f *ast.FieldDefinition) bool {
 }
 
 // buildCustomDirectiveForLambda returns custom directive for the given field to be used for @lambda
+// The constructed @custom looks like this:
+//	@custom(http: {
+//	   url: "<graphql_lambda_url: a-fixed-pre-defined-url>",
+//	   method: POST,
+//	   body: "<all-the-args-for-a-query-or-mutation>/<all-the-scalar-fields-from-parent-type-for-a
+//	   -@lambda-on-field>"
+//	   mode: BATCH (set only if @lambda was on a non query/mutation field)
+//	})
 func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinition,
 	lambdaDir *ast.Directive, skipInBodyTemplate func(f *ast.FieldDefinition) bool) *ast.Directive {
 	comma := ""
@@ -693,12 +721,14 @@ func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinit
 			appendToBodyTemplate(arg.Name)
 		}
 	} else {
-		// for fields in other types, skip the ones in body template which have a @lambda or @custom
-		// or are not scalar
+		// For fields in other types, skip the ones in body template which have a @lambda or @custom
+		// or are not scalar. The skipInBodyTemplate function is also used to check these
+		// conditions, in case the field can't tell by itself.
 		for _, f := range defn.Fields {
-			if !skipInBodyTemplate(f) {
-				appendToBodyTemplate(f.Name)
+			if hasCustomOrLambda(f) || !isScalar(f.Type.Name()) || skipInBodyTemplate(f) {
+				continue
 			}
+			appendToBodyTemplate(f.Name)
 		}
 	}
 	bodyTemplate.WriteString("}")

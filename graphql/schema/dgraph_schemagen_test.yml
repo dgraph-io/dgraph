@@ -613,6 +613,7 @@ schemas:
       type User {
         id: ID!
         name: String!
+        bio: String! @lambda
         friends: [User] @custom(http: {
           url: "http://mock:8888/users",
           method: "GET"

@@ -198,7 +198,8 @@ they form a Raft group and provide synchronous replication.
 
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
-	flag.String("graphql_lambda_url", "", "URL of lambda functions for custom GraphQL resolvers")
+	flag.String("graphql_lambda_url", "",
+		"URL of lambda server that implements custom GraphQL JavaScript resolvers")
 
 	// Cache flags
 	flag.String("cache_percentage", "0,65,35,0",

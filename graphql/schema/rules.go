@@ -1196,9 +1196,7 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	}
 	// reuse @custom directive validation
 	errs := customDirectiveValidation(sch, typ, field, buildCustomDirectiveForLambda(typ, field,
-		dir, func(f *ast.FieldDefinition) bool {
-			return hasCustomOrLambda(f) || !isScalar(f.Type.Name())
-		}), secrets)
+		dir, func(f *ast.FieldDefinition) bool { return false }), secrets)
 	for _, err := range errs {
 		err.Message = "While building @custom for @lambda: " + err.Message
 	}
