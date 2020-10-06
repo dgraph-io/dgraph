@@ -6,7 +6,7 @@ title = "Delete"
     weight = 7
 +++
 
-A delete mutation, signified with the `delete` keyword, removes triples from the store. 
+A delete mutation, signified with the `delete` keyword, removes predicates from the store. 
 
 For example, if the store contained the following:
 ```RDF
@@ -15,7 +15,7 @@ For example, if the store contained the following:
 <0xf11168064b01135b> <dgraph.type> "Person" .
 ```
 
-Then, the following delete mutation deletes erroneous data and removes it from indexes if present:
+Then, the following delete mutation deletes the specified erroneous data, and removes it from indexes if present:
 
 ```sh
 {
@@ -24,6 +24,12 @@ Then, the following delete mutation deletes erroneous data and removes it from i
   }
 }
 ```
+
+## Wildcard delete
+
+In many cases you will need to delete not just individual predicates, but all predicates that match a wildcard
+`(*)` search. To prevent unintended data loss, wildcard delete mutations delete only typed data within
+a node. For more information on how to set the type information for a node, see [Setting the type of a node](https://dgraph.io/docs/query-language/type-system/#setting-the-type-of-a-node).
 
 For a particular node `N`, all data for predicate `P` (and corresponding indexing) is removed with the pattern `S P *`.
 
@@ -39,11 +45,6 @@ The pattern `S * *` deletes all the known edges out of a node, any reverse edges
 edges and any indexing for the removed data. The predicates to delete are
 derived from the type information for that node (the value of the `dgraph.type`
 edges on that node and their corresponding definitions in the schema). 
-
-**Note**: If the type information
-for the node `S` is missing then the delete operation will not work. For more information on how to set the type
-information for a node, see [Setting the type of a node](https://dgraph.io/docs/query-language/type-system/#setting-the-type-of-a-node).
-
 
 ```sh
 {
@@ -63,7 +64,7 @@ by this pattern, the node itself may still exist depending on if all the predica
 
 Deleting the value of a non-list predicate (i.e a 1-to-1 relation) can be done in two ways.
 
-1. Using the star notation mentioned in the last section.
+1. Using the a 'wildcard delete' star notation mentioned in the last section.
 1. Setting the object to a specific value. If the value passed is not the current value, the mutation will succeed but will have no effect. If the value passed is the current value, the mutation will succeed and will delete the triple.
 
 For language-tagged values, the following special syntax is supported:
