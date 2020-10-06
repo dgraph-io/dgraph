@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v2"
+	bo "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto"
@@ -1239,14 +1240,33 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 	return cachePercent, nil
 }
 
-// ParseCompressionLevel returns compression level(int) given the compression level(string)
-func ParseCompressionLevel(level string) int {
-	x, err := strconv.Atoi(level)
-	Check(err)
-	if x < 0 {
-		glog.Fatalf("ERROR: compression level(%s) cannot be negative", level)
+// ParseCompression returns badger.compressionType and compression level given compression string
+// of format compression-type:compression-level
+func ParseCompression(cStr string) (bo.CompressionType, int) {
+	cStrSplit := strings.Split(cStr, ":")
+	cType := cStrSplit[0]
+	level := 3
+
+	var err error
+	if len(cStrSplit) == 2 {
+		level, err = strconv.Atoi(cStrSplit[1])
+		Check(err)
+		if level <= 0 {
+			glog.Fatalf("ERROR: compression level(%v) must be greater than zero", level)
+		}
+	} else if len(cStrSplit) > 2 {
+		glog.Fatalf("ERROR: Invalid badger.compression argument")
 	}
-	return x
+	switch cType {
+	case "zstd":
+		return bo.ZSTD, level
+	case "snappy":
+		return bo.Snappy, 0
+	case "none":
+		return bo.None, 0
+	}
+	glog.Fatalf("ERROR: compression type (%s) invalid", cType)
+	return 0, 0
 }
 
 // ToHex converts a uint64 to a hex byte array. If rdf is true it will

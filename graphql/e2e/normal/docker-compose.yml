@@ -32,7 +32,10 @@ services:
     labels:
       cluster: test
       service: alpha1
-    command: /gobin/dgraph alpha --zero=zero1:5180 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --my=alpha1:7180
+    command: /gobin/dgraph alpha --zero=zero1:5180 -o 100 --expose_trace --trace 1.0
+      --profile_mode block --block_rate 10 --logtostderr -v=2
+      --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --my=alpha1:7180
+      --graphql_lambda_url=http://lambda:8686/graphql-worker
 
   zeroAdmin:
     image: dgraph/dgraph:latest
@@ -67,3 +70,20 @@ services:
       cluster: admintest
       service: alphaAdmin
     command: /gobin/dgraph alpha --zero=zeroAdmin:5280 -o 200 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --my=alphaAdmin:7280
+
+  lambda:
+    image: dgraph/dgraph-lambda:latest
+    container_name: lambda
+    labels:
+      cluster: test
+    ports:
+      - 8686:8686
+    depends_on:
+      - alpha
+    environment:
+      DGRAPH_URL: http://alpha:8180
+    volumes:
+      - type: bind
+        source: ./script.js
+        target: /app/script.js
+        read_only: true
