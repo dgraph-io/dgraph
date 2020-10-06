@@ -428,6 +428,7 @@ func Load(predicate string) error {
 	if len(predicate) == 0 {
 		return errors.Errorf("Empty predicate")
 	}
+	delete(State().mutSchema, predicate)
 	key := x.SchemaKey(predicate)
 	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
@@ -448,7 +449,6 @@ func Load(predicate string) error {
 	}
 	State().Set(predicate, &s)
 	State().elog.Printf(logUpdate(&s, predicate))
-	delete(State().mutSchema, predicate)
 	glog.Infoln(logUpdate(&s, predicate))
 	return nil
 }
@@ -566,6 +566,17 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 					ValueType: pb.Posting_STRING,
 				},
 			},
+		}, &pb.TypeUpdate{
+			TypeName: "dgraph.graphql.history",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.graphql.schema_history",
+					ValueType: pb.Posting_STRING,
+				}, {
+					Predicate: "dgraph.graphql.schema_created_at",
+					ValueType: pb.Posting_DATETIME,
+				},
+			},
 		})
 
 	if all || x.WorkerConfig.AclEnabled {
@@ -638,22 +649,36 @@ func CompleteInitialSchema() []*pb.SchemaUpdate {
 func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
 
-	initialSchema = append(initialSchema, &pb.SchemaUpdate{
-		Predicate: "dgraph.type",
-		ValueType: pb.Posting_STRING,
-		Directive: pb.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
-		List:      true,
-	}, &pb.SchemaUpdate{
-		Predicate: "dgraph.graphql.schema",
-		ValueType: pb.Posting_STRING,
-	}, &pb.SchemaUpdate{
-		Predicate: "dgraph.graphql.xid",
-		ValueType: pb.Posting_STRING,
-		Directive: pb.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
-		Upsert:    true,
-	})
+	initialSchema = append(initialSchema,
+		&pb.SchemaUpdate{
+			Predicate: "dgraph.cors",
+			ValueType: pb.Posting_STRING,
+			List:      true,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			Upsert:    true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.type",
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			List:      true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.schema",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.xid",
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			Upsert:    true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.schema_history",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.schema_created_at",
+			ValueType: pb.Posting_DATETIME,
+		})
 
 	if all || x.WorkerConfig.AclEnabled {
 		// propose the schema update for acl predicates

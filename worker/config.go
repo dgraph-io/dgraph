@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/golang/glog"
+	bo "github.com/dgraph-io/badger/v2/options"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
@@ -39,22 +39,30 @@ const (
 type Options struct {
 	// PostingDir is the path to the directory storing the postings..
 	PostingDir string
-	// BadgerTables is the name of the mode used to load the badger tables.
+	// BadgerTables is the name of the mode used to load the badger tables for the p directory.
 	BadgerTables string
-	// BadgerVlog is the name of the mode used to load the badger value log.
+	// BadgerVlog is the name of the mode used to load the badger value log for the p directory.
 	BadgerVlog string
-	// BadgerCompressionLevel is the ZSTD compression level used by badger. A
+
+	// PostingDirCompression is the compression algorithem used to compression Postings directory.
+	PostingDirCompression bo.CompressionType
+	// PostingDirCompressionLevel is the ZSTD compression level used by Postings directory. A
 	// higher value means more CPU intensive compression and better compression
 	// ratio.
-	BadgerCompressionLevel int
+	PostingDirCompressionLevel int
 	// WALDir is the path to the directory storing the write-ahead log.
 	WALDir string
 	// MutationsMode is the mode used to handle mutation requests.
 	MutationsMode int
 	// AuthToken is the token to be passed for Alter HTTP requests.
 	AuthToken string
-	// AllottedMemory is the estimated size taken by the LRU cache.
-	AllottedMemory float64
+
+	// PBlockCacheSize is the size of block cache for pstore
+	PBlockCacheSize int64
+	// PIndexCacheSize is the size of index cache for pstore
+	PIndexCacheSize int64
+	// WalCache is the size of block cache for wstore
+	WalCache int64
 
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
 	HmacSecret x.SensitiveByteSlice
@@ -62,8 +70,6 @@ type Options struct {
 	AccessJwtTtl time.Duration
 	// RefreshJwtTtl is the TTL of the refresh JWT.
 	RefreshJwtTtl time.Duration
-	// AclRefreshInterval is the interval used to refresh the ACL cache.
-	AclRefreshInterval time.Duration
 }
 
 // Config holds an instance of the server options..
@@ -79,7 +85,6 @@ func SetConfiguration(newConfig *Options) {
 
 	posting.Config.Lock()
 	defer posting.Config.Unlock()
-	posting.Config.AllottedMemory = Config.AllottedMemory
 }
 
 // MinAllottedMemory is the minimum amount of memory needed for the LRU cache.
@@ -94,18 +99,4 @@ func (opt *Options) validate() {
 	wd, err := filepath.Abs(opt.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
-	if opt.AllottedMemory < 0 {
-		if allottedMemory := 0.25 * float64(AvailableMemory); allottedMemory > MinAllottedMemory {
-			opt.AllottedMemory = allottedMemory
-			glog.Infof(
-				"LRU memory (--lru_mb) set to %vMB, 25%% of the total RAM found (%vMB)\n"+
-					"For more information on --lru_mb please read "+
-					"https://dgraph.io/docs/deploy/#config\n",
-				opt.AllottedMemory, AvailableMemory)
-		}
-	}
-	x.AssertTruefNoTrace(opt.AllottedMemory >= MinAllottedMemory,
-		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f\n"+
-			"For more information on --lru_mb please read https://dgraph.io/docs/deploy/#config",
-		MinAllottedMemory, opt.AllottedMemory)
 }

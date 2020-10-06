@@ -1,6 +1,12 @@
 +++
 title = "Get Started - Quickstart Guide"
 aliases = ["/get-started-old"]
+[menu.main]
+  url = "/get-started"
+  name = "Get Started"
+  identifier = "get-started"
+  parent = "dql"
+  weight = 2
 +++
 
 {{% notice "note" %}}
@@ -59,14 +65,6 @@ docker run --rm -it -p 8080:8080 -p 9080:9080 -p 8000:8000 -v ~/dgraph:/dgraph d
 This would start a single container with **Dgraph Alpha**, **Dgraph Zero** and **Ratel** running in it.
 You would find the Dgraph data stored in a folder named *dgraph* of your *home directory*.
 
-{{% notice "tip" %}}
-Usually, you need to set the estimated memory Dgraph alpha can take through `lru_mb` flag.
-This is just a hint to the Dgraph alpha, and actual usage would be higher than this.
-It is recommended to set lru_mb to the one-third of the available RAM. For the standalone setup,
-it is set to that by default.
-{{% /notice %}}
-
-
 ### Step 2: Run Mutation
 
 {{% notice "tip" %}}
@@ -74,11 +72,11 @@ Once Dgraph is running, you can access **Ratel** at [`http://localhost:8000`](ht
 It allows browser-based queries, mutations and visualizations.
 
 You can run the mutations and queries below from either curl in the command line
-or by pasting the mutation data in the **Ratel**.
+or by pasting the mutation data in **Ratel**.
 {{% /notice %}}
 
 #### Dataset
-The dataset is a movie graph, where and the graph nodes are
+The dataset is a movie graph, where the graph nodes are
 entities of the type directors, actors, genres, or movies.
 
 #### Storing data in the graph
@@ -162,6 +160,8 @@ curl "localhost:8080/alter" -XPOST -d $'
   release_date: datetime @index(year) .
   revenue: float .
   running_time: int .
+  starring: uid .
+  director: uid .
 
   type Person {
     name
@@ -286,12 +286,12 @@ data, set a schema and queried that data back.
 
 ## Where to go from here
 
-- Go to [Clients]({{< relref "clients/index.md" >}}) to see how to
+- Go to [Clients]({{< relref "clients/_index.md" >}}) to see how to
 communicate with Dgraph from your application.
 - Take the [Tour](https://dgraph.io/tour/) for a guided tour of how to write queries in Dgraph.
 - A wider range of queries can also be found in the
-[Query Language]({{< relref "query-language/index.md" >}}) reference.
-- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
+[Query Language]({{< relref "query-language/_index.md" >}}) reference.
+- See [Deploy]({{< relref "deploy/_index.md" >}}) if you wish to run Dgraph
   in a cluster.
 
 ## Need Help

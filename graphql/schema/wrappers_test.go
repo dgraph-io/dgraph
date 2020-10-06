@@ -22,7 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -84,7 +83,7 @@ type Starship {
         length: Float
 }`
 
-	schHandler, errs := NewHandler(schemaStr)
+	schHandler, errs := NewHandler(schemaStr, false)
 	require.NoError(t, errs)
 	sch, err := FromString(schHandler.GQLSchema())
 	require.NoError(t, err)
@@ -206,7 +205,7 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 			length: Float
 	}`
 
-	schHandler, errs := NewHandler(schemaStr)
+	schHandler, errs := NewHandler(schemaStr, false)
 	require.NoError(t, errs)
 	sch, err := FromString(schHandler.GQLSchema())
 	require.NoError(t, err)
@@ -331,16 +330,14 @@ func TestCheckNonNulls(t *testing.T) {
 
 func TestSubstituteVarsInBody(t *testing.T) {
 	tcases := []struct {
-		name        string
-		variables   map[string]interface{}
-		template    interface{}
-		expected    interface{}
-		expectedErr error
+		name      string
+		variables map[string]interface{}
+		template  interface{}
+		expected  interface{}
 	}{
 		{
 			"handle nil template correctly",
 			map[string]interface{}{"id": "0x3", "postID": "0x9"},
-			nil,
 			nil,
 			nil,
 		},
@@ -349,21 +346,18 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			map[string]interface{}{"id": "0x3", "postID": "0x9"},
 			map[string]interface{}{},
 			map[string]interface{}{},
-			nil,
 		},
 		{
 			"substitutes variables correctly",
 			map[string]interface{}{"id": "0x3", "postID": "0x9"},
 			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
 			map[string]interface{}{"author": "0x3", "post": map[string]interface{}{"id": "0x9"}},
-			nil,
 		},
 		{
 			"substitutes nil variables correctly",
 			map[string]interface{}{"id": nil},
 			map[string]interface{}{"author": "$id"},
 			map[string]interface{}{"author": nil},
-			nil,
 		},
 		{
 			"substitutes variables with an array in template correctly",
@@ -375,7 +369,6 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			map[string]interface{}{"author": "0x3", "admin": false,
 				"post": map[string]interface{}{"id": "0x9",
 					"comments": []interface{}{"Random comment", 28}}, "age": 28},
-			nil,
 		},
 		{
 			"substitutes variables with an array of object in template correctly",
@@ -387,7 +380,6 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			map[string]interface{}{"author": "0x3", "admin": false,
 				"post": map[string]interface{}{"id": "0x9",
 					"comments": []interface{}{map[string]interface{}{"text": "Random comment"}}}, "age": 28},
-			nil,
 		},
 		{
 			"substitutes array variables correctly",
@@ -396,14 +388,12 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			map[string]interface{}{"ids": "$ids", "names": "$names", "check": "$check"},
 			map[string]interface{}{"ids": []int{1, 2, 3}, "names": []string{"M1", "M2"},
 				"check": []interface{}{1, 3.14, "test"}},
-			nil,
 		},
 		{
 			"substitutes object variables correctly",
 			map[string]interface{}{"author": map[string]interface{}{"id": 1, "name": "George"}},
 			map[string]interface{}{"author": "$author"},
 			map[string]interface{}{"author": map[string]interface{}{"id": 1, "name": "George"}},
-			nil,
 		},
 		{
 			"substitutes array of object variables correctly",
@@ -412,7 +402,6 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			map[string]interface{}{"authors": "$authors"},
 			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
 				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
-			nil,
 		},
 		{
 			"substitutes direct body variable correctly",
@@ -421,14 +410,47 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			"$authors",
 			[]interface{}{map[string]interface{}{"id": 1, "name": "George"},
 				map[string]interface{}{"id": 2, "name": "Jerry"}},
-			nil,
 		},
 		{
-			"variable not found error",
+			"keep direct hardcoded string as is",
+			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
+				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
+			"authors",
+			"authors",
+		},
+		{
+			"keep direct hardcoded int as is",
+			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
+				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
+			3,
+			3,
+		},
+		{
+			"substitute only variables and keep deep hardcoded values as is",
+			map[string]interface{}{"id": "0x3", "admin": false, "postID": "0x9",
+				"text": "Random comment", "age": 28},
+			map[string]interface{}{"author": "$id", "admin": true,
+				"post": map[string]interface{}{"id": "$postID", "rating": 4.5,
+					"comments": []interface{}{map[string]interface{}{"text": "$text",
+						"type": "hidden"}}},
+				"age": int64(23), "meta": nil},
+			map[string]interface{}{"author": "0x3", "admin": true,
+				"post": map[string]interface{}{"id": "0x9", "rating": 4.5,
+					"comments": []interface{}{map[string]interface{}{"text": "Random comment",
+						"type": "hidden"}}},
+				"age": int64(23), "meta": nil},
+		},
+		{
+			"Skip one missing variable in the HTTP body",
 			map[string]interface{}{"postID": "0x9"},
 			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
-			nil,
-			errors.New("couldn't find variable: $id in variables map"),
+			map[string]interface{}{"post": map[string]interface{}{"id": "0x9"}},
+		},
+		{
+			"Skip all missing variables in the HTTP body",
+			map[string]interface{}{},
+			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
+			map[string]interface{}{"post": map[string]interface{}{}},
 		},
 	}
 
@@ -440,13 +462,8 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			} else {
 				templatePtr = &test.template
 			}
-			err := SubstituteVarsInBody(templatePtr, test.variables)
-			if test.expectedErr == nil {
-				require.NoError(t, err)
-				require.Equal(t, test.expected, test.template)
-			} else {
-				require.EqualError(t, err, test.expectedErr.Error())
-			}
+			SubstituteVarsInBody(templatePtr, test.variables)
+			require.Equal(t, test.expected, test.template)
 		})
 	}
 }
@@ -474,6 +491,48 @@ func TestParseBodyTemplate(t *testing.T) {
 			nil,
 		},
 		{
+			"parses body template with direct variable correctly",
+			`$authors`,
+			"$authors",
+			map[string]bool{"authors": true},
+			nil,
+		},
+		{
+			"parses body template with direct hardcoded int correctly",
+			`67`,
+			int64(67),
+			map[string]bool{},
+			nil,
+		},
+		{
+			"parses body template with direct hardcoded float correctly",
+			`67.23`,
+			67.23,
+			map[string]bool{},
+			nil,
+		},
+		{
+			"parses body template with direct hardcoded boolean correctly",
+			`true`,
+			true,
+			map[string]bool{},
+			nil,
+		},
+		{
+			"parses body template with direct hardcoded string correctly",
+			`"alice"`,
+			"alice",
+			map[string]bool{},
+			nil,
+		},
+		{
+			"parses body template with direct hardcoded null correctly",
+			`null`,
+			nil,
+			map[string]bool{},
+			nil,
+		},
+		{
 			"parses empty object body template correctly",
 			`{}`,
 			map[string]interface{}{},
@@ -483,8 +542,17 @@ func TestParseBodyTemplate(t *testing.T) {
 		{
 			"parses body template correctly",
 			`{ author: $id, post: { id: $postID }}`,
-			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
+			map[string]interface{}{"author": "$id",
+				"post": map[string]interface{}{"id": "$postID"}},
 			map[string]bool{"id": true, "postID": true},
+			nil,
+		},
+		{
+			"parses body template with underscores correctly",
+			`{ author_name: $author_name, post: { id: $postID }}`,
+			map[string]interface{}{"author_name": "$author_name",
+				"post": map[string]interface{}{"id": "$postID"}},
+			map[string]bool{"author_name": true, "postID": true},
 			nil,
 		},
 		{
@@ -508,39 +576,43 @@ func TestParseBodyTemplate(t *testing.T) {
 			nil,
 		},
 		{
-			"parses body template with direct variable correctly",
-			`$authors`,
-			"$authors",
-			map[string]bool{"authors": true},
+			"parses body template with an array of object and hardcoded scalars correctly",
+			`{ author: $id, admin: false, post: { id: $postID, rating: 4.5, 
+				comments: [{ text: $text, type: "hidden" }] }, age: 23, meta: null}`,
+			map[string]interface{}{"author": "$id", "admin": false,
+				"post": map[string]interface{}{"id": "$postID", "rating": 4.5,
+					"comments": []interface{}{map[string]interface{}{"text": "$text",
+						"type": "hidden"}}},
+				"age": int64(23), "meta": nil},
+			map[string]bool{"id": true, "postID": true, "text": true},
 			nil,
 		},
 		{
-			"json unmarshal error",
+			"bad template error",
 			`{ author: $id, post: { id $postID }}`,
 			nil,
 			nil,
-			errors.New("couldn't unmarshal HTTP body: {\"author\":\"$id\",\"post\":{\"id\"\"$postID\"}}" +
-				" as JSON"),
+			errors.New("input:1: Expected :, found $"),
 		},
 		{
 			"unmatched brackets error",
 			`{{ author: $id, post: { id: $postID }}`,
 			nil,
 			nil,
-			errors.New("found unmatched curly braces while parsing body template"),
+			errors.New("input:1: Expected Name, found {"),
 		},
 		{
 			"invalid character error",
 			`(author: $id, post: { id: $postID }}`,
 			nil,
 			nil,
-			errors.New("invalid character: ( while parsing body template"),
+			errors.New("input:1: Unexpected ("),
 		},
 	}
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			b, requiredFields, err := parseBodyTemplate(test.template)
+			b, requiredFields, err := parseBodyTemplate(test.template, true)
 			if test.expectedErr == nil {
 				require.NoError(t, err)
 				require.Equal(t, test.requiredFields, requiredFields)
@@ -723,7 +795,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			schHandler, errs := NewHandler(tcase.GQLSchema)
+			schHandler, errs := NewHandler(tcase.GQLSchema, false)
 			require.NoError(t, errs)
 			sch, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
@@ -763,7 +835,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 			c, err := field.CustomHTTPConfig()
 			require.NoError(t, err)
 
-			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema)
+			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema, false)
 			require.NoError(t, errs)
 			remoteSchema, err := FromString(remoteSchemaHandler.GQLSchema())
 			require.NoError(t, err)
@@ -823,7 +895,7 @@ func TestAllowedHeadersList(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			schHandler, errs := NewHandler(test.schemaStr)
+			schHandler, errs := NewHandler(test.schemaStr, false)
 			require.NoError(t, errs)
 			_, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
@@ -906,7 +978,7 @@ func TestCustomLogicHeaders(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := NewHandler(test.schemaStr)
+			_, err := NewHandler(test.schemaStr, false)
 			require.EqualError(t, err, test.err.Error())
 		})
 	}
@@ -1029,7 +1101,7 @@ func TestParseSecrets(t *testing.T) {
 			`,
 			nil,
 			"",
-			errors.New("required field missing in Dgraph.Authorization: `Verification key` `Header` `Namespace` `Algo`"),
+			errors.New("required field missing in Dgraph.Authorization: `Verification key`/`JWKUrl` `Algo` `Header` `Namespace`"),
 		},
 		{
 			"Valid Dgraph.Authorization with audience field",
@@ -1062,15 +1134,15 @@ func TestParseSecrets(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			s, err := parseSecrets(test.schemaStr)
+			s, authMeta, err := parseSecrets(test.schemaStr)
 			if test.err != nil || err != nil {
 				require.EqualError(t, err, test.err.Error())
 				return
 			}
-
 			require.Equal(t, test.expectedSecrets, s)
 			if test.expectedAuthHeader != "" {
-				require.Equal(t, test.expectedAuthHeader, authorization.GetHeader())
+				require.NotNil(t, authMeta)
+				require.Equal(t, test.expectedAuthHeader, authMeta.Header)
 			}
 		})
 	}

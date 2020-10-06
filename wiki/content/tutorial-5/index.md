@@ -368,7 +368,7 @@ Let's extend the last query also to fetch the hashtags and the mentions.
 
 _Note: If the traversal query syntax in the above query is not familiar to you, [check out the third tutorial]({{< relref "tutorial-3/index.md" >}}) of the series._
 
-Did you know that string values in Dgraph can also be compared using comparators like greater-than or less-than? 
+Did you know that string values in Dgraph can also be compared using comparators like greater-than or less-than?
 
 In our next section, let's see how to run the comparison functions other than `equals to (eq)` on the string predicates.
 
@@ -407,7 +407,7 @@ Let's find the twitter accounts which come after `dgraphlabs` in alphabetically 
 
 Oops, we have an error!
 
-You can see from the error that the current `hash` index on the `user_handle` predicate doesn't support the `gt` function. 
+You can see from the error that the current `hash` index on the `user_handle` predicate doesn't support the `gt` function.
 
 To be able to do string comparison operations like the one above, you need first set the `exact` index on the string predicate.
 
@@ -467,7 +467,7 @@ Adding the `term` index is similar to adding any other string index.
 Dgraph provides two built-in functions specifically to search for terms: `allofterms` and `anyofterms`.
 
 Apart from these two functions, the `term` index only supports the `eq` comparator.
-This means any other query functions (like eq, lt, gt...) fails when run on string predicates with the `term` index.
+This means any other query functions (like lt, gt, le...) fails when run on string predicates with the `term` index.
 
 We'll soon take a look at the table containing the string indices and their supporting query functions.
 But first, let's learn how to use `anyofterms` and `allofterms` query functions.

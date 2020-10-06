@@ -5,6 +5,8 @@
         msg
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter": { "aSecret": { "anyofterms": "auth is applied" } } }
   dgmutations:
@@ -22,6 +24,76 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
+- name: "Delete with inverse field and RBAC true"
+  gqlquery: |
+    mutation {
+      deleteTweets(
+        filter: {
+          text: {anyoftext: "abc"}
+        }) {
+        tweets {
+          text
+        }
+      }
+    }
+  jwtvar:
+    USER: "foo"
+    ROLE: "admin"
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "User.tweets" : [{"uid":"uid(x)"}],
+            "uid" : "uid(User2)"
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteTweets(func: uid(TweetsRoot)) {
+        uid
+        User2 as Tweets.user
+      }
+      TweetsRoot as var(func: uid(Tweets1))
+      Tweets1 as var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "abc"))
+      tweets(func: uid(Tweets3)) {
+        text : Tweets.text
+        dgraph.uid : uid
+      }
+      Tweets3 as var(func: uid(Tweets4))
+      Tweets4 as var(func: uid(x))
+    }
+
+- name: "Delete with inverse field and RBAC false"
+  gqlquery: |
+    mutation {
+      deleteTweets(
+        filter: {
+          text: {anyoftext: "abc"}
+        }) {
+        tweets {
+          text
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "admin"
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" }
+        ]
+  dgquery: |-
+    query {
+      x as deleteTweets()
+      tweets(func: uid(Tweets1)) {
+        text : Tweets.text
+        dgraph.uid : uid
+      }
+      Tweets1 as var(func: uid(Tweets2))
+      Tweets2 as var(func: uid(x))
+    }
+
 - name: "Delete with deep auth"
   gqlquery: |
     mutation deleteTicket($filter: TicketFilter!) {
@@ -29,6 +101,8 @@
         msg
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter": { "title": { "anyofterms": "auth is applied" } } }
   dgmutations:
@@ -90,6 +164,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter": { "title": { "anyofterms": "auth is applied" } } }
   dgmutations:
@@ -206,7 +282,9 @@
     {
       "projs" : ["0x01", "0x02"]
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -244,7 +322,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -269,6 +349,8 @@
         "username": { "eq": "userxyz" }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [
@@ -276,6 +358,10 @@
           {
             "Ticket.assignedTo" : [ {"uid":"uid(x)"} ],
             "uid" : "uid(Ticket4)"
+          },
+          {
+            "Tweets.user" : {"uid":"uid(x)"},
+            "uid" : "uid(Tweets5)"
           }
         ]
   dgquery: |-
@@ -283,6 +369,7 @@
       x as deleteUser(func: uid(UserRoot)) {
         uid
         Ticket4 as User.tickets
+        Tweets5 as User.tweets
       }
       UserRoot as var(func: uid(User1)) @filter((uid(UserAuth2) AND uid(UserAuth3)))
       User1 as var(func: type(User)) @filter(eq(User.username, "userxyz"))
@@ -297,6 +384,8 @@
         msg
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter":
       {
@@ -331,7 +420,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -359,7 +450,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -377,7 +470,7 @@
         random : Log.random
         dgraph.uid : uid
       }
-      Log2 as var(func: uid(Log3), orderasc: Log.logs)
+      Log2 as var(func: uid(Log3))
       Log3 as var(func: uid(x))
     }
 
@@ -392,7 +485,9 @@
     {
       "ids" : ["0x01", "0x02"]
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{ "uid": "uid(x)" }]
@@ -416,6 +511,8 @@
     {
       "ids" : ["0x01", "0x02"]
     }
+  jwtvar:
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{ "uid": "uid(x)" }]
@@ -442,7 +539,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -474,7 +573,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -498,7 +599,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -522,7 +625,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{

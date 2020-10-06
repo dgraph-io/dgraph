@@ -59,7 +59,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 		SessionToken: req.SessionToken,
 		Anonymous:    req.Anonymous,
 	}
-	if err := VerifyBackup(req.Location, req.BackupId, &creds, currentGroups); err != nil {
+	if err := VerifyBackup(req, &creds, currentGroups); err != nil {
 		return 0, errors.Wrapf(err, "failed to verify backup")
 	}
 
@@ -209,13 +209,14 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(err, "cannot create backup handler")
 	}
 
-	manifests, err := handler.GetManifests(uri, req.BackupId)
+	manifests, err := handler.GetManifests(uri, req.BackupId, req.BackupNum)
 	if err != nil {
 		return errors.Wrapf(err, "cannot get backup manifests")
 	}
 	if len(manifests) == 0 {
 		return errors.Errorf("no backup manifests found at location %s", req.Location)
 	}
+
 	lastManifest := manifests[len(manifests)-1]
 	preds, ok := lastManifest.Groups[req.GroupId]
 	if !ok {
@@ -285,8 +286,18 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	return config, nil
 }
 
+func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
+	return &Credentials{
+		AccessKey:    req.AccessKey,
+		SecretKey:    req.SecretKey,
+		SessionToken: req.SessionToken,
+		Anonymous:    req.Anonymous,
+	}
+}
+
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
-	res := LoadBackup(req.Location, req.BackupId,
+	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
+		getCredentialsFromRestoreRequest(req),
 		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
 			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.

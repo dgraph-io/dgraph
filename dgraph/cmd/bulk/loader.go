@@ -54,6 +54,7 @@ type options struct {
 	TmpDir           string
 	NumGoroutines    int
 	MapBufSize       uint64
+	PartitionBufSize int64
 	SkipMapPhase     bool
 	CleanupTmp       bool
 	NumReducers      int
@@ -66,6 +67,7 @@ type options struct {
 	NewUids          bool
 	ClientDir        string
 	Encrypted        bool
+	EncryptedOut     bool
 
 	MapShards    int
 	ReduceShards int
@@ -77,6 +79,8 @@ type options struct {
 	EncryptionKey x.SensitiveByteSlice
 	// BadgerCompressionlevel is the compression level to use while writing to badger.
 	BadgerCompressionLevel int
+	BlockCacheSize         int64
+	IndexCacheSize         int64
 }
 
 type state struct {
@@ -88,7 +92,8 @@ type state struct {
 	readerChunkCh chan *bytes.Buffer
 	mapFileId     uint32 // Used atomically to name the output files of the mappers.
 	dbs           []*badger.DB
-	writeTs       uint64 // All badger writes use this timestamp
+	tmpDbs        []*badger.DB // Temporary DB to write the split lists to avoid ordering issues.
+	writeTs       uint64       // All badger writes use this timestamp
 }
 
 type loader struct {
@@ -342,6 +347,11 @@ func (ld *loader) writeSchema() {
 func (ld *loader) cleanup() {
 	for _, db := range ld.dbs {
 		x.Check(db.Close())
+	}
+	for _, db := range ld.tmpDbs {
+		opts := db.Opts()
+		x.Check(db.Close())
+		x.Check(os.RemoveAll(opts.Dir))
 	}
 	ld.prog.endSummary()
 }

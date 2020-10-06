@@ -20,13 +20,13 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/query"
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/v2/y"
-
+	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
@@ -305,28 +305,33 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 }
 
 // RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
-func RefreshAcls(closer *y.Closer) {
-	defer closer.Done()
+func RefreshAcls(closer *z.Closer) {
+	defer func() {
+		glog.Infoln("RefreshAcls closed")
+		closer.Done()
+	}()
 	if len(worker.Config.HmacSecret) == 0 {
 		// the acl feature is not turned on
 		return
 	}
 
-	ticker := time.NewTicker(worker.Config.AclRefreshInterval)
-	defer ticker.Stop()
-
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
 	// aclCachePtr
-	retrieveAcls := func() error {
+	var maxRefreshTs uint64
+	retrieveAcls := func(refreshTs uint64) error {
+		if refreshTs <= maxRefreshTs {
+			return nil
+		}
+		maxRefreshTs = refreshTs
+
 		glog.V(3).Infof("Refreshing ACLs")
 		queryRequest := api.Request{
 			Query:    queryAcls,
 			ReadOnly: true,
+			StartTs:  refreshTs,
 		}
 
-		ctx := context.Background()
-		var err error
-		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
+		queryResp, err := (&Server{}).doQuery(closer.Ctx(), &queryRequest, NoAuthorize)
 		if err != nil {
 			return errors.Errorf("unable to retrieve acls: %v", err)
 		}
@@ -340,16 +345,17 @@ func RefreshAcls(closer *y.Closer) {
 		return nil
 	}
 
-	for {
-		select {
-		case <-closer.HasBeenClosed():
+	closer.AddRunning(1)
+	go worker.SubscribeForUpdates(aclPrefixes, func(kvs *bpb.KVList) {
+		if kvs == nil || len(kvs.Kv) == 0 {
 			return
-		case <-ticker.C:
-			if err := retrieveAcls(); err != nil {
-				glog.Errorf("Error while retrieving acls:%v", err)
-			}
 		}
-	}
+		if err := retrieveAcls(kvs.Kv[0].Version); err != nil {
+			glog.Errorf("Error while retrieving acls: %v", err)
+		}
+	}, 1, closer)
+
+	<-closer.HasBeenClosed()
 }
 
 const queryAcls = `
@@ -367,8 +373,22 @@ const queryAcls = `
 }
 `
 
+var aclPrefixes = [][]byte{
+	x.PredicatePrefix("dgraph.acl.permission"),
+	x.PredicatePrefix("dgraph.acl.predicate"),
+	x.PredicatePrefix("dgraph.acl.rule"),
+	x.PredicatePrefix("dgraph.user.group"),
+	x.PredicatePrefix("dgraph.type.Group"),
+	x.PredicatePrefix("dgraph.xid"),
+}
+
 // ResetAcl clears the aclCachePtr and upserts the Groot account.
-func ResetAcl() {
+func ResetAcl(closer *z.Closer) {
+	defer func() {
+		glog.Infof("ResetAcl closed")
+		closer.Done()
+	}()
+
 	if len(worker.Config.HmacSecret) == 0 {
 		// The acl feature is not turned on.
 		return
@@ -435,8 +455,8 @@ func ResetAcl() {
 		return nil
 	}
 
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		if err := upsertGuardians(ctx); err != nil {
 			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
@@ -446,8 +466,8 @@ func ResetAcl() {
 		break
 	}
 
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		if err := upsertGroot(ctx); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
@@ -583,7 +603,10 @@ func parsePredsFromMutation(nquads []*api.NQuad) []string {
 	// use a map to dedup predicates
 	predsMap := make(map[string]struct{})
 	for _, nquad := range nquads {
-		predsMap[nquad.Predicate] = struct{}{}
+		// _STAR_ALL is not a predicate in itself.
+		if nquad.Predicate != "_STAR_ALL" {
+			predsMap[nquad.Predicate] = struct{}{}
+		}
 	}
 
 	preds := make([]string, 0, len(predsMap))
@@ -658,7 +681,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return nil
 		}
 
-		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Write)
+		blockedPreds, allowedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -668,7 +691,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to mutate following predicates: %s\n", msg.String())
 		}
-
+		gmu.AllowedPreds = allowedPreds
 		return nil
 	}
 
@@ -721,8 +744,10 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) predsAndvars {
 	}
 	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
-		if _, found := varsMap[pred]; !found {
-			preds = append(preds, pred)
+		if len(pred) > 0 {
+			if _, found := varsMap[pred]; !found {
+				preds = append(preds, pred)
+			}
 		}
 	}
 

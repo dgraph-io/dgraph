@@ -43,12 +43,20 @@ const (
 	customDirective       = "custom"
 	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
 	cascadeDirective      = "cascade"
+	cascadeArg            = "fields"
 	SubscriptionDirective = "withSubscription"
+	lambdaDirective       = "lambda"
 
 	// custom directive args and fields
-	mode   = "mode"
-	BATCH  = "BATCH"
-	SINGLE = "SINGLE"
+	dqlArg      = "dql"
+	httpArg     = "http"
+	httpUrl     = "url"
+	httpMethod  = "method"
+	httpBody    = "body"
+	httpGraphql = "graphql"
+	mode        = "mode"
+	BATCH       = "BATCH"
+	SINGLE      = "SINGLE"
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
@@ -60,10 +68,21 @@ const (
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
 	schemaExtras = `
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can represent values in range [-(2^63),(2^63 - 1)].
+"""
+scalar Int64
+
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
 scalar DateTime
 
 enum DgraphIndex {
 	int
+	int64
 	float
 	bool
 	hash
@@ -121,9 +140,10 @@ directive @auth(
 	add: AuthRule,
 	update: AuthRule,
 	delete:AuthRule) on OBJECT
-directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -131,6 +151,14 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+}
+
+input Int64Filter {
+	eq: Int64
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
 }
 
 input FloatFilter {
@@ -210,6 +238,7 @@ var numUids = &ast.FieldDefinition{
 // == supported Dgraph index -> GraphQL type it applies to
 var supportedSearches = map[string]searchTypeIndex{
 	"int":      {"Int", "int"},
+	"int64":    {"Int64", "int"},
 	"float":    {"Float", "float"},
 	"bool":     {"Boolean", "bool"},
 	"hash":     {"String", "hash"},
@@ -224,11 +253,12 @@ var supportedSearches = map[string]searchTypeIndex{
 	"hour":     {"DateTime", "hour"},
 }
 
-// GraphQL scalar type -> default Dgraph index (/search)
+// GraphQL scalar type -> default search arg
 // used if the schema specifies @search without an arg
 var defaultSearches = map[string]string{
 	"Boolean":  "bool",
 	"Int":      "int",
+	"Int64":    "int64",
 	"Float":    "float",
 	"String":   "term",
 	"DateTime": "year",
@@ -253,6 +283,7 @@ var filtersCollisions = map[string][]string{
 // GraphQL types that can be used for ordering in orderasc and orderdesc.
 var orderable = map[string]bool{
 	"Int":      true,
+	"Int64":    true,
 	"Float":    true,
 	"String":   true,
 	"DateTime": true,
@@ -269,6 +300,7 @@ var enumDirectives = map[string]bool{
 var builtInFilters = map[string]string{
 	"bool":     "Boolean",
 	"int":      "IntFilter",
+	"int64":    "Int64Filter",
 	"float":    "FloatFilter",
 	"year":     "DateTimeFilter",
 	"month":    "DateTimeFilter",
@@ -287,6 +319,7 @@ var scalarToDgraph = map[string]string{
 	"ID":       "uid",
 	"Boolean":  "bool",
 	"Int":      "int",
+	"Int64":    "int",
 	"Float":    "float",
 	"String":   "string",
 	"DateTime": "dateTime",
@@ -313,7 +346,8 @@ var directiveValidators = map[string]directiveValidator{
 	deprecatedDirective:   ValidatorNoOp,
 	SubscriptionDirective: ValidatorNoOp,
 	// Just go get it printed into generated schema
-	authDirective: ValidatorNoOp,
+	authDirective:   ValidatorNoOp,
+	lambdaDirective: lambdaDirectiveValidation,
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
@@ -547,6 +581,7 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
 		addQueries(sch, defn)
+		addTypeHasFilter(sch, defn)
 	}
 }
 
@@ -658,10 +693,9 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 // }
 func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
-		custom := fld.Directives.ForName(customDirective)
-		// Filtering and ordering for fields with @custom directive is handled by the remote
+		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
-		if custom != nil {
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -690,6 +724,35 @@ func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 				Name: "filter",
 				Type: &ast.Type{NamedType: fldType + "Filter"},
 			})
+	}
+}
+
+// addTypeHasFilter adds `enum TypeHasFilter {...}` to the Schema
+// if the object/interface has a field other than the ID field
+func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
+	filterName := defn.Name + "HasFilter"
+	filter := &ast.Definition{
+		Kind: ast.Enum,
+		Name: filterName,
+	}
+
+	for _, fld := range defn.Fields {
+		if isID(fld) || hasCustomOrLambda(fld) {
+			continue
+		}
+		filter.EnumValues = append(filter.EnumValues,
+			&ast.EnumValueDefinition{Name: fld.Name})
+	}
+
+	// Interfaces could have just ID field but Types cannot for eg:
+	// interface I {
+	// 	 id: ID!
+	// }
+	// is a valid interface but it do not have any field which can
+	// be filtered using has filter
+
+	if len(filter.EnumValues) > 0 {
+		schema.Types[filterName] = filter
 	}
 }
 
@@ -773,10 +836,6 @@ func mergeAndAddFilters(filterTypes []string, schema *ast.Schema, filterName str
 //   ...
 // }
 func addFilterType(schema *ast.Schema, defn *ast.Definition) {
-	if !hasFilterable(defn) {
-		return
-	}
-
 	filterName := defn.Name + "Filter"
 	filter := &ast.Definition{
 		Kind: ast.InputObject,
@@ -811,6 +870,13 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 		}
 	}
 
+	// Has filter makes sense only if there is atleast one non ID field in the defn
+	if len(getFieldsWithoutIDType(schema, defn)) > 0 {
+		filter.Fields = append(filter.Fields,
+			&ast.FieldDefinition{Name: "has", Type: &ast.Type{NamedType: defn.Name + "HasFilter"}},
+		)
+	}
+
 	// Not filter makes sense even if the filter has only one field. And/Or would only make sense
 	// if the filter has more than one field or if it has one non-id field.
 	if (len(filter.Fields) == 1 && !isID(filter.Fields[0])) || len(filter.Fields) > 1 {
@@ -820,8 +886,14 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 		)
 	}
 
+	// filter must have atleast one field. So not filter should be there.
+	// For eg, if defn has only one field,2 cases are possible:-
+	// 1- it is of ID type : then it contains filter of id type
+	// 2- it is of non-ID type :  then it will have 'has' filter
 	filter.Fields = append(filter.Fields,
-		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}})
+		&ast.FieldDefinition{Name: "not", Type: &ast.Type{NamedType: filterName}},
+	)
+
 	schema.Types[filterName] = filter
 }
 
@@ -833,8 +905,13 @@ func hasFilterable(defn *ast.Definition) bool {
 }
 
 func hasOrderables(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return orderable[fld.Type.Name()] })
+	return fieldAny(defn.Fields, isOrderable)
+}
+
+func isOrderable(fld *ast.FieldDefinition) bool {
+	// lists can't be ordered and NamedType will be empty for lists,
+	// so it will return false for list fields
+	return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
 }
 
 func hasID(defn *ast.Definition) bool {
@@ -955,7 +1032,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if orderable[fld.Type.Name()] {
+		if isOrderable(fld) {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}
@@ -1261,9 +1338,9 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		custom := fld.Directives.ForName(customDirective)
-		// Fields with @custom directive should not be part of mutation input, hence we skip them.
-		if custom != nil {
+		// Fields with @custom/@lambda directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -1302,9 +1379,9 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
-		custom := fld.Directives.ForName(customDirective)
-		// Fields with @custom directive should not be part of mutation input, hence we skip them.
-		if custom != nil {
+		// Fields with @custom/@lambda directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 

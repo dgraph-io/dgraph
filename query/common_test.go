@@ -69,6 +69,20 @@ func processQuery(ctx context.Context, t *testing.T, query string) (string, erro
 	return string(jsonResponse), err
 }
 
+func processQueryRDF(ctx context.Context, t *testing.T, query string) (string, error) {
+	txn := client.NewTxn()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Do(ctx, &api.Request{
+		Query:      query,
+		RespFormat: api.Request_RDF,
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(res.Rdf), err
+}
+
 func processQueryNoErr(t *testing.T, query string) string {
 	res, err := processQuery(context.Background(), t, query)
 	require.NoError(t, err)
@@ -263,6 +277,7 @@ geometry                       : geo @index(geo) .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 nick_name                      : string @index(term) .
+pet_name                       : [string] @index(exact) .
 royal_title                    : string @index(hash, term, fulltext) @lang .
 school                         : [uid] @count .
 lossy                          : string @index(term) @lang .
@@ -301,6 +316,8 @@ noindex_dob                    : datetime .
 noindex_alive                  : bool .
 noindex_salary                 : float .
 language                       : [string] .
+score                          : [int] @index(int) .
+average                        : [float] @index(float) .
 `
 
 func populateCluster() {
@@ -715,6 +732,21 @@ func populateCluster() {
 		<56> <connects> <58> (weight=1) .
 		<58> <connects> <59> (weight=1) .
 		<59> <connects> <60> (weight=1) .
+
+		# data for testing between operator.
+		<20000> <score> "90" .
+		<20000> <score> "56" .
+		<20000> <average> "46.93" .
+		<20000> <average> "55.10" .
+		<20000> <pet_name> "little master" .
+		<20000> <pet_name> "master blaster" .
+
+		<20001> <score> "68" .
+		<20001> <score> "85" .
+		<20001> <average> "35.20" .
+		<20001> <average> "49.33" .
+		<20001> <pet_name> "mahi" .
+		<20001> <pet_name> "ms" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))

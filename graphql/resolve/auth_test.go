@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -42,9 +43,8 @@ import (
 type AuthQueryRewritingCase struct {
 	Name string
 
-	// Values to come in the JWT
-	User string
-	Role string
+	// JWT variables
+	JWTVar map[string]interface{}
 
 	// GQL query and variables
 	GQLQuery  string
@@ -162,6 +162,7 @@ func TestStringCustomClaim(t *testing.T) {
 	require.NoError(t, err)
 
 	test.LoadSchemaFromString(t, string(authSchema))
+	testutil.SetAuthMeta(string(authSchema))
 
 	// Token with string custom claim
 	// "https://xyz.io/jwt/claims": "{\"USER\": \"50950b40-262f-4b26-88a7-cbbb780b2176\", \"ROLE\": \"ADMIN\"}",
@@ -187,6 +188,7 @@ func TestAudienceClaim(t *testing.T) {
 	require.NoError(t, err)
 
 	test.LoadSchemaFromString(t, string(authSchema))
+	testutil.SetAuthMeta(string(authSchema))
 
 	// Verify that authorization information is set correctly.
 	metainfo := authorization.GetAuthMeta()
@@ -241,6 +243,48 @@ func TestAudienceClaim(t *testing.T) {
 	}
 }
 
+func TestInvalidAuthInfo(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+	authSchema, err := testutil.AppendJWKAndVerificationKey(sch)
+	require.NoError(t, err)
+	_, err = schema.NewHandler(string(authSchema), false)
+	require.Error(t, err, fmt.Errorf("Expecting either JWKUrl or (VerificationKey, Algo), both were given"))
+}
+
+//Todo(Minhaj): Add a testcase for token without Expiry
+func TestVerificationWithJWKUrl(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+
+	authSchema, err := testutil.AppendAuthInfoWithJWKUrl(sch)
+	require.NoError(t, err)
+	test.LoadSchemaFromString(t, string(authSchema))
+
+	// Verify that authorization information is set correctly.
+	metainfo := authorization.GetAuthMeta()
+	require.Equal(t, metainfo.Algo, "")
+	require.Equal(t, metainfo.Header, "X-Test-Auth")
+	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
+	require.Equal(t, metainfo.VerificationKey, "")
+	require.Equal(t, metainfo.JWKUrl, "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
+
+	testCase := struct {
+		name  string
+		token string
+	}{
+		name:  `Expired Token`,
+		token: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE2NzUwM2UwYWVjNTJkZGZiODk2NTIxYjkxN2ZiOGUyMGMxZjMzMDAiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZmlyLXByb2plY3QxLTI1OWU3IiwiYXVkIjoiZmlyLXByb2plY3QxLTI1OWU3IiwiYXV0aF90aW1lIjoxNjAxNDQ0NjM0LCJ1c2VyX2lkIjoiMTdHb3h2dU5CWlc5YTlKU3Z3WXhROFc0bjE2MyIsInN1YiI6IjE3R294dnVOQlpXOWE5SlN2d1l4UThXNG4xNjMiLCJpYXQiOjE2MDE0NDQ2MzQsImV4cCI6MTYwMTQ0ODIzNCwiZW1haWwiOiJtaW5oYWpAZGdyYXBoLmlvIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJmaXJlYmFzZSI6eyJpZGVudGl0aWVzIjp7ImVtYWlsIjpbIm1pbmhhakBkZ3JhcGguaW8iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJwYXNzd29yZCJ9fQ.q5YmOzOUkZHNjlz53hgLNSVg-brIU9tLJ4jLC0_Xurl5wEbyZ6D_KQ9-UFqbl2HR6R1V5kpaf6eDFR3c83i1PpCbJ4LTjHAf_njQvL75ByERld23lZtKZyEeE6ujdFXL8ne4fI2qenD1Xeqx9AnXbLf7U_CvZpbX3l1wj7p0Lpn7qixi0AztuLSJMLkMfFpaiwyFZQivi4cqtnI25VIsK6a4KIpl1Sk0AHT-lv9PRadd_JDjWAIzD0SfhpZOskaeA9PljVMp-Y3Xscwg_Qc6u1MIBPg1jKO-ngjhWkgEWBoz5F836P7phT60LVBHhYuk-jRN6HSSNWQ3ineuN-jBkg",
+	}
+
+	md := metadata.New(map[string]string{"authorizationJwt": testCase.token})
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+
+	_, err = authorization.ExtractCustomClaims(ctx)
+	require.True(t, strings.Contains(err.Error(), "token is expired"))
+
+}
+
 // TODO(arijit): Generate the JWT token instead of using pre generated token.
 func TestJWTExpiry(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
@@ -250,6 +294,7 @@ func TestJWTExpiry(t *testing.T) {
 	require.NoError(t, err)
 
 	test.LoadSchemaFromString(t, string(authSchema))
+	testutil.SetAuthMeta(string(authSchema))
 
 	// Verify that authorization information is set correctly.
 	metainfo := authorization.GetAuthMeta()
@@ -318,13 +363,10 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
 
-			authMeta.AuthVars = map[string]interface{}{
-				"ROLE": tcase.Role,
-			}
-
-			// Skipping $USER for specific rules.
-			if !strings.HasPrefix(tcase.Name, "Query with missing variable") {
-				authMeta.AuthVars["USER"] = "user1"
+			// Clear the map and initialize it.
+			authMeta.AuthVars = make(map[string]interface{})
+			for k, v := range tcase.JWTVar {
+				authMeta.AuthVars[k] = v
 			}
 
 			ctx := context.Background()
@@ -336,6 +378,10 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 			require.Nil(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
+
+			// Check for unused variables.
+			_, err = gql.Parse(gql.Request{Str: dgraph.AsString(dgQuery)})
+			require.NoError(t, err)
 		})
 	}
 }
@@ -488,6 +534,10 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 			// -- Assert --
 			require.Nil(t, err)
 			require.Equal(t, tt.dgQuery, dgraph.AsString(dgQuery))
+
+			// Check for unused variables.
+			_, err = gql.Parse(gql.Request{Str: dgraph.AsString(dgQuery)})
+			require.NoError(t, err)
 		})
 
 	}
@@ -538,13 +588,12 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta)
 			mut := test.GetMutation(t, op)
 			rewriterToTest := NewDeleteRewriter()
 
-			authMeta.AuthVars = map[string]interface{}{
-				"USER": "user1",
+			// Clear the map and initialize it.
+			authMeta.AuthVars = make(map[string]interface{})
+			for k, v := range tcase.JWTVar {
+				authMeta.AuthVars[k] = v
 			}
 
-			if tcase.Role != "" {
-				authMeta.AuthVars["ROLE"] = tcase.Role
-			}
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
 
@@ -650,10 +699,12 @@ func checkAddUpdateCase(
 	require.NoError(t, err)
 	mut := test.GetMutation(t, op)
 
-	authMeta.AuthVars = map[string]interface{}{
-		"USER": "user1",
-		"ROLE": tcase.Role,
+	// Clear the map and initialize it.
+	authMeta.AuthVars = make(map[string]interface{})
+	for k, v := range tcase.JWTVar {
+		authMeta.AuthVars[k] = v
 	}
+
 	ctx, err := authMeta.AddClaimsToContext(context.Background())
 	require.NoError(t, err)
 
@@ -685,7 +736,7 @@ func checkAddUpdateCase(
 
 	// -- Assert --
 	// most cases are built into the authExecutor
-	if tcase.Error != nil || resolved.Err != nil {
+	if tcase.Error != nil {
 		require.Equal(t, tcase.Error.Error(), resolved.Err.Error())
 	}
 }
@@ -702,6 +753,8 @@ func TestAuthQueryRewriting(t *testing.T) {
 		strSchema := string(result)
 
 		authMeta, err := authorization.Parse(strSchema)
+		authorization.SetAuthMeta(authMeta)
+
 		metaInfo := &testutil.AuthMeta{
 			PublicKey: authMeta.VerificationKey,
 			Namespace: authMeta.Namespace,

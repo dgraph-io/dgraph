@@ -19,6 +19,8 @@ package x
 import (
 	"net"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 // Options stores the options for this package.
@@ -30,10 +32,17 @@ type Options struct {
 	QueryEdgeLimit uint64
 	// NormalizeNodeLimit is the maximum number of nodes allowed in a normalize query.
 	NormalizeNodeLimit int
+	// MutationsNQuadLimit is maximum number of nquads that can be present in a single
+	// mutation request.
+	MutationsNQuadLimit int
 	// PollInterval is the polling interval for graphql subscription.
 	PollInterval time.Duration
-	//GraphqlExtension wiil be set to see extensions in graphql results
+	// GraphqlExtension will be set to see extensions in graphql results
 	GraphqlExtension bool
+	// GraphqlDebug will enable debug mode in GraphQL
+	GraphqlDebug bool
+	// GraphqlLambdaUrl stores the URL of lambda functions for custom GraphQL resolvers
+	GraphqlLambdaUrl string
 }
 
 // Config stores the global instance of this package's options.
@@ -84,6 +93,8 @@ type WorkerOptions struct {
 	StartTime time.Time
 	// LudicrousMode is super fast mode with fewer guarantees.
 	LudicrousMode bool
+	// Number of mutations that can be run together in ludicrous mode
+	LudicrousConcurrency int
 	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
 	EncryptionKey SensitiveByteSlice
 	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
@@ -91,7 +102,24 @@ type WorkerOptions struct {
 	// queries hence it has been kept as int32. LogRequest value 1 enables logging of requests
 	// coming to alphas and 0 disables it.
 	LogRequest int32
+	// If true, we should call msync or fsync after every write to survive hard reboots.
+	HardSync bool
 }
 
 // WorkerConfig stores the global instance of the worker package's options.
 var WorkerConfig WorkerOptions
+
+func (w *WorkerOptions) Parse(conf *viper.Viper) {
+	w.MyAddr = conf.GetString("my")
+	w.Tracing = conf.GetFloat64("trace")
+
+	if w.LudicrousMode {
+		w.HardSync = false
+
+	} else {
+		survive := conf.GetString("survive")
+		AssertTruef(survive == "process" || survive == "filesystem",
+			"Invalid survival mode: %s", survive)
+		w.HardSync = survive == "filesystem"
+	}
+}

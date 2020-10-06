@@ -81,6 +81,24 @@ var (
 	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
+	// TxnAborts records count of aborted transactions.
+	TxnAborts = stats.Int64("txn_aborts_total",
+		"Number of transaction aborts", stats.UnitDimensionless)
+	// PBlockHitRatio records the hit ratio of posting store block cache.
+	PBlockHitRatio = stats.Float64("hit_ratio_postings_block",
+		"Hit ratio of p store block cache", stats.UnitDimensionless)
+	// PIndexHitRatio records the hit ratio of posting store index cache.
+	PIndexHitRatio = stats.Float64("hit_ratio_postings_index",
+		"Hit ratio of p store index cache", stats.UnitDimensionless)
+	// WBlockHitRatio records the hit ratio of wal store block cache.
+	WBlockHitRatio = stats.Float64("hit_ratio_wal_block",
+		"Hit ratio of w store block cache", stats.UnitDimensionless)
+	// WIndexHitRatio records the hit ratio of wal store index cache.
+	WIndexHitRatio = stats.Float64("hit_ratio_wal_index",
+		"Hit ratio of w store index cache", stats.UnitDimensionless)
+	// PLCacheHitRatio records the hit ratio of posting list cache.
+	PLCacheHitRatio = stats.Float64("hit_ratio_posting_cache",
+		"Hit ratio of posting list cache", stats.UnitDimensionless)
 
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
@@ -147,6 +165,13 @@ var (
 			Aggregation: view.Count(),
 			TagKeys:     allTagKeys,
 		},
+		{
+			Name:        TxnAborts.Name(),
+			Measure:     TxnAborts,
+			Description: TxnAborts.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
 
 		// Last value aggregations
 		{
@@ -197,6 +222,41 @@ var (
 			Description: AlphaHealth.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     nil,
+		},
+		{
+			Name:        PBlockHitRatio.Name(),
+			Measure:     PBlockHitRatio,
+			Description: PBlockHitRatio.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        PIndexHitRatio.Name(),
+			Measure:     PIndexHitRatio,
+			Description: PIndexHitRatio.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        WBlockHitRatio.Name(),
+			Measure:     WBlockHitRatio,
+			Description: WBlockHitRatio.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        WIndexHitRatio.Name(),
+			Measure:     WIndexHitRatio,
+			Description: WIndexHitRatio.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        PLCacheHitRatio.Name(),
+			Measure:     PLCacheHitRatio,
+			Description: PLCacheHitRatio.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
 		},
 	}
 )

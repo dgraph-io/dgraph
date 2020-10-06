@@ -34,9 +34,11 @@ import (
 )
 
 const (
+	alphaGrpc            = "localhost:9180"
 	alphaURL             = "http://localhost:8180/graphql"
 	alphaAdminURL        = "http://localhost:8180/admin"
 	subscriptionEndpoint = "ws://localhost:8180/graphql"
+	groupOnegRPC         = "localhost:9180"
 	customTypes          = `type MovieDirector @remote {
 		 id: ID!
 		 name: String!
@@ -158,6 +160,42 @@ func TestCustomPostQuery(t *testing.T) {
 	require.JSONEq(t, expected, string(result.Data))
 }
 
+func TestCustomPostQueryWithBody(t *testing.T) {
+	schema := customTypes + `
+	 type Query {
+		 myFavoriteMoviesPost(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+				 url: "http://mock:8888/favMoviesPostWithBody/$id?name=$name",
+                 body:"{id:$id,name:$name,num:$num,movie_type:\"space\"}"
+				 method: "POST"
+		 })
+	 }`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	query := `
+	 query {
+		 myFavoriteMoviesPost(id: "0x123", name: "Author") {
+			 id
+			 name
+			 director {
+				 id
+				 name
+			 }
+		 }
+	 }`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+
+	expected := `{"myFavoriteMoviesPost":[{"id":"0x3","name":"Star Wars","director":
+    [{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":
+    [{"id":"0x6","name":"J.J. Abrams"}]}]}`
+	require.JSONEq(t, expected, string(result.Data))
+}
+
 func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	schema := customTypes + `
 	 type Query {
@@ -192,7 +230,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	require.Nilf(t, result.Errors, "%s", result.Errors)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
 }
@@ -231,7 +269,7 @@ func TestCustomNameForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	require.Nilf(t, result.Errors, "%s", result.Errors)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
 }
@@ -434,7 +472,7 @@ func TestCustomQueryWithNonExistentURLShouldReturnError(t *testing.T) {
 	require.Equal(t, x.GqlErrorList{
 		{
 			Message: "Evaluation of custom field failed because external request returned an " +
-				"error: unexpected status code: 404 for field: myFavoriteMovies within" +
+				"error: unexpected error with: 404 for field: myFavoriteMovies within" +
 				" type: Query.",
 			Locations: []x.Location{{Line: 3, Column: 3}},
 		},
@@ -519,10 +557,10 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 
 	expectedErrors := x.GqlErrorList{
 		&x.GqlError{Message: "Evaluation of custom field failed because external request " +
-			"returned an error: unexpected status code: 404 for field: cars within type: Person.",
+			"returned an error: unexpected error with: 404 for field: cars within type: Person.",
 			Locations: []x.Location{{Line: 6, Column: 4}}},
 		&x.GqlError{Message: "Evaluation of custom field failed because external request returned" +
-			" an error: unexpected status code: 404 for field: bikes within type: Person.",
+			" an error: unexpected error with: 404 for field: bikes within type: Person.",
 			Locations: []x.Location{{Line: 9, Column: 4}}},
 	}
 	require.Contains(t, result.Errors, expectedErrors[0])
@@ -1009,6 +1047,103 @@ func TestCustomFieldsShouldForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nilf(t, result.Errors, "%+v", result.Errors)
+}
+
+func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
+	schema := `
+    type User {
+		id: ID!
+        address:String
+		name: String
+			@custom(
+				http: {
+					url: "http://mock:8888/userName"
+					method: "GET"
+					body: "{uid: $id,address:$address}"
+					mode: SINGLE,
+					secretHeaders: ["GITHUB-API-TOKEN"]
+				}
+			)
+		age: Int! @search
+  	}
+
+# Dgraph.Secret GITHUB-API-TOKEN "some-api-token"
+  `
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	users := addUsers(t)
+	queryUser := `
+	query ($id: [ID!]){
+		queryUser(filter: {id: $id}, order: {asc: age}) {
+			name
+			age
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: queryUser,
+		Variables: map[string]interface{}{"id": []interface{}{
+			users[0].ID, users[1].ID, users[2].ID}},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nilf(t, result.Errors, "%+v", result.Errors)
+}
+
+func TestCustomFieldsShouldPassBody(t *testing.T) {
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	schema := `
+    type User {
+		id: String! @id @search(by: [hash, regexp])
+        address:String
+		name: String
+			@custom(
+				http: {
+					url: "http://mock:8888/userNameWithoutAddress"
+					method: "GET"
+                    body: "{uid: $id,address:$address}"
+                    mode: SINGLE,
+					secretHeaders: ["GITHUB-API-TOKEN"]
+				}
+			)
+		age: Int! @search
+  	}
+# Dgraph.Secret GITHUB-API-TOKEN "some-api-token"
+  `
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `mutation addUser {
+			 addUser(input: [{ id:"0x5", age: 10 }]) {
+				 user {
+					 id
+					 age
+				 }
+			 }
+		 }`,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	queryUser := `
+	query ($id: String!){
+		queryUser(filter: {id: {eq: $id}}) {
+		   name
+           age
+		}
+     }`
+
+	params = &common.GraphQLParams{
+		Query:     queryUser,
+		Variables: map[string]interface{}{"id": "0x5"},
+	}
+
+	result = params.ExecuteAsPost(t, alphaURL)
 	require.Nilf(t, result.Errors, "%+v", result.Errors)
 }
 
@@ -1732,6 +1867,85 @@ func TestCustomPostMutation(t *testing.T) {
 	require.JSONEq(t, expected, string(result.Data))
 }
 
+func TestCustomPostMutationNullInBody(t *testing.T) {
+	schema := `type MovieDirector @remote {
+		 id: ID!
+		 name: String!
+		 directed: [Movie]
+	 }
+    type Movie @remote {
+		 id: ID!
+		 name: String
+		 director: [MovieDirector]
+	 }
+	input MovieDirectorInput {
+		id: ID
+		name: String
+		directed: [MovieInput]
+	}
+	input MovieInput {
+		id: ID
+		name: String
+		director: [MovieDirectorInput]
+	}
+	type Mutation {
+        createMyFavouriteMovies(input: [MovieInput!]): [Movie] @custom(http: {
+			url: "http://mock:8888/favMoviesCreateWithNullBody",
+			method: "POST",
+			body: "{ movies: $input}"
+        })
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation createMovies($movs: [MovieInput!]) {
+			createMyFavouriteMovies(input: $movs) {
+				id
+				name
+				director {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"movs": []interface{}{
+				map[string]interface{}{
+					"name":     "Mov1",
+					"director": []interface{}{map[string]interface{}{"name": "Dir1"}},
+				},
+				map[string]interface{}{"name": nil},
+			}},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	expected := `
+	{
+      "createMyFavouriteMovies": [
+        {
+          "id": "0x1",
+          "name": "Mov1",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "Dir1"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": null,
+          "director": []
+        }
+      ]
+    }`
+	require.JSONEq(t, expected, string(result.Data))
+}
+
 func TestCustomPatchMutation(t *testing.T) {
 	schema := customTypes + `
 	input MovieDirectorInput {
@@ -2001,51 +2215,6 @@ func TestCustomGraphqlMissingTypeForBatchedFieldInput(t *testing.T) {
 			"PostFilterInput.\n")
 }
 
-func TestCustomGraphqlInvalidArgForBatchedField(t *testing.T) {
-	t.Skip()
-	schema := `
-	type Post {
-		id: ID!
-		text: String
-		comments: Post! @custom(http: {
-							url: "http://mock:8888/getPosts",
-							method: "POST",
-							mode: BATCH
-							graphql: "query { getPosts(input: [{name: $id}]) }"
-						})
-	}
-	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Equal(t, "resolving updateGQLSchema failed because input:9: Type Post"+
-		"; Field comments: inside graphql in @custom directive, argument `name` is not present "+
-		"in remote query `getPosts`.\n", res.Errors[0].Error())
-}
-
-func TestCustomGraphqlArgTypeMismatchForBatchedField(t *testing.T) {
-	t.Skip()
-	schema := `
-	type Post {
-		id: ID!
-		likes: Int
-		text: String
-		comments: Post! @custom(http: {
-							url: "http://mock:8888/getPostswithLike",
-							method: "POST",
-							mode: BATCH
-							graphql: "query { getPosts(input: [{id: $id, text: $likes}]) }"
-						})
-	}
-	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Equal(t, "resolving updateGQLSchema failed because input:10: Type Post"+
-		"; Field comments: inside graphql in @custom directive, found type mismatch for variable"+
-		" `$likes` in query `getPosts`, expected `Int`, got `String!`.\n", res.Errors[0].Error())
-}
-
 func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
 	schema := `
 	type Country @remote {
@@ -2084,28 +2253,6 @@ func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
 	require.Len(t, res.Errors, 1)
 	require.Contains(t, res.Errors[0].Error(), "argument `country` in mutation"+
 		" `setCountry` is missing, it is required by remote mutation.")
-}
-
-func TestCustomGraphqlMissingRequiredArgumentForBatchedField(t *testing.T) {
-	t.Skip()
-	schema := `
-	type Post {
-		id: ID!
-		text: String
-		comments: Post! @custom(http: {
-							url: "http://mock:8888/getPosts",
-							method: "POST",
-							mode: BATCH
-							graphql: "query { getPosts(input: [{id: $id}]) }"
-						})
-	}
-	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Equal(t, "resolving updateGQLSchema failed because input:9: Type Post"+
-		"; Field comments: inside graphql in @custom directive, argument `text` in query "+
-		"`getPosts` is missing, it is required by remote query.\n", res.Errors[0].Error())
 }
 
 // this one accepts an object and returns an object
@@ -2421,12 +2568,16 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 	params := &common.GraphQLParams{
 		Query: `
 		mutation{
-			addUser(input:[{
-			  screen_name:"manishrjain",
-			  tweets:[{
-				text:"hello twitter"
-			  }]
-			}]){
+			addUser(input:[
+			  {
+				  screen_name:"manishrjain",
+				  tweets:[{text:"hello twitter"}]
+			  }
+			  {
+				  screen_name:"amazingPanda",
+				  tweets:[{text:"I love Kung fu."}]
+			  }
+			]){
 			  numUids
 			}
 		  }`,
@@ -2454,18 +2605,387 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 
 	result = params.ExecuteAsPost(t, alphaURL)
 	common.RequireNoGQLErrors(t, result)
-	require.JSONEq(t, string(result.Data), `
+	testutil.CompareJSON(t, `
 	{
-		"querySearchTweets": [{
-			"text": "hello twitter",
-			"user": {
-				"screen_name": "manishrjain",
-				"followers": {
-					"users": [{
-						"name": "hi_balaji"
-					}]
+		"querySearchTweets": [
+			{
+				"text": "hello twitter",
+				"user": {
+					"screen_name": "manishrjain",
+					"followers": {
+						"users": [{"name": "hi_balaji"}]
+					}
+				}
+			},{
+				"text": "I love Kung fu.",
+				"user": {
+					"screen_name": "amazingPanda",
+					"followers": {
+						"users": [{"name": "twitter_bot"}]
+					}
 				}
 			}
-		}]
-	}`)
+		]
+	}`, string(result.Data))
+}
+
+func TestCustomDQL(t *testing.T) {
+	dg, err := testutil.DgraphClient(alphaGrpc)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+
+	schema := `
+	type Tweets {
+		id: ID!
+		text: String! @search(by: [fulltext])
+		user: User
+		timestamp: DateTime! @search
+	}
+	type User {
+		screen_name: String! @id
+		followers: Int @search
+		tweets: [Tweets] @hasInverse(field: user)
+	}
+	type UserTweetCount @remote {
+		screen_name: String
+		tweetCount: Int
+	}
+	
+	type Query {
+	  getFirstUserByFollowerCount(count: Int!): User @custom(dql: """
+		query getFirstUserByFollowerCount($count: int) {
+			getFirstUserByFollowerCount(func: eq(User.followers, $count), first: 1) {
+				screen_name: User.screen_name
+				followers: User.followers
+			}
+		}
+		""")
+		
+	  dqlTweetsByAuthorFollowers: [Tweets] @custom(dql: """
+		query {
+			var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "DQL")) {
+				Tweets.user {
+					followers as User.followers
+				}
+				userFollowerCount as sum(val(followers))
+			}
+			dqlTweetsByAuthorFollowers(func: uid(userFollowerCount), orderdesc: val(userFollowerCount)) {
+				id: uid
+				text: Tweets.text
+				timestamp: Tweets.timestamp
+			}
+		}
+		""")
+		
+	  filteredTweetsByAuthorFollowers(search: String!): [Tweets] @custom(dql: """
+		query t($search: string) {
+			var(func: type(Tweets)) @filter(anyoftext(Tweets.text, $search)) {
+				Tweets.user {
+					followers as User.followers
+				}
+				userFollowerCount as sum(val(followers))
+			}
+			filteredTweetsByAuthorFollowers(func: uid(userFollowerCount), orderdesc: val(userFollowerCount)) {
+				id: uid
+				text: Tweets.text
+				timestamp: Tweets.timestamp
+			}
+		}
+		""")
+
+	  queryUserTweetCounts: [UserTweetCount] @custom(dql: """
+		query {
+			var(func: type(User)) {
+				tc as count(User.tweets)
+			}
+			queryUserTweetCounts(func: uid(tc), orderdesc: val(tc)) {
+				screen_name: User.screen_name
+				tweetCount: val(tc)
+			}
+		}
+		""")
+	}
+	`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation {
+		  addTweets(input: [
+			{
+			  text: "Hello DQL!"
+			  user: {
+				screen_name: "abhimanyu"
+				followers: 5
+			  }
+			  timestamp: "2020-07-29"
+			}
+			{
+			  text: "Woah DQL works!"
+			  user: {
+				screen_name: "pawan"
+				followers: 10
+			  }
+			  timestamp: "2020-07-29"
+			}
+			{
+			  text: "hmm, It worked."
+			  user: {
+				screen_name: "abhimanyu"
+				followers: 5
+			  }
+			  timestamp: "2020-07-30"
+			}
+		  ]) {
+			numUids
+		  }
+		}`,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	params = &common.GraphQLParams{
+		Query: `
+		query ($count: Int!) {
+		  queryWithVar: getFirstUserByFollowerCount(count: $count) {
+			screen_name
+			followers
+		  }
+		  getFirstUserByFollowerCount(count: 10) {
+			screen_name
+			followers
+		  }
+		  dqlTweetsByAuthorFollowers {
+			text
+		  }
+		  filteredTweetsByAuthorFollowers(search: "hello") {
+			text
+		  }
+		  queryUserTweetCounts {
+			screen_name
+			tweetCount
+		  }
+		}`,
+		Variables: map[string]interface{}{"count": 5},
+	}
+
+	result = params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	require.JSONEq(t, `{
+		"queryWithVar": {
+		  "screen_name": "abhimanyu",
+		  "followers": 5
+		},
+		"getFirstUserByFollowerCount": {
+		  "screen_name": "pawan",
+		  "followers": 10
+		},
+		"dqlTweetsByAuthorFollowers": [
+		  {
+			"text": "Woah DQL works!"
+		  },
+		  {
+			"text": "Hello DQL!"
+		  }
+		],
+		"filteredTweetsByAuthorFollowers": [
+		  {
+			"text": "Hello DQL!"
+		  }
+		],
+		"queryUserTweetCounts": [
+		  {
+			"screen_name": "abhimanyu",
+			"tweetCount": 2
+		  },
+		  {
+			"screen_name": "pawan",
+			"tweetCount": 1
+		  }
+		]
+	  }`, string(result.Data))
+}
+
+func TestCustomGetQuerywithRESTError(t *testing.T) {
+	schema := customTypes + `
+	 type Query {
+		 myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+				 url: "http://mock:8888/favMoviesError/$id?name=$name&num=$num",
+				 method: "GET"
+		 })
+	 }`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	query := `
+	 query {
+		 myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
+			 id
+			 name
+			 director {
+				 id
+				 name
+			 }
+		 }
+	 }`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message:   "Rest API returns Error for myFavoriteMovies query",
+			Locations: []x.Location{{Line: 5, Column: 4}},
+			Path:      []interface{}{"Movies", "name"},
+		},
+	}, result.Errors)
+
+}
+
+func TestCustomFieldsWithRestError(t *testing.T) {
+	schema := `
+    type Car @remote {
+		id: ID! 
+		name: String!
+	}
+
+	type User {
+		id: String! @id @search(by: [hash, regexp])
+		name: String
+			@custom(
+				http: {
+					url: "http://mock:8888//userNameError"
+					method: "GET"
+					body: "{uid: $id}"
+					mode: SINGLE,
+				}
+			)
+		age: Int! @search
+		cars: Car
+		@custom(
+			http: {
+			url: "http://mock:8888/cars"
+			method: "GET"
+			body: "{uid: $id}"
+			mode: BATCH,
+			}
+	      )		
+  	}
+  `
+
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `mutation addUser {
+			 addUser(input: [{ id:"0x1", age: 10 }]) {
+				 user {
+					 id
+					 age
+				 }
+			 }
+		 }`,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	queryUser := `
+	query ($id: String!){
+		queryUser(filter: {id: {eq: $id}}) {
+			id
+			name
+			age
+			cars{
+			  name
+			}
+		}
+	}`
+
+	params = &common.GraphQLParams{
+		Query:     queryUser,
+		Variables: map[string]interface{}{"id": "0x1"},
+	}
+
+	result = params.ExecuteAsPost(t, alphaURL)
+
+	expected := `
+	{
+      "queryUser": [
+        {
+          "id": "0x1",
+          "name": null,
+          "age": 10,
+          "cars": {
+            "name": "car-0x1"
+          }	
+        }
+      ]
+    }`
+
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message: "Rest API returns Error for field name",
+		},
+	}, result.Errors)
+
+	require.JSONEq(t, expected, string(result.Data))
+
+}
+
+func TestCustomPostMutationWithRESTError(t *testing.T) {
+	schema := customTypes + `
+	input MovieDirectorInput {
+		id: ID
+		name: String
+		directed: [MovieInput]
+	}
+	input MovieInput {
+		id: ID
+		name: String
+		director: [MovieDirectorInput]
+	}
+	type Mutation {
+        createMyFavouriteMovies(input: [MovieInput!]): [Movie] @custom(http: {
+			url: "http://mock:8888/favMoviesCreateError",
+			method: "POST",
+			body: "{ movies: $input}"
+        })
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation createMovies($movs: [MovieInput!]) {
+			createMyFavouriteMovies(input: $movs) {
+				id
+				name
+				director {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"movs": []interface{}{
+				map[string]interface{}{
+					"name":     "Mov1",
+					"director": []interface{}{map[string]interface{}{"name": "Dir1"}},
+				},
+				map[string]interface{}{"name": "Mov2"},
+			}},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message: "Rest API returns Error for FavoriteMoviesCreate query",
+		},
+	}, result.Errors)
+
 }

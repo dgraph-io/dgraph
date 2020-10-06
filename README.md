@@ -21,7 +21,7 @@ Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/master/query-langu
 
 ## Status
 
-Dgraph is [at version 1.1.x][rel] and is production ready. Apart from the vast open source community, it is being used in
+Dgraph is [at version 20.03.4][rel] and is production ready. Apart from the vast open source community, it is being used in
 production at multiple Fortune 500 companies, and by
 [Intuit Katlas](https://github.com/intuit/katlas) and [VMware Purser](https://github.com/vmware/purser).
 
@@ -124,5 +124,4 @@ The Dgraph team maintain a number of [officially supported client libraries](htt
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
 - Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) for filing bugs or feature requests.
-- Join [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io).
 - Follow us on Twitter [@dgraphlabs](https://twitter.com/dgraphlabs).

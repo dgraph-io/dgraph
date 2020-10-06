@@ -20,17 +20,13 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"strconv"
-	"time"
-
-	"github.com/dgrijalva/jwt-go/v4"
-	"google.golang.org/grpc/metadata"
-
 	"io"
 	"io/ioutil"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
@@ -39,9 +35,11 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
+	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 )
 
 type Headerkey string
@@ -70,12 +68,12 @@ type graphqlHandler struct {
 }
 
 // NewServer returns a new IServeGraphQL that can serve the given resolvers
-func NewServer(schemaEpoch *uint64, resolver *resolve.RequestResolver) IServeGraphQL {
+func NewServer(schemaEpoch *uint64, resolver *resolve.RequestResolver, admin bool) IServeGraphQL {
 	gh := &graphqlHandler{
 		resolver: resolver,
 		poller:   subscription.NewPoller(schemaEpoch, resolver),
 	}
-	gh.handler = recoveryHandler(commonHeaders(gh.Handler()))
+	gh.handler = recoveryHandler(commonHeaders(admin, gh.Handler()))
 	return gh
 }
 
@@ -120,20 +118,18 @@ type graphqlSubscription struct {
 
 func (gs *graphqlSubscription) Subscribe(
 	ctx context.Context,
-	document string,
+	document,
 	operationName string,
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
 
 	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us in the context.
 	// And we are extracting the Auth JWT from those and passing them along.
-
-	header, _ := ctx.Value("Header").(json.RawMessage)
 	customClaims := &authorization.CustomClaims{
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: jwt.At(time.Time{}),
-		},
+		StandardClaims: jwt.StandardClaims{},
 	}
+	header, _ := ctx.Value("Header").(json.RawMessage)
+
 	if len(header) > 0 {
 		payload := make(map[string]interface{})
 		if err := json.Unmarshal(header, &payload); err != nil {
@@ -141,21 +137,28 @@ func (gs *graphqlSubscription) Subscribe(
 		}
 
 		name := authorization.GetHeader()
-		val, ok := payload[name].(string)
-		if ok {
+		for key, val := range payload {
+			if !strings.EqualFold(key, name) {
+				continue
+			}
 
 			md := metadata.New(map[string]string{
-				"authorizationJwt": val,
+				"authorizationJwt": val.(string),
 			})
 			ctx = metadata.NewIncomingContext(ctx, md)
-
 			customClaims, err = authorization.ExtractCustomClaims(ctx)
 			if err != nil {
 				return nil, err
 			}
+			break
 		}
-	}
 
+	}
+	// for the cases when no expiry is given in jwt or subscription doesn't have any authorization,
+	// we set their expiry to zero time
+	if customClaims.StandardClaims.ExpiresAt == nil {
+		customClaims.StandardClaims.ExpiresAt = jwt.At(time.Time{})
+	}
 	req := &schema.Request{
 		OperationName: operationName,
 		Query:         document,
@@ -292,9 +295,14 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 	return gqlReq, nil
 }
 
-func commonHeaders(next http.Handler) http.Handler {
+func commonHeaders(admin bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		x.AddCorsHeaders(w)
+		if admin {
+			x.AddCorsHeaders(w)
+		} else {
+			// /graphql endpoint is protected by allow listed origins.
+			addDynamicHeaders(r.Header.Get("Origin"), w)
+		}
 		// Overwrite the allowed headers after also including headers which are part of
 		// forwardHeaders.
 		w.Header().Set("Access-Control-Allow-Headers", schema.AllowedHeaders())
@@ -316,4 +324,27 @@ func recoveryHandler(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// addCorsHeader checks the given origin is in allowlist or not. If it's in
+// allow list we'll let them access /graphql endpoint.
+func addDynamicHeaders(origin string, w http.ResponseWriter) {
+	w.Header().Set("Connection", "close")
+	allowList := x.AcceptedOrigins.Load().(map[string]struct{})
+	_, ok := allowList[origin]
+	// Given origin is not in the allow list so let's not
+	// add any cors headers.
+	if !ok && len(allowList) != 0 {
+		return
+	} else if ok && len(allowList) != 0 {
+		// Let's set the respective origin address in the allow origin.
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	} else if len(allowList) == 0 {
+		// Since there is no allowlist to restrict we'll allow everyone
+		// to access.
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	}
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", x.AccessControlAllowedHeaders)
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
 }

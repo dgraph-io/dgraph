@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -40,9 +41,25 @@ func unknownStatus(q schema.Query, err error) *resolve.Resolved {
 	}
 }
 
+func getRestoreStatusInput(q schema.Query) (int64, error) {
+	restoreId := q.ArgValue("restoreId")
+	switch v := restoreId.(type) {
+	case int64:
+		return v, nil
+	case json.Number:
+		return v.Int64()
+	default:
+		return -1, fmt.Errorf("Invalid value of restoreId")
+	}
+
+}
+
 func resolveRestoreStatus(ctx context.Context, q schema.Query) *resolve.Resolved {
-	restoreId := int(q.ArgValue("restoreId").(int64))
-	status, err := worker.ProcessRestoreStatus(ctx, restoreId)
+	restoreId, err := getRestoreStatusInput(q)
+	if err != nil {
+		return unknownStatus(q, err)
+	}
+	status, err := worker.ProcessRestoreStatus(ctx, int(restoreId))
 	if err != nil {
 		return unknownStatus(q, err)
 	}

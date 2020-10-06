@@ -168,6 +168,54 @@
     }
 
 -
+  name: "Query with has Filter"
+  gqlquery: |
+    query {
+      queryTeacher(filter: {has: subject}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryTeacher(func: type(Teacher)) @filter(has(Teacher.subject)) {
+        name : People.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "has Filter with not"
+  gqlquery: |
+    query {
+      queryTeacher(filter: { not : {has: subject } }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryTeacher(func: type(Teacher)) @filter(NOT (has(Teacher.subject))) {
+        name : People.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "has Filter with and"
+  gqlquery: |
+    query {
+      queryTeacher(filter: {has: subject, and: {has: teaches } }  ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryTeacher(func: type(Teacher)) @filter((has(Teacher.teaches) AND has(Teacher.subject))) {
+        name : People.name
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "Filters in same input object implies AND"
   gqlquery: |
     query {
@@ -194,6 +242,22 @@
   dgquery: |-
     query {
       queryAuthor(func: type(Author)) @filter(((gt(Author.reputation, 2.5) AND le(Author.dob, "2001-01-01")) AND eq(Author.name, "A. N. Author"))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "has Filter with nested 'and'"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { dob: { le: "2001-01-01" }, and: { has: country } } } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(((has(Author.country) AND le(Author.dob, "2001-01-01")) AND eq(Author.name, "A. N. Author"))) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -401,6 +465,51 @@
     }
 
 
+-
+  name: "Deep filter with has filter"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { has : tags }) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter(has(Post.tags)) {
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Deep filter with has and other filters"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter:{ title : {anyofterms: "GRAPHQL"} , and : { has : tags } } ) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter((has(Post.tags) AND anyofterms(Post.title, "GRAPHQL"))) {
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
 -
   name: "Deep filter with first"
   gqlquery: |
@@ -740,6 +849,203 @@
           dgraph.uid : uid
         }
         dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive on filter query"
+  gqlquery: |
+    query {
+      queryAuthor @cascade(fields:["dob"]) {
+        dob
+        name
+        posts {
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade(Author.dob) {
+        dob : Author.dob
+        name : Author.name
+        posts : Author.posts {
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive on get query"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") @cascade(fields:["dob"]) {
+        dob
+        name
+        posts {
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) @cascade(Author.dob) {
+        dob : Author.dob
+        name : Author.name
+        posts : Author.posts {
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive on query field"
+  gqlquery: |
+    query {
+      queryAuthor {
+        dob
+        posts @cascade(fields:["text"]) {
+          text
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        dob : Author.dob
+        posts : Author.posts @cascade(Post.text) {
+          text : Post.text
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive on root and query field"
+  gqlquery: |
+    query {
+      queryAuthor @cascade(fields:["dob"]) {
+        dob
+        reputation
+        posts @cascade(fields:["text","title","postID"]) {
+          text
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade(Author.dob) {
+        dob : Author.dob
+        reputation : Author.reputation
+        posts : Author.posts @cascade(Post.text, Post.title, uid) {
+          text : Post.text
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive with multiple parameters on root and query field"
+  gqlquery: |
+    query {
+      queryAuthor @cascade(fields:["dob","reputation","id"]) {
+        dob
+        reputation
+        posts @cascade(fields:["text","title"]) {
+          text
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade(Author.dob, Author.reputation, uid) {
+        dob : Author.dob
+        reputation : Author.reputation
+        posts : Author.posts @cascade(Post.text, Post.title) {
+          text : Post.text
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive with argument at outer level which is not present in inner level "
+  gqlquery: |
+    query {
+      queryAuthor @cascade(fields:["dob"]) {
+        dob
+        reputation
+        posts  {
+          text
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade(Author.dob) {
+        dob : Author.dob
+        reputation : Author.reputation
+        posts : Author.posts {
+          text : Post.text
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "parameterized cascade with interface implementation Human"
+  gqlquery: |
+    query {
+      queryHuman @cascade(fields:["id","name","ename","dob"]) {
+        id
+        name
+        ename
+        dob
+        female
+      }
+    }
+  dgquery: |-
+    query {
+      queryHuman(func: type(Human)) @cascade(uid, Character.name, Employee.ename, Human.dob) {
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        dob : Human.dob
+        female : Human.female
+      }
+    }
+
+-
+  name: "parameterized cascade with interface Character"
+  gqlquery: |
+    query {
+      queryCharacter @cascade(fields:["id","name"]) {
+        id
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryCharacter(func: type(Character)) @cascade(uid, Character.name) {
+        dgraph.type
+        id : uid
+        name : Character.name
       }
     }
 
@@ -1326,7 +1632,7 @@
         }
       }
     }
-  dgquery: |
+  dgquery: |-
     query {
       getPost(func: uid(0x1)) @filter(type(Post)) {
         postID : uid
@@ -1337,5 +1643,112 @@
           id : uid
           url : Comment.url
         }
+      }
+    }
+- name: "getType by id should work"
+  gqlquery: |-
+    query {
+      getTweets(id: "1286891968727982081") {
+        score
+        id
+      }
+    }
+  dgquery: |-
+    query {
+      getTweets(func: eq(Tweets.id, "1286891968727982081")) @filter(type(Tweets)) {
+        score : Tweets.score
+        id : Tweets.id
+        dgraph.uid : uid
+      }
+    }
+
+- name: "querying a field multiple times with different aliases adds it only once in rewriting"
+  gqlquery: |-
+    query {
+      queryThingOne {
+        i1: id
+        i2: id
+        name
+        n: name
+        n1: name
+      }
+    }
+  dgquery: |-
+    query {
+      queryThingOne(func: type(ThingOne)) {
+        id : uid
+        name : Thing.name
+      }
+    }
+
+- name: "query with fragments inside interface"
+  gqlquery: |-
+    query {
+      queryThing {
+        __typename
+        ... on ThingOne {
+          id
+          name
+          color
+          prop
+          usedBy
+        }
+        ... thingTwoFrag
+      }
+    }
+    fragment thingTwoFrag on ThingTwo {
+      id
+      name
+      color
+      prop
+      owner
+    }
+  dgquery: |-
+    query {
+      queryThing(func: type(Thing)) {
+        dgraph.type
+        id : uid
+        name : Thing.name
+        ThingOne.color : ThingOne.color
+        prop : prop
+        usedBy : ThingOne.usedBy
+        ThingTwo.color : ThingTwo.color
+        owner : ThingTwo.owner
+      }
+    }
+
+- name: "query only __typename in fragments inside interface"
+  gqlquery: |-
+    query {
+      queryThing {
+        ... on ThingOne {
+          __typename
+        }
+        ... on ThingTwo {
+          __typename
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryThing(func: type(Thing)) {
+        dgraph.type
+        dgraph.uid : uid
+      }
+    }
+
+- name: "query only __typename in fragment inside object"
+  gqlquery: |-
+    query {
+      queryThingOne {
+        ... on ThingOne {
+          __typename
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryThingOne(func: type(ThingOne)) {
+        dgraph.uid : uid
       }
     }

@@ -21,8 +21,10 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"mime"
 	"net/http"
 	"sort"
 	"strconv"
@@ -176,18 +178,27 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		Query     string            `json:"query"`
 		Variables map[string]string `json:"variables"`
 	}
+
 	contentType := r.Header.Get("Content-Type")
-	switch strings.ToLower(contentType) {
+	mediaType, contentTypeParams, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid Content-Type")
+	}
+	if charset, ok := contentTypeParams["charset"]; ok && strings.ToLower(charset) != "utf-8" {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported charset. "+
+			"Supported charset is UTF-8")
+		return
+	}
+
+	switch mediaType {
 	case "application/json":
 		if err := json.Unmarshal(body, &params); err != nil {
 			jsonErr := convertJSONError(string(body), err)
 			x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 			return
 		}
-
 	case "application/graphql+-":
 		params.Query = string(body)
-
 	default:
 		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
 			"Supported content types are application/json, application/graphql+-")
@@ -239,6 +250,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	// Add cost to the header.
+	w.Header().Set(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 
 	e := query.Extensions{
 		Txn:     resp.Txn,
@@ -297,7 +310,17 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req *api.Request
 	contentType := r.Header.Get("Content-Type")
-	switch strings.ToLower(contentType) {
+	mediaType, contentTypeParams, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid Content-Type")
+	}
+	if charset, ok := contentTypeParams["charset"]; ok && strings.ToLower(charset) != "utf-8" {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported charset. "+
+			"Supported charset is UTF-8")
+		return
+	}
+
+	switch mediaType {
 	case "application/json":
 		ms := make(map[string]*skipJSONUnmarshal)
 		if err := json.Unmarshal(body, &ms); err != nil {
@@ -391,6 +414,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	// Add cost to the header.
+	w.Header().Set(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 
 	resp.Latency.ParsingNs = uint64(parseEnd.Sub(parseStart).Nanoseconds())
 	e := query.Extensions{

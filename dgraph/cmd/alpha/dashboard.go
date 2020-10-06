@@ -34,6 +34,10 @@ type keywords struct {
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.Error(w, "404 page not found", http.StatusNotFound)
+		return
+	}
 	x.Check2(w.Write([]byte(
 		"Dgraph browser is available for running separately using the dgraph-ratel binary")))
 }

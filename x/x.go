@@ -34,20 +34,24 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
+	bo "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.opencensus.io/plugin/ocgrpc"
+	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/trace"
 	"golang.org/x/crypto/ssh/terminal"
 	"google.golang.org/grpc"
@@ -121,6 +125,9 @@ const (
 {"predicate":"dgraph.rule.predicate","type":"string","index":true,"tokenizer":["exact"],"upsert":true},
 {"predicate":"dgraph.rule.permission","type":"int"}
 `
+	// CorsPredicate is the json representation of the predicate reserved by dgraph for the use
+	//of cors
+	CorsPredicate = `{"predicate":"dgraph.cors","type":"string","list":true,"type":"string","index":true,"tokenizer":["exact"],"upsert":true}`
 
 	InitialTypes = `
 "types": [{
@@ -135,6 +142,9 @@ const (
 },{
 	"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],
 	"name": "dgraph.type.Rule"
+}, {
+	"fields": [{"name": "dgraph.graphql.schema_history"},{"name": "dgraph.graphql.schema_created_at"}],
+	"name": "dgraph.graphql.history"
 }]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
@@ -146,10 +156,13 @@ const (
 	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
+	DgraphCostHeader = "Dgraph-TouchedUids"
 
 	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
 	GraphqlPredicates = `
 {"predicate":"dgraph.graphql.schema", "type": "string"},
+{"predicate":"dgraph.graphql.schema_history", "type": "string"},
+{"predicate":"dgraph.graphql.schema_created_at", "type": "datetime"},
 {"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
 `
 )
@@ -159,7 +172,26 @@ var (
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 	// Nilbyte is a nil byte slice. Used
 	Nilbyte []byte
+	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
+	AcceptedOrigins = atomic.Value{}
 )
+
+func init() {
+	AcceptedOrigins.Store(map[string]struct{}{})
+}
+
+// UpdateCorsOrigins updates the cors allowlist with the given origins.
+func UpdateCorsOrigins(origins []string) {
+	if len(origins) == 1 && origins[0] == "*" {
+		AcceptedOrigins.Store(map[string]struct{}{})
+		return
+	}
+	allowList := make(map[string]struct{}, len(origins))
+	for _, origin := range origins {
+		allowList[origin] = struct{}{}
+	}
+	AcceptedOrigins.Store(allowList)
+}
 
 // ShouldCrash returns true if the error should cause the process to crash.
 func ShouldCrash(err error) bool {
@@ -293,6 +325,22 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	ext := make(map[string]interface{})
 	ext["code"] = code
 	qr.Errors = append(qr.Errors, &GqlError{Message: msg, Extensions: ext})
+	if js, err := json.Marshal(qr); err == nil {
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
+	} else {
+		Panic(errors.Errorf("Unable to marshal: %+v", qr))
+	}
+}
+
+func SetStatusWithErrors(w http.ResponseWriter, code string, errs []string) {
+	var qr queryRes
+	ext := make(map[string]interface{})
+	ext["code"] = code
+	for _, err := range errs {
+		qr.Errors = append(qr.Errors, &GqlError{Message: err, Extensions: ext})
+	}
 	if js, err := json.Marshal(qr); err == nil {
 		if _, err := w.Write(js); err != nil {
 			glog.Errorf("Error while writing: %+v", err)
@@ -441,7 +489,12 @@ func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error
 		out = gzw
 	}
 
-	return out.Write(b)
+	bytesWritten, err := out.Write(b)
+	if err != nil {
+		return 0, err
+	}
+	w.Header().Set("Content-Length", strconv.FormatInt(int64(bytesWritten), 10))
+	return bytesWritten, nil
 }
 
 // Min returns the minimum of the two given numbers.
@@ -572,22 +625,25 @@ func PageRange(count, offset, n int) (int, int) {
 }
 
 // ValidateAddress checks whether given address can be used with grpc dial function
-func ValidateAddress(addr string) bool {
+func ValidateAddress(addr string) error {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return false
+		return err
 	}
 	if p, err := strconv.Atoi(port); err != nil || p <= 0 || p >= 65536 {
-		return false
+		return errors.Errorf("Invalid port: %v", p)
 	}
 	if ip := net.ParseIP(host); ip != nil {
-		return true
+		return nil
 	}
 	// try to parse as hostname as per hostname RFC
 	if len(strings.Replace(host, ".", "", -1)) > 255 {
-		return false
+		return errors.Errorf("Hostname should be less than or equal to 255 characters")
 	}
-	return regExpHostName.MatchString(host)
+	if !regExpHostName.MatchString(host) {
+		return errors.Errorf("Invalid hostname: %v", host)
+	}
+	return nil
 }
 
 // RemoveDuplicates sorts the slice of strings and removes duplicates. changes the input slice.
@@ -740,7 +796,7 @@ func DivideAndRule(num int) (numGo, width int) {
 }
 
 // SetupConnection starts a secure gRPC connection to the given host.
-func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientConn, error) {
+func SetupConnection(host string, tlsCfg *tls.Config, useGz bool, dialOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	callOpts := append([]grpc.CallOption{},
 		grpc.MaxCallRecvMsgSize(GrpcMaxSize),
 		grpc.MaxCallSendMsgSize(GrpcMaxSize))
@@ -750,7 +806,7 @@ func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientC
 		callOpts = append(callOpts, grpc.UseCompressor(gzip.Name))
 	}
 
-	dialOpts := append([]grpc.DialOption{},
+	dialOpts = append(dialOpts,
 		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithBlock())
@@ -815,13 +871,38 @@ type CredOpt struct {
 	PasswordOpt string
 }
 
+type authorizationCredentials struct {
+	token string
+}
+
+func (a *authorizationCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{"Authorization": a.token}, nil
+}
+
+func (a *authorizationCredentials) RequireTransportSecurity() bool {
+	return true
+}
+
+// WithAuthorizationCredentials adds Authorization: <api-token> to every GRPC request
+// This is mostly used by Slash GraphQL to authenticate requests
+func WithAuthorizationCredentials(authToken string) grpc.DialOption {
+	return grpc.WithPerRPCCredentials(&authorizationCredentials{authToken})
+}
+
 // GetDgraphClient creates a Dgraph client based on the following options in the configuration:
+// --slash_grpc_endpoint specifies the grpc endpoint for slash. It takes precedence over --alpha and TLS
 // --alpha specifies a comma separated list of endpoints to connect to
 // --tls_cacert, --tls_cert, --tls_key etc specify the TLS configuration of the connection
 // --retries specifies how many times we should retry the connection to each endpoint upon failures
 // --user and --password specify the credentials we should use to login with the server
 func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
-	alphas := conf.GetString("alpha")
+	var alphas string
+	if conf.GetString("slash_grpc_endpoint") != "" {
+		alphas = conf.GetString("slash_grpc_endpoint")
+	} else {
+		alphas = conf.GetString("alpha")
+	}
+
 	if len(alphas) == 0 {
 		glog.Fatalf("The --alpha option must be set in order to connect to Dgraph")
 	}
@@ -842,10 +923,15 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 		}
 	}
 
+	dialOpts := []grpc.DialOption{}
+	if conf.GetString("slash_grpc_endpoint") != "" && conf.IsSet("auth_token") {
+		dialOpts = append(dialOpts, WithAuthorizationCredentials(conf.GetString("auth_token")))
+	}
+
 	for _, d := range ds {
 		var conn *grpc.ClientConn
 		for i := 0; i < retries; i++ {
-			conn, err = SetupConnection(d, tlsCfg, false)
+			conn, err = SetupConnection(d, tlsCfg, false, dialOpts...)
 			if err == nil {
 				break
 			}
@@ -941,9 +1027,86 @@ func IsGuardian(groups []string) bool {
 	return false
 }
 
+// MonitorCacheHealth periodically monitors the cache metrics and reports if
+// there is high contention in the cache.
+func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, closer *z.Closer) {
+	defer closer.Done()
+
+	getMetrics := func(ct string) *ristretto.Metrics {
+		var metrics *ristretto.Metrics
+		switch ct {
+		case "pstore-block":
+			metrics = db.BlockCacheMetrics()
+		case "pstore-index":
+			metrics = db.IndexCacheMetrics()
+		case "WALstore-block":
+			metrics = db.BlockCacheMetrics()
+		case "WALstore-index":
+			metrics = db.IndexCacheMetrics()
+		}
+		return metrics
+	}
+
+	checkCache := func(ct string) {
+		metrics := getMetrics(ct)
+		if metrics == nil {
+			return
+		}
+		switch ct {
+		case "pstore-block":
+			ostats.Record(context.Background(), PBlockHitRatio.M(metrics.Ratio()))
+		case "pstore-index":
+			ostats.Record(context.Background(), PIndexHitRatio.M(metrics.Ratio()))
+		case "WALstore-block":
+			ostats.Record(context.Background(), WBlockHitRatio.M(metrics.Ratio()))
+		case "WALstore-index":
+			ostats.Record(context.Background(), WIndexHitRatio.M(metrics.Ratio()))
+		default:
+			panic("invalid cache type")
+		}
+
+		// If the mean life expectancy is less than 10 seconds, the cache
+		// might be too small.
+		le := metrics.LifeExpectancySeconds()
+		lifeTooShort := le.Count > 0 && float64(le.Sum)/float64(le.Count) < 10
+		hitRatioTooLow := metrics.Ratio() > 0 && metrics.Ratio() < 0.4
+		if bool(glog.V(2)) && (lifeTooShort || hitRatioTooLow) {
+			glog.Warningf("======== Cache might be too small %s =====", ct)
+			glog.Warningf("Metric: %+v", metrics)
+			glog.Warningf("Life expectancy: %+v", le)
+		}
+	}
+
+	logMetrics := func(ct string) {
+		if metrics := getMetrics(ct); metrics != nil {
+			prefix := fmt.Sprintf("%s-%s", prefix, ct)
+			le := metrics.LifeExpectancySeconds()
+			glog.V(2).Infof("%s metrics %+v %+v", prefix, metrics, le)
+		}
+	}
+
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
+	tickerLog := time.NewTicker(5 * time.Minute)
+	defer tickerLog.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			checkCache(prefix + "-block")
+			checkCache(prefix + "-index")
+		case <-tickerLog.C:
+			logMetrics(prefix + "-block")
+			logMetrics(prefix + "-index")
+		case <-closer.HasBeenClosed():
+			return
+		}
+	}
+}
+
 // RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
 // Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
-func RunVlogGC(store *badger.DB, closer *y.Closer) {
+func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 	// Get initial size on start.
 	_, lastVlogSize := store.Size()
@@ -984,9 +1147,11 @@ type DB interface {
 	Sync() error
 }
 
-func StoreSync(db DB, closer *y.Closer) {
+func StoreSync(db DB, closer *z.Closer) {
 	defer closer.Done()
-	ticker := time.NewTicker(1 * time.Second)
+	// We technically don't need to call this due to mmap being able to survive process crashes.
+	// But, once a minute is infrequent enough that we won't lose any performance due to this.
+	ticker := time.NewTicker(time.Minute)
 	for {
 		select {
 		case <-ticker.C:
@@ -1041,4 +1206,92 @@ func DeepCopyJsonArray(a []interface{}) []interface{} {
 		}
 	}
 	return aCopy
+}
+
+// GetCachePercentages returns the slice of cache percentages given the "," (comma) separated
+// cache percentages(integers) string and expected number of caches.
+func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
+	cp := strings.Split(cpString, ",")
+	// Sanity checks
+	if len(cp) != numExpected {
+		return nil, errors.Errorf("ERROR: expected %d cache percentages, got %d",
+			numExpected, len(cp))
+	}
+
+	var cachePercent []int64
+	percentSum := 0
+	for _, percent := range cp {
+		x, err := strconv.Atoi(percent)
+		if err != nil {
+			return nil, errors.Errorf("ERROR: unable to parse cache percentage(%s)", percent)
+		}
+		if x < 0 {
+			return nil, errors.Errorf("ERROR: cache percentage(%s) cannot be negative", percent)
+		}
+		cachePercent = append(cachePercent, int64(x))
+		percentSum += x
+	}
+
+	if percentSum != 100 {
+		return nil, errors.Errorf("ERROR: cache percentages (%s) does not sum up to 100",
+			strings.Join(cp, "+"))
+	}
+
+	return cachePercent, nil
+}
+
+// ParseCompression returns badger.compressionType and compression level given compression string
+// of format compression-type:compression-level
+func ParseCompression(cStr string) (bo.CompressionType, int) {
+	cStrSplit := strings.Split(cStr, ":")
+	cType := cStrSplit[0]
+	level := 3
+
+	var err error
+	if len(cStrSplit) == 2 {
+		level, err = strconv.Atoi(cStrSplit[1])
+		Check(err)
+		if level <= 0 {
+			glog.Fatalf("ERROR: compression level(%v) must be greater than zero", level)
+		}
+	} else if len(cStrSplit) > 2 {
+		glog.Fatalf("ERROR: Invalid badger.compression argument")
+	}
+	switch cType {
+	case "zstd":
+		return bo.ZSTD, level
+	case "snappy":
+		return bo.Snappy, 0
+	case "none":
+		return bo.None, 0
+	}
+	glog.Fatalf("ERROR: compression type (%s) invalid", cType)
+	return 0, 0
+}
+
+// ToHex converts a uint64 to a hex byte array. If rdf is true it will
+// use < > brackets to delimit the value. Otherwise it will use quotes
+// like JSON requires.
+func ToHex(i uint64, rdf bool) []byte {
+	var b [16]byte
+	tmp := strconv.AppendUint(b[:0], i, 16)
+
+	out := make([]byte, len(tmp)+3+1)
+	if rdf {
+		out[0] = '<'
+	} else {
+		out[0] = '"'
+	}
+
+	out[1] = '0'
+	out[2] = 'x'
+	n := copy(out[3:], tmp)
+
+	if rdf {
+		out[3+n] = '>'
+	} else {
+		out[3+n] = '"'
+	}
+
+	return out
 }

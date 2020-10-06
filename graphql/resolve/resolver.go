@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/types"
@@ -174,6 +176,11 @@ type Resolved struct {
 	Extensions *schema.Extensions
 }
 
+// restErr is Error returned from custom REST endpoint
+type restErr struct {
+	Errors x.GqlErrorList `json:"errors,omitempty"`
+}
+
 // CompletionFunc is an adapter that allows us to compose completions and build a
 // ResultCompleter from a function.  Based on the http.HandlerFunc pattern.
 type CompletionFunc func(ctx context.Context, resolved *Resolved)
@@ -261,6 +268,13 @@ func (rf *resolverFactory) WithConventionResolvers(
 				// TODO - This can be part of a config later.
 				Timeout: time.Minute,
 			}, StdQueryCompletion())
+		})
+	}
+
+	for _, q := range s.Queries(schema.DQLQuery) {
+		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
+			// DQL queries don't need any QueryRewriter
+			return NewQueryResolver(nil, fns.Ex, StdQueryCompletion())
 		})
 	}
 
@@ -445,7 +459,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 							Err:   err,
 						}
 					})
-
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
 			}(q, i)
 		}
@@ -667,8 +680,7 @@ func completeDgraphResult(
 		glog.Errorf("Could not process Dgraph result : \n%s", string(dgResult))
 		return nullResponse(
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
-				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
-				"Please let us know : https://github.com/dgraph-io/dgraph/issues.").
+				"This probably indicates a bug in Dgraph. Please let us know by filing an issue.").
 				WithLocations(field.Location()))
 	}
 
@@ -683,7 +695,9 @@ func completeDgraphResult(
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
 	// So we are only building object results.
 	var valToComplete map[string]interface{}
-	err := json.Unmarshal(dgResult, &valToComplete)
+	d := json.NewDecoder(bytes.NewBuffer(dgResult))
+	d.UseNumber()
+	err := d.Decode(&valToComplete)
 	if err != nil {
 		glog.Errorf("%+v \n Dgraph result :\n%s\n",
 			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
@@ -692,7 +706,7 @@ func completeDgraphResult(
 			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result"))
 	}
 
-	switch val := valToComplete[field.Name()].(type) {
+	switch val := valToComplete[field.DgraphAlias()].(type) {
 	case []interface{}:
 		if field.Type().ListType() == nil {
 			// Turn Dgraph list result to single object
@@ -726,7 +740,7 @@ func completeDgraphResult(
 						field.Name(), field.Type().String()).WithLocations(field.Location()))
 			}
 
-			valToComplete[field.Name()] = internalVal
+			valToComplete[field.DgraphAlias()] = internalVal
 		}
 	case interface{}:
 		// no need to error in this case, this can be returned for custom HTTP query/mutation
@@ -740,7 +754,11 @@ func completeDgraphResult(
 		// case
 	}
 
-	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.Name()])
+	// TODO: correctly handle DgraphAlias for custom field resolution, at present it uses f.Name(),
+	// it should be using f.DgraphAlias() to get values from valToComplete.
+	// It works ATM because there hasn't been a scenario where there are two fields with same
+	// name in implementing types of an interface with @custom on some field in those types.
+	err = resolveCustomFields(ctx, field.SelectionSet(), valToComplete[field.DgraphAlias()])
 	if err != nil {
 		errs = append(errs, schema.AsGQLErrors(err)...)
 	}
@@ -801,7 +819,8 @@ type graphqlResp struct {
 	Errors x.GqlErrorList         `json:"errors,omitempty"`
 }
 
-func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+func resolveCustomField(ctx context.Context, f schema.Field, vals []interface{}, mu *sync.RWMutex,
+	errCh chan error) {
 	defer api.PanicHandler(func(err error) {
 		errCh <- internalServerError(err, f)
 	})
@@ -846,13 +865,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			}
 
 			mu.RLock()
-			if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
-				errCh <- x.GqlErrorf("Evaluation of custom field failed while substituting "+
-					"variables into body for remote endpoint with an error: %s for field: %s "+
-					"within type: %s.", err, f.Name(), f.GetObjectName()).WithLocations(f.Location())
-				mu.RUnlock()
-				return
-			}
+			schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{}))
 			mu.RUnlock()
 			inputs[i] = temp
 		}
@@ -867,6 +880,8 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			body["query"] = fconf.RemoteGqlQuery
 			body["variables"] = map[string]interface{}{fconf.GraphqlBatchModeArgument: requestInput}
 			requestInput = body
+		} else if f.HasLambdaDirective() {
+			requestInput = getBodyForLambda(ctx, f, requestInput, nil)
 		}
 
 		b, err := json.Marshal(requestInput)
@@ -875,7 +890,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			return
 		}
 
-		b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+		b, status, err := makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 		if err != nil {
 			errCh <- x.GqlErrorList{externalRequestError(err, f)}
 			return
@@ -884,6 +899,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		// To collect errors from remote GraphQL endpoint and those encountered during execution.
 		var errs error
 		var result []interface{}
+		var rerr restErr
 		if graphql {
 			resp := &graphqlResp{}
 			err = json.Unmarshal(b, resp)
@@ -901,11 +917,23 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				errCh <- schema.AppendGQLErrs(errs, keyNotFoundError(f, fconf.RemoteGqlQueryName))
 				return
 			}
-		} else if err := json.Unmarshal(b, &result); err != nil {
-			errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-			return
+		} else {
+			if status >= 200 && status < 300 {
+				if err = json.Unmarshal(b, &result); err != nil {
+					errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+					return
+				}
+			} else {
+				if err = json.Unmarshal(b, &rerr); err != nil {
+					err = errors.Errorf("unexpected error with: %v", status)
+					errCh <- x.GqlErrorList{externalRequestError(err, f)}
+					return
+				} else {
+					errCh <- rerr.Errors
+					return
+				}
+			}
 		}
-
 		if len(result) != len(vals) {
 			gqlErr := x.GqlErrorf("Evaluation of custom field failed because expected result of "+
 				"external request to be of size %v, got: %v for field: %s within type: %s.",
@@ -949,10 +977,11 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				return
 			}
 
+			url := fconf.URL
 			if !graphql {
 				// For REST requests, we'll have to substitute the variables used in the URL.
 				mu.RLock()
-				fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL,
+				url, err = schema.SubstituteVarsInURL(url,
 					vals[idx].(map[string]interface{}))
 				if err != nil {
 					mu.RUnlock()
@@ -966,18 +995,18 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				mu.RUnlock()
 			}
 
-			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+			b, status, err := makeRequest(nil, fconf.Method, url, string(b), fconf.ForwardHeaders)
 			if err != nil {
 				errChan <- x.GqlErrorList{externalRequestError(err, f)}
 				return
 			}
 
 			var result interface{}
+			var rerr restErr
 			var errs error
 			if graphql {
 				resp := &graphqlResp{}
-				err = json.Unmarshal(b, resp)
-				if err != nil {
+				if err = json.Unmarshal(b, resp); err != nil {
 					errChan <- x.GqlErrorList{jsonUnmarshalError(err, f)}
 					return
 				}
@@ -992,11 +1021,23 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 						keyNotFoundError(f, fconf.RemoteGqlQueryName))
 					return
 				}
-			} else if err := json.Unmarshal(b, &result); err != nil {
-				errChan <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-				return
+			} else {
+				if status >= 200 && status < 300 {
+					if err = json.Unmarshal(b, &result); err != nil {
+						errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+						return
+					}
+				} else {
+					if err = json.Unmarshal(b, &rerr); err != nil {
+						err = errors.Errorf("unexpected error with: %v", status)
+						errCh <- x.GqlErrorList{externalRequestError(err, f)}
+						return
+					} else {
+						errCh <- rerr.Errors
+						return
+					}
+				}
 			}
-
 			mu.Lock()
 			val, ok := vals[idx].(map[string]interface{})
 			if ok {
@@ -1030,7 +1071,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 // }
 // In the example above, resolveNestedFields would be called on classes field and vals would be the
 // list of all users.
-func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
+func resolveNestedFields(ctx context.Context, f schema.Field, vals []interface{}, mu *sync.RWMutex,
 	errCh chan error) {
 	defer api.PanicHandler(func(err error) {
 		errCh <- internalServerError(err, f)
@@ -1109,7 +1150,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 	}
 	mu.RUnlock()
 
-	if err := resolveCustomFields(f.SelectionSet(), input); err != nil {
+	if err := resolveCustomFields(ctx, f.SelectionSet(), input); err != nil {
 		errCh <- err
 		return
 	}
@@ -1173,7 +1214,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 // work.
 // TODO - We can be smarter about this and know before processing the query if we should be making
 // this recursive call upfront.
-func resolveCustomFields(fields []schema.Field, data interface{}) error {
+func resolveCustomFields(ctx context.Context, fields []schema.Field, data interface{}) error {
 	if data == nil {
 		return nil
 	}
@@ -1204,9 +1245,9 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 		numRoutines++
 		hasCustomDirective, _ := f.HasCustomDirective()
 		if !hasCustomDirective {
-			go resolveNestedFields(f, vals, mu, errCh)
+			go resolveNestedFields(ctx, f, vals, mu, errCh)
 		} else {
-			go resolveCustomField(f, vals, mu, errCh)
+			go resolveCustomField(ctx, f, vals, mu, errCh)
 		}
 	}
 
@@ -1262,8 +1303,11 @@ func completeObject(
 	var buf bytes.Buffer
 	comma := ""
 
-	x.Check2(buf.WriteRune('{'))
+	// Below map keeps track of fields which have been seen as part of
+	// interface to avoid double entry in the resulting response
+	seenField := make(map[string]bool)
 
+	x.Check2(buf.WriteRune('{'))
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
@@ -1280,6 +1324,9 @@ func completeObject(
 		if len(dgraphTypes) > 0 {
 			includeField = f.IncludeInterfaceField(dgraphTypes)
 		}
+		if _, ok := seenField[f.ResponseName()]; ok {
+			includeField = false
+		}
 		if !includeField {
 			continue
 		}
@@ -1289,7 +1336,9 @@ func completeObject(
 		x.Check2(buf.WriteString(f.ResponseName()))
 		x.Check2(buf.WriteString(`": `))
 
-		val := res[f.Name()]
+		seenField[f.ResponseName()] = true
+
+		val := res[f.DgraphAlias()]
 		if f.Name() == schema.Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
@@ -1347,7 +1396,7 @@ func completeValue(
 	switch val := val.(type) {
 	case map[string]interface{}:
 		switch field.Type().Name() {
-		case "String", "ID", "Boolean", "Float", "Int", "DateTime":
+		case "String", "ID", "Boolean", "Float", "Int", "Int64", "DateTime":
 			return nil, x.GqlErrorList{&x.GqlError{
 				Message:   errExpectedScalar,
 				Locations: []x.Location{field.Location()},
@@ -1456,18 +1505,19 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case bool:
 			val = strconv.FormatBool(v)
 		case string:
+		case json.Number:
+			val = v.String()
 		default:
 			return nil, valueCoercionError(v)
 		}
 	case "Boolean":
 		switch v := val.(type) {
-		case float64:
-			val = v != 0
-		case int64:
-			val = v != 0
 		case string:
 			val = len(v) > 0
 		case bool:
+		case json.Number:
+			valFloat, _ := v.Float64()
+			val = valFloat != 0
 		default:
 			return nil, valueCoercionError(v)
 		}
@@ -1476,15 +1526,13 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		case float64:
 			// The spec says that we can coerce a Float value to Int, if we don't lose information.
 			// See: https: //spec.graphql.org/June2018/#sec-Float
-			// Lets try to see if this a whole number, otherwise return error because we
-			// might be losing informating by truncating it.
-			truncated := math.Trunc(v)
-			if truncated == v {
-				tv := int(truncated)
-				if tv > math.MaxInt32 || tv < math.MinInt32 {
-					return nil, valueCoercionError(v)
-				}
-				val = tv
+			// Lets try to see if this number could be converted to int32 without losing
+			// information, otherwise return error.
+			// See: https://github.com/golang/go/issues/19405 to understand why the comparison
+			// should be done after double conversion.
+			i32Val := int32(v)
+			if v == float64(i32Val) {
+				val = i32Val
 			} else {
 				return nil, valueCoercionError(v)
 			}
@@ -1495,17 +1543,17 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				val = 0
 			}
 		case string:
-			i, err := strconv.ParseFloat(v, 32)
+			i, err := strconv.ParseFloat(v, 64)
 			// An error can be encountered if we had a value that can't be fit into
-			// a 32 bit floating point number.
+			// a 64 bit floating point number..
+			// Lets try to see if this number could be converted to int32 without losing
+			// information, otherwise return error.
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
-			// Lets try to see if this a whole number, otherwise return error because we
-			// might be losing informating by truncating it.
-			truncated := math.Trunc(i)
-			if truncated == i {
-				val = int(truncated)
+			i32Val := int32(i)
+			if i == float64(i32Val) {
+				val = i32Val
 			} else {
 				return nil, valueCoercionError(v)
 			}
@@ -1514,15 +1562,53 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				return nil, valueCoercionError(v)
 			}
 		case int:
-			// numUids are added as int, so we need special handling for that. Other number values
-			// in a JSON object are automatically unmarshaled as float so they are handle above.
+			// numUids are added as int, so we need special handling for that.
 			if v > math.MaxInt32 || v < math.MinInt32 {
+				return nil, valueCoercionError(v)
+			}
+		case json.Number:
+			// We have already checked range for int32 at input validation time.
+			// So now just parse and check errors.
+			i, err := strconv.ParseFloat(v.String(), 64)
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			i32Val := int32(i)
+			if i == float64(i32Val) {
+				val = i32Val
+			} else {
 				return nil, valueCoercionError(v)
 			}
 		default:
 			return nil, valueCoercionError(v)
 		}
-
+	case "Int64":
+		switch v := val.(type) {
+		case bool:
+			if v {
+				val = 1
+			} else {
+				val = 0
+			}
+		case string:
+			i, err := strconv.ParseInt(v, 10, 64)
+			// An error can be encountered if we had a value that can't be fit into
+			// a 64 bit int or because of other parsing issues.
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			val = i
+		case json.Number:
+			// To use whole 64-bit range for int64 without any coercing,
+			// We pass int64 values as string to dgraph and parse it as integer here
+			i, err := strconv.ParseInt(v.String(), 10, 64)
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			val = i
+		default:
+			return nil, valueCoercionError(v)
+		}
 	case "Float":
 		switch v := val.(type) {
 		case bool:
@@ -1533,12 +1619,18 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			}
 		case string:
 			i, err := strconv.ParseFloat(v, 64)
+			// An error can be encountered if we had a value that can't be fit into
+			// a 64 bit floating point number or because of other parsing issues.
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
 			val = i
-		case int64:
-			val = float64(v)
+		case json.Number:
+			i, err := strconv.ParseFloat(v.String(), 64)
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			val = i
 		case float64:
 		default:
 			return nil, valueCoercionError(v)
@@ -1549,18 +1641,16 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			if _, err := types.ParseTime(v); err != nil {
 				return nil, valueCoercionError(v)
 			}
-		case float64:
-			truncated := math.Trunc(v)
-			if truncated == v {
+		case json.Number:
+			valFloat, _ := v.Float64()
+			truncated := math.Trunc(valFloat)
+			if truncated == valFloat {
 				// Lets interpret int values as unix timestamp.
 				t := time.Unix(int64(truncated), 0).UTC()
 				val = t.Format(time.RFC3339)
 			} else {
 				return nil, valueCoercionError(v)
 			}
-		case int64:
-			t := time.Unix(v, 0).UTC()
-			val = t.Format(time.RFC3339)
 		default:
 			return nil, valueCoercionError(v)
 		}
@@ -1737,7 +1827,7 @@ func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolv
 }
 
 func makeRequest(client *http.Client, method, url, body string,
-	header http.Header) ([]byte, error) {
+	header http.Header) ([]byte, int, error) {
 	var reqBody io.Reader
 	if body == "" || body == "null" {
 		reqBody = http.NoBody
@@ -1747,7 +1837,7 @@ func makeRequest(client *http.Client, method, url, body string,
 
 	req, err := http.NewRequest(method, url, reqBody)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header = header
 
@@ -1759,16 +1849,30 @@ func makeRequest(client *http.Client, method, url, body string,
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, errors.Errorf("unexpected status code: %v", resp.StatusCode)
+		return nil, 0, err
 	}
 
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
-	return b, err
+	return b, resp.StatusCode, err
+}
+
+func getBodyForLambda(ctx context.Context, field schema.Field, parents,
+	args interface{}) map[string]interface{} {
+	body := make(map[string]interface{})
+	body["resolver"] = field.GetObjectName() + "." + field.Name()
+	body["authHeader"] = map[string]interface{}{
+		"key":   authorization.GetHeader(),
+		"value": authorization.GetJwtToken(ctx),
+	}
+	if parents != nil {
+		body["parents"] = parents
+	}
+	if args != nil {
+		body["args"] = args
+	}
+	return body
 }
 
 func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Field) *Resolved {
@@ -1787,13 +1891,18 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 
 	var body string
 	if hrc.Template != nil {
-		b, err := json.Marshal(*hrc.Template)
+		jsonTemplate := *hrc.Template
+		if field.HasLambdaDirective() {
+			jsonTemplate = getBodyForLambda(ctx, field, nil, *hrc.Template)
+		}
+		b, err := json.Marshal(jsonTemplate)
 		if err != nil {
 			return emptyResult(jsonMarshalError(err, field, *hrc.Template))
 		}
 		body = string(b)
 	}
-	b, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
+
+	b, status, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
 	if err != nil {
 		return emptyResult(externalRequestError(err, field))
 	}
@@ -1801,12 +1910,20 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	// this means it had body and not graphql, so just unmarshal it and return
 	if hrc.RemoteGqlQueryName == "" {
 		var result interface{}
-		if err := json.Unmarshal(b, &result); err != nil {
-			return emptyResult(jsonUnmarshalError(err, field))
+		var rerr restErr
+		if status >= 200 && status < 300 {
+			if err := json.Unmarshal(b, &result); err != nil {
+				return emptyResult(jsonUnmarshalError(err, field))
+			}
+		} else if err := json.Unmarshal(b, &rerr); err != nil {
+			err = errors.Errorf("unexpected error with: %v", status)
+			rerr.Errors = x.GqlErrorList{externalRequestError(err, field)}
 		}
+
 		return &Resolved{
 			Data:  map[string]interface{}{field.Name(): result},
 			Field: field,
+			Err:   rerr.Errors,
 		}
 	}
 
@@ -1825,7 +1942,6 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	if !ok {
 		return emptyResult(resp.Errors)
 	}
-
 	return &Resolved{
 		Data:  map[string]interface{}{field.Name(): data},
 		Field: field,
