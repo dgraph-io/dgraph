@@ -400,6 +400,21 @@ input RestoreInput {
 }
 ```
 
+Restore requests will return immediately without waiting for the operation to
+finish. The `restoreId` value included in the response can be used to query for
+the state of the restore operation via the `restoreStatus` endpoint. The request
+should be sent to the same alpha to which the original restore request was sent.
+Below is an example of how to perform the query.
+
+```
+query status() {
+	restoreStatus(restoreId: 8) {
+		status
+		errors
+	}
+}
+```
+
 ## Offline restore using `dgraph restore`
 
 {{% notice "note" %}}
