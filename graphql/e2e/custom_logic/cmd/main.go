@@ -141,6 +141,11 @@ func compareHeaders(headers map[string][]string, actual http.Header) error {
 	if headers == nil {
 		return nil
 	}
+	// unless some other content-type was expected, always make sure we get JSON as content-type.
+	if _, ok := headers["Content-Type"]; !ok {
+		headers["Content-Type"] = []string{"application/json"}
+	}
+
 	actualHeaderLen := len(actual)
 	expectedHeaderLen := len(headers)
 	if actualHeaderLen != expectedHeaderLen {

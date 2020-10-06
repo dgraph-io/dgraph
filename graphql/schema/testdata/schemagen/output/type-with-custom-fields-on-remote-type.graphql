@@ -93,6 +93,7 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -177,13 +178,10 @@ type UpdateUserPayload {
 #######################
 
 enum UserHasFilter {
-	name
 	age
-	cars
 }
 
 enum UserOrderable {
-	name
 	age
 }
 

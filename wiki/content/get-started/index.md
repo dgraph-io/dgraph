@@ -65,14 +65,6 @@ docker run --rm -it -p 8080:8080 -p 9080:9080 -p 8000:8000 -v ~/dgraph:/dgraph d
 This would start a single container with **Dgraph Alpha**, **Dgraph Zero** and **Ratel** running in it.
 You would find the Dgraph data stored in a folder named *dgraph* of your *home directory*.
 
-{{% notice "tip" %}}
-Usually, you need to set the estimated memory Dgraph alpha can take through `lru_mb` flag.
-This is just a hint to the Dgraph alpha, and actual usage would be higher than this.
-It is recommended to set lru_mb to the one-third of the available RAM. For the standalone setup,
-it is set to that by default.
-{{% /notice %}}
-
-
 ### Step 2: Run Mutation
 
 {{% notice "tip" %}}
