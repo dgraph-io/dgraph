@@ -412,6 +412,20 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	return true
 }
 
+// AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
+func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
+	if authToken := r.Header.Get("X-Dgraph-AuthToken"); authToken != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("auth-token", authToken)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
+}
+
 // AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
 func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
 	if accessJwt := r.Header.Get("X-Dgraph-AccessToken"); accessJwt != "" {
