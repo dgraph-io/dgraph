@@ -24,7 +24,7 @@ That brings up GraphQL at `localhost:8080/graphql` and `localhost:8080/admin`, b
 
 Once you've tried out Dgraph GraphQL, you'll need to move past the `dgraph/standalone` and run and deploy Dgraph instances.
 
-Dgraph is a distributed graph database.  It can scale to huge data and shard that data across a cluster of Dgraph instances.  GraphQL is built into Dgraph in its Alpha nodes. To learn how to manage and deploy a Dgraph cluster to build an App, check our [deployment guide](/deploy/).
+Dgraph is a distributed graph database.  It can scale to huge data and shard that data across a cluster of Dgraph instances.  GraphQL is built into Dgraph in its Alpha nodes. To learn how to manage and deploy a Dgraph cluster, check our [deployment guide](https://dgraph.io/docs/deploy/).
 
 GraphQL schema introspection is enabled by default, but can be disabled with the `--graphql_introspection=false` when starting the Dgraph alpha nodes.
 
@@ -42,7 +42,7 @@ When you start Dgraph with GraphQL, two GraphQL endpoints are served.
 
 ### /graphql
 
-At `/graphql` you'll find the GraphQL API for the types you've added.  That's what your app would access and is the GraphQL entry point to Dgraph.  If you need to know more about this, see the [quick start](/graphql/quick-start/) and [schema docs](/graphql/schema/).
+At `/graphql` you'll find the GraphQL API for the types you've added.  That's what your app would access and is the GraphQL entry point to Dgraph.  If you need to know more about this, see the [quick start](https://dgraph.io/docs/graphql/quick-start/) and [schema docs](https://dgraph.io/docs/graphql/schema/).
 
 ### /admin
 
@@ -331,9 +331,9 @@ You'll notice that the `/admin` schema is very much the same as the schemas gene
 
 Enterprise Features like ACL, Backups and Restore are also available using the GraphQL API at `/admin` endpoint.
 
-* [ACL](https://dgraph.io/docs/enterprise-features/access-control-lists/#using-graphql-admin-api).
-* [Backups](https://dgraph.io/docs/enterprise-features/binary-backups/#create-a-backup).
-* [Restore](https://dgraph.io/docs/enterprise-features/binary-backups/#restore-from-backup).
+* [ACL](https://dgraph.io/docs/enterprise-features/access-control-lists/#using-graphql-admin-api)
+* [Backups](https://dgraph.io/docs/enterprise-features/binary-backups/#create-a-backup)
+* [Restore](https://dgraph.io/docs/enterprise-features/binary-backups/#restore-from-backup)
 
 ## First Start
 
@@ -343,9 +343,9 @@ On first starting with a blank database:
 * Querying the `/admin` endpoint for `getGQLSchema` returns `"getGQLSchema": null`.
 * Querying the `/admin` endpoint for `health` lets you know that no schema has been added.
 
-## Adding a Schema
+## Modifying a Schema
 
-There are two ways you can add a schema:
+There are two ways you can modify a GraphQL schema:
 - Using `/admin/schema`
 - Using the `updateGQLSchema` mutation on `/admin` 
 
@@ -353,7 +353,7 @@ There are two ways you can add a schema:
 
 The `/admin/schema` endpoint provides a simplified method to add and update schemas.
 
-Given a blank database, to create a schema you only need to call the `/admin/schema` endpoint with the required schema definition. For example:
+To create a schema you only need to call the `/admin/schema` endpoint with the required schema definition. For example:
 
 ```graphql
 type Person { 
@@ -370,9 +370,9 @@ On successful execution, the `/admin/schema` endpoint will give you a JSON respo
 
 ### Using `updateGQLSchema`
 
-Another option to add a schema is the `updateGQLSchema` mutation. 
+Another option to add or modify a GraphQL schema is the `updateGQLSchema` mutation. 
 
-Given a blank database, running this mutation on the `/admin` endpoint
+For example, to create a schema using `updateGQLSchema`, run this mutation on the `/admin` endpoint:
 
 ```graphql
 mutation {
@@ -387,18 +387,28 @@ mutation {
 }
 ```
 
+## Initial Schema
+
+Regardless of the method used to upload the GraphQL schema, on a black database, adding this schema
+
+```graphql
+type Person {
+	name: String
+}
+```
+
 would cause the following:
 
-* The `/graphql` endpoint would refresh and serve the GraphQL schema generated from type `type Person { name: String }`: that's Dgraph type `Person` and predicate `Person.name: string .` (see [this article](/graphql/dgraph) on how to customize the generated schema)
+* The `/graphql` endpoint would refresh and serve the GraphQL schema generated from type `type Person { name: String }`: that's Dgraph type `Person` and predicate `Person.name: string .` (see [this article](https://dgraph.io/docs/graphql/dgraph) on how to customize the generated schema)
 * The schema of the underlying Dgraph instance would be altered to allow for the new `Person` type and `name` predicate.
 * The `/admin` endpoint for `health` would return that a schema is being served.
-* The mutation returns `"schema": "type Person { name: String }"` and the generated GraphQL schema for `generatedSchema` (this is the schema served at `/graphql`).
+* The mutation would return `"schema": "type Person { name: String }"` and the generated GraphQL schema for `generatedSchema` (this is the schema served at `/graphql`).
 * Querying the `/admin` endpoint for `getGQLSchema` would return the new schema.
 
 
 ## Migrating a Schema
 
-Given an instance serving the schema from the previous section, running an `updateGQLSchema` mutation with the following input
+Given an instance serving the GraphQL schema from the previous section, updating the schema to the following
 
 ```graphql
 type Person {
@@ -407,20 +417,28 @@ type Person {
 }
 ```
 
-changes the GraphQL definition of `Person` and results in the following:
+would change the GraphQL definition of `Person` and result in the following:
 
-* The `/graphql` endpoint would refresh and now serves the GraphQL schema generated from the new type.
+* The `/graphql` endpoint would refresh and serve the GraphQL schema generated from the new type.
 * The schema of the underlying Dgraph instance would be altered to allow for `dob` (predicate `Person.dob: datetime .` is added, and `Person.name` becomes `Person.name: string @index(regexp).`) and indexes are rebuilt to allow the regexp search.
 * The `health` is unchanged.
-* Querying the `/admin` endpoint for `getGQLSchema` now returns the updated schema.
+* Querying the `/admin` endpoint for `getGQLSchema` would return the updated schema.
 
 ## Removing from Schema
 
 Adding a schema through GraphQL doesn't remove existing data (it only removes indexes).
 
-For example, starting from the schema in the previous section and running `updateGQLSchema` with the initial `type Person { name: String }` would have the following effects:
+For example, starting from the schema in the previous section and modifying it with the initial schema
+
+```graphql
+type Person { 
+	name: String 
+}
+```
+
+would have the following effects:
 
 * The `/graphql` endpoint would refresh to serve the schema built from this type.
-* Thus, field `dob` would no longer be accessible and there'd be no search available on `name`.
+* Thus, field `dob` would no longer be accessible, and there'd be no search available on `name`.
 * The search index on `name` in Dgraph would be removed.
 * The predicate `dob` in Dgraph would be left untouched (the predicate remains and no data is deleted).
