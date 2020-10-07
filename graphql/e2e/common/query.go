@@ -346,6 +346,66 @@ func allPosts(t *testing.T) []*post {
 	return result.QueryPost
 }
 
+func InFilter(t *testing.T) {
+	addStateParams := &GraphQLParams{
+		Query: `mutation addState($name1: String!, $code1: String!, $name2: String!, $code2: String! ) {
+			addState(input: [{name: $name1, xcode: $code1},{name: $name2, xcode: $code2}]) {
+				state {
+					xcode
+					name
+				}
+			}
+		}`,
+
+		Variables: map[string]interface{}{
+			"name1": "A State",
+			"code1": "abc",
+			"name2": "B State",
+			"code2": "def",
+		},
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	getStateParams := &GraphQLParams{
+		Query: `query{
+			queryState(filter: {xcode: {in: ["abc", "def"]}}){
+				xcode
+				name
+			}
+		}`,
+	}
+
+	gqlResponse = getStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryState []*state
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(result.QueryState))
+
+	state1 := &state{
+		Name: "A State",
+		Code: "abc",
+	}
+	state2 := &state{
+		Name: "B State",
+		Code: "def",
+	}
+
+	expected := []*state{state1, state2}
+
+	if diff := cmp.Diff(expected, result.QueryState); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	deleteFilter := map[string]interface{}{"xcode": map[string]interface{}{"in": []string{"abc", "def"}}}
+	deleteGqlType(t, "State", deleteFilter, 2, nil)
+}
+
 func deepFilter(t *testing.T) {
 	getAuthorParams := &GraphQLParams{
 		Query: `query {
@@ -376,6 +436,9 @@ func deepFilter(t *testing.T) {
 	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+
+	deleteFilter := map[string]interface{}{"xcode": map[string]interface{}{"in": []string{"abc", "def"}}}
+	deleteGqlType(t, "State", deleteFilter, 2, nil)
 }
 
 func deepHasFilter(t *testing.T) {
