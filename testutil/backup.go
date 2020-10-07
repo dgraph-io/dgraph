@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -50,8 +49,9 @@ func openDgraph(pdir string) (*badger.DB, error) {
 		return nil, err
 	}
 
-	opt := badger.DefaultOptions(pdir).WithTableLoadingMode(options.MemoryMap).
-		WithReadOnly(true).
+	opt := badger.DefaultOptions(pdir).
+		WithBlockCacheSize(10 * (1 << 20)).
+		WithIndexCacheSize(10 * (1 << 20)).
 		WithEncryptionKey(k)
 	return badger.OpenManaged(opt)
 }

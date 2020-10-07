@@ -70,9 +70,7 @@ func run(conf *viper.Viper) error {
 	// Copied over from zero/run.go
 	kvOpt := badger.LSMOnlyOptions(oldDir).
 		WithSyncWrites(false).
-		WithTruncate(true).
-		WithValueLogFileSize(64 << 20).
-		WithLoadBloomsOnOpen(false)
+		WithValueLogFileSize(64 << 20)
 
 	kv, err := badger.OpenManaged(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
