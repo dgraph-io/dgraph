@@ -178,6 +178,7 @@ type Type interface {
 	EnsureNonNulls(map[string]interface{}, string) error
 	FieldOriginatedFrom(fieldName string) string
 	AuthRules() *TypeAuth
+	IsPoint() bool
 	fmt.Stringer
 }
 
@@ -431,9 +432,9 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	dgraphPredicate := make(map[string]map[string]string)
 	for _, inputTyp := range sch.Types {
 		// We only want to consider input types (object and interface) defined by the user as part
-		// of the schema hence we ignore BuiltIn, query and mutation types.
+		// of the schema hence we ignore BuiltIn, query and mutation types and Geo types.
 		if inputTyp.BuiltIn || isQueryOrMutationType(inputTyp) || inputTyp.Name == "Subscription" ||
-			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
+			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) || inputTyp.Name == "Point" {
 			continue
 		}
 
@@ -1596,6 +1597,10 @@ func (m *mutation) IsAuthQuery() bool {
 
 func (t *astType) AuthRules() *TypeAuth {
 	return t.inSchema.authRules[t.DgraphName()]
+}
+
+func (t *astType) IsPoint() bool {
+	return t.Name() == "Point"
 }
 
 func (t *astType) Field(name string) FieldDefinition {

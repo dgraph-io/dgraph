@@ -1,8 +1,8 @@
 +++
 title = "Fetching and Updating Your Schema"
+weight = 3   
 [menu.main]
     parent = "slash-graphql-admin"
-    weight = 3   
 +++
 
 Your GraphQL schema can be fetched and updated using the `/admin` endpoint of your cluster. As an example, if your graphql endpoint is `https://frozen-mango-42.us-west-2.aws.cloud.dgraph.io/graphql`, then the admin endpoint for schema will be at `https://frozen-mango.us-west-2.aws.cloud.dgraph.io/admin`.

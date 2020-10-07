@@ -38,10 +38,6 @@ const (
 type Options struct {
 	// PostingDir is the path to the directory storing the postings..
 	PostingDir string
-	// BadgerTables is the name of the mode used to load the badger tables for the p directory.
-	BadgerTables string
-	// BadgerVlog is the name of the mode used to load the badger value log for the p directory.
-	BadgerVlog string
 
 	// PostingDirCompression is the compression algorithem used to compression Postings directory.
 	PostingDirCompression bo.CompressionType

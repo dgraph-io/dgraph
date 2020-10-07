@@ -1,10 +1,10 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Deploy"
+weight = 8
 [menu.main]
   url = "/deploy/"
   identifier = "deploy"
-  weight = 8
 +++
 
 This page talks about running Dgraph in various deployment modes, in a distributed fashion and involves

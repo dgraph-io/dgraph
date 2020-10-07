@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Troubleshooting"
+weight = 19
 [menu.main]
     parent = "deploy"
-    weight = 19
 +++
 
 Here are some problems that you may encounter and some solutions to try.

@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Language and RDF Types"
+weight = 5
 [menu.main]
     parent = "mutations"
-    weight = 5
 +++
 
 RDF N-Quad allows specifying a language for string values and an RDF type.  Languages are written using `@lang`. For example

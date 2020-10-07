@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Load balancing queries with Nginx"
+weight = 8
 [menu.main]
     parent = "howto"
-    weight = 8
 +++
 
 There might be times when you'll want to set up a load balancer to accomplish goals such as increasing the utilization of your database by sending queries from the app to multiple database server replicas. You can follow these steps to get started with that.

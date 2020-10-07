@@ -1,8 +1,8 @@
 +++
 title = "Types"
+weight = 2
 [menu.main]
     parent = "schema"
-    weight = 2   
 +++
 
 This page describes how you use GraphQL types to set the Dgraph GraphQL schema.
