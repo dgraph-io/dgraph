@@ -1,9 +1,10 @@
 +++
 title = "Documentation and Comments"
+weight = 6
 [menu.main]
     parent = "schema"
-    weight = 6   
 +++
+
 ## Schema Documentation Processed  by Generated API
 Dgraph accepts GraphQL documentation comments (e.g. `""" This is a graphql comment """`), which get passed through to the generated API and thus shown as documentation in GraphQL tools like GraphiQL, GraphQL Playground, Insomnia etc.
 

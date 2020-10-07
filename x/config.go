@@ -41,6 +41,8 @@ type Options struct {
 	GraphqlExtension bool
 	// GraphqlDebug will enable debug mode in GraphQL
 	GraphqlDebug bool
+	// GraphqlLambdaUrl stores the URL of lambda functions for custom GraphQL resolvers
+	GraphqlLambdaUrl string
 }
 
 // Config stores the global instance of this package's options.

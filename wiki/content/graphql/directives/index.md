@@ -1,10 +1,10 @@
 +++
 title = "Index of Directives"
+weight = 11
 [menu.main]
   name = "Directives"
   identifier = "directives"
   parent = "graphql"
-  weight = 11
 +++
 
 The list of all directives supported by Dgraph.

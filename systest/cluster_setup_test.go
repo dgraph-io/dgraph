@@ -82,7 +82,7 @@ func (d *DgraphCluster) StartZeroOnly() error {
 	}
 
 	// Wait for dgraphzero to start listening and become the leader.
-	time.Sleep(time.Second * 4)
+	time.Sleep(time.Second * 6)
 	return nil
 }
 
@@ -107,7 +107,7 @@ func (d *DgraphCluster) StartAlphaOnly() error {
 	// programmatically by hitting the query port. This would be quicker than
 	// just waiting 4 seconds (which seems to be the smallest amount of time to
 	// reliably wait).
-	time.Sleep(time.Second * 4)
+	time.Sleep(time.Second * 6)
 
 	d.client = dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
 

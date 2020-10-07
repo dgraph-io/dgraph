@@ -1,8 +1,8 @@
 +++
 title = "Securing Your GraphQL endpoint"
+weight = 6
 [menu.main]
     parent = "slash-graphql"
-    weight = 6
 +++
 
 Here are a few tips for securing your Slash GraphQL Backend

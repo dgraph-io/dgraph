@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Delete"
+weight = 7
 [menu.main]
     parent = "mutations"
-    weight = 7
 +++
 
 A delete mutation, signified with the `delete` keyword, removes triples from the store.

@@ -1,8 +1,8 @@
 +++
-title = "Creating basic UI"
+title = "Creating a basic UI"
+weight = 3
 [menu.main]
     parent = "todo-app-tutorial"
-    weight = 3   
 +++
 
 In this step, we will create a simple todo app (React) and integrate it with Auth0.

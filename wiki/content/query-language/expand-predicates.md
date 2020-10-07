@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Expand Predicates"
+weight = 14
 [menu.main]
     parent = "query-language"
-    weight = 14
 +++
 
 The `expand()` function can be used to expand the predicates out of a node. To

@@ -1,9 +1,9 @@
 +++
 title = "Order and Pagination"
+weight = 4
 [menu.main]
     parent = "graphql-queries"
     name = "Order and Pagination"
-    weight = 4   
 +++
 
 Every type with fields whose types can be ordered (`Int`, `Float`, `String`, `DateTime`) gets

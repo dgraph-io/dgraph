@@ -30,6 +30,7 @@
     ]
   url: http://myapi.com/favMovies/0x1?name=Michael&num=
   method: GET
+  headers: { "Content-type": ["application/json"] }
   resolvedresponse: |
     {
       "myFavoriteMovies": [
@@ -84,7 +85,7 @@
   url: http://myapi.com/favMovies/0x9?name=Michael&num=10
   method: POST
   body: '{ "id": "0x9", "name": "Michael", "director": { "number": 10 }}'
-  headers: { "X-App-Token": ["val"], "Auth0-Token": ["tok"] }
+  headers: { "X-App-Token": ["val"], "Auth0-Token": ["tok"], "Content-type": ["application/json"] }
   resolvedresponse: |
     {
       "myFavoriteMoviesPart2": [

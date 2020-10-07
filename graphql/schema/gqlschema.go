@@ -45,12 +45,18 @@ const (
 	cascadeDirective      = "cascade"
 	cascadeArg            = "fields"
 	SubscriptionDirective = "withSubscription"
+	lambdaDirective       = "lambda"
 
 	// custom directive args and fields
-	dqlArg = "dql"
-	mode   = "mode"
-	BATCH  = "BATCH"
-	SINGLE = "SINGLE"
+	dqlArg      = "dql"
+	httpArg     = "http"
+	httpUrl     = "url"
+	httpMethod  = "method"
+	httpBody    = "body"
+	httpGraphql = "graphql"
+	mode        = "mode"
+	BATCH       = "BATCH"
+	SINGLE      = "SINGLE"
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
@@ -89,6 +95,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -123,6 +130,25 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter!
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -137,6 +163,7 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -244,6 +271,7 @@ var supportedSearches = map[string]searchTypeIndex{
 	"month":    {"DateTime", "month"},
 	"day":      {"DateTime", "day"},
 	"hour":     {"DateTime", "hour"},
+	"geo":      {"Point", "geo"},
 }
 
 // GraphQL scalar type -> default search arg
@@ -255,6 +283,7 @@ var defaultSearches = map[string]string{
 	"Float":    "float",
 	"String":   "term",
 	"DateTime": "year",
+	"Point":    "geo",
 }
 
 // graphqlSpecScalars holds all the scalar types supported by the graphql spec.
@@ -305,6 +334,7 @@ var builtInFilters = map[string]string{
 	"fulltext": "StringFullTextFilter",
 	"exact":    "StringExactFilter",
 	"hash":     "StringHashFilter",
+	"geo":      "PointGeoFilter",
 }
 
 // GraphQL scalar -> Dgraph scalar
@@ -339,7 +369,8 @@ var directiveValidators = map[string]directiveValidator{
 	deprecatedDirective:   ValidatorNoOp,
 	SubscriptionDirective: ValidatorNoOp,
 	// Just go get it printed into generated schema
-	authDirective: ValidatorNoOp,
+	authDirective:   ValidatorNoOp,
+	lambdaDirective: lambdaDirectiveValidation,
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
@@ -685,10 +716,9 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 // }
 func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
-		custom := fld.Directives.ForName(customDirective)
-		// Filtering and ordering for fields with @custom directive is handled by the remote
+		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
-		if custom != nil {
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -730,7 +760,7 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if isID(fld) {
+		if isID(fld) || hasCustomOrLambda(fld) {
 			continue
 		}
 		filter.EnumValues = append(filter.EnumValues,
@@ -898,12 +928,13 @@ func hasFilterable(defn *ast.Definition) bool {
 }
 
 func hasOrderables(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool {
-			// lists can't be ordered and NamedType will be empty for lists,
-			// so it will return false for list fields
-			return orderable[fld.Type.NamedType]
-		})
+	return fieldAny(defn.Fields, isOrderable)
+}
+
+func isOrderable(fld *ast.FieldDefinition) bool {
+	// lists can't be ordered and NamedType will be empty for lists,
+	// so it will return false for list fields
+	return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
 }
 
 func hasID(defn *ast.Definition) bool {
@@ -1024,7 +1055,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if fld.Type.NamedType != "" && orderable[fld.Type.NamedType] {
+		if isOrderable(fld) {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}
@@ -1330,9 +1361,9 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		custom := fld.Directives.ForName(customDirective)
-		// Fields with @custom directive should not be part of mutation input, hence we skip them.
-		if custom != nil {
+		// Fields with @custom/@lambda directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -1371,9 +1402,9 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
-		custom := fld.Directives.ForName(customDirective)
-		// Fields with @custom directive should not be part of mutation input, hence we skip them.
-		if custom != nil {
+		// Fields with @custom/@lambda directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
