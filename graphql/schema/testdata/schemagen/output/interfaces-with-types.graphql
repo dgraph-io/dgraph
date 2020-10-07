@@ -166,6 +166,7 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
@@ -174,6 +175,7 @@ input StringExactFilter {
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 
 #######################
@@ -371,6 +373,7 @@ input DroidRef {
 
 input Episode_hash {
 	eq: [Episode!]!
+	in: [Episode!]!
 }
 
 input HumanFilter {
