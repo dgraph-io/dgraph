@@ -5443,3 +5443,13 @@ func TestBadCascadeParameterized(t *testing.T) {
 		require.Error(t, err)
 	}
 }
+
+func TestEmptyId(t *testing.T) {
+	q := "query me($a: string) { q(func: uid($a)) { name }}"
+	r := Request{
+		Str:       q,
+		Variables: map[string]string{"$a": "   "},
+	}
+	_, err := Parse(r)
+	require.Error(t, err, "ID cannot be empty")
+}
