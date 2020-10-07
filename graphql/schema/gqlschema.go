@@ -95,6 +95,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -127,6 +128,25 @@ input CustomHTTP {
 	secretHeaders: [String!]
 	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
+}
+
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter!
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -251,6 +271,7 @@ var supportedSearches = map[string]searchTypeIndex{
 	"month":    {"DateTime", "month"},
 	"day":      {"DateTime", "day"},
 	"hour":     {"DateTime", "hour"},
+	"geo":      {"Point", "geo"},
 }
 
 // GraphQL scalar type -> default search arg
@@ -262,6 +283,7 @@ var defaultSearches = map[string]string{
 	"Float":    "float",
 	"String":   "term",
 	"DateTime": "year",
+	"Point":    "geo",
 }
 
 // graphqlSpecScalars holds all the scalar types supported by the graphql spec.
@@ -312,6 +334,7 @@ var builtInFilters = map[string]string{
 	"fulltext": "StringFullTextFilter",
 	"exact":    "StringExactFilter",
 	"hash":     "StringHashFilter",
+	"geo":      "PointGeoFilter",
 }
 
 // GraphQL scalar -> Dgraph scalar

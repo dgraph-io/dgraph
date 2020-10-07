@@ -446,7 +446,16 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
 				case ast.Object, ast.Interface:
-					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
+					if isPointType(f.Type) {
+						typStr = "geo"
+						var indexes []string
+						if f.Directives.ForName(searchDirective) != nil {
+							indexes = append(indexes, "geo")
+						}
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
+					} else {
+						typStr = fmt.Sprintf("%suid%s", prefix, suffix)
+					}
 
 					if parentInt == nil {
 						if strings.HasPrefix(fname, "~") {

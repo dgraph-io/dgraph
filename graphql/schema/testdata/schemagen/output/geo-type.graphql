@@ -2,16 +2,10 @@
 # Input Schema
 #######################
 
-type Post {
-	id: ID!
-	title: String!
-	text: String
-	author(filter: AuthorFilter): Author!
-}
-
-type Author {
+type Hotel {
 	id: ID!
 	name: String!
+	location: Point @search
 }
 
 #######################
@@ -177,35 +171,19 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type AddHotelPayload {
+	hotel(filter: HotelFilter, order: HotelOrder, first: Int, offset: Int): [Hotel]
 	numUids: Int
 }
 
-type AddPostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	numUids: Int
-}
-
-type DeleteAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type DeleteHotelPayload {
+	hotel(filter: HotelFilter, order: HotelOrder, first: Int, offset: Int): [Hotel]
 	msg: String
 	numUids: Int
 }
 
-type DeletePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	msg: String
-	numUids: Int
-}
-
-type UpdateAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
-	numUids: Int
-}
-
-type UpdatePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+type UpdateHotelPayload {
+	hotel(filter: HotelFilter, order: HotelOrder, first: Int, offset: Int): [Hotel]
 	numUids: Int
 }
 
@@ -213,99 +191,54 @@ type UpdatePostPayload {
 # Generated Enums
 #######################
 
-enum AuthorHasFilter {
+enum HotelHasFilter {
 	name
+	location
 }
 
-enum AuthorOrderable {
+enum HotelOrderable {
 	name
-}
-
-enum PostHasFilter {
-	title
-	text
-	author
-}
-
-enum PostOrderable {
-	title
-	text
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddAuthorInput {
+input AddHotelInput {
 	name: String!
+	location: PointRef
 }
 
-input AddPostInput {
-	title: String!
-	text: String
-	author: AuthorRef!
-}
-
-input AuthorFilter {
+input HotelFilter {
 	id: [ID!]
-	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
-	not: AuthorFilter
+	location: PointGeoFilter
+	has: HotelHasFilter
+	and: HotelFilter
+	or: HotelFilter
+	not: HotelFilter
 }
 
-input AuthorOrder {
-	asc: AuthorOrderable
-	desc: AuthorOrderable
-	then: AuthorOrder
+input HotelOrder {
+	asc: HotelOrderable
+	desc: HotelOrderable
+	then: HotelOrder
 }
 
-input AuthorPatch {
+input HotelPatch {
 	name: String
+	location: PointRef
 }
 
-input AuthorRef {
+input HotelRef {
 	id: ID
 	name: String
+	location: PointRef
 }
 
-input PostFilter {
-	id: [ID!]
-	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
-	not: PostFilter
-}
-
-input PostOrder {
-	asc: PostOrderable
-	desc: PostOrderable
-	then: PostOrder
-}
-
-input PostPatch {
-	title: String
-	text: String
-	author: AuthorRef
-}
-
-input PostRef {
-	id: ID
-	title: String
-	text: String
-	author: AuthorRef
-}
-
-input UpdateAuthorInput {
-	filter: AuthorFilter!
-	set: AuthorPatch
-	remove: AuthorPatch
-}
-
-input UpdatePostInput {
-	filter: PostFilter!
-	set: PostPatch
-	remove: PostPatch
+input UpdateHotelInput {
+	filter: HotelFilter!
+	set: HotelPatch
+	remove: HotelPatch
 }
 
 #######################
@@ -313,10 +246,8 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	getPost(id: ID!): Post
-	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	getAuthor(id: ID!): Author
-	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getHotel(id: ID!): Hotel
+	queryHotel(filter: HotelFilter, order: HotelOrder, first: Int, offset: Int): [Hotel]
 }
 
 #######################
@@ -324,11 +255,8 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: [AddPostInput!]!): AddPostPayload
-	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(filter: PostFilter!): DeletePostPayload
-	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
-	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
-	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	addHotel(input: [AddHotelInput!]!): AddHotelPayload
+	updateHotel(input: UpdateHotelInput!): UpdateHotelPayload
+	deleteHotel(filter: HotelFilter!): DeleteHotelPayload
 }
 
