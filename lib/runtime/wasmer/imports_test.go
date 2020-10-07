@@ -21,12 +21,13 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_ext_twox_256(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 	mem := instance.vm.Memory.Data()
 
 	data := []byte("hello")
@@ -53,7 +54,7 @@ func Test_ext_twox_256(t *testing.T) {
 }
 
 func Test_ext_kill_child_storage(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 	mem := instance.vm.Memory.Data()
 	// set child storage
 	storageKey := []byte("childstore1")
@@ -108,7 +109,7 @@ func Test_ext_kill_child_storage(t *testing.T) {
 }
 
 func Test_ext_clear_child_storage(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 	mem := instance.vm.Memory.Data()
 	// set child storage
 	storageKey := []byte("childstore1")
@@ -163,7 +164,7 @@ func Test_ext_clear_child_storage(t *testing.T) {
 }
 
 func Test_ext_get_allocated_child_storage(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 	mem := instance.vm.Memory.Data()
 
 	// set child storage

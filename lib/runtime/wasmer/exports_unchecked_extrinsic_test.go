@@ -12,7 +12,7 @@ import (
 )
 
 func TestApplyExtrinsic_Transfer_NoBalance_UncheckedExt(t *testing.T) {
-	rt := NewTestInstance(t, NODE_RUNTIME)
+	rt := NewTestInstance(t, runtime.NODE_RUNTIME)
 	rtVerB, err := rt.exec(runtime.CoreVersion, []byte{})
 	require.Nil(t, err)
 
@@ -76,7 +76,7 @@ func TestApplyExtrinsic_Transfer_NoBalance_UncheckedExt(t *testing.T) {
 }
 
 func TestApplyExtrinsic_Transfer_WithBalance_UncheckedExtrinsic(t *testing.T) {
-	rt := NewTestInstance(t, NODE_RUNTIME)
+	rt := NewTestInstance(t, runtime.NODE_RUNTIME)
 	rtVerB, err := rt.exec(runtime.CoreVersion, []byte{})
 	require.Nil(t, err)
 

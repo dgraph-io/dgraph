@@ -21,6 +21,8 @@ import (
 
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/scale"
+
+	log "github.com/ChainSafe/log15"
 )
 
 var (
@@ -59,6 +61,16 @@ const NodeStorageTypeLocal NodeStorageType = 2
 type NodeStorage struct {
 	LocalStorage      BasicStorage
 	PersistentStorage BasicStorage
+}
+
+// InstanceConfig represents a runtime instance configuration
+type InstanceConfig struct {
+	Storage     Storage
+	Keystore    *keystore.GenericKeystore
+	LogLvl      log.Lvl
+	Role        byte
+	NodeStorage NodeStorage
+	Network     BasicNetwork
 }
 
 // Context is the context for the wasm interpreter's imported functions
@@ -124,4 +136,24 @@ func (v *VersionAPI) Decode(in []byte) error {
 	}
 
 	return nil
+}
+
+// NewValidateTransactionError returns an error based on a return value from TaggedTransactionQueueValidateTransaction
+func NewValidateTransactionError(res []byte) error {
+	// confirm we have an error
+	if res[0] == 0 {
+		return nil
+	}
+
+	if res[1] == 0 {
+		// transaction is invalid
+		return ErrInvalidTransaction
+	}
+
+	if res[1] == 1 {
+		// transaction validity can't be determined
+		return ErrUnknownTransaction
+	}
+
+	return ErrCannotValidateTx
 }

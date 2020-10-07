@@ -383,13 +383,13 @@ func (s *Service) handleRuntimeChanges(header *types.Header) error {
 		}
 
 		cfg := &wasmer.Config{
-			Storage:     ts,
-			Keystore:    s.keys.Acco.(*keystore.GenericKeystore),
-			Imports:     wasmer.RegisterImports_NodeRuntime,
-			LogLvl:      -1, // don't change runtime package log level
-			NodeStorage: s.rt.NodeStorage(),
-			Network:     s.rt.NetworkService(),
+			Imports: wasmer.RegisterImports_NodeRuntime,
 		}
+		cfg.Storage = ts
+		cfg.Keystore = s.keys.Acco.(*keystore.GenericKeystore)
+		cfg.LogLvl = -1
+		cfg.NodeStorage = s.rt.NodeStorage()
+		cfg.Network = s.rt.NetworkService()
 
 		s.rt, err = wasmer.NewInstance(code, cfg)
 		if err != nil {

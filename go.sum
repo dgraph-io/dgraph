@@ -14,6 +14,18 @@ github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/ChainSafe/chaindb v0.0.1 h1:A+11ulFG6R/IE6pEBy6j6hTTHTA3BvCVK8jklogW0Uw=
 github.com/ChainSafe/chaindb v0.0.1/go.mod h1:FQQJbGzWe+rOa0aW/wSMz1qfIScauntW0HiynEIezuk=
+github.com/ChainSafe/chaindb v0.1.0 h1:mvVC8oWkgEO2VOOdy55SpdhKeVjZnsDLlIIuOGYS4sQ=
+github.com/ChainSafe/chaindb v0.1.0/go.mod h1:FQQJbGzWe+rOa0aW/wSMz1qfIScauntW0HiynEIezuk=
+github.com/ChainSafe/chaindb v0.1.1-0.20201006203234-477aea6e1e64 h1:c9eEZ8DLgSLAV8a+WTDhEQvLCtF0l5f0GL8vMniOxcY=
+github.com/ChainSafe/chaindb v0.1.1-0.20201006203234-477aea6e1e64/go.mod h1:FQQJbGzWe+rOa0aW/wSMz1qfIScauntW0HiynEIezuk=
+github.com/ChainSafe/chaindb v0.1.1 h1:n12h2KZLgLSoOshCMG5XYoaZljJNSXQaV/fOCIVTJl4=
+github.com/ChainSafe/chaindb v0.1.1/go.mod h1:FQQJbGzWe+rOa0aW/wSMz1qfIScauntW0HiynEIezuk=
+github.com/ChainSafe/chaindb v0.1.2 h1:9zYNvop0GLIkoRFhzgCJVizhTxGWbD7M5BNGLjSqHvQ=
+github.com/ChainSafe/chaindb v0.1.2/go.mod h1:FQQJbGzWe+rOa0aW/wSMz1qfIScauntW0HiynEIezuk=
+github.com/ChainSafe/chaindb v0.1.3-0.20201006205605-8b0172911282 h1:Etc0yOcxRJBm61JMUwf2NoOKN9LEJM79h/d8kSyRfmg=
+github.com/ChainSafe/chaindb v0.1.3-0.20201006205605-8b0172911282/go.mod h1:FQQJbGzWe+rOa0aW/wSMz1qfIScauntW0HiynEIezuk=
+github.com/ChainSafe/chaindb v0.1.3 h1:yeZbB3J+xEWXLizxm3cuwhfV97NRbZnP2oB/2nKQw5A=
+github.com/ChainSafe/chaindb v0.1.3/go.mod h1:FQQJbGzWe+rOa0aW/wSMz1qfIScauntW0HiynEIezuk=
 github.com/ChainSafe/go-schnorrkel v0.0.0-20200405005733-88cbf1b4c40d h1:nalkkPQcITbvhmL4+C4cKA87NW0tfm3Kl9VXRoPywFg=
 github.com/ChainSafe/go-schnorrkel v0.0.0-20200405005733-88cbf1b4c40d/go.mod h1:URdX5+vg25ts3aCh8H5IFZybJYKWhJHYMTnf+ULtoC4=
 github.com/ChainSafe/log15 v1.0.0 h1:vRDVtWtVwIH5uSCBvgTTZh6FA58UBJ6+QiiypaZfBf8=
@@ -54,6 +66,8 @@ github.com/btcsuite/snappy-go v0.0.0-20151229074030-0bdef8d06723/go.mod h1:8woku
 github.com/btcsuite/websocket v0.0.0-20150119174127-31079b680792/go.mod h1:ghJtEyQwv5/p4Mg4C0fgbePVuGr935/5ddU9Z3TmDRY=
 github.com/btcsuite/winsvc v1.0.0/go.mod h1:jsenWakMcC0zFBFurPLEAyrnc/teJEM1O46fmI40EZs=
 github.com/buger/jsonparser v0.0.0-20181115193947-bf1c66bbce23/go.mod h1:bbYlZJ7hK1yFx9hf58LP0zeX7UjIGs20ufpu3evjr+s=
+github.com/bytecodealliance/wasmtime-go v0.20.0 h1:omD0VY6IwL60E8YMM8rgcmyGT8O+pqabHAwoPi5il6k=
+github.com/bytecodealliance/wasmtime-go v0.20.0/go.mod h1:q320gUxqyI8yB+ZqRuaJOEnGkAnHh6WtJjMaT2CW4wI=
 github.com/cespare/xxhash v1.1.0 h1:a6HrQnmkObjyL+Gs60czilIUGqrzKutQD6XZog3p+ko=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
 github.com/cheekybits/genny v1.0.0/go.mod h1:+tQajlRqAUrPI7DOSpB0XAqZYtQakVtB7wXkRAgjxjQ=

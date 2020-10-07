@@ -85,14 +85,14 @@ func createRuntime(cfg *Config, st *state.Service, ks *keystore.GenericKeystore,
 		PersistentStorage: database.NewTable(st.DB(), "offlinestorage"),
 	}
 	rtCfg := &wasmer.Config{
-		Storage:     ts,
-		Keystore:    ks,
-		Imports:     wasmer.RegisterImports_NodeRuntime,
-		LogLvl:      cfg.Log.RuntimeLvl,
-		NodeStorage: ns,
-		Role:        cfg.Core.Roles,
-		Network:     net,
+		Imports: wasmer.RegisterImports_NodeRuntime,
 	}
+	rtCfg.Storage = ts
+	rtCfg.Keystore = ks
+	rtCfg.LogLvl = cfg.Log.RuntimeLvl
+	rtCfg.NodeStorage = ns
+	rtCfg.Network = net
+	rtCfg.Role = cfg.Core.Roles
 
 	// create runtime executor
 	rt, err := wasmer.NewInstance(code, rtCfg)

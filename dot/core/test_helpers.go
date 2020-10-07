@@ -178,7 +178,7 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 	}
 
 	if cfg.Runtime == nil {
-		cfg.Runtime = wasmer.NewTestInstance(t, wasmer.NODE_RUNTIME)
+		cfg.Runtime = wasmer.NewTestInstance(t, runtime.NODE_RUNTIME)
 	}
 
 	if cfg.Keystore == nil {

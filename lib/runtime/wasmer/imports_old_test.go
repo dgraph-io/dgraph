@@ -38,7 +38,7 @@ import (
 // tests that the function ext_get_storage_into can retrieve a value from the trie
 // and store it in the wasm memory
 func TestExt_get_storage_into(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -82,7 +82,7 @@ func TestExt_get_storage_into(t *testing.T) {
 
 // tests that ext_set_storage can storage a value in the trie
 func TestExt_set_storage(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -117,7 +117,7 @@ func TestExt_set_storage(t *testing.T) {
 
 // tests that we can retrieve the trie root hash and store it in wasm memory
 func TestExt_storage_root(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 	// save result at `resultPtr` in memory
@@ -140,7 +140,7 @@ func TestExt_storage_root(t *testing.T) {
 
 // test that ext_get_allocated_storage can get a value from the trie and store it in memory
 func TestSetAndGetAllocatedStorage(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -200,7 +200,7 @@ func TestSetAndGetAllocatedStorage(t *testing.T) {
 
 // test that ext_get_allocated_storage can get a value from the trie and store it in memory
 func Test_ext_get_allocated_storage(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 	// put kv pair in trie
@@ -248,7 +248,7 @@ func Test_ext_get_allocated_storage(t *testing.T) {
 
 // test that ext_clear_storage can delete a value from the trie
 func TestExt_clear_storage(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 	// save kv pair in trie
@@ -280,7 +280,7 @@ func TestExt_clear_storage(t *testing.T) {
 
 // test that ext_clear_prefix can delete all trie values with a certain prefix
 func TestExt_clear_prefix(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -337,17 +337,16 @@ func TestExt_clear_prefix(t *testing.T) {
 	instanceTrieHash, err := instance.ctx.Storage.Root()
 	require.Nil(t, err)
 
+	t.Log(expectedTrie)
+
 	expectedHash, err := expectedTrie.Hash()
 	require.Nil(t, err)
-
-	if !bytes.Equal(instanceTrieHash[:], expectedHash[:]) {
-		t.Error("did not get expected trie")
-	}
+	require.Equal(t, expectedHash, instanceTrieHash)
 }
 
 // test that ext_blake2_128 performs a blake2b hash of the data
 func TestExt_blake2_128(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 	// save data in memory
@@ -375,7 +374,7 @@ func TestExt_blake2_128(t *testing.T) {
 
 // test that ext_blake2_256 performs a blake2b hash of the data
 func TestExt_blake2_256(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 	// save data in memory
@@ -403,7 +402,7 @@ func TestExt_blake2_256(t *testing.T) {
 
 // test that ext_ed25519_verify verifies a valid signature
 func TestExt_ed25519_verify(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -454,7 +453,7 @@ func TestExt_ed25519_verify(t *testing.T) {
 
 // test that ext_sr25519_verify verifies a valid signature
 func TestExt_sr25519_verify(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -504,7 +503,7 @@ func TestExt_sr25519_verify(t *testing.T) {
 // test that ext_blake2_256_enumerated_trie_root places values in an array into a trie
 // with the key being the index of the value and returns the hash
 func TestExt_blake2_256_enumerated_trie_root(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -572,7 +571,7 @@ func TestExt_blake2_256_enumerated_trie_root(t *testing.T) {
 // test that ext_twox_64 performs a xxHash64
 func TestExt_twox_64(t *testing.T) {
 	// test cases from https://github.com/paritytech/substrate/blob/13fc71c681cc9a3cc911c32c7890b52885092969/core/executor/src/wasm_executor.rs#L1701
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 	// save data in memory
@@ -619,7 +618,7 @@ func TestExt_twox_64(t *testing.T) {
 // test that ext_twox_128 performs a xxHash64 twice on give byte array of the data
 func TestExt_twox_128(t *testing.T) {
 	// test cases from https://github.com/paritytech/substrate/blob/13fc71c681cc9a3cc911c32c7890b52885092969/core/executor/src/wasm_executor.rs#L1701
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 	// save data in memory
@@ -665,7 +664,7 @@ func TestExt_twox_128(t *testing.T) {
 
 // test that ext_keccak_256 returns the correct hash
 func TestExt_keccak_256(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -695,7 +694,7 @@ func TestExt_keccak_256(t *testing.T) {
 // test ext_malloc returns expected pointer value of 8
 func TestExt_malloc(t *testing.T) {
 	// given
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	testFunc, ok := instance.vm.Exports["test_ext_malloc"]
 	if !ok {
@@ -714,7 +713,7 @@ func TestExt_malloc(t *testing.T) {
 // test ext_free, confirm ext_free frees memory without error
 func TestExt_free(t *testing.T) {
 	// given
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	initFunc, ok := instance.vm.Exports["test_ext_malloc"]
 	if !ok {
@@ -741,7 +740,7 @@ func TestExt_free(t *testing.T) {
 
 // test that ext_secp256k1_ecdsa_recover returns the correct public key
 func TestExt_secp256k1_ecdsa_recover(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -777,7 +776,7 @@ func TestExt_secp256k1_ecdsa_recover(t *testing.T) {
 
 // test that TestExt_sr25519_generate generates and saves a keypair in the keystore
 func TestExt_sr25519_generate(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -815,7 +814,7 @@ func TestExt_sr25519_generate(t *testing.T) {
 
 // test that TestExt_ed25519_generate generates and saves a keypair in the keystore
 func TestExt_ed25519_generate(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -853,7 +852,7 @@ func TestExt_ed25519_generate(t *testing.T) {
 
 // test that ext_ed25519_public_keys confirms that we can retrieve our public keys from the keystore
 func TestExt_ed25519_public_keys(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	testKps := []crypto.Keypair{}
 	expectedPubkeys := [][]byte{}
@@ -915,7 +914,7 @@ func TestExt_ed25519_public_keys(t *testing.T) {
 
 // test that ext_sr25519_public_keys confirms that we can retrieve our public keys from the keystore
 func TestExt_sr25519_public_keys(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	testKps := []crypto.Keypair{}
 	expectedPubkeys := [][]byte{}
@@ -977,7 +976,7 @@ func TestExt_sr25519_public_keys(t *testing.T) {
 
 // test that ext_ed25519_sign generates and saves a keypair in the keystore
 func TestExt_ed25519_sign(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -1022,7 +1021,7 @@ func TestExt_ed25519_sign(t *testing.T) {
 
 // test that ext_sr25519_sign generates and saves a keypair in the keystore
 func TestExt_sr25519_sign(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -1068,7 +1067,7 @@ func TestExt_sr25519_sign(t *testing.T) {
 
 // test that ext_get_child_storage_into retrieves a value stored in a child trie
 func TestExt_get_child_storage_into(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -1110,7 +1109,7 @@ func TestExt_get_child_storage_into(t *testing.T) {
 
 // test that ext_set_child_storage sets a value stored in a child trie
 func TestExt_set_child_storage(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -1150,7 +1149,7 @@ func TestExt_set_child_storage(t *testing.T) {
 }
 
 func TestExt_local_storage_set_local(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -1180,7 +1179,7 @@ func TestExt_local_storage_set_local(t *testing.T) {
 }
 
 func TestExt_local_storage_set_persistent(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	mem := instance.vm.Memory.Data()
 
@@ -1210,7 +1209,7 @@ func TestExt_local_storage_set_persistent(t *testing.T) {
 }
 
 func TestExt_local_storage_get_local(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 	mem := instance.vm.Memory.Data()
 
 	key := []byte("mykey")
@@ -1236,7 +1235,7 @@ func TestExt_local_storage_get_local(t *testing.T) {
 }
 
 func TestExt_local_storage_get_persistent(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 	mem := instance.vm.Memory.Data()
 
 	key := []byte("mykey")
@@ -1312,7 +1311,7 @@ var CompareSetTests = []CompareSetTest{
 
 func TestExt_local_storage_compare_and_set(t *testing.T) {
 	for _, v := range CompareSetTests {
-		instance := NewTestInstance(t, TEST_RUNTIME)
+		instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 		mem := instance.vm.Memory.Data()
 		// setup and init storage
 		var nodeStorage runtime.BasicStorage
@@ -1362,7 +1361,7 @@ func TestExt_local_storage_compare_and_set(t *testing.T) {
 
 func TestExt_is_validator(t *testing.T) {
 	// test with validator
-	instance := NewTestInstanceWithRole(t, TEST_RUNTIME, byte(4))
+	instance := NewTestInstanceWithRole(t, runtime.TEST_RUNTIME, byte(4))
 	// call wasm function
 	testFunc, ok := instance.vm.Exports["test_ext_is_validator"]
 	if !ok {
@@ -1373,7 +1372,7 @@ func TestExt_is_validator(t *testing.T) {
 	require.Equal(t, int32(1), res.ToI32())
 
 	// test with non-validator
-	instance = NewTestInstanceWithRole(t, TEST_RUNTIME, byte(1))
+	instance = NewTestInstanceWithRole(t, runtime.TEST_RUNTIME, byte(1))
 	// call wasm function
 	testFunc, ok = instance.vm.Exports["test_ext_is_validator"]
 	if !ok {
@@ -1385,7 +1384,7 @@ func TestExt_is_validator(t *testing.T) {
 }
 
 func TestExt_network_state(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 	memory := instance.vm.Memory.Data()
 
 	testFunc, ok := instance.vm.Exports["test_ext_network_state"]

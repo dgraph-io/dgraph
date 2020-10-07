@@ -2,7 +2,6 @@ package wasmer
 
 import (
 	"math/big"
-	"os"
 	"reflect"
 	"testing"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/runtime/extrinsic"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
@@ -23,23 +23,16 @@ import (
 var kr, _ = keystore.NewSr25519Keyring()
 var maxRetries = 10
 
-func TestExportRuntime(t *testing.T) {
-	fp := "runtime.out"
-	exportRuntime(t, SUBSTRATE_TEST_RUNTIME, fp)
-	err := os.Remove(fp)
-	require.NoError(t, err)
-}
-
 func TestGrandpaAuthorities(t *testing.T) {
 	tt := trie.NewEmptyTrie()
 
 	value, err := common.HexToBytes("0x0108eea1eabcac7d2c8a6459b7322cf997874482bfc3d2ec7a80888a3a7d714103640000000000000000b64994460e59b30364cad3c92e3df6052f9b0ebbb8f88460c194dc5794d6d7170100000000000000")
 	require.NoError(t, err)
 
-	err = tt.Put(TestAuthorityDataKey, value)
+	err = tt.Put(runtime.TestAuthorityDataKey, value)
 	require.NoError(t, err)
 
-	rt := NewTestInstanceWithTrie(t, NODE_RUNTIME, tt, log.LvlTrace)
+	rt := NewTestInstanceWithTrie(t, runtime.NODE_RUNTIME, tt, log.LvlTrace)
 
 	auths, err := rt.GrandpaAuthorities()
 	require.NoError(t, err)
@@ -59,7 +52,7 @@ func TestGrandpaAuthorities(t *testing.T) {
 }
 
 func TestConfigurationFromRuntime_noAuth(t *testing.T) {
-	rt := NewTestInstance(t, NODE_RUNTIME)
+	rt := NewTestInstance(t, runtime.NODE_RUNTIME)
 
 	cfg, err := rt.BabeConfiguration()
 	if err != nil {
@@ -117,7 +110,7 @@ func TestConfigurationFromRuntime_withAuthorities(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rt := NewTestInstanceWithTrie(t, NODE_RUNTIME, tt, log.LvlTrace)
+	rt := NewTestInstanceWithTrie(t, runtime.NODE_RUNTIME, tt, log.LvlTrace)
 
 	cfg, err := rt.BabeConfiguration()
 	if err != nil {
@@ -149,7 +142,7 @@ func TestConfigurationFromRuntime_withAuthorities(t *testing.T) {
 }
 
 func TestInitializeBlock(t *testing.T) {
-	rt := NewTestInstance(t, NODE_RUNTIME)
+	rt := NewTestInstance(t, runtime.NODE_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),
@@ -166,7 +159,7 @@ func TestFinalizeBlock(t *testing.T) {
 	// need to move inherents to a different package for use with BABE and runtime
 	t.Skip()
 
-	rt := NewTestInstance(t, NODE_RUNTIME)
+	rt := NewTestInstance(t, runtime.NODE_RUNTIME)
 
 	header := &types.Header{
 		ParentHash: trie.EmptyHash,
@@ -209,7 +202,7 @@ func TestFinalizeBlock(t *testing.T) {
 // this will likely result in some of them being removed (need to determine what extrinsic types are valid)
 func TestValidateTransaction_AuthoritiesChange(t *testing.T) {
 	// TODO: update AuthoritiesChange to need to be signed by an authority
-	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
 
 	alice := kr.Alice().Public().Encode()
 	bob := kr.Bob().Public().Encode()
@@ -241,7 +234,7 @@ func TestValidateTransaction_AuthoritiesChange(t *testing.T) {
 }
 
 func TestValidateTransaction_IncludeData(t *testing.T) {
-	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
 
 	ext := extrinsic.NewIncludeDataExt([]byte("nootwashere"))
 	tx, err := ext.Encode()
@@ -263,7 +256,7 @@ func TestValidateTransaction_IncludeData(t *testing.T) {
 }
 
 func TestValidateTransaction_StorageChange(t *testing.T) {
-	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
 
 	ext := extrinsic.NewStorageChangeExt([]byte("testkey"), optional.NewBytes(true, []byte("testvalue")))
 	enc, err := ext.Encode()
@@ -284,7 +277,7 @@ func TestValidateTransaction_StorageChange(t *testing.T) {
 }
 
 func TestValidateTransaction_Transfer(t *testing.T) {
-	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
 
 	alice := kr.Alice().Public().Encode()
 	bob := kr.Bob().Public().Encode()
@@ -318,7 +311,7 @@ func TestValidateTransaction_Transfer(t *testing.T) {
 
 func TestApplyExtrinsic_AuthoritiesChange(t *testing.T) {
 	// TODO: update AuthoritiesChange to need to be signed by an authority
-	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
 
 	alice := kr.Alice().Public().Encode()
 	bob := kr.Bob().Public().Encode()
@@ -349,7 +342,7 @@ func TestApplyExtrinsic_AuthoritiesChange(t *testing.T) {
 }
 
 func TestApplyExtrinsic_IncludeData(t *testing.T) {
-	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),
@@ -371,7 +364,7 @@ func TestApplyExtrinsic_IncludeData(t *testing.T) {
 }
 
 func TestApplyExtrinsic_StorageChange_Set(t *testing.T) {
-	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),
@@ -402,12 +395,11 @@ func TestApplyExtrinsic_StorageChange_Set(t *testing.T) {
 
 	val, err = rt.ctx.Storage.Get([]byte("testkey"))
 	require.NoError(t, err)
-	// TODO: why does calling finalize_block modify the storage?
-	require.NotEqual(t, []byte("testvalue"), val)
+	require.Equal(t, []byte("testvalue"), val)
 }
 
 func TestApplyExtrinsic_StorageChange_Delete(t *testing.T) {
-	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),
@@ -432,7 +424,7 @@ func TestApplyExtrinsic_StorageChange_Delete(t *testing.T) {
 
 // TODO, this test replaced by TestApplyExtrinsic_Transfer_NoBalance_UncheckedExt, should this be removed?
 func TestApplyExtrinsic_Transfer_NoBalance(t *testing.T) {
-	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),
@@ -464,7 +456,7 @@ func TestApplyExtrinsic_Transfer_NoBalance(t *testing.T) {
 
 // TODO, this test replaced by TestApplyExtrinsic_Transfer_WithBalance_UncheckedExtrinsic, should this be removed?
 func TestApplyExtrinsic_Transfer_WithBalance(t *testing.T) {
-	rt := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
+	rt := NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
 
 	header := &types.Header{
 		Number: big.NewInt(77),

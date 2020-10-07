@@ -21,25 +21,21 @@ import (
 	"os"
 	"sync"
 
-	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 
 	log "github.com/ChainSafe/log15"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
 
+var _ runtime.Instance = (*Instance)(nil)
+
 var memory, memErr = wasm.NewMemory(17, 0)
-var logger = log.New("pkg", "runtime")
+var logger = log.New("pkg", "runtime", "module", "go-wasmer")
 
 // Config represents a wasmer configuration
 type Config struct {
-	Storage     runtime.Storage
-	Keystore    *keystore.GenericKeystore
-	Imports     func() (*wasm.Imports, error)
-	LogLvl      log.Lvl
-	Role        byte
-	NodeStorage runtime.NodeStorage
-	Network     runtime.BasicNetwork
+	runtime.InstanceConfig
+	Imports func() (*wasm.Imports, error)
 }
 
 // Instance represents a go-wasmer instance
@@ -90,16 +86,11 @@ func NewInstance(code []byte, cfg *Config) (*Instance, error) {
 
 	memAllocator := runtime.NewAllocator(instance.Memory.Data(), 0)
 
-	validator := false
-	if cfg.Role == byte(4) {
-		validator = true
-	}
-
 	runtimeCtx := &runtime.Context{
 		Storage:     cfg.Storage,
 		Allocator:   memAllocator,
 		Keystore:    cfg.Keystore,
-		Validator:   validator,
+		Validator:   cfg.Role == byte(4),
 		NodeStorage: cfg.NodeStorage,
 		Network:     cfg.Network,
 	}

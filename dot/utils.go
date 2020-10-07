@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/genesis"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/runtime/wasmer"
 	"github.com/ChainSafe/gossamer/lib/utils"
 	log "github.com/ChainSafe/log15"
@@ -119,8 +120,8 @@ func NewTestGenesisFile(t *testing.T, cfg *Config) *os.File {
 func NewTestGenesisAndRuntime(t *testing.T) string {
 	dir := utils.NewTestDir(t)
 
-	_ = wasmer.NewTestInstance(t, wasmer.NODE_RUNTIME)
-	runtimeFilePath := wasmer.GetAbsolutePath(wasmer.NODE_RUNTIME_FP)
+	_ = wasmer.NewTestInstance(t, runtime.NODE_RUNTIME)
+	runtimeFilePath := runtime.GetAbsolutePath(runtime.NODE_RUNTIME_FP)
 
 	runtimeData, err := ioutil.ReadFile(runtimeFilePath)
 	require.Nil(t, err)

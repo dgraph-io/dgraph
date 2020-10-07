@@ -38,11 +38,6 @@ func NewTrieState(t *trie.Trie) *TrieState {
 	}
 }
 
-// Trie returns the underlying trie
-func (s *TrieState) Trie() *trie.Trie {
-	return s.t
-}
-
 // Set sets a key-value pair in the trie
 func (s *TrieState) Set(key []byte, value []byte) error {
 	s.lock.Lock()

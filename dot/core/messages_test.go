@@ -27,6 +27,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/runtime/wasmer"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
@@ -77,7 +78,7 @@ func TestService_ProcessTransactionMessage(t *testing.T) {
 
 	t.Skip()
 	tt := trie.NewEmptyTrie()
-	rt := wasmer.NewTestInstanceWithTrie(t, wasmer.NODE_RUNTIME, tt, log.LvlTrace)
+	rt := wasmer.NewTestInstanceWithTrie(t, runtime.NODE_RUNTIME, tt, log.LvlTrace)
 
 	kp, err := sr25519.GenerateKeypair()
 	require.Nil(t, err)

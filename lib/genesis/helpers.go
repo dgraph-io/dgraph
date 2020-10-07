@@ -100,9 +100,9 @@ func NewRuntimeFromGenesis(g *Genesis, storage runtime.Storage) (runtime.Instanc
 
 	code := common.MustHexToBytes(codeStr)
 	cfg := &wasmer.Config{
-		Storage: storage,
 		Imports: wasmer.RegisterImports_NodeRuntime,
 	}
+	cfg.Storage = storage
 
 	return wasmer.NewInstance(code, cfg)
 }

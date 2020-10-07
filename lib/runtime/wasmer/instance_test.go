@@ -34,7 +34,7 @@ func TestInstance_Version_NodeRuntime(t *testing.T) {
 		Impl_version:      193,
 	}
 
-	instance := NewTestInstance(t, NODE_RUNTIME)
+	instance := NewTestInstance(t, runtime.NODE_RUNTIME)
 
 	ret, err := instance.exec(runtime.CoreVersion, []byte{})
 	require.Nil(t, err)
@@ -65,7 +65,7 @@ func TestInstance_Version_TestRuntime(t *testing.T) {
 		Impl_version:      1,
 	}
 
-	instance := NewTestInstance(t, SUBSTRATE_TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
 
 	ret, err := instance.exec(runtime.CoreVersion, []byte{})
 	require.Nil(t, err)
@@ -88,7 +88,7 @@ func TestInstance_Version_TestRuntime(t *testing.T) {
 
 // test used for ensuring runtime exec calls can me made concurrently
 func TestConcurrentRuntimeCalls(t *testing.T) {
-	instance := NewTestInstance(t, TEST_RUNTIME)
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
 
 	// execute 2 concurrent calls to the runtime
 	go func() {

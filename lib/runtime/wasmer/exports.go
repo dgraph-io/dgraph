@@ -17,32 +17,13 @@ func (r *Instance) ValidateTransaction(e types.Extrinsic) (*transaction.Validity
 	}
 
 	if ret[0] != 0 {
-		return nil, determineError(ret)
+		return nil, runtime.NewValidateTransactionError(ret)
 	}
 
 	v := transaction.NewValidity(0, [][]byte{{}}, [][]byte{{}}, 0, false)
 	_, err = scale.Decode(ret[1:], v)
 
 	return v, err
-}
-
-func determineError(res []byte) error {
-	// confirm we have an error
-	if res[0] == 0 {
-		return nil
-	}
-
-	if res[1] == 0 {
-		// transaction is invalid
-		return runtime.ErrInvalidTransaction
-	}
-
-	if res[1] == 1 {
-		// transaction validity can't be determined
-		return runtime.ErrUnknownTransaction
-	}
-
-	return runtime.ErrCannotValidateTx
 }
 
 // Version calls runtime function Core_Version
