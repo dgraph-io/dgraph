@@ -436,9 +436,6 @@ func deepFilter(t *testing.T) {
 	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
-
-	deleteFilter := map[string]interface{}{"xcode": map[string]interface{}{"in": []string{"abc", "def"}}}
-	deleteGqlType(t, "State", deleteFilter, 2, nil)
 }
 
 func deepHasFilter(t *testing.T) {
