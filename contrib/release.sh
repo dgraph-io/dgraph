@@ -71,7 +71,7 @@ mkdir $GOPATH
 PATH="$GOPATH/bin:$PATH"
 
 # The Go version used for release builds must match this version.
-GOVERSION="1.14.4"
+GOVERSION=${GOVERSION:-"1.14.4"}
 
 TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
