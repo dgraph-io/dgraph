@@ -1,7 +1,7 @@
 type Author {
   id: ID!
   name: String! @search(by: [hash])
-  posts: [Post] 
+  posts: [Post]
 }
 
 interface Post {
@@ -12,7 +12,7 @@ interface Post {
 }
 
 type Question implements Post {
-  answered: Boolean 
+  answered: Boolean
 }
 
 type Answer implements Post {
