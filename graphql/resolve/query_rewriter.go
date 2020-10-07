@@ -1065,6 +1065,8 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// in takes List of Scalars as argument, for eg:
 				// code : { in: {"abc", "def", "ghi"} } -> eq(State.code,"abc","def","ghi")
 				case "in":
+					// No need to check for List types as this would pass GraphQL validation
+					// if val was not list
 					vals := val.([]interface{})
 					fn = "eq"
 

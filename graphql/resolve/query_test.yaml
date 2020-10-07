@@ -17,6 +17,24 @@
     }
 
 -
+  name: "in filter with eq filter"
+  gqlquery: |
+    query {
+      queryState(filter: {code: {in: ["abc", "def", "ghi"]}, or: {code: {eq: "jkl"}}} ) {
+        code
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryState(func: type(State)) @filter((eq(State.code, "abc", "def", "ghi") OR eq(State.code, "jkl"))) {
+        code : State.code
+        name : State.name
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "ID query"
   gqlquery: |
     query {

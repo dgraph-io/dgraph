@@ -346,7 +346,7 @@ func allPosts(t *testing.T) []*post {
 	return result.QueryPost
 }
 
-func InFilter(t *testing.T) {
+func inFilter(t *testing.T) {
 	addStateParams := &GraphQLParams{
 		Query: `mutation addState($name1: String!, $code1: String!, $name2: String!, $code2: String! ) {
 			addState(input: [{name: $name1, xcode: $code1},{name: $name2, xcode: $code2}]) {
@@ -368,11 +368,30 @@ func InFilter(t *testing.T) {
 	gqlResponse := addStateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
+	updateStateParams := &GraphQLParams{
+		Query: `mutation{
+			updateState(input: { 
+				filter: {
+					xcode: { in: ["abc", "def"]}},
+				set: { 
+					capital: "Common Capital"} }){
+				state{
+					xcode
+					name
+					capital
+				}
+			}
+		  }`,
+	}
+	gqlResponse = updateStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
 	getStateParams := &GraphQLParams{
 		Query: `query{
 			queryState(filter: {xcode: {in: ["abc", "def"]}}){
 				xcode
 				name
+				capital
 			}
 		}`,
 	}
@@ -388,12 +407,14 @@ func InFilter(t *testing.T) {
 	require.Equal(t, 2, len(result.QueryState))
 
 	state1 := &state{
-		Name: "A State",
-		Code: "abc",
+		Name:    "A State",
+		Code:    "abc",
+		Capital: "Common Capital",
 	}
 	state2 := &state{
-		Name: "B State",
-		Code: "def",
+		Name:    "B State",
+		Code:    "def",
+		Capital: "Common Capital",
 	}
 
 	expected := []*state{state1, state2}
