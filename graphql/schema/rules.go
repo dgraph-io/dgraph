@@ -956,7 +956,6 @@ func validateSearchArg(searchArg string,
 	return nil
 }
 
-<<<<<<< HEAD
 func isGeoType(typ *ast.Type) bool {
 	if typ.Name() == "Point" || typ.Name() == "Polygon" || typ.Name() == "MultiPolygon" {
 		return true
@@ -964,13 +963,6 @@ func isGeoType(typ *ast.Type) bool {
 	return false
 }
 
-||||||| cec55674c
-=======
-func isPointType(typ *ast.Type) bool {
-	return typ.Name() == "Point"
-}
-
->>>>>>> origin/master
 func searchValidation(
 	sch *ast.Schema,
 	typ *ast.Definition,
