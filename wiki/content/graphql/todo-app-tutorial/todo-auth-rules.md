@@ -1,8 +1,8 @@
 +++
 title = "Auth Rules"
+weight = 4
 [menu.main]
     parent = "todo-app-tutorial"
-    weight = 4   
 +++
 
 In the current state of the app, we can view anyone's todos, but we want our todos to be private to us. Let's do that using the `auth` directive to limit that to the user's todos.

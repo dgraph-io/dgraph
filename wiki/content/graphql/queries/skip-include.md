@@ -1,9 +1,9 @@
 +++
 title = "Skip and Include"
+weight = 6
 [menu.main]
     parent = "graphql-queries"
     name = "Skip and Include"
-    weight = 6  
 +++
 
 `@skip` and `@include` are directives which can be applied on a field while querying.

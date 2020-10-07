@@ -1,8 +1,8 @@
 +++
 title = "Mutations"
+weight = 3
 [menu.main]
     parent = "authorization"
-    weight = 3   
 +++
 
 Mutations with auth work similarly to query.  However, mutations involve a state change in the database, so it's important to understand when the rules are applied and what they mean.

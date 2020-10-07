@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Facets : Edge attributes"
+weight = 22
 [menu.main]
     parent = "query-language"
-    weight = 22
 +++
 
 Dgraph supports facets --- **key value pairs on edges** --- as an extension to RDF triples. That is, facets add properties to edges, rather than to nodes.

@@ -110,13 +110,6 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
-	flag.String("badger.tables", "mmap",
-		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for the postings."+
-			"Option sequence consume most to least RAM while providing "+
-			"best to worst read performance respectively.")
-	flag.String("badger.vlog", "mmap",
-		"[mmap, disk] Specifies how Badger Value log is stored for the postings."+
-			"mmap consumes more RAM, but provides better performance.")
 	flag.String("badger.compression", "snappy",
 		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
 			"level (if applicable) for the postings directory. none would disable compression,"+
@@ -619,9 +612,6 @@ func run() {
 		MutationsMode: worker.AllowMutations,
 		AuthToken:     Alpha.Conf.GetString("auth_token"),
 	}
-
-	opts.BadgerTables = Alpha.Conf.GetString("badger.tables")
-	opts.BadgerVlog = Alpha.Conf.GetString("badger.vlog")
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {

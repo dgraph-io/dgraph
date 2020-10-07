@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "License"
+weight = 4
 [menu.main]
     parent = "enterprise-features"
-    weight = 4
 +++
 
 Dgraph enterprise features are proprietary licensed under the [Dgraph Community

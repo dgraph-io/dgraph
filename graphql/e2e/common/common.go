@@ -336,6 +336,7 @@ func RunAll(t *testing.T) {
 	t.Run("queries have extensions", queriesHaveExtensions)
 	t.Run("alias works for queries", queryWithAlias)
 	t.Run("cascade directive", queryWithCascade)
+	t.Run("query geo near filter", queryGeoNearFilter)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -378,6 +379,7 @@ func RunAll(t *testing.T) {
 	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
 	t.Run("Input coercing for int64 type", int64BoundaryTesting)
 	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
+	t.Run("Geo type", mutationGeoType)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Blank Nodes and UID"
+weight = 2
 [menu.main]
     parent = "mutations"
-    weight = 2
 +++
 
 Blank nodes in mutations, written `_:identifier`, identify nodes within a mutation.  Dgraph creates a UID identifying each blank node and returns the created UIDs as the mutation result.  For example, mutation:
