@@ -1,8 +1,8 @@
 +++
 title = "Links in the Graph"
+weight = 4
 [menu.main]
     parent = "schema"
-    weight = 4   
 +++
 
 All the data in your app forms a GraphQL data graph.  That graph has nodes of particular types (the types you define in your schema) and links between the nodes to form the data graph.

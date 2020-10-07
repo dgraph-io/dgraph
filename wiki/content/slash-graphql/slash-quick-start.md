@@ -1,8 +1,8 @@
 +++
 title = "Slash Quick Start"
+weight = 1   
 [menu.main]
     parent = "slash-graphql"
-    weight = 1
 +++
 
 ## Introduction

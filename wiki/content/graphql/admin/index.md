@@ -1,11 +1,11 @@
 +++
 title = "Admin"
+weight = 12
 [menu.main]
   url = "/graphql/admin/"
   name = "Admin"
   identifier = "graphql-admin"
   parent = "graphql"
-  weight = 12
 +++
 
 The admin API and how to run Dgraph with GraphQL.

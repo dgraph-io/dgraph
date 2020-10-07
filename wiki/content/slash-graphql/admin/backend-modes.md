@@ -1,8 +1,8 @@
 +++
 title = "Switching Backend Modes"
+weight = 6
 [menu.main]
     parent = "slash-graphql-admin"
-    weight = 6
 +++
 
 Slash GraphQL supports different 3 different backend modes, which controls how the underlying Dgraph instance is configured
