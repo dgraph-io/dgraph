@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v2"
+	bo "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto"
@@ -1148,7 +1149,9 @@ type DB interface {
 
 func StoreSync(db DB, closer *z.Closer) {
 	defer closer.Done()
-	ticker := time.NewTicker(1 * time.Second)
+	// We technically don't need to call this due to mmap being able to survive process crashes.
+	// But, once a minute is infrequent enough that we won't lose any performance due to this.
+	ticker := time.NewTicker(time.Minute)
 	for {
 		select {
 		case <-ticker.C:
@@ -1237,39 +1240,33 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 	return cachePercent, nil
 }
 
-// ParseCompressionLevel returns compression level(int) given the compression level(string)
-func ParseCompressionLevel(compressionLevel string) (int, error) {
-	x, err := strconv.Atoi(compressionLevel)
-	if err != nil {
-		return 0, errors.Errorf("ERROR: unable to parse compression level(%s)", compressionLevel)
-	}
-	if x < 0 {
-		return 0, errors.Errorf("ERROR: compression level(%s) cannot be negative", compressionLevel)
-	}
-	return x, nil
-}
+// ParseCompression returns badger.compressionType and compression level given compression string
+// of format compression-type:compression-level
+func ParseCompression(cStr string) (bo.CompressionType, int) {
+	cStrSplit := strings.Split(cStr, ":")
+	cType := cStrSplit[0]
+	level := 3
 
-// GetCompressionLevels returns the slice of compression levels given the "," (comma) separated
-// compression levels(integers) string.
-func GetCompressionLevels(compressionLevelsString string) ([]int, error) {
-	compressionLevels := strings.Split(compressionLevelsString, ",")
-	// Validity checks
-	if len(compressionLevels) != 1 && len(compressionLevels) != 2 {
-		return nil, errors.Errorf("ERROR: expected single integer or two comma separated integers")
-	}
-	var compressionLevelsInt []int
-	for _, cLevel := range compressionLevels {
-		x, err := ParseCompressionLevel(cLevel)
-		if err != nil {
-			return nil, err
+	var err error
+	if len(cStrSplit) == 2 {
+		level, err = strconv.Atoi(cStrSplit[1])
+		Check(err)
+		if level <= 0 {
+			glog.Fatalf("ERROR: compression level(%v) must be greater than zero", level)
 		}
-		compressionLevelsInt = append(compressionLevelsInt, x)
+	} else if len(cStrSplit) > 2 {
+		glog.Fatalf("ERROR: Invalid badger.compression argument")
 	}
-	// Append the same compression level in case only one level was passed.
-	if len(compressionLevelsInt) == 1 {
-		compressionLevelsInt = append(compressionLevelsInt, compressionLevelsInt[0])
+	switch cType {
+	case "zstd":
+		return bo.ZSTD, level
+	case "snappy":
+		return bo.Snappy, 0
+	case "none":
+		return bo.None, 0
 	}
-	return compressionLevelsInt, nil
+	glog.Fatalf("ERROR: compression type (%s) invalid", cType)
+	return 0, 0
 }
 
 // ToHex converts a uint64 to a hex byte array. If rdf is true it will

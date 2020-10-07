@@ -338,6 +338,7 @@ func RunAll(t *testing.T) {
 	t.Run("queries have extensions", queriesHaveExtensions)
 	t.Run("alias works for queries", queryWithAlias)
 	t.Run("cascade directive", queryWithCascade)
+	t.Run("query geo near filter", queryGeoNearFilter)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -393,6 +394,12 @@ func RunAll(t *testing.T) {
 	t.Run("fragment in query", fragmentInQuery)
 	t.Run("fragment in query on Interface", fragmentInQueryOnInterface)
 	t.Run("fragment in query on Object", fragmentInQueryOnObject)
+
+	// lambda tests
+	t.Run("lambda on type field", lambdaOnTypeField)
+	t.Run("lambda on interface field", lambdaOnInterfaceField)
+	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
+	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
 }
 
 // RunCorsTest test all cors related tests.

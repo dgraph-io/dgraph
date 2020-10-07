@@ -316,4 +316,3 @@ type Mutation {
 	updateHotel(input: UpdateHotelInput!): UpdateHotelPayload
 	deleteHotel(filter: HotelFilter!): DeleteHotelPayload
 }
-

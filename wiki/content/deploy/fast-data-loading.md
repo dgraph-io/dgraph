@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Fast Data Loading"
+weight = 12
 [menu.main]
     parent = "deploy"
-    weight = 12
 +++
 
 There are two different tools that can be used for fast data loading:

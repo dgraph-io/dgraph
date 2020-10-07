@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Math on value variables"
+weight = 12
 [menu.main]
     parent = "query-language"
-    weight = 12
 +++
 
 Value variables can be combined using mathematical functions.  For example, this could be used to associate a score which is then used to order or perform other operations, such as might be used in building news feeds, simple recommendation systems, and so on.

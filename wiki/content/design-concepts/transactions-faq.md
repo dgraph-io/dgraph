@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Transactions: FAQ"
+weight = 1
 [menu.main]
     parent = "design-concepts"
-    weight = 1
 +++
 
 Dgraph supports distributed ACID transactions through snapshot isolation.

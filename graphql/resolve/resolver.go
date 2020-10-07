@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/types"
@@ -176,6 +178,11 @@ type Resolved struct {
 	Field      schema.Field
 	Err        error
 	Extensions *schema.Extensions
+}
+
+// restErr is Error returned from custom REST endpoint
+type restErr struct {
+	Errors x.GqlErrorList `json:"errors,omitempty"`
 }
 
 // CompletionFunc is an adapter that allows us to compose completions and build a
@@ -755,7 +762,7 @@ func completeDgraphResult(
 	// it should be using f.DgraphAlias() to get values from valToComplete.
 	// It works ATM because there hasn't been a scenario where there are two fields with same
 	// name in implementing types of an interface with @custom on some field in those types.
-	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.DgraphAlias()])
+	err = resolveCustomFields(ctx, field.SelectionSet(), valToComplete[field.DgraphAlias()])
 	if err != nil {
 		errs = append(errs, schema.AsGQLErrors(err)...)
 	}
@@ -816,7 +823,8 @@ type graphqlResp struct {
 	Errors x.GqlErrorList         `json:"errors,omitempty"`
 }
 
-func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+func resolveCustomField(ctx context.Context, f schema.Field, vals []interface{}, mu *sync.RWMutex,
+	errCh chan error) {
 	defer api.PanicHandler(func(err error) {
 		errCh <- internalServerError(err, f)
 	})
@@ -876,6 +884,8 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			body["query"] = fconf.RemoteGqlQuery
 			body["variables"] = map[string]interface{}{fconf.GraphqlBatchModeArgument: requestInput}
 			requestInput = body
+		} else if f.HasLambdaDirective() {
+			requestInput = getBodyForLambda(ctx, f, requestInput, nil)
 		}
 
 		b, err := json.Marshal(requestInput)
@@ -884,7 +894,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			return
 		}
 
-		b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+		b, status, err := makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 		if err != nil {
 			errCh <- x.GqlErrorList{externalRequestError(err, f)}
 			return
@@ -893,6 +903,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		// To collect errors from remote GraphQL endpoint and those encountered during execution.
 		var errs error
 		var result []interface{}
+		var rerr restErr
 		if graphql {
 			resp := &graphqlResp{}
 			err = json.Unmarshal(b, resp)
@@ -910,11 +921,23 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				errCh <- schema.AppendGQLErrs(errs, keyNotFoundError(f, fconf.RemoteGqlQueryName))
 				return
 			}
-		} else if err := json.Unmarshal(b, &result); err != nil {
-			errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-			return
+		} else {
+			if status >= 200 && status < 300 {
+				if err = json.Unmarshal(b, &result); err != nil {
+					errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+					return
+				}
+			} else {
+				if err = json.Unmarshal(b, &rerr); err != nil {
+					err = errors.Errorf("unexpected error with: %v", status)
+					errCh <- x.GqlErrorList{externalRequestError(err, f)}
+					return
+				} else {
+					errCh <- rerr.Errors
+					return
+				}
+			}
 		}
-
 		if len(result) != len(vals) {
 			gqlErr := x.GqlErrorf("Evaluation of custom field failed because expected result of "+
 				"external request to be of size %v, got: %v for field: %s within type: %s.",
@@ -976,18 +999,18 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				mu.RUnlock()
 			}
 
-			b, err = makeRequest(nil, fconf.Method, url, string(b), fconf.ForwardHeaders)
+			b, status, err := makeRequest(nil, fconf.Method, url, string(b), fconf.ForwardHeaders)
 			if err != nil {
 				errChan <- x.GqlErrorList{externalRequestError(err, f)}
 				return
 			}
 
 			var result interface{}
+			var rerr restErr
 			var errs error
 			if graphql {
 				resp := &graphqlResp{}
-				err = json.Unmarshal(b, resp)
-				if err != nil {
+				if err = json.Unmarshal(b, resp); err != nil {
 					errChan <- x.GqlErrorList{jsonUnmarshalError(err, f)}
 					return
 				}
@@ -1002,11 +1025,23 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 						keyNotFoundError(f, fconf.RemoteGqlQueryName))
 					return
 				}
-			} else if err := json.Unmarshal(b, &result); err != nil {
-				errChan <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-				return
+			} else {
+				if status >= 200 && status < 300 {
+					if err = json.Unmarshal(b, &result); err != nil {
+						errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+						return
+					}
+				} else {
+					if err = json.Unmarshal(b, &rerr); err != nil {
+						err = errors.Errorf("unexpected error with: %v", status)
+						errCh <- x.GqlErrorList{externalRequestError(err, f)}
+						return
+					} else {
+						errCh <- rerr.Errors
+						return
+					}
+				}
 			}
-
 			mu.Lock()
 			val, ok := vals[idx].(map[string]interface{})
 			if ok {
@@ -1040,7 +1075,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 // }
 // In the example above, resolveNestedFields would be called on classes field and vals would be the
 // list of all users.
-func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
+func resolveNestedFields(ctx context.Context, f schema.Field, vals []interface{}, mu *sync.RWMutex,
 	errCh chan error) {
 	defer api.PanicHandler(func(err error) {
 		errCh <- internalServerError(err, f)
@@ -1119,7 +1154,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 	}
 	mu.RUnlock()
 
-	if err := resolveCustomFields(f.SelectionSet(), input); err != nil {
+	if err := resolveCustomFields(ctx, f.SelectionSet(), input); err != nil {
 		errCh <- err
 		return
 	}
@@ -1183,7 +1218,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 // work.
 // TODO - We can be smarter about this and know before processing the query if we should be making
 // this recursive call upfront.
-func resolveCustomFields(fields []schema.Field, data interface{}) error {
+func resolveCustomFields(ctx context.Context, fields []schema.Field, data interface{}) error {
 	if data == nil {
 		return nil
 	}
@@ -1214,9 +1249,9 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 		numRoutines++
 		hasCustomDirective, _ := f.HasCustomDirective()
 		if !hasCustomDirective {
-			go resolveNestedFields(f, vals, mu, errCh)
+			go resolveNestedFields(ctx, f, vals, mu, errCh)
 		} else {
-			go resolveCustomField(f, vals, mu, errCh)
+			go resolveCustomField(ctx, f, vals, mu, errCh)
 		}
 	}
 
@@ -1929,7 +1964,7 @@ func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolv
 }
 
 func makeRequest(client *http.Client, method, url, body string,
-	header http.Header) ([]byte, error) {
+	header http.Header) ([]byte, int, error) {
 	var reqBody io.Reader
 	if body == "" || body == "null" {
 		reqBody = http.NoBody
@@ -1939,7 +1974,7 @@ func makeRequest(client *http.Client, method, url, body string,
 
 	req, err := http.NewRequest(method, url, reqBody)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header = header
 
@@ -1951,16 +1986,30 @@ func makeRequest(client *http.Client, method, url, body string,
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, errors.Errorf("unexpected status code: %v", resp.StatusCode)
+		return nil, 0, err
 	}
 
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
-	return b, err
+	return b, resp.StatusCode, err
+}
+
+func getBodyForLambda(ctx context.Context, field schema.Field, parents,
+	args interface{}) map[string]interface{} {
+	body := make(map[string]interface{})
+	body["resolver"] = field.GetObjectName() + "." + field.Name()
+	body["authHeader"] = map[string]interface{}{
+		"key":   authorization.GetHeader(),
+		"value": authorization.GetJwtToken(ctx),
+	}
+	if parents != nil {
+		body["parents"] = parents
+	}
+	if args != nil {
+		body["args"] = args
+	}
+	return body
 }
 
 func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Field) *Resolved {
@@ -1979,14 +2028,18 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 
 	var body string
 	if hrc.Template != nil {
-		b, err := json.Marshal(*hrc.Template)
+		jsonTemplate := *hrc.Template
+		if field.HasLambdaDirective() {
+			jsonTemplate = getBodyForLambda(ctx, field, nil, *hrc.Template)
+		}
+		b, err := json.Marshal(jsonTemplate)
 		if err != nil {
 			return emptyResult(jsonMarshalError(err, field, *hrc.Template))
 		}
 		body = string(b)
 	}
 
-	b, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
+	b, status, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
 	if err != nil {
 		return emptyResult(externalRequestError(err, field))
 	}
@@ -1994,12 +2047,20 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	// this means it had body and not graphql, so just unmarshal it and return
 	if hrc.RemoteGqlQueryName == "" {
 		var result interface{}
-		if err := json.Unmarshal(b, &result); err != nil {
-			return emptyResult(jsonUnmarshalError(err, field))
+		var rerr restErr
+		if status >= 200 && status < 300 {
+			if err := json.Unmarshal(b, &result); err != nil {
+				return emptyResult(jsonUnmarshalError(err, field))
+			}
+		} else if err := json.Unmarshal(b, &rerr); err != nil {
+			err = errors.Errorf("unexpected error with: %v", status)
+			rerr.Errors = x.GqlErrorList{externalRequestError(err, field)}
 		}
+
 		return &Resolved{
 			Data:  map[string]interface{}{field.Name(): result},
 			Field: field,
+			Err:   rerr.Errors,
 		}
 	}
 
@@ -2018,7 +2079,6 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	if !ok {
 		return emptyResult(resp.Errors)
 	}
-
 	return &Resolved{
 		Data:  map[string]interface{}{field.Name(): data},
 		Field: field,

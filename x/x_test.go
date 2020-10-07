@@ -161,8 +161,13 @@ func TestVersionString(t *testing.T) {
 
 func TestToHex(t *testing.T) {
 	require.Equal(t, []byte(`"0x0"`), ToHex(0, false))
+	require.Equal(t, []byte(`<0x0>`), ToHex(0, true))
 	require.Equal(t, []byte(`"0xf"`), ToHex(15, false))
+	require.Equal(t, []byte(`<0xf>`), ToHex(15, true))
 	require.Equal(t, []byte(`"0x19"`), ToHex(25, false))
+	require.Equal(t, []byte(`<0x19>`), ToHex(25, true))
 	require.Equal(t, []byte(`"0xff"`), ToHex(255, false))
+	require.Equal(t, []byte(`<0xff>`), ToHex(255, true))
 	require.Equal(t, []byte(`"0xffffffffffffffff"`), ToHex(math.MaxUint64, false))
+	require.Equal(t, []byte(`<0xffffffffffffffff>`), ToHex(math.MaxUint64, true))
 }

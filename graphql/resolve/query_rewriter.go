@@ -757,6 +757,7 @@ func addSelectionSetFrom(
 		if !f.Type().IsGeo() {
 			selectionAuth = addSelectionSetFrom(child, f, auth)
 		}
+
 		addedFields[f.Name()] = true
 
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
@@ -1197,6 +1198,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 						},
 					})
 				}
+
 			case []interface{}:
 				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
 				ids := convertIDs(dgFunc)

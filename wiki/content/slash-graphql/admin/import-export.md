@@ -1,8 +1,8 @@
 +++
 title = "Importing and Exporting data from Slash GraphQL"
+weight = 4   
 [menu.main]
     parent = "slash-graphql-admin"
-    weight = 4   
 +++
 
 It is possible to export your data from one slash backend, and then import this data back into another Dgraph instance or Slash Backend.

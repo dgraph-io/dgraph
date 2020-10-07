@@ -56,6 +56,15 @@
                 "exact"
             ],
             "type": "string"
+||||||| cec55674c
+                "hash",
+                "trigram"
+            ]
+        },
+        {
+            "predicate": "Human.starships",
+            "type": "uid",
+            "list": true
         },
         {
             "index": true,
@@ -300,6 +309,20 @@
                 "bool"
             ],
             "type": "bool"
+        },
+        {
+            "predicate": "post1.numLikes",
+            "type": "int"
+        },
+        {
+            "predicate": "post1.title",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "upsert": true
         },
         {
             "predicate": "pwd",
