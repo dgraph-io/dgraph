@@ -74,7 +74,6 @@ const (
 var subExp = 3 * time.Second
 
 func TestSubscription(t *testing.T) {
-
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
@@ -108,7 +107,6 @@ func TestSubscription(t *testing.T) {
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
-
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription{
 			queryProduct{
@@ -117,7 +115,6 @@ func TestSubscription(t *testing.T) {
 		  }`,
 	}, `{}`)
 	require.Nil(t, err)
-
 	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
@@ -130,9 +127,6 @@ func TestSubscription(t *testing.T) {
 	require.JSONEq(t, `{"queryProduct":[{"name":"sanitizer"}]}`, string(subscriptionResp.Data))
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
-
-	// Background indexing is happening so wait till it get indexed.
-	time.Sleep(time.Second * 2)
 
 	// Update the product to get the latest update.
 	add = &common.GraphQLParams{
@@ -164,7 +158,6 @@ func TestSubscription(t *testing.T) {
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
 
-	time.Sleep(2 * time.Second)
 	// Change schema to terminate subscription..
 	add = &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
@@ -181,7 +174,6 @@ func TestSubscription(t *testing.T) {
 	time.Sleep(time.Second)
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
-
 	require.Nil(t, res)
 }
 
