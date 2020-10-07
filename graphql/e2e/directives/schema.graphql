@@ -5,6 +5,8 @@ type Hotel {
     id: ID!
     name: String! @search(by: [exact])
     location: Point @search
+    area: Polygon @search
+    branches: MultiPolygon @search
 }
 
 type Country {

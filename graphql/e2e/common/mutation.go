@@ -3790,6 +3790,106 @@ func mutationGeoType(t *testing.T) {
 	deleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
 }
 
+func mutationPolygonType(t *testing.T) {
+	addHotelParams := &GraphQLParams{
+		Query: `
+		mutation addHotel {
+		  addHotel(input: [
+				{
+					name: "Taj Hotel"
+					area : {
+							coordinates: [{
+								points: [{
+									latitude: 11.11,
+									longitude: 22.22
+								}, {
+									latitude: 15.15,
+									longitude: 16.16
+								}, {
+									latitude: 20.20,
+									longitude: 21.21
+								},
+ 								{
+									latitude: 11.11,
+									longitude: 22.22
+								}]
+							}, {
+								points: [{
+									latitude: 11.18,
+									longitude: 22.28
+								}, {
+									latitude: 15.18,
+									longitude: 16.18
+								}, {
+									latitude: 20.28,
+									longitude: 21.28
+								}, {
+									latitude: 11.18,
+									longitude: 22.28
+								}]
+							}]
+    					}
+					}
+					]) {
+			hotel {
+			  name
+			  area {
+				__typename
+				coordinates {
+                  __typename
+				  points {
+					latitude
+					__typename
+					longitude
+				  }
+				}
+			  }
+			}
+		  }
+		}`,
+	}
+	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addHotelExpected := `
+	{
+		"addHotel": {
+			"hotel": [{
+				"name": "Taj Hotel",
+				"area": {
+				  "coordinates": [{
+					"points": [{
+					  "latitude": 11.11,
+					  "longitude": 22.22
+					}, {
+					  "latitude": 15.15,
+					  "longitude": 16.16
+					}, {
+					  "latitude": 20.20,
+					  "longitude": 21.21
+					}]
+				  }, {
+					  "points": [{
+						"latitude": 11.18,
+						"longitude": 22.28
+					  }, {
+						"latitude": 15.18,
+						"longitude": 16.18
+					  }, {
+						"latitude": 20.28,
+						"longitude": 21.28
+					  }]
+				  }]
+				}
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
+
+	// Cleanup
+	deleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
+}
+
 func addMutationWithHasInverseOverridesCorrectly(t *testing.T) {
 	params := &GraphQLParams{
 		Query: `mutation addCountry($input: [AddCountryInput!]!) {

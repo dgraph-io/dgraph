@@ -1212,16 +1212,12 @@ func rewriteObject(
 				// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
 				//          like here ^^
 				if fieldDef.Type().IsGeo() {
-					// For Geo type, the mutation json is as follows:
-					// { "type": "Point", "coordinates": [11.11, 22.22]}
-					lat := val["latitude"]
-					long := val["longitude"]
 					frags = &mutationRes{
 						secondPass: []*mutationFragment{
 							newFragment(
 								map[string]interface{}{
-									"type":        "Point",
-									"coordinates": []interface{}{long, lat},
+									"type":        fieldDef.Type().Name(),
+									"coordinates": rewriteGeoObject(val, fieldDef.Type()),
 								},
 							),
 						},
@@ -1302,6 +1298,44 @@ func rewriteObject(
 	}
 
 	return results
+}
+
+func makePolygon(val map[string]interface{}) []interface{} {
+	var resPoly []interface{}
+	coordinates, _ := val["coordinates"].([]interface{})
+	for _, vc := range coordinates {
+		ring := vc.(map[string]interface{})
+		points, _ := ring["points"].([]interface{})
+		var resRing []interface{}
+		for _, p := range points {
+			point := p.(map[string]interface{})
+			resRing = append(resRing, []interface{}{point["longitude"], point["latitude"]})
+		}
+		resPoly = append(resPoly, resRing)
+	}
+	return resPoly
+}
+
+func rewriteGeoObject(val map[string]interface{}, typ schema.Type) []interface{} {
+	switch typ.Name() {
+	case "Point":
+		// For Point type, the mutation json is as follows:
+		// { "type": "Point", "coordinates": [11.11, 22.22]}
+		lat := val["latitude"]
+		long := val["longitude"]
+		return []interface{}{long, lat}
+	case "Polygon":
+		return makePolygon(val)
+	case "MultiPolygon":
+		polygons, _ := val["polygons"].([]interface{})
+		var res []interface{}
+		for _, p := range polygons {
+			polygon, _ := p.(map[string]interface{})
+			res = append(res, makePolygon(polygon))
+		}
+		return res
+	}
+	return nil
 }
 
 func invalidObjectFragment(

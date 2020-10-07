@@ -1230,12 +1230,118 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 	return errs
 }
 
+// Converts the Dgraph result to GraphQL Polygon type.
+// Dgraph output: coordinate: [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
+// Graphql output: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}, { points: [{ latitude: 11.18, longitude: 22.28}, { latitude: 15.18, longitude: 16.18} , { latitude: 20.28, longitude: 21.28}]} ] } }
+func completePolygon(buf *bytes.Buffer, field schema.Field, coordinate []interface{}) {
+	fields := field.SelectionSet()
+	comma1 := ""
+	x.Check2(buf.WriteRune('{'))
+	for _, field1 := range fields {
+		x.Check2(buf.WriteString(comma1))
+		x.Check2(buf.WriteRune('"'))
+		x.Check2(buf.WriteString(field1.ResponseName()))
+		x.Check2(buf.WriteString(`": `))
+
+		switch field1.Name() {
+		case "coordinates":
+			x.Check2(buf.WriteRune('['))
+			comma2 := ""
+			for _, vc := range coordinate {
+				field2 := field1.SelectionSet()
+				x.Check2(buf.WriteString(comma2))
+				x.Check2(buf.WriteRune('{'))
+				comma3 := ""
+				for _, field3 := range field2 {
+					x.Check2(buf.WriteString(comma3))
+					x.Check2(buf.WriteRune('"'))
+					x.Check2(buf.WriteString(field3.ResponseName()))
+					x.Check2(buf.WriteString(`": `))
+					switch field3.Name() {
+					case "points":
+						x.Check2(buf.WriteRune('['))
+						comma4 := ""
+						ring, _ := vc.([]interface{})
+						for _, vp := range ring {
+							x.Check2(buf.WriteString(comma4))
+							point, _ := vp.([]interface{})
+							completePoint(buf, field3, point)
+							comma4 = ","
+						}
+						x.Check2(buf.WriteRune(']'))
+					case schema.Typename:
+						x.Check2(buf.WriteString(`"PointList"`))
+					}
+					comma3 = ","
+				}
+				x.Check2(buf.WriteRune('}'))
+				comma2 = ","
+			}
+			x.Check2(buf.WriteRune(']'))
+		case schema.Typename:
+			x.Check2(buf.WriteString(`"Polygon"`))
+		}
+		comma1 = ","
+	}
+	x.Check2(buf.WriteRune('}'))
+}
+
+func completeMultiPolygon(buf *bytes.Buffer, field schema.Field, coordinate []interface{}) {
+	fields := field.SelectionSet()
+	comma1 := ""
+	x.Check2(buf.WriteRune('{'))
+	for _, field1 := range fields {
+		x.Check2(buf.WriteString(comma1))
+		x.Check2(buf.WriteRune('"'))
+		x.Check2(buf.WriteString(field1.ResponseName()))
+		x.Check2(buf.WriteString(`": `))
+		switch field1.Name() {
+		case "polygons":
+			x.Check2(buf.WriteRune('['))
+			comma2 := ""
+			for _, vc := range coordinate {
+				x.Check2(buf.WriteString(comma2))
+				polygon := vc.([]interface{})
+				completePolygon(buf, field1, polygon)
+				comma2 = ","
+			}
+			x.Check2(buf.WriteRune(']'))
+		case schema.Typename:
+			x.Check2(buf.WriteString(`"MultiPolygon"`))
+		}
+		comma1 = ","
+	}
+	x.Check2(buf.WriteRune('}'))
+}
+
+func completePoint(buf *bytes.Buffer, field schema.Field, coordinate []interface{}) {
+	fields := field.SelectionSet()
+	longitude := fmt.Sprintf("%s", coordinate[0])
+	latitude := fmt.Sprintf("%s", coordinate[1])
+	comma := ""
+	x.Check2(buf.WriteRune('{'))
+	for _, field := range fields {
+		x.Check2(buf.WriteString(comma))
+		x.Check2(buf.WriteRune('"'))
+		x.Check2(buf.WriteString(field.ResponseName()))
+		x.Check2(buf.WriteString(`": `))
+
+		switch field.Name() {
+		case "latitude":
+			x.Check2(buf.WriteString(latitude))
+		case "longitude":
+			x.Check2(buf.WriteString(longitude))
+		case schema.Typename:
+			x.Check2(buf.WriteString(`"Point"`))
+		}
+		comma = ","
+	}
+	x.Check2(buf.WriteRune('}'))
+}
+
 // completeGeoObject builds a json GraphQL result object for the geo type.
 // It returns a bracketed json object like { "longitude" : 12.32 , "latitude" : 123.32 }.
 func completeGeoObject(field schema.Field, val map[string]interface{}, path []interface{}) ([]byte, x.GqlErrorList) {
-	var buf bytes.Buffer
-	x.Check2(buf.WriteRune('{'))
-
 	coordinate, _ := val["coordinates"].([]interface{})
 	if coordinate == nil {
 		gqlErr := x.GqlErrorf(errExpectedNonNull, field.Name(), field.Type()).WithLocations(field.Location())
@@ -1243,29 +1349,19 @@ func completeGeoObject(field schema.Field, val map[string]interface{}, path []in
 		return nil, x.GqlErrorList{gqlErr}
 	}
 
-	fields := field.SelectionSet()
-	comma := ""
-
-	longitude := fmt.Sprintf("%s", coordinate[0])
-	latitude := fmt.Sprintf("%s", coordinate[1])
-	for _, field := range fields {
-		x.Check2(buf.WriteString(comma))
-		x.Check2(buf.WriteRune('"'))
-		x.Check2(buf.WriteString(field.ResponseName()))
-		x.Check2(buf.WriteString(`": `))
-
-		switch field.ResponseName() {
-		case "latitude":
-			x.Check2(buf.WriteString(latitude))
-		case "longitude":
-			x.Check2(buf.WriteString(longitude))
-		}
-
-		comma = ","
+	typ, _ := val["type"].(string)
+	var buf bytes.Buffer
+	var err x.GqlErrorList
+	switch typ {
+	case "Point":
+		completePoint(&buf, field, coordinate)
+	case "Polygon":
+		completePolygon(&buf, field, coordinate)
+	case "MultiPolygon":
+		completeMultiPolygon(&buf, field, coordinate)
 	}
 
-	x.Check2(buf.WriteRune('}'))
-	return buf.Bytes(), nil
+	return buf.Bytes(), err
 }
 
 // completeObject builds a json GraphQL result object for the current query level.

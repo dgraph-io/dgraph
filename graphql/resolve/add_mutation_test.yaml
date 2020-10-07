@@ -1,5 +1,5 @@
 -
-  name: "Add mutation with geo"
+  name: "Add mutation geo field - Point type"
   gqlmutation: |
     mutation addHotel($hotel: AddHotelInput!) {
       addHotel(input: [$hotel]) {
@@ -27,6 +27,156 @@
           "Hotel.location": {
             "type": "Point",
             "coordinates": [22.22, 11.11]
+          }
+        }
+
+-
+  name: "Add mutation geo field - Polygon type"
+  gqlmutation: |
+    mutation addHotel($hotel: AddHotelInput!) {
+      addHotel(input: [$hotel]) {
+        hotel {
+          name
+          area {
+            coordinates {
+              points {
+                latitude
+                longitude
+              }
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "hotel":
+      { "name": "Taj Hotel",
+        "area": {
+          "coordinates": [{
+            "points": [{
+              "latitude": 11.11,
+              "longitude": 22.22
+            }, {
+              "latitude": 15.15,
+              "longitude": 16.16
+            }, {
+              "latitude": 20.20,
+              "longitude": 21.21
+            }]
+          }, {
+              "points": [{
+                "latitude": 11.18,
+                "longitude": 22.28
+              }, {
+                "latitude": 15.18,
+                "longitude": 16.18
+              }, {
+                "latitude": 20.28,
+                "longitude": 21.28
+              }]
+          }]
+        }
+      }
+    }
+  explanation: "Add mutation should convert the Polygon type mutation to corresponding Dgraph JSON mutation"
+  dgmutations:
+    - setjson: |
+        {
+          "uid":"_:Hotel1",
+          "dgraph.type":["Hotel"],
+          "Hotel.name":"Taj Hotel",
+          "Hotel.area": {
+            "type": "Polygon",
+            "coordinates": [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
+          }
+        }
+
+-
+  name: "Add mutation geo field - Multi-Polygon type"
+  gqlmutation: |
+    mutation addHotel($hotel: AddHotelInput!) {
+      addHotel(input: [$hotel]) {
+        hotel {
+          name
+          branches {
+            polygons {
+              coordinates {
+                points {
+                  latitude
+                  longitude
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "hotel":
+      { "name": "Taj Hotel",
+        "branches": {
+          "polygons": [{
+            "coordinates": [{
+              "points": [{
+                "latitude": 11.11,
+                "longitude": 22.22
+              }, {
+                "latitude": 15.15,
+                "longitude": 16.16
+              }, {
+                "latitude": 20.20,
+                "longitude": 21.21
+              }]
+            }, {
+              "points": [{
+                "latitude": 11.18,
+                "longitude": 22.28
+              }, {
+                "latitude": 15.18,
+                "longitude": 16.18
+              }, {
+                "latitude": 20.28,
+                "longitude": 21.28
+              }]
+            }]
+          }, {
+            "coordinates": [{
+              "points": [{
+                "latitude": 91.11,
+                "longitude": 92.22
+              }, {
+                "latitude": 15.15,
+                "longitude": 16.16
+              }, {
+                "latitude": 20.20,
+                "longitude": 21.21
+              }]
+            }, {
+              "points": [{
+                "latitude": 11.18,
+                "longitude": 22.28
+              }, {
+                "latitude": 15.18,
+                "longitude": 16.18
+              }, {
+                "latitude": 20.28,
+                "longitude": 21.28
+              }]
+            }]
+        }]
+        }
+      }
+    }
+  explanation: "Add mutation should convert the MultiPolygon type mutation to corresponding Dgraph JSON mutation"
+  dgmutations:
+    - setjson: |
+        {
+          "uid":"_:Hotel1",
+          "dgraph.type":["Hotel"],
+          "Hotel.name":"Taj Hotel",
+          "Hotel.branches": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
           }
         }
 
