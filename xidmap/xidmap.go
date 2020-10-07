@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v2"
-	// bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -44,7 +43,6 @@ type XidMap struct {
 	maxUidSeen uint64
 
 	// Optionally, these can be set to persist the mappings.
-	// writer *badger.StreamWriter
 	writer *badger.WriteBatch
 }
 
@@ -88,8 +86,6 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	if db != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
 		xm.writer = db.NewWriteBatch()
-		// xm.writer = db.NewStreamWriter()
-		// x.Check(xm.writer.Prepare())
 
 		err := db.View(func(txn *badger.Txn) error {
 			var count int
@@ -253,13 +249,6 @@ func (m *XidMap) Flush() error {
 			err = shard.trie.Iterate(func(key string, uid uint64) error {
 				var uidBuf [8]byte
 				binary.BigEndian.PutUint64(uidBuf[:], uid)
-				// kvs := &bpb.KVList{Kv: []*bpb.KV{{
-				// 	Key: []byte(key),
-				// 	Value: uidBuf[:],
-				// }}}
-				// if err := m.writer.Write(kvs); err != nil {
-				// 	return err
-				// }
 				return m.writer.Set([]byte(key), uidBuf[:])
 			})
 			shard.Unlock()
