@@ -148,7 +148,7 @@ func writeFilterArguments(b *strings.Builder, args []gql.Arg) {
 		if i != 0 {
 			x.Check2(b.WriteString(", "))
 		}
-		x.Check2(b.WriteString(fmt.Sprintf("%s", arg.Value)))
+		x.Check2(b.WriteString(arg.Value))
 	}
 }
 
