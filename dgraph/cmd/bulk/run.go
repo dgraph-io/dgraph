@@ -111,7 +111,7 @@ func init() {
 	flag.Int("badger.compression_level", 1,
 		"The compression level for Badger. A higher value uses more resources.")
 	flag.Int64("badger.cache_mb", 64, "Total size of cache (in MB) per shard in reducer.")
-	flag.String("badger.cache_percentage", "100,0",
+	flag.String("badger.cache_percentage", "70,30",
 		"Cache percentages summing up to 100 for various caches"+
 			" (FORMAT: BlockCacheSize, IndexCacheSize).")
 
