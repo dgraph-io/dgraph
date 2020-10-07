@@ -1,9 +1,9 @@
 +++
 title = "Search and Filtering"
+weight = 2
 [menu.main]
     parent = "graphql-queries"
     name = "Search and Filtering"
-    weight = 2   
 +++
 
 Queries generated for a GraphQL type allow you to generate a single of list of

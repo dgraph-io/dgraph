@@ -7,4 +7,3 @@ alpha:
   configFile:
     config.hcl: |
       whitelist = "10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1"
-      lru_mb    = 2048

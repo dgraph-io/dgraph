@@ -27,6 +27,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof" // http profiler
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -116,9 +117,10 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored for the postings."+
 			"mmap consumes more RAM, but provides better performance.")
-	flag.String("badger.compression_level", "3",
-		"Specifies the compression level for the postings directory. A higher value"+
-			" uses more resources. The value of 0 disables compression.")
+	flag.String("badger.compression", "snappy",
+		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
+			"level (if applicable) for the postings directory. none would disable compression,"+
+			" while zstd:1 would set zstd compression at level 1.")
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -157,12 +159,6 @@ they form a Raft group and provide synchronous replication.
 		"Enterprise feature.")
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
-	flag.Duration("acl_cache_ttl", 30*time.Second, "DEPRECATED: The interval to refresh the acl "+
-		"cache. Enterprise feature.") // TODO: Remove this flag.
-
-	flag.Float64P("lru_mb", "l", -1, // TODO: Remove this flag.
-		"Estimated memory the LRU cache can take. "+
-			"Actual usage by the process would be more than specified here.")
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
 
@@ -200,6 +196,8 @@ they form a Raft group and provide synchronous replication.
 
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
+	flag.String("graphql_lambda_url", "",
+		"URL of lambda server that implements custom GraphQL JavaScript resolvers")
 
 	// Cache flags
 	flag.String("cache_percentage", "0,65,35,0",
@@ -608,18 +606,18 @@ func run() {
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
 	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
-	level := x.ParseCompressionLevel(Alpha.Conf.GetString("badger.compression_level"))
+	ctype, clevel := x.ParseCompression(Alpha.Conf.GetString("badger.compression"))
 	opts := worker.Options{
 		PostingDir:                 Alpha.Conf.GetString("postings"),
 		WALDir:                     Alpha.Conf.GetString("wal"),
-		PostingDirCompressionLevel: level,
+		PostingDirCompression:      ctype,
+		PostingDirCompressionLevel: clevel,
 		PBlockCacheSize:            pstoreBlockCacheSize,
 		PIndexCacheSize:            pstoreIndexCacheSize,
 		WalCache:                   walCache,
 
-		MutationsMode:  worker.AllowMutations,
-		AuthToken:      Alpha.Conf.GetString("auth_token"),
-		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+		MutationsMode: worker.AllowMutations,
+		AuthToken:     Alpha.Conf.GetString("auth_token"),
 	}
 
 	opts.BadgerTables = Alpha.Conf.GetString("badger.tables")
@@ -693,6 +691,19 @@ func run() {
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
 	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
+	x.Config.GraphqlLambdaUrl = Alpha.Conf.GetString("graphql_lambda_url")
+	if x.Config.GraphqlLambdaUrl != "" {
+		graphqlLambdaUrl, err := url.Parse(x.Config.GraphqlLambdaUrl)
+		if err != nil {
+			glog.Errorf("unable to parse graphql_lambda_url: %v", err)
+			return
+		}
+		if !graphqlLambdaUrl.IsAbs() {
+			glog.Errorf("expecting graphql_lambda_url to be an absolute URL, got: %s",
+				graphqlLambdaUrl.String())
+			return
+		}
+	}
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

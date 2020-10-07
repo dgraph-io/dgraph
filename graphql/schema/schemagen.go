@@ -219,6 +219,15 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
 	}
 
+	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
+	// then Fetch the JWKs from the JWKUrl
+	if metaInfo != nil && metaInfo.JWKUrl != "" {
+		fetchErr := metaInfo.FetchJWKs()
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+	}
+
 	handler := &handler{
 		input:          input,
 		dgraphSchema:   dgSchema,
@@ -414,7 +423,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			pwdField := getPasswordField(def)
 
 			for _, f := range def.Fields {
-				if f.Type.Name() == "ID" {
+				if f.Type.Name() == "ID" || hasCustomOrLambda(f) {
 					continue
 				}
 

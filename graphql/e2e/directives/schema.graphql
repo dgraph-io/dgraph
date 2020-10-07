@@ -43,6 +43,8 @@ type Author @dgraph(type: "test.dgraph.author") {
         reputation: Float @search
         country: Country
         posts: [Post!] @hasInverse(field: author)
+		bio: String @lambda
+		rank: Int @lambda
 }
 
 type Post @dgraph(type: "myPost") {
@@ -96,6 +98,7 @@ interface Character @dgraph(type: "performance.character") {
         id: ID!
         name: String! @search(by: [exact])
         appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
+		bio: String @lambda
 }
 
 type Human implements Character & Employee {
@@ -189,4 +192,12 @@ type Person1 {
     id: ID!
     name: String!
     friends: [Person1] @hasInverse(field: friends)
+}
+
+type Query {
+	authorsByName(name: String!): [Author] @lambda
+}
+
+type Mutation {
+	newAuthor(name: String!): ID! @lambda
 }

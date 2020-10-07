@@ -1,8 +1,8 @@
 +++
 title = "Introduction"
+weight = 1   
 [menu.main]
     parent = "slash-graphql"
-    weight = 1   
 +++
 
 <p className="subheading font-weight-regular">Slash GraphQL Provides /graphql Backend for Your App</p>

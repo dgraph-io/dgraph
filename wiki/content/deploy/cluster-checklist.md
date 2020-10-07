@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Cluster Checklist"
+weight = 11
 [menu.main]
     parent = "deploy"
-    weight = 11
 +++
 
 In setting up a cluster be sure the check the following.

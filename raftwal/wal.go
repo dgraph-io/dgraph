@@ -20,6 +20,7 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
@@ -117,7 +118,7 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 			// The existing entry was found in the current file. We only have to zero out
 			// from the entries after the one in which the entry was found.
 			if l.nextEntryIdx > eidx {
-				zeroOut(l.current.data, entrySize*eidx, entrySize*l.nextEntryIdx)
+				z.ZeroOut(l.current.Data, entrySize*eidx, entrySize*l.nextEntryIdx)
 			}
 		} else {
 			// The existing entry was found in one of the previous file.
@@ -134,10 +135,10 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 			for _, ef := range extra {
 				glog.V(2).Infof("Deleting extra file: %d\n", ef.fid)
 				if err := ef.delete(); err != nil {
-					glog.Errorf("deleting file: %s. error: %v\n", ef.fd.Name(), err)
+					glog.Errorf("deleting file: %s. error: %v\n", ef.Fd.Name(), err)
 				}
 			}
-			zeroOut(l.current.data, entrySize*eidx, logFileOffset)
+			z.ZeroOut(l.current.Data, entrySize*eidx, logFileOffset)
 			l.files = l.files[:fidx]
 		}
 		l.nextEntryIdx = eidx
@@ -152,7 +153,7 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		// calculate the next offset.
 		e := l.current.getEntry(prev)
 		offset = int(e.DataOffset())
-		offset += sliceSize(l.current.data, offset)
+		offset += sliceSize(l.current.Data, offset)
 	} else {
 		// At the start of the file so use entryFileOffset.
 		offset = logFileOffset
@@ -167,7 +168,7 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		}
 
 		// Write re.Data to a new slice at the end of the file.
-		destBuf, next := l.current.allocateSlice(len(re.Data), offset)
+		destBuf, next := l.current.AllocateSlice(len(re.Data), offset)
 		x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 
 		// Write the entry at the given slot.
@@ -319,7 +320,7 @@ func (l *wal) deleteBefore(raftIndex uint64) {
 
 	for _, ef := range before {
 		if err := ef.delete(); err != nil {
-			glog.Errorf("while deleting file: %s, err: %v\n", ef.fd.Name(), err)
+			glog.Errorf("while deleting file: %s, err: %v\n", ef.Fd.Name(), err)
 		}
 	}
 	return
@@ -329,11 +330,11 @@ func (l *wal) deleteBefore(raftIndex uint64) {
 func (l *wal) reset() error {
 	for _, ef := range l.files {
 		if err := ef.delete(); err != nil {
-			return errors.Wrapf(err, "while deleting %s", ef.fd.Name())
+			return errors.Wrapf(err, "while deleting %s", ef.Fd.Name())
 		}
 	}
 	l.files = l.files[:0]
-	zeroOut(l.current.data, 0, logFileOffset)
+	z.ZeroOut(l.current.Data, 0, logFileOffset)
 	l.nextEntryIdx = 0
 	return nil
 }
@@ -349,7 +350,7 @@ func (l *wal) rotate(firstIndex uint64) error {
 		}
 	}
 	nextFid += 1
-	go l.current.sync() // Trigger a sync in the background.
+	go l.current.Sync() // Trigger a sync in the background.
 
 	ef, err := openLogFile(l.dir, nextFid)
 	if err != nil {
