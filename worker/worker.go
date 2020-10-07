@@ -143,8 +143,12 @@ func UpdateCacheMb(memoryMB int64) error {
 	indexCacheSize := (cachePercent[2] * (memoryMB << 20)) / 100
 
 	posting.UpdateMaxCost(plCacheSize)
-	pstore.UpdateCacheMaxCost(badger.BlockCache, blockCacheSize)
-	pstore.UpdateCacheMaxCost(badger.IndexCache, indexCacheSize)
+	if _, err := pstore.CacheMaxCost(badger.BlockCache, blockCacheSize); err != nil {
+		return errors.Wrapf(err, "cannot update block cache size")
+	}
+	if _, err := pstore.CacheMaxCost(badger.IndexCache, indexCacheSize); err != nil {
+		return errors.Wrapf(err, "cannot update index cache size")
+	}
 	return nil
 }
 
