@@ -605,8 +605,6 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 
 		seen[def.Name] = true
 		cleanupInput(sch, sch.Types[nt], seen)
-		seen[def.Name] = false
-
 		// If after calling cleanup on an input type, it got deleted then it doesn't need to be
 		// in the fields for this type anymore.
 		if sch.Types[nt] == nil {
