@@ -239,15 +239,13 @@ func (m *XidMap) AllocateUid() uint64 {
 	return sh.assign(m.newRanges)
 }
 
-func (m *XidMap) WriteToBadger() error {
-	if m.writer == nil {
-		return nil
-	}
-	return nil
-}
-
 // Flush must be called if DB is provided to XidMap.
 func (m *XidMap) Flush() error {
+	glog.Infof("Writing xid map to DB")
+	defer func() {
+		glog.Infof("Finished writing xid map to DB")
+	}()
+
 	for _, shard := range m.shards {
 		var err error
 		if m.writer != nil {
