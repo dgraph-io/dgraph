@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
@@ -76,6 +77,9 @@ const (
 		"and as much other data as possible returned."
 
 	errInternal = "Internal error"
+
+	errExpectedNonNull = "Non-nullable field '%s' (type %s) was not present in result from Dgraph.  " +
+		"GraphQL error propagation triggered."
 )
 
 // A ResolverFactory finds the right resolver for a query/mutation.
@@ -1261,6 +1265,44 @@ func resolveCustomFields(ctx context.Context, fields []schema.Field, data interf
 	return errs
 }
 
+// completeGeoObject builds a json GraphQL result object for the geo type.
+// It returns a bracketed json object like { "longitude" : 12.32 , "latitude" : 123.32 }.
+func completeGeoObject(field schema.Field, val map[string]interface{}, path []interface{}) ([]byte, x.GqlErrorList) {
+	var buf bytes.Buffer
+	x.Check2(buf.WriteRune('{'))
+
+	coordinate, _ := val["coordinates"].([]interface{})
+	if coordinate == nil {
+		gqlErr := x.GqlErrorf(errExpectedNonNull, field.Name(), field.Type()).WithLocations(field.Location())
+		gqlErr.Path = copyPath(path)
+		return nil, x.GqlErrorList{gqlErr}
+	}
+
+	fields := field.SelectionSet()
+	comma := ""
+
+	longitude := fmt.Sprintf("%s", coordinate[0])
+	latitude := fmt.Sprintf("%s", coordinate[1])
+	for _, field := range fields {
+		x.Check2(buf.WriteString(comma))
+		x.Check2(buf.WriteRune('"'))
+		x.Check2(buf.WriteString(field.ResponseName()))
+		x.Check2(buf.WriteString(`": `))
+
+		switch field.ResponseName() {
+		case "latitude":
+			x.Check2(buf.WriteString(latitude))
+		case "longitude":
+			x.Check2(buf.WriteString(longitude))
+		}
+
+		comma = ","
+	}
+
+	x.Check2(buf.WriteRune('}'))
+	return buf.Bytes(), nil
+}
+
 // completeObject builds a json GraphQL result object for the current query level.
 // It returns a bracketed json object like { f1:..., f2:..., ... }.
 //
@@ -1411,6 +1453,9 @@ func completeValue(
 				Path:      copyPath(path),
 			}}
 		}
+		if field.Type().IsPoint() {
+			return completeGeoObject(field, val, path)
+		}
 
 		return completeObject(path, field.SelectionSet(), val)
 	case []interface{}:
@@ -1444,12 +1489,8 @@ func completeValue(
 				return []byte("null"), nil
 			}
 
-			gqlErr := x.GqlErrorf(
-				"Non-nullable field '%s' (type %s) was not present in result from Dgraph.  "+
-					"GraphQL error propagation triggered.", field.Name(), field.Type()).
-				WithLocations(field.Location())
+			gqlErr := x.GqlErrorf(errExpectedNonNull, field.Name(), field.Type()).WithLocations(field.Location())
 			gqlErr.Path = copyPath(path)
-
 			return nil, x.GqlErrorList{gqlErr}
 		}
 

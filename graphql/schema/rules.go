@@ -275,6 +275,9 @@ func inputTypeNameValidation(schema *ast.SchemaDocument) gqlerror.List {
 		"StringFullTextFilter": true,
 		"StringExactFilter":    true,
 		"StringHashFilter":     true,
+		"PointGeoFilter":       true,
+		"PointRef":             true,
+		"NearFilter":           true,
 	}
 	definedInputTypes := make([]*ast.Definition, 0)
 
@@ -953,6 +956,10 @@ func validateSearchArg(searchArg string,
 	return nil
 }
 
+func isPointType(typ *ast.Type) bool {
+	return typ.Name() == "Point"
+}
+
 func searchValidation(
 	sch *ast.Schema,
 	typ *ast.Definition,
@@ -963,10 +970,10 @@ func searchValidation(
 
 	arg := dir.Arguments.ForName(searchArgs)
 	if arg == nil {
-		// If there's no arg, then it can be an enum or has to be a scalar that's
+		// If there's no arg, then it can be an enum or Geo type or has to be a scalar that's
 		// not ID. The schema generation will add the default search
 		// for that type.
-		if sch.Types[field.Type.Name()].Kind == ast.Enum ||
+		if sch.Types[field.Type.Name()].Kind == ast.Enum || isPointType(field.Type) ||
 			(sch.Types[field.Type.Name()].Kind == ast.Scalar && !isIDField(typ, field)) {
 			return nil
 		}
@@ -1900,6 +1907,7 @@ func isReservedKeyWord(name string) bool {
 		// Reserved Type names
 		"uid":          true,
 		"Subscription": true,
+		"Point":        true,
 	}
 
 	caseInsensitiveKeywords := map[string]bool{

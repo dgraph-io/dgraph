@@ -116,8 +116,7 @@ func printBasic(store RaftStore) (uint64, uint64) {
 func printRaft(db *badger.DB, store *raftmigrate.OldDiskStorage) {
 	startIdx, lastIdx := printBasic(store)
 
-	commitTs, err := db.MaxVersion()
-	x.Check(err)
+	commitTs := db.MaxVersion()
 	// In case we need to truncate raft entries.
 	batch := db.NewWriteBatchAt(commitTs)
 	defer batch.Cancel()

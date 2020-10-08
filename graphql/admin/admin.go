@@ -249,12 +249,12 @@ const (
 	}
 
 	input ConfigInput {
-
 		"""
-		Estimated memory the LRU cache can take. Actual usage by the process would be
-		more than specified here. (default -1 means no set limit)
+		Estimated memory the caches can take. Actual usage by the process would be
+		more than specified here. The caches will be updated according to the
+		cache_percentage flag.
 		"""
-		lruMb: Float
+		cacheMb: Float
 
 		"""
 		True value of logRequest enables logging of all the requests coming to alphas.
@@ -268,7 +268,7 @@ const (
 	}
 
 	type Config {
-		lruMb: Float
+		cacheMb: Float
 	}
 
 	` + adminTypes + `

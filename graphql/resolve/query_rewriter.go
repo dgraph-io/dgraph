@@ -751,7 +751,10 @@ func addSelectionSetFrom(
 			auth.varName = parentQryName
 		}
 
-		selectionAuth := addSelectionSetFrom(child, f, auth)
+		var selectionAuth []*gql.GraphQuery
+		if !f.Type().IsPoint() {
+			selectionAuth = addSelectionSetFrom(child, f, auth)
+		}
 		addedFields[f.Name()] = true
 
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
@@ -1057,15 +1060,40 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// OR
 				// numLikes: { le: 10 } -> le(Post.numLikes, 10)
 				fn, val := first(dgFunc)
-				ands = append(ands, &gql.FilterTree{
-					Func: &gql.Function{
-						Name: fn,
-						Args: []gql.Arg{
-							{Value: typ.DgraphPredicate(field)},
-							{Value: maybeQuoteArg(fn, val)},
+				switch fn {
+				case "near":
+					//  For Geo type we have `near` filter which is written as follows:
+					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
+					geoParams := val.(map[string]interface{})
+					distance := geoParams["distance"]
+
+					coordinate, _ := geoParams["coordinate"].(map[string]interface{})
+					lat := coordinate["latitude"]
+					long := coordinate["longitude"]
+
+					args := []gql.Arg{
+						{Value: typ.DgraphPredicate(field)},
+						{Value: fmt.Sprintf("[%v,%v]", long, lat)},
+						{Value: fmt.Sprintf("%v", distance)},
+					}
+
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: args,
 						},
-					},
-				})
+					})
+				default:
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: []gql.Arg{
+								{Value: typ.DgraphPredicate(field)},
+								{Value: maybeQuoteArg(fn, val)},
+							},
+						},
+					})
+				}
 			case []interface{}:
 				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
 				ids := convertIDs(dgFunc)
