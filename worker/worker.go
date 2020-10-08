@@ -128,9 +128,8 @@ func BlockingStop() {
 
 // UpdateCacheMb updates the value of cache_mb and updates the corresponding cache sizes.
 func UpdateCacheMb(memoryMB int64) error {
-	glog.Infof("memoryMB %d", memoryMB)
+	glog.Infof("Updating cacheMb to %d", memoryMB)
 	if memoryMB < 0 {
-		glog.Infof("negative memoryMB")
 		return errors.Errorf("cache_mb must be non-negative")
 	}
 
