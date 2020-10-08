@@ -17,8 +17,15 @@
 package raftwal
 
 import (
+	"bytes"
+	"crypto/aes"
+	"encoding/binary"
+	"fmt"
+	"hash/crc32"
+	"io"
 	"sort"
 
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
@@ -44,6 +51,12 @@ type wal struct {
 	// dir is the directory to use to store files.
 	dir string
 }
+
+type header struct {
+	dataLen uint32
+}
+
+const maxHeaderSize = 4
 
 // allEntries returns all the entries in the range [lo, hi).
 func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
@@ -167,8 +180,19 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 			l.nextEntryIdx, offset = 0, logFileOffset
 		}
 
+		var ebuf bytes.Buffer
+		elen, err := l.current.encodeData(&ebuf, re.Data, uint32(offset))
+		if err != nil {
+			return err
+		}
+		fmt.Println(elen)
+
+		var decoded []byte
+		decoded, err = l.current.decodeData(ebuf.Bytes(), uint32(offset))
+		fmt.Println(re.Data, decoded)
 		// Write re.Data to a new slice at the end of the file.
 		destBuf, next := l.current.AllocateSlice(len(re.Data), offset)
+
 		x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 
 		// Write the entry at the given slot.
@@ -180,6 +204,73 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		l.nextEntryIdx++
 	}
 	return nil
+}
+
+func (lf *logFile) encodeData(buf *bytes.Buffer, data []byte, offset uint32) (int, error) {
+	h := header{
+		dataLen: uint32(len(data)),
+	}
+	hash := crc32.New(y.CastagnoliCrcTable)
+	writer := io.MultiWriter(buf, hash)
+	// encode header.
+	var headerEnc [maxHeaderSize]byte
+	sz := h.Encode(headerEnc[:])
+	y.Check2(writer.Write(headerEnc[:sz]))
+
+	eBuf := make([]byte, 0, len(data))
+	eBuf = append(eBuf, data...)
+	if err := y.XORBlockStream(
+		writer, eBuf, lf.dataKey.Data, lf.generateIV(offset)); err != nil {
+		return 0, y.Wrapf(err, "%v ", "Error while encoding entry for vlog.")
+	}
+	var crcBuf [crc32.Size]byte
+	binary.BigEndian.PutUint32(crcBuf[:], hash.Sum32())
+	y.Check2(buf.Write(crcBuf[:]))
+	// return encoded length.
+	return len(headerEnc[:sz]) + len(data) + len(crcBuf), nil
+}
+
+func (lf *logFile) decodeData(buf []byte, offset uint32) ([]byte, error) {
+	var h header
+	hlen := h.Decode(buf)
+	dataBuf := buf[hlen:]
+
+	var err error
+	// No need to worry about mmap. because, XORBlock allocates a byte array to do the
+	// xor. So, the given slice is not being mutated.
+	if dataBuf, err = lf.decryptData(dataBuf, offset); err != nil {
+		return nil, err
+	}
+	return dataBuf, nil
+}
+
+func (lf *logFile) decryptData(buf []byte, offset uint32) ([]byte, error) {
+	return y.XORBlockAllocate(buf, lf.dataKey.Data, lf.generateIV(offset))
+}
+
+// Decode decodes the given header from the provided byte slice.
+// Returns the number of bytes read.
+func (h *header) Decode(buf []byte) int {
+	index := 0
+	dlen, count := binary.Uvarint(buf[index:])
+	h.dataLen = uint32(dlen)
+	return index + count
+}
+
+func (h header) Encode(out []byte) int {
+	index := 0
+	index += binary.PutUvarint(out[index:], uint64(h.dataLen))
+	return index
+}
+
+// generateIV will generate IV by appending given offset with the base IV.
+func (lf *logFile) generateIV(offset uint32) []byte {
+	iv := make([]byte, aes.BlockSize)
+	// baseIV is of 12 bytes.
+	y.AssertTrue(12 == copy(iv[:12], lf.baseIV))
+	// remaining 4 bytes is obtained from offset.
+	binary.BigEndian.PutUint32(iv[12:], offset)
+	return iv
 }
 
 // firstIndex returns the first index available in the entry log.

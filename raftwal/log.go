@@ -17,6 +17,7 @@
 package raftwal
 
 import (
+	cryptorand "crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -24,7 +25,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
@@ -75,6 +80,10 @@ func marshalEntry(b []byte, term, index, do, typ uint64) {
 type logFile struct {
 	*z.MmapFile
 	fid int64
+
+	registry *badger.KeyRegistry
+	dataKey  *pb.DataKey
+	baseIV   []byte
 }
 
 func logFname(dir string, id int64) string {
@@ -86,8 +95,22 @@ func logFname(dir string, id int64) string {
 func openLogFile(dir string, fid int64) (*logFile, error) {
 	glog.V(2).Infof("opening log file: %d\n", fid)
 	fpath := logFname(dir, fid)
+	fmt.Println(fpath)
 	// Open the file in read-write mode and create it if it doesn't exist yet.
 	mf, err := z.OpenMmapFile(fpath, os.O_RDWR|os.O_CREATE, logFileSize)
+
+	var registry *badger.KeyRegistry
+
+	krOpt := badger.KeyRegistryOptions{
+		ReadOnly:                      false,
+		Dir:                           dir,
+		EncryptionKey:                 []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+		EncryptionKeyRotationDuration: time.Hour,
+		InMemory:                      false,
+	}
+	if registry, err = badger.OpenKeyRegistry(krOpt); err != nil {
+		panic("Failed to open key registry")
+	}
 
 	if err == z.NewFile {
 		glog.V(2).Infof("New file: %d\n", fid)
@@ -99,6 +122,10 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 	lf := &logFile{
 		MmapFile: mf,
 		fid:      fid,
+		registry: registry,
+	}
+	if err = lf.bootstrap(); err != nil {
+		panic("Failed to bootstrap logFile")
 	}
 	return lf, nil
 }
@@ -241,4 +268,24 @@ func getLogFiles(dir string) ([]*logFile, error) {
 		return files[i].getEntry(0).Index() < files[j].getEntry(0).Index()
 	})
 	return files, nil
+}
+
+func (lf *logFile) bootstrap() error {
+	var err error
+
+	// generate data key for the log file.
+	var dk *pb.DataKey
+	if dk, err = lf.registry.LatestDataKey(); err != nil {
+		return y.Wrapf(err, "Error while retrieving datakey in logFile.bootstarp")
+	}
+	lf.dataKey = dk
+	buf := make([]byte, 12)
+
+	if _, err := cryptorand.Read(buf[:]); err != nil {
+		return y.Wrapf(err, "Error while creating base IV, while creating logfile")
+	}
+
+	// Initialize base IV.
+	lf.baseIV = buf[:]
+	return nil
 }
