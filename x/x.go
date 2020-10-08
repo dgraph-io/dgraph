@@ -320,6 +320,7 @@ func (gqlErr *GqlError) WithPath(path []interface{}) *GqlError {
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
+	w.Header().Set("Content-Type", "application/json")
 	var qr queryRes
 	ext := make(map[string]interface{})
 	ext["code"] = code
@@ -409,6 +410,20 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+// AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
+func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
+	if authToken := r.Header.Get("X-Dgraph-AuthToken"); authToken != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("auth-token", authToken)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
 }
 
 // AttachAccessJwt adds any incoming JWT header data into the grpc context metadata

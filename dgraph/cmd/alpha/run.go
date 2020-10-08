@@ -141,7 +141,7 @@ they form a Raft group and provide synchronous replication.
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
 	flag.String("auth_token", "",
-		"If set, all Alter requests to Dgraph would need to have this token."+
+		"If set, all Admin requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
 
