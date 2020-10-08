@@ -74,6 +74,10 @@ type User struct {
 	Password      string  `json:"dgraph.password"`
 	PasswordMatch bool    `json:"password_match"`
 	Groups        []Group `json:"dgraph.user.group"`
+	// FailedLoginCounter stores the count of successive failed logins of a user
+	FailedLoginCounter int64 `json:"dgraph.failed_login_counter"`
+	// BlockTimestamp stores timestamp when user was blocked due to successive failed logins
+	BlockTimestamp int64 `json:"dgraph.block_timestamp"`
 }
 
 // GetUid returns the UID of the user.

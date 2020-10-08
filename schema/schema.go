@@ -597,6 +597,14 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 					Predicate: "dgraph.user.group",
 					ValueType: pb.Posting_UID,
 				},
+				{
+					Predicate: "dgraph.failed_login_counter",
+					ValueType: pb.Posting_INT,
+				},
+				{
+					Predicate: "dgraph.block_timestamp",
+					ValueType: pb.Posting_INT,
+				},
 			},
 		},
 			&pb.TypeUpdate{
@@ -714,6 +722,16 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			},
 			{
 				Predicate: "dgraph.rule.permission",
+				ValueType: pb.Posting_INT,
+			},
+			{
+				// This stores the count of successive failed logins of a user
+				Predicate: "dgraph.failed_login_counter",
+				ValueType: pb.Posting_INT,
+			},
+			{
+				// This stores timestamp when user was blocked due to successive failed logins
+				Predicate: "dgraph.block_timestamp",
 				ValueType: pb.Posting_INT,
 			},
 		}...)

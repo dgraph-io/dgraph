@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +39,15 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+)
+
+const (
+	// maxFailedLoginAttempt is the maximum number of successive
+	// failed login attempts a user can have before being blocked.
+	maxFailedLoginAttempt = 3
+	// blockDuration is the time for which the user will be blocked after
+	// having maxFailedLoginAttempt successive failed login attempts.
+	blockDuration = 15 * time.Minute
 )
 
 type predsAndvars struct {
@@ -156,10 +166,34 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		return nil, errors.Errorf("unable to authenticate through password: "+
 			"user not found for id %v", request.Userid)
 	}
-	if !user.PasswordMatch {
-		return nil, errors.Errorf("password mismatch for user: %v", request.Userid)
+
+	var completedProbation bool
+	if user.FailedLoginCounter >= maxFailedLoginAttempt {
+		failedTimestamp := time.Unix(user.BlockTimestamp, 0)
+		currTime := time.Now()
+		if currTime.Sub(failedTimestamp) < blockDuration {
+			return nil, errors.Errorf(
+				"Too many unsuccessful login attempts. Please try after some time.")
+		}
+		completedProbation = true
 	}
-	return user, nil
+
+	if user.PasswordMatch {
+		if user.FailedLoginCounter != 0 {
+			err = updateFailedLoginCounter(ctx, user, int64(0))
+		}
+		return user, err
+	}
+
+	if completedProbation {
+		user.FailedLoginCounter = 0
+	}
+
+	err = updateFailedLoginCounter(ctx, user, user.FailedLoginCounter+1)
+	if err == nil {
+		err = errors.Errorf("password mismatch for user: %v", request.Userid)
+	}
+	return nil, err
 }
 
 // validateToken verifies the signature and expiration of the jwt, and if validation passes,
@@ -266,17 +300,19 @@ func getRefreshJwt(userId string) (string, error) {
 }
 
 const queryUser = `
-    query search($userid: string, $password: string){
-      user(func: eq(dgraph.xid, $userid)) {
-	    uid
-        dgraph.xid
-        password_match: checkpwd(dgraph.password, $password)
-        dgraph.user.group {
-          uid
-          dgraph.xid
-        }
-      }
-    }`
+	query search($userid: string, $password: string) {
+		user(func: eq(dgraph.xid, $userid)) {
+			uid
+			dgraph.xid
+			dgraph.failed_login_counter
+			dgraph.block_timestamp
+			password_match: checkpwd(dgraph.password, $password)
+			dgraph.user.group {
+				uid
+				dgraph.xid
+			}
+		}
+	}`
 
 // authorizeUser queries the user with the given user id, and returns the associated uid,
 // acl groups, and whether the password stored in DB matches the supplied password
@@ -1220,4 +1256,40 @@ func removeGroupBy(gbAttrs []gql.GroupByAttr,
 		filteredGbAttrs = append(filteredGbAttrs, gbAttr)
 	}
 	return filteredGbAttrs
+}
+
+func updateFailedLoginCounter(ctx context.Context, user *acl.User, newCounter int64) error {
+	mutRequest := api.Request{
+		Mutations: []*api.Mutation{
+			{
+				Set: []*api.NQuad{
+					{
+						Subject:   user.Uid,
+						Predicate: "dgraph.failed_login_counter",
+						ObjectValue: &api.Value{Val: &api.Value_IntVal{
+							IntVal: newCounter}},
+					},
+				},
+				CommitNow: true,
+			},
+		},
+		CommitNow: true,
+	}
+
+	if newCounter >= maxFailedLoginAttempt {
+		setTsNQuad := &api.NQuad{
+			Subject:   user.Uid,
+			Predicate: "dgraph.block_timestamp", // Can we have some variable which stores this string
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{
+				StrVal: strconv.FormatInt(time.Now().Unix(), 10)}},
+		}
+		mutRequest.Mutations[0].Set = append(mutRequest.Mutations[0].Set, setTsNQuad)
+	}
+
+	_, err := (&Server{}).doQuery(ctx, &mutRequest, NoAuthorize)
+	if err != nil {
+		return errors.Wrapf(err, "Error while updating failed login counter")
+	}
+
+	return nil
 }
