@@ -84,13 +84,13 @@ func logFname(dir string, id int64) string {
 // openLogFile opens a logFile in the given directory. The filename is
 // constructed based on the value of fid.
 func openLogFile(dir string, fid int64) (*logFile, error) {
-	glog.V(2).Infof("opening log file: %d\n", fid)
+	glog.V(3).Infof("opening log file: %d\n", fid)
 	fpath := logFname(dir, fid)
 	// Open the file in read-write mode and create it if it doesn't exist yet.
 	mf, err := z.OpenMmapFile(fpath, os.O_RDWR|os.O_CREATE, logFileSize)
 
 	if err == z.NewFile {
-		glog.V(2).Infof("New file: %d\n", fid)
+		glog.V(3).Infof("New file: %d\n", fid)
 		z.ZeroOut(mf.Data, 0, logFileOffset)
 	} else {
 		x.Check(err)

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
@@ -65,12 +64,8 @@ func InitServerState() {
 
 func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).
-		WithTruncate(true).
 		WithLogger(&x.ToGlog{}).
 		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
-
-	// Do not load bloom filters on DB open.
-	opt.LoadBloomsOnOpen = false
 
 	// Disable conflict detection in badger. Alpha runs in managed mode and
 	// perform its own conflict detection so we don't need badger's conflict
@@ -83,29 +78,6 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
 
 	// Settings for the data directory.
-	badgerTables := Config.BadgerTables
-	badgerVlog := Config.BadgerVlog
-	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
-	switch badgerTables {
-	case "mmap":
-		opt.TableLoadingMode = options.MemoryMap
-	case "ram":
-		opt.TableLoadingMode = options.LoadToRAM
-	case "disk":
-		opt.TableLoadingMode = options.FileIO
-	default:
-		glog.Fatalf("Invalid Badger Tables options")
-	}
-
-	glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
-	switch badgerVlog {
-	case "mmap":
-		opt.ValueLogLoadingMode = options.MemoryMap
-	case "disk":
-		opt.ValueLogLoadingMode = options.FileIO
-	default:
-		x.Fatalf("Invalid Badger Value log options")
-	}
 	return opt
 }
 
@@ -157,7 +129,8 @@ func (s *ServerState) initStorage() {
 
 	s.gcCloser = z.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
-	go x.MonitorCacheHealth(10*time.Second, "pstore", s.Pstore, s.gcCloser)
+	// Commenting this out because Badger is doing its own cache checks.
+	go x.MonitorCacheHealth(s.Pstore, s.gcCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.

@@ -56,7 +56,6 @@ func TestQueryRewriting(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-
 			op, err := gqlSchema.Operation(
 				&schema.Request{
 					Query:     tcase.GQLQuery,

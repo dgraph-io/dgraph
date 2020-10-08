@@ -1,16 +1,6 @@
 {
     "schema": [
         {
-            "index": true,
-            "list": true,
-            "predicate": "dgraph.cors",
-            "tokenizer": [
-              "exact"
-            ],
-            "type": "string",
-            "upsert": true
-        },
-        {
             "predicate": "Category.name",
             "type": "string"
         },
@@ -43,6 +33,22 @@
             ]
         },
         {
+            "predicate": "Hotel.location",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.name",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ]
+        },
+        {
             "predicate": "Human.starships",
             "type": "uid",
             "list": true
@@ -69,13 +75,13 @@
             "upsert": true
         },
         {
-            "predicate": "Person1.name",
-            "type": "string"
-        },
-        {
             "predicate": "Person1.friends",
             "type": "uid",
             "list": true
+        },
+        {
+            "predicate": "Person1.name",
+            "type": "string"
         },
         {
             "predicate": "Post1.comments",
@@ -90,17 +96,6 @@
                 "hash"
             ],
             "upsert": true
-        },
-        {
-            "predicate": "post1.title",
-            "type": "string",
-            "index": true,
-            "tokenizer": ["trigram", "hash"],
-            "upsert": true
-        },
-        {
-            "predicate": "post1.numLikes",
-            "type": "int"
         },
         {
             "predicate": "State.capital",
@@ -175,6 +170,16 @@
         {
             "predicate": "credits",
             "type": "float"
+        },
+        {
+            "predicate": "dgraph.cors",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "list": true,
+            "upsert": true
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -293,6 +298,20 @@
             "type": "uid"
         },
         {
+            "predicate": "post1.numLikes",
+            "type": "int"
+        },
+        {
+            "predicate": "post1.title",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "pwd",
             "type": "password"
         },
@@ -408,6 +427,17 @@
         {
             "fields": [
                 {
+                    "name": "Hotel.name"
+                },
+                {
+                    "name": "Hotel.location"
+                }
+            ],
+            "name": "Hotel"
+        },
+        {
+            "fields": [
+                {
                     "name": "test.dgraph.employee.en.ename"
                 },
                 {
@@ -487,17 +517,6 @@
                 }
             ],
             "name": "Post1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "post1.title"
-                },
-                {
-                    "name": "post1.numLikes"
-                }
-            ],
-            "name": "post1"
         },
         {
             "fields": [
@@ -609,7 +628,8 @@
             "fields": [
                 {
                     "name": "dgraph.graphql.schema_history"
-                },{
+                },
+                {
                     "name": "dgraph.graphql.schema_created_at"
                 }
             ],
@@ -660,6 +680,17 @@
                 }
             ],
             "name": "performance.character"
+        },
+        {
+            "fields": [
+                {
+                    "name": "post1.title"
+                },
+                {
+                    "name": "post1.numLikes"
+                }
+            ],
+            "name": "post1"
         },
         {
             "fields": [

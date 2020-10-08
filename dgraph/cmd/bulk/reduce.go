@@ -145,12 +145,10 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 
 	opt := badger.DefaultOptions(dir).
 		WithSyncWrites(false).
-		WithTableLoadingMode(bo.MemoryMap).
-		WithValueThreshold(1 << 10 /* 1 KB */).
+		WithValueThreshold(1 << 20 /* 1 KB */).
 		WithEncryptionKey(key).
 		WithBlockCacheSize(r.opt.BlockCacheSize).
-		WithIndexCacheSize(r.opt.IndexCacheSize).
-		WithLoadBloomsOnOpen(false)
+		WithIndexCacheSize(r.opt.IndexCacheSize)
 
 	opt.Compression = bo.None
 	opt.ZSTDCompressionLevel = 0

@@ -189,8 +189,7 @@ func ListBackupManifests(l string, creds *Credentials) (map[string]*Manifest, er
 		return nil, err
 	}
 
-	// TODO(martinmr): allow overriding credentials while listing manifests.
-	h := getHandler(uri.Scheme, nil)
+	h := getHandler(uri.Scheme, creds)
 	if h == nil {
 		return nil, errors.Errorf("Unsupported URI: %v", uri)
 	}

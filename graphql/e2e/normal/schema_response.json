@@ -1,16 +1,6 @@
 {
     "schema": [
         {
-            "index": true,
-            "list": true,
-            "predicate": "dgraph.cors",
-            "tokenizer": [
-              "exact"
-            ],
-            "type": "string",
-            "upsert": true
-        },
-        {
             "predicate": "Author.country",
             "type": "uid"
         },
@@ -107,6 +97,22 @@
             "type": "string"
         },
         {
+            "predicate": "Hotel.location",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.name",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ]
+        },
+        {
             "predicate": "Human.starships",
             "type": "uid",
             "list": true
@@ -151,13 +157,13 @@
             "type": "string"
         },
         {
-            "predicate": "Person1.name",
-            "type": "string"
-        },
-        {
             "predicate": "Person1.friends",
             "type": "uid",
             "list": true
+        },
+        {
+            "predicate": "Person1.name",
+            "type": "string"
         },
         {
             "predicate": "Post.author",
@@ -249,17 +255,6 @@
             "upsert": true
         },
         {
-            "predicate": "post1.title",
-            "type": "string",
-            "index": true,
-            "tokenizer": ["trigram", "hash"],
-            "upsert": true
-        },
-        {
-            "predicate": "post1.numLikes",
-            "type": "int"
-        },
-        {
             "predicate": "Starship.length",
             "type": "float"
         },
@@ -341,17 +336,27 @@
             "type": "password"
         },
         {
+            "predicate": "dgraph.cors",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "list": true,
+            "upsert": true
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
         {
             "predicate": "dgraph.graphql.schema_created_at",
             "type": "datetime"
-		},
+        },
         {
             "predicate": "dgraph.graphql.schema_history",
             "type": "string"
-		},
+        },
         {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
@@ -369,6 +374,20 @@
                 "exact"
             ],
             "list": true
+        },
+        {
+            "predicate": "post1.numLikes",
+            "type": "int"
+        },
+        {
+            "predicate": "post1.title",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "upsert": true
         }
     ],
     "types": [
@@ -457,6 +476,17 @@
                 }
             ],
             "name": "Employee"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Hotel.name"
+                },
+                {
+                    "name": "Hotel.location"
+                }
+            ],
+            "name": "Hotel"
         },
         {
             "fields": [
@@ -579,17 +609,6 @@
         {
             "fields": [
                 {
-                    "name": "post1.title"
-                },
-                {
-                    "name": "post1.numLikes"
-                }
-            ],
-            "name": "post1"
-        },
-        {
-            "fields": [
-                {
                     "name": "Starship.name"
                 },
                 {
@@ -708,11 +727,23 @@
             "fields": [
                 {
                     "name": "dgraph.graphql.schema_history"
-                },{
+                },
+                {
                     "name": "dgraph.graphql.schema_created_at"
                 }
             ],
             "name": "dgraph.graphql.history"
+        },
+        {
+            "fields": [
+                {
+                    "name": "post1.title"
+                },
+                {
+                    "name": "post1.numLikes"
+                }
+            ],
+            "name": "post1"
         }
     ]
 }

@@ -1211,9 +1211,26 @@ func rewriteObject(
 				// or giving the data to create the object as part of a deep mutation
 				// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
 				//          like here ^^
-				frags =
-					rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
-						withAdditionalDeletes, val, deepXID, xidMetadata)
+				if fieldDef.Type().IsPoint() {
+					// For Point type, the mutation json in Dgraph is as follows:
+					// { "type": "Point", "coordinates": [11.11, 22.22]}
+					lat := val["latitude"]
+					long := val["longitude"]
+					frags = &mutationRes{
+						secondPass: []*mutationFragment{
+							newFragment(
+								map[string]interface{}{
+									"type":        "Point",
+									"coordinates": []interface{}{long, lat},
+								},
+							),
+						},
+					}
+				} else {
+					frags =
+						rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
+							withAdditionalDeletes, val, deepXID, xidMetadata)
+				}
 
 			case []interface{}:
 				// This field is either:

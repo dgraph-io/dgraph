@@ -612,8 +612,14 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
-		WithLogRotatesToFlush(10).
-		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
+		WithLogRotatesToFlush(10)
+
+	// Set cache if we have encryption.
+	if len(x.WorkerConfig.EncryptionKey) > 0 {
+		dbOpts.EncryptionKey = x.WorkerConfig.EncryptionKey
+		dbOpts.BlockCacheSize = 100 << 20
+		dbOpts.IndexCacheSize = 100 << 20
+	}
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
