@@ -3107,3 +3107,29 @@ func TestMutationWithValueVar(t *testing.T) {
 
 	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson()))
 }
+
+func TestMaxFailedLoginAttempts(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping because -short=true")
+	}
+
+	resetUser(t)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Minute)
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	for i := 0; i < 3; i++ {
+		err = userClient.Login(ctx, userid, "randomstring")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "password mismatch")
+	}
+
+	err = userClient.Login(ctx, userid, "randomstring")
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"Too many unsuccessful login attempts. Please try after some time.")
+
+	time.Sleep(15 * time.Minute)
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+}
