@@ -18,6 +18,8 @@ var TOKEN = os.Getenv("TEAMCITY_TOKEN")
 
 var opts options
 
+const TEAMCITY_BASEURL = "https://teamcity.dgraph.io"
+
 type options struct {
 	Days int
 }
@@ -105,7 +107,7 @@ func doGetRequest(url string) []byte {
 
 // Fetch the status of all the tests that ran for the given buildId
 func fetchTestsForBuild(buildID int, ch chan<- map[string]TestData) {
-	url := fmt.Sprintf("https://teamcity.dgraph.io/app/rest/testOccurrences?locator=build:id:%d", buildID)
+	url := fmt.Sprintf(TEAMCITY_BASEURL+"/app/rest/testOccurrences?locator=build:id:%d", buildID)
 	testDataMap := make(map[string]TestData)
 	for {
 		bodyBytes := doGetRequest(url)
@@ -129,14 +131,14 @@ func fetchTestsForBuild(buildID int, ch chan<- map[string]TestData) {
 		if len(alltests.NextHref) == 0 {
 			break
 		} else {
-			url = fmt.Sprintf("https://teamcity.dgraph.io%s", alltests.NextHref)
+			url = fmt.Sprintf("%s%s", TEAMCITY_BASEURL, alltests.NextHref)
 		}
 	}
 	ch <- testDataMap
 }
 
 func fetchAllBuildsSince(buildType string, date string) []BuildData {
-	url := fmt.Sprintf("https://teamcity.dgraph.io/app/rest/builds/?locator=branch:refs/heads/master,buildType:%s,sinceDate:%s", buildType, date)
+	url := fmt.Sprintf("%s/app/rest/builds/?locator=branch:refs/heads/master,buildType:%s,sinceDate:%s", TEAMCITY_BASEURL, buildType, date)
 	url = strings.ReplaceAll(url, "+", "%2B")
 	var buildDatas []BuildData
 	for {
@@ -158,7 +160,7 @@ func fetchAllBuildsSince(buildType string, date string) []BuildData {
 		if len(allBuilds.NextHref) == 0 {
 			break
 		} else {
-			url = fmt.Sprintf("https://teamcity.dgraph.io%s", allBuilds.NextHref)
+			url = fmt.Sprintf("%s%s", TEAMCITY_BASEURL, allBuilds.NextHref)
 		}
 	}
 
