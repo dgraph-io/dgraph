@@ -1407,3 +1407,24 @@ func TestExt_network_state(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedEnc, resData)
 }
+
+func TestExt_submit_transaction(t *testing.T) {
+	// https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/transaction-pool/src/tests.rs#L95
+	var data = []byte{1, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125, 142, 175, 4, 21, 22, 135, 115, 99, 38, 201, 254, 161, 126, 37, 252, 82, 135, 97, 54, 147, 201, 18, 144, 156, 178, 38, 170, 71, 148, 242, 106, 72, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 5, 113, 87, 87, 40, 221, 120, 247, 252, 137, 201, 74, 231, 222, 101, 85, 108, 102, 39, 31, 190, 210, 14, 215, 124, 19, 160, 180, 203, 54, 110, 167, 163, 149, 45, 12, 108, 80, 221, 65, 238, 57, 237, 199, 16, 10, 33, 185, 8, 244, 184, 243, 139, 5, 87, 252, 245, 24, 225, 37, 154, 163, 142}
+	dataLen := uint32(len(data))
+	instance := NewTestInstance(t, runtime.TEST_RUNTIME)
+	memory := instance.vm.Memory.Data()
+
+	testFunc, ok := instance.vm.Exports["test_ext_submit_transaction"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	dataPtr, err := instance.ctx.Allocator.Allocate(dataLen)
+	require.NoError(t, err)
+	copy(memory[dataPtr:dataPtr+dataLen], data)
+
+	res, err := testFunc(int32(dataPtr), int32(dataLen))
+	require.NoError(t, err)
+	require.Equal(t, int32(0), res.ToI32())
+}

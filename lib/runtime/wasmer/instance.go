@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ChainSafe/gossamer/lib/runtime"
-
 	log "github.com/ChainSafe/log15"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
@@ -93,6 +92,7 @@ func NewInstance(code []byte, cfg *Config) (*Instance, error) {
 		Validator:   cfg.Role == byte(4),
 		NodeStorage: cfg.NodeStorage,
 		Network:     cfg.Network,
+		Transaction: cfg.Transaction,
 	}
 
 	logger.Debug("NewInstance", "runtimeCtx", runtimeCtx)

@@ -21,10 +21,11 @@ import (
 	"testing"
 
 	database "github.com/ChainSafe/chaindb"
+	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
+	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
-
 	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
@@ -60,6 +61,7 @@ func NewTestInstanceWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie, 
 	cfg.LogLvl = lvl
 	cfg.NodeStorage = ns
 	cfg.Network = new(runtime.TestRuntimeNetwork)
+	cfg.Transaction = new(mockTransactionState)
 
 	r, err := NewInstanceFromFile(fp, cfg)
 	require.Nil(t, err, "Got error when trying to create new VM", "targetRuntime", targetRuntime)
@@ -110,4 +112,12 @@ func GetRuntimeImports(targetRuntime string) func() (*wasm.Imports, error) {
 	}
 
 	return registerImports
+}
+
+type mockTransactionState struct {
+}
+
+// AddToPool adds a transaction to the pool
+func (mt *mockTransactionState) AddToPool(vt *transaction.ValidTransaction) common.Hash {
+	return common.BytesToHash([]byte("test"))
 }

@@ -71,6 +71,7 @@ type InstanceConfig struct {
 	Role        byte
 	NodeStorage NodeStorage
 	Network     BasicNetwork
+	Transaction TransactionState
 }
 
 // Context is the context for the wasm interpreter's imported functions
@@ -81,6 +82,7 @@ type Context struct {
 	Validator   bool
 	NodeStorage NodeStorage
 	Network     BasicNetwork
+	Transaction TransactionState
 }
 
 // Version struct

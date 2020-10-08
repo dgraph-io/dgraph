@@ -63,11 +63,13 @@ import (
 	"reflect"
 	"unsafe"
 
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/scale"
+	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
 	"github.com/OneOfOne/xxhash"
@@ -833,7 +835,19 @@ func ext_network_state(context unsafe.Pointer, writtenOut int32) int32 {
 //export ext_submit_transaction
 func ext_submit_transaction(context unsafe.Pointer, data, len int32) int32 {
 	logger.Trace("[ext_submit_transaction] executing...")
-	logger.Warn("[ext_submit_transaction] Not yet implemented.")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+	runtimeCtx := instanceContext.Data().(*runtime.Context)
+
+	extBytes := memory[data : data+len]
+
+	ext := types.Extrinsic(extBytes)
+
+	// validate the transaction
+	txv := transaction.NewValidity(0, [][]byte{{}}, [][]byte{{}}, 0, false)
+	vtx := transaction.NewValidTransaction(ext, txv)
+
+	runtimeCtx.Transaction.AddToPool(vtx)
 	return 0
 }
 
