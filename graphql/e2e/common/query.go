@@ -72,7 +72,7 @@ func touchedUidsHeader(t *testing.T) {
 			}
 		}`,
 	}
-	req, err := query.createGQLPost(GraphqlURL)
+	req, err := query.CreateGQLPost(GraphqlURL)
 	require.NoError(t, err)
 
 	client := http.Client{Timeout: 10 * time.Second}
