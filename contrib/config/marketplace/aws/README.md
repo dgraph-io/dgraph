@@ -27,6 +27,21 @@ Parameters:
 
 The security groups created will allow access from the Load Balancer. If you wish to access the endpoints from your public IP, you will need to edit the security group attached to the Load Balancer.  In the AWS web console, this can be found in the Description tab of the Load Balancer, from EC2 &rarr; Load Balancers &rarr; dgraph-load-balancer ( e.g. `xxxxx-Dgrap-XXXXXXXXXXXXX`).
 
+
+You can also find the security group with this command:
+
+```bash
+MY_STACK_NAME=<name-of-cloudformation-stack>
+MY_STACK_REGION=<target-region>
+
+aws cloudformation describe-stack-resources \
+--stack-name ${MY_STACK_NAME} \
+--region ${MY_STACK_REGION} \
+--logical-resource-id 'DgraphALBSecurityGroup' \
+--query 'StackResources[0].PhysicalResourceId' \
+--output text
+```
+
 In the Security field, there the `sg-xxxxxxxxxxxxxxxxx`, which you can click this link to get sent Security Groups, then edit the inbound rules for the same SG.  There should be existing inbound rules for ports `8000`, `8080`, `9080`.  Add new entries from your public IP to access those ports.
 
 Also note the DNS information on Load Balancer description tab, like `xxxxx-Dgrap-XXXXXXXXXXXXX-1111111111.us-east-2.elb.amazonaws.com`, which you'll need to use to access the endpoint once access is enabled.  

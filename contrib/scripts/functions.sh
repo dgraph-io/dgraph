@@ -37,7 +37,7 @@ function restartCluster {
   fi
 
   docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker rm -f
-  GOPATH=$docker_compose_gopath docker-compose -p dgraph -f $compose_file up --force-recreate --remove-orphans -d || exit 1
+  GOPATH=$docker_compose_gopath docker-compose -p dgraph -f $compose_file up --force-recreate --build --remove-orphans -d || exit 1
   popd >/dev/null
 
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6180 || exit 1
@@ -54,6 +54,6 @@ function stopCluster {
 
 function loginWithGroot() {
   curl -s -XPOST localhost:8180/login -d '{"userid": "groot","password": "password"}' \
-   | python -c \
-   "import json; resp = raw_input(); data = json.loads(resp); print data['data']['accessJWT']"
+   | python3 -c \
+   "import json; resp = input(); data = json.loads(resp); print(data['data']['accessJWT'])"
 }

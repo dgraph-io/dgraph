@@ -20,10 +20,21 @@ type Library {
 # Extended Definitions
 #######################
 
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can represent values in range [-(2^63),(2^63 - 1)].
+"""
+scalar Int64
+
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
 scalar DateTime
 
 enum DgraphIndex {
 	int
+	int64
 	float
 	bool
 	hash
@@ -36,6 +47,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -66,22 +78,44 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
+}
+
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter!
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
 	delete:AuthRule) on OBJECT
-directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -89,6 +123,14 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+}
+
+input Int64Filter {
+	eq: Int64
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
 }
 
 input FloatFilter {
@@ -148,11 +190,13 @@ type AddLibraryPayload {
 }
 
 type DeleteBookPayload {
+	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
 	msg: String
 	numUids: Int
 }
 
 type DeleteLibraryItemPayload {
+	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
 	msg: String
 	numUids: Int
 }
@@ -166,10 +210,24 @@ type UpdateBookPayload {
 # Generated Enums
 #######################
 
+enum BookHasFilter {
+	refID
+	title
+	author
+}
+
 enum BookOrderable {
 	refID
 	title
 	author
+}
+
+enum LibraryHasFilter {
+	items
+}
+
+enum LibraryItemHasFilter {
+	refID
 }
 
 enum LibraryItemOrderable {
@@ -192,6 +250,7 @@ input AddLibraryInput {
 
 input BookFilter {
 	refID: StringHashFilter
+	has: BookHasFilter
 	and: BookFilter
 	or: BookFilter
 	not: BookFilter
@@ -214,8 +273,16 @@ input BookRef {
 	author: String
 }
 
+input LibraryFilter {
+	has: LibraryHasFilter
+	and: LibraryFilter
+	or: LibraryFilter
+	not: LibraryFilter
+}
+
 input LibraryItemFilter {
 	refID: StringHashFilter
+	has: LibraryItemHasFilter
 	and: LibraryItemFilter
 	or: LibraryItemFilter
 	not: LibraryItemFilter
@@ -265,14 +332,3 @@ type Mutation {
 	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
 }
 
-#######################
-# Generated Subscriptions
-#######################
-
-type Subscription {
-	getLibraryItem(refID: String!): LibraryItem
-	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	getBook(refID: String!): Book
-	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	queryLibrary(first: Int, offset: Int): [Library]
-}

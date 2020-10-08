@@ -362,7 +362,6 @@ func TestProcessTaskIndex(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	x.Init()
-	posting.Config.AllottedMemory = 1024.0
 	posting.Config.CommitFraction = 0.10
 	gr = new(groupi)
 	gr.gid = 1
@@ -386,7 +385,8 @@ func TestMain(m *testing.M) {
 	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
 	pstore = ps
-	posting.Init(ps)
+	// Not using posting list cache
+	posting.Init(ps, 0)
 	Init(ps)
 
 	os.Exit(m.Run())

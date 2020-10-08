@@ -36,6 +36,7 @@ const (
 	typFunc   = "type"
 	lenFunc   = "len"
 	countFunc = "count"
+	uidInFunc = "uid_in"
 )
 
 var (
@@ -67,13 +68,16 @@ type GraphQuery struct {
 	Recurse          bool
 	RecurseArgs      RecurseArgs
 	ShortestPathArgs ShortestPathArgs
-	Cascade          bool
+	Cascade          []string
 	IgnoreReflex     bool
 	Facets           *pb.FacetParams
 	FacetsFilter     *FilterTree
 	GroupbyAttrs     []GroupByAttr
 	FacetVar         map[string]string
 	FacetsOrder      []*FacetOrder
+
+	// Used for ACL enabled queries to curtail results to only accessible params
+	AllowedPreds []string
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -368,9 +372,6 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 
 	idVal, ok := gq.Args["id"]
 	if ok && len(gq.UID) == 0 {
-		if idVal == "" {
-			return errors.Errorf("Id can't be empty")
-		}
 		uids, err := parseID(idVal)
 		if err != nil {
 			return err
@@ -482,9 +483,6 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 				idVal, ok := vmap[v.Value]
 				if !ok {
 					return errors.Errorf("Couldn't find value for GraphQL variable: [%s]", v.Value)
-				}
-				if idVal.Value == "" {
-					return errors.Errorf("Id can't be empty")
 				}
 				uids, err := parseID(idVal.Value)
 				if err != nil {
@@ -961,7 +959,9 @@ L:
 			case "normalize":
 				gq.Normalize = true
 			case "cascade":
-				gq.Cascade = true
+				if err := parseCascade(it, gq); err != nil {
+					return nil, err
+				}
 			case "groupby":
 				gq.IsGroupby = true
 				if err := parseGroupby(it, gq); err != nil {
@@ -1725,8 +1725,22 @@ L:
 				case countFunc:
 					function.Attr = nestedFunc.Attr
 					function.IsCount = true
+				case uidFunc:
+					// TODO (Anurag): See if is is possible to support uid(1,2,3) when
+					// uid is nested inside a function like @filter(uid_in(predicate, uid()))
+					if len(nestedFunc.NeedsVar) != 1 {
+						return nil,
+							itemInFunc.Errorf("Nested uid fn expects 1 uid variable, got %v", len(nestedFunc.NeedsVar))
+					}
+					if len(nestedFunc.UID) != 0 {
+						return nil,
+							itemInFunc.Errorf("Nested uid fn expects only uid variable, got UID")
+					}
+					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
+					function.NeedsVar[0].Typ = UidVar
+					function.Args = append(function.Args, Arg{Value: nestedFunc.NeedsVar[0].Name})
 				default:
-					return nil, itemInFunc.Errorf("Only val/count/len allowed as function "+
+					return nil, itemInFunc.Errorf("Only val/count/len/uid allowed as function "+
 						"within another. Got: %s", nestedFunc.Name)
 				}
 				expectArg = false
@@ -1839,6 +1853,9 @@ L:
 				if strings.ContainsRune(itemInFunc.Val, '"') {
 					return nil, itemInFunc.Errorf("Attribute in function"+
 						" must not be quoted with \": %s", itemInFunc.Val)
+				}
+				if function.Name == uidInFunc && item.Typ == itemRightRound {
+					return nil, itemInFunc.Errorf("uid_in function expects an argument, got none")
 				}
 				function.Attr = val
 				attrItemsAgo = 0
@@ -2094,6 +2111,69 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	}
 }
 
+// parseCascade parses the cascade directive.
+// Two formats:
+// 	1. @cascade
+//  2. @cascade(pred1, pred2, ...)
+func parseCascade(it *lex.ItemIterator, gq *GraphQuery) error {
+	item := it.Item()
+	items, err := it.Peek(1)
+	if err != nil {
+		return item.Errorf("Unable to peek lexer after cascade")
+	}
+
+	// check if it is without any args:
+	// 1. @cascade {
+	// 2. @cascade }
+	// 3. @cascade @
+	// 4. @cascade\n someOtherPred
+	if items[0].Typ == itemLeftCurl || items[0].Typ == itemRightCurl || items[0].
+		Typ == itemAt || items[0].Typ == itemName {
+		// __all__ implies @cascade i.e.  implies values for all the children are mandatory.
+		gq.Cascade = append(gq.Cascade, "__all__")
+		return nil
+	}
+
+	count := 0
+	expectArg := true
+	it.Next()
+	item = it.Item()
+	if item.Typ != itemLeftRound {
+		return item.Errorf("Expected a left round after cascade, got: %s", item.String())
+	}
+
+loop:
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case itemRightRound:
+			break loop
+		case itemComma:
+			if expectArg {
+				return item.Errorf("Expected a predicate but got comma")
+			}
+			expectArg = true
+		case itemName:
+			if !expectArg {
+				return item.Errorf("Expected a comma or right round but got: %v", item.Val)
+			}
+			gq.Cascade = append(gq.Cascade, collectName(it, item.Val))
+			count++
+			expectArg = false
+		default:
+			return item.Errorf("Unexpected item while parsing: %v", item.Val)
+		}
+	}
+	if expectArg {
+		// use the initial item to report error line and column numbers
+		return item.Errorf("Unnecessary comma in cascade()")
+	}
+	if count == 0 {
+		return item.Errorf("At least one predicate required in parameterized cascade()")
+	}
+	return nil
+}
+
 // parseGroupby parses the groupby directive.
 func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 	count := 0
@@ -2264,8 +2344,11 @@ loop:
 // Parses ID list. Only used for GraphQL variables.
 // TODO - Maybe get rid of this by lexing individual IDs.
 func parseID(val string) ([]uint64, error) {
-	var uids []uint64
 	val = x.WhiteSpace.Replace(val)
+	if val == "" {
+		return nil, errors.Errorf("ID can't be empty")
+	}
+	var uids []uint64
 	if val[0] != '[' {
 		uid, err := strconv.ParseUint(val, 0, 64)
 		if err != nil {
@@ -2430,7 +2513,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			return item.Errorf("Facets parsing failed.")
 		}
 	case item.Val == "cascade":
-		curp.Cascade = true
+		if err := parseCascade(it, curp); err != nil {
+			return err
+		}
 	case item.Val == "normalize":
 		curp.Normalize = true
 	case peek[0].Typ == itemLeftRound:
@@ -3230,7 +3315,7 @@ func isGeoFunc(name string) bool {
 
 func IsInequalityFn(name string) bool {
 	switch name {
-	case "eq", "le", "ge", "gt", "lt":
+	case "eq", "le", "ge", "gt", "lt", "between":
 		return true
 	}
 	return false

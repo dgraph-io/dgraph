@@ -143,7 +143,7 @@ func TestIntrospectionQueryMissingNameArg(t *testing.T) {
 		schema {
 			query: TestType
 		}
-	
+
 		type TestType {
 			testField: String
 		}
@@ -232,7 +232,10 @@ func TestFullIntrospectionQuery(t *testing.T) {
 	}
 `})
 
-	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: introspectionQuery})
+	fullIntrospectionQuery, err := ioutil.ReadFile("testdata/introspection/input/full_query.graphql")
+	require.NoError(t, err)
+
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: string(fullIntrospectionQuery)})
 	require.Nil(t, gqlErr)
 
 	listErr := validator.Validate(sch, doc)
@@ -242,7 +245,7 @@ func TestFullIntrospectionQuery(t *testing.T) {
 	require.NotNil(t, op)
 	oper := &operation{op: op,
 		vars:     map[string]interface{}{},
-		query:    string(introspectionQuery),
+		query:    string(fullIntrospectionQuery),
 		doc:      doc,
 		inSchema: &schema{schema: sch},
 	}

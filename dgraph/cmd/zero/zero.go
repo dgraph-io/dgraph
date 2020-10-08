@@ -26,12 +26,12 @@ import (
 
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/telemetry"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -66,7 +66,7 @@ type Server struct {
 	// groupMap    map[uint32]*Group
 	nextGroup      uint32
 	leaderChangeCh chan struct{}
-	closer         *y.Closer  // Used to tell stream to close.
+	closer         *z.Closer  // Used to tell stream to close.
 	connectLock    sync.Mutex // Used to serialize connect requests from servers.
 
 	moveOngoing    chan struct{}
@@ -89,7 +89,7 @@ func (s *Server) Init() {
 	s.nextTxnTs = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
-	s.closer = y.NewCloser(2) // grpc and http
+	s.closer = z.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 
@@ -502,6 +502,9 @@ func (s *Server) Connect(ctx context.Context,
 			m.Id = s.nextRaftId
 			s.nextRaftId += 1
 			proposal.MaxRaftId = m.Id
+		} else if m.Id >= s.nextRaftId {
+			s.nextRaftId = m.Id + 1
+			proposal.MaxRaftId = m.Id
 		}
 
 		// We don't have this member. So, let's see if it has preference for a group.
@@ -587,7 +590,7 @@ func (s *Server) ShouldServe(
 	// Check who is serving this tablet.
 	tab := s.ServingTablet(tablet.Predicate)
 	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
-	if tab != nil {
+	if tab != nil && !tablet.Force {
 		// Someone is serving this tablet. Could be the caller as well.
 		// The caller should compare the returned group against the group it holds to check who's
 		// serving.
@@ -602,8 +605,7 @@ func (s *Server) ShouldServe(
 
 	// Set the tablet to be served by this server's group.
 	var proposal pb.ZeroProposal
-	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
-	tablet.Force = false
+
 	if x.IsReservedPredicate(tablet.Predicate) {
 		// Force all the reserved predicates to be allocated to group 1.
 		// This is to make it easier to stream ACL updates to all alpha servers

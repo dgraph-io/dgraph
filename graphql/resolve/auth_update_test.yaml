@@ -7,6 +7,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { "filter": { "id": [ "0x123" ] },
@@ -15,11 +17,12 @@
     }
   dgquery: |-
     query {
-      x as updateUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+      x as updateUserSecret(func: uid(UserSecretRoot)) {
         uid
       }
-      UserSecret1 as var(func: type(UserSecret)) @filter(uid(0x123))
-      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
+      UserSecret1 as var(func: uid(0x123)) @filter(type(UserSecret))
+      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   uids: |
     { }
@@ -33,6 +36,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -45,11 +50,12 @@
     }
   dgquery: |-
     query {
-      x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
+      x as updateColumn(func: uid(ColumnRoot)) {
         uid
       }
-      Column1 as var(func: type(Column)) @filter(uid(0x123))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnRoot as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
+      Column1 as var(func: uid(0x123)) @filter(type(Column))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -66,11 +72,11 @@
     {  }
   authquery: |-
     query {
-      Ticket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+      Ticket(func: uid(Ticket1)) @filter(uid(TicketAuth2)) {
         uid
       }
       Ticket1 as var(func: uid(0x789))
-      Ticket2 as var(func: uid(Ticket1)) @cascade {
+      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
@@ -99,6 +105,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -111,11 +119,12 @@
     }
   dgquery: |-
     query {
-      x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
+      x as updateColumn(func: uid(ColumnRoot)) {
         uid
       }
-      Column1 as var(func: type(Column)) @filter(uid(0x123))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnRoot as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
+      Column1 as var(func: uid(0x123)) @filter(type(Column))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -132,11 +141,11 @@
     {  }
   authquery: |-
     query {
-      Ticket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+      Ticket(func: uid(Ticket1)) @filter(uid(TicketAuth2)) {
         uid
       }
       Ticket1 as var(func: uid(0x789))
-      Ticket2 as var(func: uid(Ticket1)) @cascade {
+      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
@@ -168,6 +177,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -180,11 +191,12 @@
     }
   dgquery: |-
     query {
-      x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
+      x as updateColumn(func: uid(ColumnRoot)) {
         uid
       }
-      Column1 as var(func: type(Column)) @filter(uid(0x123))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnRoot as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
+      Column1 as var(func: uid(0x123)) @filter(type(Column))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -203,10 +215,10 @@
       Column5(func: uid(Column5)) {
         uid
       }
-      Column5.auth(func: uid(Column5)) @filter(uid(Column6)) {
+      Column5.auth(func: uid(Column5)) @filter(uid(ColumnAuth6)) {
         uid
       }
-      Column6 as var(func: uid(Column5)) @cascade {
+      ColumnAuth6 as var(func: uid(Column5)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -234,6 +246,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -246,11 +260,12 @@
     }
   dgquery: |-
     query {
-      x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
+      x as updateColumn(func: uid(ColumnRoot)) {
         uid
       }
-      Column1 as var(func: type(Column)) @filter(uid(0x123))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnRoot as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
+      Column1 as var(func: uid(0x123)) @filter(type(Column))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -269,10 +284,10 @@
       Column5(func: uid(Column5)) {
         uid
       }
-      Column5.auth(func: uid(Column5)) @filter(uid(Column6)) {
+      Column5.auth(func: uid(Column5)) @filter(uid(ColumnAuth6)) {
         uid
       }
-      Column6 as var(func: uid(Column5)) @cascade {
+      ColumnAuth6 as var(func: uid(Column5)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -301,6 +316,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -313,11 +330,12 @@
     }
   dgquery: |-
     query {
-      x as updateTicket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+      x as updateTicket(func: uid(TicketRoot)) {
         uid
       }
-      Ticket1 as var(func: type(Ticket)) @filter(uid(0x123))
-      Ticket2 as var(func: uid(Ticket1)) @cascade {
+      TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
+      Ticket1 as var(func: uid(0x123)) @filter(type(Ticket))
+      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
@@ -339,10 +357,10 @@
       Column5(func: uid(Column5)) {
         uid
       }
-      Column5.auth(func: uid(Column5)) @filter(uid(Column6)) {
+      Column5.auth(func: uid(Column5)) @filter(uid(ColumnAuth6)) {
         uid
       }
-      Column6 as var(func: uid(Column5)) @cascade {
+      ColumnAuth6 as var(func: uid(Column5)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -369,6 +387,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "upd":
       { 
@@ -381,11 +401,12 @@
     }
   dgquery: |-
     query {
-      x as updateTicket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+      x as updateTicket(func: uid(TicketRoot)) {
         uid
       }
-      Ticket1 as var(func: type(Ticket)) @filter(uid(0x123))
-      Ticket2 as var(func: uid(Ticket1)) @cascade {
+      TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
+      Ticket1 as var(func: uid(0x123)) @filter(type(Ticket))
+      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
@@ -407,10 +428,10 @@
       Column5(func: uid(Column5)) {
         uid
       }
-      Column5.auth(func: uid(Column5)) @filter(uid(Column6)) {
+      Column5.auth(func: uid(Column5)) @filter(uid(ColumnAuth6)) {
         uid
       }
-      Column6 as var(func: uid(Column5)) @cascade {
+      ColumnAuth6 as var(func: uid(Column5)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -438,7 +459,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "log":
       {
@@ -463,7 +486,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "log":
       {
@@ -476,9 +501,11 @@
     }
   dgquery: |-
     query {
-      x as updateLog(func: type(Log)) @filter(uid(0x123)) {
+      x as updateLog(func: uid(LogRoot)) {
         uid
       }
+      LogRoot as var(func: uid(Log1))
+      Log1 as var(func: uid(0x123)) @filter(type(Log))
     }
 
 - name: "Update with top level OR RBAC false."
@@ -490,7 +517,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "proj":
       {
@@ -502,11 +531,12 @@
     }
   dgquery: |-
     query {
-      x as updateProject(func: uid(Project1)) @filter(uid(Project2)) {
+      x as updateProject(func: uid(ProjectRoot)) {
         uid
       }
-      Project1 as var(func: type(Project)) @filter(uid(0x123))
-      Project2 as var(func: uid(Project1)) @cascade {
+      ProjectRoot as var(func: uid(Project1)) @filter(uid(ProjectAuth2))
+      Project1 as var(func: uid(0x123)) @filter(type(Project))
+      ProjectAuth2 as var(func: uid(Project1)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           dgraph.uid : uid
@@ -524,7 +554,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "proj":
       {
@@ -536,9 +568,11 @@
     }
   dgquery: |-
     query {
-      x as updateProject(func: type(Project)) @filter(uid(0x123)) {
+      x as updateProject(func: uid(ProjectRoot)) {
         uid
       }
+      ProjectRoot as var(func: uid(Project1))
+      Project1 as var(func: uid(0x123)) @filter(type(Project))
     }
 
 - name: "Update with top level And RBAC true."
@@ -550,7 +584,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "issue":
       {
@@ -562,11 +598,12 @@
     }
   dgquery: |-
     query {
-      x as updateIssue(func: uid(Issue1)) @filter(uid(Issue2)) {
+      x as updateIssue(func: uid(IssueRoot)) {
         uid
       }
-      Issue1 as var(func: type(Issue)) @filter(uid(0x123))
-      Issue2 as var(func: uid(Issue1)) @cascade {
+      IssueRoot as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
+      Issue1 as var(func: uid(0x123)) @filter(type(Issue))
+      IssueAuth2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
         dgraph.uid : uid
       }
@@ -581,7 +618,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "issue":
       {
@@ -605,7 +644,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "log":
       {
@@ -617,9 +658,11 @@
     }
   dgquery: |-
     query {
-      x as updateComplexLog(func: type(ComplexLog)) @filter(uid(0x123)) {
+      x as updateComplexLog(func: uid(ComplexLogRoot)) {
         uid
       }
+      ComplexLogRoot as var(func: uid(ComplexLog1))
+      ComplexLog1 as var(func: uid(0x123)) @filter(type(ComplexLog))
     }
 
 - name: "Update with top level not RBAC false."
@@ -631,7 +674,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "log":
       {

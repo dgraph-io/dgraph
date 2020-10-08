@@ -25,9 +25,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+
 	"github.com/pkg/errors"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go/v4"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -75,7 +77,7 @@ func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
 	var result *GraphQLResponse
 	err = json.Unmarshal(b, &result)
 	require.NoError(t, err)
-	require.Nil(t, result.Errors)
+	require.Nil(t, result.Errors, "Recieved GQL Errors: %+v", result.Errors)
 }
 
 func MakeGQLRequest(t *testing.T, params *GraphQLParams) *GraphQLResponse {
@@ -145,21 +147,25 @@ func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
 }
 
 type AuthMeta struct {
-	PublicKey string
-	Namespace string
-	Algo      string
-	Header    string
-	AuthVars  map[string]interface{}
+	PublicKey      string
+	Namespace      string
+	Algo           string
+	Header         string
+	AuthVars       map[string]interface{}
+	PrivateKeyPath string
 }
 
-func (a *AuthMeta) GetSignedToken(privateKeyFile string) (string, error) {
+func (a *AuthMeta) GetSignedToken(privateKeyFile string,
+	expireAfter time.Duration) (string, error) {
 	claims := clientCustomClaims{
 		a.Namespace,
 		a.AuthVars,
 		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Minute).Unix(),
-			Issuer:    "test",
+			Issuer: "test",
 		},
+	}
+	if expireAfter != -1 {
+		claims.ExpiresAt = jwt.At(time.Now().Add(expireAfter))
 	}
 
 	var signedString string
@@ -188,7 +194,7 @@ func (a *AuthMeta) GetSignedToken(privateKeyFile string) (string, error) {
 }
 
 func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, error) {
-	token, err := a.GetSignedToken("../e2e/auth/sample_private_key.pem")
+	token, err := a.GetSignedToken("../e2e/auth/sample_private_key.pem", 5*time.Minute)
 	if err != nil {
 		return ctx, err
 	}
@@ -200,7 +206,7 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 
 func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	if algo == "HS256" {
-		authInfo := `# Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"`
+		authInfo := `# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}`
 		return append(schema, []byte(authInfo)...), nil
 	}
 
@@ -216,7 +222,27 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	// Replacing ASCII newline with "\n" as the authorization information in the schema should be
 	// present in a single line.
 	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
-	authInfo := "# Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" +
-		string(keyData) + "\""
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"` + string(keyData) + `","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"RS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}`
 	return append(schema, []byte(authInfo)...), nil
+}
+
+func AppendAuthInfoWithJWKUrl(schema []byte) ([]byte, error) {
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurl":"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":["fir-project1-259e7"]}`
+	return append(schema, []byte(authInfo)...), nil
+}
+
+// Add JWKUrl and (VerificationKey, Algo) in the same Authorization JSON
+// Adding Dummy values as this should result in validation error
+func AppendJWKAndVerificationKey(schema []byte) ([]byte, error) {
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"some-key","Header":"X-Test-Auth","jwkurl":"some-url", "Namespace":"https://xyz.io/jwt/claims","Algo":"algo","Audience":["fir-project1-259e7"]}`
+	return append(schema, []byte(authInfo)...), nil
+}
+
+func SetAuthMeta(strSchema string) *authorization.AuthMeta {
+	authMeta, err := authorization.Parse(strSchema)
+	if err != nil {
+		panic(err)
+	}
+	authorization.SetAuthMeta(authMeta)
+	return authMeta
 }

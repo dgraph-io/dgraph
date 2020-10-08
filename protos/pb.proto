@@ -219,6 +219,7 @@ message DirectedEdge {
 	}
 	Op op = 8;
 	repeated api.Facet facets = 9;
+	repeated string allowedPreds = 10;
 }
 
 message Mutations {
@@ -285,6 +286,9 @@ message RestoreRequest {
 	string vault_secretid_file = 12;
 	string vault_path = 13;
 	string vault_field = 14;
+	string vault_format = 15;
+
+	uint64 backup_num = 16;
 }
 
 message Proposal {
@@ -363,6 +367,7 @@ message UidBlock {
 message UidPack {
 	uint32 block_size        = 1;
 	repeated UidBlock blocks = 2;
+	uint64 allocator = 23; // This field should be set to 0 during marshal.
 }
 
 message PostingList {
@@ -471,15 +476,6 @@ message MapHeader {
 	repeated bytes partition_keys = 1;
 }
 
-// Bulk loader proto.
-message MapEntry {
-	bytes key = 1;
-
-	// Only one should be set.
-	fixed64 uid = 2;
-	Posting posting = 3;
-}
-
 message MovePredicatePayload {
 	string predicate         = 1;
 	uint32 source_gid        = 2;
@@ -543,10 +539,11 @@ service Worker {
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
 	rpc Backup (BackupRequest)              returns (Status) {}
 	rpc Restore (RestoreRequest)            returns (Status) {}
-	rpc Export (ExportRequest)              returns (Status) {}
+	rpc Export (ExportRequest)              returns (ExportResponse) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb2.KVList) {}
+	rpc UpdateGraphQLSchema(UpdateGraphQLSchemaRequest) returns (UpdateGraphQLSchemaResponse) {}
 }
 
 message SubscriptionRequest {
@@ -593,13 +590,13 @@ message BackupRequest {
 	string secret_key = 7;
 	string session_token = 8;
 
-  // True if no credentials should be used to access the S3 or minio bucket.
-  // For example, when using a bucket with a public policy.
-  bool anonymous = 9;
+	// True if no credentials should be used to access the S3 or minio bucket.
+	// For example, when using a bucket with a public policy.
+	bool anonymous = 9;
 
-  // The predicates to backup. All other predicates present in the group (e.g
-  // stale data from a predicate move) will be ignored.
-  repeated string predicates = 10;
+	// The predicates to backup. All other predicates present in the group (e.g
+	// stale data from a predicate move) will be ignored.
+	repeated string predicates = 10;
 }
 
 message ExportRequest {
@@ -607,6 +604,21 @@ message ExportRequest {
 	uint64  read_ts  = 2;
 	int64   unix_ts  = 3;
 	string  format   = 4;
+
+	string destination = 5;
+
+	// These credentials are used to access the S3 or minio bucket.
+	string access_key = 6;
+	string secret_key = 7;
+	string session_token = 8;
+	bool anonymous = 9;
+}
+
+message ExportResponse {
+	// 0 indicates a success, and a non-zero code indicates failure
+	int32 code = 1;
+	string msg = 2;
+	repeated string files = 3;
 }
 
 // A key stored in the format used for writing backups.
@@ -636,6 +648,17 @@ message BackupPostingList {
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3;
   repeated uint64 splits = 4;
+}
+
+message UpdateGraphQLSchemaRequest {
+	uint64                start_ts       = 1;
+	string                graphql_schema = 2;
+	repeated SchemaUpdate dgraph_preds   = 3;
+	repeated TypeUpdate   dgraph_types   = 4;
+}
+
+message UpdateGraphQLSchemaResponse {
+	uint64 uid = 1;
 }
 
 // vim: noexpandtab sw=2 ts=2

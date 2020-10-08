@@ -55,6 +55,12 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 		return nil, listErr
 	}
 
+	if len(doc.Operations) == 1 && doc.Operations[0].Operation == ast.Subscription &&
+		s.schema.Subscription == nil {
+		return nil, errors.Errorf("Not resolving subscription because schema doesn't have any " +
+			"fields defined for subscription operation.")
+	}
+
 	if len(doc.Operations) > 1 && req.OperationName == "" {
 		return nil, errors.Errorf("Operation name must by supplied when query has more " +
 			"than 1 operation.")
@@ -72,11 +78,12 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	}
 
 	operation := &operation{op: op,
-		vars:     vars,
-		query:    req.Query,
-		header:   req.Header,
-		doc:      doc,
-		inSchema: s,
+		vars:                    vars,
+		query:                   req.Query,
+		header:                  req.Header,
+		doc:                     doc,
+		inSchema:                s,
+		interfaceImplFragFields: map[*ast.Field]string{},
 	}
 
 	// recursively expand fragments in operation as selection set fields
@@ -144,23 +151,28 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	// this field always has to expand any fragment on its own type
 	// "" tackles the case for an inline fragment which doesn't specify type condition
 	satisfies := []string{typeName, ""}
-	var additionalTypes []*ast.Definition
+	var additionalTypes map[string]bool
 	switch typeKind {
 	case ast.Interface:
 		// expand fragments on types which implement this interface
-		additionalTypes = op.inSchema.schema.PossibleTypes[typeName]
+		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[typeName])
+		// if there is any fragment in the selection set of this field, need to store a mapping from
+		// fields in that fragment to the fragment's type condition, to be used later in completion.
+		for _, f := range field.SelectionSet {
+			addSelectionToInterfaceImplFragFields(typeName, f, additionalTypes, op)
+		}
 	case ast.Union:
 		// expand fragments on types of which it is a union
-		additionalTypes = op.inSchema.schema.PossibleTypes[typeName]
+		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[typeName])
 	case ast.Object:
 		// expand fragments on interfaces which are implemented by this object
-		additionalTypes = op.inSchema.schema.Implements[typeName]
+		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.Implements[typeName])
 	default:
 		// return, as fragment can't be present on a field which is not Interface, Union or Object
 		return
 	}
-	for _, typ := range additionalTypes {
-		satisfies = append(satisfies, typ.Name)
+	for typName := range additionalTypes {
+		satisfies = append(satisfies, typName)
 	}
 
 	// collect all fields from any satisfying fragments into selectionSet
@@ -203,5 +215,63 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	// recursively run for this field's selectionSet
 	for _, f := range field.SelectionSet {
 		recursivelyExpandFragmentSelections(f.(*ast.Field), op)
+	}
+}
+
+// getTypeNamesAsMap returns a map containing the typeName of all the typeDefs as keys and true
+// as value
+func getTypeNamesAsMap(typesDefs []*ast.Definition) map[string]bool {
+	if typesDefs == nil {
+		return nil
+	}
+
+	typeNameMap := make(map[string]bool)
+	for _, typ := range typesDefs {
+		typeNameMap[typ.Name] = true
+	}
+	return typeNameMap
+}
+
+func addSelectionToInterfaceImplFragFields(interfaceTypeName string, field ast.Selection,
+	interfaceImplMap map[string]bool, op *operation) {
+	switch frag := field.(type) {
+	case *ast.InlineFragment:
+		addFragFieldsToInterfaceImplFields(interfaceTypeName, frag.TypeCondition,
+			frag.SelectionSet, interfaceImplMap, op)
+	case *ast.FragmentSpread:
+		addFragFieldsToInterfaceImplFields(interfaceTypeName, frag.Definition.TypeCondition,
+			frag.Definition.SelectionSet, interfaceImplMap, op)
+	}
+}
+
+func addFragFieldsToInterfaceImplFields(interfaceTypeName, typeCond string, selSet ast.SelectionSet,
+	interfaceImplMap map[string]bool, op *operation) {
+	if interfaceImplMap[typeCond] {
+		// if the type condition on fragment matches one of the types implementing the interface
+		// then we need to store mapping of the fields inside the fragment to the type condition.
+		for _, fragField := range selSet {
+			if f, ok := fragField.(*ast.Field); ok {
+				// we got a field on an implementation of a interface, so save the mapping of field
+				// to the implementing type name. This will later be used during completion to find
+				// out if the field should be reported back in the response or not.
+				op.interfaceImplFragFields[f] = typeCond
+			} else {
+				// we got a fragment inside fragment
+				// the type condition for this fragment will be same as its parent fragment
+				addSelectionToInterfaceImplFragFields(interfaceTypeName, fragField,
+					interfaceImplMap, op)
+			}
+		}
+	} else if typeCond == "" || typeCond == interfaceTypeName {
+		// otherwise, if the type condition is same as the type of the interface,
+		// then we still need to look if there are any more fragments inside this fragment
+		for _, fragField := range selSet {
+			if _, ok := fragField.(*ast.Field); !ok {
+				// we got a fragment inside fragment
+				// the type condition for this fragment may be different that its parent fragment
+				addSelectionToInterfaceImplFragFields(interfaceTypeName, fragField,
+					interfaceImplMap, op)
+			}
+		}
 	}
 }

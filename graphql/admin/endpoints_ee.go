@@ -65,8 +65,15 @@ const adminTypes = `
 
 		"""
 		Backup ID of the backup series to restore. This ID is included in the manifest.json file.
+		If missing, it defaults to the latest series.
 		"""
-		backupId: String!
+		backupId: String
+
+		"""
+		Number of the backup within the backup series to be restored. Backups with a greater value
+		will be ignored. If the value is zero or missing, the entire series will be restored.
+		"""
+		backupNum: Int
 
 		"""
 		Path to the key file needed to decrypt the backup. This file should be accessible
@@ -77,7 +84,7 @@ const adminTypes = `
 
 		"""
 		Vault server address where the key is stored. This server must be accessible
-		by all alphas in the group.
+		by all alphas in the group. Default "http://localhost:8200".
 		"""
 		vaultAddr: String
 
@@ -92,14 +99,19 @@ const adminTypes = `
 		vaultSecretIDFile: String
 
 		"""
-		Vault kv store path where the key lives.
+		Vault kv store path where the key lives. Default "secret/data/dgraph".
 		"""
 		vaultPath: String
 
 		"""
-		Vault kv store field whose value is the key.
+		Vault kv store field whose value is the key. Default "enc_key".
 		"""
 		vaultField: String
+
+		"""
+		Vault kv store field's format. Must be "base64" or "raw". Default "base64".
+		"""
+		vaultFormat: String
 
 		"""
 		Access key credential for the destination.
@@ -108,22 +120,36 @@ const adminTypes = `
 
 		"""
 		Secret key credential for the destination.
-		"""		
+		"""
 		secretKey: String
 
 		"""
 		AWS session token, if required.
-		"""	
+		"""
 		sessionToken: String
 
 		"""
 		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
-		"""	
+		"""
 		anonymous: Boolean
 	}
 
 	type RestorePayload {
-		response: Response
+		"""
+		A short string indicating whether the restore operation was successfully scheduled.
+		The status of the operation can be queried using the restoreStatus endpoint.
+		"""
+		code: String
+
+		"""
+		Includes the error message if the operation failed.
+		"""
+		message: String
+
+		"""
+		The unique ID that can be used to query the status of the restore operation.
+		"""
+		restoreId: Int
 	}
 
 	input ListBackupsInput {
@@ -202,6 +228,18 @@ const adminTypes = `
 		The type of backup, either full or incremental.
 		"""
 		type: String
+	}
+
+	type RestoreStatus {
+		"""
+		The status of the restore operation. One of UNKNOWN, IN_PROGRESS, OK, or ERR.
+		"""
+		status: String!
+
+		"""
+		A list of error messages if the restore operation failed.
+		"""
+		errors: [String]
 	}
 	
 	type LoginResponse {
@@ -459,4 +497,9 @@ const adminQueries = `
 	"""
 	Get the information about the backups at a given location.
 	"""
-	listBackups(input: ListBackupsInput!) : [Manifest]`
+	listBackups(input: ListBackupsInput!) : [Manifest]
+
+	"""
+	Get information about a restore operation.
+	"""
+	restoreStatus(restoreId: Int!) : RestoreStatus`

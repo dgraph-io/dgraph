@@ -69,8 +69,14 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 		x.Check2(b.WriteRune(')'))
 	}
 
-	if query.Cascade {
-		x.Check2(b.WriteString(" @cascade"))
+	if len(query.Cascade) != 0 {
+		if query.Cascade[0] == "__all__" {
+			x.Check2(b.WriteString(" @cascade"))
+		} else {
+			x.Check2(b.WriteString(" @cascade("))
+			x.Check2(b.WriteString(strings.Join(query.Cascade, ", ")))
+			x.Check2(b.WriteRune(')'))
+		}
 	}
 
 	switch {
@@ -149,6 +155,9 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 		x.Check2(b.WriteString(fmt.Sprintf("%s(%s)", f.Name, f.Args[0].Value)))
 	case len(f.Args) == 2:
 		x.Check2(b.WriteString(fmt.Sprintf("%s(%s, %s)", f.Name, f.Args[0].Value, f.Args[1].Value)))
+	case len(f.Args) == 3:
+		x.Check2(b.WriteString(fmt.Sprintf("%s(%s, %s, %s)", f.Name, f.Args[0].Value, f.Args[1].Value,
+			f.Args[2].Value)))
 	}
 }
 
