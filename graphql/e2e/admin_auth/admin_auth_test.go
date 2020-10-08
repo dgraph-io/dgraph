@@ -53,7 +53,7 @@ func TestLoginWithPoorManAuth(t *testing.T) {
 	common.RequireNoGQLErrors(t, params.ExecuteAsPost(t, poorManWithAclAdminURL))
 }
 
-func TestOnlyPoorManAuth(t *testing.T) {
+func TestAdminOnlyPoorManAuth(t *testing.T) {
 	// without X-Dgraph-AuthToken should give error
 	params := getUpdateGqlSchemaParams()
 	assertAuthTokenError(t, poorManAdminURL, params)
@@ -67,7 +67,7 @@ func TestOnlyPoorManAuth(t *testing.T) {
 	common.RequireNoGQLErrors(t, params.ExecuteAsPost(t, poorManAdminURL))
 }
 
-func TestPoorManWithAcl(t *testing.T) {
+func TestAdminPoorManWithAcl(t *testing.T) {
 	// without auth token and access JWT headers, should give auth token related error
 	params := getUpdateGqlSchemaParams()
 	assertAuthTokenError(t, poorManWithAclAdminURL, params)
