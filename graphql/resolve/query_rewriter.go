@@ -751,7 +751,10 @@ func addSelectionSetFrom(
 			auth.varName = parentQryName
 		}
 
-		selectionAuth := addSelectionSetFrom(child, f, auth)
+		var selectionAuth []*gql.GraphQuery
+		if !f.Type().IsPoint() {
+			selectionAuth = addSelectionSetFrom(child, f, auth)
+		}
 		addedFields[f.Name()] = true
 
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
@@ -1073,8 +1076,21 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					for _, v := range vals {
 						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
 					}
+          
+				case "near":
+					//  For Geo type we have `near` filter which is written as follows:
+					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
+					geoParams := val.(map[string]interface{})
+					distance := geoParams["distance"]
 
-				default:
+					coordinate, _ := geoParams["coordinate"].(map[string]interface{})
+					lat := coordinate["latitude"]
+					long := coordinate["longitude"]
+
+          args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)})
+          args = append(args, gql.Arg{Value: fmt.Sprintf("%v", distance)})
+
+        default:
 					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, val)})
 				}
 				ands = append(ands, &gql.FilterTree{
@@ -1082,7 +1098,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 						Name: fn,
 						Args: args,
 					},
-				})
+				})  
 			case []interface{}:
 				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
 				ids := convertIDs(dgFunc)

@@ -18,6 +18,7 @@ package schema
 
 import (
 	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -89,7 +90,6 @@ func TestSchemaString(t *testing.T) {
 
 			_, err = FromString(newSchemaStr)
 			require.NoError(t, err)
-
 			outputFileName := outputDir + testFile.Name()
 			str2, err := ioutil.ReadFile(outputFileName)
 			require.NoError(t, err)
@@ -309,4 +309,11 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				"every field in this test applies @search wrongly and should raise an error")
 		})
 	}
+}
+
+func TestMain(m *testing.M) {
+	// set up the lambda url for unit tests
+	x.Config.GraphqlLambdaUrl = "http://localhost:8086/graphql-worker"
+	// now run the tests
+	os.Exit(m.Run())
 }

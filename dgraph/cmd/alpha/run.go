@@ -27,6 +27,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof" // http profiler
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -109,13 +110,6 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
-	flag.String("badger.tables", "mmap",
-		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for the postings."+
-			"Option sequence consume most to least RAM while providing "+
-			"best to worst read performance respectively.")
-	flag.String("badger.vlog", "mmap",
-		"[mmap, disk] Specifies how Badger Value log is stored for the postings."+
-			"mmap consumes more RAM, but provides better performance.")
 	flag.String("badger.compression", "snappy",
 		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
 			"level (if applicable) for the postings directory. none would disable compression,"+
@@ -195,6 +189,8 @@ they form a Raft group and provide synchronous replication.
 
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
+	flag.String("graphql_lambda_url", "",
+		"URL of lambda server that implements custom GraphQL JavaScript resolvers")
 
 	// Cache flags
 	flag.String("cache_percentage", "0,65,35,0",
@@ -533,7 +529,7 @@ func setupServer(closer *z.Closer) {
 			exportHandler(w, r, adminServer)
 		}))))
 
-	http.Handle("/admin/config/lru_mb", allowedMethodsHandler(allowedMethods{
+	http.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
 		http.MethodGet: true,
 		http.MethodPut: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -609,6 +605,7 @@ func run() {
 		WALDir:                     Alpha.Conf.GetString("wal"),
 		PostingDirCompression:      ctype,
 		PostingDirCompressionLevel: clevel,
+		CachePercentage:            cachePercentage,
 		PBlockCacheSize:            pstoreBlockCacheSize,
 		PIndexCacheSize:            pstoreIndexCacheSize,
 		WalCache:                   walCache,
@@ -616,9 +613,6 @@ func run() {
 		MutationsMode: worker.AllowMutations,
 		AuthToken:     Alpha.Conf.GetString("auth_token"),
 	}
-
-	opts.BadgerTables = Alpha.Conf.GetString("badger.tables")
-	opts.BadgerVlog = Alpha.Conf.GetString("badger.vlog")
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {
@@ -688,6 +682,19 @@ func run() {
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
 	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
+	x.Config.GraphqlLambdaUrl = Alpha.Conf.GetString("graphql_lambda_url")
+	if x.Config.GraphqlLambdaUrl != "" {
+		graphqlLambdaUrl, err := url.Parse(x.Config.GraphqlLambdaUrl)
+		if err != nil {
+			glog.Errorf("unable to parse graphql_lambda_url: %v", err)
+			return
+		}
+		if !graphqlLambdaUrl.IsAbs() {
+			glog.Errorf("expecting graphql_lambda_url to be an absolute URL, got: %s",
+				graphqlLambdaUrl.String())
+			return
+		}
+	}
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

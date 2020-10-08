@@ -22,7 +22,6 @@ import (
 
 	bo "github.com/dgraph-io/badger/v2/options"
 
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -39,10 +38,6 @@ const (
 type Options struct {
 	// PostingDir is the path to the directory storing the postings..
 	PostingDir string
-	// BadgerTables is the name of the mode used to load the badger tables for the p directory.
-	BadgerTables string
-	// BadgerVlog is the name of the mode used to load the badger value log for the p directory.
-	BadgerVlog string
 
 	// PostingDirCompression is the compression algorithem used to compression Postings directory.
 	PostingDirCompression bo.CompressionType
@@ -70,6 +65,12 @@ type Options struct {
 	AccessJwtTtl time.Duration
 	// RefreshJwtTtl is the TTL of the refresh JWT.
 	RefreshJwtTtl time.Duration
+
+	// CachePercentage is the comma-separated list of cache percentages
+	// used to split the total cache size among the multiple caches.
+	CachePercentage string
+	// CacheMb is the total memory allocated between all the caches.
+	CacheMb int64
 }
 
 // Config holds an instance of the server options..
@@ -82,13 +83,7 @@ func SetConfiguration(newConfig *Options) {
 	}
 	newConfig.validate()
 	Config = *newConfig
-
-	posting.Config.Lock()
-	defer posting.Config.Unlock()
 }
-
-// MinAllottedMemory is the minimum amount of memory needed for the LRU cache.
-const MinAllottedMemory = 1024.0
 
 // AvailableMemory is the total size of the memory we were able to identify.
 var AvailableMemory int64

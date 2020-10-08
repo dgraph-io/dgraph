@@ -15,21 +15,24 @@
         dgraph.uid : uid
       }
     }
-
+    
 -
-  name: "in filter with eq filter"
+  name: "Geo query"
   gqlquery: |
     query {
-      queryState(filter: {code: {in: ["abc", "def", "ghi"]}, or: {code: {eq: "jkl"}}} ) {
-        code
+      queryHotel(filter: { location: { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22} } } }) {
         name
+        location {
+          latitude
+          longitude
+        }
       }
     }
   dgquery: |-
     query {
-      queryState(func: type(State)) @filter((eq(State.code, "abc", "def", "ghi") OR eq(State.code, "jkl"))) {
-        code : State.code
-        name : State.name
+      queryHotel(func: type(Hotel)) @filter(near(Hotel.location, [22.22,11.11], 33.33)) {
+        name : Hotel.name
+        location : Hotel.location
         dgraph.uid : uid
       }
     }

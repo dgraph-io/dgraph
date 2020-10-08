@@ -2165,3 +2165,75 @@ func queryWithCascade(t *testing.T) {
 		nil)
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }
+
+func queryGeoNearFilter(t *testing.T) {
+	addHotelParams := &GraphQLParams{
+		Query: `
+		mutation addHotel($hotels: [AddHotelInput!]!) {
+		  addHotel(input: $hotels) {
+			hotel {
+			  name
+			  location {
+				latitude
+				longitude
+			  }
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{"hotels": []interface{}{
+			map[string]interface{}{
+				"name": "Taj Hotel 1",
+				"location": map[string]interface{}{
+					"latitude":  11.11,
+					"longitude": 22.22,
+				},
+			},
+			map[string]interface{}{
+				"name": "Taj Hotel 2",
+				"location": map[string]interface{}{
+					"latitude":  33.33,
+					"longitude": 22.22,
+				},
+			},
+			map[string]interface{}{
+				"name": "Taj Hotel 3",
+				"location": map[string]interface{}{
+					"latitude":  11.11,
+					"longitude": 33.33,
+				},
+			},
+		},
+		},
+	}
+	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryHotel := &GraphQLParams{
+		Query: `
+			query {
+			  queryHotel(filter: { location: { near: { distance: 100, coordinate: { latitude: 11.11, longitude: 22.22} } } }) {
+				name
+				location {
+				  latitude
+				  longitude
+				}
+			  }
+			}`,
+	}
+	gqlResponse = queryHotel.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryHotelExpected := `
+	{
+		"queryHotel":[{
+			"name" : "Taj Hotel 1",
+			"location" : {
+				"latitude" : 11.11,
+				"longitude" : 22.22
+			}
+		}]
+	}`
+	testutil.CompareJSON(t, queryHotelExpected, string(gqlResponse.Data))
+	// Cleanup
+	deleteGqlType(t, "Hotel", map[string]interface{}{}, 3, nil)
+}

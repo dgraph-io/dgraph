@@ -3747,6 +3747,49 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
 	deleteGqlType(t, "Person1", map[string]interface{}{}, 3, nil)
 }
 
+func mutationGeoType(t *testing.T) {
+	addHotelParams := &GraphQLParams{
+		Query: `
+		mutation addHotel($hotel: AddHotelInput!) {
+		  addHotel(input: [$hotel]) {
+			hotel {
+			  name
+			  location {
+				latitude
+				longitude
+			  }
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{"hotel": map[string]interface{}{
+			"name": "Taj Hotel",
+			"location": map[string]interface{}{
+				"latitude":  11.11,
+				"longitude": 22.22,
+			},
+		}},
+	}
+	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addHotelExpected := `
+	{
+		"addHotel": {
+			"hotel": [{
+				"name": "Taj Hotel",
+				"location": {
+					"latitude": 11.11,
+					"longitude": 22.22
+				}
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
+
+	// Cleanup
+	deleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
+}
+
 func addMutationWithHasInverseOverridesCorrectly(t *testing.T) {
 	params := &GraphQLParams{
 		Query: `mutation addCountry($input: [AddCountryInput!]!) {

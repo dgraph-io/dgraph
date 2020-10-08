@@ -45,12 +45,18 @@ const (
 	cascadeDirective      = "cascade"
 	cascadeArg            = "fields"
 	SubscriptionDirective = "withSubscription"
+	lambdaDirective       = "lambda"
 
 	// custom directive args and fields
-	dqlArg = "dql"
-	mode   = "mode"
-	BATCH  = "BATCH"
-	SINGLE = "SINGLE"
+	dqlArg      = "dql"
+	httpArg     = "http"
+	httpUrl     = "url"
+	httpMethod  = "method"
+	httpBody    = "body"
+	httpGraphql = "graphql"
+	mode        = "mode"
+	BATCH       = "BATCH"
+	SINGLE      = "SINGLE"
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
@@ -89,6 +95,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -123,6 +130,25 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter!
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -137,6 +163,7 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -246,6 +273,7 @@ var supportedSearches = map[string]searchTypeIndex{
 	"month":    {"DateTime", "month"},
 	"day":      {"DateTime", "day"},
 	"hour":     {"DateTime", "hour"},
+	"geo":      {"Point", "geo"},
 }
 
 // GraphQL scalar type -> default search arg
@@ -257,6 +285,7 @@ var defaultSearches = map[string]string{
 	"Float":    "float",
 	"String":   "term",
 	"DateTime": "year",
+	"Point":    "geo",
 }
 
 // graphqlSpecScalars holds all the scalar types supported by the graphql spec.
@@ -307,6 +336,7 @@ var builtInFilters = map[string]string{
 	"fulltext": "StringFullTextFilter",
 	"exact":    "StringExactFilter",
 	"hash":     "StringHashFilter",
+	"geo":      "PointGeoFilter",
 }
 
 // GraphQL scalar -> Dgraph scalar
@@ -341,7 +371,8 @@ var directiveValidators = map[string]directiveValidator{
 	deprecatedDirective:   ValidatorNoOp,
 	SubscriptionDirective: ValidatorNoOp,
 	// Just go get it printed into generated schema
-	authDirective: ValidatorNoOp,
+	authDirective:   ValidatorNoOp,
+	lambdaDirective: lambdaDirectiveValidation,
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
@@ -579,11 +610,86 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 	}
 }
 
+func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
+	// seen helps us avoid cycles
+	if def == nil || seen[def.Name] {
+		return
+	}
+
+	i := 0
+	// recursively walk over fields for an input type and delete those which are themselves empty.
+	for _, f := range def.Fields {
+		nt := f.Type.Name()
+		enum := sch.Types[nt] != nil && sch.Types[nt].Kind == "ENUM"
+		// Lets skip scalar types and enums.
+		if _, ok := scalarToDgraph[nt]; ok || enum {
+			def.Fields[i] = f
+			i++
+			continue
+		}
+
+		seen[def.Name] = true
+		cleanupInput(sch, sch.Types[nt], seen)
+		// If after calling cleanup on an input type, it got deleted then it doesn't need to be
+		// in the fields for this type anymore.
+		if sch.Types[nt] == nil {
+			continue
+		}
+		def.Fields[i] = f
+		i++
+	}
+	def.Fields = def.Fields[:i]
+
+	if len(def.Fields) == 0 {
+		delete(sch.Types, def.Name)
+	}
+}
+
+func cleanSchema(sch *ast.Schema) {
+	// Let's go over inputs of the type TRef, TPatch and AddTInput and delete the ones which
+	// don't have field inside them.
+	for k := range sch.Types {
+		if strings.HasSuffix(k, "Ref") || strings.HasSuffix(k, "Patch") ||
+			(strings.HasPrefix(k, "Add") && strings.HasSuffix(k, "Input")) {
+			cleanupInput(sch, sch.Types[k], map[string]bool{})
+		}
+	}
+
+	// Let's go over mutations and cleanup those which don't have AddTInput defined in the schema
+	// anymore.
+	i := 0 // helps us overwrite the array with valid entries.
+	for _, field := range sch.Mutation.Fields {
+		custom := field.Directives.ForName("custom")
+		// We would only modify add type queries.
+		if custom != nil || !strings.HasPrefix(field.Name, "add") {
+			sch.Mutation.Fields[i] = field
+			i++
+			continue
+		}
+
+		// addT type mutations have an input which is AddTInput so if that doesn't exist anymore,
+		// we can delete the AddTPayload and also skip this mutation.
+		typ := field.Name[3:]
+		input := sch.Types["Add"+typ+"Input"]
+		if input == nil {
+			delete(sch.Types, "Add"+typ+"Payload")
+			continue
+		}
+		sch.Mutation.Fields[i] = field
+		i++
+
+	}
+	sch.Mutation.Fields = sch.Mutation.Fields[:i]
+}
+
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
-	schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
-		Kind:   ast.InputObject,
-		Name:   "Add" + defn.Name + "Input",
-		Fields: getFieldsWithoutIDType(schema, defn),
+	field := getFieldsWithoutIDType(schema, defn)
+	if len(field) != 0 {
+		schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
+			Kind:   ast.InputObject,
+			Name:   "Add" + defn.Name + "Input",
+			Fields: field,
+		}
 	}
 }
 
@@ -606,10 +712,12 @@ func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
 		}
 	}
 
-	schema.Types[defn.Name+"Ref"] = &ast.Definition{
-		Kind:   ast.InputObject,
-		Name:   defn.Name + "Ref",
-		Fields: flds,
+	if len(flds) != 0 {
+		schema.Types[defn.Name+"Ref"] = &ast.Definition{
+			Kind:   ast.InputObject,
+			Name:   defn.Name + "Ref",
+			Fields: flds,
+		}
 	}
 }
 
@@ -687,10 +795,9 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 // }
 func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
-		custom := fld.Directives.ForName(customDirective)
-		// Filtering and ordering for fields with @custom directive is handled by the remote
+		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
-		if custom != nil {
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -732,7 +839,7 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if isID(fld) {
+		if isID(fld) || hasCustomOrLambda(fld) {
 			continue
 		}
 		filter.EnumValues = append(filter.EnumValues,
@@ -900,12 +1007,13 @@ func hasFilterable(defn *ast.Definition) bool {
 }
 
 func hasOrderables(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool {
-			// lists can't be ordered and NamedType will be empty for lists,
-			// so it will return false for list fields
-			return orderable[fld.Type.NamedType]
-		})
+	return fieldAny(defn.Fields, isOrderable)
+}
+
+func isOrderable(fld *ast.FieldDefinition) bool {
+	// lists can't be ordered and NamedType will be empty for lists,
+	// so it will return false for list fields
+	return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
 }
 
 func hasID(defn *ast.Definition) bool {
@@ -1026,7 +1134,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if fld.Type.NamedType != "" && orderable[fld.Type.NamedType] {
+		if isOrderable(fld) {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}
@@ -1046,11 +1154,12 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	addFilterArgument(schema, qry)
 	addOrderArgument(schema, qry)
 	addPaginationArguments(qry)
-
-	schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
-		Kind:   ast.Object,
-		Name:   "Add" + defn.Name + "Payload",
-		Fields: []*ast.FieldDefinition{qry, numUids},
+	if schema.Types["Add"+defn.Name+"Input"] != nil {
+		schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
+			Kind:   ast.Object,
+			Name:   "Add" + defn.Name + "Payload",
+			Fields: []*ast.FieldDefinition{qry, numUids},
+		}
 	}
 }
 
@@ -1241,6 +1350,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
+
 }
 
 func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
@@ -1291,6 +1401,9 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addMutations(schema *ast.Schema, defn *ast.Definition) {
+	if schema.Types["Add"+defn.Name+"Input"] == nil {
+		return
+	}
 	addAddMutation(schema, defn)
 	addUpdateMutation(schema, defn)
 	addDeleteMutation(schema, defn)
@@ -1332,9 +1445,9 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		custom := fld.Directives.ForName(customDirective)
-		// Fields with @custom directive should not be part of mutation input, hence we skip them.
-		if custom != nil {
+		// Fields with @custom/@lambda directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -1373,9 +1486,9 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
-		custom := fld.Directives.ForName(customDirective)
-		// Fields with @custom directive should not be part of mutation input, hence we skip them.
-		if custom != nil {
+		// Fields with @custom/@lambda directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -1391,7 +1504,6 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			(!hasID(schema.Types[fld.Type.Name()]) && !hasXID(schema.Types[fld.Type.Name()])) {
 			continue
 		}
-
 		fldList = append(fldList, createField(schema, fld))
 	}
 

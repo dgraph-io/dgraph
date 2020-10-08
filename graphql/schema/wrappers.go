@@ -125,6 +125,7 @@ type Field interface {
 	Include() bool
 	Cascade() []string
 	HasCustomDirective() (bool, map[string]bool)
+	HasLambdaDirective() bool
 	Type() Type
 	SelectionSet() []Field
 	Location() x.Location
@@ -177,6 +178,7 @@ type Type interface {
 	EnsureNonNulls(map[string]interface{}, string) error
 	FieldOriginatedFrom(fieldName string) string
 	AuthRules() *TypeAuth
+	IsPoint() bool
 	fmt.Stringer
 }
 
@@ -225,6 +227,9 @@ type schema struct {
 	// something like field.Directives.ForName("custom"), which results in iterating over all the
 	// directives of the field.
 	customDirectives map[string]map[string]*ast.Directive
+	// lambdaDirectives stores the mapping of typeName->fieldName->true, if the field has @lambda.
+	// It is read-only.
+	lambdaDirectives map[string]map[string]bool
 	// Map from typename to auth rules
 	authRules map[string]*TypeAuth
 }
@@ -427,9 +432,9 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	dgraphPredicate := make(map[string]map[string]string)
 	for _, inputTyp := range sch.Types {
 		// We only want to consider input types (object and interface) defined by the user as part
-		// of the schema hence we ignore BuiltIn, query and mutation types.
+		// of the schema hence we ignore BuiltIn, query and mutation types and Geo types.
 		if inputTyp.BuiltIn || isQueryOrMutationType(inputTyp) || inputTyp.Name == "Subscription" ||
-			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
+			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) || inputTyp.Name == "Point" {
 			continue
 		}
 
@@ -601,34 +606,167 @@ func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) 
 	return repeatedFieldNames
 }
 
-func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
+// customAndLambdaMappings does following things:
+// * If there is @custom on any field, it removes the directive from the list of directives on
+//	 that field. Instead, it puts it in a map of typeName->fieldName->custom directive definition.
+//	 This mapping is returned as the first return value, which is later used to determine if some
+//	 field has custom directive or not, and accordingly construct the HTTP request for the field.
+// * If there is @lambda on any field, it removes the directive from the list of directives on
+//	 that field. Instead, it puts it in a map of typeName->fieldName->bool. This mapping is returned
+//	 as the second return value, which is later used to determine if some field has lambda directive
+//	 or not. An appropriate @custom directive is also constructed for the field with @lambda and
+//	 put into the first mapping. Both of these mappings together are used to construct the HTTP
+//	 request for @lambda field. Internally, @lambda is just @custom(http: {
+//	   url: "<graphql_lambda_url: a-fixed-pre-defined-url>",
+//	   method: POST,
+//	   body: "<all-the-args-for-a-query-or-mutation>/<all-the-scalar-fields-from-parent-type-for-a
+//	   -@lambda-on-field>"
+//	   mode: BATCH (set only if @lambda was on a non query/mutation field)
+//	 })
+//	 So, by constructing an appropriate custom directive for @lambda fields,
+//	 we just reuse logic from @custom.
+func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directive,
+	map[string]map[string]bool) {
 	customDirectives := make(map[string]map[string]*ast.Directive)
+	lambdaDirectives := make(map[string]map[string]bool)
 
 	for _, typ := range s.Types {
 		for _, field := range typ.Fields {
 			for i, dir := range field.Directives {
-				if dir.Name == customDirective {
-					// remove custom directive from s
+				if dir.Name == customDirective || dir.Name == lambdaDirective {
+					// remove @custom/@lambda directive from s
 					lastIndex := len(field.Directives) - 1
 					field.Directives[i] = field.Directives[lastIndex]
 					field.Directives = field.Directives[:lastIndex]
-					// now put it into mapping
-					var fieldMap map[string]*ast.Directive
-					if innerMap, ok := customDirectives[typ.Name]; !ok {
-						fieldMap = make(map[string]*ast.Directive)
+					// get the @custom mapping for this type
+					var customFieldMap map[string]*ast.Directive
+					if existingCustomFieldMap, ok := customDirectives[typ.Name]; ok {
+						customFieldMap = existingCustomFieldMap
 					} else {
-						fieldMap = innerMap
+						customFieldMap = make(map[string]*ast.Directive)
 					}
-					fieldMap[field.Name] = dir
-					customDirectives[typ.Name] = fieldMap
-					// break, as there can only be one @custom
+
+					if dir.Name == customDirective {
+						// if it was @custom, put the directive at the @custom mapping for the field
+						customFieldMap[field.Name] = dir
+					} else {
+						// for lambda, first update the lambda directives map
+						var lambdaFieldMap map[string]bool
+						if existingLambdaFieldMap, ok := lambdaDirectives[typ.Name]; ok {
+							lambdaFieldMap = existingLambdaFieldMap
+						} else {
+							lambdaFieldMap = make(map[string]bool)
+						}
+						lambdaFieldMap[field.Name] = true
+						lambdaDirectives[typ.Name] = lambdaFieldMap
+						// then, build a custom directive with correct semantics to be put
+						// into custom directives map at this field
+						customFieldMap[field.Name] = buildCustomDirectiveForLambda(typ, field,
+							dir, func(f *ast.FieldDefinition) bool {
+								// Need to skip the fields which have a @custom/@lambda from
+								// going in body template. The field itself may not have the
+								// directive anymore because the directive may have been removed by
+								// this function already. So, using these maps to find the same.
+								return lambdaFieldMap[f.Name] || customFieldMap[f.Name] != nil
+							})
+					}
+					// finally, update the custom directives map for this type
+					customDirectives[typ.Name] = customFieldMap
+					// break, as there can only be one @custom/@lambda
 					break
 				}
 			}
 		}
 	}
 
-	return customDirectives
+	return customDirectives, lambdaDirectives
+}
+
+func hasCustomOrLambda(f *ast.FieldDefinition) bool {
+	for _, dir := range f.Directives {
+		if dir.Name == customDirective || dir.Name == lambdaDirective {
+			return true
+		}
+	}
+	return false
+}
+
+// buildCustomDirectiveForLambda returns custom directive for the given field to be used for @lambda
+// The constructed @custom looks like this:
+//	@custom(http: {
+//	   url: "<graphql_lambda_url: a-fixed-pre-defined-url>",
+//	   method: POST,
+//	   body: "<all-the-args-for-a-query-or-mutation>/<all-the-scalar-fields-from-parent-type-for-a
+//	   -@lambda-on-field>"
+//	   mode: BATCH (set only if @lambda was on a non query/mutation field)
+//	})
+func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinition,
+	lambdaDir *ast.Directive, skipInBodyTemplate func(f *ast.FieldDefinition) bool) *ast.Directive {
+	comma := ""
+	var bodyTemplate strings.Builder
+
+	// this function appends a variable to the body template for @custom
+	appendToBodyTemplate := func(varName string) {
+		bodyTemplate.WriteString(comma)
+		bodyTemplate.WriteString(varName)
+		bodyTemplate.WriteString(": $")
+		bodyTemplate.WriteString(varName)
+		comma = ", "
+	}
+
+	// first let's construct the body template for the custom directive
+	bodyTemplate.WriteString("{")
+	if isQueryOrMutationType(defn) {
+		// for queries and mutations we need to put their arguments in the body template
+		for _, arg := range field.Arguments {
+			appendToBodyTemplate(arg.Name)
+		}
+	} else {
+		// For fields in other types, skip the ones in body template which have a @lambda or @custom
+		// or are not scalar. The skipInBodyTemplate function is also used to check these
+		// conditions, in case the field can't tell by itself.
+		for _, f := range defn.Fields {
+			if hasCustomOrLambda(f) || !isScalar(f.Type.Name()) || skipInBodyTemplate(f) {
+				continue
+			}
+			appendToBodyTemplate(f.Name)
+		}
+	}
+	bodyTemplate.WriteString("}")
+
+	// build the children for http argument
+	httpArgChildrens := []*ast.ChildValue{
+		getChildValue(httpUrl, x.Config.GraphqlLambdaUrl, ast.StringValue, lambdaDir.Position),
+		getChildValue(httpMethod, http.MethodPost, ast.EnumValue, lambdaDir.Position),
+		getChildValue(httpBody, bodyTemplate.String(), ast.StringValue, lambdaDir.Position),
+	}
+	if !isQueryOrMutationType(defn) {
+		httpArgChildrens = append(httpArgChildrens,
+			getChildValue(mode, BATCH, ast.EnumValue, lambdaDir.Position))
+	}
+
+	// build the custom directive
+	return &ast.Directive{
+		Name: customDirective,
+		Arguments: []*ast.Argument{{
+			Name: httpArg,
+			Value: &ast.Value{
+				Kind:     ast.ObjectValue,
+				Children: httpArgChildrens,
+				Position: lambdaDir.Position,
+			},
+			Position: lambdaDir.Position,
+		}},
+		Position: lambdaDir.Position,
+	}
+}
+
+func getChildValue(name, raw string, kind ast.ValueKind, position *ast.Position) *ast.ChildValue {
+	return &ast.ChildValue{
+		Name:     name,
+		Value:    &ast.Value{Raw: raw, Kind: kind, Position: position},
+		Position: position,
+	}
 }
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
@@ -640,13 +778,15 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		return nil, err
 	}
 
+	customDirs, lambdaDirs := customAndLambdaMappings(s)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
 		schema:             s,
 		dgraphPredicate:    dgraphPredicate,
 		typeNameAst:        typeMappings(s),
 		repeatedFieldNames: repeatedFieldMappings(s, dgraphPredicate),
-		customDirectives:   customMappings(s),
+		customDirectives:   customDirs,
+		lambdaDirectives:   lambdaDirs,
 		authRules:          authRules,
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
@@ -840,6 +980,10 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	return true, rf
 }
 
+func (f *field) HasLambdaDirective() bool {
+	return f.op.inSchema.lambdaDirectives[f.GetObjectName()][f.Name()]
+}
+
 func (f *field) XIDArg() string {
 	xidArgName := ""
 	passwordField := f.Type().PasswordField()
@@ -970,6 +1114,8 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	}
 
 	fconf.ForwardHeaders = http.Header{}
+	// set application/json as the default Content-Type
+	fconf.ForwardHeaders.Set("Content-Type", "application/json")
 	secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
 	if secretHeaders != nil {
 		hc.RLock()
@@ -1194,6 +1340,10 @@ func (q *query) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(q).HasCustomDirective()
 }
 
+func (q *query) HasLambdaDirective() bool {
+	return (*field)(q).HasLambdaDirective()
+}
+
 func (q *query) IDArgValue() (*string, uint64, error) {
 	return (*field)(q).IDArgValue()
 }
@@ -1327,6 +1477,10 @@ func (m *mutation) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(m).HasCustomDirective()
 }
 
+func (m *mutation) HasLambdaDirective() bool {
+	return (*field)(m).HasLambdaDirective()
+}
+
 func (m *mutation) Type() Type {
 	return (*field)(m).Type()
 }
@@ -1443,6 +1597,10 @@ func (m *mutation) IsAuthQuery() bool {
 
 func (t *astType) AuthRules() *TypeAuth {
 	return t.inSchema.authRules[t.DgraphName()]
+}
+
+func (t *astType) IsPoint() bool {
+	return t.Name() == "Point"
 }
 
 func (t *astType) Field(name string) FieldDefinition {

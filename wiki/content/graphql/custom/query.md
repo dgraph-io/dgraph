@@ -1,8 +1,8 @@
 +++
 title = "Custom Queries"
+weight = 3
 [menu.main]
     parent = "custom"
-    weight = 3   
 +++
 
 Let's say we want to integrate our app with an existing external REST API.  There's a few things we need to know:

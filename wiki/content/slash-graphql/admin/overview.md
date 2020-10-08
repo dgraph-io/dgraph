@@ -1,11 +1,11 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Overview"
+weight = 1   
 [menu.main]
     parent = "slash-graphql-admin"
     name = "Overview"
     identifier = "slash-overview"
-    weight = 1   
 +++
 
 *These are draft docs for Slash GraphQL, which is currently in beta*

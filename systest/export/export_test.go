@@ -83,14 +83,14 @@ var expectedSchema = `<movie>:string .` + " " + `
 <dgraph.graphql.schema>:string .` + " " + `
 <dgraph.graphql.schema_history>:string .` + " " + `
 <dgraph.graphql.schema_created_at>:datetime .` + " " + `
-type Node {
+type <Node> {
 	movie
 }
-type dgraph.graphql {
+type <dgraph.graphql> {
 	dgraph.graphql.schema
 	dgraph.graphql.xid
 }
-type dgraph.graphql.history {
+type <dgraph.graphql.history> {
 	dgraph.graphql.schema_history
 	dgraph.graphql.schema_created_at
 }
