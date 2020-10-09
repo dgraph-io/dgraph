@@ -399,9 +399,8 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 		reservedPreds = append(reservedPreds, "{\"predicate\": \""+pred+"\"}")
 	}
 
-	reservedPreds = append(reservedPreds, "{\"predicate\": \"name\"}")
-	reservedPreds = append(reservedPreds, "{\"predicate\": \"friends\"}")
-	reservedPreds = append(reservedPreds, "{\"predicate\": \"age\"}")
+	reservedPreds = append(reservedPreds, []string{
+		"{\"predicate\": \"name\"}", "{\"predicate\": \"friends\"}", "{\"predicate\": \"age\"}"}...)
 	reservedPredsStr := strings.Join(reservedPreds, ",")
 	js := "{\"schema\": [" + reservedPredsStr + "]," + x.InitialTypes + "}"
 

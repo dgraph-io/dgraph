@@ -2151,7 +2151,15 @@ func TestSchemaQueryWithACL(t *testing.T) {
         "exact"
       ],
       "upsert": true
-    }
+	},
+	{
+	  "predicate": "dgraph.block_timestamp",
+	  "type": "int"
+	},
+	{
+	  "predicate": "dgraph.failed_login_counter",
+	  "type": "int"
+	}
   ],
   "types": [
     {
@@ -2207,7 +2215,13 @@ func TestSchemaQueryWithACL(t *testing.T) {
         },
         {
           "name": "dgraph.user.group"
-        }
+		},
+		{
+			"name": "dgraph.failed_login_counter"
+		},
+		{
+			"name": "dgraph.block_timestamp"
+		}
       ],
       "name": "dgraph.type.User"
     }
@@ -2254,7 +2268,7 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	testutil.DropAll(t, dg)
 	resp, err := dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
 	require.NoError(t, err)
-	require.JSONEq(t, grootSchema, string(resp.GetJson()))
+	testutil.CompareJSON(t, grootSchema, string(resp.GetJson()))
 
 	// add another user and some data for that user with permissions on predicates
 	resetUser(t)
@@ -2268,7 +2282,7 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	require.NoError(t, dg.Login(context.Background(), userid, userpassword))
 	resp, err = dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
 	require.NoError(t, err)
-	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
+	testutil.CompareJSON(t, aliceSchema, string(resp.GetJson()))
 }
 
 func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
