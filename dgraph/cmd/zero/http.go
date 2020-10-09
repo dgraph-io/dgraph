@@ -246,9 +246,18 @@ func (st *state) serveHTTP(l net.Listener) {
 		IdleTimeout:  2 * time.Minute,
 	}
 
+	tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
+	x.Check(err)
+
 	go func() {
 		defer st.zero.closer.Done()
-		err := srv.Serve(l)
+		switch {
+		case tlsCfg != nil:
+			srv.TLSConfig = tlsCfg
+			err = srv.ServeTLS(l, "", "")
+		default:
+			err = srv.Serve(l)
+		}
 		glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
 		ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
 		defer cancel()
