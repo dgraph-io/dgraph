@@ -433,8 +433,11 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	for _, inputTyp := range sch.Types {
 		// We only want to consider input types (object and interface) defined by the user as part
 		// of the schema hence we ignore BuiltIn, query and mutation types and Geo types.
+		isInputTypeGeo := func(typName string) bool {
+			return typName == "Point" || typName == "PointList" || typName == "Polygon" || typName == "MultiPolygon"
+		}
 		if inputTyp.BuiltIn || isQueryOrMutationType(inputTyp) || inputTyp.Name == "Subscription" ||
-			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) || inputTyp.Name == "Point" {
+			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) || isInputTypeGeo(inputTyp.Name) {
 			continue
 		}
 

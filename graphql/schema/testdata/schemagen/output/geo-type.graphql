@@ -113,11 +113,11 @@ input PolygonRef {
 }
 
 type MultiPolygon {
-	coordinates: [Polygon!]!
+	polygons: [Polygon!]!
 }
 
 input MultiPolygonRef {
-	coordinates: [PolygonRef!]!
+	polygons: [PolygonRef!]!
 }
 
 input WithinFilter {
@@ -155,6 +155,7 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -316,3 +317,4 @@ type Mutation {
 	updateHotel(input: UpdateHotelInput!): UpdateHotelPayload
 	deleteHotel(filter: HotelFilter!): DeleteHotelPayload
 }
+
