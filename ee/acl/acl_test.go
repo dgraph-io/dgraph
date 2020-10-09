@@ -3128,7 +3128,7 @@ func TestMaxFailedLoginAttempts(t *testing.T) {
 	}
 
 	resetUser(t)
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Minute)
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Minute)
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
 
@@ -3143,7 +3143,27 @@ func TestMaxFailedLoginAttempts(t *testing.T) {
 	require.Contains(t, err.Error(),
 		"Too many unsuccessful login attempts. Please try after some time.")
 
-	time.Sleep(15 * time.Minute)
+	// We should also check if user is actually blocked for blockDuration but that
+	// would waste time unnecessarily so we will just go ahead by restting counter.
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	resetCounter := &api.Request{
+		Query: fmt.Sprintf("{u as var(func: eq(dgraph.xid, %s))}", userid),
+		Mutations: []*api.Mutation{
+			{
+				Set: []*api.NQuad{
+					{
+						Subject:     "uid(u)",
+						Predicate:   "dgraph.failed_login_counter",
+						ObjectValue: &api.Value{Val: &api.Value_IntVal{IntVal: 0}},
+					},
+				},
+			},
+		},
+		CommitNow: true,
+	}
+	_, err = dg.NewTxn().Do(ctx, resetCounter)
+	require.NoError(t, err)
+
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
 }
