@@ -90,12 +90,6 @@ var (
 	// PIndexHitRatio records the hit ratio of posting store index cache.
 	PIndexHitRatio = stats.Float64("hit_ratio_postings_index",
 		"Hit ratio of p store index cache", stats.UnitDimensionless)
-	// WBlockHitRatio records the hit ratio of wal store block cache.
-	WBlockHitRatio = stats.Float64("hit_ratio_wal_block",
-		"Hit ratio of w store block cache", stats.UnitDimensionless)
-	// WIndexHitRatio records the hit ratio of wal store index cache.
-	WIndexHitRatio = stats.Float64("hit_ratio_wal_index",
-		"Hit ratio of w store index cache", stats.UnitDimensionless)
 	// PLCacheHitRatio records the hit ratio of posting list cache.
 	PLCacheHitRatio = stats.Float64("hit_ratio_posting_cache",
 		"Hit ratio of posting list cache", stats.UnitDimensionless)
@@ -234,20 +228,6 @@ var (
 			Name:        PIndexHitRatio.Name(),
 			Measure:     PIndexHitRatio,
 			Description: PIndexHitRatio.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        WBlockHitRatio.Name(),
-			Measure:     WBlockHitRatio,
-			Description: WBlockHitRatio.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        WIndexHitRatio.Name(),
-			Measure:     WIndexHitRatio,
-			Description: WIndexHitRatio.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},

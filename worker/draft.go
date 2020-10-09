@@ -780,6 +780,11 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 			return errors.Wrapf(err, "while flushing to disk")
 		}
 	}
+	if x.WorkerConfig.HardSync {
+		if err := pstore.Sync(); err != nil {
+			glog.Errorf("Error while calling Sync while commitOrAbort: %v", err)
+		}
+	}
 
 	g := groups()
 	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
@@ -1317,7 +1322,7 @@ func (n *node) calculateTabletSizes() {
 		total += size
 	}
 
-	tableInfos := pstore.Tables(false)
+	tableInfos := pstore.Tables()
 	previousLeft := ""
 	var previousSize int64
 	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))

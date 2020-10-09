@@ -44,7 +44,6 @@ import (
 	bo "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/golang/glog"
@@ -321,6 +320,7 @@ func (gqlErr *GqlError) WithPath(path []interface{}) *GqlError {
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
+	w.Header().Set("Content-Type", "application/json")
 	var qr queryRes
 	ext := make(map[string]interface{})
 	ext["code"] = code
@@ -410,6 +410,20 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+// AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
+func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
+	if authToken := r.Header.Get("X-Dgraph-AuthToken"); authToken != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("auth-token", authToken)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
 }
 
 // AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
@@ -1029,75 +1043,30 @@ func IsGuardian(groups []string) bool {
 
 // MonitorCacheHealth periodically monitors the cache metrics and reports if
 // there is high contention in the cache.
-func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, closer *z.Closer) {
+func MonitorCacheHealth(db *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
-	getMetrics := func(ct string) *ristretto.Metrics {
-		var metrics *ristretto.Metrics
+	record := func(ct string) {
 		switch ct {
 		case "pstore-block":
-			metrics = db.BlockCacheMetrics()
-		case "pstore-index":
-			metrics = db.IndexCacheMetrics()
-		case "WALstore-block":
-			metrics = db.BlockCacheMetrics()
-		case "WALstore-index":
-			metrics = db.IndexCacheMetrics()
-		}
-		return metrics
-	}
-
-	checkCache := func(ct string) {
-		metrics := getMetrics(ct)
-		if metrics == nil {
-			return
-		}
-		switch ct {
-		case "pstore-block":
+			metrics := db.BlockCacheMetrics()
 			ostats.Record(context.Background(), PBlockHitRatio.M(metrics.Ratio()))
 		case "pstore-index":
+			metrics := db.IndexCacheMetrics()
 			ostats.Record(context.Background(), PIndexHitRatio.M(metrics.Ratio()))
-		case "WALstore-block":
-			ostats.Record(context.Background(), WBlockHitRatio.M(metrics.Ratio()))
-		case "WALstore-index":
-			ostats.Record(context.Background(), WIndexHitRatio.M(metrics.Ratio()))
 		default:
 			panic("invalid cache type")
 		}
-
-		// If the mean life expectancy is less than 10 seconds, the cache
-		// might be too small.
-		le := metrics.LifeExpectancySeconds()
-		lifeTooShort := le.Count > 0 && float64(le.Sum)/float64(le.Count) < 10
-		hitRatioTooLow := metrics.Ratio() > 0 && metrics.Ratio() < 0.4
-		if bool(glog.V(2)) && (lifeTooShort || hitRatioTooLow) {
-			glog.Warningf("======== Cache might be too small %s =====", ct)
-			glog.Warningf("Metric: %+v", metrics)
-			glog.Warningf("Life expectancy: %+v", le)
-		}
 	}
 
-	logMetrics := func(ct string) {
-		if metrics := getMetrics(ct); metrics != nil {
-			prefix := fmt.Sprintf("%s-%s", prefix, ct)
-			le := metrics.LifeExpectancySeconds()
-			glog.V(2).Infof("%s metrics %+v %+v", prefix, metrics, le)
-		}
-	}
-
-	ticker := time.NewTicker(period)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	tickerLog := time.NewTicker(5 * time.Minute)
-	defer tickerLog.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			checkCache(prefix + "-block")
-			checkCache(prefix + "-index")
-		case <-tickerLog.C:
-			logMetrics(prefix + "-block")
-			logMetrics(prefix + "-index")
+			record("pstore-block")
+			record("pstore-index")
 		case <-closer.HasBeenClosed():
 			return
 		}

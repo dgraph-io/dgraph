@@ -126,15 +126,28 @@ func BlockingStop() {
 	workerServer.Stop()
 }
 
-// UpdateLruMb updates the value of lru_mb
-func UpdateLruMb(memoryMB float64) error {
-	if memoryMB < MinAllottedMemory {
-		return errors.Errorf("lru_mb must be at least %.0f\n", MinAllottedMemory)
+// UpdateCacheMb updates the value of cache_mb and updates the corresponding cache sizes.
+func UpdateCacheMb(memoryMB int64) error {
+	glog.Infof("Updating cacheMb to %d", memoryMB)
+	if memoryMB < 0 {
+		return errors.Errorf("cache_mb must be non-negative")
 	}
 
-	posting.Config.Lock()
-	posting.Config.AllottedMemory = memoryMB
-	posting.Config.Unlock()
+	cachePercent, err := x.GetCachePercentages(Config.CachePercentage, 4)
+	if err != nil {
+		return err
+	}
+	plCacheSize := (cachePercent[0] * (memoryMB << 20)) / 100
+	blockCacheSize := (cachePercent[1] * (memoryMB << 20)) / 100
+	indexCacheSize := (cachePercent[2] * (memoryMB << 20)) / 100
+
+	posting.UpdateMaxCost(plCacheSize)
+	if _, err := pstore.CacheMaxCost(badger.BlockCache, blockCacheSize); err != nil {
+		return errors.Wrapf(err, "cannot update block cache size")
+	}
+	if _, err := pstore.CacheMaxCost(badger.IndexCache, indexCacheSize); err != nil {
+		return errors.Wrapf(err, "cannot update index cache size")
+	}
 	return nil
 }
 

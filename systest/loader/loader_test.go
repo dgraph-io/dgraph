@@ -20,7 +20,6 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -43,28 +42,22 @@ func TestLoaderXidmap(t *testing.T) {
 
 	data, err := filepath.Abs("testdata/first.rdf.gz")
 	require.NoError(t, err)
-	liveCmd := exec.Command(testutil.DgraphBinaryPath(), "live",
+	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"-x", "x",
-	)
-	liveCmd.Dir = tmpDir
-	require.NoError(t, liveCmd.Run())
+		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
+	require.NoError(t, err)
 
 	// Load another file, live should reuse the xidmap.
 	data, err = filepath.Abs("testdata/second.rdf.gz")
 	require.NoError(t, err)
-	liveCmd = exec.Command(testutil.DgraphBinaryPath(), "live",
+	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"-x", "x",
-	)
-	liveCmd.Dir = tmpDir
-	liveCmd.Stdout = os.Stdout
-	liveCmd.Stderr = os.Stdout
-	require.NoError(t, liveCmd.Run())
+		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
+	require.NoError(t, err)
 
 	op := api.Operation{Schema: "name: string @index(exact) ."}
 	x.Check(dg.Alter(ctx, &op))

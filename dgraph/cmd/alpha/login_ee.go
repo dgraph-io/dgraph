@@ -34,7 +34,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pass in PoorMan's auth, IP information if present.
 	ctx := x.AttachRemoteIP(context.Background(), r)
+	ctx = x.AttachAuthToken(ctx, r)
 
 	body := readRequest(w, r)
 	loginReq := api.LoginRequest{}
