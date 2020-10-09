@@ -69,8 +69,10 @@ type Server struct {
 	closer         *z.Closer  // Used to tell stream to close.
 	connectLock    sync.Mutex // Used to serialize connect requests from servers.
 
-	moveOngoing    chan struct{}
-	blockCommitsOn *sync.Map
+	//tls client config used to connect with zero internally
+	tlsClientConfig *x.TLSHelperConfig
+	moveOngoing     chan struct{}
+	blockCommitsOn  *sync.Map
 }
 
 // Init initializes the zero server.
@@ -226,18 +228,23 @@ func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	if state.Zeros == nil {
 		state.Zeros = make(map[uint64]*pb.Member)
 	}
+
 	if state.Groups == nil {
 		state.Groups = make(map[uint32]*pb.Group)
 	}
+
+	//todo check if these groups are all zero or if there is any alpha
 	// Create connections to all members.
 	for _, g := range state.Groups {
 		for _, m := range g.Members {
-			conn.GetPools().Connect(m.Addr)
+			conn.GetPools().Connect(m.Addr, s.tlsClientConfig)
 		}
+
 		if g.Tablets == nil {
 			g.Tablets = make(map[string]*pb.Tablet)
 		}
 	}
+
 	s.nextGroup = uint32(len(state.Groups) + 1)
 }
 
@@ -457,7 +464,7 @@ func (s *Server) Connect(ctx context.Context,
 			switch {
 			case member.Addr == m.Addr && m.Id == 0:
 				glog.Infof("Found a member with the same address. Returning: %+v", member)
-				conn.GetPools().Connect(m.Addr)
+				conn.GetPools().Connect(m.Addr, s.tlsClientConfig)
 				return &pb.ConnectionState{
 					State:  ms,
 					Member: member,
@@ -482,7 +489,7 @@ func (s *Server) Connect(ctx context.Context,
 	}
 
 	// Create a connection and check validity of the address by doing an Echo.
-	conn.GetPools().Connect(m.Addr)
+	conn.GetPools().Connect(m.Addr, s.tlsClientConfig)
 
 	createProposal := func() *pb.ZeroProposal {
 		s.Lock()

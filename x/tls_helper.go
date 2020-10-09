@@ -55,9 +55,46 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 		"provided by the client to the server.")
 }
 
+func LoadInternalTLSServerHelperConfig(certDir string) *TLSHelperConfig {
+	if certDir == "" {
+		return nil
+	}
+
+	conf := &TLSHelperConfig{}
+	conf.UseSystemCACerts = true
+	conf.CertDir = certDir
+	conf.CertRequired = true
+	conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
+	conf.Cert = path.Join(conf.CertDir, "node.crt")
+	conf.Key = path.Join(conf.CertDir, "node.key")
+	conf.ClientAuth = "REQUIREANDVERIFY"
+	return conf
+}
+
+func LoadInternalTLSClientHelperConfig(v *viper.Viper) (*TLSHelperConfig, error) {
+	conf := &TLSHelperConfig{}
+	conf.UseSystemCACerts = true
+	conf.CertDir = v.GetString("dgraph_tls_dir")
+	if conf.CertDir != "" {
+		conf.CertRequired = true
+		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
+		conf.Cert = path.Join(conf.CertDir, "client." + v.GetString("dgraph_tls_client_name") + ".crt")
+		conf.Key = path.Join(conf.CertDir, "client." + v.GetString("dgraph_tls_client_name") + ".key")
+		conf.ClientAuth = "REQUIREANDVERIFY"
+		conf.ServerName= v.GetString("dgraph_tls_server_name")
+		return conf, nil
+	}
+
+	if v.GetString("dgraph_tls_server_name") != "" ||
+		v.GetString("dgraph_tls_client_name") != ""  {
+		return nil, errors.Errorf("--dgraph_tls_dir is required for enabling TLS")
+	}
+
+	return nil, nil
+}
+
 // LoadServerTLSConfig loads the TLS config into the server with the given parameters.
-func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) (*tls.Config,
-	error) {
+func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) (*tls.Config, error) {
 	conf := TLSHelperConfig{}
 	conf.CertDir = v.GetString("tls_dir")
 	if conf.CertDir != "" {
@@ -179,7 +216,7 @@ func setupClientAuth(authType string) (tls.ClientAuthType, error) {
 // GenerateServerTLSConfig creates and returns a new *tls.Config with the
 // configuration provided.
 func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err error) {
-	if config.CertRequired {
+	if config != nil && config.CertRequired {
 		tlsCfg = new(tls.Config)
 		cert, err := tls.LoadX509KeyPair(config.Cert, config.Key)
 		if err != nil {
@@ -207,13 +244,40 @@ func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err e
 	return nil, nil
 }
 
-// GenerateClientTLSConfig creates and returns a new client side *tls.Config with the
+// GenerateClientTLSConfig creates and returns a new client side *tls.Config with tzhe
 // configuration provided.
 func GenerateClientTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err error) {
-	pool, err := generateCertPool(config.RootCACert, config.UseSystemCACerts)
-	if err != nil {
-		return nil, err
+	if config == nil {
+		return nil, nil
 	}
 
-	return &tls.Config{RootCAs: pool, ServerName: config.ServerName}, nil
+	caCert := config.RootCACert
+	if caCert != "" {
+		tlsCfg := tls.Config{}
+
+		// 1. set up the root CA
+		pool, err := generateCertPool(caCert, config.UseSystemCACerts)
+		if err != nil {
+			return nil, err
+		}
+		tlsCfg.RootCAs = pool
+
+		// 2. set up the server name for verification
+		tlsCfg.ServerName = config.ServerName
+
+		// 3. optionally load the client cert files
+		certFile := config.Cert
+		keyFile := config.Key
+		if certFile != "" && keyFile != "" {
+			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+			if err != nil {
+				return nil, err
+			}
+			tlsCfg.Certificates = []tls.Certificate{cert}
+		}
+
+		return &tlsCfg, nil
+	}
+
+	return nil, nil
 }

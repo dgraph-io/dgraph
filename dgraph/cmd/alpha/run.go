@@ -173,6 +173,13 @@ they form a Raft group and provide synchronous replication.
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
 
+	flag.String("dgraph_tls_dir", "",
+		"Path to directory that has mTLS certificates and keys for dgraph internal communication")
+	flag.String("dgraph_tls_client_name", "",
+		"client name to be used for mTLS for dgraph internal communication")
+	flag.String("dgraph_tls_server_name", "",
+		"server name to be used for mTLS for dgraph internal communication")
+
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
@@ -651,6 +658,12 @@ func run() {
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
+	tlsConf, err := x.LoadInternalTLSClientHelperConfig(Alpha.Conf)
+	if err != nil {
+		glog.Error("unable to read tls config for internal communication ", err)
+		return
+	}
+
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
@@ -665,6 +678,8 @@ func run() {
 		StartTime:            startTime,
 		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
 		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
+		TLSClientConfig:      tlsConf,
+		TLSDir:               Alpha.Conf.GetString("dgraph_tls_dir"),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 

@@ -32,6 +32,7 @@ import (
 	"go.opencensus.io/zpages"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -52,7 +53,9 @@ type options struct {
 	w                 string
 	rebalanceInterval time.Duration
 
-	totalCache int64
+	//tls client config which will be used by zeros to connect internally
+	tlsClientConfig *x.TLSHelperConfig
+	totalCache      int64
 }
 
 var opts options
@@ -88,6 +91,12 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+	flag.String("dgraph_tls_dir", "",
+		"Path to directory that has mTLS certificates and keys for dgraph internal communication")
+	flag.String("dgraph_tls_client_name", "",
+		"client name to be used for mTLS for dgraph internal communication")
+	flag.String("dgraph_tls_server_name", "",
+		"server name to be used for mTLS for dgraph internal communication")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -104,15 +113,23 @@ type state struct {
 
 func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	x.RegisterExporters(Zero.Conf, "dgraph.zero")
-
-	s := grpc.NewServer(
+	grpcOpts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
-		grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+	}
+
+	tlsConf, err := x.GenerateServerTLSConfig(x.LoadInternalTLSServerHelperConfig(Zero.Conf.GetString("dgraph_tls_dir")))
+	x.Check(err)
+
+	if tlsConf != nil {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))
+	}
+	s := grpc.NewServer(grpcOpts...)
 
 	rc := pb.RaftContext{Id: opts.nodeId, Addr: x.WorkerConfig.MyAddr, Group: 0}
-	m := conn.NewNode(&rc, store)
+	m := conn.NewNode(&rc, store, opts.tlsClientConfig)
 
 	// Zero followers should not be forwarding proposals to the leader, to avoid txn commits which
 	// were calculated in a previous Zero leader.
@@ -120,7 +137,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	st.rs = conn.NewRaftServer(m)
 
 	st.node = &node{Node: m, ctx: context.Background(), closer: z.NewCloser(1)}
-	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node}
+	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node, tlsClientConfig: opts.tlsClientConfig}
 	st.zero.Init()
 	st.node.server = st.zero
 
@@ -161,6 +178,12 @@ func run() {
 
 	x.PrintVersion()
 
+	tlsConf, err := x.LoadInternalTLSClientHelperConfig(Zero.Conf)
+	if err != nil {
+		glog.Error("unable to load tls config for internal communication ", err)
+		return
+	}
+
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
@@ -170,6 +193,7 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
+		tlsClientConfig:   tlsConf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 

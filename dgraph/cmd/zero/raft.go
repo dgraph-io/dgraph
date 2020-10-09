@@ -172,7 +172,7 @@ func newGroup() *pb.Group {
 	}
 }
 
-func (n *node) handleMemberProposal(member *pb.Member) error {
+func (n *node) handleMemberProposal(member *pb.Member, opts options) error {
 	n.server.AssertLock()
 	state := n.server.state
 
@@ -213,7 +213,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	}
 
 	// Create a connection to this server.
-	go conn.GetPools().Connect(member.Addr)
+	go conn.GetPools().Connect(member.Addr, opts.tlsClientConfig)
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
@@ -296,7 +296,7 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	return nil
 }
 
-func (n *node) applyProposal(e raftpb.Entry) (string, error) {
+func (n *node) applyProposal(e raftpb.Entry, opts options) (string, error) {
 	var p pb.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
 	if len(e.Data) == 0 {
@@ -343,7 +343,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		}
 	}
 	if p.Member != nil {
-		if err := n.handleMemberProposal(p.Member); err != nil {
+		if err := n.handleMemberProposal(p.Member, opts); err != nil {
 			span.Annotatef(nil, "While applying membership proposal: %+v", err)
 			glog.Errorf("While applying membership proposal: %+v", err)
 			return p.Key, err
@@ -539,7 +539,7 @@ func (n *node) initAndStartNode() error {
 		}
 
 	case len(opts.peer) > 0:
-		p := conn.GetPools().Connect(opts.peer)
+		p := conn.GetPools().Connect(opts.peer, opts.tlsClientConfig)
 		if p == nil {
 			return errors.Errorf("Unhealthy connection to %v", opts.peer)
 		}
@@ -580,7 +580,7 @@ func (n *node) initAndStartNode() error {
 		go n.proposeNewCID()
 	}
 
-	go n.Run()
+	go n.Run(opts)
 	go n.BatchAndSendMessages()
 	go n.ReportRaftComms()
 	return nil
@@ -680,7 +680,7 @@ func (n *node) trySnapshot(skip uint64) {
 
 const tickDur = 100 * time.Millisecond
 
-func (n *node) Run() {
+func (n *node) Run(opts options) {
 	var leader bool
 	licenseApplied := false
 	ticker := time.NewTicker(tickDur)
@@ -767,7 +767,7 @@ func (n *node) Run() {
 					glog.Infof("Done applying conf change at %#x", n.Id)
 
 				case entry.Type == raftpb.EntryNormal:
-					key, err := n.applyProposal(entry)
+					key, err := n.applyProposal(entry, opts)
 					if err != nil {
 						glog.Errorf("While applying proposal: %v\n", err)
 					}

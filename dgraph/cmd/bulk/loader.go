@@ -21,11 +21,13 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials"
 	"hash/adler32"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -115,9 +117,23 @@ func newLoader(opt *options) *loader {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
+	conf := &x.TLSHelperConfig{}
+	conf.UseSystemCACerts = true
+	conf.CertDir = Bulk.Conf.GetString("zero_tls_dir")
+	if conf.CertDir != "" {
+		conf.CertRequired = true
+		conf.RootCACert = path.Join(conf.CertDir, "ca.crt")
+		conf.Cert = path.Join(conf.CertDir, "client." + Bulk.Conf.GetString("zero_tls_client_name") + ".crt")
+		conf.Key = path.Join(conf.CertDir, "client." + Bulk.Conf.GetString("zero_tls_client_name") + ".crt")
+		conf.ClientAuth = "REQUIREANDVERIFY"
+		conf.ServerName= Bulk.Conf.GetString("zero_tls_server_name")
+	}
+
+	tlsConf, err := x.GenerateServerTLSConfig(conf)
+	x.Check(err)
 	zero, err := grpc.DialContext(ctx, opt.ZeroAddr,
 		grpc.WithBlock(),
-		grpc.WithInsecure())
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	st := &state{
 		opt:    opt,
