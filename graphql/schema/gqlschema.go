@@ -677,7 +677,7 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 		nt := f.Type.Name()
 		enum := sch.Types[nt] != nil && sch.Types[nt].Kind == "ENUM"
 		// Lets skip scalar types and enums.
-		if _, ok := scalarToDgraph[nt]; ok || enum {
+		if _, ok := inbuiltTypeToDgraph[nt]; ok || enum {
 			def.Fields[i] = f
 			i++
 			continue
