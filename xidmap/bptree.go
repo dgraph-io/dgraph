@@ -138,5 +138,23 @@ func (t *BpTree) Get(key uint64) (uint64, bool) {
 }
 
 func (t *BpTree) Insert(key, val uint64) {
+	// Find the node.
+	node := t.getNode(t.root)
+	for node != nil {
+		if node.leaf {
+			break
+		}
 
+		_, next, _ := node.search(key)
+		if next == 0 {
+			break
+		}
+		node = t.getNode(next)
+	}
+
+	if node.insert(key, val) {
+		return
+	}
+
+	// Split nodes recursively.
 }
