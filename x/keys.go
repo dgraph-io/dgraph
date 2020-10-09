@@ -532,12 +532,14 @@ var starAllPredicateMap = map[string]struct{}{
 }
 
 var aclPredicateMap = map[string]struct{}{
-	"dgraph.xid":             {},
-	"dgraph.password":        {},
-	"dgraph.user.group":      {},
-	"dgraph.rule.predicate":  {},
-	"dgraph.rule.permission": {},
-	"dgraph.acl.rule":        {},
+	"dgraph.xid":                  {},
+	"dgraph.password":             {},
+	"dgraph.user.group":           {},
+	"dgraph.rule.predicate":       {},
+	"dgraph.rule.permission":      {},
+	"dgraph.acl.rule":             {},
+	"dgraph.failed_login_counter": {},
+	"dgraph.block_timestamp":      {},
 }
 
 var graphqlReservedPredicate = map[string]struct{}{
@@ -623,6 +625,15 @@ func StarAllPredicates() []string {
 func AllACLPredicates() []string {
 	preds := make([]string, 0, len(aclPredicateMap))
 	for pred := range aclPredicateMap {
+		preds = append(preds, pred)
+	}
+	return preds
+}
+
+// AllGraphQLReservedPredicates returns all reserved graphql predicates
+func AllGraphQLReservedPredicates() []string {
+	preds := make([]string, 0, len(graphqlReservedPredicate))
+	for pred := range graphqlReservedPredicate {
 		preds = append(preds, pred)
 	}
 	return preds

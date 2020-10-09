@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -386,56 +387,24 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	txn = c.NewTxn()
 	resp, err := txn.Query(ctx, `schema {name}`)
 	require.NoError(t, err)
-	js := `
-  {
-    "schema": [
-	  {
-		"predicate": "dgraph.cors"
-	  },
-	  {
-	    "predicate": "dgraph.graphql.schema_history"
-	  },
-	  {
-	    "predicate": "dgraph.graphql.schema_created_at"
-	  },
-      {
-        "predicate": "dgraph.xid"
-      },
-      {
-        "predicate": "dgraph.password"
-      },
-	  {
-		  "predicate": "dgraph.acl.rule"
-	  },
-	  {
-		  "predicate": "dgraph.rule.predicate"
-	  },
-	  {
-		  "predicate": "dgraph.rule.permission"
-	  },
-	  {
-        "predicate": "dgraph.graphql.schema"
-	  },
-	  {
-        "predicate": "dgraph.graphql.xid"
-	  },
-      {
-        "predicate": "dgraph.user.group"
-      },
-      {
-        "predicate": "friends"
-      },
-      {
-        "predicate": "dgraph.type"
-      },
-      {
-        "predicate": "name"
-      },
-      {
-        "predicate": "age"
-      }
-    ],` + x.InitialTypes + `
-  }`
+
+	var reservedPreds []string
+	for _, pred := range x.AllACLPredicates() {
+		reservedPreds = append(reservedPreds, "{\"predicate\": \""+pred+"\"}")
+	}
+	for _, pred := range x.StarAllPredicates() {
+		reservedPreds = append(reservedPreds, "{\"predicate\": \""+pred+"\"}")
+	}
+	for _, pred := range x.AllGraphQLReservedPredicates() {
+		reservedPreds = append(reservedPreds, "{\"predicate\": \""+pred+"\"}")
+	}
+
+	reservedPreds = append(reservedPreds, "{\"predicate\": \"name\"}")
+	reservedPreds = append(reservedPreds, "{\"predicate\": \"friends\"}")
+	reservedPreds = append(reservedPreds, "{\"predicate\": \"age\"}")
+	reservedPredsStr := strings.Join(reservedPreds, ",")
+	js := "{\"schema\": [" + reservedPredsStr + "]," + x.InitialTypes + "}"
+
 	testutil.CompareJSON(t, js, string(resp.Json))
 }
 
@@ -737,17 +706,17 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
 		_:alice1 <name> "Alice 1" .
-		_:alice1 <age> "23" . 
+		_:alice1 <age> "23" .
 		_:alice2 <name> "Alice 2" .
 		_:alice3 <name> "Alice 3" .
 		_:alice3 <age> "32" .
 		_:bob <name> "Bob" .
 		_:chris <name> "Chris" .
 		_:dave <name> "Dave" .
-		_:alice1 <friend> _:bob (close=true) .  
-		_:alice1 <friend> _:dave .    
-		_:alice2 <friend> _:chris (close=false) .	  
-		  _:bob <friend> _:chris .		
+		_:alice1 <friend> _:bob (close=true) .
+		_:alice1 <friend> _:dave .
+		_:alice2 <friend> _:chris (close=false) .
+		  _:bob <friend> _:chris .
 	`),
 	})
 	require.NoError(t, err)
@@ -759,8 +728,8 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 		{
 			// value preds Parameterized at root.
 			in: `
-			{  
-				q(func: anyoftext(name, "Alice")) @cascade(name, age)   {	
+			{
+				q(func: anyoftext(name, "Alice")) @cascade(name, age)   {
 					name
 					age
 					friend {
@@ -823,13 +792,13 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 			in: `{
 				q(func: anyoftext(name, "Alice")) @cascade {
 				  name
-				  age  
+				  age
 					friend {
 					  name
 				  	  age
 				  	}
 				}
-			}			  
+			}
 			  `,
 			out: `{
 				"q": []
@@ -840,13 +809,13 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 			in: `{
 				q(func: anyoftext(name, "Alice")) @cascade(__all__) {
 				  name
-				  age  
+				  age
 					friend {
 					  name
 				  	  age
 				  	}
 				}
-			}			  
+			}
 			  `,
 			out: `{
 				"q": []
@@ -857,13 +826,13 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 			in: `{
 				q(func: anyoftext(name, "Alice")) @cascade {
 				  name
-				  age  
+				  age
 					friend @cascade {
 					  name
 				  	  age
 				    }
 				}
-			}			  
+			}
 			  `,
 			out: `{
 				"q": []
@@ -881,7 +850,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				    age
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -927,7 +896,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				    age
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -944,7 +913,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					"age": "32"
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -960,12 +929,12 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				    age
 				  }
 				}
-			}						
+			}
 			`,
 			out: `
 			{
 				"q": []
-			}			
+			}
 			`,
 		},
 
@@ -980,7 +949,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 						  age
 				  }
 				}
-			}				  
+			}
 			`,
 			out: `
 			{
@@ -1005,7 +974,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -1021,7 +990,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					name
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -1035,7 +1004,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -1051,12 +1020,12 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					name
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
 				"q": []
-			}			
+			}
 			`,
 		},
 
@@ -1074,7 +1043,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					}
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -1109,7 +1078,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				      name
 				    }
 				}
-			}	
+			}
 			`,
 			out: `
 			{
@@ -1132,7 +1101,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -1148,7 +1117,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					  age
 				    }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
