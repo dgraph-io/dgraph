@@ -1325,8 +1325,18 @@ func rewriteGeoObject(val map[string]interface{}, typ schema.Type) []interface{}
 		long := val["longitude"]
 		return []interface{}{long, lat}
 	case "Polygon":
+		// For Polygon type, the mutation json is as follows:
+		// {
+		//   "type": "Polygon",
+		//   "coordinates": [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
+		// }
 		return makePolygon(val)
 	case "MultiPolygon":
+		// For MultiPolygon type, the mutation json is as follows:
+		// {
+		//   "type": "MultiPolygon",
+		//   "coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
+		// }
 		polygons, _ := val["polygons"].([]interface{})
 		var res []interface{}
 		for _, p := range polygons {

@@ -92,7 +92,7 @@
         }
 
 -
-  name: "Add mutation geo field - Multi-Polygon type"
+  name: "Add mutation geo field - MultiPolygon type"
   gqlmutation: |
     mutation addHotel($hotel: AddHotelInput!) {
       addHotel(input: [$hotel]) {

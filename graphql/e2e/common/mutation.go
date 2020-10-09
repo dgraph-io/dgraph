@@ -3749,7 +3749,7 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
 
 func mutationPointType(t *testing.T) {
 	addHotelParams := &GraphQLParams{
-		Query: `    
+		Query: `
 		mutation addHotel($hotel: AddHotelInput!) {
 		  addHotel(input: [$hotel]) {
 			hotel {
