@@ -91,12 +91,9 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-	flag.String("dgraph_tls_dir", "",
-		"Path to directory that has mTLS certificates and keys for dgraph internal communication")
-	flag.String("dgraph_tls_client_name", "",
-		"client name to be used for mTLS for dgraph internal communication")
-	flag.String("dgraph_tls_server_name", "",
-		"server name to be used for mTLS for dgraph internal communication")
+
+	x.RegisterDgraphTLSFlags(flag)
+	x.RegisterClientTLSFlags(flag)
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {

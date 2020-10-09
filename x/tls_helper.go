@@ -55,6 +55,15 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 		"provided by the client to the server.")
 }
 
+func RegisterDgraphTLSFlags(flag *pflag.FlagSet) {
+	flag.String("dgraph_tls_dir", "",
+		"Path to directory that has mTLS certificates and keys for dgraph internal communication")
+	flag.String("dgraph_tls_client_name", "",
+		"client name to be used for mTLS for dgraph internal communication")
+	flag.String("dgraph_tls_server_name", "",
+		"server name to be used for mTLS for dgraph internal communication")
+}
+
 func LoadInternalTLSServerHelperConfig(certDir string) *TLSHelperConfig {
 	if certDir == "" {
 		return nil
