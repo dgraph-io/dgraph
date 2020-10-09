@@ -205,6 +205,14 @@
         },
         {
             "index": true,
+	        "predicate": "Hotel.area",
+	        "tokenizer": [
+	            "geo"
+	        ],
+	        "type": "geo"
+	    },
+        {
+            "index": true,
             "predicate": "State.xcode",
             "tokenizer": [
                 "hash",
@@ -364,6 +372,12 @@
             "type": "uid"
         },
         {
+            "index": true,
+            "predicate": "Hotel.branches",
+            "tokenizer": ["geo"],
+            "type": "geo"
+        },
+        {
             "predicate": "Starship.length",
             "type": "float"
         },
@@ -415,6 +429,15 @@
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                { "name": "Hotel.name"},
+                { "name": "Hotel.area"},
+                { "name": "Hotel.branches"},
+                { "name": "Hotel.location"}
+            ],
+            "name": "Hotel"
         },
         {
             "fields": [
@@ -617,17 +640,6 @@
                 }
             ],
             "name": "ThingTwo"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Hotel.name"
-                },
-                {
-                    "name": "Hotel.location"
-                }
-            ],
-            "name": "Hotel"
         },
         {
             "fields": [

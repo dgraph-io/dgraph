@@ -3747,7 +3747,7 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
 	deleteGqlType(t, "Person1", map[string]interface{}{}, 3, nil)
 }
 
-func mutationGeoType(t *testing.T) {
+func mutationPointType(t *testing.T) {
 	addHotelParams := &GraphQLParams{
 		Query: `    
 		mutation addHotel($hotel: AddHotelInput!) {
@@ -3857,27 +3857,44 @@ func mutationPolygonType(t *testing.T) {
 			"hotel": [{
 				"name": "Taj Hotel",
 				"area": {
+				  "__typename": "Polygon",
 				  "coordinates": [{
+					"__typename": "PointList",
 					"points": [{
+					  "__typename": "Point",
 					  "latitude": 11.11,
 					  "longitude": 22.22
 					}, {
+					  "__typename": "Point",
 					  "latitude": 15.15,
 					  "longitude": 16.16
 					}, {
+					  "__typename": "Point",
 					  "latitude": 20.20,
 					  "longitude": 21.21
+					},{
+					  "__typename": "Point",
+					  "latitude": 11.11,
+					  "longitude": 22.22
 					}]
 				  }, {
+					  "__typename": "PointList",
 					  "points": [{
+					  	"__typename": "Point",
 						"latitude": 11.18,
 						"longitude": 22.28
 					  }, {
+					  	"__typename": "Point",
 						"latitude": 15.18,
 						"longitude": 16.18
 					  }, {
+					  	"__typename": "Point",
 						"latitude": 20.28,
 						"longitude": 21.28
+					  }, {
+					  	"__typename": "Point",
+						"latitude": 11.18,
+						"longitude": 22.28
 					  }]
 				  }]
 				}
