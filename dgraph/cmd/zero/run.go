@@ -94,18 +94,9 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-	// TLS configurations
-	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
-	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
-	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	flag.String("tls_disabled_route", "", "comma separated zero endpoint which will be disabled from TLS encryption."+
-		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
-	flag.String("dgraph_tls_dir", "",
-		"Path to directory that has mTLS certificates and keys for dgraph internal communication")
-	flag.String("dgraph_tls_client_name", "",
-		"client name to be used for mTLS for dgraph internal communication")
-	flag.String("dgraph_tls_server_name", "",
-		"server name to be used for mTLS for dgraph internal communication")
+
+	x.RegisterDgraphTLSFlags(flag)
+	x.RegisterClientTLSFlags(flag)
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
