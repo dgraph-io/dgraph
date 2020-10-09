@@ -76,6 +76,7 @@ type Node struct {
 	RaftContext *pb.RaftContext
 	Store       *raftwal.DiskStorage
 	Rand        *rand.Rand
+	tlsClientConfig *x.TLSHelperConfig
 
 	Proposals proposals
 
@@ -84,7 +85,7 @@ type Node struct {
 }
 
 // NewNode returns a new Node instance.
-func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
+func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *x.TLSHelperConfig) *Node {
 	snap, err := store.Snapshot()
 	x.Check(err)
 
@@ -135,13 +136,14 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		Applied:     y.WaterMark{Name: "Applied watermark"},
-		RaftContext: rc,
-		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
-		confChanges: make(map[uint64]chan error),
-		messages:    make(chan sendmsg, 100),
-		peers:       make(map[uint64]string),
-		requestCh:   make(chan linReadReq, 100),
+		Applied:         y.WaterMark{Name: "Applied watermark"},
+		RaftContext:     rc,
+		Rand:            rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
+		confChanges:     make(map[uint64]chan error),
+		messages:        make(chan sendmsg, 100),
+		peers:           make(map[uint64]string),
+		requestCh:       make(chan linReadReq, 100),
+		tlsClientConfig: tlsConfig,
 	}
 	n.Applied.Init(nil)
 	// This should match up to the Applied index set above.
@@ -521,7 +523,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 		n.SetPeer(pid, addr)
 		return
 	}
-	GetPools().Connect(addr)
+	GetPools().Connect(addr, n.tlsClientConfig)
 	n.SetPeer(pid, addr)
 }
 

@@ -89,6 +89,8 @@ func init() {
 	flag.Bool("version", false, "Prints the version of Dgraph Bulk Loader.")
 	flag.Bool("store_xids", false, "Generate an xid edge for each node.")
 	flag.StringP("zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
+	flag.String("zero_tls_dir", "",
+		"Directory that contains TLS certificate for bulk loader to connect zero")
 	flag.String("xidmap", "", "Directory to store xid to uid mapping")
 	// TODO: Potentially move http server to main.
 	flag.String("http", "localhost:8080",
