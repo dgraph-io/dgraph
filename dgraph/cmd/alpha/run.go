@@ -173,13 +173,6 @@ they form a Raft group and provide synchronous replication.
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
 
-	flag.String("dgraph_tls_dir", "",
-		"Path to directory that has mTLS certificates and keys for dgraph internal communication")
-	flag.String("dgraph_tls_client_name", "",
-		"client name to be used for mTLS for dgraph internal communication")
-	flag.String("dgraph_tls_server_name", "",
-		"server name to be used for mTLS for dgraph internal communication")
-
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
@@ -203,6 +196,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("cache_percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
+
+	x.RegisterDgraphTLSFlags(flag)
 }
 
 func setupCustomTokenizers() {

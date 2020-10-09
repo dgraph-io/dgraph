@@ -27,7 +27,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -113,27 +112,23 @@ func newLoader(opt *options) *loader {
 	}
 
 	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	conf := &x.TLSHelperConfig{}
-	conf.UseSystemCACerts = true
-	conf.CertDir = Bulk.Conf.GetString("zero_tls_dir")
-	if conf.CertDir != "" {
-		conf.CertRequired = true
-		conf.RootCACert = path.Join(conf.CertDir, "ca.crt")
-		conf.Cert = path.Join(conf.CertDir, "client." + Bulk.Conf.GetString("zero_tls_client_name") + ".crt")
-		conf.Key = path.Join(conf.CertDir, "client." + Bulk.Conf.GetString("zero_tls_client_name") + ".crt")
-		conf.ClientAuth = "REQUIREANDVERIFY"
-		conf.ServerName= Bulk.Conf.GetString("zero_tls_server_name")
-	}
-
-	tlsConf, err := x.GenerateServerTLSConfig(conf)
+	config, err := x.LoadInternalTLSClientHelperConfig(Bulk.Conf)
 	x.Check(err)
-	zero, err := grpc.DialContext(ctx, opt.ZeroAddr,
+	tlsConf, err := x.GenerateServerTLSConfig(config)
+	x.Check(err)
+
+	dialOpts := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	}
+	if tlsConf != nil {
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	} else {
+		dialOpts = append(dialOpts, grpc.WithInsecure())
+	}
+	zero, err := grpc.DialContext(ctx, opt.ZeroAddr, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	st := &state{
 		opt:    opt,
