@@ -154,7 +154,7 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 	opt.ZSTDCompressionLevel = 0
 	// Overwrite badger options based on the options provided by the user.
 	if compression {
-		opt.Compression = bo.ZSTD
+		opt.Compression = r.state.opt.BadgerCompression
 		opt.ZSTDCompressionLevel = r.state.opt.BadgerCompressionLevel
 	}
 
