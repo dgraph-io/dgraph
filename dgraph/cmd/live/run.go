@@ -166,6 +166,7 @@ func init() {
 	enc.RegisterFlags(flag)
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
+	x.RegisterDgraphTLSFlags(flag)
 }
 
 func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
@@ -542,6 +543,11 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		var tlsErr error
 		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
 		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
+	} else {
+		helperConfig, err := x.LoadInternalTLSClientHelperConfig(conf)
+		x.Checkf(err, "Unable to generate helper TLS config")
+		tlsConfig, err = x.GenerateClientTLSConfig(helperConfig)
+		x.Checkf(err, "Unable to generate TLS Cert Pool")
 	}
 
 	// compression with zero server actually makes things worse
