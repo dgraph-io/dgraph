@@ -20,8 +20,8 @@ shutdown. All such admin endpoints are protected by three layers of authenticati
   HTTP request).
 
 An admin endpoint is any HTTP endpoint which provides admin functionality.
-Admin endpoints nornally start with the `/admin` path. The current list of admin
-endpoints includes:
+Admin endpoints usually start with the `/admin` path. The current list of admin
+endpoints includes the following:
 
 * /admin
 * /admin/backup
@@ -38,8 +38,8 @@ There are a few exceptions to the general rule described above:
 * `/login`: This endpoint logs-in an ACL user, and provides them with a JWT.
   Only IP Whitelisting and Poor-man's auth checks are performed for this endpoint.
 * `/admin`: This endpoint provides GraphQL queries/mutations corresponding to
-  the HTTP admin endpoints. All the queries/mutations on `/admin` have all three
-  layers of authentication, except for `login (mutation)`, whcih has the has the
+  the HTTP admin endpoints. All of the queries/mutations on `/admin` have all
+  three layers of authentication, except for `login (mutation)`, which has the
   same behavior as the above HTTP `/login` endpoint.
 
 ## Whitelisting Admin Operations
