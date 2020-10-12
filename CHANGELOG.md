@@ -9,7 +9,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Changed
 
-- Updater badger to 5e3d4b9 (#6669)
+- Update badger to 5e3d4b9 (#6669)
 - build: Makefile to build Dgraph inside docker container. (#6601)
 - Return content length header for queries (#6480)
 - Use raft storage in managedmode (#6547)
@@ -59,7 +59,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Changed
 
-- Updater badger to 5e3d4b9 (#6670)
+- Update badger to 5e3d4b9 (#6670)
 - Return content length header for queries (#6479)
 - Use raft storage in managedmode (#6545)
 
