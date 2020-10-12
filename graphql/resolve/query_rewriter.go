@@ -1089,6 +1089,11 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 
 					args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)})
 					args = append(args, gql.Arg{Value: fmt.Sprintf("%v", distance)})
+				case "between":
+
+					vals := val.(map[string]interface{})
+					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["min"])})
+					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["max"])})
 
 				default:
 					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, val)})
