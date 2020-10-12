@@ -5,64 +5,54 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
 ## [20.07.2] - Unreleased
-
 [20.07.2]: https://github.com/dgraph-io/dgraph/compare/v20.07.1...v20.03.2
 
 ### Changed
 
 - Updater badger to 5e3d4b9 (#6669)
-- docs: Update restore documentation. (#6653)
-- doc: update /admin endpoint documentation. (#6415) (#6527)
-- test: Enterprise License tests (#5822) (#6640)
 - build: Makefile to build Dgraph inside docker container. (#6601)
-- docs: add documentation for clone backend (#6622)
-- chore(query): Return content length header for queries (#6469) (#6480)
-- perf(raft): Use raft storage in managedmode (#6457) (#6547)
-- Update index.md (#6566) (#6567)
-- Changes github.com/dgraph-io/graphql-transport-ws version (#6462) (#6529)
-- docs: Update list documentation (#6455) (#6461)
+- Return content length header for queries (#6480)
+- Use raft storage in managedmode (#6547)
+- Update index.md (#6567)
+- Changes github.com/dgraph-io/graphql-transport-ws version (#6529)
 
 ### Added
 
-- feat(Dgraph): add utility to export backup data. (#6590)
-- feat(Dgraph): Add separate compression flag for z and wal dirs (#6401) (#6421)
+- add utility to export backup data. (#6590)
+- Add separate compression flag for z and wal dirs (#6421)
 
 ### Fixed
 
-- fix(Auth): fix Poor-man's auth for admin operations (#6660) (#6686)
+- GraphQL
+  - disallowing field names with as (#6645)
+  - Remove extra fields when querying interfaces (#6647)
+  - fix object Linking with `hasInverse` (#6648)
+  - Update gqlgen in go.mod (#6646)
+  - This PR adds documentation for Scalar DateTime type. (#6554)
+  - Hide info when performing mutation on id field with auth rule. (#6534)
+  - Fix cascade with auth query when RBAC is false (#6535)
+  - Fix squashIntoObject so that results are correctly merged (#6530)
+  - fix errors from authorization examples given in docs. (#6522)
+  - fix  restoreStatus query with query variables (#6424)
+  - fix for deletion on interfaces with no non Id field (#6417)
+  - fix internal error when doing GraphQL schema introspection after drop all (#6525)
+  - Link xids properly if there are duplicate xids within t… (#6521)
+  - Fix query rewriting for auth delete when deleting types with inverse field. (#6524)
+  - Fix order and offset in auth queries. (#6366)
+  - Generate correct schema when no orderable field in a type (#6460)
+  - don't generate orderable enum value for list fields (#6413)
+  - fix introspection completion bug (#6389)
+- fix Poor-man's auth for admin operations (#6686)
 - Break out if g.Ctx is done (#6675)
-- fix(Query): Fix wrong path response for k-shortest paths (#6437) (#6654)
-- fix (graphql): disallowing field names with as (#6645)
-- fix(GraphQL Query): Remove extra fields when querying interfaces (#6596) (#6647)
-- Fix(GraphQL): fix object Linking with `hasInverse` (#6557) (#6648)
-- fix(gqlgen): Update gqlgen in go.mod (#6594) (#6646)
+- Fix wrong path response for k-shortest paths (#6654)
 - Update nextRaftId when starting a node with a raftId > 0. (#6597)
-- Pagination param "after" does not work when using func: uid(v) (#6365) (#6634)
-- CID never created if Zero stops early after first init (#5719) (#6637)
-- test: Fix flakiness in group_delete_test.go (#6626)
+- Pagination param "after" does not work when using func: uid(v) (#6634)
+- CID never created if Zero stops early after first init (#6637)
 - Pause rollups during snapshot streaming. (#6611)
-- fix(bulkLoader): Use flags for cache (#6322) (#6467)
-- Revert "fix(GraphQL): This PR add schema cleaning in GraphQL. (#6523)" (#6559)
-- fix(GraphQL): This PR adds documentation for Scalar DateTime type. (#6373) (#6554)
-- fix(GraphQL): Hide info when performing mutation on id field with auth rule. (#6391) (#6534)
-- fix(GraphQL): Fix cascade with auth query when RBAC is false (#6444) (#6535)
-- fix(GraphQL): Fix squashIntoObject so that results are correctly merged (#6416) (#6530)
-- fix(GraphQL): This PR add schema cleaning in GraphQL. (#6523)
+- Use flags for cache (#6467)
 - Remove auth error from mutation. (#6532)
-- fix(GraphQl): fix errors from authorization examples given in docs. (#6330) (#6522)
-- fix(GraphQL): fix  restoreStatus query with query variables (#6414) (#6424)
-- fix(GraphQL): fix for deletion on interfaces with no non Id field (#6387) (#6417)
-- fix(GraphQL): fix internal error when doing GraphQL schema introspection after drop all (#6268) (#6525)
-- fix(GraphQL): Link xids properly if there are duplicate xids within t… (#6521)
-- fix(GraphQL): Fix query rewriting for auth delete when deleting types with inverse field. (#6350) (#6524)
-- fix(GraphQL): Fix order and offset in auth queries. (#6221) (#6366)
-- Fix(increment): Fix readTs less than minTs (#6317) (#6517)
-- Fix(docs): Fix subsection references in docs (#6439) (#6516)
-- fix(Dgraph): fix bug when deleting and adding to a single UID predicate in the same transaction. (#6449)
-- fix(GraphQL): Generate correct schema when no orderable field in a ty… (#6460)
-- fix(GraphQL): don't generate orderable enum value for list fields (#6392) (#6413)
-- fix(GraphQL): fix introspection completion bug (#6385) (#6389)
-- test: retry getting client in TestNodes. (#6482)
+- Fix readTs less than minTs (#6517)
+- fix bug when deleting and adding to a single UID predicate in the same transaction. (#6449)
 
 ## [20.03.6] - Unreleased
 [20.03.6]: https://github.com/dgraph-io/dgraph/compare/v20.03.5...v20.03.6
@@ -70,34 +60,28 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 ### Changed
 
 - Updater badger to 5e3d4b9 (#6670)
-- test: Enterprise License tests (#5822) (#6639)
-- chore(query): Return content length header for queries (#6469) (#6479)
-- Resolve conflict (#6495)
-- perf(raft): Use raft storage in managedmode (#6457) (#6545)
-- test: retry getting client in TestNodes. (#6483)
+- Return content length header for queries (#6479)
+- Use raft storage in managedmode (#6545)
 
 ### Added
 
-- feat(Dgraph): add utility to export backup data. (#6550) (#6591)
-- build: Makefile to build Dgraph inside docker container. (#6602)
-- Release section in config.toml (#6571)
-- Update releases page (#6568)
-- feat(Dgraph): Add separate compression flag for z and wal dirs (#6401) (#6420)
+- add utility to export backup data. (#6591)
+- Makefile to build Dgraph inside docker container. (#6602)
+- Add separate compression flag for z and wal dirs (#6420)
 
 ### Fixed
 
 - Break out if g.Ctx is done (#6676)
-- fix(Query): Fix wrong path response for k-shortest paths (#6437) (#6655)
+- Fix wrong path response for k-shortest paths (#6655)
 - Update nextRaftId when starting a node with a raftId > 0. (#6598)
-- Pagination param "after" does not work when using func: uid(v) (#6365) (#6631)
-- test: Fix flakiness in group_delete_test.go (#6625)
-- CID never created if Zero stops early after first init (#5719) (#6636)
+- Pagination param "after" does not work when using func: uid(v) (#6631)
+- CID never created if Zero stops early after first init (#6636)
 - Pause rollups during snapshot streaming. (#6610)
-- fix(bulkLoader): Use flags for cache (#6322) (#6466)
-- fix(shutdown): Fix negative waitgroup error (#6551)
-- fix: Report Raft heartbeat metrics for Zero v=3 logs and log read index. (#6538) (#6553)
-- Fix(increment): Fix readTs less than minTs (#6317) (#6518)
-- fix(Dgraph): fix bug when deleting and adding to a single UID predicate in the same transaction. (#6450)
+- Use flags for cache (#6466)
+- Fix negative waitgroup error (#6551)
+- Report Raft heartbeat metrics for Zero v=3 logs and log read index. (#6553)
+- Fix readTs less than minTs (#6518)
+- fix bug when deleting and adding to a single UID predicate in the same transaction. (#6450)
 
 ## [1.2.8] - Unreleased
 [1.2.8]: https://github.com/dgraph-io/dgraph/compare/v1.2.7...v1.2.8
@@ -105,24 +89,19 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 ### Changed
 
 - Update badger to 5e3d4b9 (#6671)
-- resolved conflicts (#6635)
-- test: Enterprise License tests (#5822) (#6641)
-- chore(query): Return content length header for queries (#6469) (#6478)
-- perf(raft): Use raft storage in managedmode (#6457) (#6546)
+- Return content length header for queries (#6478)
+- Use raft storage in managedmode (#6546)
 
 ### Added
 
-- build: Makefile to build Dgraph inside docker container. (#6603)
-- feat(Dgraph): Add separate compression flag for z and wal dirs (#6401) (#6419)
+- Makefile to build Dgraph inside docker container. (#6603)
+- Add separate compression flag for z and wal dirs (#6419)
 
 ### Fixed
 
 - Break out if g.Ctx is done (#6677)
 - Update nextRaftId when starting a node with a raftId > 0. (#6599)
-- test: Fix flakiness in group_delete_test.go (#6627)
-- test: retry getting client in TestNodes. (#6484)
-- fix(bulkLoader): Use flags for cache (#6322) (#6465)
-- release page (#6570)
+- Use flags for cache (#6465)
 
 ## [20.07.1] - 2020-09-17
 [20.07.1]: https://github.com/dgraph-io/dgraph/compare/v20.07.0...v20.07.1
