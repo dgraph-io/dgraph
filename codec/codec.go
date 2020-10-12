@@ -357,7 +357,7 @@ func EncodeFromBuffer(uids []byte, blockSize int) *pb.UidPack {
 		uid, n := binary.Uvarint(uids)
 		uids = uids[n:]
 
-		next := uid - uint64(prev)
+		next := uint64(prev) + uid
 		enc.Add(next)
 		prev = next
 	}
