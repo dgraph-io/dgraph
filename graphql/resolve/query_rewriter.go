@@ -751,7 +751,10 @@ func addSelectionSetFrom(
 			auth.varName = parentQryName
 		}
 
-		selectionAuth := addSelectionSetFrom(child, f, auth)
+		var selectionAuth []*gql.GraphQuery
+		if !f.Type().IsPoint() {
+			selectionAuth = addSelectionSetFrom(child, f, auth)
+		}
 		addedFields[f.Name()] = true
 
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
@@ -1056,16 +1059,46 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title, "GraphQL")
 				// OR
 				// numLikes: { le: 10 } -> le(Post.numLikes, 10)
+
 				fn, val := first(dgFunc)
+				args := []gql.Arg{
+					{Value: typ.DgraphPredicate(field)},
+				}
+				switch fn {
+				// in takes List of Scalars as argument, for eg:
+				// code : { in: {"abc", "def", "ghi"} } -> eq(State.code,"abc","def","ghi")
+				case "in":
+					// No need to check for List types as this would pass GraphQL validation
+					// if val was not list
+					vals := val.([]interface{})
+					fn = "eq"
+
+					for _, v := range vals {
+						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
+					}
+          
+				case "near":
+					//  For Geo type we have `near` filter which is written as follows:
+					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
+					geoParams := val.(map[string]interface{})
+					distance := geoParams["distance"]
+
+					coordinate, _ := geoParams["coordinate"].(map[string]interface{})
+					lat := coordinate["latitude"]
+					long := coordinate["longitude"]
+
+          args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)})
+          args = append(args, gql.Arg{Value: fmt.Sprintf("%v", distance)})
+
+        default:
+					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, val)})
+				}
 				ands = append(ands, &gql.FilterTree{
 					Func: &gql.Function{
 						Name: fn,
-						Args: []gql.Arg{
-							{Value: typ.DgraphPredicate(field)},
-							{Value: maybeQuoteArg(fn, val)},
-						},
+						Args: args,
 					},
-				})
+				})  
 			case []interface{}:
 				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
 				ids := convertIDs(dgFunc)

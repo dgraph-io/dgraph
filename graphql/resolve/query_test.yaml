@@ -1,4 +1,43 @@
 -
+  name: "in filter"
+  gqlquery: |
+    query {
+      queryState(filter: {code: {in: ["abc", "def", "ghi"]}}) {
+        code
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryState(func: type(State)) @filter(eq(State.code, "abc", "def", "ghi")) {
+        code : State.code
+        name : State.name
+        dgraph.uid : uid
+      }
+    }
+    
+-
+  name: "Geo query"
+  gqlquery: |
+    query {
+      queryHotel(filter: { location: { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22} } } }) {
+        name
+        location {
+          latitude
+          longitude
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(near(Hotel.location, [22.22,11.11], 33.33)) {
+        name : Hotel.name
+        location : Hotel.location
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "ID query"
   gqlquery: |
     query {

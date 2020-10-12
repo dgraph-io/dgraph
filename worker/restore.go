@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/pkg/errors"
 
@@ -65,8 +64,9 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice) LoadR
 			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 				WithSyncWrites(false).
-				WithTableLoadingMode(options.MemoryMap).
 				WithValueThreshold(1 << 10).
+				WithBlockCacheSize(100 * (1 << 20)).
+				WithIndexCacheSize(100 * (1 << 20)).
 				WithNumVersionsToKeep(math.MaxInt32).
 				WithEncryptionKey(key))
 			if err != nil {

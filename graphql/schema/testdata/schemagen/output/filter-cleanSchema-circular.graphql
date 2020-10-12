@@ -1,0 +1,287 @@
+#######################
+# Input Schema
+#######################
+
+type X {
+	f1(first: Int, offset: Int): [Y] @dgraph(pred: "f1")
+	f3(first: Int, offset: Int): [Z] @dgraph(pred: "~f3")
+}
+
+type Y {
+	f1(first: Int, offset: Int): [X] @dgraph(pred: "~f1")
+	f2(first: Int, offset: Int): [Z] @dgraph(pred: "f2")
+}
+
+type Z {
+	f2(first: Int, offset: Int): [Y] @dgraph(pred: "~f2")
+	f3(first: Int, offset: Int): [X] @dgraph(pred: "f3")
+}
+
+#######################
+# Extended Definitions
+#######################
+
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can represent values in range [-(2^63),(2^63 - 1)].
+"""
+scalar Int64
+
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	int64
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+	geo
+}
+
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+enum Mode {
+	BATCH
+	SINGLE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
+}
+
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter!
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete:AuthRule) on OBJECT
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE
+directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input Int64Filter {
+	eq: Int64
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	in: [String]
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+	in: [String]
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddXPayload {
+	x(first: Int, offset: Int): [X]
+	numUids: Int
+}
+
+type AddYPayload {
+	y(first: Int, offset: Int): [Y]
+	numUids: Int
+}
+
+type AddZPayload {
+	z(first: Int, offset: Int): [Z]
+	numUids: Int
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum XHasFilter {
+	f1
+	f3
+}
+
+enum YHasFilter {
+	f1
+	f2
+}
+
+enum ZHasFilter {
+	f2
+	f3
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AddXInput {
+	f1: [YRef]
+}
+
+input AddYInput {
+	f2: [ZRef]
+}
+
+input AddZInput {
+	f3: [XRef]
+}
+
+input XFilter {
+	has: XHasFilter
+	and: XFilter
+	or: XFilter
+	not: XFilter
+}
+
+input XRef {
+	f1: [YRef]
+}
+
+input YFilter {
+	has: YHasFilter
+	and: YFilter
+	or: YFilter
+	not: YFilter
+}
+
+input YRef {
+	f2: [ZRef]
+}
+
+input ZFilter {
+	has: ZHasFilter
+	and: ZFilter
+	or: ZFilter
+	not: ZFilter
+}
+
+input ZRef {
+	f3: [XRef]
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	queryX(first: Int, offset: Int): [X]
+	queryY(first: Int, offset: Int): [Y]
+	queryZ(first: Int, offset: Int): [Z]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addX(input: [AddXInput!]!): AddXPayload
+	addY(input: [AddYInput!]!): AddYPayload
+	addZ(input: [AddZInput!]!): AddZPayload
+}
+

@@ -108,14 +108,13 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 	if lf.registry, err = badger.OpenKeyRegistry(krOpt); err != nil {
 		glog.Fatalf("Failed to open KeyRegistry: %v\n", err)
 	}
-
-	glog.V(2).Infof("opening log file: %d\n", fid)
+	glog.V(3).Infof("opening log file: %d\n", fid)
 	fpath := logFname(dir, fid)
 	// Open the file in read-write mode and create it if it doesn't exist yet.
 	lf.MmapFile, err = z.OpenMmapFile(fpath, os.O_RDWR|os.O_CREATE, logFileSize)
 
 	if err == z.NewFile {
-		glog.V(2).Infof("New file: %d\n", fid)
+		glog.V(3).Infof("New file: %d\n", fid)
 		z.ZeroOut(lf.Data, 0, logFileOffset)
 		if err = lf.bootstrap(); err != nil {
 			glog.Fatalf("Failed to bootstrap logfile: %v\n", err)
