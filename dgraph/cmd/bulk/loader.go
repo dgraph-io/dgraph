@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
+	bo "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/badger/v2/y"
 
 	"github.com/dgraph-io/dgraph/chunker"
@@ -77,6 +78,8 @@ type options struct {
 	// ........... Badger options ..........
 	// EncryptionKey is the key used for encryption. Enterprise only feature.
 	EncryptionKey x.SensitiveByteSlice
+	// BadgerCompression is the compression algorithm to use while writing to badger.
+	BadgerCompression bo.CompressionType
 	// BadgerCompressionlevel is the compression level to use while writing to badger.
 	BadgerCompressionLevel int
 	BlockCacheSize         int64
