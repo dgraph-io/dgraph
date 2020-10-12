@@ -356,7 +356,16 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		req.wg.Add(1) // One for finishing the writes.
 		go func() {
 			defer req.wg.Done()
+			var attr string
 			for kvlist := range req.listCh {
+				for _, kv := range kvlist.GetKv() {
+					pk, err := x.Parse(kv.Key)
+					x.Check(err)
+					if pk.Attr != attr {
+						fmt.Printf("---> WRITING attr: %s\n", pk.Attr)
+						attr = pk.Attr
+					}
+				}
 				x.Check(ci.writer.Write(kvlist))
 			}
 		}()
