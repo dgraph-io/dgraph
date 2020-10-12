@@ -91,6 +91,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -125,6 +126,25 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter!
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -139,6 +159,7 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -192,6 +213,7 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
@@ -201,6 +223,7 @@ input StringExactFilter {
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 
 #######################
@@ -389,6 +412,7 @@ input PostRef {
 
 input PostType_exact {
 	eq: PostType
+	in: PostType
 	le: PostType
 	lt: PostType
 	ge: PostType
@@ -398,6 +422,7 @@ input PostType_exact {
 
 input PostType_exact_StringRegExpFilter {
 	eq: PostType
+	in: PostType
 	le: PostType
 	lt: PostType
 	ge: PostType
@@ -408,10 +433,12 @@ input PostType_exact_StringRegExpFilter {
 
 input PostType_hash {
 	eq: PostType
+	in: PostType
 }
 
 input PostType_hash_StringRegExpFilter {
 	eq: PostType
+	in: PostType
 	regexp: String
 }
 
@@ -419,6 +446,7 @@ input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter 
 	alloftext: String
 	anyoftext: String
 	eq: String
+	in: [String]
 	allofterms: String
 	anyofterms: String
 	regexp: String

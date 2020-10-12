@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Java"
+weight = 4
 [menu.main]
     parent = "clients"
-    weight = 4
 +++
 
 The official Java client [can be found here](https://github.com/dgraph-io/dgraph4j). 

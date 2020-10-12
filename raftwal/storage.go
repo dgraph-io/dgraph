@@ -18,12 +18,9 @@ package raftwal
 
 import (
 	"math"
-	"os"
-	"path"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
@@ -86,72 +83,6 @@ type DiskStorage struct {
 
 type indexRange struct {
 	from, until uint64 // index range for deletion, until index is not deleted.
-}
-
-// zeroOut zeroes out all the bytes in the range [start, end).
-func zeroOut(dst []byte, start, end int) {
-	buf := dst[start:end]
-	buf[0] = 0x00
-	for i := 1; i < len(buf); i *= 2 {
-		copy(buf[i:], buf[:i])
-	}
-}
-
-func syncDir(dir string) error {
-	glog.V(2).Infof("Syncing dir: %s\n", dir)
-	df, err := os.Open(dir)
-	if err != nil {
-		return errors.Wrapf(err, "while opening %s", dir)
-	}
-	x.Check(err)
-	if err := df.Sync(); err != nil {
-		return errors.Wrapf(err, "while syncing %s", dir)
-	}
-	if err := df.Close(); err != nil {
-		return errors.Wrapf(err, "while closing %s", dir)
-	}
-	return nil
-}
-
-// openMmapFile opens an existing file or creates a new file. If the file is
-// created, it would truncate the file to maxSz. In both cases, it would mmap
-// the file to maxSz and returned it.
-func openMmapFile(filename string, flag int, maxSz int) (*mmapFile, error) {
-	fd, err := os.OpenFile(filename, flag, 0666)
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to open: %s", filename)
-	}
-	fi, err := fd.Stat()
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot stat file: %s", filename)
-	}
-	fileSize := fi.Size()
-	if fileSize > int64(maxSz) {
-		return nil, errors.Errorf("file size %d does not match zero or max size %d",
-			fileSize, maxSz)
-	}
-	if err := fd.Truncate(int64(maxSz)); err != nil {
-		return nil, errors.Wrapf(err, "error while truncation")
-	}
-	buf, err := z.Mmap(fd, true, int64(maxSz)) // Mmap up to max size.
-	if err != nil {
-		return nil, errors.Wrapf(err, "while mmapping %s with size: %d", fd.Name(), maxSz)
-	}
-
-	err = nil
-	if fileSize == 0 {
-		err = errNewFile
-		dir, _ := path.Split(filename)
-		go func() {
-			if err := syncDir(dir); err != nil {
-				glog.Errorf("Error during syncDir: %v\n", err)
-			}
-		}()
-	}
-	return &mmapFile{
-		data: buf,
-		fd:   fd,
-	}, err
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
@@ -425,10 +356,10 @@ func (w *DiskStorage) addEntries(entries []raftpb.Entry) error {
 
 // Sync calls the Sync method in the underlying badger instance to write all the contents to disk.
 func (w *DiskStorage) Sync() error {
-	if err := w.meta.sync(); err != nil {
+	if err := w.meta.Sync(); err != nil {
 		return errors.Wrapf(err, "while syncing meta")
 	}
-	if err := w.wal.current.sync(); err != nil {
+	if err := w.wal.current.Sync(); err != nil {
 		return errors.Wrapf(err, "while syncing current file")
 	}
 	return nil

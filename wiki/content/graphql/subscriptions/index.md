@@ -1,11 +1,11 @@
 +++
 title = "GraphQL Subscriptions"
+weight = 8
 [menu.main]
   url = "/graphql/subscriptions/"
   name = "Subscriptions"
   identifier = "subscriptions"
   parent = "graphql"
-  weight = 8
 +++
 
 Subscriptions allow clients to listen to real-time messages from the server. The client connects to the server via a bi-directional communication channel using WebSocket and sends a subscription query that specifies which event it is interested in. When an event is triggered, the server executes the stored GraphQL query, and the result is sent through the same communication channel back to the client.

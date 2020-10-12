@@ -1,8 +1,8 @@
 +++
 title = "Advanced Queries with GraphQL+-"
+weight = 2
 [menu.main]
     parent = "slash-graphql"
-    weight = 2
 +++
 
 *It is now possible to [embed GraphQL+- queries inside your GraphQL schema](/graphql/custom/graphqlpm), which is recommended for most use cases. The rest of this document covers how to connect to connect to your Slash GraphQL backend with existing Dgraph clients.*

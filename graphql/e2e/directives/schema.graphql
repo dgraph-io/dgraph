@@ -1,6 +1,12 @@
 # **Don't delete** Comments at top of schemas should work
 # See: https://github.com/dgraph-io/dgraph/issues/4227
 
+type Hotel {
+    id: ID!
+    name: String! @search(by: [exact])
+    location: Point @search
+}
+
 type Country {
         # **Don't delete** Comments in types should work
         id: ID! # **Don't delete** Comments in lines should work
@@ -37,6 +43,8 @@ type Author @dgraph(type: "test.dgraph.author") {
         reputation: Float @search
         country: Country
         posts: [Post!] @hasInverse(field: author)
+		bio: String @lambda
+		rank: Int @lambda
 }
 
 type Post @dgraph(type: "myPost") {
@@ -90,6 +98,7 @@ interface Character @dgraph(type: "performance.character") {
         id: ID!
         name: String! @search(by: [exact])
         appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
+		bio: String @lambda
 }
 
 type Human implements Character & Employee {
@@ -183,4 +192,12 @@ type Person1 {
     id: ID!
     name: String!
     friends: [Person1] @hasInverse(field: friends)
+}
+
+type Query {
+	authorsByName(name: String!): [Author] @lambda
+}
+
+type Mutation {
+	newAuthor(name: String!): ID! @lambda
 }

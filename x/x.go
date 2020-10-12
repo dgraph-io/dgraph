@@ -41,10 +41,11 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v2"
+	bo "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dustin/go-humanize"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -320,6 +321,7 @@ func (gqlErr *GqlError) WithPath(path []interface{}) *GqlError {
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
+	w.Header().Set("Content-Type", "application/json")
 	var qr queryRes
 	ext := make(map[string]interface{})
 	ext["code"] = code
@@ -409,6 +411,20 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+// AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
+func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
+	if authToken := r.Header.Get("X-Dgraph-AuthToken"); authToken != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("auth-token", authToken)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
 }
 
 // AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
@@ -1028,75 +1044,30 @@ func IsGuardian(groups []string) bool {
 
 // MonitorCacheHealth periodically monitors the cache metrics and reports if
 // there is high contention in the cache.
-func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, closer *z.Closer) {
+func MonitorCacheHealth(db *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
-	getMetrics := func(ct string) *ristretto.Metrics {
-		var metrics *ristretto.Metrics
+	record := func(ct string) {
 		switch ct {
 		case "pstore-block":
-			metrics = db.BlockCacheMetrics()
-		case "pstore-index":
-			metrics = db.IndexCacheMetrics()
-		case "WALstore-block":
-			metrics = db.BlockCacheMetrics()
-		case "WALstore-index":
-			metrics = db.IndexCacheMetrics()
-		}
-		return metrics
-	}
-
-	checkCache := func(ct string) {
-		metrics := getMetrics(ct)
-		if metrics == nil {
-			return
-		}
-		switch ct {
-		case "pstore-block":
+			metrics := db.BlockCacheMetrics()
 			ostats.Record(context.Background(), PBlockHitRatio.M(metrics.Ratio()))
 		case "pstore-index":
+			metrics := db.IndexCacheMetrics()
 			ostats.Record(context.Background(), PIndexHitRatio.M(metrics.Ratio()))
-		case "WALstore-block":
-			ostats.Record(context.Background(), WBlockHitRatio.M(metrics.Ratio()))
-		case "WALstore-index":
-			ostats.Record(context.Background(), WIndexHitRatio.M(metrics.Ratio()))
 		default:
 			panic("invalid cache type")
 		}
-
-		// If the mean life expectancy is less than 10 seconds, the cache
-		// might be too small.
-		le := metrics.LifeExpectancySeconds()
-		lifeTooShort := le.Count > 0 && float64(le.Sum)/float64(le.Count) < 10
-		hitRatioTooLow := metrics.Ratio() > 0 && metrics.Ratio() < 0.4
-		if bool(glog.V(2)) && (lifeTooShort || hitRatioTooLow) {
-			glog.Warningf("======== Cache might be too small %s =====", ct)
-			glog.Warningf("Metric: %+v", metrics)
-			glog.Warningf("Life expectancy: %+v", le)
-		}
 	}
 
-	logMetrics := func(ct string) {
-		if metrics := getMetrics(ct); metrics != nil {
-			prefix := fmt.Sprintf("%s-%s", prefix, ct)
-			le := metrics.LifeExpectancySeconds()
-			glog.V(2).Infof("%s metrics %+v %+v", prefix, metrics, le)
-		}
-	}
-
-	ticker := time.NewTicker(period)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	tickerLog := time.NewTicker(5 * time.Minute)
-	defer tickerLog.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			checkCache(prefix + "-block")
-			checkCache(prefix + "-index")
-		case <-tickerLog.C:
-			logMetrics(prefix + "-block")
-			logMetrics(prefix + "-index")
+			record("pstore-block")
+			record("pstore-index")
 		case <-closer.HasBeenClosed():
 			return
 		}
@@ -1107,36 +1078,33 @@ func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, clos
 // Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
 func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
-	// Get initial size on start.
-	_, lastVlogSize := store.Size()
-	const GB = int64(1 << 30)
 
 	// Runs every 1m, checks size of vlog and runs GC conditionally.
-	vlogTicker := time.NewTicker(1 * time.Minute)
-	defer vlogTicker.Stop()
-	// Runs vlog GC unconditionally every 10 minutes.
-	mandatoryVlogTicker := time.NewTicker(10 * time.Minute)
-	defer mandatoryVlogTicker.Stop()
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
 
 	runGC := func() {
+		_, before := store.Size()
+		var runs int
 		for err := error(nil); err == nil; {
 			// If a GC is successful, immediately run it again.
+			runs++
 			err = store.RunValueLogGC(0.7)
 		}
-		_, lastVlogSize = store.Size()
+		if runs == 0 {
+			return
+		}
+		_, after := store.Size()
+		glog.V(2).Infof("Ran Value log GC %d times. Before: %s After: %s",
+			runs, humanize.IBytes(uint64(before)), humanize.IBytes(uint64(after)))
 	}
 
+	runGC()
 	for {
 		select {
 		case <-closer.HasBeenClosed():
 			return
-		case <-vlogTicker.C:
-			_, currentVlogSize := store.Size()
-			if currentVlogSize < lastVlogSize+GB {
-				continue
-			}
-			runGC()
-		case <-mandatoryVlogTicker.C:
+		case <-ticker.C:
 			runGC()
 		}
 	}
@@ -1239,14 +1207,33 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 	return cachePercent, nil
 }
 
-// ParseCompressionLevel returns compression level(int) given the compression level(string)
-func ParseCompressionLevel(level string) int {
-	x, err := strconv.Atoi(level)
-	Check(err)
-	if x < 0 {
-		glog.Fatalf("ERROR: compression level(%s) cannot be negative", level)
+// ParseCompression returns badger.compressionType and compression level given compression string
+// of format compression-type:compression-level
+func ParseCompression(cStr string) (bo.CompressionType, int) {
+	cStrSplit := strings.Split(cStr, ":")
+	cType := cStrSplit[0]
+	level := 3
+
+	var err error
+	if len(cStrSplit) == 2 {
+		level, err = strconv.Atoi(cStrSplit[1])
+		Check(err)
+		if level <= 0 {
+			glog.Fatalf("ERROR: compression level(%v) must be greater than zero", level)
+		}
+	} else if len(cStrSplit) > 2 {
+		glog.Fatalf("ERROR: Invalid badger.compression argument")
 	}
-	return x
+	switch cType {
+	case "zstd":
+		return bo.ZSTD, level
+	case "snappy":
+		return bo.Snappy, 0
+	case "none":
+		return bo.None, 0
+	}
+	glog.Fatalf("ERROR: compression type (%s) invalid", cType)
+	return 0, 0
 }
 
 // ToHex converts a uint64 to a hex byte array. If rdf is true it will

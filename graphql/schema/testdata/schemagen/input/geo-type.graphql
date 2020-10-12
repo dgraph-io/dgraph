@@ -1,0 +1,5 @@
+type Hotel {
+    id: ID!
+    name: String!
+    location: Point @search
+}

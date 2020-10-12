@@ -88,9 +88,10 @@ func main() {
 
 			case ms.NumGC == lastNumGC:
 				runtime.GC()
-				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC,
+				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s. jemalloc: %s.\n", ms.NumGC,
 					humanize.IBytes(ms.HeapInuse),
-					humanize.IBytes(ms.HeapIdle-ms.HeapReleased))
+					humanize.IBytes(ms.HeapIdle-ms.HeapReleased),
+					humanize.IBytes(js.Active))
 				lastNumGC = ms.NumGC + 1
 				lastMs = ms
 			}

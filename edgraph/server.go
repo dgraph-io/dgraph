@@ -1312,7 +1312,7 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
-var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Alter operations.")
+var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Admin operations.")
 
 func hasAdminAuth(ctx context.Context, tag string) (net.Addr, error) {
 	ipAddr, err := x.HasWhitelistedIP(ctx)

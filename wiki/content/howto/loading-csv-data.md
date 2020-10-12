@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Loading CSV Data"
+weight = 6
 [menu.main]
     parent = "howto"
-    weight = 6
 +++
 
 [Dgraph mutations]({{< relref "mutations/_index.md" >}}) are accepted in RDF

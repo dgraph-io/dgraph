@@ -297,6 +297,7 @@ func RunAll(t *testing.T) {
 	t.Run("multiple search indexes", multipleSearchIndexes)
 	t.Run("multiple search indexes wrong field", multipleSearchIndexesWrongField)
 	t.Run("hash search", hashSearch)
+	t.Run("in filter", inFilter)
 	t.Run("deep filter", deepFilter)
 	t.Run("deep has filter", deepHasFilter)
 	t.Run("many queries", manyQueries)
@@ -336,6 +337,7 @@ func RunAll(t *testing.T) {
 	t.Run("queries have extensions", queriesHaveExtensions)
 	t.Run("alias works for queries", queryWithAlias)
 	t.Run("cascade directive", queryWithCascade)
+	t.Run("query geo near filter", queryGeoNearFilter)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -378,6 +380,7 @@ func RunAll(t *testing.T) {
 	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
 	t.Run("Input coercing for int64 type", int64BoundaryTesting)
 	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
+	t.Run("Geo type", mutationGeoType)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -390,6 +393,12 @@ func RunAll(t *testing.T) {
 	t.Run("fragment in query", fragmentInQuery)
 	t.Run("fragment in query on Interface", fragmentInQueryOnInterface)
 	t.Run("fragment in query on Object", fragmentInQueryOnObject)
+
+	// lambda tests
+	t.Run("lambda on type field", lambdaOnTypeField)
+	t.Run("lambda on interface field", lambdaOnInterfaceField)
+	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
+	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
 }
 
 // RunCorsTest test all cors related tests.
@@ -437,12 +446,12 @@ func gzipCompressionHeader(t *testing.T) {
 		}`,
 	}
 
-	req, err := queryCountry.createGQLPost(GraphqlURL)
+	req, err := queryCountry.CreateGQLPost(GraphqlURL)
 	require.NoError(t, err)
 
 	req.Header.Set("Content-Encoding", "gzip")
 
-	resData, err := runGQLRequest(req)
+	resData, err := RunGQLRequest(req)
 	require.NoError(t, err)
 
 	var result *GraphQLResponse
@@ -464,11 +473,11 @@ func gzipCompressionNoHeader(t *testing.T) {
 		gzipEncoding: true,
 	}
 
-	req, err := queryCountry.createGQLPost(GraphqlURL)
+	req, err := queryCountry.CreateGQLPost(GraphqlURL)
 	require.NoError(t, err)
 
 	req.Header.Del("Content-Encoding")
-	resData, err := runGQLRequest(req)
+	resData, err := RunGQLRequest(req)
 	require.NoError(t, err)
 
 	var result *GraphQLResponse
@@ -507,7 +516,7 @@ func (params *GraphQLParams) Execute(t require.TestingT, req *http.Request) *Gra
 	for h := range params.Headers {
 		req.Header.Set(h, params.Headers.Get(h))
 	}
-	res, err := runGQLRequest(req)
+	res, err := RunGQLRequest(req)
 	require.NoError(t, err)
 
 	var result *GraphQLResponse
@@ -525,7 +534,7 @@ func (params *GraphQLParams) Execute(t require.TestingT, req *http.Request) *Gra
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
 // and executes the request to url.
 func (params *GraphQLParams) ExecuteAsPost(t require.TestingT, url string) *GraphQLResponse {
-	req, err := params.createGQLPost(url)
+	req, err := params.CreateGQLPost(url)
 	require.NoError(t, err)
 
 	return params.Execute(t, req)
@@ -606,7 +615,7 @@ func (params *GraphQLParams) buildPostRequest(url string, body []byte, contentTy
 	return req, nil
 }
 
-func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
+func (params *GraphQLParams) CreateGQLPost(url string) (*http.Request, error) {
 	body, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
@@ -619,8 +628,8 @@ func (params *GraphQLParams) createApplicationGQLPost(url string) (*http.Request
 	return params.buildPostRequest(url, []byte(params.Query), "application/graphql")
 }
 
-// runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
-func runGQLRequest(req *http.Request) ([]byte, error) {
+// RunGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
+func RunGQLRequest(req *http.Request) ([]byte, error) {
 	client := &http.Client{Timeout: 50 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -706,7 +715,7 @@ func allCountriesAdded() ([]*country, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := runGQLRequest(req)
+	resp, err := RunGQLRequest(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "error running GraphQL query")
 	}
@@ -749,12 +758,12 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 	schemaQry := &GraphQLParams{
 		Query: `query { getGQLSchema { schema } }`,
 	}
-	req, err := schemaQry.createGQLPost(url)
+	req, err := schemaQry.CreateGQLPost(url)
 	if err != nil {
 		return false, errors.Wrap(err, "while creating gql post")
 	}
 
-	res, err := runGQLRequest(req)
+	res, err := RunGQLRequest(req)
 	if err != nil {
 		return false, errors.Wrap(err, "error running GraphQL query")
 	}
@@ -798,12 +807,12 @@ func addSchema(url, schema string) error {
 		}`,
 		Variables: map[string]interface{}{"sch": schema},
 	}
-	req, err := add.createGQLPost(url)
+	req, err := add.CreateGQLPost(url)
 	if err != nil {
 		return errors.Wrap(err, "error creating GraphQL query")
 	}
 
-	resp, err := runGQLRequest(req)
+	resp, err := RunGQLRequest(req)
 	if err != nil {
 		return errors.Wrap(err, "error running GraphQL query")
 	}
@@ -841,7 +850,7 @@ func addSchemaThroughAdminSchemaEndpt(url, schema string) error {
 		return errors.Wrap(err, "error running GraphQL query")
 	}
 
-	resp, err := runGQLRequest(req)
+	resp, err := RunGQLRequest(req)
 	if err != nil {
 		return errors.Wrap(err, "error running GraphQL query")
 	}

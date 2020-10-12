@@ -1,9 +1,9 @@
 +++
 title = "Requests and Responses"
+weight = 2
 [menu.main]
     parent = "api"
     name = "Requests and Responses"
-    weight = 2   
 +++
 
 In this section, we'll cover the structure for GraphQL requests and responses, how to enable compression for them, and configuration options for extensions.

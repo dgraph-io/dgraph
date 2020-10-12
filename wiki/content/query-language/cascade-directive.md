@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Cascade Directive"
+weight = 15
 [menu.main]
     parent = "query-language"
-    weight = 15
 +++
 
 With the `@cascade` directive, nodes that don't have all predicates specified in the query are removed. This can be useful in cases where some filter was applied or if nodes might not have all listed predicates.

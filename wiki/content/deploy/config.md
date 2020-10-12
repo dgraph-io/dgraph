@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Config"
+weight = 2
 [menu.main]
     parent = "deploy"
-    weight = 2
 +++
 
 {{% notice "tip" %}}
@@ -51,7 +51,6 @@ Example JSON config file (config.json):
 {
   "my": "localhost:7080",
   "zero": "localhost:5080",
-  "lru_mb": 4096,
   "postings": "/path/to/p",
   "wal": "/path/to/w"
 }
@@ -62,7 +61,6 @@ Example TOML config file (config.toml):
 ```toml
 my = "localhost:7080"
 zero = "localhost:5080"
-lru_mb = 4096
 postings = "/path/to/p"
 wal = "/path/to/w"
 ```
@@ -73,7 +71,6 @@ Example YAML config file (config.yml):
 ```yaml
 my: "localhost:7080"
 zero: "localhost:5080"
-lru_mb: 4096
 postings: "/path/to/p"
 wal: "/path/to/w"
 ```
@@ -83,7 +80,6 @@ Example HCL config file (config.hcl):
 ```hcl
 my = "localhost:7080"
 zero = "localhost:5080"
-lru_mb = 4096
 postings = "/path/to/p"
 wal = "/path/to/w"
 ```
@@ -92,7 +88,6 @@ Example Java properties config file (config.properties):
 ```text
 my=localhost:7080
 zero=localhost:5080
-lru_mb=4096
 postings=/path/to/p
 wal=/path/to/w
 ```
