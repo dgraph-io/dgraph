@@ -145,19 +145,17 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	}
 
 	// authorize the user using password
-	var err error
-	user, err = authorizeUser(ctx, request.Userid, request.Password)
+	invalidLogin := errors.New("Invalid username or password")
+	user, err := authorizeUser(ctx, request.Userid, request.Password)
 	if err != nil {
-		return nil, errors.Wrapf(err, "while querying user with id %v",
-			request.Userid)
+		return nil, invalidLogin
 	}
 
 	if user == nil {
-		return nil, errors.Errorf("unable to authenticate through password: "+
-			"user not found for id %v", request.Userid)
+		return nil, invalidLogin
 	}
 	if !user.PasswordMatch {
-		return nil, errors.Errorf("password mismatch for user: %v", request.Userid)
+		return nil, invalidLogin
 	}
 	return user, nil
 }
