@@ -1596,10 +1596,10 @@ func ToBackupPostingList(l *pb.PostingList, bl *pb.BackupPostingList) ([]byte, e
 
 	// Encode uids to []byte instead of []uint64 if we have more than 1000
 	// uids. We do this to improve the memory usage.
-	if codec.ApproxLen(l.Pack) > 1000 {
+	if codec.ApproxLen(l.Pack) > 1024 {
 		buf := codec.DecodeToBuffer(l.Pack, 0)
 		defer buf.Release()
-		bl.Uidbytes = buf.Bytes()
+		bl.UidBytes = buf.Bytes()
 	} else {
 		bl.Uids = codec.Decode(l.Pack, 0)
 	}
@@ -1617,10 +1617,10 @@ func FromBackupPostingList(bl *pb.BackupPostingList) *pb.PostingList {
 		return &l
 	}
 
-	if len(bl.Uids) != 0 {
+	if len(bl.Uids) > 0 {
 		l.Pack = codec.Encode(bl.Uids, blockSize)
-	} else {
-		l.Pack = codec.EncodeFromBuffer(bl.Uidbytes, blockSize)
+	} else if len(bl.UidBytes) > 0 {
+		l.Pack = codec.EncodeFromBuffer(bl.UidBytes, blockSize)
 	}
 	l.Postings = bl.Postings
 	l.CommitTs = bl.CommitTs

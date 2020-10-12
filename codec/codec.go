@@ -350,12 +350,12 @@ func Encode(uids []uint64, blockSize int) *pb.UidPack {
 }
 
 // EncodeFromBuffer is the same as Encode but it accepts a byte slice instead of a uint64 slice.
-func EncodeFromBuffer(uids []byte, blockSize int) *pb.UidPack {
+func EncodeFromBuffer(buf []byte, blockSize int) *pb.UidPack {
 	enc := Encoder{BlockSize: blockSize}
 	prev := uint64(0)
-	for len(uids) > 0 {
-		uid, n := binary.Uvarint(uids)
-		uids = uids[n:]
+	for len(buf) > 0 {
+		uid, n := binary.Uvarint(buf)
+		buf = buf[n:]
 
 		next := uint64(prev) + uid
 		enc.Add(next)
@@ -405,7 +405,7 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 // DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
 // calloc'ed and can be SHOULD be freed up by calling buffer.Release().
 func DecodeToBuffer(pack *pb.UidPack, seek uint64) *z.Buffer {
-	buf, err := z.NewBufferWith(256<<20, 16<<30, z.UseCalloc)
+	buf, err := z.NewBufferWith(256<<20, 32<<30, z.UseCalloc)
 	x.Check(err)
 	buf.AutoMmapAfter(1 << 30)
 
