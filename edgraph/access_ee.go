@@ -524,7 +524,7 @@ func ResetAcl(closer *z.Closer) {
 		}
 		atomic.StoreUint64(&x.GrootUserUid, grootUserUidUint)
 		glog.Infof("groot user uid: %d", grootUserUidUint)
-		glog.Infof("Successfully upserted groot user account")
+		glog.Infof("Successfully upserted groot account")
 		return nil
 	}
 
