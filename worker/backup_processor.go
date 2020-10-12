@@ -36,7 +36,7 @@ import (
 
 const (
 	// backupNumGo is the number of go routines used by the backup stream writer.
-	backupNumGo = 16
+	backupNumGo = 2
 )
 
 // BackupProcessor handles the different stages of the backup process.
