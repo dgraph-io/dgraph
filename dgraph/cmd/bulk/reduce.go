@@ -352,24 +352,33 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		}
 	}
 
-	for req := range writerCh {
-		req.wg.Add(1) // One for finishing the writes.
-		go func() {
-			defer req.wg.Done()
-			var attr string
-			for kvlist := range req.listCh {
-				for _, kv := range kvlist.GetKv() {
-					pk, err := x.Parse(kv.Key)
-					x.Check(err)
-					if pk.Attr != attr {
-						fmt.Printf("---> WRITING attr: %s\n", pk.Attr)
-						attr = pk.Attr
-					}
+	var lastStreamId uint32
+	write := func(req *encodeRequest) {
+		for kvlist := range req.listCh {
+			x.Check(ci.writer.Write(kvlist))
+
+			for _, kv := range kvlist.GetKv() {
+				if lastStreamId == kv.StreamId {
+					continue
 				}
-				x.Check(ci.writer.Write(kvlist))
+				if lastStreamId > 0 {
+					fmt.Printf("Finishing stream id: %d\n", lastStreamId)
+					list := &bpb.KVList{}
+					list.Kv = append(list.Kv, &bpb.KV{
+						StreamId:   lastStreamId,
+						StreamDone: true,
+					})
+					ci.writer.Write(list)
+				}
+				lastStreamId = kv.StreamId
 			}
-		}()
+		}
+	}
+
+	for req := range writerCh {
+		write(req)
 		req.wg.Wait()
+
 		count(req)
 	}
 
