@@ -538,7 +538,7 @@ remove the node in this order:
 
 1. On the Zero leader, call `/removeNode` to remove the Dgraph instance from
    the cluster (see [More about Dgraph Zero]({{< relref
-   "#more-about-dgraph-zero" >}})). The removed instance will immediately stop
+   "/deploy/dgraph-zero" >}})). The removed instance will immediately stop
    running. Any further attempts to join the cluster will fail for that instance
    since it has been removed.
 2. Remove the PersistentVolumeClaim associated with the pod to delete its data.
