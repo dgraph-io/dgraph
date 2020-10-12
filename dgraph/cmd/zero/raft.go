@@ -727,15 +727,12 @@ func (n *node) Run() {
 			}
 			span.Annotatef(nil, "Pushed %d readstates", len(rd.ReadStates))
 
+			var becameLeader bool
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
-					glog.Infoln("I've become the leader, updating leases.")
-					n.server.updateLeases()
+					becameLeader = true
 				}
 				leader = rd.RaftState == raft.StateLeader
-				// Oracle stream would close the stream once it steps down as leader
-				// predicate move would cancel any in progress move on stepping down.
-				n.triggerLeaderChange()
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
@@ -777,6 +774,16 @@ func (n *node) Run() {
 					glog.Infof("Unhandled entry: %+v\n", entry)
 				}
 				n.Applied.Done(entry.Index)
+			}
+
+			if becameLeader {
+				// Update the leases after having applied all the entries up until now.
+				glog.Infoln("I've become the leader, updating leases.")
+				n.server.updateLeases()
+
+				// Oracle stream would close the stream once it steps down as leader
+				// predicate move would cancel any in progress move on stepping down.
+				n.triggerLeaderChange()
 			}
 			span.Annotatef(nil, "Applied %d CommittedEntries", len(rd.CommittedEntries))
 
