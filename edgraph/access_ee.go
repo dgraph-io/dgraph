@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -44,22 +45,6 @@ import (
 type predsAndvars struct {
 	preds []string
 	vars  map[string]string
-}
-
-type groupNode struct {
-	Uid string `json:"uid"`
-}
-
-type groupQryResp struct {
-	GuardiansGroup []groupNode `json:"guardians"`
-}
-
-type userNode struct {
-	Uid string `json:"uid"`
-}
-
-type userQryResp struct {
-	GrootUser []userNode `json:"grootUser"`
 }
 
 // Login handles login requests from clients.
@@ -434,6 +419,15 @@ func ResetAcl(closer *z.Closer) {
 
 		resp, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
 
+		// Structs to parse guardians group uid from query response
+		type groupNode struct {
+			Uid string `json:"uid"`
+		}
+
+		type groupQryResp struct {
+			GuardiansGroup []groupNode `json:"guardians"`
+		}
+
 		if err != nil {
 			return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
 		}
@@ -458,7 +452,7 @@ func ResetAcl(closer *z.Closer) {
 		if err != nil {
 			return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansGroupUid)
 		}
-		x.GuardiansGroupUid.Store(guardiansGroupUidUint)
+		atomic.StoreUint64(&x.GuardiansGroupUid, guardiansGroupUidUint)
 
 		glog.Infof("guardians group uid: %d", guardiansGroupUidUint)
 		glog.Infof("Successfully upserted the guardians group")
@@ -498,6 +492,15 @@ func ResetAcl(closer *z.Closer) {
 			return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
 		}
 
+		// Structs to parse groot user uid from query response
+		type userNode struct {
+			Uid string `json:"uid"`
+		}
+
+		type userQryResp struct {
+			GrootUser []userNode `json:"grootUser"`
+		}
+
 		var grootUserUid string
 		var userResp userQryResp
 		if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
@@ -519,7 +522,7 @@ func ResetAcl(closer *z.Closer) {
 		if err != nil {
 			return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
 		}
-		x.GrootUserUid.Store(grootUserUidUint)
+		atomic.StoreUint64(&x.GrootUserUid, grootUserUidUint)
 		glog.Infof("groot user uid: %d", grootUserUidUint)
 		glog.Infof("Successfully upserted groot user account")
 		return nil
