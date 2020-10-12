@@ -20,6 +20,7 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"sort"
@@ -93,39 +94,48 @@ func logFname(dir string, id int64) string {
 // openLogFile opens a logFile in the given directory. The filename is
 // constructed based on the value of fid.
 func openLogFile(dir string, fid int64) (*logFile, error) {
-	glog.V(2).Infof("opening log file: %d\n", fid)
-	fpath := logFname(dir, fid)
-	fmt.Println(fpath)
-	// Open the file in read-write mode and create it if it doesn't exist yet.
-	mf, err := z.OpenMmapFile(fpath, os.O_RDWR|os.O_CREATE, logFileSize)
-
-	var registry *badger.KeyRegistry
-
+	var err error
+	lf := &logFile{
+		fid: fid,
+	}
 	krOpt := badger.KeyRegistryOptions{
 		ReadOnly:                      false,
 		Dir:                           dir,
-		EncryptionKey:                 []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-		EncryptionKeyRotationDuration: time.Hour,
+		EncryptionKey:                 x.WorkerConfig.EncryptionKey,
+		EncryptionKeyRotationDuration: 10 * 24 * time.Hour,
 		InMemory:                      false,
 	}
-	if registry, err = badger.OpenKeyRegistry(krOpt); err != nil {
-		panic("Failed to open key registry")
+	if lf.registry, err = badger.OpenKeyRegistry(krOpt); err != nil {
+		glog.Fatalf("Failed to open KeyRegistry: %v\n", err)
 	}
+
+	glog.V(2).Infof("opening log file: %d\n", fid)
+	fpath := logFname(dir, fid)
+	// Open the file in read-write mode and create it if it doesn't exist yet.
+	lf.MmapFile, err = z.OpenMmapFile(fpath, os.O_RDWR|os.O_CREATE, logFileSize)
 
 	if err == z.NewFile {
 		glog.V(2).Infof("New file: %d\n", fid)
-		z.ZeroOut(mf.Data, 0, logFileOffset)
-	} else {
+		z.ZeroOut(lf.Data, 0, logFileOffset)
+		if err = lf.bootstrap(); err != nil {
+			glog.Fatalf("Failed to bootstrap logfile: %v\n", err)
+		}
+	} else if err != nil {
 		x.Check(err)
-	}
+	} else {
+		buf := make([]byte, 20)
+		copy(buf, lf.Data[logFileSize-20:logFileSize])
 
-	lf := &logFile{
-		MmapFile: mf,
-		fid:      fid,
-		registry: registry,
-	}
-	if err = lf.bootstrap(); err != nil {
-		panic("Failed to bootstrap logFile")
+		keyID := binary.BigEndian.Uint64(buf[:8])
+		var dk *pb.DataKey
+		// retrieve datakey from the keyID of the logfile.
+		if dk, err = lf.registry.DataKey(keyID); err != nil {
+			glog.Fatalf("Failed to read DataKey: %v\n", err)
+		}
+		lf.dataKey = dk
+		lf.baseIV = buf[8:]
+		fmt.Println(buf)
+		y.AssertTrue(len(lf.baseIV) == 12)
 	}
 	return lf, nil
 }
@@ -270,22 +280,37 @@ func getLogFiles(dir string) ([]*logFile, error) {
 	return files, nil
 }
 
+// KeyID returns datakey's ID.
+func (lf *logFile) keyID() uint64 {
+	if lf.dataKey == nil {
+		// If there is no datakey, then we'll return 0. Which means no encryption.
+		return 0
+	}
+	return lf.dataKey.KeyId
+}
+
+// bootstrap will initialize the log file with key id and baseIV.
+// The below figure shows the layout of log file.
+// +----------------+------------------+------------------+
+// | keyID(8 bytes) |  baseIV(12 bytes)|	 entry...     |
+// +----------------+------------------+------------------+
 func (lf *logFile) bootstrap() error {
 	var err error
+	if _, err = lf.Fd.Seek(0, io.SeekStart); err != nil {
+		return y.Wrapf(err, "Error while SeekStart for the logfile %d in logFile.bootstarp", lf.fid)
+	}
 
 	// generate data key for the log file.
-	var dk *pb.DataKey
-	if dk, err = lf.registry.LatestDataKey(); err != nil {
+	if lf.dataKey, err = lf.registry.LatestDataKey(); err != nil {
 		return y.Wrapf(err, "Error while retrieving datakey in logFile.bootstarp")
 	}
-	lf.dataKey = dk
-	buf := make([]byte, 12)
-
-	if _, err := cryptorand.Read(buf[:]); err != nil {
+	buf := make([]byte, 20)
+	binary.BigEndian.PutUint64(buf[:8], lf.keyID())
+	if _, err := cryptorand.Read(buf[8:]); err != nil {
 		return y.Wrapf(err, "Error while creating base IV, while creating logfile")
 	}
-
 	// Initialize base IV.
-	lf.baseIV = buf[:]
+	lf.baseIV = buf[8:]
+	lf.Fd.WriteAt(buf, logFileSize-20)
 	return nil
 }

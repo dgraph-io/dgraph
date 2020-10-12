@@ -20,8 +20,6 @@ import (
 	"bytes"
 	"crypto/aes"
 	"encoding/binary"
-	"fmt"
-	"hash/crc32"
 	"io"
 	"sort"
 
@@ -54,9 +52,10 @@ type wal struct {
 
 type header struct {
 	dataLen uint32
+	offset  uint32
 }
 
-const maxHeaderSize = 4
+const maxHeaderSize = 8
 
 // allEntries returns all the entries in the range [lo, hi).
 func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
@@ -103,6 +102,12 @@ func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 			// file in the next iteration.
 			offset = maxNumEntries
 			continue
+		}
+
+		if x.WorkerConfig.EncryptionKey != nil && len(re.Data) > 0 {
+			decoded, err := currFile.decodeData(re.Data, uint32(offset))
+			x.Check(err)
+			re.Data = decoded
 		}
 
 		size += uint64(re.Size())
@@ -179,21 +184,21 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 			}
 			l.nextEntryIdx, offset = 0, logFileOffset
 		}
-
-		var ebuf bytes.Buffer
-		elen, err := l.current.encodeData(&ebuf, re.Data, uint32(offset))
-		if err != nil {
-			return err
+		var destBuf []byte
+		var next int
+		if x.WorkerConfig.EncryptionKey != nil {
+			var ebuf bytes.Buffer
+			_, err := l.current.encodeData(&ebuf, re.Data, uint32(offset))
+			if err != nil {
+				return err
+			}
+			// Allocate slice for the encoded data and copy encoded bytes.
+			destBuf, next = l.current.AllocateSlice(len(ebuf.Bytes()), offset)
+			x.AssertTrue(copy(destBuf, ebuf.Bytes()) == len(ebuf.Bytes()))
+		} else {
+			destBuf, next = l.current.AllocateSlice(len(re.Data), offset)
+			x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 		}
-		fmt.Println(elen)
-
-		var decoded []byte
-		decoded, err = l.current.decodeData(ebuf.Bytes(), uint32(offset))
-		fmt.Println(re.Data, decoded)
-		// Write re.Data to a new slice at the end of the file.
-		destBuf, next := l.current.AllocateSlice(len(re.Data), offset)
-
-		x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 
 		// Write the entry at the given slot.
 		buf := l.current.getEntry(l.nextEntryIdx)
@@ -209,25 +214,23 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 func (lf *logFile) encodeData(buf *bytes.Buffer, data []byte, offset uint32) (int, error) {
 	h := header{
 		dataLen: uint32(len(data)),
+		offset:  offset,
 	}
-	hash := crc32.New(y.CastagnoliCrcTable)
-	writer := io.MultiWriter(buf, hash)
+	writer := io.Writer(buf)
 	// encode header.
 	var headerEnc [maxHeaderSize]byte
 	sz := h.Encode(headerEnc[:])
 	y.Check2(writer.Write(headerEnc[:sz]))
 
+	// TODO: do we need to make a copy of data
 	eBuf := make([]byte, 0, len(data))
 	eBuf = append(eBuf, data...)
 	if err := y.XORBlockStream(
 		writer, eBuf, lf.dataKey.Data, lf.generateIV(offset)); err != nil {
 		return 0, y.Wrapf(err, "%v ", "Error while encoding entry for vlog.")
 	}
-	var crcBuf [crc32.Size]byte
-	binary.BigEndian.PutUint32(crcBuf[:], hash.Sum32())
-	y.Check2(buf.Write(crcBuf[:]))
 	// return encoded length.
-	return len(headerEnc[:sz]) + len(data) + len(crcBuf), nil
+	return len(headerEnc[:sz]) + len(data), nil
 }
 
 func (lf *logFile) decodeData(buf []byte, offset uint32) ([]byte, error) {
@@ -238,7 +241,7 @@ func (lf *logFile) decodeData(buf []byte, offset uint32) ([]byte, error) {
 	var err error
 	// No need to worry about mmap. because, XORBlock allocates a byte array to do the
 	// xor. So, the given slice is not being mutated.
-	if dataBuf, err = lf.decryptData(dataBuf, offset); err != nil {
+	if dataBuf, err = lf.decryptData(dataBuf, h.offset); err != nil {
 		return nil, err
 	}
 	return dataBuf, nil
@@ -253,6 +256,9 @@ func (lf *logFile) decryptData(buf []byte, offset uint32) ([]byte, error) {
 func (h *header) Decode(buf []byte) int {
 	index := 0
 	dlen, count := binary.Uvarint(buf[index:])
+	index += count
+	offset, count := binary.Uvarint(buf[index:])
+	h.offset = uint32(offset)
 	h.dataLen = uint32(dlen)
 	return index + count
 }
@@ -260,6 +266,7 @@ func (h *header) Decode(buf []byte) int {
 func (h header) Encode(out []byte) int {
 	index := 0
 	index += binary.PutUvarint(out[index:], uint64(h.dataLen))
+	index += binary.PutUvarint(out[index:], uint64(h.offset))
 	return index
 }
 
