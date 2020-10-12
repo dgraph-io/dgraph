@@ -1,5 +1,4 @@
--
-  name: "in filter"
+- name: "in filter"
   gqlquery: |
     query {
       queryState(filter: {code: {in: ["abc", "def", "ghi"]}}) {
@@ -15,9 +14,8 @@
         dgraph.uid : uid
       }
     }
-    
--
-  name: "Geo query"
+
+- name: "Geo query"
   gqlquery: |
     query {
       queryHotel(filter: { location: { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22} } } }) {
@@ -37,8 +35,7 @@
       }
     }
 
--
-  name: "ID query"
+- name: "ID query"
   gqlquery: |
     query {
       getAuthor(id: "0x1") {
@@ -53,8 +50,7 @@
       }
     }
 
--
-  name: "Alias is ignored in query rewriting - get"
+- name: "Alias is ignored in query rewriting - get"
   gqlquery: |
     query {
       author : getAuthor(id: "0x1") {
@@ -76,8 +72,7 @@
       }
     }
 
--
-  name: "Alias is ignored in query rewriting - query"
+- name: "Alias is ignored in query rewriting - query"
   gqlquery: |
     query {
       author : queryAuthor {
@@ -99,8 +94,7 @@
       }
     }
 
--
-  name: "ID field gets transformed to uid"
+- name: "ID field gets transformed to uid"
   gqlquery: |
     query {
       getAuthor(id: "0x1") {
@@ -116,8 +110,7 @@
       }
     }
 
--
-  name: "ID query with depth"
+- name: "ID query with depth"
   gqlquery: |
     query {
       getAuthor(id: "0x1") {
@@ -141,8 +134,7 @@
       }
     }
 
--
-  name: "ID query deep"
+- name: "ID query deep"
   gqlquery: |
     query {
       getAuthor(id: "0x1") {
@@ -174,8 +166,7 @@
       }
     }
 
--
-  name: "Query with no args is query for everything of that type"
+- name: "Query with no args is query for everything of that type"
   gqlquery: |
     query {
       queryAuthor {
@@ -190,8 +181,7 @@
       }
     }
 
--
-  name: "Filter gets rewritten as @filter"
+- name: "Filter gets rewritten as @filter"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" } }) {
@@ -205,9 +195,24 @@
         dgraph.uid : uid
       }
     }
+- name: "Filter connectives with null values gets skipped "
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" },not:null }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
 
 -
-  name: "Query with has Filter"
+
+- name: "Query with has Filter"
   gqlquery: |
     query {
       queryTeacher(filter: {has: subject}) {
@@ -222,8 +227,7 @@
       }
     }
 
--
-  name: "has Filter with not"
+- name: "has Filter with not"
   gqlquery: |
     query {
       queryTeacher(filter: { not : {has: subject } }) {
@@ -238,8 +242,7 @@
       }
     }
 
--
-  name: "has Filter with and"
+- name: "has Filter with and"
   gqlquery: |
     query {
       queryTeacher(filter: {has: subject, and: {has: teaches } }  ) {
@@ -254,8 +257,7 @@
       }
     }
 
--
-  name: "Filters in same input object implies AND"
+- name: "Filters in same input object implies AND"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, dob: { le: "2001-01-01" }, reputation: { gt: 2.5 } } ) {
@@ -270,8 +272,7 @@
       }
     }
 
--
-  name: "Filter with nested 'and'"
+- name: "Filter with nested 'and'"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { dob: { le: "2001-01-01" }, and: { reputation: { gt: 2.5 } } } } ) {
@@ -286,8 +287,7 @@
       }
     }
 
--
-  name: "has Filter with nested 'and'"
+- name: "has Filter with nested 'and'"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { dob: { le: "2001-01-01" }, and: { has: country } } } ) {
@@ -302,8 +302,7 @@
       }
     }
 
--
-  name: "Filter with 'or'"
+- name: "Filter with 'or'"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, or: { dob: { le: "2001-01-01" } } } ) {
@@ -319,8 +318,7 @@
     }
 
 
--
-  name: "Filter with implied and as well as 'or'"
+- name: "Filter with implied and as well as 'or'"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, reputation: { gt: 2.5 }, or: { dob: { le: "2001-01-01" } } } ) {
@@ -335,8 +333,7 @@
       }
     }
 
--
-  name: "Filter with implied and nested in 'or'"
+- name: "Filter with implied and nested in 'or'"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, or: { reputation: { gt: 2.5 }, dob: { le: "2001-01-01" } } } ) {
@@ -351,8 +348,7 @@
       }
     }
 
--
-  name: "Filter nested 'or'"
+- name: "Filter nested 'or'"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, or: { reputation: { gt: 2.5 }, or: { dob: { le: "2001-01-01" } } } } ) {
@@ -367,8 +363,7 @@
       }
     }
 
--
-  name: "Filter with 'not"
+- name: "Filter with 'not"
   gqlquery: |
     query {
       queryAuthor(filter: { not: { reputation: { gt: 2.5 } } } ) {
@@ -383,8 +378,7 @@
       }
     }
 
--
-  name: "Filter with first"
+- name: "Filter with first"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" } }, first: 10) {
@@ -399,8 +393,7 @@
       }
     }
 
--
-  name: "Filter with first and offset"
+- name: "Filter with first and offset"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" } }, first: 10, offset: 10) {
@@ -415,8 +408,7 @@
       }
     }
 
--
-  name: "Filter with order asc"
+- name: "Filter with order asc"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" } }, order: { asc: reputation }) {
@@ -431,8 +423,7 @@
       }
     }
 
--
-  name: "Filter with order desc"
+- name: "Filter with order desc"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" } }, order: { desc: reputation }) {
@@ -448,8 +439,7 @@
     }
 
 
--
-  name: "Filter with nested order"
+- name: "Filter with nested order"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" } }, order: { desc: reputation, then: { asc: dob } }) {
@@ -464,8 +454,7 @@
       }
     }
 
--
-  name: "Filter with order, first and offset"
+- name: "Filter with order, first and offset"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" } }, order: { desc: reputation }, first: 10, offset: 10) {
@@ -480,8 +469,7 @@
       }
     }
 
--
-  name: "Deep filter"
+- name: "Deep filter"
   gqlquery: |
     query {
       queryAuthor {
@@ -504,8 +492,7 @@
     }
 
 
--
-  name: "Deep filter with has filter"
+- name: "Deep filter with has filter"
   gqlquery: |
     query {
       queryAuthor {
@@ -527,8 +514,7 @@
       }
     }
 
--
-  name: "Deep filter with has and other filters"
+- name: "Deep filter with has and other filters"
   gqlquery: |
     query {
       queryAuthor {
@@ -549,8 +535,7 @@
         dgraph.uid : uid
       }
     }
--
-  name: "Deep filter with first"
+- name: "Deep filter with first"
   gqlquery: |
     query {
       queryAuthor {
@@ -572,8 +557,7 @@
       }
     }
 
--
-  name: "Deep filter with order, first and offset"
+- name: "Deep filter with order, first and offset"
   gqlquery: |
     query {
       queryAuthor {
@@ -596,8 +580,7 @@
     }
 
 
--
-  name: "All Float filters work"
+- name: "All Float filters work"
   gqlquery: |
     query {
       queryAuthor(filter: { reputation: { gt: 1.1 }, or: { reputation: { ge: 1.1 }, or: { reputation: { lt: 1.1 }, or: { reputation: { le: 1.1 }, or: { reputation: { eq: 1.1 } } } } } } ) {
@@ -612,8 +595,7 @@
       }
     }
 
--
-  name: "All DateTime filters work"
+- name: "All DateTime filters work"
   gqlquery: |
     query {
       queryAuthor(filter: { dob: { gt: "2000-01-01" }, or: { dob: { ge: "2000-01-01" }, or: { dob: { lt: "2000-01-01" }, or: { dob: { le: "2000-01-01" }, or: { dob: { eq: "2000-01-01" } } } } } } ) {
@@ -628,8 +610,7 @@
       }
     }
 
--
-  name: "All Int filters work"
+- name: "All Int filters work"
   gqlquery: |
     query {
       queryPost(filter: { numLikes: { gt: 10 }, or: { numLikes: { ge: 10 }, or: { numLikes: { lt: 10 }, or: { numLikes: { le: 10 }, or: { numLikes: { eq: 10 } } } } } } ) {
@@ -644,8 +625,7 @@
       }
     }
 
--
-  name: "All String hash filters work"
+- name: "All String hash filters work"
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" } } ) {
@@ -660,8 +640,7 @@
       }
     }
 
--
-  name: "All String exact filters work"
+- name: "All String exact filters work"
   gqlquery: |
     query {
       queryCountry(filter: { name: { gt: "AAA" }, or: { name: { ge: "AAA" }, or: { name: { lt: "AAA" }, or: { name: { le: "AAA" }, or: { name: { eq: "AAA" } } } } } } ) {
@@ -676,8 +655,7 @@
       }
     }
 
--
-  name: "All String term filters work"
+- name: "All String term filters work"
   gqlquery: |
     query {
       queryPost(filter: { title: { anyofterms: "GraphQL"}, or: { title: { allofterms: "GraphQL" } } } ) {
@@ -693,8 +671,7 @@
     }
 
 
--
-  name: "All String fulltext filters work"
+- name: "All String fulltext filters work"
   gqlquery: |
     query {
       queryPost(filter: { text: { anyoftext: "GraphQL"}, or: { text: { alloftext: "GraphQL" } } } ) {
@@ -709,8 +686,7 @@
       }
     }
 
--
-  name: "All String regexp filters work"
+- name: "All String regexp filters work"
   gqlquery: |
     query {
       queryCountry(filter: { name: { regexp: "/.*ust.*/" }}) {
@@ -725,8 +701,7 @@
       }
     }
 
--
-  name: "Skip directive"
+- name: "Skip directive"
   variables:
     skipTrue: true
     skipFalse: false
@@ -748,8 +723,7 @@
       }
     }
 
--
-  name: "Include directive"
+- name: "Include directive"
   variables:
     includeTrue: true
     includeFalse: false
@@ -770,8 +744,7 @@
       }
     }
 
--
-  name: "Include only fields for which skip is !false or include is true"
+- name: "Include only fields for which skip is !false or include is true"
   variables:
     includeFalse: false
     includeTrue: true
@@ -799,8 +772,7 @@
       }
     }
 
--
-  name: "Cascade directive on get query"
+- name: "Cascade directive on get query"
   gqlquery: |
     query {
       getAuthor(id: "0x1") @cascade {
@@ -822,8 +794,7 @@
       }
     }
 
--
-  name: "Cascade directive on filter query"
+- name: "Cascade directive on filter query"
   gqlquery: |
     query {
       queryAuthor @cascade {
@@ -845,8 +816,7 @@
       }
     }
 
--
-  name: "Cascade directive on query field"
+- name: "Cascade directive on query field"
   gqlquery: |
     query {
       queryAuthor {
@@ -868,8 +838,7 @@
       }
     }
 
--
-  name: "Cascade directive on root query and query field"
+- name: "Cascade directive on root query and query field"
   gqlquery: |
     query {
       queryAuthor @cascade {
@@ -891,8 +860,7 @@
       }
     }
 
--
-  name: "Parameterized Cascade directive on filter query"
+- name: "Parameterized Cascade directive on filter query"
   gqlquery: |
     query {
       queryAuthor @cascade(fields:["dob"]) {
@@ -916,8 +884,7 @@
       }
     }
 
--
-  name: "Parameterized Cascade directive on get query"
+- name: "Parameterized Cascade directive on get query"
   gqlquery: |
     query {
       getAuthor(id: "0x1") @cascade(fields:["dob"]) {
@@ -941,8 +908,7 @@
       }
     }
 
--
-  name: "Parameterized Cascade directive on query field"
+- name: "Parameterized Cascade directive on query field"
   gqlquery: |
     query {
       queryAuthor {
@@ -966,8 +932,7 @@
       }
     }
 
--
-  name: "Parameterized Cascade directive on root and query field"
+- name: "Parameterized Cascade directive on root and query field"
   gqlquery: |
     query {
       queryAuthor @cascade(fields:["dob"]) {
@@ -993,8 +958,7 @@
       }
     }
 
--
-  name: "Parameterized Cascade directive with multiple parameters on root and query field"
+- name: "Parameterized Cascade directive with multiple parameters on root and query field"
   gqlquery: |
     query {
       queryAuthor @cascade(fields:["dob","reputation","id"]) {
@@ -1020,8 +984,7 @@
       }
     }
 
--
-  name: "Parameterized Cascade directive with argument at outer level which is not present in inner level "
+- name: "Parameterized Cascade directive with argument at outer level which is not present in inner level "
   gqlquery: |
     query {
       queryAuthor @cascade(fields:["dob"]) {
@@ -1047,8 +1010,7 @@
       }
     }
 
--
-  name: "parameterized cascade with interface implementation Human"
+- name: "parameterized cascade with interface implementation Human"
   gqlquery: |
     query {
       queryHuman @cascade(fields:["id","name","ename","dob"]) {
@@ -1070,8 +1032,7 @@
       }
     }
 
--
-  name: "parameterized cascade with interface Character"
+- name: "parameterized cascade with interface Character"
   gqlquery: |
     query {
       queryCharacter @cascade(fields:["id","name"]) {
@@ -1088,8 +1049,7 @@
       }
     }
 
--
-  name: "getHuman which implements an interface"
+- name: "getHuman which implements an interface"
   gqlquery: |
     query {
       getHuman(id: "0x1") {
@@ -1111,8 +1071,7 @@
       }
     }
 
--
-  name: "queryHuman which implements an interface"
+- name: "queryHuman which implements an interface"
   gqlquery: |
     query {
       queryHuman {
@@ -1134,8 +1093,7 @@
       }
     }
 
--
-  name: "Get Query on interface whose implementation contains Auth rules."
+- name: "Get Query on interface whose implementation contains Auth rules."
   gqlquery: |
     query {
       getX(id: "0x1") {
@@ -1148,8 +1106,7 @@
       getX()
     }
 
--
-  name: "Query on interface whose implementation contains Auth rules."
+- name: "Query on interface whose implementation contains Auth rules."
   gqlquery: |
     query {
       queryX {
@@ -1162,8 +1119,7 @@
       queryX()
     }
 
--
-  name: "filter with order for type which implements an interface"
+- name: "filter with order for type which implements an interface"
   gqlquery: |
     query {
       queryHuman (filter: { name: { anyofterms: "GraphQL" } }, order: { asc: ename }) {
@@ -1183,8 +1139,7 @@
       }
     }
 
--
-  name: "queryCharacter with fragment for human"
+- name: "queryCharacter with fragment for human"
   gqlquery: |
     query {
       queryCharacter {
@@ -1207,8 +1162,7 @@
       }
     }
 
--
-  name: "queryCharacter with fragment on multiple types"
+- name: "queryCharacter with fragment on multiple types"
   gqlquery: |
     query {
       queryCharacter {
@@ -1235,8 +1189,7 @@
       }
     }
 
--
-  name: "Filter with id uses uid func at root."
+- name: "Filter with id uses uid func at root."
   gqlquery: |
     query {
       queryAuthor(filter: { id: ["0x1", "0x2"], and: { name: { eq: "A. N. Author" } }}) {
@@ -1251,8 +1204,7 @@
       }
     }
 
--
-  name: "Filter with id inside and argument doesn't use uid func at root."
+- name: "Filter with id inside and argument doesn't use uid func at root."
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" }, and: { id: ["0x1", "0x2"] }}) {
@@ -1267,8 +1219,7 @@
       }
     }
 
--
-  name: "Filter with id and not translates correctly.."
+- name: "Filter with id and not translates correctly.."
   gqlquery: |
     query {
       queryAuthor(filter: { not: { id: ["0x1", "0x2"] }}) {
@@ -1283,8 +1234,7 @@
       }
     }
 
--
-  name: "Deep filter with id"
+- name: "Deep filter with id"
   gqlquery: |
     query {
       queryAuthor {
@@ -1306,8 +1256,7 @@
       }
     }
 
--
-  name: "Deep filter with id in not key"
+- name: "Deep filter with id in not key"
   gqlquery: |
     query {
       queryAuthor {
@@ -1329,8 +1278,7 @@
       }
     }
 
--
-  name: "Pagination and Order at root node with UID."
+- name: "Pagination and Order at root node with UID."
   gqlquery: |
     query {
       queryAuthor(filter: { id: ["0x1", "0x2"] }, order: {asc: name}, first: 0, offset: 1 ) {
@@ -1345,8 +1293,7 @@
       }
     }
 
--
-  name: "Order at root node with UID."
+- name: "Order at root node with UID."
   gqlquery: |
     query {
       queryAuthor(filter: { id: ["0x1", "0x2"] }, order: {asc: name}) {
@@ -1361,8 +1308,7 @@
       }
     }
 
--
-  name: "Order at root node without UID."
+- name: "Order at root node without UID."
   gqlquery: |
     query {
       queryAuthor(order: {asc: name}) {
@@ -1377,8 +1323,7 @@
       }
     }
 
--
-  name: "Order and Pagination at root node without UID."
+- name: "Order and Pagination at root node without UID."
   gqlquery: |
     query {
       queryAuthor(order: {asc: name}, first: 2, offset: 3) {
@@ -1394,8 +1339,7 @@
     }
 
 
--
-  name: "Filter with no valid id construct the right query with type func at root."
+- name: "Filter with no valid id construct the right query with type func at root."
   gqlquery: |
     query {
       queryAuthor(filter: { id: ["alice", "bob"], and: { name: { eq: "A. N. Author" } }}) {
@@ -1410,8 +1354,7 @@
       }
     }
 
--
-  name: "Filter with id only includes valid id in dgquery."
+- name: "Filter with id only includes valid id in dgquery."
   gqlquery: |
     query {
       queryAuthor(filter: { id: ["0x1", "bob"], and: { name: { eq: "A. N. Author" } }}) {
@@ -1426,8 +1369,7 @@
       }
     }
 
--
-  name: "Get editor without supplying anything"
+- name: "Get editor without supplying anything"
   gqlquery: |
     query {
       getEditor {
@@ -1442,8 +1384,7 @@
       }
     }
 
--
-  name: "Get editor using code"
+- name: "Get editor using code"
   gqlquery: |
     query {
       getEditor(code: "tolstoy") {
@@ -1458,8 +1399,7 @@
       }
     }
 
--
-  name: "Get editor using both code and id"
+- name: "Get editor using both code and id"
   gqlquery: |
     query {
       getEditor(code: "tolstoy", id: "0x1") {
@@ -1474,8 +1414,7 @@
       }
     }
 
--
-  name: "Get with XID where no ID in type"
+- name: "Get with XID where no ID in type"
   gqlquery: |
     query {
       getState(code: "NSW") {
@@ -1490,8 +1429,7 @@
       }
     }
 
--
-  name: "Query editor using code"
+- name: "Query editor using code"
   gqlquery: |
     query {
       queryEditor(filter: { code: { eq: "editor" }, and: { name: { eq: "A. N. Editor" }}}) {
@@ -1506,8 +1444,7 @@
       }
     }
 
--
-  name: "Query editor using code and uid"
+- name: "Query editor using code and uid"
   gqlquery: |
     query {
       queryEditor(filter: { id: ["0x1"], and: { code: { eq: "editor"}}}) {
@@ -1522,8 +1459,7 @@
       }
     }
 
--
-  name: "Query along reverse edge is converted appropriately"
+- name: "Query along reverse edge is converted appropriately"
   gqlquery: |
     query {
       queryMovie {
@@ -1545,8 +1481,7 @@
       }
     }
 
--
-  name: "deprecated fields can be queried"
+- name: "deprecated fields can be queried"
   gqlquery: |
     query {
       queryCategory {
@@ -1562,8 +1497,7 @@
       }
     }
 
--
-  name: "Password query"
+- name: "Password query"
   gqlquery: |
     query {
       checkUserPassword(name: "user1", pwd: "Password") {
