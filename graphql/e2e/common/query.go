@@ -450,6 +450,43 @@ func betweenFilter(t *testing.T) {
 
 }
 
+func deepBetweenFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query{
+			queryAuthor(filter: {reputation: {between: {min:6.0, max: 7.2}}}){
+			  name
+			  reputation
+			  posts(filter: {topic: {between: {min: "GraphQL", max: "GraphQL+-"}}}){
+				title
+				topic
+			  }
+			}
+		  }`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.QueryAuthor))
+
+	expected := &author{
+		Name:       "Ann Author",
+		Reputation: 6.6,
+		Posts:      []*post{{Title: "Introducing GraphQL in Dgraph", Topic: "GraphQL"}},
+	}
+
+	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+}
+
 func deepFilter(t *testing.T) {
 	getAuthorParams := &GraphQLParams{
 		Query: `query {
