@@ -6,7 +6,8 @@ title = "Delete"
     weight = 7
 +++
 
-A delete mutation, identified by the `delete` keyword, removes predicates from the store.
+A delete mutation, identified by the `delete` keyword, removes
+[triples](/mutations/triples) from the store.
 
 For example, if the store contained the following:
 ```RDF
@@ -43,8 +44,9 @@ indexing) is removed with the pattern `S P *`.
 The pattern `S * *` deletes all the known edges out of a node, any reverse edges corresponding to the removed edges, and any indexing for the removed data.
 
 {{% notice "note" %}} For mutations that fit the `S * *` pattern, only
-predicates that match the type information for the node (set by `dgraph.type`)
-are deleted.{{% /notice %}}
+data that matches the type information for the node (set by `dgraph.type`)
+is deleted. To delete the node itself using a `S * *` delete mutation, all
+predicates in the node must be typed.{{% /notice %}}
 
 ```sh
 {
@@ -55,9 +57,9 @@ are deleted.{{% /notice %}}
 ```
 
 If the node `S` in the delete pattern `S * *` has only a few predicates with a
-type defined by `dgraph.type`, then only those typed predicates are deleted. If
-a node has predicates left that are not deleted, the node itself will still
-exist after the delete mutation executes.
+type defined by `dgraph.type`, then only those triples with typed predicates are
+deleted. A node that contains untyped predicates will still exist after a
+`S * *` delete mutation.
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported because
 it's inefficient to store and find all the incoming edges. {{% /notice %}}
