@@ -352,12 +352,12 @@ func Encode(uids []uint64, blockSize int) *pb.UidPack {
 // EncodeFromBuffer is the same as Encode but it accepts a byte slice instead of a uint64 slice.
 func EncodeFromBuffer(buf []byte, blockSize int) *pb.UidPack {
 	enc := Encoder{BlockSize: blockSize}
-	prev := uint64(0)
+	var prev uint64
 	for len(buf) > 0 {
 		uid, n := binary.Uvarint(buf)
 		buf = buf[n:]
 
-		next := uint64(prev) + uid
+		next := prev + uid
 		enc.Add(next)
 		prev = next
 	}
