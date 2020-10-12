@@ -1589,15 +1589,24 @@ func (l *List) PartSplits() []uint64 {
 }
 
 // ToBackupPostingList converts a posting list into its representation used for storing backups.
-func ToBackupPostingList(l *pb.PostingList, bl *pb.BackupPostingList) {
+func ToBackupPostingList(l *pb.PostingList, bl *pb.BackupPostingList) ([]byte, error) {
 	if l == nil || bl == nil {
-		return
+		return nil, nil
 	}
 
-	bl.Uids = codec.Decode(l.Pack, 0)
+	// Encode uids to []byte instead of []uint64 if we have more than 1000
+	// uids. We do this to improve the memory usage.
+	if codec.ApproxLen(l.Pack) > 1024 {
+		buf := codec.DecodeToBuffer(l.Pack, 0)
+		defer buf.Release()
+		bl.UidBytes = buf.Bytes()
+	} else {
+		bl.Uids = codec.Decode(l.Pack, 0)
+	}
 	bl.Postings = l.Postings
 	bl.CommitTs = l.CommitTs
 	bl.Splits = l.Splits
+	return bl.Marshal()
 }
 
 // FromBackupPostingList converts a posting list in the format used for backups to a
@@ -1608,7 +1617,11 @@ func FromBackupPostingList(bl *pb.BackupPostingList) *pb.PostingList {
 		return &l
 	}
 
-	l.Pack = codec.Encode(bl.Uids, blockSize)
+	if len(bl.Uids) > 0 {
+		l.Pack = codec.Encode(bl.Uids, blockSize)
+	} else if len(bl.UidBytes) > 0 {
+		l.Pack = codec.EncodeFromBuffer(bl.UidBytes, blockSize)
+	}
 	l.Postings = bl.Postings
 	l.CommitTs = bl.CommitTs
 	l.Splits = bl.Splits
