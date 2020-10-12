@@ -1089,8 +1089,11 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 
 					args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)})
 					args = append(args, gql.Arg{Value: fmt.Sprintf("%v", distance)})
-				case "between":
 
+				case "between":
+					// numLikes: { between : { min : 10,  max:100 }} should be rewritten into
+					// 	between(numLikes,10,20). Order of arguments (min,max) is neccessary or
+					// it will return empty
 					vals := val.(map[string]interface{})
 					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["min"])})
 					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["max"])})

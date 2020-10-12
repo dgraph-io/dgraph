@@ -153,8 +153,6 @@ func writeFilterArguments(b *strings.Builder, args []gql.Arg) {
 }
 
 func writeFilterFunction(b *strings.Builder, f *gql.Function) {
-	// Do not perform rewriting for between filter
-	// Added temporarily as Between filter is supported only in the root func.
 	if f == nil {
 		return
 	}

@@ -298,6 +298,7 @@ func RunAll(t *testing.T) {
 	t.Run("multiple search indexes wrong field", multipleSearchIndexesWrongField)
 	t.Run("hash search", hashSearch)
 	t.Run("in filter", inFilter)
+	t.Run("between filter", betweenFilter)
 	t.Run("deep filter", deepFilter)
 	t.Run("deep has filter", deepHasFilter)
 	t.Run("many queries", manyQueries)

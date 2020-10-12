@@ -427,6 +427,29 @@ func inFilter(t *testing.T) {
 	deleteGqlType(t, "State", deleteFilter, 2, nil)
 }
 
+func betweenFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			queryPost(filter: {numLikes: {between: {min:10, max:100}}}) {
+				title
+				numLikes
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryPost []*post
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(result.QueryPost))
+
+}
+
 func deepFilter(t *testing.T) {
 	getAuthorParams := &GraphQLParams{
 		Query: `query {
