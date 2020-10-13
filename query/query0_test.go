@@ -3308,6 +3308,31 @@ func TestBetweenWithoutIndex(t *testing.T) {
 
 }
 
+func TestEqFilterWithoutIndex(t *testing.T) {
+	test := struct {
+		name   string
+		query  string
+		result string
+	}{
+		`Test eq filter on Non Indexed Predicate`,
+		`
+		{
+			me(func: type(CarModel)) @filter(eq(year,2008,2009)){
+				make
+				model
+				year
+			}
+		}
+		`,
+		`{"data":{"me":[{"make":"Ford","model":"Focus","year":2008},{"make":"Ford","model":"Focus","year":2009},{"make":"Toyota","model":"Prius","year":2009}]}}`,
+	}
+	t.Run(test.name, func(t *testing.T) {
+		js := processQueryNoErr(t, test.query)
+		require.JSONEq(t, js, test.result)
+	})
+
+}
+
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
