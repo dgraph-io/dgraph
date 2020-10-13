@@ -663,7 +663,7 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 		addTypeFunc(dgQuery, m.MutatedType().DgraphName())
 	}
 
-	addFilter(dgQuery, m.MutatedType(), filter)
+	_ = addFilter(dgQuery, m.MutatedType(), filter)
 
 	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery, rbac)
 

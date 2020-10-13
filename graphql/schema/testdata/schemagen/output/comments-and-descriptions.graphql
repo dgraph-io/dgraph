@@ -223,7 +223,7 @@ enum TOrderable {
 #######################
 
 input A_UnionFilter {
-	a_UnionTypes: [A_UnionType!]
+	memberTypes: [A_UnionType!]
 	tFilter: TFilter
 }
 

@@ -494,7 +494,7 @@ input PlanetRef {
 }
 
 input ResidentFilter {
-	residentTypes: [ResidentType!]
+	memberTypes: [ResidentType!]
 	humanFilter: HumanFilter
 	droidFilter: DroidFilter
 	starshipFilter: StarshipFilter

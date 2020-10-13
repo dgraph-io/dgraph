@@ -172,6 +172,10 @@ type Type interface {
 	DgraphName() string
 	DgraphPredicate(fld string) string
 	Nullable() bool
+	// true if this is a union type
+	IsUnion() bool
+	// returns the DgraphName for the member types of this union
+	UnionMembers([]interface{}) []Type
 	ListType() Type
 	Interfaces() []string
 	EnsureNonNulls(map[string]interface{}, string) error
@@ -1613,6 +1617,34 @@ func (t *astType) DgraphName() string {
 
 func (t *astType) Nullable() bool {
 	return !t.typ.NonNull
+}
+
+func (t *astType) IsUnion() bool {
+	return t.inSchema.schema.Types[t.typ.Name()].Kind == ast.Union
+}
+
+func (t *astType) UnionMembers(memberTypesList []interface{}) []Type {
+	var memberTypes []Type
+	if (memberTypesList) == nil {
+		// if no specific members were requested, find out all the members of this union
+		for _, typName := range t.inSchema.schema.Types[t.typ.Name()].Types {
+			memberTypes = append(memberTypes, &astType{
+				typ:             &ast.Type{NamedType: typName},
+				inSchema:        t.inSchema,
+				dgraphPredicate: t.dgraphPredicate,
+			})
+		}
+	} else {
+		// else return wrapper for only the members which were requested
+		for _, typName := range memberTypesList {
+			memberTypes = append(memberTypes, &astType{
+				typ:             &ast.Type{NamedType: typName.(string)},
+				inSchema:        t.inSchema,
+				dgraphPredicate: t.dgraphPredicate,
+			})
+		}
+	}
+	return memberTypes
 }
 
 func (t *astType) ListType() Type {

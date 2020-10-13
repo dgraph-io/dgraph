@@ -695,7 +695,7 @@ func addUnionReferenceType(schema *ast.Schema, defn *ast.Definition) {
 	}
 	for _, typName := range defn.Types {
 		refType.Fields = append(refType.Fields, &ast.FieldDefinition{
-			Name: camelCase(typName) + "Ref",
+			Name: CamelCase(typName) + "Ref",
 			// the TRef for every member type is guaranteed to exist because member types can
 			// only be objects types, and a TRef is always generated for an object type
 			Type: &ast.Type{NamedType: typName + "Ref"},
@@ -712,7 +712,7 @@ func addUnionFilterType(schema *ast.Schema, defn *ast.Definition) {
 		Fields: []*ast.FieldDefinition{
 			// field for selecting the union member type to report back
 			{
-				Name: camelCase(defn.Name) + "Types",
+				Name: "memberTypes",
 				Type: &ast.Type{Elem: &ast.Type{NamedType: defn.Name + "Type", NonNull: true}},
 			},
 		},
@@ -720,7 +720,7 @@ func addUnionFilterType(schema *ast.Schema, defn *ast.Definition) {
 	// adding fields for specifying type filter for each union member type
 	for _, typName := range defn.Types {
 		filter.Fields = append(filter.Fields, &ast.FieldDefinition{
-			Name: camelCase(typName) + "Filter",
+			Name: CamelCase(typName) + "Filter",
 			// the TFilter for every member type is guaranteed to exist because each member type
 			// will either have an ID field or some other kind of field causing it to have hasFilter
 			Type: &ast.Type{NamedType: typName + "Filter"},
@@ -1205,7 +1205,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 
 func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	qry := &ast.FieldDefinition{
-		Name: camelCase(defn.Name),
+		Name: CamelCase(defn.Name),
 		Type: ast.ListType(&ast.Type{
 			NamedType: defn.Name,
 		}, nil),
@@ -1237,7 +1237,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	qry := &ast.FieldDefinition{
-		Name: camelCase(defn.Name),
+		Name: CamelCase(defn.Name),
 		Type: &ast.Type{
 			Elem: &ast.Type{
 				NamedType: defn.Name,
@@ -1264,7 +1264,7 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	qry := &ast.FieldDefinition{
-		Name: camelCase(defn.Name),
+		Name: CamelCase(defn.Name),
 		Type: ast.ListType(&ast.Type{
 			NamedType: defn.Name,
 		}, nil),
@@ -1912,7 +1912,7 @@ func isGraphqlSpecScalar(typ string) bool {
 	return ok
 }
 
-func camelCase(x string) string {
+func CamelCase(x string) string {
 	if x == "" {
 		return ""
 	}

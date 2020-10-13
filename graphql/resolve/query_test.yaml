@@ -1752,3 +1752,150 @@
         dgraph.uid : uid
       }
     }
+
+- name: "query union field - without arguments on union field & with fragment on interface
+implemented by member-type"
+  gqlquery: |-
+    query {
+      queryHome {
+        address
+        members {
+          ... on Animal {
+            category
+          }
+          ... on Dog {
+            breed
+          }
+          ... on Parrot {
+            repeatsWords
+          }
+          ... on Human {
+            name
+            dob
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHome(func: type(Home)) {
+        address : Home.address
+        members : Home.members {
+          category : Animal.category
+          breed : Dog.breed
+          repeatsWords : Parrot.repeatsWords
+          name : Character.name
+          dob : Human.dob
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "query union field - with arguments on union field"
+  gqlquery: |-
+    query {
+      queryHome {
+        members(filter: {
+            memberTypes: [Dog, Parrot]
+            dogFilter:  {
+              breed: { allofterms: "German Shepherd"}
+            }
+          }
+          first: 5
+          offset: 10
+        ) {
+          ... on Dog {
+            id
+          }
+          ... on Parrot {
+            repeatsWords
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHome(func: type(Home)) {
+        members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Parrot))) (first: 5, offset: 10) {
+          id : uid
+          repeatsWords : Parrot.repeatsWords
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "query union field - memberTypes is empty list"
+  gqlquery: |-
+    query {
+      queryHome {
+        members(filter: {
+          memberTypes: []
+          dogFilter:  {
+            breed: { allofterms: "German Shepherd"}
+          }
+        }) {
+          ... on Dog {
+            id
+          }
+          ... on Parrot {
+            repeatsWords
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHome(func: type(Home))
+    }
+
+- name: "query union field - memberTypes isn't specified"
+  gqlquery: |-
+    query {
+      queryHome {
+        members(filter: {
+          dogFilter:  {
+            breed: { allofterms: "German Shepherd"}
+          }
+        }) {
+          ... on Dog {
+            id
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHome(func: type(Home)) {
+        members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Parrot) OR type(Human))) {
+          id : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "query union field - memberTypes contains all the types"
+  gqlquery: |-
+    query {
+      queryHome {
+        members(filter: {
+          memberTypes: [Dog, Human, Parrot]
+          dogFilter:  {
+            breed: { allofterms: "German Shepherd"}
+          }
+        }) {
+          ... on Dog {
+            id
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHome(func: type(Home)) {
+        members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Human) OR type(Parrot))) {
+          id : uid
+        }
+        dgraph.uid : uid
+      }
+    }
