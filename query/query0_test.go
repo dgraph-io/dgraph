@@ -3314,7 +3314,7 @@ func TestBetweenWithoutIndex(t *testing.T) {
 				 }
 			}
 			`,
-			`{"data": {"me": [{"newage": 21},{"newage": 22,"newfriend": [{"newage": 25},{"newage": 26}]},{"newage": 23,"newfriend": [{"newage": 27},{"newage": 28}]},{"newage": 24,"newfriend": [{"newage": 29},{"newage": 30}]}]}`,
+			`{"data": {"me": [{"newage": 21},{"newage": 22,"newfriend": [{"newage": 25},{"newage": 26}]},{"newage": 23,"newfriend": [{"newage": 27},{"newage": 28}]},{"newage": 24,"newfriend": [{"newage": 29},{"newage": 30}]}]}}`,
 		},
 	}
 	for _, tc := range tests {
