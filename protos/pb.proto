@@ -648,6 +648,7 @@ message BackupPostingList {
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3;
   repeated uint64 splits = 4;
+	bytes uid_bytes = 5;
 }
 
 message UpdateGraphQLSchemaRequest {

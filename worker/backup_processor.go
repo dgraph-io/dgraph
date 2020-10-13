@@ -315,13 +315,8 @@ func (pr *BackupProcessor) toBackupPostingList(val []byte, threadNum int) ([]byt
 	if err := pl.Unmarshal(val); err != nil {
 		return nil, errors.Wrapf(err, "while reading posting list")
 	}
-	posting.ToBackupPostingList(pl, bpl)
-	backupVal, err := bpl.Marshal()
 
-	if err != nil {
-		return nil, errors.Wrapf(err, "while converting posting list for backup")
-	}
-	return backupVal, nil
+	return posting.ToBackupPostingList(pl, bpl)
 }
 
 func writeKVList(list *bpb.KVList, w io.Writer) error {
