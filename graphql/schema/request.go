@@ -17,7 +17,9 @@
 package schema
 
 import (
+	"github.com/golang/glog"
 	"net/http"
+	"reflect"
 
 	"github.com/pkg/errors"
 
@@ -73,6 +75,7 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	}
 
 	vars, gqlErr := validator.VariableValues(s.schema, op, req.Variables)
+	variableValidateInt64(s.schema, op, req.Variables)
 	if gqlErr != nil {
 		return nil, gqlErr
 	}
@@ -92,6 +95,51 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	}
 
 	return operation, nil
+}
+
+func variableValidateInt64(schema *ast.Schema, op *ast.OperationDefinition, variables map[string]interface{}) {
+	for _, v := range op.VariableDefinitions {
+		val, _ := variables[v.Variable]
+		rv := reflect.ValueOf(val)
+		if rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface {
+			rv = rv.Elem()
+		}
+		variableValidateInt64Recursive(schema, v.Type, rv)
+	}
+	return
+}
+
+func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val reflect.Value) {
+
+	if typ.Elem != nil {
+		for i := 0; i < val.Len(); i++ {
+			field := val.Index(i)
+			if field.Kind() == reflect.Ptr || field.Kind() == reflect.Interface {
+				field = field.Elem()
+			}
+			variableValidateInt64Recursive(schema, typ.Elem, field)
+		}
+		return
+	}
+
+	def := schema.Types[typ.NamedType]
+	glog.Infof("%v-%v", val, def)
+	switch def.Kind {
+	case ast.InputObject:
+		// check for unknown fields
+
+		for _, fieldDef := range def.Fields {
+			field := val.MapIndex(reflect.ValueOf(fieldDef.Name))
+			if field.Kind() == reflect.Ptr || field.Kind() == reflect.Interface {
+				field = field.Elem()
+			}
+
+			variableValidateInt64Recursive(schema, fieldDef.Type, field)
+		}
+
+	}
+
+	return
 }
 
 // recursivelyExpandFragmentSelections puts a fragment's selection set directly inside this
