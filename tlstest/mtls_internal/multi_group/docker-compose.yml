@@ -19,7 +19,7 @@ services:
         target: /dgraph-tls
         read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180
-      --logtostderr -v=2 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name alpha1 --dgraph_tls_client_name alph1auser
+      --logtostderr -v=2 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name alpha1 --dgraph_tls_client_name alpha1user
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha2:
     image: dgraph/dgraph:latest

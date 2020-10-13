@@ -76,7 +76,7 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 }
 
 func TestClusterSetup(t *testing.T) {
-	dgConn, err := grpc.Dial(":7180", grpc.WithInsecure())
+	dgConn, err := grpc.Dial(":9180", grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
