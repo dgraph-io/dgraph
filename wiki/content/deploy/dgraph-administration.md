@@ -23,15 +23,15 @@ An admin endpoint is any HTTP endpoint which provides admin functionality.
 Admin endpoints usually start with the `/admin` path. The current list of admin
 endpoints includes the following:
 
-* /admin
-* /admin/backup
-* /admin/config/lru_mb
-* /admin/draining
-* /admin/export
-* /admin/shutdown
-* /admin/schema
-* /alter
-* /login
+* `/admin`
+* `/admin/backup`
+* `/admin/config/lru_mb`
+* `/admin/draining`
+* `/admin/export`
+* `/admin/shutdown`
+* `/admin/schema`
+* `/alter`
+* `/login`
 
 There are a few exceptions to the general rule described above:
 
