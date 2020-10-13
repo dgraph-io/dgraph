@@ -12,7 +12,7 @@ The Dgraph ACL tool is deprecated and would be removed in the next release. ACL 
 {{% /notice %}}
 
 Access Control List (ACL) provides access protection to your data stored in
-Dgraph. When the ACL feature is turned on, a client, e.g. dgo or dgraph4j, must
+Dgraph. When the ACL feature is turned on, a client, e.g. [dgo](https://github.com/dgraph-io/dgo) or [dgraph4j](https://github.com/dgraph-io/dgraph4j), must
 authenticate with a username and password before executing any transactions, and
 is only allowed to access the data permitted by the ACL rules.
 
@@ -22,7 +22,26 @@ the data protected by ACL rules.
 
 ## Turn on ACLs
 
-The ACL Feature can be turned on by following these steps
+{{% notice "tip" %}}
+
+To use the Access Control List (ACL) features, you need to run Dgraph in Enterprise mode.
+{{% /notice %}}
+
+### Running in Enterprise mode
+
+Dgraph enterprise features are enabled by default in a new cluster for 30 days. After the trial period of thirty days, the cluster must obtain a license from Dgraph to continue using the enterprise features released in the proprietary code.
+
+If you have a [License](https://dgraph.io/docs/enterprise-features/license/), you can supply the license key to the Zero server with:
+
+```bash
+dgraph zero --enterprise_license=PATH_TO_LICENSE_KEY
+```
+
+Once this is done, ACL will be turned on by default and you'll be able to run the ACL examples presented in this article.
+
+### Enabling ACL
+
+The ACL feature can be turned on by following these steps:
 
 1. Since ACL is an enterprise feature, make sure your use case is covered under
 a contract with Dgraph Labs Inc. You can contact us by sending an email to
@@ -37,6 +56,10 @@ HMAC-SHA256 as the signing algorithm.
 
 3. Start all the alpha servers in your cluster with the option `--acl_secret_file`, and
 make sure they are all using the same secret key file created in Step 2.
+
+   ```bash
+   dgraph alpha --acl_secret_file=PATH_TO_SECRET
+   ```
 
 Here is an example that starts one zero server and one alpha server with the ACL feature turned on:
 
@@ -56,20 +79,28 @@ If you are using docker-compose, a sample cluster can be set up by:
 
 Now that your cluster is running with the ACL feature turned on, you can set up the ACL rules. This can be done using the web UI Ratel or by using a GraphQL tool which fires the mutations. Execute the following mutations using a GraphQL tool like Insomnia, GraphQL Playground or GraphiQL.
 
-A typical workflow is the following:
+A typical workflow includes the following tasks:
 
-1. Reset the root password
-2. Create a regular user
-3. Create a group
-4. Assign the user to the group
-5. Assign predicate permissions to the group
+- [Reset the root password](#reset-the-root-password)
+- [Create a regular User](#create-a-regular-user)
+- [Create a Group](#create-a-group)
+- [Assign a User to a Group](#assign-a-user-to-a-group)
+- [Remove a User from a Group](#remove-a-user-from-a-group)
+- [Assign predicate permissions to a Group](#assign-predicate-permissions-to-a-group)
+- [Remove a rule from a Group](#remove-a-rule-from-a-group)
+- [Delete a User](#delete-a-user)
+- [Delete a Group](#delete-a-group)
 
 ### Using GraphQL Admin API
+
 {{% notice "note" %}}
 All these mutations require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
 {{% /notice %}}
 
-1) Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`as a demo, make sure to choose the correct IP and port for your environment:
+### Reset the root password
+
+The example below uses the dgraph endpoint `localhost:8080/admin`as a demo, make sure to choose the correct IP and port for your environment:
+
 ```graphql
 mutation {
   updateUser(input: {filter: {name: {eq: "groot"}}, set: {password: "newpassword"}}) {
@@ -81,7 +112,9 @@ mutation {
 ```
 The default password is `password`. `groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. You can add more users to this group if required.
 
-2) Create a regular user
+### Create a regular User
+
+To create a user `alice`, with password `newpassword`, you should execute the following GraphQL mutation:
 
 ```graphql
 mutation {
@@ -109,7 +142,9 @@ Now you should see the following output
 }
 ```
 
-3) Create a group
+### Create a Group
+
+To create a group `dev`, you should execute:
 
 ```graphql
 mutation {
@@ -141,7 +176,8 @@ Now you should see the following output
 }
 ```
 
-4) Assign the user to the group
+### Assign a User to a Group
+
 To assign the user `alice` to both the group `dev` and the group `sre`, the mutation should be
 
 ```graphql
@@ -157,7 +193,34 @@ mutation {
 }
 ```
 
-5) Assign predicate permissions to the group
+### Remove a User from a Group
+
+To remove `alice` from the `dev` group, the mutation should be
+
+```graphql
+mutation updateUser(input: {
+		filter: {
+			name: {
+				eq: "alice"
+			}
+		},
+		remove: {
+			groups: [{ name: "dev" }]
+		}
+	}) {
+		user {
+			name
+			groups {
+				name
+			}
+		}
+	}
+}
+```
+
+### Assign predicate permissions to a Group
+
+Here we assign a permission rule for the `friend` predicate to the group:
 
 ```graphql
 mutation {
@@ -173,7 +236,8 @@ mutation {
 }
 ```
 
-Here we assigned a permission rule for the friend predicate to the group. In case you have [reverse edges]({{< relref "query-language/schema.md#reverse-edges" >}}), they have to be given the permission to the group as well
+In case you have [reverse edges]({{< relref "query-language/schema.md#reverse-edges" >}}), they have to be given the permission to the group as well
+
 ```graphql
 mutation {
   updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "~friend", permission: 7}]}}) {
@@ -187,7 +251,9 @@ mutation {
   }
 }
 ```
+
 You can also resolve this by using the `dgraph acl` tool
+
 ```
 dgraph acl -a <ALPHA_ADDRESS:PORT> -w <GROOT_USER> -x <GROOT_PASSWORD>  mod --group dev --pred ~friend --perm 7
 ```
@@ -216,90 +282,70 @@ mutation {
 }
 ```
 
-## Retrieve Users and Groups Information
+### Remove a rule from a Group
+
+To remove a rule from the group `dev`, the mutation should be:
+
+```graphql
+mutation updateGroup(input: {
+		filter: {
+			name: {
+				eq: "dev"
+			}
+		},
+		remove: {
+			rules: [{predicate: "name", permission: 7}]
+		}
+	}) {
+		group {
+			name
+			rules {
+				predicate
+				permission
+			}
+		}
+	}
+```
+
+### Delete a User
+
+To delete the user `alice`, you should execute
+
+```graphql
+mutation deleteUser(filter: {name: {eq: "alice"}}) {
+		msg
+		numUids
+	}
+```
+
+### Delete a Group
+
+To delete the group `sre`, the mutation should be
+
+```graphql
+mutation deleteGroup(filter: {name: {eq: "sre"}}) {
+		msg
+		numUids
+	}
+```
+
+## Retrieve Users and Groups information
+
 {{% notice "note" %}}
 All these queries require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
 {{% /notice %}}
-The following examples show how to retrieve information about users and groups.
 
-### Using a GraphQL tool
+The following examples show how to retrieve information about users and groups. These queries can be executed using a GraphQL tool like Insomnia or GraphQL Playground.
 
-1) Check information about a user
+- [Query for Users](#query-for-users)
+- [Check User information](#check-user-information)
+- [Query for Groups](#query-for-groups)
+- [Check Group information](#check-group-information)
+- [Run ACL commands as another guardian](#run-acl-commands-as-another-guardian)
 
-```graphql
-query {
-  getUser(name: "alice") {
-    name
-    groups {
-      name
-    }
-  }
-}
-```
+### Query for Users
 
-and the output should show the groups that the user has been added to, e.g.
-
-```json
-{
-  "data": {
-    "getUser": {
-      "name": "alice",
-      "groups": [
-        {
-          "name": "dev"
-        }
-      ]
-    }
-  }
-}
-```
-
-2) Check information about a group
-
-```graphql
-{
-  getGroup(name: "dev") {
-    name
-    users {
-      name
-    }
-    rules {
-      permission
-      predicate
-    }
-  }
-}
-```
-
-and the output should include the users in the group, as well as the permissions, the
-group's ACL rules, e.g.
-
-```json
-{
-  "data": {
-    "getGroup": {
-      "name": "dev",
-      "users": [
-        {
-          "name": "alice"
-        }
-      ],
-      "rules": [
-        {
-          "permission": 7,
-          "predicate": "friend"
-        },
-        {
-          "permission": 7,
-          "predicate": "name"
-        }
-      ]
-    }
-  }
-}
-```
-
-3) Query for users
+Let's query for the user `alice`:
 
 ```graphql
 query {
@@ -312,7 +358,7 @@ query {
 }
 ```
 
-and the output should show the groups that the user has been added to, e.g.
+The output should show the groups that the user has been added to, e.g.
 
 ```json
 {
@@ -331,7 +377,41 @@ and the output should show the groups that the user has been added to, e.g.
 }
 ```
 
-4) Query for groups
+### Check User information
+
+We can obtain information about a user with the following query:
+
+```graphql
+query {
+  getUser(name: "alice") {
+    name
+    groups {
+      name
+    }
+  }
+}
+```
+
+The output should show the groups that the user has been added to, e.g.
+
+```json
+{
+  "data": {
+    "getUser": {
+      "name": "alice",
+      "groups": [
+        {
+          "name": "dev"
+        }
+      ]
+    }
+  }
+}
+```
+
+### Query for Groups
+
+Let's query for the `dev` group:
 
 ```graphql
 query {
@@ -348,7 +428,7 @@ query {
 }
 ```
 
-and the output should include the users in the group, as well as the permissions the
+The output should include the users in the group as well as the permissions, the
 group's ACL rules, e.g.
 
 ```json
@@ -378,21 +458,81 @@ group's ACL rules, e.g.
 }
 ```
 
-5) Run ACL commands as another guardian (member of `guardians` group).
+### Check Group information
 
-You can also run ACL commands with other users. Say we have a user `alice` which is member
-of `guardians` group and its password is `simple_alice`.
+To check the `dev` group information:
 
-## Access Data Using a Client
+```graphql
+{
+  getGroup(name: "dev") {
+    name
+    users {
+      name
+    }
+    rules {
+      permission
+      predicate
+    }
+  }
+}
+```
 
-Now that the ACL data are set, to access the data protected by ACL rules, we need to
+The output should include the users in the group as well as the permissions, the
+group's ACL rules, e.g.
+
+```json
+{
+  "data": {
+    "getGroup": {
+      "name": "dev",
+      "users": [
+        {
+          "name": "alice"
+        }
+      ],
+      "rules": [
+        {
+          "permission": 7,
+          "predicate": "friend"
+        },
+        {
+          "permission": 7,
+          "predicate": "name"
+        }
+      ]
+    }
+  }
+}
+```
+
+### Run ACL commands as another guardian
+
+You can also run ACL commands as another user (member of the `guardians` group). Say we have a user `alice`, which is a member
+of `guardians` group, and its password is `simple_alice`.
+
+```graphql
+mutation {
+  updateUser(input: {filter: {name: {eq: "alice"}}, set: {groups: [{name: "guardians"}]}}) {
+    user {
+      name
+      groups {
+        name
+    }
+    }
+  }
+}
+```
+
+## Access Data using a Client
+
+Now that the ACL settings are in place, to access the data protected by ACL rules, we need to
 first log in through a user. This is tyically done via the client's `.login(USER_ID, USER_PASSWORD)` method.
 
-A sample code using the dgo client can be found
+A sample code using the [dgo client](https://github.com/dgraph-io/dgo) can be found
 [here](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go). An example using
-dgraph4j can be found [here](https://github.com/dgraph-io/dgraph4j/blob/master/src/test/java/io/dgraph/AclTest.java).
+[dgraph4j](https://github.com/dgraph-io/dgraph4j) can be found [here](https://github.com/dgraph-io/dgraph4j/blob/master/src/test/java/io/dgraph/AclTest.java).
 
-## Access Data Using the GraphQL API
+## Access Data using the GraphQL API
 
 Dgraph's HTTP API also supports authenticated operations to access ACL-protected
 data.
@@ -460,7 +600,7 @@ the password for any user) by following these steps.
 3. Start Dgraph Alpha.
 4. Connect to Dgraph Alpha using Ratel and run the following upsert mutation to update the groot password
    to `newpassword` (choose your own secure password):
-   ```text
+   ```graphql
    upsert {
      query {
        groot as var(func: eq(dgraph.xid, "groot"))
