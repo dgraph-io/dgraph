@@ -56,8 +56,13 @@ func TestEntryReadWrite(t *testing.T) {
 	require.Equal(t, uint64(1), entries[0].Term)
 	require.Equal(t, data, entries[0].Data)
 
-	// Try opening it with a wrong key.
+	// Opening it with a wrong key fails.
 	x.WorkerConfig.EncryptionKey = []byte("other16byteskeys")
 	_, err = openWal(dir)
 	require.EqualError(t, err, "Encryption key mismatch")
+
+	// Opening it without encryption fails.
+	x.WorkerConfig.EncryptionKey = nil
+	_, err = openWal(dir)
+	require.EqualError(t, err, "Logfile is encrypted but encryption key is nil")
 }

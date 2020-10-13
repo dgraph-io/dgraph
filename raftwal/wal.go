@@ -174,7 +174,7 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		var next int
 
 		// If encryption is enabled then encrypt the data.
-		if x.WorkerConfig.EncryptionKey != nil {
+		if l.current.dataKey != nil {
 			var ebuf bytes.Buffer
 			curr := l.current
 			if err := y.XORBlockStream(
