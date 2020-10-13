@@ -275,8 +275,7 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 		}
 
 		kv.Key = backupKey
-		kv.UserMeta = tl.alloc.Allocate(1)
-		kv.UserMeta[0] = item.UserMeta()
+		kv.UserMeta = tl.alloc.Copy([]byte{item.UserMeta()})
 		kv.Version = item.Version()
 		kv.ExpiresAt = item.ExpiresAt()
 		list.Kv = append(list.Kv, kv)

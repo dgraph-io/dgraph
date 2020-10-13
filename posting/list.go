@@ -904,7 +904,7 @@ func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
 	kv := y.NewKV(alloc)
 	if isPlistEmpty(plist) {
 		kv.Value = nil
-		kv.Meta = alloc.Copy([]byte{BitEmptyPosting})
+		kv.UserMeta = alloc.Copy([]byte{BitEmptyPosting})
 		return kv
 	}
 	ref := plist.Pack.GetAllocRef()
@@ -920,7 +920,7 @@ func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
 		plist.Pack.AllocRef = ref
 	}
 	kv.Value = out[:n]
-	kv.Meta = alloc.Copy([]byte{BitCompletePosting})
+	kv.UserMeta = alloc.Copy([]byte{BitCompletePosting})
 	return kv
 }
 

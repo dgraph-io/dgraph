@@ -684,6 +684,14 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	stream.Send = func(kvList *bpb.KVList) error {
+		kvs := kvList.Kv[:0]
+		for _, kv := range kvList.Kv {
+			if kv.StreamDone {
+				continue
+			}
+			kvs = append(kvs, kv)
+		}
+		kvList.Kv = kvs
 		if err := tmpWriter.Write(kvList); err != nil {
 			return errors.Wrap(err, "error setting entries in temp badger")
 		}
@@ -729,8 +737,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	tmpStream.Send = func(kvList *bpb.KVList) error {
-		// TODO (Anurag): Instead of calling SetEntryAt everytime, we can filter KVList and call Write only once.
-		// SetEntryAt requries lock for every entry, whereas Write reduces lock contention.
 		for _, kv := range kvList.Kv {
 			if len(kv.Value) == 0 {
 				continue
