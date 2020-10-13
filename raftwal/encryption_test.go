@@ -18,6 +18,7 @@ package raftwal
 
 import (
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -32,6 +33,7 @@ func TestEntryReadWrite(t *testing.T) {
 	require.NoError(t, err)
 	el, err := openWal(dir)
 	require.NoError(t, err)
+	defer os.RemoveAll(dir)
 
 	require.NoError(t, el.AddEntries([]raftpb.Entry{{Index: 1, Term: 1, Data: []byte("abc")}}))
 	entries := el.allEntries(0, 100, 10000)
@@ -40,6 +42,16 @@ func TestEntryReadWrite(t *testing.T) {
 	require.Equal(t, uint64(1), entries[0].Term)
 	require.Equal(t, "abc", string(entries[0].Data))
 
+	// Open the wal file again.
+	el2, err := openWal(dir)
+	require.NoError(t, err)
+	entries = el2.allEntries(0, 100, 10000)
+	require.Equal(t, 1, len(entries))
+	require.Equal(t, uint64(1), entries[0].Index)
+	require.Equal(t, uint64(1), entries[0].Term)
+	require.Equal(t, "abc", string(entries[0].Data))
+
+	// Try opening it with a wrong key.
 	x.WorkerConfig.EncryptionKey = []byte("other16byteskeys")
 	_, err = openWal(dir)
 	require.EqualError(t, err, "Encryption key mismatch")

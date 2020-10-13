@@ -49,13 +49,15 @@ const (
 	// logFileOffset is offset in the log file where data is stored.
 	logFileOffset = 1 << 20 // 1MB
 	// encryptionKeyOffset is offset in the log file where encryption key is stored.
-	encryptionKeyOffset = logFileOffset - 20 // 1MB
+	encryptionKeyOffset = logFileOffset - 16 // 1MB - 16B
 	// logFileSize is the initial size of the log file.
 	logFileSize = 16 << 30
 	// entrySize is the size in bytes of a single entry.
 	entrySize = 32
 	// logSuffix is the suffix for log files.
 	logSuffix = ".wal"
+	// baseIVsize is the size of random part of IV
+	baseIVsize = 8
 )
 
 var (
@@ -128,7 +130,7 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 	} else {
 		if len(encKey) != 0 {
 			// Openend an existing file.
-			buf := make([]byte, 20)
+			buf := make([]byte, 16)
 			copy(buf, lf.Data[encryptionKeyOffset:])
 
 			keyID := binary.BigEndian.Uint64(buf[:8])
@@ -139,7 +141,7 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 			}
 			lf.dataKey = dk
 			lf.baseIV = buf[8:]
-			y.AssertTrue(len(lf.baseIV) == 12)
+			y.AssertTrue(len(lf.baseIV) == 8)
 		}
 	}
 	return lf, nil
@@ -171,11 +173,12 @@ func (lf *logFile) GetRaftEntry(idx int) raftpb.Entry {
 			re.Data = append(re.Data, data...)
 		}
 	}
+	// Decrypt the data if encryption in enabled.
 	if x.WorkerConfig.EncryptionKey != nil && len(re.Data) > 0 {
 		// No need to worry about mmap. because, XORBlock allocates a byte array to do the
 		// xor. So, the given slice is not being mutated.
 		decoded, err := y.XORBlockAllocate(
-			re.Data, lf.dataKey.Data, lf.generateIV(uint32(entry.DataOffset())))
+			re.Data, lf.dataKey.Data, lf.generateIV(entry.DataOffset()))
 		x.Check(err)
 		re.Data = decoded
 	}
@@ -305,7 +308,7 @@ func (lf *logFile) keyID() uint64 {
 // bootstrap will initialize the log file with key id and baseIV.
 // The below figure shows the layout of log file.
 // +----------------+------------------+------------------+
-// | keyID(8 bytes) |  baseIV(12 bytes)|	 entry...     |
+// | keyID(8 bytes) |  baseIV(8 bytes)|	 entry...     |
 // +----------------+------------------+------------------+
 func (lf *logFile) bootstrap() error {
 	// registry is nil if we don't have encryption enabled.
@@ -318,8 +321,10 @@ func (lf *logFile) bootstrap() error {
 	if lf.dataKey, err = lf.registry.LatestDataKey(); err != nil {
 		return y.Wrapf(err, "Error while retrieving datakey in logFile.bootstarp")
 	}
-	buf := make([]byte, 20)
+	buf := make([]byte, 16)
 	binary.BigEndian.PutUint64(buf[:8], lf.keyID())
+
+	// fill in random bytes in the last 8 bytes of buf
 	if _, err := cryptorand.Read(buf[8:]); err != nil {
 		return y.Wrapf(err, "Error while creating base IV, while creating logfile")
 	}

@@ -172,11 +172,13 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		}
 		var destBuf []byte
 		var next int
+
+		// If encryption is enabled then encrypt the data.
 		if x.WorkerConfig.EncryptionKey != nil {
 			var ebuf bytes.Buffer
 			curr := l.current
 			if err := y.XORBlockStream(
-				&ebuf, re.Data, curr.dataKey.Data, curr.generateIV(uint32(offset))); err != nil {
+				&ebuf, re.Data, curr.dataKey.Data, curr.generateIV(uint64(offset))); err != nil {
 				return err
 			}
 			// Allocate slice for the encoded data and copy encoded bytes.
@@ -199,12 +201,12 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 }
 
 // generateIV will generate IV by appending given offset with the base IV.
-func (lf *logFile) generateIV(offset uint32) []byte {
+func (lf *logFile) generateIV(offset uint64) []byte {
 	iv := make([]byte, aes.BlockSize)
-	// baseIV is of 12 bytes.
-	y.AssertTrue(12 == copy(iv[:12], lf.baseIV))
-	// remaining 4 bytes is obtained from offset.
-	binary.BigEndian.PutUint32(iv[12:], offset)
+	// IV is of 16 bytes, in which first 8 bytes are obtained from baseIV
+	// and the remaining 8 bytes is obtained from the offset.
+	y.AssertTrue(baseIVsize == copy(iv[:baseIVsize], lf.baseIV))
+	binary.BigEndian.PutUint64(iv[baseIVsize:], offset)
 	return iv
 }
 
