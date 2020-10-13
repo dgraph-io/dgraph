@@ -85,7 +85,6 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
-directive @oneOf on INPUT_OBJECT
 
 input IntFilter {
 	eq: Int

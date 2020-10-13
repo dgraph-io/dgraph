@@ -1158,16 +1158,21 @@ func rewriteObject(
 
 			switch val := val.(type) {
 			case map[string]interface{}:
-				// This field is another GraphQL object, which could either be linking to an
-				// existing node by it's ID
-				// { "title": "...", "author": { "id": "0x123" }
-				//          like here ^^
-				// or giving the data to create the object as part of a deep mutation
-				// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
-				//          like here ^^
-				frags =
-					rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
+				if fieldDef.Type().IsUnion() {
+					frags = rewriteUnionField(ctx, typ, fieldDef, myUID, varGen,
 						withAdditionalDeletes, val, deepXID, xidMetadata)
+				} else {
+					// This field is another GraphQL object, which could either be linking to an
+					// existing node by it's ID
+					// { "title": "...", "author": { "id": "0x123" }
+					//          like here ^^
+					// or giving the data to create the object as part of a deep mutation
+					// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
+					//          like here ^^
+					frags =
+						rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
+							withAdditionalDeletes, val, deepXID, xidMetadata)
+				}
 
 			case []interface{}:
 				// This field is either:
@@ -1239,6 +1244,39 @@ func rewriteObject(
 	}
 
 	return results
+}
+
+// if this is a union field, then obj should have only one key which will be a ref
+// to one of the member types. Eg:
+// { "dogRef" : { ... } }
+// So, just rewrite it as an object with correct underlying type.
+func rewriteUnionField(ctx context.Context,
+	parentTyp schema.Type,
+	srcField schema.FieldDefinition,
+	srcUID string,
+	varGen *VariableGenerator,
+	withAdditionalDeletes bool,
+	obj map[string]interface{},
+	deepXID int,
+	xidMetadata *xidMetadata) *mutationRes {
+	if len(obj) != 1 {
+		errFrag := newFragment(nil)
+		errFrag.err = fmt.Errorf(
+			"Value for field `%s` must have exactly one child, found %d children",
+			srcField.DgraphPredicate(), len(obj))
+		return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+	}
+
+	var typ schema.Type
+	for memberRef, memberRefVal := range obj {
+		memberTypeName := strings.ToUpper(memberRef[:1]) + memberRef[1:len(
+			memberRef)-3]
+		srcField = srcField.WithMemberType(memberTypeName)
+		typ = srcField.Type()
+		obj = memberRefVal.(map[string]interface{})
+	}
+	return rewriteObject(ctx, parentTyp, typ, srcField, srcUID, varGen,
+		withAdditionalDeletes, obj, deepXID, xidMetadata)
 }
 
 func invalidObjectFragment(
@@ -1681,8 +1719,14 @@ func rewriteList(
 	for _, obj := range objects {
 		switch obj := obj.(type) {
 		case map[string]interface{}:
-			frag := rewriteObject(ctx, parentTyp, typ, srcField, srcUID, varGen,
-				withAdditionalDeletes, obj, deepXID, xidMetadata)
+			var frag *mutationRes
+			if typ.IsUnion() {
+				frag = rewriteUnionField(ctx, parentTyp, srcField, srcUID, varGen,
+					withAdditionalDeletes, obj, deepXID, xidMetadata)
+			} else {
+				frag = rewriteObject(ctx, parentTyp, typ, srcField, srcUID, varGen,
+					withAdditionalDeletes, obj, deepXID, xidMetadata)
+			}
 			if len(frag.secondPass) != 0 {
 				foundSecondPass = true
 			}

@@ -174,7 +174,7 @@ type Type interface {
 	Nullable() bool
 	// true if this is a union type
 	IsUnion() bool
-	// returns the DgraphName for the member types of this union
+	// returns a list of member types for this union
 	UnionMembers([]interface{}) []Type
 	ListType() Type
 	Interfaces() []string
@@ -196,6 +196,7 @@ type FieldDefinition interface {
 	IsID() bool
 	HasIDDirective() bool
 	Inverse() FieldDefinition
+	WithMemberType(string) FieldDefinition
 	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
 	ForwardEdge() FieldDefinition
 }
@@ -1546,6 +1547,23 @@ func (fd *fieldDefinition) Inverse() FieldDefinition {
 		inSchema:        fd.inSchema,
 		dgraphPredicate: fd.dgraphPredicate,
 		parentType:      typeWrapper,
+	}
+}
+
+func (fd *fieldDefinition) WithMemberType(memberType string) FieldDefinition {
+	// just need to return a copy of this fieldDefinition with type set to memberType
+	return &fieldDefinition{
+		fieldDef: &ast.FieldDefinition{
+			Name:         fd.fieldDef.Name,
+			Arguments:    fd.fieldDef.Arguments,
+			DefaultValue: fd.fieldDef.DefaultValue,
+			Type:         &ast.Type{NamedType: memberType},
+			Directives:   fd.fieldDef.Directives,
+			Position:     fd.fieldDef.Position,
+		},
+		inSchema:        fd.inSchema,
+		dgraphPredicate: fd.dgraphPredicate,
+		parentType:      fd.parentType,
 	}
 }
 

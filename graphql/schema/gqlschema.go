@@ -142,7 +142,6 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
-directive @oneOf on INPUT_OBJECT
 
 input IntFilter {
 	eq: Int
@@ -688,10 +687,6 @@ func addUnionReferenceType(schema *ast.Schema, defn *ast.Definition) {
 	refType := &ast.Definition{
 		Kind: ast.InputObject,
 		Name: refTypeName,
-		Directives: ast.DirectiveList{{
-			Name:       oneOfDirective,
-			Definition: schema.Directives[oneOfDirective],
-		}},
 	}
 	for _, typName := range defn.Types {
 		refType.Fields = append(refType.Fields, &ast.FieldDefinition{

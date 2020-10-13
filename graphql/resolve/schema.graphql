@@ -331,5 +331,6 @@ type Home {
     id: ID!
     address: String
     members: [HomeMember]
+    favouriteMember: HomeMember
 }
 # union testing - end
