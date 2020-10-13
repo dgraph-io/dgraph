@@ -41,12 +41,13 @@ indexing) is removed with the pattern `S P *`.
 }
 ```
 
-The pattern `S * *` deletes all the known edges out of a node, any reverse edges corresponding to the removed edges, and any indexing for the removed data.
+The pattern `S * *` deletes all the known edges out of a node, any reverse edges
+corresponding to the removed edges, and any indexing for the removed data.
 
 {{% notice "note" %}} For mutations that fit the `S * *` pattern, only
-data that matches the type information for the node (set by `dgraph.type`)
-is deleted. To delete the node itself using a `S * *` delete mutation, all
-predicates in the node must be typed.{{% /notice %}}
+predicates that are among the types associated with a given node (using
+`dgraph.type`) are deleted. Any predicates that are don't match one of the
+node's types will remain after an `S * *` delete mutation.{{% /notice %}}
 
 ```sh
 {
