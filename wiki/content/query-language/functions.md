@@ -406,7 +406,7 @@ Index Required: `dateTime`
 
 Returns nodes that match a range of `dateTime` values. The `between` function
 performs a range check to improve query efficiency, as a wide-ranging `dateTime`
-query on a large set of data would run slowly.
+query on a large set of data would run slowly without such a check.
 
 Query Example: Movies released between 1976 and 1983, listed by genre.
 
