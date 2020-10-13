@@ -28,7 +28,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Remove extra fields when querying interfaces (#6647)
   - fix object Linking with `hasInverse` (#6648)
   - Update gqlgen in go.mod (#6646)
-  - This PR adds documentation for Scalar DateTime type. (#6554)
   - Hide info when performing mutation on id field with auth rule. (#6534)
   - Fix cascade with auth query when RBAC is false (#6535)
   - Fix squashIntoObject so that results are correctly merged (#6530)
