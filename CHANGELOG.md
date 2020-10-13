@@ -9,98 +9,162 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Changed
 
-- Update badger to 5e3d4b9 (#6669)
-- build: Makefile to build Dgraph inside docker container. (#6601)
-- Return content length header for queries (#6480)
-- Use raft storage in managedmode (#6547)
-- Update index.md (#6567)
-- Changes github.com/dgraph-io/graphql-transport-ws version (#6529)
+- Update badger to 5e3d4b9 ([#6669][])
+- build: Makefile to build Dgraph inside docker container. ([#6601][])
+- Return content length header for queries ([#6480][])
+- Use raft storage in managedmode ([#6547][])
+- Update index.md ([#6567][])
+- Changes github.com/dgraph-io/graphql-transport-ws version ([#6529][])
 
 ### Added
 
-- add utility to export backup data. (#6590)
-- Add separate compression flag for z and wal dirs (#6421)
+- add utility to export backup data. ([#6590][])
+- Add separate compression flag for z and wal dirs ([#6421][])
 
 ### Fixed
 
 - GraphQL
-  - disallowing field names with as (#6645)
-  - Remove extra fields when querying interfaces (#6647)
-  - fix object Linking with `hasInverse` (#6648)
-  - Update gqlgen in go.mod (#6646)
-  - Hide info when performing mutation on id field with auth rule. (#6534)
-  - Fix cascade with auth query when RBAC is false (#6535)
-  - Fix squashIntoObject so that results are correctly merged (#6530)
-  - fix errors from authorization examples given in docs. (#6522)
-  - fix  restoreStatus query with query variables (#6424)
-  - fix for deletion on interfaces with no non Id field (#6417)
-  - fix internal error when doing GraphQL schema introspection after drop all (#6525)
-  - Link xids properly if there are duplicate xids within t… (#6521)
-  - Fix query rewriting for auth delete when deleting types with inverse field. (#6524)
-  - Fix order and offset in auth queries. (#6366)
-  - Generate correct schema when no orderable field in a type (#6460)
-  - don't generate orderable enum value for list fields (#6413)
-  - fix introspection completion bug (#6389)
-- fix Poor-man's auth for admin operations (#6686)
-- Break out if g.Ctx is done (#6675)
-- Fix wrong path response for k-shortest paths (#6654)
-- Update nextRaftId when starting a node with a raftId > 0. (#6597)
-- Pagination param "after" does not work when using func: uid(v) (#6634)
-- CID never created if Zero stops early after first init (#6637)
-- Pause rollups during snapshot streaming. (#6611)
-- Use flags for cache (#6467)
-- Remove auth error from mutation. (#6532)
-- Fix readTs less than minTs (#6517)
-- fix bug when deleting and adding to a single UID predicate in the same transaction. (#6449)
+  - disallowing field names with as ([#6645][])
+  - Remove extra fields when querying interfaces ([#6647][])
+  - fix object Linking with `hasInverse` ([#6648][])
+  - Update gqlgen in go.mod ([#6646][])
+  - Hide info when performing mutation on id field with auth rule. ([#6534][])
+  - Fix cascade with auth query when RBAC is false ([#6535][])
+  - Fix squashIntoObject so that results are correctly merged ([#6530][])
+  - fix errors from authorization examples given in docs. ([#6522][])
+  - fix  restoreStatus query with query variables ([#6424][])
+  - fix for deletion on interfaces with no non Id field ([#6417][])
+  - fix internal error when doing GraphQL schema introspection after drop all ([#6525][])
+  - Link xids properly if there are duplicate xids within t… ([#6521][])
+  - Fix query rewriting for auth delete when deleting types with inverse field. ([#6524][])
+  - Fix order and offset in auth queries. ([#6366][])
+  - Generate correct schema when no orderable field in a type ([#6460][])
+  - don't generate orderable enum value for list fields ([#6413][])
+  - fix introspection completion bug ([#6389][])
+- fix Poor-man's auth for admin operations ([#6686][])
+- Break out if g.Ctx is done ([#6675][])
+- Fix wrong path response for k-shortest paths ([#6654][])
+- Update nextRaftId when starting a node with a raftId > 0. ([#6597][])
+- Pagination param "after" does not work when using func: uid(v) ([#6634][])
+- CID never created if Zero stops early after first init ([#6637][])
+- Pause rollups during snapshot streaming. ([#6611][])
+- Use flags for cache ([#6467][])
+- Remove auth error from mutation. ([#6532][])
+- Fix readTs less than minTs ([#6517][])
+- fix bug when deleting and adding to a single UID predicate in the same transaction. ([#6449][])
+
+[#6669]: https://github.com/dgraph-io/dgraph/issues/6669
+[#6601]: https://github.com/dgraph-io/dgraph/issues/6601
+[#6480]: https://github.com/dgraph-io/dgraph/issues/6480
+[#6547]: https://github.com/dgraph-io/dgraph/issues/6547
+[#6567]: https://github.com/dgraph-io/dgraph/issues/6567
+[#6529]: https://github.com/dgraph-io/dgraph/issues/6529
+[#6590]: https://github.com/dgraph-io/dgraph/issues/6590
+[#6421]: https://github.com/dgraph-io/dgraph/issues/6421
+[#6645]: https://github.com/dgraph-io/dgraph/issues/6645
+[#6647]: https://github.com/dgraph-io/dgraph/issues/6647
+[#6648]: https://github.com/dgraph-io/dgraph/issues/6648
+[#6646]: https://github.com/dgraph-io/dgraph/issues/6646
+[#6534]: https://github.com/dgraph-io/dgraph/issues/6534
+[#6535]: https://github.com/dgraph-io/dgraph/issues/6535
+[#6530]: https://github.com/dgraph-io/dgraph/issues/6530
+[#6522]: https://github.com/dgraph-io/dgraph/issues/6522
+[#6424]: https://github.com/dgraph-io/dgraph/issues/6424
+[#6417]: https://github.com/dgraph-io/dgraph/issues/6417
+[#6525]: https://github.com/dgraph-io/dgraph/issues/6525
+[#6521]: https://github.com/dgraph-io/dgraph/issues/6521
+[#6524]: https://github.com/dgraph-io/dgraph/issues/6524
+[#6366]: https://github.com/dgraph-io/dgraph/issues/6366
+[#6460]: https://github.com/dgraph-io/dgraph/issues/6460
+[#6413]: https://github.com/dgraph-io/dgraph/issues/6413
+[#6389]: https://github.com/dgraph-io/dgraph/issues/6389
+[#6686]: https://github.com/dgraph-io/dgraph/issues/6686
+[#6675]: https://github.com/dgraph-io/dgraph/issues/6675
+[#6654]: https://github.com/dgraph-io/dgraph/issues/6654
+[#6597]: https://github.com/dgraph-io/dgraph/issues/6597
+[#6634]: https://github.com/dgraph-io/dgraph/issues/6634
+[#6637]: https://github.com/dgraph-io/dgraph/issues/6637
+[#6611]: https://github.com/dgraph-io/dgraph/issues/6611
+[#6467]: https://github.com/dgraph-io/dgraph/issues/6467
+[#6532]: https://github.com/dgraph-io/dgraph/issues/6532
+[#6517]: https://github.com/dgraph-io/dgraph/issues/6517
+[#6449]: https://github.com/dgraph-io/dgraph/issues/6449
 
 ## [20.03.6] - Unreleased
 [20.03.6]: https://github.com/dgraph-io/dgraph/compare/v20.03.5...v20.03.6
 
 ### Changed
 
-- Update badger to 5e3d4b9 (#6670)
-- Return content length header for queries (#6479)
-- Use raft storage in managedmode (#6545)
+- Update badger to 5e3d4b9 ([#6670][])
+- Return content length header for queries ([#6479][])
+- Use raft storage in managedmode ([#6545][])
 
 ### Added
 
-- add utility to export backup data. (#6591)
-- Makefile to build Dgraph inside docker container. (#6602)
-- Add separate compression flag for z and wal dirs (#6420)
+- add utility to export backup data. ([#6591][])
+- Makefile to build Dgraph inside docker container. ([#6602][])
+- Add separate compression flag for z and wal dirs ([#6420][])
 
 ### Fixed
 
-- Break out if g.Ctx is done (#6676)
-- Fix wrong path response for k-shortest paths (#6655)
-- Update nextRaftId when starting a node with a raftId > 0. (#6598)
-- Pagination param "after" does not work when using func: uid(v) (#6631)
-- CID never created if Zero stops early after first init (#6636)
-- Pause rollups during snapshot streaming. (#6610)
-- Use flags for cache (#6466)
-- Fix negative waitgroup error (#6551)
-- Report Raft heartbeat metrics for Zero v=3 logs and log read index. (#6553)
-- Fix readTs less than minTs (#6518)
-- fix bug when deleting and adding to a single UID predicate in the same transaction. (#6450)
+- Break out if g.Ctx is done ([#6676][])
+- Fix wrong path response for k-shortest paths ([#6655][])
+- Update nextRaftId when starting a node with a raftId > 0. ([#6598][])
+- Pagination param "after" does not work when using func: uid(v) ([#6631][])
+- CID never created if Zero stops early after first init ([#6636][])
+- Pause rollups during snapshot streaming. ([#6610][])
+- Use flags for cache ([#6466][])
+- Fix negative waitgroup error ([#6551][])
+- Report Raft heartbeat metrics for Zero v=3 logs and log read index. ([#6553][])
+- Fix readTs less than minTs ([#6518][])
+- fix bug when deleting and adding to a single UID predicate in the same transaction. ([#6450][])
+
+[#6670]: https://github.com/dgraph-io/dgraph/issues/6670
+[#6479]: https://github.com/dgraph-io/dgraph/issues/6479
+[#6545]: https://github.com/dgraph-io/dgraph/issues/6545
+[#6591]: https://github.com/dgraph-io/dgraph/issues/6591
+[#6602]: https://github.com/dgraph-io/dgraph/issues/6602
+[#6420]: https://github.com/dgraph-io/dgraph/issues/6420
+[#6676]: https://github.com/dgraph-io/dgraph/issues/6676
+[#6655]: https://github.com/dgraph-io/dgraph/issues/6655
+[#6598]: https://github.com/dgraph-io/dgraph/issues/6598
+[#6631]: https://github.com/dgraph-io/dgraph/issues/6631
+[#6636]: https://github.com/dgraph-io/dgraph/issues/6636
+[#6610]: https://github.com/dgraph-io/dgraph/issues/6610
+[#6466]: https://github.com/dgraph-io/dgraph/issues/6466
+[#6551]: https://github.com/dgraph-io/dgraph/issues/6551
+[#6553]: https://github.com/dgraph-io/dgraph/issues/6553
+[#6518]: https://github.com/dgraph-io/dgraph/issues/6518
+[#6450]: https://github.com/dgraph-io/dgraph/issues/6450
 
 ## [1.2.8] - Unreleased
 [1.2.8]: https://github.com/dgraph-io/dgraph/compare/v1.2.7...v1.2.8
 
 ### Changed
 
-- Update badger to 5e3d4b9 (#6671)
-- Return content length header for queries (#6478)
-- Use raft storage in managedmode (#6546)
+- Update badger to 5e3d4b9 ([#6671][])
+- Return content length header for queries ([#6478][])
+- Use raft storage in managedmode ([#6546][])
 
 ### Added
 
-- Makefile to build Dgraph inside docker container. (#6603)
-- Add separate compression flag for z and wal dirs (#6419)
+- Makefile to build Dgraph inside docker container. ([#6603][])
+- Add separate compression flag for z and wal dirs ([#6419][])
 
 ### Fixed
 
-- Break out if g.Ctx is done (#6677)
-- Update nextRaftId when starting a node with a raftId > 0. (#6599)
-- Use flags for cache (#6465)
+- Break out if g.Ctx is done ([#6677][])
+- Update nextRaftId when starting a node with a raftId > 0. ([#6599][])
+- Use flags for cache ([#6465][])
+
+[#6671]: https://github.com/dgraph-io/dgraph/issues/6671
+[#6478]: https://github.com/dgraph-io/dgraph/issues/6478
+[#6546]: https://github.com/dgraph-io/dgraph/issues/6546
+[#6603]: https://github.com/dgraph-io/dgraph/issues/6603
+[#6419]: https://github.com/dgraph-io/dgraph/issues/6419
+[#6677]: https://github.com/dgraph-io/dgraph/issues/6677
+[#6599]: https://github.com/dgraph-io/dgraph/issues/6599
+[#6465]: https://github.com/dgraph-io/dgraph/issues/6465
 
 ## [20.07.1] - 2020-09-17
 [20.07.1]: https://github.com/dgraph-io/dgraph/compare/v20.07.0...v20.07.1
