@@ -205,7 +205,7 @@ func initService(basename string, idx, grpcPort int) service {
 	if opts.LudicrousMode {
 		svc.Command += " --ludicrous_mode=true"
 	}
-
+	svc.Command += fmt.Sprintf(" -o %d --idx=%d", opts.PortOffset+getOffset(idx), idx)
 	return svc
 }
 
