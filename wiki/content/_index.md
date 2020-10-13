@@ -63,9 +63,9 @@ aliases = ["/contribute"]
     </a>
   </div>
   <div class="item">
-    <div class="icon"></div>
+    <div class="icon"><i class="fa fa-university" aria-hidden="true"></i></div>
     <a href="{{< relref "tutorials/index.md">}}">
-      <h2>Tutorials - Get Started with Dgraph</h2>
+      <h2>Tutorials</h2>
       <p>
         Get Started with Dgraph alongside a series of tutorials
       </p>
@@ -92,17 +92,17 @@ aliases = ["/contribute"]
   <div class="item">
     <div class="icon"><i class="lni lni-fireworks"></i></div>
     <a href="{{< relref "clients/_index.md">}}">
-      Clients
-    </a>
+      <h2>Clients</h2>
     <p>
       Dgraph clients in various programming languages
     </p>
+    </a>
   </div>
 
   <div class="item">
     <div class="icon"><i class="fa fa-wrench" aria-hidden="true"></i></div>
     <a href="{{< relref "deploy/_index.md">}}">
-      Deploy
+      <h2>Deploy</h2>
       <p>
         Running Dgraph cluster in production
       </p>
@@ -112,7 +112,7 @@ aliases = ["/contribute"]
   <div class="item">
     <div class="icon"><i class="fa fa-building-o" aria-hidden="true"></i></div>
     <a href="{{< relref "enterprise-features/_index.md">}}">
-      Enterprise Features
+      <h2>Enterprise Features</h2>
       <p>
         Exclusive features like ACLs, binary backups, encryption at rest, and more
       </p>
@@ -121,7 +121,7 @@ aliases = ["/contribute"]
   <div class="item">
     <div class="icon"><i class="fa fa-question-circle-o" aria-hidden="true"></i></div>
     <a href="/faq">
-      FAQ
+      <h2>FAQ</h2>
       <p>
         Frequently asked questions
       </p>
@@ -130,7 +130,7 @@ aliases = ["/contribute"]
   <div class="item">
     <div class="icon"><i class="fa fa-cog" aria-hidden="true"></i></div>
     <a href="https://dgraph.io/docs/badger">
-      Badger
+      <h2>Badger</h2>
       <p>
         Embeddable, persistent and fast key-value database that powers Dgraph
       </p>
