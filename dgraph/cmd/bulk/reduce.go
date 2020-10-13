@@ -664,15 +664,11 @@ func (r *reducer) toList(req *encodeRequest) {
 				req.splitCh <- &bpb.KVList{Kv: splits}
 			}
 		} else {
-			data, byt := posting.MarshalPostingList(pl)
+			kv := posting.MarshalPostingList(pl, nil)
 			codec.FreePack(pl.Pack)
 
-			kv := &bpb.KV{
-				Key:      y.Copy(currentKey),
-				Value:    data,
-				UserMeta: []byte{byt},
-				Version:  writeVersionTs,
-			}
+			kv.Key = y.Copy(currentKey)
+			kv.Version = writeVersionTs
 			kv.StreamId = r.streamIdFor(pk.Attr)
 			kvList.Kv = append(kvList.Kv, kv)
 		}

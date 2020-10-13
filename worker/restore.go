@@ -176,11 +176,9 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 					// part without rolling the key first. This part is here for backwards
 					// compatibility. New backups are not affected because there was a change
 					// to roll up lists into a single one.
-					restoreVal, byt := posting.MarshalPostingList(pl)
+					kv := posting.MarshalPostingList(pl, nil)
 					codec.FreePack(pl.Pack)
 					kv.Key = restoreKey
-					kv.Value = restoreVal
-					kv.UserMeta = []byte{byt}
 					if err := loader.Set(kv); err != nil {
 						return 0, err
 					}

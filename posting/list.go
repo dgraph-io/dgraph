@@ -831,14 +831,9 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	defer out.free()
 
 	var kvs []*bpb.KV
-	kv := y.NewKV(alloc)
+	kv := MarshalPostingList(out.plist, alloc)
 	kv.Version = out.newMinTs
 	kv.Key = alloc.Copy(l.key)
-
-	val, meta := MarshalPostingList(out.plist)
-	kv.UserMeta = alloc.Copy([]byte{meta})
-	kv.Value = alloc.Copy(val)
-
 	kvs = append(kvs, kv)
 
 	for startUid, plist := range out.parts {
@@ -861,68 +856,72 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	return kvs, nil
 }
 
-// SingleListRollup works like rollup but generates a single list with no splits.
+// ToBackupPostingList works like rollup but generates a single list with no splits.
 // It's used during backup so that each backed up posting list is stored in a single key.
-func (l *List) SingleListRollup(kv *bpb.KV) error {
-	if kv == nil {
-		return errors.Errorf("passed kv pointer cannot be nil")
-	}
-
+func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator) (*bpb.KV, error) {
+	bl.Reset()
 	l.RLock()
 	defer l.RUnlock()
 
 	out, err := l.rollup(math.MaxUint64, false)
 	if err != nil {
-		return errors.Wrapf(err, "failed when calling List.rollup")
+		return nil, errors.Wrapf(err, "failed when calling List.rollup")
 	}
 	// out is only nil when the list's minTs is greater than readTs but readTs
 	// is math.MaxUint64 so that's not possible. Assert that's true.
 	x.AssertTrue(out != nil)
 	defer out.free()
 
-	kv.Version = out.newMinTs
-	kv.Key = l.key
-	val, meta := MarshalPostingList(out.plist)
-	kv.UserMeta = []byte{meta}
-	kv.Value = val
+	ToBackupPostingList(out.plist, bl)
+	val := alloc.Allocate(bl.Size())
+	n, err := bl.MarshalToSizedBuffer(val)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil
+	kv := y.NewKV(alloc)
+	kv.Key = alloc.Copy(l.key)
+	kv.Version = out.newMinTs
+	kv.Value = val[:n]
+	return kv, nil
 }
 
 func (out *rollupOutput) marshalPostingListPart(alloc *z.Allocator,
 	baseKey []byte, startUid uint64, plist *pb.PostingList) (*bpb.KV, error) {
-	kv := y.NewKV(alloc)
-	kv.Version = out.newMinTs
 	key, err := x.SplitKey(baseKey, startUid)
 	if err != nil {
 		return nil, errors.Wrapf(err,
 			"cannot generate split key for list with base key %s and start UID %d",
 			hex.EncodeToString(baseKey), startUid)
 	}
+	kv := MarshalPostingList(plist, alloc)
+	kv.Version = out.newMinTs
 	kv.Key = alloc.Copy(key)
-	val, meta := MarshalPostingList(plist)
-	kv.UserMeta = alloc.Copy([]byte{meta})
-	kv.Value = alloc.Copy(val)
-
 	return kv, nil
 }
 
-func MarshalPostingList(plist *pb.PostingList) ([]byte, byte) {
+func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
+	kv := y.NewKV(alloc)
 	if isPlistEmpty(plist) {
-		return nil, BitEmptyPosting
+		kv.Value = nil
+		kv.Meta = alloc.Copy([]byte{BitEmptyPosting})
+		return kv
 	}
-	alloc := plist.Pack.GetAllocator()
+	ref := plist.Pack.GetAllocRef()
 	if plist.Pack != nil {
 		// Set allocator to zero for marshal.
-		plist.Pack.Allocator = 0
+		plist.Pack.AllocRef = 0
 	}
 
-	data, err := plist.Marshal()
+	out := alloc.Allocate(plist.Size())
+	n, err := plist.MarshalToSizedBuffer(out)
 	x.Check(err)
 	if plist.Pack != nil {
-		plist.Pack.Allocator = alloc
+		plist.Pack.AllocRef = ref
 	}
-	return data, BitCompletePosting
+	kv.Value = out[:n]
+	kv.Meta = alloc.Copy([]byte{BitCompletePosting})
+	return kv
 }
 
 const blockSize int = 256
@@ -1506,7 +1505,7 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 	lowPl.Pack = &pb.UidPack{
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[:midBlock],
-		Allocator: plist.Pack.Allocator,
+		AllocRef:  plist.Pack.AllocRef,
 	}
 
 	// Generate posting list holding the second half of the current list's postings.
@@ -1514,7 +1513,7 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 	highPl.Pack = &pb.UidPack{
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[midBlock:],
-		Allocator: plist.Pack.Allocator,
+		AllocRef:  plist.Pack.AllocRef,
 	}
 
 	// Add elements in plist.Postings to the corresponding list.
@@ -1593,9 +1592,9 @@ func (l *List) PartSplits() []uint64 {
 }
 
 // ToBackupPostingList converts a posting list into its representation used for storing backups.
-func ToBackupPostingList(l *pb.PostingList, bl *pb.BackupPostingList) ([]byte, error) {
+func ToBackupPostingList(l *pb.PostingList, bl *pb.BackupPostingList) {
 	if l == nil || bl == nil {
-		return nil, nil
+		return
 	}
 
 	// Encode uids to []byte instead of []uint64 if we have more than 1000
@@ -1610,7 +1609,6 @@ func ToBackupPostingList(l *pb.PostingList, bl *pb.BackupPostingList) ([]byte, e
 	bl.Postings = l.Postings
 	bl.CommitTs = l.CommitTs
 	bl.Splits = l.Splits
-	return bl.Marshal()
 }
 
 // FromBackupPostingList converts a posting list in the format used for backups to a

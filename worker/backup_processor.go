@@ -239,7 +239,6 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 		// version of one so they would be incorrectly rejected by above check.
 		return list, nil
 	}
-	kv := y.NewKV(tl.alloc)
 
 	switch item.UserMeta() {
 	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
@@ -248,7 +247,8 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 			return nil, errors.Wrapf(err, "while reading posting list")
 		}
 
-		err = l.SingleListRollup(kv)
+		// Don't allocate kv on tl.alloc, because we don't need it by the end of this func.
+		kv, err := l.ToBackupPostingList(&tl.bpl, tl.alloc)
 		if err != nil {
 			return nil, errors.Wrapf(err, "while rolling up list")
 		}
@@ -258,15 +258,10 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 			return nil, err
 		}
 		kv.Key = backupKey
-
-		backupPl, err := tl.toBackupPostingList(kv.Value)
-		if err != nil {
-			return nil, err
-		}
-		kv.Value = backupPl
 		list.Kv = append(list.Kv, kv)
 
 	case posting.BitSchemaPosting:
+		kv := y.NewKV(tl.alloc)
 		if err := item.Value(func(val []byte) error {
 			kv.Value = tl.alloc.Copy(val)
 			return nil
@@ -303,21 +298,6 @@ func (tl *threadLocal) toBackupKey(key []byte) ([]byte, error) {
 	out := tl.alloc.Allocate(bk.Size())
 	n, err := bk.MarshalToSizedBuffer(out)
 	return out[:n], err
-}
-
-func (tl *threadLocal) toBackupPostingList(val []byte) ([]byte, error) {
-	tl.pl.Reset()
-	tl.bpl.Reset()
-
-	if err := tl.pl.Unmarshal(val); err != nil {
-		return nil, errors.Wrapf(err, "while reading posting list")
-	}
-
-	out, err := posting.ToBackupPostingList(&tl.pl, &tl.bpl)
-	if err != nil {
-		return nil, errors.Wrapf(err, "while backup posting list")
-	}
-	return tl.alloc.Copy(out), nil
 }
 
 func writeKVList(list *bpb.KVList, w io.Writer) error {
