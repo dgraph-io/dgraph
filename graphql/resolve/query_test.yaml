@@ -195,6 +195,7 @@
         dgraph.uid : uid
       }
     }
+
 - name: "Filter connectives with null values gets skipped "
   gqlquery: |
     query {
@@ -209,8 +210,6 @@
         dgraph.uid : uid
       }
     }
-
--
 
 - name: "Query with has Filter"
   gqlquery: |
