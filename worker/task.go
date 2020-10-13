@@ -460,15 +460,12 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 							}
 						}
 					case "between":
-						if types.CompareVals("ge", val, srcFn.eqTokens[0]) &&
-							types.CompareVals("le", val, srcFn.eqTokens[1]) {
+						if types.CompareBetween(val, srcFn.eqTokens[0], srcFn.eqTokens[1]) {
 							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
-							break
 						}
 					default:
 						if types.CompareVals(srcFn.fname, val, srcFn.eqTokens[0]) {
 							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
-							break
 						}
 					}
 
@@ -1345,8 +1342,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 		}
 	case arg.srcFn.fname == between:
 		compareFunc := func(dst types.Val) bool {
-			return types.CompareVals("ge", dst, arg.srcFn.eqTokens[0]) &&
-				types.CompareVals("le", dst, arg.srcFn.eqTokens[1])
+			return types.CompareBetween(dst, arg.srcFn.eqTokens[0], arg.srcFn.eqTokens[1])
 		}
 		if err := filterRow(0, compareFunc); err != nil {
 			return err
