@@ -46,7 +46,7 @@ corresponding to the removed edges, and any indexing for the removed data.
 
 {{% notice "note" %}} For mutations that fit the `S * *` pattern, only
 predicates that are among the types associated with a given node (using
-`dgraph.type`) are deleted. Any predicates that are don't match one of the
+`dgraph.type`) are deleted. Any predicates that don't match one of the
 node's types will remain after an `S * *` delete mutation.{{% /notice %}}
 
 ```sh
