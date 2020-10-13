@@ -48,19 +48,19 @@ const (
 	maxNumEntries = 30000
 	// logFileOffset is offset in the log file where data is stored.
 	logFileOffset = 1 << 20 // 1MB
+	// baseIVsize is the size of random part of IV.
+	baseIVsize = 8
+	// keyIDsize is the size of keyID.
+	keyIDsize = 8
 	// encryptionKeyOffset is offset in the log file where keyID (first 8 bytes)
 	// and baseIV (remaining 8 bytes) are stored.
-	encryptionKeyOffset = logFileOffset - 16 // 1MB - 16B
+	encryptionKeyOffset = logFileOffset - baseIVsize - keyIDsize // 1MB - 16B
 	// logFileSize is the initial size of the log file.
 	logFileSize = 16 << 30
 	// entrySize is the size in bytes of a single entry.
 	entrySize = 32
 	// logSuffix is the suffix for log files.
 	logSuffix = ".wal"
-	// baseIVsize is the size of random part of IV.
-	baseIVsize = 8
-	// keyIDsize is the size of keyID.
-	keyIDsize = 8
 )
 
 var (
@@ -142,12 +142,10 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 			if encKey == nil {
 				return nil, errors.New("Logfile is encrypted but encryption key is nil")
 			}
-			var dk *pb.DataKey
 			// retrieve datakey from the keyID of the logfile.
-			if dk, err = lf.registry.DataKey(keyID); err != nil {
+			if lf.dataKey, err = lf.registry.DataKey(keyID); err != nil {
 				return nil, err
 			}
-			lf.dataKey = dk
 			lf.baseIV = buf[keyIDsize:]
 			y.AssertTrue(len(lf.baseIV) == baseIVsize)
 		}

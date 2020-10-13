@@ -170,9 +170,6 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 			}
 			l.nextEntryIdx, offset = 0, logFileOffset
 		}
-		var destBuf []byte
-		var next int
-
 		// If encryption is enabled then encrypt the data.
 		if l.current.dataKey != nil {
 			var ebuf bytes.Buffer
@@ -185,7 +182,7 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		}
 
 		// Allocate slice for the data and copy bytes.
-		destBuf, next = l.current.AllocateSlice(len(re.Data), offset)
+		destBuf, next := l.current.AllocateSlice(len(re.Data), offset)
 		x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 
 		// Write the entry at the given slot.

@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft/raftpb"
 )
@@ -61,7 +60,7 @@ func TestEntryReadWrite(t *testing.T) {
 	_, err = openWal(dir)
 	require.EqualError(t, err, "Encryption key mismatch")
 
-	// Opening it without encryption fails.
+	// Opening it without encryption key fails.
 	x.WorkerConfig.EncryptionKey = nil
 	_, err = openWal(dir)
 	require.EqualError(t, err, "Logfile is encrypted but encryption key is nil")
