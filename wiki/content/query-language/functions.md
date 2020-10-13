@@ -400,7 +400,7 @@ than that of the movie Minority Report.
 
 Syntax Example: `between(predicate, startDateValue, endDateValue)`
 
-Schema Types: `dateTime`
+Schema Types: Scalar types, including `dateTime`, `int`, `float` and `string`
 
 Index Required: `dateTime`
 
@@ -408,14 +408,13 @@ Returns nodes that match a range of `dateTime` values. The `between` function
 performs a range check to improve query efficiency, as a wide-ranging `dateTime`
 query on a large set of data would run slowly.
 
-Query Example: Movies directed by Ridley Scott and released between 1976 and 1983.
+Query Example: Movies released between 1976 and 1983, listed by genre.
 
 {{< runnable >}}
 {
-  me(func: eq(name@en, "Ridley Scott")) {
+  me(func: between(initial_release_date, "1976-01-01", "1983-01-01")) {
     name@en
-    director.film @filter(between(initial_release_date, "1976-01-01", "1983-01-01"))  {
-      initial_release_date
+    genre {
       name@en
     }
   }
