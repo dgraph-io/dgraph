@@ -298,7 +298,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 			// Let's set all of them at this move timestamp.
 			kv.Version = in.TxnTs
 		}
-		return &bpb.KVList{AllocatorId: alloc.Ref, Kv: kvs}, err
+		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(list *bpb.KVList) error {
 		return s.Send(&pb.KVS{Kv: list.Kv})

@@ -726,10 +726,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			return nil, err
 		}
 
-		return &bpb.KVList{
-			AllocatorId: alloc.Ref,
-			Kv:          kvs,
-		}, nil
+		return &bpb.KVList{Kv: kvs}, nil
 	}
 	tmpStream.Send = func(kvList *bpb.KVList) error {
 		// TODO (Anurag): Instead of calling SetEntryAt everytime, we can filter KVList and call Write only once.

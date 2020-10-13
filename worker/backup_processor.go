@@ -228,9 +228,7 @@ func (m *Manifest) GoString() string {
 
 func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 	*bpb.KVList, error) {
-	list := &bpb.KVList{
-		AllocatorId: tl.alloc.Ref,
-	}
+	list := &bpb.KVList{}
 
 	item := itr.Item()
 	if item.UserMeta() != posting.BitSchemaPosting &&
