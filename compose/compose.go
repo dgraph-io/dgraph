@@ -220,7 +220,6 @@ func getZero(idx int) service {
 		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/zw", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" -o %d --idx=%d", opts.PortOffset+getOffset(idx), idx)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
 	if opts.NumAlphas > 1 {
 		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
