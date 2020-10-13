@@ -36,7 +36,9 @@ func TestEncryptionDecryption(t *testing.T) {
 
 	var buf bytes.Buffer
 	data := []byte("Hello Encryption!")
-	el.current.encodeData(&buf, data, logFileOffset+150)
+	_, err = el.current.encodeData(&buf, data, logFileOffset+150)
+	require.NoError(t, err)
+
 	decoded, err := el.current.decodeData(buf.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, data, decoded)
