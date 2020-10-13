@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package raftwal
 
 import (
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"testing"
 
@@ -35,12 +36,16 @@ func TestEntryReadWrite(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	require.NoError(t, el.AddEntries([]raftpb.Entry{{Index: 1, Term: 1, Data: []byte("abc")}}))
+	// generate some random data
+	data := make([]byte, rand.Intn(1000))
+	rand.Read(data)
+
+	require.NoError(t, el.AddEntries([]raftpb.Entry{{Index: 1, Term: 1, Data: data}}))
 	entries := el.allEntries(0, 100, 10000)
 	require.Equal(t, 1, len(entries))
 	require.Equal(t, uint64(1), entries[0].Index)
 	require.Equal(t, uint64(1), entries[0].Term)
-	require.Equal(t, "abc", string(entries[0].Data))
+	require.Equal(t, data, entries[0].Data)
 
 	// Open the wal file again.
 	el2, err := openWal(dir)
@@ -49,7 +54,7 @@ func TestEntryReadWrite(t *testing.T) {
 	require.Equal(t, 1, len(entries))
 	require.Equal(t, uint64(1), entries[0].Index)
 	require.Equal(t, uint64(1), entries[0].Term)
-	require.Equal(t, "abc", string(entries[0].Data))
+	require.Equal(t, data, entries[0].Data)
 
 	// Try opening it with a wrong key.
 	x.WorkerConfig.EncryptionKey = []byte("other16byteskeys")

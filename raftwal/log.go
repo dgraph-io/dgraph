@@ -97,11 +97,11 @@ func logFname(dir string, id int64) string {
 // openLogFile opens a logFile in the given directory. The filename is
 // constructed based on the value of fid.
 func openLogFile(dir string, fid int64) (*logFile, error) {
-	var err error
 	lf := &logFile{
 		fid: fid,
 	}
 	encKey := x.WorkerConfig.EncryptionKey
+	var err error
 	if len(encKey) != 0 {
 		krOpt := badger.KeyRegistryOptions{
 			ReadOnly:                      false,
@@ -141,7 +141,7 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 			}
 			lf.dataKey = dk
 			lf.baseIV = buf[8:]
-			y.AssertTrue(len(lf.baseIV) == 8)
+			y.AssertTrue(len(lf.baseIV) == baseIVsize)
 		}
 	}
 	return lf, nil
@@ -173,7 +173,7 @@ func (lf *logFile) GetRaftEntry(idx int) raftpb.Entry {
 			re.Data = append(re.Data, data...)
 		}
 	}
-	// Decrypt the data if encryption in enabled.
+	// Decrypt the data if encryption is enabled.
 	if x.WorkerConfig.EncryptionKey != nil && len(re.Data) > 0 {
 		// No need to worry about mmap. because, XORBlock allocates a byte array to do the
 		// xor. So, the given slice is not being mutated.

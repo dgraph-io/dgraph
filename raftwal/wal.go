@@ -181,13 +181,12 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 				&ebuf, re.Data, curr.dataKey.Data, curr.generateIV(uint64(offset))); err != nil {
 				return err
 			}
-			// Allocate slice for the encoded data and copy encoded bytes.
-			destBuf, next = l.current.AllocateSlice(len(ebuf.Bytes()), offset)
-			x.AssertTrue(copy(destBuf, ebuf.Bytes()) == len(ebuf.Bytes()))
-		} else {
-			destBuf, next = l.current.AllocateSlice(len(re.Data), offset)
-			x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
+			re.Data = ebuf.Bytes()
 		}
+
+		// Allocate slice for the data and copy bytes.
+		destBuf, next = l.current.AllocateSlice(len(re.Data), offset)
+		x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 
 		// Write the entry at the given slot.
 		buf := l.current.getEntry(l.nextEntryIdx)
