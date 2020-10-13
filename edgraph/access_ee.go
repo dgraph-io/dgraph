@@ -121,6 +121,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		return nil, errors.Wrapf(err, "invalid login request")
 	}
 
+	invalidLogin := errors.New("Invalid username or password")
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
 		userData, err := validateToken(request.RefreshToken)
@@ -132,7 +133,8 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		userId := userData[0]
 		user, err = authorizeUser(ctx, userId, "")
 		if err != nil {
-			return nil, errors.Wrapf(err, "while querying user with id %v", userId)
+			glog.Errorf("%s while querying user with id %s", err.Error(), userId)
+			return nil, invalidLogin
 		}
 
 		if user == nil {
@@ -145,7 +147,6 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	}
 
 	// authorize the user using password
-	invalidLogin := errors.New("Invalid username or password")
 	user, err := authorizeUser(ctx, request.Userid, request.Password)
 	if err != nil {
 		return nil, invalidLogin
