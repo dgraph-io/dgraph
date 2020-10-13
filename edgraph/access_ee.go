@@ -149,13 +149,16 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	// authorize the user using password
 	user, err := authorizeUser(ctx, request.Userid, request.Password)
 	if err != nil {
+		glog.Error(err)
 		return nil, invalidLogin
 	}
 
 	if user == nil {
+		glog.Errorf("user not found for id %s", request.Userid)
 		return nil, invalidLogin
 	}
 	if !user.PasswordMatch {
+		glog.Errorf("password mismatch for user %s", request.Userid)
 		return nil, invalidLogin
 	}
 	return user, nil
