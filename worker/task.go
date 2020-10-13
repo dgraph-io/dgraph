@@ -451,10 +451,25 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					if val, err = types.Convert(val, srcFn.atype); err != nil {
 						return err
 					}
-					if types.CompareVals(srcFn.fname, val, srcFn.eqTokens[0]) {
-						uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+					switch srcFn.fname {
+					case "eq":
+						for _, eqToken := range srcFn.eqTokens {
+							if types.CompareVals(srcFn.fname, val, eqToken) {
+								uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+							}
+						}
+					case "between":
+						if types.CompareVals("ge", val, srcFn.eqTokens[0]) &&
+							types.CompareVals("le", val, srcFn.eqTokens[1]) {
+							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+						}
+					default:
+						if types.CompareVals(srcFn.fname, val, srcFn.eqTokens[0]) {
+							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+						}
 						break
 					}
+
 				} else {
 					vl.Values = append(vl.Values, newValue)
 				}
