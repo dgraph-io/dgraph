@@ -106,7 +106,7 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 		InMemory:                      false,
 	}
 	if lf.registry, err = badger.OpenKeyRegistry(krOpt); err != nil {
-		glog.Fatalf("Failed to open KeyRegistry: %v\n", err)
+		return nil, err
 	}
 	glog.V(3).Infof("opening log file: %d\n", fid)
 	fpath := logFname(dir, fid)
@@ -117,7 +117,7 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 		glog.V(3).Infof("New file: %d\n", fid)
 		z.ZeroOut(lf.Data, 0, logFileOffset)
 		if err = lf.bootstrap(); err != nil {
-			glog.Fatalf("Failed to bootstrap logfile: %v\n", err)
+			return nil, err
 		}
 	} else if err != nil {
 		x.Check(err)
@@ -129,7 +129,7 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 		var dk *pb.DataKey
 		// retrieve datakey from the keyID of the logfile.
 		if dk, err = lf.registry.DataKey(keyID); err != nil {
-			glog.Fatalf("Failed to read DataKey: %v\n", err)
+			return nil, err
 		}
 		lf.dataKey = dk
 		lf.baseIV = buf[8:]

@@ -105,7 +105,7 @@ func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 		}
 
 		if x.WorkerConfig.EncryptionKey != nil && len(re.Data) > 0 {
-			decoded, err := currFile.decodeData(re.Data, uint32(offset))
+			decoded, err := currFile.decodeData(re.Data)
 			x.Check(err)
 			re.Data = decoded
 		}
@@ -222,18 +222,15 @@ func (lf *logFile) encodeData(buf *bytes.Buffer, data []byte, offset uint32) (in
 	sz := h.Encode(headerEnc[:])
 	y.Check2(writer.Write(headerEnc[:sz]))
 
-	// TODO: do we need to make a copy of data
-	eBuf := make([]byte, 0, len(data))
-	eBuf = append(eBuf, data...)
 	if err := y.XORBlockStream(
-		writer, eBuf, lf.dataKey.Data, lf.generateIV(offset)); err != nil {
+		writer, data, lf.dataKey.Data, lf.generateIV(offset)); err != nil {
 		return 0, y.Wrapf(err, "%v ", "Error while encoding entry for vlog.")
 	}
 	// return encoded length.
 	return len(headerEnc[:sz]) + len(data), nil
 }
 
-func (lf *logFile) decodeData(buf []byte, offset uint32) ([]byte, error) {
+func (lf *logFile) decodeData(buf []byte) ([]byte, error) {
 	var h header
 	hlen := h.Decode(buf)
 	dataBuf := buf[hlen:]
