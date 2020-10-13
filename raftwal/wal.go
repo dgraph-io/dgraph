@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/aes"
 	"encoding/binary"
-	"io"
 	"sort"
 
 	"github.com/dgraph-io/badger/v2/y"
@@ -49,13 +48,6 @@ type wal struct {
 	// dir is the directory to use to store files.
 	dir string
 }
-
-type header struct {
-	dataLen uint32
-	offset  uint32
-}
-
-const maxHeaderSize = 8
 
 // allEntries returns all the entries in the range [lo, hi).
 func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
@@ -102,12 +94,6 @@ func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 			// file in the next iteration.
 			offset = maxNumEntries
 			continue
-		}
-
-		if x.WorkerConfig.EncryptionKey != nil && len(re.Data) > 0 {
-			decoded, err := currFile.decodeData(re.Data)
-			x.Check(err)
-			re.Data = decoded
 		}
 
 		size += uint64(re.Size())
@@ -188,8 +174,9 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		var next int
 		if x.WorkerConfig.EncryptionKey != nil {
 			var ebuf bytes.Buffer
-			_, err := l.current.encodeData(&ebuf, re.Data, uint32(offset))
-			if err != nil {
+			curr := l.current
+			if err := y.XORBlockStream(
+				&ebuf, re.Data, curr.dataKey.Data, curr.generateIV(uint32(offset))); err != nil {
 				return err
 			}
 			// Allocate slice for the encoded data and copy encoded bytes.
@@ -209,62 +196,6 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		l.nextEntryIdx++
 	}
 	return nil
-}
-
-func (lf *logFile) encodeData(buf *bytes.Buffer, data []byte, offset uint32) (int, error) {
-	h := header{
-		dataLen: uint32(len(data)),
-		offset:  offset,
-	}
-	writer := io.Writer(buf)
-	// encode header.
-	var headerEnc [maxHeaderSize]byte
-	sz := h.Encode(headerEnc[:])
-	y.Check2(writer.Write(headerEnc[:sz]))
-
-	if err := y.XORBlockStream(
-		writer, data, lf.dataKey.Data, lf.generateIV(offset)); err != nil {
-		return 0, y.Wrapf(err, "%v ", "Error while encoding entry for vlog.")
-	}
-	// return encoded length.
-	return len(headerEnc[:sz]) + len(data), nil
-}
-
-func (lf *logFile) decodeData(buf []byte) ([]byte, error) {
-	var h header
-	hlen := h.Decode(buf)
-	dataBuf := buf[hlen:]
-
-	var err error
-	// No need to worry about mmap. because, XORBlock allocates a byte array to do the
-	// xor. So, the given slice is not being mutated.
-	if dataBuf, err = lf.decryptData(dataBuf, h.offset); err != nil {
-		return nil, err
-	}
-	return dataBuf, nil
-}
-
-func (lf *logFile) decryptData(buf []byte, offset uint32) ([]byte, error) {
-	return y.XORBlockAllocate(buf, lf.dataKey.Data, lf.generateIV(offset))
-}
-
-// Decode decodes the given header from the provided byte slice.
-// Returns the number of bytes read.
-func (h *header) Decode(buf []byte) int {
-	index := 0
-	dlen, count := binary.Uvarint(buf[index:])
-	index += count
-	offset, count := binary.Uvarint(buf[index:])
-	h.offset = uint32(offset)
-	h.dataLen = uint32(dlen)
-	return index + count
-}
-
-func (h header) Encode(out []byte) int {
-	index := 0
-	index += binary.PutUvarint(out[index:], uint64(h.dataLen))
-	index += binary.PutUvarint(out[index:], uint64(h.offset))
-	return index
 }
 
 // generateIV will generate IV by appending given offset with the base IV.

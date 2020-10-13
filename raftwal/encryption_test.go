@@ -17,7 +17,6 @@
 package raftwal
 
 import (
-	"bytes"
 	"io/ioutil"
 	"testing"
 
@@ -26,23 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft/raftpb"
 )
-
-func TestEncryptionDecryption(t *testing.T) {
-	x.WorkerConfig.EncryptionKey = []byte("badger16byteskey")
-	dir, err := ioutil.TempDir("", "raftwal")
-	require.NoError(t, err)
-	el, err := openWal(dir)
-	require.NoError(t, err)
-
-	var buf bytes.Buffer
-	data := []byte("Hello Encryption!")
-	_, err = el.current.encodeData(&buf, data, logFileOffset+150)
-	require.NoError(t, err)
-
-	decoded, err := el.current.decodeData(buf.Bytes())
-	require.NoError(t, err)
-	require.Equal(t, data, decoded)
-}
 
 func TestEntryReadWrite(t *testing.T) {
 	x.WorkerConfig.EncryptionKey = []byte("badger16byteskey")

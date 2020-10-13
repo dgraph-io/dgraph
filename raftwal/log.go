@@ -20,7 +20,6 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"sort"
@@ -49,6 +48,8 @@ const (
 	maxNumEntries = 30000
 	// logFileOffset is offset in the log file where data is stored.
 	logFileOffset = 1 << 20 // 1MB
+	// encryptionKeyOffset is offset in the log file where encryption key is stored.
+	encryptionKeyOffset = logFileOffset - 20 // 1MB
 	// logFileSize is the initial size of the log file.
 	logFileSize = 16 << 30
 	// entrySize is the size in bytes of a single entry.
@@ -98,15 +99,18 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 	lf := &logFile{
 		fid: fid,
 	}
-	krOpt := badger.KeyRegistryOptions{
-		ReadOnly:                      false,
-		Dir:                           dir,
-		EncryptionKey:                 x.WorkerConfig.EncryptionKey,
-		EncryptionKeyRotationDuration: 10 * 24 * time.Hour,
-		InMemory:                      false,
-	}
-	if lf.registry, err = badger.OpenKeyRegistry(krOpt); err != nil {
-		return nil, err
+	encKey := x.WorkerConfig.EncryptionKey
+	if len(encKey) != 0 {
+		krOpt := badger.KeyRegistryOptions{
+			ReadOnly:                      false,
+			Dir:                           dir,
+			EncryptionKey:                 encKey,
+			EncryptionKeyRotationDuration: 10 * 24 * time.Hour,
+			InMemory:                      false,
+		}
+		if lf.registry, err = badger.OpenKeyRegistry(krOpt); err != nil {
+			return nil, err
+		}
 	}
 	glog.V(3).Infof("opening log file: %d\n", fid)
 	fpath := logFname(dir, fid)
@@ -122,19 +126,21 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 	} else if err != nil {
 		x.Check(err)
 	} else {
-		buf := make([]byte, 20)
-		copy(buf, lf.Data[logFileSize-20:logFileSize])
+		if len(encKey) != 0 {
+			// Openend an existing file.
+			buf := make([]byte, 20)
+			copy(buf, lf.Data[encryptionKeyOffset:])
 
-		keyID := binary.BigEndian.Uint64(buf[:8])
-		var dk *pb.DataKey
-		// retrieve datakey from the keyID of the logfile.
-		if dk, err = lf.registry.DataKey(keyID); err != nil {
-			return nil, err
+			keyID := binary.BigEndian.Uint64(buf[:8])
+			var dk *pb.DataKey
+			// retrieve datakey from the keyID of the logfile.
+			if dk, err = lf.registry.DataKey(keyID); err != nil {
+				return nil, err
+			}
+			lf.dataKey = dk
+			lf.baseIV = buf[8:]
+			y.AssertTrue(len(lf.baseIV) == 12)
 		}
-		lf.dataKey = dk
-		lf.baseIV = buf[8:]
-		fmt.Println(buf)
-		y.AssertTrue(len(lf.baseIV) == 12)
 	}
 	return lf, nil
 }
@@ -164,6 +170,14 @@ func (lf *logFile) GetRaftEntry(idx int) raftpb.Entry {
 			// Copy the data over to allow the mmaped file to be deleted later.
 			re.Data = append(re.Data, data...)
 		}
+	}
+	if x.WorkerConfig.EncryptionKey != nil && len(re.Data) > 0 {
+		// No need to worry about mmap. because, XORBlock allocates a byte array to do the
+		// xor. So, the given slice is not being mutated.
+		decoded, err := y.XORBlockAllocate(
+			re.Data, lf.dataKey.Data, lf.generateIV(uint32(entry.DataOffset())))
+		x.Check(err)
+		re.Data = decoded
 	}
 	return re
 }
@@ -294,11 +308,12 @@ func (lf *logFile) keyID() uint64 {
 // | keyID(8 bytes) |  baseIV(12 bytes)|	 entry...     |
 // +----------------+------------------+------------------+
 func (lf *logFile) bootstrap() error {
-	var err error
-	if _, err = lf.Fd.Seek(0, io.SeekStart); err != nil {
-		return y.Wrapf(err, "Error while SeekStart for the logfile %d in logFile.bootstarp", lf.fid)
+	// registry is nil if we don't have encryption enabled.
+	if lf.registry == nil {
+		return nil
 	}
 
+	var err error
 	// generate data key for the log file.
 	if lf.dataKey, err = lf.registry.LatestDataKey(); err != nil {
 		return y.Wrapf(err, "Error while retrieving datakey in logFile.bootstarp")
@@ -310,6 +325,6 @@ func (lf *logFile) bootstrap() error {
 	}
 	// Initialize base IV.
 	lf.baseIV = buf[8:]
-	lf.Fd.WriteAt(buf, logFileSize-20)
+	copy(lf.Data[encryptionKeyOffset:], buf)
 	return nil
 }
