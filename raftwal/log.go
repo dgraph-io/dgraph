@@ -17,6 +17,7 @@
 package raftwal
 
 import (
+	"crypto/aes"
 	cryptorand "crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -309,6 +310,16 @@ func (lf *logFile) keyID() uint64 {
 		return 0
 	}
 	return lf.dataKey.KeyId
+}
+
+// generateIV will generate IV by appending given offset with the base IV.
+func (lf *logFile) generateIV(offset uint64) []byte {
+	iv := make([]byte, aes.BlockSize)
+	// IV is of 16 bytes, in which first 8 bytes are obtained from baseIV
+	// and the remaining 8 bytes is obtained from the offset.
+	y.AssertTrue(baseIVsize == copy(iv[:baseIVsize], lf.baseIV))
+	binary.BigEndian.PutUint64(iv[baseIVsize:], offset)
+	return iv
 }
 
 // bootstrap will initialize the log file with key id and baseIV.
