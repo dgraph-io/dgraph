@@ -189,7 +189,7 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 					// a list that is too big to be read back from disk.
 					// Rollup will take ownership of the Pack and will free the memory.
 					l := posting.NewList(restoreKey, pl, kv.Version)
-					kvs, err := l.Rollup()
+					kvs, err := l.Rollup(nil)
 					if err != nil {
 						// TODO: wrap errors in this file for easier debugging.
 						return 0, err

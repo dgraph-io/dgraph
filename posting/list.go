@@ -28,6 +28,7 @@ import (
 	"github.com/pkg/errors"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
@@ -36,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -816,7 +818,7 @@ func (l *List) Length(readTs, afterUid uint64) int {
 // The first part of a multi-part list always has start UID 1 and will be the last part
 // to be deleted, at which point the entire list will be marked for deletion.
 // As the list grows, existing parts might be split if they become too big.
-func (l *List) Rollup() ([]*bpb.KV, error) {
+func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
 	out, err := l.rollup(math.MaxUint64, true)
@@ -829,18 +831,20 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	defer out.free()
 
 	var kvs []*bpb.KV
-	kv := &bpb.KV{}
+	kv := y.NewKV(alloc)
 	kv.Version = out.newMinTs
-	kv.Key = l.key
+	kv.Key = alloc.Copy(l.key)
+
 	val, meta := MarshalPostingList(out.plist)
-	kv.UserMeta = []byte{meta}
-	kv.Value = val
+	kv.UserMeta = alloc.Copy([]byte{meta})
+	kv.Value = alloc.Copy(val)
+
 	kvs = append(kvs, kv)
 
 	for startUid, plist := range out.parts {
 		// Any empty posting list would still have BitEmpty set. And the main posting list
 		// would NOT have that posting list startUid in the splits list.
-		kv, err := out.marshalPostingListPart(l.key, startUid, plist)
+		kv, err := out.marshalPostingListPart(alloc, l.key, startUid, plist)
 		if err != nil {
 			return nil, errors.Wrapf(err, "cannot marshaling posting list parts")
 		}
@@ -885,9 +889,9 @@ func (l *List) SingleListRollup(kv *bpb.KV) error {
 	return nil
 }
 
-func (out *rollupOutput) marshalPostingListPart(
+func (out *rollupOutput) marshalPostingListPart(alloc *z.Allocator,
 	baseKey []byte, startUid uint64, plist *pb.PostingList) (*bpb.KV, error) {
-	kv := &bpb.KV{}
+	kv := y.NewKV(alloc)
 	kv.Version = out.newMinTs
 	key, err := x.SplitKey(baseKey, startUid)
 	if err != nil {
@@ -895,10 +899,10 @@ func (out *rollupOutput) marshalPostingListPart(
 			"cannot generate split key for list with base key %s and start UID %d",
 			hex.EncodeToString(baseKey), startUid)
 	}
-	kv.Key = key
+	kv.Key = alloc.Copy(key)
 	val, meta := MarshalPostingList(plist)
-	kv.UserMeta = []byte{meta}
-	kv.Value = val
+	kv.UserMeta = alloc.Copy([]byte{meta})
+	kv.Value = alloc.Copy(val)
 
 	return kv, nil
 }

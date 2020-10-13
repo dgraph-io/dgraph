@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -719,12 +720,16 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// No need to write a loop after ReadPostingList to skip unread entries
 		// for a given key because we only wrote BitDeltaPosting to temp badger.
 
-		kvs, err := l.Rollup()
+		alloc := tmpStream.Allocator(itr.ThreadId)
+		kvs, err := l.Rollup(alloc)
 		if err != nil {
 			return nil, err
 		}
 
-		return &bpb.KVList{Kv: kvs}, nil
+		return &bpb.KVList{
+			AllocatorId: alloc.Ref,
+			Kv:          kvs,
+		}, nil
 	}
 	tmpStream.Send = func(kvList *bpb.KVList) error {
 		// TODO (Anurag): Instead of calling SetEntryAt everytime, we can filter KVList and call Write only once.
@@ -736,7 +741,11 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
 			// which occurred before this schema mutation.
-			e := &badger.Entry{Key: kv.Key, Value: kv.Value, UserMeta: BitCompletePosting}
+			e := &badger.Entry{
+				Key:      y.Copy(kv.Key),
+				Value:    y.Copy(kv.Value),
+				UserMeta: BitCompletePosting,
+			}
 			if err := writer.SetEntryAt(e.WithDiscard(), r.startTs); err != nil {
 				return errors.Wrap(err, "error in writing index to pstore")
 			}
