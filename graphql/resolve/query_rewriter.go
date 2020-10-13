@@ -1020,7 +1020,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	// Each key in filter is either "and", "or", "not" or the field name it
 	// applies to such as "title" in: `title: { anyofterms: "GraphQL" }``
 	for _, field := range keys {
-		if filter[field] != nil {
+		if filter[field] == nil {
 			continue
 		}
 		switch field {
