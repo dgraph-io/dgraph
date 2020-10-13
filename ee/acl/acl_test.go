@@ -3107,3 +3107,15 @@ func TestMutationWithValueVar(t *testing.T) {
 
 	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson()))
 }
+
+func TestFailedLogin(t *testing.T) {
+	resetUser(t)
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+
+	client, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	err = client.Login(ctx, userid, "randomstring")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
+}
