@@ -93,7 +93,6 @@ instances to achieve high-availability.
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 
 	x.RegisterDgraphTLSFlags(flag)
-	x.RegisterClientTLSFlags(flag)
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
