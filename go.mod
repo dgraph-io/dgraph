@@ -2,8 +2,8 @@ module github.com/dgraph-io/dgraph
 
 go 1.12
 
-replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
-replace github.com/dgraph-io/badger/v2 => /home/mrjn/go/src/github.com/dgraph-io/badger
+// replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
+// replace github.com/dgraph-io/badger/v2 => /home/mrjn/go/src/github.com/dgraph-io/badger
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
@@ -23,7 +23,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201013213131-8d26d52f694f
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
-	github.com/dgraph-io/ristretto v0.0.4-0.20201013194302-6d6fac64beae
+	github.com/dgraph-io/ristretto v0.0.4-0.20201013234705-28aba7a42dfa
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13

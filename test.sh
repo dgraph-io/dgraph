@@ -112,7 +112,7 @@ function Run {
         go test -json -v ${GO_TEST_OPTS[*]} $@
         return
     fi
-    go test -v ${GO_TEST_OPTS[*]} $@ \
+    go test ${GO_TEST_OPTS[*]} $@ \
     | GREP_COLORS='ne:mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='ne:mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
     | GREP_COLORS='ne:mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$'
