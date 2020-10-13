@@ -100,6 +100,11 @@ func (in *Instance) NetworkService() gssmrruntime.BasicNetwork {
 	return ctx.Network
 }
 
+// Exec calls the given function with the given data
+func (in *Instance) Exec(function string, data []byte) ([]byte, error) {
+	return in.exec(function, data)
+}
+
 func (in *Instance) exec(function string, data []byte) ([]byte, error) {
 	in.mu.Lock()
 	defer in.mu.Unlock()

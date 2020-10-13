@@ -13,7 +13,6 @@ require (
 	github.com/docker/docker v1.13.1
 	github.com/ethereum/go-ethereum v1.9.6
 	github.com/go-interpreter/wagon v0.6.1-0.20200227184901-6803234760a6
-	github.com/golangci/golangci-lint v1.23.1 // indirect
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.4.2

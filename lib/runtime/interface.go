@@ -29,6 +29,7 @@ type Instance interface {
 	NodeStorage() NodeStorage
 	NetworkService() BasicNetwork
 
+	Exec(function string, data []byte) ([]byte, error)
 	SetContext(s Storage) // used to set the TrieState before a runtime call
 	Version() (*VersionAPI, error)
 	Metadata() ([]byte, error)
