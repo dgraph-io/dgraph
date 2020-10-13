@@ -130,7 +130,7 @@ func (s *ServerState) initStorage() {
 	s.gcCloser = z.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
 	// Commenting this out because Badger is doing its own cache checks.
-	// go x.MonitorCacheHealth(10*time.Second, "pstore", s.Pstore, s.gcCloser)
+	go x.MonitorCacheHealth(s.Pstore, s.gcCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.
