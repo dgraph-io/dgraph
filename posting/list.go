@@ -856,7 +856,7 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	return kvs, nil
 }
 
-// ToBackupPostingList works like rollup but generates a single list with no splits.
+// ToBackupPostingList uses rollup to generate a single list with no splits.
 // It's used during backup so that each backed up posting list is stored in a single key.
 func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator) (*bpb.KV, error) {
 	bl.Reset()
@@ -872,7 +872,20 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator)
 	x.AssertTrue(out != nil)
 	defer out.free()
 
-	ToBackupPostingList(out.plist, bl)
+	ol := out.plist
+	// Encode uids to []byte instead of []uint64 if we have more than 1000
+	// uids. We do this to improve the memory usage.
+	if codec.ApproxLen(ol.Pack) > 1024 {
+		buf := codec.DecodeToBuffer(ol.Pack, 0)
+		defer buf.Release()
+		bl.UidBytes = buf.Bytes()
+	} else {
+		bl.Uids = codec.Decode(ol.Pack, 0)
+	}
+	bl.Postings = ol.Postings
+	bl.CommitTs = ol.CommitTs
+	bl.Splits = ol.Splits
+
 	val := alloc.Allocate(bl.Size())
 	n, err := bl.MarshalToSizedBuffer(val)
 	if err != nil {
@@ -1589,26 +1602,6 @@ func (l *List) PartSplits() []uint64 {
 	splits := make([]uint64, len(l.plist.Splits))
 	copy(splits, l.plist.Splits)
 	return splits
-}
-
-// ToBackupPostingList converts a posting list into its representation used for storing backups.
-func ToBackupPostingList(l *pb.PostingList, bl *pb.BackupPostingList) {
-	if l == nil || bl == nil {
-		return
-	}
-
-	// Encode uids to []byte instead of []uint64 if we have more than 1000
-	// uids. We do this to improve the memory usage.
-	if codec.ApproxLen(l.Pack) > 1024 {
-		buf := codec.DecodeToBuffer(l.Pack, 0)
-		defer buf.Release()
-		bl.UidBytes = buf.Bytes()
-	} else {
-		bl.Uids = codec.Decode(l.Pack, 0)
-	}
-	bl.Postings = l.Postings
-	bl.CommitTs = l.CommitTs
-	bl.Splits = l.Splits
 }
 
 // FromBackupPostingList converts a posting list in the format used for backups to a
