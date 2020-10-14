@@ -24,9 +24,7 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -277,6 +275,20 @@ func serveHTTPServer(l net.Listener) {
 }
 
 func startServers(m cmux.CMux) {
+	// if tls enabled http rule will check that the requested route should not be part of tls_enabled_routes
+	// though with tls enabled, all routes irrespective of config are encrypted using tls.
+	httpRule := m.Match(func(r io.Reader) bool {
+		path, ok := parseRequestPath(r)
+		if !ok {
+			return false
+		}
+		_, ok = opts.tlsEnabledRoute[path]
+		return !ok
+	})
+	go serveHTTPServer(httpRule)
+
+	// if enabled, tls has to be default behaviour because there is no clean way to decrypt request params using cmux.
+	// So when it says tlsEnabledRoute, these route will not be available without TLS.
 	if len(opts.tlsEnabledRoute) > 0 {
 		tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
 		x.Check(err)
@@ -284,48 +296,16 @@ func startServers(m cmux.CMux) {
 			glog.Fatalf("tls_enabled_route is set but tls config is not provided. Please define variable --tls_dir")
 		}
 
-		httpsRule := m.Match(func(r io.Reader) bool {
-			path, ok := parseRequestPath(r)
-			if !ok {
-				return false
-			}
-			_, ok = opts.tlsEnabledRoute[path]
-			return ok
-		})
-
+		httpsRule := m.Match(cmux.Any())
 		go serveHTTPServer(tls.NewListener(httpsRule, tlsCfg))
 	}
-
-	httpRule := m.Match(cmux.Any())
-	go serveHTTPServer(httpRule)
 }
 
 func parseRequestPath(r io.Reader) (path string, ok bool) {
-	br := bufio.NewReader(&io.LimitedReader{R: r, N: 4096})
-	line, part, err := br.ReadLine()
-	if err != nil || part {
-		return "", false
-	}
-
-	_, reqUri, _, ok := parseRequestLine(string(line))
-	if !ok {
-		return "", false
-	}
-	parse, err := url.Parse(reqUri)
+	request, err := http.ReadRequest(bufio.NewReader(r))
 	if err != nil {
 		return "", false
 	}
-	return parse.Path, true
-}
 
-// parseRequestLine parses "GET /foo HTTP/1.1" into its three parts.
-// grabbed from net/http package
-func parseRequestLine(line string) (method, requestURI, proto string, ok bool) {
-	s1 := strings.Index(line, " ")
-	s2 := strings.Index(line[s1+1:], " ")
-	if s1 < 0 || s2 < 0 {
-		return
-	}
-	s2 += s1 + 1
-	return line[:s1], line[s1+1 : s2], line[s2+1:], true
+	return request.URL.Path, true
 }
