@@ -509,6 +509,9 @@ schema(pred: [name, friend]) {
 }
 ```
 
+{{% notice "note" %}} If ACL is enabled, then the schema query returns only the
+predicates for which the logged-in ACL user has read access. {{% /notice %}}
+
 Types can also be queried. Below are some example queries.
 
 ```
