@@ -243,36 +243,6 @@ invalid_schemas:
     ]
 
   -
-    name: "@oneOf can't be used in user-input"
-    input: |
-      type V @oneOf{
-        f1: String
-      }
-      interface W @oneOf {
-        f2: Int
-      }
-      union X @oneOf = V
-      input Y @oneOf {
-        f: U
-      }
-      enum Z @oneOf {
-        E1
-        E2
-      }
-    errlist: [
-      { "message": "Type V; has the @oneOf directive, but it is not applicable at type level.",
-        "locations": [{"line":1, "column":9}]},
-      { "message": "Type W; has the @oneOf directive, but it is not applicable at type level.",
-        "locations": [{"line":4, "column":14}]},
-      { "message": "Type X; has the @oneOf directive, but it is not applicable at type level.",
-        "locations": [{"line":7, "column":10}]},
-      { "message": "Type Y; has the @oneOf directive, but it is not applicable at type level.",
-        "locations": [{"line":8, "column":10}]},
-      { "message": "Type Z; has the @oneOf directive, but it is not applicable at type level.",
-        "locations": [{"line":11, "column":9}]},
-    ]
-
-  -
     name: "Typename is reserved word"
     input: |
       type String {
