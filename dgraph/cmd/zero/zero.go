@@ -228,12 +228,10 @@ func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	if state.Zeros == nil {
 		state.Zeros = make(map[uint64]*pb.Member)
 	}
-
 	if state.Groups == nil {
 		state.Groups = make(map[uint32]*pb.Group)
 	}
 
-	//todo check if these groups are all zero or if there is any alpha
 	// Create connections to all members.
 	for _, g := range state.Groups {
 		for _, m := range g.Members {
