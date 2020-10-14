@@ -123,7 +123,9 @@ const (
 {"predicate":"dgraph.user.group","list":true, "reverse":true, "type":"uid"},
 {"predicate":"dgraph.acl.rule","type":"uid","list":true},
 {"predicate":"dgraph.rule.predicate","type":"string","index":true,"tokenizer":["exact"],"upsert":true},
-{"predicate":"dgraph.rule.permission","type":"int"}
+{"predicate":"dgraph.rule.permission","type":"int"},
+{"predicate":"dgraph.failed_login_counter","type":"int"},
+{"predicate":"dgraph.block_timestamp","type":"int"}
 `
 	// CorsPredicate is the json representation of the predicate reserved by dgraph for the use
 	//of cors
@@ -134,7 +136,7 @@ const (
 	"fields": [{"name": "dgraph.graphql.schema"},{"name": "dgraph.graphql.xid"}],
 	"name": "dgraph.graphql"
 },{
-	"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],
+	"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"},{"name": "dgraph.failed_login_counter"}, {"name": "dgraph.block_timestamp"}],
 	"name": "dgraph.type.User"
 },{
 	"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],

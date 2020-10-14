@@ -2151,7 +2151,15 @@ func TestSchemaQueryWithACL(t *testing.T) {
         "exact"
       ],
       "upsert": true
-    }
+	},
+	{
+	  "predicate": "dgraph.block_timestamp",
+	  "type": "int"
+	},
+	{
+	  "predicate": "dgraph.failed_login_counter",
+	  "type": "int"
+	}
   ],
   "types": [
     {
@@ -2207,7 +2215,13 @@ func TestSchemaQueryWithACL(t *testing.T) {
         },
         {
           "name": "dgraph.user.group"
-        }
+		},
+		{
+			"name": "dgraph.failed_login_counter"
+		},
+		{
+			"name": "dgraph.block_timestamp"
+		}
       ],
       "name": "dgraph.type.User"
     }
@@ -2254,7 +2268,7 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	testutil.DropAll(t, dg)
 	resp, err := dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
 	require.NoError(t, err)
-	require.JSONEq(t, grootSchema, string(resp.GetJson()))
+	testutil.CompareJSON(t, grootSchema, string(resp.GetJson()))
 
 	// add another user and some data for that user with permissions on predicates
 	resetUser(t)
@@ -2268,7 +2282,7 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	require.NoError(t, dg.Login(context.Background(), userid, userpassword))
 	resp, err = dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
 	require.NoError(t, err)
-	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
+	testutil.CompareJSON(t, aliceSchema, string(resp.GetJson()))
 }
 
 func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
@@ -3106,4 +3120,50 @@ func TestMutationWithValueVar(t *testing.T) {
 	require.NoError(t, err)
 
 	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson()))
+}
+
+func TestMaxFailedLoginAttempts(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping because -short=true")
+	}
+
+	resetUser(t)
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Minute)
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	for i := 0; i < 3; i++ {
+		err = userClient.Login(ctx, userid, "randomstring")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "password mismatch")
+	}
+
+	err = userClient.Login(ctx, userid, "randomstring")
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"Too many unsuccessful login attempts. Please try after some time.")
+
+	// We should also check if user is actually blocked for blockDuration but that
+	// would waste time unnecessarily so we will just go ahead by restting counter.
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	resetCounter := &api.Request{
+		Query: fmt.Sprintf("{u as var(func: eq(dgraph.xid, %s))}", userid),
+		Mutations: []*api.Mutation{
+			{
+				Set: []*api.NQuad{
+					{
+						Subject:     "uid(u)",
+						Predicate:   "dgraph.failed_login_counter",
+						ObjectValue: &api.Value{Val: &api.Value_IntVal{IntVal: 0}},
+					},
+				},
+			},
+		},
+		CommitNow: true,
+	}
+	_, err = dg.NewTxn().Do(ctx, resetCounter)
+	require.NoError(t, err)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
 }
