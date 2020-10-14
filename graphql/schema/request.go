@@ -18,10 +18,11 @@ package schema
 
 import (
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 	"net/http"
 	"reflect"
-
-	"github.com/pkg/errors"
+	"strconv"
 
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/parser"
@@ -75,9 +76,12 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	}
 
 	vars, gqlErr := validator.VariableValues(s.schema, op, req.Variables)
-	variableValidateInt64(s.schema, op, req.Variables)
 	if gqlErr != nil {
 		return nil, gqlErr
+	}
+	err := variableValidateInt64(s.schema, op, req.Variables)
+	if err != nil {
+		return nil, err
 	}
 
 	operation := &operation{op: op,
@@ -97,49 +101,96 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	return operation, nil
 }
 
-func variableValidateInt64(schema *ast.Schema, op *ast.OperationDefinition, variables map[string]interface{}) {
+func variableValidateInt64(schema *ast.Schema, op *ast.OperationDefinition, variables map[string]interface{}) *gqlerror.Error {
+	path := ast.Path{ast.PathName("variable")}
+	var err *gqlerror.Error
 	for _, v := range op.VariableDefinitions {
+		path = append(path, ast.PathName(v.Variable))
 		val, _ := variables[v.Variable]
 		rv := reflect.ValueOf(val)
 		if rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface {
 			rv = rv.Elem()
 		}
-		variableValidateInt64Recursive(schema, v.Type, rv)
+		err = variableValidateInt64Recursive(schema, v.Type, rv, path)
+		if err != nil {
+			glog.Infof("%v", err)
+			return gqlerror.ErrorPathf(path, err.Error())
+		}
+		path = path[0 : len(path)-1]
 	}
-	return
+	return nil
 }
 
-func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val reflect.Value) {
-
+func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val reflect.Value, path ast.Path) *gqlerror.Error {
+	var err error
+	currentPath := path
+	resetPath := func() {
+		path = currentPath
+	}
+	defer resetPath()
 	if typ.Elem != nil {
 		for i := 0; i < val.Len(); i++ {
+			resetPath()
+			path = append(path, ast.PathIndex(i))
 			field := val.Index(i)
 			if field.Kind() == reflect.Ptr || field.Kind() == reflect.Interface {
 				field = field.Elem()
 			}
-			variableValidateInt64Recursive(schema, typ.Elem, field)
+			err = variableValidateInt64Recursive(schema, typ.Elem, field, path)
+			if err != nil {
+				glog.Infof("%v", err)
+				return gqlerror.ErrorPathf(path, err.Error())
+			}
 		}
-		return
+		return nil
 	}
 
 	def := schema.Types[typ.NamedType]
 	glog.Infof("%v-%v", val, def)
 	switch def.Kind {
-	case ast.InputObject:
-		// check for unknown fields
+	case ast.Scalar:
+		switch typ.NamedType {
+		case "Int", "Int64":
 
-		for _, fieldDef := range def.Fields {
-			field := val.MapIndex(reflect.ValueOf(fieldDef.Name))
-			if field.Kind() == reflect.Ptr || field.Kind() == reflect.Interface {
-				field = field.Elem()
+			if def.Kind == "Int" {
+				_, err = strconv.ParseInt(val.String(), 10, 32)
+			} else {
+				_, err = strconv.ParseInt(val.String(), 10, 64)
 			}
+			if err != nil {
+				if errors.Is(err, strconv.ErrRange) {
+					return gqlerror.ErrorPathf(path, "Out of range value '%s', for type `%s`", val.String(), typ.NamedType)
 
-			variableValidateInt64Recursive(schema, fieldDef.Type, field)
+				} else {
+					return gqlerror.ErrorPathf(path, err.Error())
+				}
+			}
 		}
 
-	}
+	case ast.InputObject:
+		// check for unknown fields
+		for _, fieldDef := range def.Fields {
+			resetPath()
+			path = append(path, ast.PathName(fieldDef.Name))
 
-	return
+			field := val.MapIndex(reflect.ValueOf(fieldDef.Name))
+			if !field.IsValid() {
+				continue
+			}
+			if field.Kind() == reflect.Ptr || field.Kind() == reflect.Interface {
+				if !fieldDef.Type.NonNull && field.IsNil() {
+					continue
+				}
+				field = field.Elem()
+			}
+			err = variableValidateInt64Recursive(schema, fieldDef.Type, field, path)
+			if err != nil {
+				glog.Infof("%v", err)
+				return gqlerror.ErrorPathf(path, err.Error())
+			}
+		}
+	}
+	return nil
 }
 
 // recursivelyExpandFragmentSelections puts a fragment's selection set directly inside this
