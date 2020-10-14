@@ -83,6 +83,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -150,6 +151,7 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -199,6 +201,7 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
@@ -207,6 +210,7 @@ input StringExactFilter {
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 
 #######################
@@ -333,7 +337,6 @@ enum HumanOrderable {
 enum PlanetHasFilter {
 	name
 	residents
-	bestTool
 }
 
 enum PlanetOrderable {
@@ -449,6 +452,7 @@ input DroidRef {
 
 input Episode_hash {
 	eq: [Episode!]!
+	in: [Episode!]!
 }
 
 input HumanFilter {
