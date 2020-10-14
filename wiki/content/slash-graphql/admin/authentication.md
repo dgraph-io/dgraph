@@ -1,8 +1,8 @@
 +++
 title = "Authentication"
+weight = 2   
 [menu.main]
     parent = "slash-graphql-admin"
-    weight = 2   
 +++
 
 All the APIs documented here require an API token for access. A new API token can be generated from Slash GraphQL by selecting the ["Settings" button](https://slash.dgraph.io/_/settings) from the sidebar, then clicking the Add API Key button. Keep your API key safe, it will not be accessible once you leave the page.

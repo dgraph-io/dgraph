@@ -22,6 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 // QueryMiddleware represents a middleware for queries
@@ -143,6 +144,13 @@ func IpWhitelistingMW4Query(resolver QueryResolver) QueryResolver {
 	})
 }
 
+func LoggingMWQuery(resolver QueryResolver) QueryResolver {
+	return QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
+		glog.Infof("GraphQL admin query. Name =  %v", query.Name())
+		return resolver.Resolve(ctx, query)
+	})
+}
+
 // GuardianAuthMW4Mutation blocks the resolution of resolverFunc if there is no Guardian auth
 // present in context, otherwise it lets the resolverFunc resolve the mutation.
 func GuardianAuthMW4Mutation(resolver MutationResolver) MutationResolver {
@@ -160,6 +168,14 @@ func IpWhitelistingMW4Mutation(resolver MutationResolver) MutationResolver {
 		if resolved := resolveIpWhitelisting(ctx, mutation); resolved != nil {
 			return resolved, false
 		}
+		return resolver.Resolve(ctx, mutation)
+	})
+}
+
+func LoggingMWMutation(resolver MutationResolver) MutationResolver {
+	return MutationResolverFunc(func(ctx context.Context, mutation schema.Mutation) (*Resolved,
+		bool) {
+		glog.Infof("GraphQL admin mutation. Name =  %v", mutation.Name())
 		return resolver.Resolve(ctx, mutation)
 	})
 }

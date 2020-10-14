@@ -18,6 +18,7 @@ package codec
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math"
 	"sort"
 	"unsafe"
@@ -348,6 +349,21 @@ func Encode(uids []uint64, blockSize int) *pb.UidPack {
 	return enc.Done()
 }
 
+// EncodeFromBuffer is the same as Encode but it accepts a byte slice instead of a uint64 slice.
+func EncodeFromBuffer(buf []byte, blockSize int) *pb.UidPack {
+	enc := Encoder{BlockSize: blockSize}
+	var prev uint64
+	for len(buf) > 0 {
+		uid, n := binary.Uvarint(buf)
+		buf = buf[n:]
+
+		next := prev + uid
+		enc.Add(next)
+		prev = next
+	}
+	return enc.Done()
+}
+
 // ApproxLen would indicate the total number of UIDs in the pack. Can be used for int slice
 // allocations.
 func ApproxLen(pack *pb.UidPack) int {
@@ -377,13 +393,33 @@ func ExactLen(pack *pb.UidPack) int {
 // Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would
 // need to do more specific things than just return the list back.
 func Decode(pack *pb.UidPack, seek uint64) []uint64 {
-	uids := make([]uint64, 0, ApproxLen(pack))
+	out := make([]uint64, 0, ApproxLen(pack))
 	dec := Decoder{Pack: pack}
 
-	for block := dec.Seek(seek, SeekStart); len(block) > 0; block = dec.Next() {
-		uids = append(uids, block...)
+	for uids := dec.Seek(seek, SeekStart); len(uids) > 0; uids = dec.Next() {
+		out = append(out, uids...)
 	}
-	return uids
+	return out
+}
+
+// DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
+// calloc'ed and can be SHOULD be freed up by calling buffer.Release().
+func DecodeToBuffer(pack *pb.UidPack, seek uint64) *z.Buffer {
+	buf, err := z.NewBufferWith(256<<20, 32<<30, z.UseCalloc)
+	x.Check(err)
+	buf.AutoMmapAfter(1 << 30)
+
+	var last uint64
+	tmp := make([]byte, 16)
+	dec := Decoder{Pack: pack}
+	for uids := dec.Seek(seek, SeekStart); len(uids) > 0; uids = dec.Next() {
+		for _, u := range uids {
+			n := binary.PutUvarint(tmp, u-last)
+			x.Check2(buf.Write(tmp[:n]))
+			last = u
+		}
+	}
+	return buf
 }
 
 func match32MSB(num1, num2 uint64) bool {

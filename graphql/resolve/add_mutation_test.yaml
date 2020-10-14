@@ -1,4 +1,60 @@
 -
+  name: "Add mutation with geo"
+  gqlmutation: |
+    mutation addHotel($hotel: AddHotelInput!) {
+      addHotel(input: [$hotel]) {
+        hotel {
+          name
+          location {
+            latitude
+            longitude
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "hotel":
+      { "name": "Taj Hotel",
+        "location": { "latitude": 11.11 , "longitude" : 22.22}
+      }
+    }
+  explanation: "Add mutation should convert the Point type mutation to corresponding Dgraph JSON mutation"
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Hotel1",
+          "dgraph.type":["Hotel"],
+          "Hotel.name":"Taj Hotel",
+          "Hotel.location": {
+            "type": "Point",
+            "coordinates": [22.22, 11.11]
+          }
+        }
+
+-
+  name: "Add mutation with geo without longitude"
+  gqlmutation: |
+    mutation addHotel($hotel: AddHotelInput!) {
+      addHotel(input: [$hotel]) {
+        hotel {
+          name
+          location {
+            latitude
+            longitude
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "hotel":
+      { "name": "Taj Hotel",
+        "location": { "latitude": 11.11 }
+      }
+    }
+  explanation: "Add mutation for Point type mutation should have both latitude and longitude"
+  validationerror:
+    { "message": "input: variable.hotel.location.longitude must be defined" }
+
+-
   name: "Add mutation with variables"
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
@@ -1600,7 +1656,7 @@
     {
       "auth": {
         "name": "A.N. Author",
-        "posts": [ { "postID": "0x456" } ]
+        "posts": [ { "postID": "0x456" }, {"title": "New Post", "author": {"name": "Abhimanyu"}} ]
       }
     }
   dgmutations:
@@ -1612,6 +1668,12 @@
           "Author.posts": [
             {
               "uid": "0x456",
+              "Post.author": { "uid": "_:Author1" }
+            },
+            {
+              "uid": "_:Post4",
+              "dgraph.type": ["Post"],
+              "Post.title": "New Post",
               "Post.author": { "uid": "_:Author1" }
             }
           ]
@@ -1647,13 +1709,19 @@
     {
       "inp": {
         "name": "A Country",
-        "states": [ { "code": "abc", "name": "Alphabet" } ]
+        "states": [
+          { "code": "abc", "name": "Alphabet" },
+          { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
+        ]
       }
     }
 
   dgquery: |-
     query {
       State3 as State3(func: eq(State.code, "abc")) @filter(type(State)) {
+        uid
+      }
+      State6 as State6(func: eq(State.code, "def")) @filter(type(State)) {
         uid
       }
     }
@@ -1668,6 +1736,16 @@
           "uid": "_:State3"
         }
       cond: "@if(eq(len(State3), 0))"
+    - setjson: |
+        {
+          "State.code": "def",
+          "State.name": "Vowel",
+          "dgraph.type": [
+            "State"
+          ],
+          "uid": "_:State6"
+        }
+      cond: "@if(eq(len(State6), 0))"
 
   dgquerysec: |-
     query {
@@ -1676,6 +1754,12 @@
       }
       var(func: uid(State3)) {
         Country4 as State.country
+      }
+      State6 as State6(func: eq(State.code, "def")) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State6)) {
+        Country7 as State.country
       }
     }
   dgmutationssec:
@@ -1688,6 +1772,10 @@
             {
               "uid": "uid(State3)",
               "State.country": { "uid": "_:Country1" }
+            },
+            {
+              "uid": "uid(State6)",
+              "State.country": { "uid": "_:Country1" }
             }
           ]
         }
@@ -1696,9 +1784,13 @@
           {
             "uid": "uid(Country4)",
             "Country.states": [ { "uid": "uid(State3)" } ]
+          },
+          {
+            "uid": "uid(Country7)",
+            "Country.states": [ { "uid": "uid(State6)" } ]
           }
         ]
-      cond: "@if(eq(len(State3), 1))"
+      cond: "@if(eq(len(State3), 1) AND eq(len(State6), 1))"
 
 - name: "Deep XID 4 level deep"
   gqlmutation: |

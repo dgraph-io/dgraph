@@ -996,6 +996,30 @@ func rewriteObject(
 		if xid != nil && xidString != "" {
 			xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
+
+			// Inverse Link is added as a Part of asXIDReference so we delete any provided
+			// Link to the object.
+			// Example: for this mutation
+			// mutation addCountry($inp: AddCountryInput!) {
+			// 	addCountry(input: [$inp]) {
+			// 	  country {
+			// 		id
+			// 	  }
+			// 	}
+			//  }
+			// with the input:
+			//{
+			// "inp": {
+			// 	"name": "A Country",
+			// 	"states": [
+			// 	  { "code": "abc", "name": "Alphabet" },
+			// 	  { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
+			// 	]
+			//   }
+			// }
+			// we delete the link of Second state to "B Country"
+			deleteInverseObject(obj, srcField)
+
 			if deepXID > 2 {
 				// Here we link the already existing node with an xid to the parent whose id is
 				// passed in srcUID. We do this linking only if there is a hasInverse relationship
@@ -1059,11 +1083,33 @@ func rewriteObject(
 		myUID = fmt.Sprintf("_:%s", variable)
 
 		if xid == nil || deepXID > 2 {
+			// If this object had an overwritten value for the inverse field, then we don't want to
+			// use that value as we will add the link to the inverse field in the below
+			// function call with the parent of this object
+			// for example, for this mutation:
+			// mutation addAuthor($auth: AddAuthorInput!) {
+			// addAuthor(input: [$auth]) {
+			// 	author {
+			// 		id
+			// 	}
+			// 	}
+			// }
+			// with the following input
+			//   {
+			// 	"auth": {
+			// 	  "name": "A.N. Author",
+			// 	  "posts": [ { "postID": "0x456" }, {"title": "New Post", "author": {"name": "Abhimanyu"}} ]
+			// 	}
+			//   }
+			// We delete the link of second input post with Author "name" : "Abhimanyu".
+			deleteInverseObject(obj, srcField)
+
 			// Lets link the new node that we are creating with the parent if a @hasInverse
 			// exists between the two.
 			// So for example if we had the addAuthor mutation which is also adding nested
 			// posts, then we add the link _:Post Post.author AuthorUID(srcUID) here.
 			addInverseLink(newObj, srcField, srcUID)
+
 		}
 	} else {
 		myUID = srcUID
@@ -1169,7 +1215,22 @@ func rewriteObject(
 					// or giving the data to create the object as part of a deep mutation
 					// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
 					//          like here ^^
-					frags =
+					if fieldDef.Type().IsPoint() {
+					// For Point type, the mutation json in Dgraph is as follows:
+					// { "type": "Point", "coordinates": [11.11, 22.22]}
+					lat := val["latitude"]
+					long := val["longitude"]
+					frags = &mutationRes{
+						secondPass: []*mutationFragment{
+							newFragment(
+								map[string]interface{}{
+									"type":        "Point",
+									"coordinates": []interface{}{long, lat},
+								},
+							),
+						},
+					}
+				} else {frags =
 						rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
 							withAdditionalDeletes, val, deepXID, xidMetadata)
 				}
@@ -1671,6 +1732,15 @@ func attachChild(res map[string]interface{}, parent schema.Type, child schema.Fi
 			[]interface{}{map[string]interface{}{"uid": childUID}}
 	} else {
 		res[parent.DgraphPredicate(child.Name())] = map[string]interface{}{"uid": childUID}
+	}
+}
+
+func deleteInverseObject(obj map[string]interface{}, srcField schema.FieldDefinition) {
+	if srcField != nil {
+		invField := srcField.Inverse()
+		if invField != nil && invField.Type().ListType() == nil {
+			delete(obj, invField.Name())
+		}
 	}
 }
 

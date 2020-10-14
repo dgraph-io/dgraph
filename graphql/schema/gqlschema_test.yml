@@ -9,7 +9,18 @@ invalid_schemas:
       }
     errlist: [
       {"message":"Fields id1, id2 and id3 are listed as IDs for type P, but a type can have only one ID field. Pick a single field as the ID for type P.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}]},
-      {"message":"Type P; is invalid, a type must have atleast one field that is not of ID! type and doesn't have @custom directive.", "locations":[{"line":1, "column":6}]}
+      {"message":"Type P; is invalid, a type must have atleast one field that is not of ID! type and doesn't have @custom/@lambda directive.", "locations":[{"line":1, "column":6}]}
+    ]
+
+  - name: "Geo field with invalid argument in @search."
+    input: |
+      type Hotel {
+        id: ID!
+        name: String!
+        location: Point @search(by: [int])
+      }
+    errlist: [
+      {"message":"Type Hotel; Field location: has the @search directive but the argument int doesn't apply to field type Point.  Search by int applies to fields of type Int. Fields of type Point are searchable by just @search.", "locations":[ { "line": 4, "column":20}]},
     ]
 
   -
@@ -33,11 +44,11 @@ invalid_schemas:
       }
     errlist: [
       {"message":"GraphQL Query and Mutation types are only allowed to have fields
-      with @custom directive. Other fields are built automatically for you. Found Query getAuthor
-      without @custom.", "locations":[{"line":1, "column":6}]},
+      with @custom/@lambda directive. Other fields are built automatically for you. Found Query getAuthor
+      without @custom/@lambda.", "locations":[{"line":1, "column":6}]},
       {"message":"GraphQL Query and Mutation types are only allowed to have fields with
-      @custom directive. Other fields are built automatically for you. Found Mutation getAuthor
-      without @custom.", "locations":[{"line":4, "column":6}]},
+      @custom/@lambda directive. Other fields are built automatically for you. Found Mutation getAuthor
+      without @custom/@lambda.", "locations":[{"line":4, "column":6}]},
     ]
 
   -
@@ -287,6 +298,15 @@ invalid_schemas:
       {"message":"Mutation is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":8, "column":11}]},
       {"message":"Subscription is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":11, "column":7}]},
       {"message":"uid is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":14, "column":6}]},
+    ]
+
+  - name: "Point is reserved word"
+    input: |
+      type Point {
+        id: ID!
+      }
+    errlist: [
+      { "message": "Point is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations": [ { "line": 1, "column": 6 } ] },
     ]
 
   -
@@ -1749,7 +1769,7 @@ invalid_schemas:
       ]
     },
     {
-      "message": "Type Author; Field name; @custom directive, body template can't use another field with @custom directive, found field `name` with @custom.",
+      "message": "Type Author; Field name; @custom directive, body template can't use another field with @custom/@lambda directive, found field `name` with @custom/@lambda.",
       "locations": [
       {
         "line": 6,
@@ -1831,7 +1851,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo; @custom directive, body template can't use another field with @custom directive, found field `foo` with @custom.",
+    {"message": "Type Author; Field yo; @custom directive, body template can't use another field with @custom/@lambda directive, found field `foo` with @custom/@lambda.",
      "locations":[{"line":12, "column":12}]},
     ]
 
@@ -1876,7 +1896,7 @@ invalid_schemas:
       ]
     },
     {
-      "message": "Type Author; Field name; @custom directive, graphql can't use another field with @custom directive, found field `name` with @custom.",
+      "message": "Type Author; Field name; @custom directive, graphql can't use another field with @custom/@lambda directive, found field `name` with @custom/@lambda.",
       "locations": [
       {
         "line": 6,
@@ -1982,7 +2002,7 @@ invalid_schemas:
       }
     errlist: [
     {
-      "message": "Type Author; Field yo; @custom directive, graphql can't use another field with @custom directive, found field `foo` with @custom.",
+      "message": "Type Author; Field yo; @custom directive, graphql can't use another field with @custom/@lambda directive, found field `foo` with @custom/@lambda.",
       "locations": [
       {
         "line": 12,
@@ -2472,7 +2492,7 @@ invalid_schemas:
       }
 
     errlist: [
-      {"message": "Type Author; is invalid, a type must have atleast one field that is not of ID! type and doesn't have @custom directive.",
+      {"message": "Type Author; is invalid, a type must have atleast one field that is not of ID! type and doesn't have @custom/@lambda directive.",
         "locations":[{"line":1, "column":6}]},
       ]
 
@@ -2489,7 +2509,7 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; is invalid, a type must have atleast one field that is not of ID! type and doesn't have @custom directive.",
+      {"message": "Type Author; is invalid, a type must have atleast one field that is not of ID! type and doesn't have @custom/@lambda directive.",
         "locations":[{"line":1, "column":6}]},
       ]
 
@@ -2543,8 +2563,8 @@ invalid_schemas:
                 })
       }
     errlist: [
-    {"message": "Type School; field name; can't have @custom directive as a @remote
-     type can't have fields with @custom directive.", "locations": [{"line":9, "column":3}]}
+    {"message": "Type School; field name; can't have @custom/@lambda directive as a @remote
+     type can't have fields with @custom/@lambda directive.", "locations": [{"line":9, "column":3}]}
     ]
 
   -
@@ -2564,7 +2584,7 @@ invalid_schemas:
       }
     errlist: [
     {"message": "Type Author; field neighbour; is of a type that has @remote directive. Those
-    would need to be resolved by a @custom directive.",
+    would need to be resolved by a @custom/@lambda directive.",
      "locations": [{"line":9, "column":3}]}
     ]
 
@@ -2652,6 +2672,47 @@ invalid_schemas:
     {"message": "Type Y; Field f1 is of type String, but reverse predicate in @dgraph directive only
      applies to fields with object types.",
      "locations":[{"line":6, "column":5}]}
+    ]
+
+  -
+    name: "as is reserved keyword - type Name"
+    input: |
+      type As {
+        id: ID!
+        name: String
+      }
+    errlist: [
+      { "message": "As is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations": [ { "line": 1, "column": 6 } ] },
+    ]
+
+  - name: "as is reserved keyword - field name"
+    input: |
+      type X {
+        as: ID!
+        name: String
+      }
+    errlist: [
+      { "message": "Type X; Field as: as is a reserved keyword and you cannot declare a field with this name.", "locations": [ { "line": 2, "column": 3 } ] },
+    ]
+
+  - name: "as is reserved keyword - type name using @dgraph directive"
+    input: |
+      type X @dgraph(type:"as") {
+        id: ID!
+        name: String
+      }
+    errlist: [
+      { "message": "Type X; type argument 'as' for @dgraph directive is a reserved keyword.", "locations": [ { "line": 1, "column": 9 } ] },
+    ]
+
+  - name: "as is reserved keyword - field name using @dgraph directive"
+    input: |
+      type X {
+        id: ID!
+        name: String @dgraph(pred:"as")
+      }
+    errlist: [
+      { "message": "Type X; Field name: pred argument 'as' for @dgraph directive is a reserved keyword.", "locations": [ { "line": 3, "column": 17 } ] },
     ]
 
 

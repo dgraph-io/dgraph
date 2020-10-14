@@ -1,11 +1,11 @@
 +++
 title = "Index of Directives"
+weight = 11
 [menu.main]
   url = "/graphql/directives/"
   name = "Directives"
   identifier = "directives"
   parent = "graphql"
-  weight = 11
 +++
 
 The list of all directives supported by Dgraph.
@@ -45,7 +45,9 @@ Reference: [Subscriptions](/graphql/subscriptions)
 
 ### @secret
 
-TODO - After adding docs for password type.
+`@secret` directive is used to store secret information, it gets encrypted and then stored in Dgraph.
+
+Reference: [Password Type](/graphql/schema/#password-type)
 
 ### @auth
 

@@ -1,6 +1,12 @@
 # Test schema that contains an example of everything that's useful to
 # test for query rewriting.
 
+type Hotel {
+    id: ID!
+    name: String!
+    location: Point @search
+}
+
 type Country {
         id: ID!
         name: String! @search(by: [trigram, exact])

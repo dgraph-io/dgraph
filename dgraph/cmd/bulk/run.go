@@ -60,7 +60,11 @@ func init() {
 	flag.String("format", "",
 		"Specify file format (rdf or json) instead of getting it from filename.")
 	flag.Bool("encrypted", false,
-		"Flag to indicate whether schema and data files are encrypted.")
+		"Flag to indicate whether schema and data files are encrypted. "+
+			"Must be specified with --encryption_key_file or vault option(s).")
+	flag.Bool("encrypted_out", false,
+		"Flag to indicate whether to encrypt the output. "+
+			"Must be specified with --encryption_key_file or vault option(s).")
 	flag.String("out", defaultOutDir,
 		"Location to write the final dgraph data directories.")
 	flag.Bool("replace_out", false,
@@ -104,10 +108,12 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// Options around how to set up Badger.
-	flag.Int("badger.compression_level", 1,
-		"The compression level for Badger. A higher value uses more resources.")
-	flag.Int64("badger.cache_mb", 0, "Total size of cache (in MB) per shard in reducer.")
-	flag.String("badger.cache_percentage", "0,100",
+	flag.String("badger.compression", "snappy",
+		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
+			"level (if applicable) for the postings directory. none would disable compression,"+
+			" while zstd:1 would set zstd compression at level 1.")
+	flag.Int64("badger.cache_mb", 64, "Total size of cache (in MB) per shard in reducer.")
+	flag.String("badger.cache_percentage", "70,30",
 		"Cache percentages summing up to 100 for various caches"+
 			" (FORMAT: BlockCacheSize, IndexCacheSize).")
 
@@ -116,12 +122,14 @@ func init() {
 }
 
 func run() {
+	ctype, clevel := x.ParseCompression(Bulk.Conf.GetString("badger.compression"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
 		SchemaFile:       Bulk.Conf.GetString("schema"),
 		GqlSchemaFile:    Bulk.Conf.GetString("graphql_schema"),
 		Encrypted:        Bulk.Conf.GetBool("encrypted"),
+		EncryptedOut:     Bulk.Conf.GetBool("encrypted_out"),
 		OutDir:           Bulk.Conf.GetString("out"),
 		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
@@ -142,7 +150,8 @@ func run() {
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
 		ClientDir:        Bulk.Conf.GetString("xidmap"),
 		// Badger options
-		BadgerCompressionLevel: Bulk.Conf.GetInt("badger.compression_level"),
+		BadgerCompression:      ctype,
+		BadgerCompressionLevel: clevel,
 	}
 
 	x.PrintVersion()
@@ -166,10 +175,25 @@ func run() {
 		fmt.Printf("unable to read key %v", err)
 		return
 	}
-	if opt.Encrypted && len(opt.EncryptionKey) == 0 {
-		fmt.Printf("Must use --encryption_key_file or vault option(s) with --encrypted option.\n")
-		os.Exit(1)
+	if len(opt.EncryptionKey) == 0 {
+		if opt.Encrypted || opt.EncryptedOut {
+			fmt.Fprint(os.Stderr, "Must use --encryption_key_file or vault option(s).\n")
+			os.Exit(1)
+		}
+	} else {
+		requiredFlags := Bulk.Cmd.Flags().Changed("encrypted") &&
+			Bulk.Cmd.Flags().Changed("encrypted_out")
+		if !requiredFlags {
+			fmt.Fprint(os.Stderr, "Must specify --encrypted and --encrypted_out when providing encryption key.\n")
+			os.Exit(1)
+		}
+		if !opt.Encrypted && !opt.EncryptedOut {
+			fmt.Fprint(os.Stderr, "Must set --encrypted and/or --encrypted_out to true when providing encryption key.\n")
+			os.Exit(1)
+		}
 	}
+	fmt.Printf("Encrypted input: %v; Encrypted output: %v\n", opt.Encrypted, opt.EncryptedOut)
+
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 		os.Exit(1)

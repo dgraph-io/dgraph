@@ -44,18 +44,21 @@ const (
 	authDirective         = "auth"
 	customDirective       = "custom"
 	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
+	lambdaDirective       = "lambda"
 
 	cascadeDirective = "cascade"
 	cascadeArg       = "fields"
 
-	// this directive is used internally for union inputs. It can't be present in user's schema.
-	oneOfDirective = "oneOf"
-
 	// custom directive args and fields
-	dqlArg = "dql"
-	mode   = "mode"
-	BATCH  = "BATCH"
-	SINGLE = "SINGLE"
+	dqlArg      = "dql"
+	httpArg     = "http"
+	httpUrl     = "url"
+	httpMethod  = "method"
+	httpBody    = "body"
+	httpGraphql = "graphql"
+	mode        = "mode"
+	BATCH       = "BATCH"
+	SINGLE      = "SINGLE"
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
@@ -94,6 +97,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -128,6 +132,25 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter!
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -142,6 +165,7 @@ directive @auth(
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -191,6 +215,7 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
@@ -199,6 +224,7 @@ input StringExactFilter {
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 `
 )
@@ -249,6 +275,7 @@ var supportedSearches = map[string]searchTypeIndex{
 	"month":    {"DateTime", "month"},
 	"day":      {"DateTime", "day"},
 	"hour":     {"DateTime", "hour"},
+	"geo":      {"Point", "geo"},
 }
 
 // GraphQL scalar type -> default search arg
@@ -260,6 +287,7 @@ var defaultSearches = map[string]string{
 	"Float":    "float",
 	"String":   "term",
 	"DateTime": "year",
+	"Point":    "geo",
 }
 
 // graphqlSpecScalars holds all the scalar types supported by the graphql spec.
@@ -310,6 +338,7 @@ var builtInFilters = map[string]string{
 	"fulltext": "StringFullTextFilter",
 	"exact":    "StringExactFilter",
 	"hash":     "StringHashFilter",
+	"geo":      "PointGeoFilter",
 }
 
 // GraphQL scalar -> Dgraph scalar
@@ -343,8 +372,8 @@ var directiveValidators = map[string]directiveValidator{
 	authDirective:         ValidatorNoOp, // Just to get it printed into generated schema
 	customDirective:       customDirectiveValidation,
 	remoteDirective:       ValidatorNoOp,
-	oneOfDirective:        ValidatorNoOp, // Just to get it printed into generated schema
 	deprecatedDirective:   ValidatorNoOp,
+	lambdaDirective:       lambdaDirectiveValidation,
 }
 
 // directiveLocationMap stores the directives and their locations for the ones which can be
@@ -361,7 +390,6 @@ var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
 	remoteDirective: {ast.Object: true, ast.Interface: true, ast.Union: true,
 		ast.InputObject: true, ast.Enum: true},
 	cascadeDirective: nil,
-	oneOfDirective:   nil,
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List

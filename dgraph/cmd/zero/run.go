@@ -33,8 +33,6 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/badger/v2"
-	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -47,17 +45,14 @@ import (
 
 type options struct {
 	bindall           bool
-	myAddr            string
 	portOffset        int
 	nodeId            uint64
 	numReplicas       int
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
-	LudicrousMode     bool
 
-	totalCache      int64
-	cachePercentage string
+	totalCache int64
 }
 
 var opts options
@@ -82,8 +77,8 @@ instances to achieve high-availability.
 	Zero.EnvPrefix = "DGRAPH_ZERO"
 
 	flag := Zero.Cmd.Flags()
-	flag.String("my", "",
-		"addr:port of this server, so other Dgraph alphas can talk to this.")
+	x.FillCommonFlags(flag)
+
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
 	flag.Uint64("idx", 1, "Unique node index for this server. idx cannot be 0.")
@@ -92,34 +87,7 @@ instances to achieve high-availability.
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
-	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
-	flag.Bool("enable_sentry", true, "Turn on/off sending events to Sentry. (default on)")
-
-	// OpenCensus flags.
-	flag.Float64("trace", 0.01, "The ratio of queries to trace.")
-	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
-	// See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
-	// about the status of supporting annotation logs through the datadog exporter
-	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
-		" exporter does not support annotation logs and would discard them.")
-	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-
-	// Cache flags
-	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
-	flag.String("cache_percentage", "100,0",
-		"Cache percentages summing up to 100 for various caches (FORMAT: blockCache,indexCache).")
-
-	// Badger flags
-	flag.String("badger.tables", "mmap",
-		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for write-ahead log directory "+
-			"write-ahead directory. Option sequence consume most to least RAM while providing "+
-			"best to worst read performance respectively")
-	flag.String("badger.vlog", "mmap",
-		"[mmap, disk] Specifies how Badger Value log is stored for the write-ahead log directory "+
-			"log directory. mmap consumes more RAM, but provides better performance.")
-	flag.Int("badger.compression_level", 3,
-		"The compression level for Badger. A higher value uses more resources.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -143,7 +111,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.MaxConcurrentStreams(1000),
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}))
 
-	rc := pb.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
+	rc := pb.RaftContext{Id: opts.nodeId, Addr: x.WorkerConfig.MyAddr, Group: 0}
 	m := conn.NewNode(&rc, store)
 
 	// Zero followers should not be forwarding proposals to the leader, to avoid txn commits which
@@ -192,28 +160,23 @@ func run() {
 	}
 
 	x.PrintVersion()
+
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
-		myAddr:            Zero.Conf.GetString("my"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
 		nodeId:            uint64(Zero.Conf.GetInt("idx")),
 		numReplicas:       Zero.Conf.GetInt("replicas"),
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
-		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
-		cachePercentage:   Zero.Conf.GetString("cache_percentage"),
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 
 	if opts.nodeId == 0 {
 		log.Fatalf("ERROR: idx flag cannot be 0. Please try again with idx as a positive integer")
 	}
-
-	x.WorkerConfig = x.WorkerOptions{
-		LudicrousMode: Zero.Conf.GetBool("ludicrous_mode"),
-	}
+	x.WorkerConfig.Parse(Zero.Conf)
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
@@ -244,8 +207,8 @@ func run() {
 	if opts.bindall {
 		addr = "0.0.0.0"
 	}
-	if opts.myAddr == "" {
-		opts.myAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
+	if x.WorkerConfig.MyAddr == "" {
+		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
 
 	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")
@@ -255,58 +218,11 @@ func run() {
 
 	x.AssertTruef(opts.totalCache >= 0, "ERROR: Cache size must be non-negative")
 
-	cachePercent, err := x.GetCachePercentages(opts.cachePercentage, 2)
-	x.Check(err)
-	blockCacheSz := (cachePercent[0] * (opts.totalCache << 20)) / 100
-	indexCacheSz := (cachePercent[1] * (opts.totalCache << 20)) / 100
-
-	// Open raft write-ahead log and initialize raft node.
+	// Create and initialize write-ahead log.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.LSMOnlyOptions(opts.w).
-		WithSyncWrites(false).
-		WithTruncate(true).
-		WithValueLogFileSize(64 << 20).
-		WithBlockCacheSize(blockCacheSz).
-		WithIndexCacheSize(indexCacheSz).
-		WithLoadBloomsOnOpen(false)
-
-	compression_level := Zero.Conf.GetInt("badger.compression_level")
-	if compression_level > 0 {
-		// By default, compression is disabled in badger.
-		kvOpt.Compression = bopt.ZSTD
-		kvOpt.ZSTDCompressionLevel = compression_level
-	}
-
-	// Set loading mode options.
-	switch Zero.Conf.GetString("badger.tables") {
-	case "mmap":
-		kvOpt.TableLoadingMode = bopt.MemoryMap
-	case "ram":
-		kvOpt.TableLoadingMode = bopt.LoadToRAM
-	case "disk":
-		kvOpt.TableLoadingMode = bopt.FileIO
-	default:
-		x.Fatalf("Invalid Badger Tables options")
-	}
-	switch Zero.Conf.GetString("badger.vlog") {
-	case "mmap":
-		kvOpt.ValueLogLoadingMode = bopt.MemoryMap
-	case "disk":
-		kvOpt.ValueLogLoadingMode = bopt.FileIO
-	default:
-		x.Fatalf("Invalid Badger Value log options")
-	}
-	glog.Infof("Opening zero BadgerDB with options: %+v\n", kvOpt)
-
-	kv, err := badger.Open(kvOpt)
-	x.Checkf(err, "Error while opening WAL store")
-	defer kv.Close()
-
-	gcCloser := z.NewCloser(1) // closer for vLogGC
-	go x.RunVlogGC(kv, gcCloser)
-	defer gcCloser.SignalAndWait()
-
-	store := raftwal.Init(kv, opts.nodeId, 0)
+	store := raftwal.Init(opts.w)
+	store.SetUint(raftwal.RaftId, opts.nodeId)
+	store.SetUint(raftwal.GroupId, 0) // All zeros have group zero.
 
 	// Initialize the servers.
 	var st state
@@ -364,8 +280,6 @@ func run() {
 		st.node.closer.SignalAndWait()
 		// Try to generate a snapshot before the shutdown.
 		st.node.trySnapshot(0)
-		// Stop Raft store.
-		store.Closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
 
@@ -376,8 +290,7 @@ func run() {
 	st.zero.closer.Wait()
 	glog.Infoln("Closer closed.")
 
-	err = kv.Close()
-	glog.Infof("Badger closed with err: %v\n", err)
-
+	err = store.Close()
+	glog.Infof("Raft WAL closed with err: %v\n", err)
 	glog.Infoln("All done. Goodbye!")
 }

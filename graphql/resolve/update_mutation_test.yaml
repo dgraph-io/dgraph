@@ -1,4 +1,86 @@
 -
+  name: "Update set mutation on geo type"
+  gqlmutation: |
+    mutation updateHotel($patch: UpdateHotelInput!) {
+      updateHotel(input: $patch) {
+        hotel {
+          name
+          location {
+            latitude
+            longitude
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "location":  { "near" : { "distance": 33.33, "coordinate" : { "latitude": 11.11, "longitude": 22.22 } } }
+        },
+        "set": {
+          "location": { "latitude": 11.11 , "longitude" : 22.22}
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph set mutation"
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Hotel.location": {
+            "type": "Point",
+            "coordinates": [22.22, 11.11]
+          }
+        }
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateHotel(func: type(Hotel)) @filter(near(Hotel.location, [22.22,11.11], 33.33)) {
+        uid
+      }
+    }
+
+-
+  name: "Update remove mutation on geo type"
+  gqlmutation: |
+    mutation updateHotel($patch: UpdateHotelInput!) {
+      updateHotel(input: $patch) {
+        hotel {
+          name
+          location {
+            latitude
+            longitude
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123", "0x124"]
+        },
+        "remove": {
+          "location": { "latitude": 11.11 , "longitude" : 22.22}
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph set mutation"
+  dgmutations:
+    - deletejson: |
+        { "uid" : "uid(x)",
+          "Hotel.location": {
+            "type": "Point",
+            "coordinates": [22.22, 11.11]
+          }
+        }
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateHotel(func: uid(0x123, 0x124)) @filter(type(Hotel)) {
+        uid
+      }
+    }
+
+-
   name: "Update set mutation with variables"
   gqlmutation: |
     mutation updatePost($patch: UpdatePostInput!) {

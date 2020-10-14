@@ -75,6 +75,14 @@ const (
             {
                 "name": "posts",
 				"description": ""
+            },
+            {
+                "name": "bio",
+				"description": ""
+            },
+            {
+                "name": "rank",
+				"description": ""
             }
 		],
 		"enumValues":[]

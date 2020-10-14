@@ -450,7 +450,9 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	}
 
 	// update mutations from the query results before assigning UIDs
-	updateMutations(qc)
+	if err := updateMutations(qc); err != nil {
+		return err
+	}
 
 	newUids, err := query.AssignUids(ctx, qc.gmuList)
 	if err != nil {
@@ -599,7 +601,7 @@ func buildUpsertQuery(qc *queryContext) string {
 // updateMutations updates the mutation and replaces uid(var) and val(var) with
 // their values or a blank node, in case of an upsert.
 // We use the values stored in qc.uidRes and qc.valRes to update the mutation.
-func updateMutations(qc *queryContext) {
+func updateMutations(qc *queryContext) error {
 	for i, condVar := range qc.condVars {
 		gmu := qc.gmuList[i]
 		if len(condVar) != 0 {
@@ -611,9 +613,15 @@ func updateMutations(qc *queryContext) {
 			}
 		}
 
-		updateUIDInMutations(gmu, qc)
-		updateValInMutations(gmu, qc)
+		if err := updateUIDInMutations(gmu, qc); err != nil {
+			return err
+		}
+		if err := updateValInMutations(gmu, qc); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 // findMutationVars finds all the variables used in mutation block and stores them
@@ -733,20 +741,26 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api
 
 		newNQuads = append(newNQuads, nq)
 	}
+	qc.nquadsCount += len(newNQuads)
 	return newNQuads
 }
 
 // updateValInMutations does following transformations:
 // 0x123 <amount> val(v) -> 0x123 <amount> 13.0
-func updateValInMutations(gmu *gql.Mutation, qc *queryContext) {
+func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	gmu.Del = updateValInNQuads(gmu.Del, qc, false)
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
+	if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
+			qc.nquadsCount, x.Config.MutationsNQuadLimit)
+	}
+	return nil
 }
 
 // updateUIDInMutations does following transformations:
 //   * uid(v) -> 0x123     -- If v is defined in query block
 //   * uid(v) -> _:uid(v)  -- Otherwise
-func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) {
+func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	// usedMutationVars keeps track of variables that are used in mutations.
 	getNewVals := func(s string) []string {
 		if strings.HasPrefix(s, "uid(") {
@@ -788,9 +802,15 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) {
 				}
 
 				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
+				qc.nquadsCount++
+			}
+			if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+				return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
+					qc.nquadsCount, x.Config.MutationsNQuadLimit)
 			}
 		}
 	}
+
 	gmu.Del = gmuDel
 
 	// Update the values in mutation block from the query block.
@@ -799,6 +819,12 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) {
 		newSubs := getNewVals(nq.Subject)
 		newObs := getNewVals(nq.ObjectId)
 
+		qc.nquadsCount += len(newSubs) * len(newObs)
+		if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+			return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
+				qc.nquadsCount, x.Config.MutationsNQuadLimit)
+		}
+
 		for _, s := range newSubs {
 			for _, o := range newObs {
 				gmuSet = append(gmuSet, getNewNQuad(nq, s, o))
@@ -806,6 +832,7 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) {
 		}
 	}
 	gmu.Set = gmuSet
+	return nil
 }
 
 // queryContext is used to pass around all the variables needed
@@ -836,6 +863,11 @@ type queryContext struct {
 	span *trace.Span
 	// graphql indicates whether the given request is from graphql admin or not.
 	graphql bool
+	// nquadsCount maintains numbers of nquads which would be inserted as part of this request.
+	// In some cases(mostly upserts), numbers of nquads to be inserted can to huge(we have seen upto
+	// 1B) and resulting in OOM. We are limiting number of nquads which can be inserted in
+	// a single request.
+	nquadsCount int
 }
 
 // Health handles /health and /health?all requests.
@@ -1280,7 +1312,7 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
-var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Alter operations.")
+var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Admin operations.")
 
 func hasAdminAuth(ctx context.Context, tag string) (net.Addr, error) {
 	ipAddr, err := x.HasWhitelistedIP(ctx)

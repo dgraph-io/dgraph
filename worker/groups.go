@@ -25,7 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v2"
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
@@ -69,7 +68,7 @@ func groups() *groupi {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrance to the RAFT
 // world from main.go.
-func StartRaftNodes(walStore *badger.DB, bindall bool) {
+func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	if x.WorkerConfig.MyAddr == "" {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
@@ -88,8 +87,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	}
 
 	if x.WorkerConfig.RaftId == 0 {
-		id, err := raftwal.RaftId(walStore)
-		x.Check(err)
+		id := walStore.Uint(raftwal.RaftId)
 		x.WorkerConfig.RaftId = id
 
 		// If the w directory already contains raft information, ignore the proposed
@@ -139,8 +137,10 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.triggerCh = make(chan struct{}, 1)
 
 	// Initialize DiskStorage and pass it along.
-	store := raftwal.Init(walStore, x.WorkerConfig.RaftId, gid)
-	gr.Node = newNode(store, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
+	walStore.SetUint(raftwal.RaftId, x.WorkerConfig.RaftId)
+	walStore.SetUint(raftwal.GroupId, uint64(gid))
+
+	gr.Node = newNode(walStore, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.UpdateNode(gr.Node.Node)
@@ -1021,6 +1021,9 @@ func (g *groupi) processOracleDeltaStream() {
 				// towards num pending proposals and be proposed right away.
 				err := g.Node.proposeAndWait(g.Ctx(), &pb.Proposal{Delta: delta})
 				if err == nil {
+					break
+				}
+				if g.Ctx().Err() != nil {
 					break
 				}
 				glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+

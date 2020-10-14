@@ -284,13 +284,11 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 		if tablet.Force {
 			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, tablet.Predicate)
-		} else {
-			if prev.GroupId != tablet.GroupId {
-				glog.Infof(
-					"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
-					prev.Predicate, tablet.GroupId, prev.GroupId)
-				return errTabletAlreadyServed
-			}
+		} else if prev.GroupId != tablet.GroupId {
+			glog.Infof(
+				"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
+				prev.Predicate, tablet.GroupId, prev.GroupId)
+			return errTabletAlreadyServed
 		}
 	}
 	tablet.Force = false
@@ -446,7 +444,7 @@ func (n *node) triggerLeaderChange() {
 func (n *node) proposeNewCID() {
 	// Either this is a new cluster or can't find a CID in the entries. So, propose a new ID for the cluster.
 	// CID check is needed for the case when a leader assigns a CID to the new node and the new node is proposing a CID
-	for len(n.server.membershipState().Cid) == 0 {
+	for n.server.membershipState().Cid == "" {
 		id := uuid.New().String()
 		err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
 		if err == nil {
@@ -574,6 +572,7 @@ func (n *node) initAndStartNode() error {
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 	default:
+		glog.Infof("Starting a brand new node")
 		data, err := n.RaftContext.Marshal()
 		x.Check(err)
 		peers := []raft.Peer{{ID: n.Id, Context: data}}
@@ -583,6 +582,7 @@ func (n *node) initAndStartNode() error {
 
 	go n.Run()
 	go n.BatchAndSendMessages()
+	go n.ReportRaftComms()
 	return nil
 }
 
@@ -678,10 +678,12 @@ func (n *node) trySnapshot(skip uint64) {
 	glog.Infof("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
 }
 
+const tickDur = 100 * time.Millisecond
+
 func (n *node) Run() {
 	var leader bool
 	licenseApplied := false
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(tickDur)
 	defer ticker.Stop()
 
 	// snapshot can cause select loop to block while deleting entries, so run
@@ -699,7 +701,7 @@ func (n *node) Run() {
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)
-	if opts.LudicrousMode {
+	if !x.WorkerConfig.HardSync {
 		closer.AddRunning(1)
 		go x.StoreSync(n.Store, closer)
 	}
@@ -744,7 +746,7 @@ func (n *node) Run() {
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
 			span.Annotatef(nil, "Saved to storage")
-			if !x.WorkerConfig.LudicrousMode && rd.MustSync {
+			if x.WorkerConfig.HardSync && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %v", err)
 				}
@@ -792,7 +794,7 @@ func (n *node) Run() {
 			timer.Record("advance")
 
 			span.End()
-			if timer.Total() > 200*time.Millisecond {
+			if timer.Total() > 5*tickDur {
 				glog.Warningf(
 					"Raft.Ready took too long to process: %s."+
 						" Num entries: %d. MustSync: %v",

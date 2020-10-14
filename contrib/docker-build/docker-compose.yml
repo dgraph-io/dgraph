@@ -1,0 +1,14 @@
+version: "3.5"
+services:
+  build:
+    image: dgraph/dgraph:latest
+    container_name: build
+    working_dir: /data/build
+    labels:
+      cluster: test
+      service: build
+    volumes:
+      - type: bind
+        source: ../../
+        target: /dgraph
+    command: /dgraph/contrib/docker-build/build.sh

@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Ludicrous Mode"
+weight = 13
 [menu.main]
     parent = "deploy"
-    weight = 13
 +++
 
 Ludicrous mode is available in Dgraph v20.03.1 or later.
