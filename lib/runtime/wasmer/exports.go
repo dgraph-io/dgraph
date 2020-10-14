@@ -126,7 +126,7 @@ func (r *Instance) ExecuteBlock(block *types.Block) ([]byte, error) {
 	// copy block since we're going to modify it
 	b := block.DeepCopy()
 
-	b.Header.Digest = [][]byte{}
+	b.Header.Digest = [][]byte{} // TODO: remove only seal digest
 	bdEnc, err := b.Encode()
 	if err != nil {
 		return nil, err

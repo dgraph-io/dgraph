@@ -52,7 +52,7 @@ func (s *Service) receiveMessages(cond func() bool) {
 					continue
 				}
 
-				s.logger.Debug("validated vote message", "vote", v, "subround", vm.Stage)
+				s.logger.Debug("validated vote message", "vote", v, "round", vm.Round, "subround", vm.Stage, "precommits", s.precommits)
 			case <-ctx.Done():
 				s.logger.Trace("returning from receiveMessages")
 				return
@@ -125,6 +125,10 @@ func (s *Service) createVoteMessage(vote *Vote, stage subround, kp crypto.Keypai
 // validateMessage validates a VoteMessage and adds it to the current votes
 // it returns the resulting vote if validated, error otherwise
 func (s *Service) validateMessage(m *VoteMessage) (*Vote, error) {
+	// make sure round does not increment while VoteMessage is being validated
+	s.roundLock.Lock()
+	defer s.roundLock.Unlock()
+
 	if m.Message == nil {
 		return nil, errors.New("invalid VoteMessage; missing Message field")
 	}

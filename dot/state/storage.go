@@ -82,8 +82,15 @@ func (s *StorageState) pruneStorage() { //nolint
 
 // StoreTrie stores the given trie in the StorageState and writes it to the database
 func (s *StorageState) StoreTrie(root common.Hash, ts *TrieState) error {
+	// TODO: commit and free TrieState
+
 	s.lock.Lock()
-	s.tries[root] = ts.t
+	var err error
+	// make copy of trie since ts.Free will clear the TrieState
+	s.tries[root], err = ts.t.DeepCopy()
+	if err != nil {
+		return err
+	}
 	s.lock.Unlock()
 
 	logger.Debug("stored trie in storage state", "root", root)
@@ -108,7 +115,7 @@ func (s *StorageState) TrieState(hash *common.Hash) (*TrieState, error) {
 		return nil, errTrieDoesNotExist(*hash)
 	}
 
-	return NewTrieState(s.tries[*hash]), nil
+	return NewTrieState(s.baseDB, s.tries[*hash])
 }
 
 // StoreInDB encodes the entire trie and writes it to the DB

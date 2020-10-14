@@ -17,8 +17,6 @@
 package sync
 
 import (
-	"bytes"
-	"encoding/hex"
 	"math/big"
 	"testing"
 	"time"
@@ -26,15 +24,13 @@ import (
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/common/variadic"
-	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/runtime"
-	"github.com/ChainSafe/gossamer/lib/runtime/extrinsic"
 	"github.com/ChainSafe/gossamer/lib/runtime/wasmer"
+	"github.com/ChainSafe/gossamer/lib/scale"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
@@ -49,11 +45,8 @@ var testGenesisHeader = &types.Header{
 	StateRoot: trie.EmptyHash,
 }
 
-func newTestSyncer(t *testing.T, cfg *Config) *Service {
-	if cfg == nil {
-		cfg = &Config{}
-	}
-
+func newTestSyncer(t *testing.T) *Service {
+	cfg := &Config{}
 	stateSrvc := state.NewService("", log.LvlInfo)
 	stateSrvc.UseMemDB()
 
@@ -75,7 +68,7 @@ func newTestSyncer(t *testing.T, cfg *Config) *Service {
 	}
 
 	if cfg.Runtime == nil {
-		cfg.Runtime = wasmer.NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
+		cfg.Runtime = wasmer.NewTestInstance(t, runtime.NODE_RUNTIME)
 	}
 
 	if cfg.TransactionState == nil {
@@ -96,7 +89,7 @@ func newTestSyncer(t *testing.T, cfg *Config) *Service {
 }
 
 func TestHandleSeenBlocks(t *testing.T) {
-	syncer := newTestSyncer(t, nil)
+	syncer := newTestSyncer(t)
 	number := big.NewInt(12)
 	req := syncer.HandleSeenBlocks(number)
 	require.NotNil(t, req)
@@ -105,7 +98,7 @@ func TestHandleSeenBlocks(t *testing.T) {
 }
 
 func TestHandleSeenBlocks_NotHighestSeen(t *testing.T) {
-	syncer := newTestSyncer(t, nil)
+	syncer := newTestSyncer(t)
 
 	number := big.NewInt(12)
 	req := syncer.HandleSeenBlocks(number)
@@ -119,7 +112,7 @@ func TestHandleSeenBlocks_NotHighestSeen(t *testing.T) {
 }
 
 func TestHandleSeenBlocks_GreaterThanHighestSeen_NotSynced(t *testing.T) {
-	syncer := newTestSyncer(t, nil)
+	syncer := newTestSyncer(t)
 
 	number := big.NewInt(12)
 	req := syncer.HandleSeenBlocks(number)
@@ -134,7 +127,7 @@ func TestHandleSeenBlocks_GreaterThanHighestSeen_NotSynced(t *testing.T) {
 }
 
 func TestHandleSeenBlocks_GreaterThanHighestSeen_Synced(t *testing.T) {
-	syncer := newTestSyncer(t, nil)
+	syncer := newTestSyncer(t)
 
 	number := big.NewInt(12)
 	req := syncer.HandleSeenBlocks(number)
@@ -152,10 +145,10 @@ func TestHandleSeenBlocks_GreaterThanHighestSeen_Synced(t *testing.T) {
 }
 
 func TestHandleBlockResponse(t *testing.T) {
-	syncer := newTestSyncer(t, nil)
+	syncer := newTestSyncer(t)
 	syncer.highestSeenBlock = big.NewInt(132)
 
-	responder := newTestSyncer(t, nil)
+	responder := newTestSyncer(t)
 	addTestBlocksToState(t, 130, responder.blockState)
 
 	startNum := 1
@@ -185,11 +178,11 @@ func TestHandleBlockResponse(t *testing.T) {
 }
 
 func TestHandleBlockResponse_MissingBlocks(t *testing.T) {
-	syncer := newTestSyncer(t, nil)
+	syncer := newTestSyncer(t)
 	syncer.highestSeenBlock = big.NewInt(20)
 	addTestBlocksToState(t, 4, syncer.blockState)
 
-	responder := newTestSyncer(t, nil)
+	responder := newTestSyncer(t)
 	addTestBlocksToState(t, 16, responder.blockState)
 
 	startNum := 16
@@ -214,7 +207,7 @@ func TestHandleBlockResponse_MissingBlocks(t *testing.T) {
 }
 
 func TestRemoveIncludedExtrinsics(t *testing.T) {
-	syncer := newTestSyncer(t, nil)
+	syncer := newTestSyncer(t)
 
 	ext := []byte("nootwashere")
 	tx := &transaction.ValidTransaction{
@@ -243,38 +236,8 @@ func TestRemoveIncludedExtrinsics(t *testing.T) {
 	require.Nil(t, inQueue, "queue should be empty")
 }
 
-func TestCoreExecuteBlock(t *testing.T) {
-	t.Skip()
-	syncer := newTestSyncer(t, nil)
-	ph, err := hex.DecodeString("972a70b03bb1764fa0c9b631cb825860567ae6098f1ef2261f3cbbd34b000057")
-	require.Nil(t, err)
-	sr, err := hex.DecodeString("0812e3eb9ccf2955b647062349e0e33cbb0d9e936f8185f11a545236d2b41aaf")
-	require.Nil(t, err)
-	er, err := hex.DecodeString("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
-	require.Nil(t, err)
-
-	cHeader := &types.Header{
-		ParentHash:     common.BytesToHash(ph), // executeBlock fails empty or 0 hash
-		Number:         big.NewInt(341),
-		StateRoot:      common.BytesToHash(sr),
-		ExtrinsicsRoot: common.BytesToHash(er),
-		Digest:         nil,
-	}
-
-	block := &types.Block{
-		Header: cHeader,
-		Body:   types.NewBody([]byte{}),
-	}
-
-	res, err := syncer.executeBlock(block)
-	require.Nil(t, err)
-
-	// if execute block returns a non-empty byte array, something went wrong
-	require.Equal(t, []byte{}, res)
-}
-
 func TestHandleBlockResponse_NoBlockData(t *testing.T) {
-	syncer := newTestSyncer(t, nil)
+	syncer := newTestSyncer(t)
 	msg := &network.BlockResponseMessage{
 		ID:        0,
 		BlockData: nil,
@@ -286,7 +249,7 @@ func TestHandleBlockResponse_NoBlockData(t *testing.T) {
 }
 
 func TestHandleBlockResponse_BlockData(t *testing.T) {
-	syncer := newTestSyncer(t, nil)
+	syncer := newTestSyncer(t)
 
 	cHeader := &optional.CoreHeader{
 		ParentHash:     syncer.blockState.BestBlockHash(), // executeBlock fails empty or 0 hash
@@ -314,132 +277,75 @@ func TestHandleBlockResponse_BlockData(t *testing.T) {
 	require.Equal(t, int64(1), high)
 }
 
-func newBlockBuilder(t *testing.T, cfg *babe.ServiceConfig) *babe.Service { //nolint
-	if cfg.Runtime == nil {
-		cfg.Runtime = wasmer.NewTestInstance(t, runtime.SUBSTRATE_TEST_RUNTIME)
+func buildBlock(t *testing.T, instance runtime.Instance, parent *types.Header) *types.Block {
+	header := &types.Header{
+		ParentHash: parent.Hash(),
+		Number:     big.NewInt(0).Add(parent.Number, big.NewInt(1)),
+		Digest:     [][]byte{},
 	}
 
-	if cfg.Keypair == nil {
-		kp, err := sr25519.GenerateKeypair()
-		require.Nil(t, err)
-		cfg.Keypair = kp
-	}
-
-	cfg.AuthData = []*types.Authority{
-		{
-			Key:    cfg.Keypair.Public().(*sr25519.PublicKey),
-			Weight: 1,
-		},
-	}
-
-	b, err := babe.NewService(cfg)
+	err := instance.InitializeBlock(header)
 	require.NoError(t, err)
 
-	return b
-}
-
-func TestExecuteBlock(t *testing.T) {
-	t.Skip()
-	// skip until block builder is separate from BABE
-
-	tt := trie.NewEmptyTrie()
-	rt := wasmer.NewTestInstanceWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt, log.LvlTrace)
-
-	// load authority into runtime
-	kp, err := sr25519.GenerateKeypair()
+	idata := types.NewInherentsData()
+	err = idata.SetInt64Inherent(types.Timstap0, uint64(time.Now().Unix()))
 	require.NoError(t, err)
 
-	pubkey := kp.Public().Encode()
-	err = tt.Put(runtime.TestAuthorityDataKey, append([]byte{4}, pubkey...))
+	err = idata.SetInt64Inherent(types.Babeslot, 1)
 	require.NoError(t, err)
 
-	cfg := &Config{
-		Runtime: rt,
-	}
-
-	syncer := newTestSyncer(t, cfg)
-
-	bcfg := &babe.ServiceConfig{
-		Runtime:          syncer.runtime,
-		TransactionState: syncer.transactionState.(*state.TransactionState),
-		Keypair:          kp,
-		BlockState:       syncer.blockState.(*state.BlockState),
-		Threshold:        babe.MaxThreshold,
-	}
-
-	builder := newBlockBuilder(t, bcfg)
-	parent, err := syncer.blockState.(*state.BlockState).BestBlockHeader()
+	err = idata.SetBigIntInherent(types.Finalnum, big.NewInt(0))
 	require.NoError(t, err)
 
-	var block *types.Block
-	for i := 0; i < maxRetries; i++ {
-		slot := babe.NewSlot(1, 0, 0)
-		block, err = builder.BuildBlock(parent, *slot)
+	ienc, err := idata.Encode()
+	require.NoError(t, err)
+
+	// Call BlockBuilder_inherent_extrinsics which returns the inherents as extrinsics
+	inherentExts, err := instance.InherentExtrinsics(ienc)
+	require.NoError(t, err)
+
+	// decode inherent extrinsics
+	exts, err := scale.Decode(inherentExts, [][]byte{})
+	require.NoError(t, err)
+
+	bodyExts := []types.Extrinsic{}
+
+	// apply each inherent extrinsic
+	for _, ext := range exts.([][]byte) {
+		in, err := scale.Encode(ext) //nolint
 		require.NoError(t, err)
-		if err == nil {
-			break
-		}
+		t.Log(in)
+
+		ret, err := instance.ApplyExtrinsic(in)
+		require.NoError(t, err)
+		require.Equal(t, ret, []byte{0, 0})
+
+		bodyExts = append(bodyExts, in)
 	}
 
+	res, err := instance.FinalizeBlock()
 	require.NoError(t, err)
-	_, err = syncer.executeBlock(block)
+
+	body, err := types.NewBodyFromExtrinsics(bodyExts)
 	require.NoError(t, err)
+
+	return &types.Block{
+		Header: res,
+		Body:   body,
+	}
 }
 
-func TestExecuteBlock_WithExtrinsic(t *testing.T) {
-	t.Skip()
-	// skip until block builder is separate from BABE
+func TestCoreExecuteBlock(t *testing.T) {
+	t.Skip() // this currently fails due to mismatching ExtrinsicRoots
+	syncer := newTestSyncer(t)
 
-	tt := trie.NewEmptyTrie()
-	rt := wasmer.NewTestInstanceWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt, log.LvlTrace)
-
-	// load authority into runtime
-	kp, err := sr25519.GenerateKeypair()
-	require.NoError(t, err)
-
-	pubkey := kp.Public().Encode()
-	err = tt.Put(runtime.TestAuthorityDataKey, append([]byte{4}, pubkey...))
-	require.NoError(t, err)
-
-	cfg := &Config{
-		Runtime: rt,
-	}
-
-	syncer := newTestSyncer(t, cfg)
-
-	bcfg := &babe.ServiceConfig{
-		Runtime:          syncer.runtime,
-		TransactionState: syncer.transactionState.(*state.TransactionState),
-		Keypair:          kp,
-		BlockState:       syncer.blockState.(*state.BlockState),
-		Threshold:        babe.MaxThreshold,
-	}
-
-	key := []byte("noot")
-	value := []byte("washere")
-	ext := extrinsic.NewStorageChangeExt(key, optional.NewBytes(true, value))
-	enc, err := ext.Encode()
-	require.NoError(t, err)
-
-	tx := transaction.NewValidTransaction(enc, new(transaction.Validity))
-	_, err = syncer.transactionState.(*state.TransactionState).Push(tx)
-	require.NoError(t, err)
-
-	builder := newBlockBuilder(t, bcfg)
 	parent, err := syncer.blockState.(*state.BlockState).BestBlockHeader()
 	require.NoError(t, err)
 
-	var block *types.Block
-	for i := 0; i < maxRetries; i++ {
-		slot := babe.NewSlot(uint64(time.Now().Unix()), 100000, 1)
-		block, err = builder.BuildBlock(parent, *slot)
-		if err == nil {
-			break
-		}
-	}
+	block := buildBlock(t, syncer.runtime, parent)
+	res, err := syncer.executeBlock(block)
+	require.Nil(t, err)
 
-	require.NoError(t, err)
-	require.Equal(t, true, bytes.Contains(*block.Body, enc))
-	_, err = syncer.executeBlock(block)
-	require.NoError(t, err)
+	// if execute block returns a non-empty byte array, something went wrong
+	require.Equal(t, []byte{}, res)
 }

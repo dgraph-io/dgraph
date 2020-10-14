@@ -43,8 +43,29 @@ type Instance struct {
 	mu sync.Mutex
 }
 
+// NewInstance instantiates a runtime from the given wasm bytecode
+func NewInstance(code []byte, cfg *Config) (*Instance, error) {
+	engine := wasmtime.NewEngine()
+	module, err := wasmtime.NewModule(engine, code)
+	if err != nil {
+		return nil, err
+	}
+
+	return newInstanceFromModule(module, engine, cfg)
+}
+
 // NewInstanceFromFile instantiates a runtime from a .wasm file
 func NewInstanceFromFile(fp string, cfg *Config) (*Instance, error) {
+	engine := wasmtime.NewEngine()
+	module, err := wasmtime.NewModuleFromFile(engine, fp)
+	if err != nil {
+		return nil, err
+	}
+
+	return newInstanceFromModule(module, engine, cfg)
+}
+
+func newInstanceFromModule(module *wasmtime.Module, engine *wasmtime.Engine, cfg *Config) (*Instance, error) {
 	// if cfg.LogLvl set to < 0, then don't change package log level
 	if cfg.LogLvl >= 0 {
 		h := log.StreamHandler(os.Stdout, log.TerminalFormat())
@@ -52,13 +73,7 @@ func NewInstanceFromFile(fp string, cfg *Config) (*Instance, error) {
 		logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
 	}
 
-	engine := wasmtime.NewEngine()
 	store := wasmtime.NewStore(engine)
-	module, err := wasmtime.NewModuleFromFile(engine, fp)
-	if err != nil {
-		return nil, err
-	}
-
 	instance, err := wasmtime.NewInstance(store, module, cfg.Imports(store))
 	if err != nil {
 		return nil, err

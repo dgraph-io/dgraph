@@ -213,14 +213,14 @@ func (b *Service) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 // buildBlockInherents applies the inherents for a block
 func (b *Service) buildBlockInherents(slot Slot) error {
 	// Setup inherents: add timstap0
-	idata := NewInherentsData()
-	err := idata.SetInt64Inherent(Timstap0, uint64(time.Now().Unix()))
+	idata := types.NewInherentsData()
+	err := idata.SetInt64Inherent(types.Timstap0, uint64(time.Now().Unix()))
 	if err != nil {
 		return err
 	}
 
 	// add babeslot
-	err = idata.SetInt64Inherent(Babeslot, slot.number)
+	err = idata.SetInt64Inherent(types.Babeslot, slot.number)
 	if err != nil {
 		return err
 	}
@@ -231,7 +231,7 @@ func (b *Service) buildBlockInherents(slot Slot) error {
 		return err
 	}
 
-	err = idata.SetBigIntInherent(Finalnum, fin.Number)
+	err = idata.SetBigIntInherent(types.Finalnum, fin.Number)
 	if err != nil {
 		return err
 	}

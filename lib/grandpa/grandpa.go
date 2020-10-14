@@ -47,6 +47,7 @@ type Service struct {
 	keypair       *ed25519.Keypair // TODO: change to grandpa keystore
 	mapLock       sync.Mutex
 	chanLock      sync.Mutex
+	roundLock     sync.Mutex
 	authority     bool          // run the service as an authority (ie participate in voting)
 	paused        atomic.Value  // the service will be paused if it is waiting for catch up responses
 	resumed       chan struct{} // this channel will be closed when the service resumes
@@ -230,6 +231,8 @@ func (s *Service) initiate() error {
 		s.chanLock.Unlock()
 	}
 
+	// make sure no votes can be validated while we are incrementing rounds
+	s.roundLock.Lock()
 	s.state.round++
 	s.logger.Trace("incrementing grandpa round", "next round", s.state.round)
 	if s.tracker != nil {
@@ -252,6 +255,7 @@ func (s *Service) initiate() error {
 		s.tracker.start()
 		s.logger.Trace("started message tracker")
 	}
+	s.roundLock.Unlock()
 
 	// don't begin grandpa until we are at block 1
 	h, err := s.blockState.BestBlockHeader()
@@ -560,7 +564,9 @@ func (s *Service) attemptToFinalize() error {
 		}
 
 		// if we haven't received a finalization message for this block yet, broadcast a finalization message
-		s.logger.Debug("finalized block!!!", "setID", s.state.setID, "round", s.state.round, "hash", s.head.Hash())
+		votes := s.getDirectVotes(precommit)
+		s.logger.Debug("finalized block!!!", "setID", s.state.setID, "round", s.state.round, "hash", s.head.Hash(),
+			"precommits #", pc, "votes for bfc #", votes[*bfc], "total votes for bfc", pc, "precommits", s.precommits)
 		msg := s.newFinalizationMessage(s.head, s.state.round)
 
 		// TODO: safety

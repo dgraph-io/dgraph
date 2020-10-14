@@ -17,7 +17,6 @@
 package dot
 
 import (
-	"bytes"
 	"encoding/binary"
 	"math/big"
 	"reflect"
@@ -320,10 +319,7 @@ func TestInitNode_LoadStorageRoot(t *testing.T) {
 
 	stateRoot, err := coreSrvc.StorageRoot()
 	require.Nil(t, err)
-
-	if !bytes.Equal(expectedRoot[:], stateRoot[:]) {
-		t.Fatalf("Fail: got %x expected %x", stateRoot, expectedRoot)
-	}
+	require.Equal(t, expectedRoot, stateRoot)
 }
 
 func TestInitNode_LoadBalances(t *testing.T) {

@@ -106,6 +106,7 @@ func (cm *ChainModule) GetBlock(r *http.Request, req *ChainHashRequest, res *Cha
 // GetBlockHash Get hash of the 'n-th' block in the canon chain. If no parameters are provided,
 //  the latest block hash gets returned.
 func (cm *ChainModule) GetBlockHash(r *http.Request, req *ChainBlockNumberRequest, res *ChainHashResponse) error {
+	fmt.Println("RPC chain_getBlockHash", req)
 	// if request is empty, return highest hash
 	if *req == nil || reflect.ValueOf(*req).Len() == 0 {
 		*res = cm.blockAPI.BestBlockHash().String()
@@ -245,6 +246,7 @@ func (cm *ChainModule) lookupHashByInterface(i interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	return h.String(), nil
 }
 

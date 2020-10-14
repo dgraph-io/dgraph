@@ -101,13 +101,14 @@ func NewTestRuntimeStorage(t *testing.T, tr *trie.Trie) *TestRuntimeStorage {
 		tr = trie.NewEmptyTrie()
 	}
 
-	testDatadirPath, _ := ioutil.TempDir(".", "test-datadir-*")
+	testDatadirPath, _ := ioutil.TempDir("/tmp", "test-datadir-*")
 	db, err := chaindb.NewBadgerDB(testDatadirPath)
 	if err != nil {
 		t.Fatal("failed to create TestRuntimeStorage database")
 	}
 
 	t.Cleanup(func() {
+		_ = db.Close()
 		_ = os.RemoveAll(testDatadirPath)
 	})
 

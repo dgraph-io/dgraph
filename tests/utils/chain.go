@@ -52,6 +52,20 @@ func GetChainHead(t *testing.T, node *Node) *types.Header {
 	return HeaderResponseToHeader(t, header)
 }
 
+// GetChainHeadWithError calls the endpoint chain_getHeader to get the latest chain head
+func GetChainHeadWithError(t *testing.T, node *Node) (*types.Header, error) {
+	respBody, err := PostRPC(ChainGetHeader, NewEndpoint(node.RPCPort), "[]")
+	require.NoError(t, err)
+
+	header := new(modules.ChainBlockHeaderResponse)
+	err = DecodeRPC(t, respBody, header)
+	if err != nil {
+		return nil, err
+	}
+
+	return HeaderResponseToHeader(t, header), nil
+}
+
 // GetBlockHash calls the endpoint chain_getBlockHash to get the latest chain head
 func GetBlockHash(t *testing.T, node *Node, num string) (common.Hash, error) {
 	respBody, err := PostRPC(ChainGetBlockHash, NewEndpoint(node.RPCPort), "["+num+"]")

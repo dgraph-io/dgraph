@@ -55,6 +55,12 @@ type PublicKey ed25519.PublicKey
 // PublicKeyBytes is an encoded ed25519 public key
 type PublicKeyBytes [PublicKeyLength]byte
 
+// String returns the PublicKeyBytes formatted as a hex string
+func (b PublicKeyBytes) String() string {
+	pk := [PublicKeyLength]byte(b)
+	return common.BytesToHex(pk[:])
+}
+
 // Encode returns the SCALE encoding of PublicKeyBytes
 func (b PublicKeyBytes) Encode() ([]byte, error) {
 	return b[:], nil

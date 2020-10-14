@@ -38,7 +38,7 @@ func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) {
 
 // tests the ProcessBlockRequestMessage method
 func TestService_CreateBlockResponse(t *testing.T) {
-	s := newTestSyncer(t, nil)
+	s := newTestSyncer(t)
 	addTestBlocksToState(t, 2, s.blockState)
 
 	bestHash := s.blockState.BestBlockHash()

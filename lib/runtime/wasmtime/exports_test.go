@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/scale"
@@ -77,7 +76,6 @@ func TestInstance_BabeConfiguration_NodeRuntime(t *testing.T) {
 	}
 
 	instance := NewTestInstance(t, runtime.NODE_RUNTIME)
-	t.Log(ctx.Storage)
 	babeCfg, err := instance.BabeConfiguration()
 	require.NoError(t, err)
 	require.Equal(t, expected, babeCfg)
@@ -115,14 +113,14 @@ func TestInstance_InherentExtrinsics_NodeRuntime(t *testing.T) {
 	err := instance.InitializeBlock(header)
 	require.NoError(t, err)
 
-	idata := babe.NewInherentsData()
-	err = idata.SetInt64Inherent(babe.Timstap0, uint64(time.Now().Unix()))
+	idata := types.NewInherentsData()
+	err = idata.SetInt64Inherent(types.Timstap0, uint64(time.Now().Unix()))
 	require.NoError(t, err)
 
-	err = idata.SetInt64Inherent(babe.Babeslot, 1)
+	err = idata.SetInt64Inherent(types.Babeslot, 1)
 	require.NoError(t, err)
 
-	err = idata.SetBigIntInherent(babe.Finalnum, big.NewInt(0))
+	err = idata.SetBigIntInherent(types.Finalnum, big.NewInt(0))
 	require.NoError(t, err)
 
 	ienc, err := idata.Encode()
@@ -159,14 +157,14 @@ func TestInstance_FinalizeBlock_NodeRuntime(t *testing.T) {
 	err := instance.InitializeBlock(header)
 	require.NoError(t, err)
 
-	idata := babe.NewInherentsData()
-	err = idata.SetInt64Inherent(babe.Timstap0, uint64(time.Now().Unix()))
+	idata := types.NewInherentsData()
+	err = idata.SetInt64Inherent(types.Timstap0, uint64(time.Now().Unix()))
 	require.NoError(t, err)
 
-	err = idata.SetInt64Inherent(babe.Babeslot, 1)
+	err = idata.SetInt64Inherent(types.Babeslot, 1)
 	require.NoError(t, err)
 
-	err = idata.SetBigIntInherent(babe.Finalnum, big.NewInt(0))
+	err = idata.SetBigIntInherent(types.Finalnum, big.NewInt(0))
 	require.NoError(t, err)
 
 	ienc, err := idata.Encode()

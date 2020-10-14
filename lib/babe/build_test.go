@@ -19,7 +19,6 @@ package babe
 import (
 	"bytes"
 	"math/big"
-	"reflect"
 	"testing"
 	"time"
 
@@ -35,9 +34,7 @@ import (
 
 func TestSeal(t *testing.T) {
 	kp, err := sr25519.GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	cfg := &ServiceConfig{
 		Keypair: kp,
@@ -46,45 +43,27 @@ func TestSeal(t *testing.T) {
 	babeService := createTestService(t, cfg)
 
 	zeroHash, err := common.HexToHash("0x00")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	header, err := types.NewHeader(zeroHash, big.NewInt(0), zeroHash, zeroHash, [][]byte{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	encHeader, err := header.Encode()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	seal, err := babeService.buildBlockSeal(header)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	ok, err := kp.Public().Verify(encHeader, seal.Data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if !ok {
-		t.Fatal("could not verify seal")
-	}
+	require.True(t, ok, "could not verify seal")
 }
 
 func addAuthorshipProof(t *testing.T, babeService *Service, slotNumber uint64) {
 	outAndProof, err := babeService.runLottery(slotNumber)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if outAndProof == nil {
-		t.Fatal("proof was nil when under threshold")
-	}
-
+	require.NoError(t, err)
+	require.NotNil(t, outAndProof, "proof was nil when under threshold")
 	babeService.slotToProof[slotNumber] = outAndProof
 }
 
@@ -139,24 +118,22 @@ func TestBuildBlock_ok(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedBlockHeader := &types.Header{
-		ParentHash:     emptyHeader.Hash(),
-		Number:         big.NewInt(1),
-		StateRoot:      emptyHash,
-		ExtrinsicsRoot: emptyHash,
-		Digest:         [][]byte{preDigest.Encode()},
+		ParentHash: emptyHeader.Hash(),
+		Number:     big.NewInt(1),
+		StateRoot:  emptyHash,
+		Digest:     [][]byte{preDigest.Encode()},
 	}
 
 	// remove seal from built block, since we can't predict the signature
 	block.Header.Digest = block.Header.Digest[:1]
-	// reset state root, since it has randomness aspects in it
-	// TODO: where does this randomness come from?
 	header, err := babeService.blockState.BestBlockHeader()
 	require.NoError(t, err)
-	block.Header.StateRoot = header.StateRoot
 
-	if !reflect.DeepEqual(block.Header, expectedBlockHeader) {
-		t.Fatalf("Fail: got %v expected %v", block.Header, expectedBlockHeader)
-	}
+	// reset StateRoot and ExtrinsicRoot, since it has randomness aspects in it
+	// TODO: where does this randomness come from?
+	block.Header.ExtrinsicsRoot = header.ExtrinsicsRoot
+	block.Header.StateRoot = header.StateRoot
+	require.Equal(t, block.Header, expectedBlockHeader)
 
 	// confirm block body is correct
 	extsRes, err := block.Body.AsExtrinsics()

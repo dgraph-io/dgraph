@@ -499,7 +499,7 @@ func (b *Service) handleSlot(slotNum uint64) error {
 	// set runtime trie before building block
 	// if block building is successful, store the resulting trie in the storage state
 	ts, err := b.storageState.TrieState(&parent.StateRoot)
-	if err != nil {
+	if err != nil || ts == nil {
 		b.logger.Error("failed to get parent trie", "parent state root", parent.StateRoot, "error", err)
 		return err
 	}
@@ -516,7 +516,7 @@ func (b *Service) handleSlot(slotNum uint64) error {
 
 	block, err := b.buildBlock(parent, currentSlot)
 	if err != nil {
-		b.logger.Debug("block authoring", "error", err)
+		b.logger.Error("block authoring", "error", err)
 		return nil
 	}
 

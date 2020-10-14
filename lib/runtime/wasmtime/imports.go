@@ -98,7 +98,7 @@ func ext_get_storage_into(c *wasmtime.Caller, keyData, keyLen, valueData, valueL
 
 	if len(val) > int(valueLen) {
 		logger.Debug("[ext_get_storage_into]", "error", "value exceeds allocated buffer length")
-		return 0
+		//return 0
 	}
 
 	copy(memory[valueData:valueData+valueLen], val[valueOffset:])

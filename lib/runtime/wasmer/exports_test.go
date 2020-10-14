@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
@@ -13,6 +14,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/runtime/extrinsic"
+	"github.com/ChainSafe/gossamer/lib/scale"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
@@ -23,7 +25,7 @@ import (
 var kr, _ = keystore.NewSr25519Keyring()
 var maxRetries = 10
 
-func TestGrandpaAuthorities(t *testing.T) {
+func TestInstance_GrandpaAuthoritiesNodeRuntime(t *testing.T) {
 	tt := trie.NewEmptyTrie()
 
 	value, err := common.HexToBytes("0x0108eea1eabcac7d2c8a6459b7322cf997874482bfc3d2ec7a80888a3a7d714103640000000000000000b64994460e59b30364cad3c92e3df6052f9b0ebbb8f88460c194dc5794d6d7170100000000000000")
@@ -51,7 +53,7 @@ func TestGrandpaAuthorities(t *testing.T) {
 	require.Equal(t, expected, auths)
 }
 
-func TestConfigurationFromRuntime_noAuth(t *testing.T) {
+func TestInstance_BabeConfiguration_NodeRuntime_NoAuthorities(t *testing.T) {
 	rt := NewTestInstance(t, runtime.NODE_RUNTIME)
 
 	cfg, err := rt.BabeConfiguration()
@@ -75,7 +77,7 @@ func TestConfigurationFromRuntime_noAuth(t *testing.T) {
 	}
 }
 
-func TestConfigurationFromRuntime_withAuthorities(t *testing.T) {
+func TestInstance_BabeConfiguration_NodeRuntime_WithAuthorities(t *testing.T) {
 	tt := trie.NewEmptyTrie()
 
 	// randomness key
@@ -141,7 +143,7 @@ func TestConfigurationFromRuntime_withAuthorities(t *testing.T) {
 	}
 }
 
-func TestInitializeBlock(t *testing.T) {
+func TestInstance_InitializeBlock_NodeRuntime(t *testing.T) {
 	rt := NewTestInstance(t, runtime.NODE_RUNTIME)
 
 	header := &types.Header{
@@ -154,48 +156,122 @@ func TestInitializeBlock(t *testing.T) {
 	}
 }
 
-func TestFinalizeBlock(t *testing.T) {
-	// TODO: need to add inherents before calling finalize_block (see babe/inherents_test.go)
-	// need to move inherents to a different package for use with BABE and runtime
-	t.Skip()
-
+func TestInstance_InherentExtrinsics_Timestamp_NodeRuntime(t *testing.T) {
 	rt := NewTestInstance(t, runtime.NODE_RUNTIME)
+
+	idata := types.NewInherentsData()
+	err := idata.SetInt64Inherent(types.Timstap0, uint64(time.Now().Unix()))
+	require.NoError(t, err)
+
+	ienc, err := idata.Encode()
+	require.NoError(t, err)
+
+	ret, err := rt.InherentExtrinsics(ienc)
+	require.NoError(t, err)
+
+	exts, err := scale.Decode(ret, [][]byte{})
+	require.NoError(t, err)
+
+	for _, ext := range exts.([][]byte) {
+		in, err := scale.Encode(ext)
+		require.NoError(t, err)
+
+		ret, err := rt.ApplyExtrinsic(in)
+		require.NoError(t, err)
+		require.Equal(t, []byte{0, 0}, ret)
+	}
+}
+
+func TestInstance_InherentExtrinsics_Finalnum_NodeRuntime(t *testing.T) {
+	rt := NewTestInstance(t, runtime.NODE_RUNTIME)
+
+	idata := types.NewInherentsData()
+	err := idata.SetInt64Inherent(types.Timstap0, uint64(time.Now().Unix()))
+	require.NoError(t, err)
+
+	err = idata.SetBigIntInherent(types.Finalnum, big.NewInt(1))
+	require.NoError(t, err)
+
+	ienc, err := idata.Encode()
+	require.NoError(t, err)
+
+	ret, err := rt.InherentExtrinsics(ienc)
+	require.NoError(t, err)
+
+	exts, err := scale.Decode(ret, [][]byte{})
+	require.NoError(t, err)
+
+	for _, ext := range exts.([][]byte) {
+		in, err := scale.Encode(ext) //nolint
+		require.NoError(t, err)
+
+		ret, err := rt.ApplyExtrinsic(in) //nolint
+		require.NoError(t, err)
+		require.Equal(t, []byte{0, 0}, ret)
+	}
+}
+
+func TestInstance_FinalizeBlock_NodeRuntime(t *testing.T) {
+	instance := NewTestInstance(t, runtime.NODE_RUNTIME)
 
 	header := &types.Header{
 		ParentHash: trie.EmptyHash,
 		Number:     big.NewInt(77),
-		//StateRoot: trie.EmptyHash,
-		//ExtrinsicsRoot: trie.EmptyHash,
-		Digest: [][]byte{},
+		Digest:     [][]byte{},
 	}
 
-	err := rt.InitializeBlock(header)
+	err := instance.InitializeBlock(header)
 	require.NoError(t, err)
 
-	var res *types.Header
-	for i := 0; i < 1; i++ {
-		res, err = rt.FinalizeBlock()
-		if err == nil {
-			break
-		}
+	idata := types.NewInherentsData()
+	err = idata.SetInt64Inherent(types.Timstap0, uint64(time.Now().Unix()))
+	require.NoError(t, err)
+
+	err = idata.SetInt64Inherent(types.Babeslot, 1)
+	require.NoError(t, err)
+
+	err = idata.SetBigIntInherent(types.Finalnum, big.NewInt(0))
+	require.NoError(t, err)
+
+	ienc, err := idata.Encode()
+	require.NoError(t, err)
+
+	// Call BlockBuilder_inherent_extrinsics which returns the inherents as extrinsics
+	inherentExts, err := instance.InherentExtrinsics(ienc)
+	require.NoError(t, err)
+
+	// decode inherent extrinsics
+	exts, err := scale.Decode(inherentExts, [][]byte{})
+	require.NoError(t, err)
+
+	// apply each inherent extrinsic
+	for _, ext := range exts.([][]byte) {
+		in, err := scale.Encode(ext) //nolint
+		require.NoError(t, err)
+
+		ret, err := instance.ApplyExtrinsic(in)
+		require.NoError(t, err)
+		require.Equal(t, ret, []byte{0, 0})
 	}
+
+	res, err := instance.FinalizeBlock()
 	require.NoError(t, err)
 
 	res.Number = header.Number
 
 	expected := &types.Header{
-		StateRoot:      trie.EmptyHash,
-		ExtrinsicsRoot: trie.EmptyHash,
-		Number:         big.NewInt(77),
-		Digest:         [][]byte{},
+		ParentHash: header.ParentHash,
+		Number:     big.NewInt(77),
+		Digest:     [][]byte{},
 	}
 
-	res.Hash()
-	expected.Hash()
-
-	if !reflect.DeepEqual(res, expected) {
-		t.Fatalf("Fail: got %v expected %v", res, expected)
-	}
+	require.Equal(t, expected.ParentHash, res.ParentHash)
+	require.Equal(t, expected.Number, res.Number)
+	require.Equal(t, expected.Digest, res.Digest)
+	require.NotEqual(t, common.Hash{}, res.StateRoot)
+	require.NotEqual(t, common.Hash{}, res.ExtrinsicsRoot)
+	require.NotEqual(t, trie.EmptyHash, res.StateRoot)
+	require.NotEqual(t, trie.EmptyHash, res.ExtrinsicsRoot)
 }
 
 // TODO: the following tests need to be updated to use NODE_RUNTIME.

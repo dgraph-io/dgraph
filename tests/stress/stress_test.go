@@ -91,17 +91,17 @@ func TestSync_Basic(t *testing.T) {
 }
 
 func TestSync_SingleBlockProducer(t *testing.T) {
-	numNodes = 6 // TODO: increase this when syncing improves
+	numNodes = 9 // TODO: increase this when syncing improves
 	utils.SetLogLevel(log.LvlInfo)
 
 	// start block producing node first
-	node, err := utils.RunGossamer(t, numNodes-1, utils.TestDir(t, "ferdie"), utils.GenesisSixAuths, utils.ConfigBABEMaxThreshold)
+	node, err := utils.RunGossamer(t, numNodes-1, utils.TestDir(t, "ian"), utils.GenesisDefault, utils.ConfigBABEMaxThreshold)
 	require.NoError(t, err)
 
 	// wait and start rest of nodes - if they all start at the same time the first round usually doesn't complete since
 	// all nodes vote for different blocks.
 	time.Sleep(time.Second * 5)
-	nodes, err := utils.InitializeAndStartNodes(t, numNodes-1, utils.GenesisSixAuths, utils.ConfigNoBABE)
+	nodes, err := utils.InitializeAndStartNodes(t, numNodes-1, utils.GenesisDefault, utils.ConfigNoBABE)
 	require.NoError(t, err)
 	nodes = append(nodes, node)
 
@@ -173,13 +173,24 @@ func TestSync_ManyProducers(t *testing.T) {
 func TestSync_Bench(t *testing.T) {
 	numNodes = 2
 	utils.SetLogLevel(log.LvlInfo)
-	numBlocks := 256
+	numBlocks := 64
 
 	// start block producing node
-	// node produces 10 blocks / second
-	alice, err := utils.RunGossamer(t, 0, utils.TestDir(t, "alice"), utils.GenesisDefault, utils.ConfigBABEMaxThresholdBench)
+	alice, err := utils.RunGossamer(t, 0, utils.TestDir(t, "alice"), utils.GenesisDefault, utils.ConfigBABEMaxThreshold)
 	require.NoError(t, err)
-	time.Sleep(time.Second*time.Duration(numBlocks/10) + time.Second)
+
+	for {
+		header, err := utils.GetChainHeadWithError(t, alice) //nolint
+		if err != nil {
+			continue
+		}
+
+		if header.Number.Int64() >= int64(numBlocks) {
+			break
+		}
+
+		time.Sleep(3 * time.Second)
+	}
 
 	err = utils.PauseBABE(t, alice)
 	require.NoError(t, err)
@@ -195,7 +206,7 @@ func TestSync_Bench(t *testing.T) {
 		require.Len(t, errList, 0)
 	}()
 
-	// see how long it takes to sync to block 256
+	// see how long it takes to sync to block numBlocks
 	last := big.NewInt(int64(numBlocks))
 	start := time.Now()
 	var end time.Time
@@ -212,8 +223,8 @@ func TestSync_Bench(t *testing.T) {
 		}
 	}
 
-	maxTime := time.Second * 15
-	minBPS := float64(17)
+	maxTime := time.Second * 7
+	minBPS := float64(8)
 	totalTime := end.Sub(start)
 	bps := float64(numBlocks) / end.Sub(start).Seconds()
 	t.Log("total sync time:", totalTime)

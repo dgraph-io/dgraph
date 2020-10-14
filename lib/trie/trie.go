@@ -52,6 +52,19 @@ func NewTrie(root node) *Trie {
 	}
 }
 
+// DeepCopy makes a new trie and copies over the existing trie into the new trie
+func (t *Trie) DeepCopy() (*Trie, error) {
+	cp := NewEmptyTrie()
+	for k, v := range t.Entries() {
+		err := cp.Put([]byte(k), v)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return cp, nil
+}
+
 // RootNode returns the root of the trie
 func (t *Trie) RootNode() node { //nolint
 	return t.root

@@ -17,10 +17,12 @@
 package babe
 
 import (
+	"io/ioutil"
 	"math"
 	"math/big"
-	"reflect"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
@@ -36,6 +38,7 @@ import (
 
 var emptyHash = trie.EmptyHash
 var maxThreshold = big.NewInt(0).SetBytes([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+var testTimeout = time.Second * 5
 
 var genesisHeader = &types.Header{
 	Number:    big.NewInt(0),
@@ -102,6 +105,10 @@ func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 		cfg.BlockState = dbSrv.Block
 		cfg.StorageState = dbSrv.Storage
 		cfg.EpochState = dbSrv.Epoch
+	}
+
+	if cfg.StartSlot == 0 {
+		cfg.StartSlot = 1
 	}
 
 	babeService, err := NewService(cfg)
@@ -199,15 +206,33 @@ func TestRunLottery_False(t *testing.T) {
 }
 
 func TestBabeAnnounceMessage(t *testing.T) {
+	// this test uses a real database because it sets the runtime Storage context, which
+	// must be backed by a non-memory database
+	datadir, _ := ioutil.TempDir("/tmp", "test-datadir-*")
+	dbSrv := state.NewService(datadir, log.LvlInfo)
+	genesisData := new(genesis.Data)
+	err := dbSrv.Initialize(genesisData, genesisHeader, trie.NewEmptyTrie(), firstEpochInfo)
+	require.NoError(t, err)
+	err = dbSrv.Start()
+	require.NoError(t, err)
+
 	cfg := &ServiceConfig{
-		TransactionState: state.NewTransactionState(),
-		LogLvl:           log.LvlInfo,
+		BlockState:       dbSrv.Block,
+		StorageState:     dbSrv.Storage,
+		EpochState:       dbSrv.Epoch,
+		TransactionState: dbSrv.Transaction,
+		LogLvl:           log.LvlTrace,
 	}
 
 	babeService := createTestService(t, cfg)
+	t.Cleanup(func() {
+		_ = dbSrv.Stop()
+		os.RemoveAll(datadir)
+		_ = babeService.Stop()
+	})
 
 	babeService.config = &types.BabeConfiguration{
-		SlotDuration:       1,
+		SlotDuration:       5000,
 		EpochLength:        6,
 		C1:                 1,
 		C2:                 10,
@@ -223,18 +248,18 @@ func TestBabeAnnounceMessage(t *testing.T) {
 		{Key: nil, Weight: 1},
 	}
 
-	err := babeService.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	err = babeService.Start()
+	require.NoError(t, err)
 
 	babeService.threshold = maxThreshold
+	blockNumber := big.NewInt(int64(1))
 
 	newBlocks := babeService.GetBlockChannel()
-	block := <-newBlocks
-	blockNumber := big.NewInt(int64(1))
-	if !reflect.DeepEqual(block.Header.Number, blockNumber) {
-		t.Fatalf("Didn't receive the correct block: %+v\nExpected block: %+v", block.Header.Number, blockNumber)
+	select {
+	case block := <-newBlocks:
+		require.Equal(t, blockNumber, block.Header.Number)
+	case <-time.After(testTimeout):
+		t.Fatal("did not receive block")
 	}
 }
 
@@ -368,6 +393,5 @@ func TestService_SetRandomness(t *testing.T) {
 	rAfter := bs.randomness
 
 	require.NotEqual(t, rBefore, rAfter)
-
 	require.Equal(t, rand, rAfter)
 }
