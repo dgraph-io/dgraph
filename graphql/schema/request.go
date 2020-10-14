@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"net/http"
@@ -79,7 +78,7 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	if gqlErr != nil {
 		return nil, gqlErr
 	}
-	err := variableValidateInt64(s.schema, op, req.Variables)
+	err := variableValidateInt(s.schema, op, req.Variables)
 	if err != nil {
 		return nil, err
 	}
@@ -101,20 +100,26 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	return operation, nil
 }
 
-func variableValidateInt64(schema *ast.Schema, op *ast.OperationDefinition, variables map[string]interface{}) *gqlerror.Error {
+func variableValidateInt(schema *ast.Schema, op *ast.OperationDefinition, variables map[string]interface{}) *gqlerror.Error {
 	path := ast.Path{ast.PathName("variable")}
-	var err *gqlerror.Error
 	for _, v := range op.VariableDefinitions {
 		path = append(path, ast.PathName(v.Variable))
-		val, _ := variables[v.Variable]
-		rv := reflect.ValueOf(val)
-		if rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface {
-			rv = rv.Elem()
+		val, hasValue := variables[v.Variable]
+		if !hasValue {
+			if v.DefaultValue != nil {
+				val, _ = v.DefaultValue.Value(nil)
+				hasValue = true
+			}
 		}
-		err = variableValidateInt64Recursive(schema, v.Type, rv, path)
-		if err != nil {
-			glog.Infof("%v", err)
-			return gqlerror.ErrorPathf(path, err.Error())
+		if hasValue {
+			rv := reflect.ValueOf(val)
+			if rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface {
+				rv = rv.Elem()
+			}
+			err := variableValidateInt64Recursive(schema, v.Type, rv, path)
+			if err != nil {
+				return err
+			}
 		}
 		path = path[0 : len(path)-1]
 	}
@@ -122,7 +127,6 @@ func variableValidateInt64(schema *ast.Schema, op *ast.OperationDefinition, vari
 }
 
 func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val reflect.Value, path ast.Path) *gqlerror.Error {
-	var err error
 	currentPath := path
 	resetPath := func() {
 		path = currentPath
@@ -136,39 +140,43 @@ func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val refle
 			if field.Kind() == reflect.Ptr || field.Kind() == reflect.Interface {
 				field = field.Elem()
 			}
-			err = variableValidateInt64Recursive(schema, typ.Elem, field, path)
+			err := variableValidateInt64Recursive(schema, typ.Elem, field, path)
 			if err != nil {
-				glog.Infof("%v", err)
-				return gqlerror.ErrorPathf(path, err.Error())
+				return err
 			}
 		}
 		return nil
 	}
 
 	def := schema.Types[typ.NamedType]
-	glog.Infof("%v-%v", val, def)
+	if !typ.NonNull && !val.IsValid() {
+		// If the type is not null and we got a invalid value namely null/nil, then it's valid
+		return nil
+	}
+
 	switch def.Kind {
 	case ast.Scalar:
 		switch typ.NamedType {
 		case "Int", "Int64":
-
-			if def.Kind == "Int" {
-				_, err = strconv.ParseInt(val.String(), 10, 32)
+			var errIntCoerce error
+			if typ.NamedType == "Int" {
+				_, errIntCoerce = strconv.ParseInt(val.String(), 10, 32)
 			} else {
-				_, err = strconv.ParseInt(val.String(), 10, 64)
+				_, errIntCoerce = strconv.ParseInt(val.String(), 10, 64)
 			}
-			if err != nil {
-				if errors.Is(err, strconv.ErrRange) {
+			if errIntCoerce != nil {
+				if errors.Is(errIntCoerce, strconv.ErrRange) {
 					return gqlerror.ErrorPathf(path, "Out of range value '%s', for type `%s`", val.String(), typ.NamedType)
 
 				} else {
-					return gqlerror.ErrorPathf(path, err.Error())
+					return gqlerror.WrapPath(path, errIntCoerce)
 				}
 			}
 		}
 
 	case ast.InputObject:
 		// check for unknown fields
+
 		for _, fieldDef := range def.Fields {
 			resetPath()
 			path = append(path, ast.PathName(fieldDef.Name))
@@ -183,12 +191,13 @@ func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val refle
 				}
 				field = field.Elem()
 			}
-			err = variableValidateInt64Recursive(schema, fieldDef.Type, field, path)
+			err := variableValidateInt64Recursive(schema, fieldDef.Type, field, path)
 			if err != nil {
-				glog.Infof("%v", err)
-				return gqlerror.ErrorPathf(path, err.Error())
+				return err
 			}
 		}
+	default:
+		return nil
 	}
 	return nil
 }
