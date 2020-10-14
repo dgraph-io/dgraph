@@ -3292,23 +3292,23 @@ func TestBetweenWithIndex(t *testing.T) {
 		{
 			`Test Between on Indexed Predicate`,
 			`{
-				me(func :has(newname))  @filter(eq(newname,"P1","P3")){
+				me(func :has(newname))  @filter(between(newname,"P1","P3")){
 					newname
 				  }
 			 }`,
-			`{"data": {"me": [{"newname": "P1"},{"newname": "P3"}]}}`,
+			`{"data": {"me": [{"newname": "P1"},{"newname": "P2"},{"newname": "P3"},{"newname": "P10"},{"newname": "P11"},{"newname": "P12"}]}}`,
 		},
 		{
 			`Test Between on Indexed Predicate at child Node`,
 			`{
-				me(func :has(newname))  @filter(eq(newname,"P1","P3")){
+				me(func :has(newname))  @filter(between(newname,"P12","P2")){
 					newname
-					newfriend @filter(eq(newname, "P3", "P7")){
+					newfriend @filter(between(newname, "P3", "P5")){
 					  newname
 					}
-				}
+				  }
 			 }`,
-			`{"data": {"me": [{"newname": "P1", "newfriend": [{"newname": "P3"}]},{"newname": "P3", "newfriend": [{"newname": "P7"}]}]}}`,
+			`{"data": {"me": [{"newname": "P2", "newfriend": [{"newname": "P5"}]},{"newname": "P12"}]}}`,
 		},
 	}
 
