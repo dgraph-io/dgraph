@@ -69,7 +69,7 @@ var testCasesHttps = []testCase{
 }
 
 func TestZeroWithCustomTLSWithTLSClient(t *testing.T) {
-	pool, err := generateCertPool("/dgraph-tls/ca.crt", true)
+	pool, err := generateCertPool("../../tls/ca.crt", true)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
