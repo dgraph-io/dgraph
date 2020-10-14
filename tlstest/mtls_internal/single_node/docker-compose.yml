@@ -19,7 +19,7 @@ services:
         target: /dgraph-tls
         read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180
-      --logtostderr -v=2 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name alpha1 --dgraph_tls_client_name alpha1user
+      --logtostderr -v=2 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name alpha1
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   zero1:
     image: dgraph/dgraph:latest
@@ -39,6 +39,6 @@ services:
         source: ../tls/zero1
         target: /dgraph-tls
         read_only: true
-    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --logtostderr --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name zero1 --dgraph_tls_client_name zero1user
+    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --logtostderr --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name zero1
       -v=2 --bindall
 volumes: {}

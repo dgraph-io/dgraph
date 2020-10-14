@@ -19,7 +19,7 @@ services:
         target: /dgraph-tls
         read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180
-      --logtostderr -v=2 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name alpha1 --dgraph_tls_client_name alpha1user
+      --logtostderr -v=2 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name alpha1
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha2:
     image: dgraph/dgraph:latest
@@ -40,7 +40,7 @@ services:
         target: /dgraph-tls
         read_only: true
     command: /gobin/dgraph alpha -o 200 --my=alpha2:7280 --zero=zero1:5180
-      --logtostderr -v=2 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name alpha2 --dgraph_tls_client_name alpha2user
+      --logtostderr -v=2 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name alpha2
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha3:
     image: dgraph/dgraph:latest
@@ -61,7 +61,7 @@ services:
         target: /dgraph-tls
         read_only: true
     command: /gobin/dgraph alpha -o 300 --my=alpha3:7380 --zero=zero1:5180
-      --logtostderr -v=2 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name alpha3 --dgraph_tls_client_name alpha3user
+      --logtostderr -v=2 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name alpha3
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   zero1:
     image: dgraph/dgraph:latest
@@ -81,7 +81,7 @@ services:
         source: ../tls/zero1
         target: /dgraph-tls
         read_only: true
-    command: /gobin/dgraph zero -o 100 --idx=1 --replicas 3 --my=zero1:5180 --logtostderr --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name zero1 --dgraph_tls_client_name zero1user
+    command: /gobin/dgraph zero -o 100 --idx=1 --replicas 3 --my=zero1:5180 --logtostderr --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name zero1
       -v=2 --bindall
   zero2:
     image: dgraph/dgraph:latest
@@ -101,7 +101,7 @@ services:
         source: ../tls/zero2
         target: /dgraph-tls
         read_only: true
-    command: /gobin/dgraph zero -o 200 --idx=2 --replicas 3 --my=zero2:5280 --logtostderr --peer zero1:5180 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name zero2 --dgraph_tls_client_name zero2user
+    command: /gobin/dgraph zero -o 200 --idx=2 --replicas 3 --my=zero2:5280 --logtostderr --peer zero1:5180 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name zero2
       -v=2 --bindall
   zero3:
     image: dgraph/dgraph:latest
@@ -121,6 +121,6 @@ services:
         source: ../tls/zero3
         target: /dgraph-tls
         read_only: true
-    command: /gobin/dgraph zero -o 300 --idx=3 --replicas 3 --my=zero3:5380 --logtostderr --peer zero1:5180 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name zero3 --dgraph_tls_client_name zero3user
+    command: /gobin/dgraph zero -o 300 --idx=3 --replicas 3 --my=zero3:5380 --logtostderr --peer zero1:5180 --dgraph_tls_dir /dgraph-tls --dgraph_tls_server_name zero3
       -v=2 --bindall
 volumes: {}
