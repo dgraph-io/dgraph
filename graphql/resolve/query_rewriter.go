@@ -1037,6 +1037,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	// Each key in filter is either "and", "or", "not" or the field name it
 	// applies to such as "title" in: `title: { anyofterms: "GraphQL" }``
 	for _, field := range keys {
+		if filter[field] == nil {
+			continue
+		}
 		switch field {
 
 		// In 'and', 'or' and 'not' cases, filter[field] must be a map[string]interface{}
@@ -1093,7 +1096,6 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					for _, v := range vals {
 						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
 					}
-
 				case "near":
 					//  For Geo type we have `near` filter which is written as follows:
 					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
@@ -1104,8 +1106,8 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					lat := coordinate["latitude"]
 					long := coordinate["longitude"]
 
-					args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)})
-					args = append(args, gql.Arg{Value: fmt.Sprintf("%v", distance)})
+					args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)},
+						gql.Arg{Value: fmt.Sprintf("%v", distance)})
 
 				default:
 					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, val)})
