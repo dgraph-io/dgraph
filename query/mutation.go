@@ -256,19 +256,17 @@ func checkIfDeletingAclOperation(edges []*pb.DirectedEdge) error {
 	for _, edge := range edges {
 		// Disallow deleting of guardians group
 		if edge.Entity == guardianGroupUid && edge.Op == pb.DirectedEdge_DEL {
-			glog.Info("Trying to delete guardians group. Operation not allowed.")
 			isDeleteAclOperation = true
 			break
 		}
 		// Disallow deleting of groot user
 		if edge.Entity == grootUserUid && edge.Op == pb.DirectedEdge_DEL {
-			glog.Info("Trying to delete groot user. Operation not allowed.")
 			isDeleteAclOperation = true
 			break
 		}
 	}
 	if isDeleteAclOperation {
-		return errors.Errorf("guardians group and groot user cannot be deleted.")
+		return errors.Errorf("Properties of guardians group and groot user cannot be deleted.")
 	}
 	return nil
 }
