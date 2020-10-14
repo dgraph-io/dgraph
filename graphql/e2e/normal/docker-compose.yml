@@ -4,10 +4,6 @@ services:
     image: dgraph/dgraph:latest
     container_name: zero1
     working_dir: /data/zero1
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
     ports:
       - 5180:5180
       - 6180:6180
@@ -25,10 +21,6 @@ services:
     image: dgraph/dgraph:latest
     container_name: alpha1
     working_dir: /data/alpha1
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -46,10 +38,6 @@ services:
     image: dgraph/dgraph:latest
     container_name: zeroAdmin
     working_dir: /data/zeroAdmin
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
     ports:
       - 5280:5280
       - 6280:6280
@@ -67,10 +55,6 @@ services:
     image: dgraph/dgraph:latest
     container_name: alphaAdmin
     working_dir: /data/alphaAdmin
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
     volumes:
       - type: bind
         source: $GOPATH/bin
