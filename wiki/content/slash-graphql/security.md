@@ -17,4 +17,7 @@ Restricting the origins that your Slash GraphQL responds to is a an important st
 
 In order to add origins to the allow list, please see the [settings page](https://slash.dgraph.io/_/settings), under the "CORS" tab. By default, we allow all origins to connect to your endpoint (`Access-Control-Allow-Origin: *`), and adding an origin will prevent this default behavior. On adding your first origin, we automatically add "https://slash.dgraph.io"  as well, so that the API explorer continues to work.
 
-Note: CORS restrictions are not a replacement for writing auth rules, as it is possible for malicious actors to bypass these restrictions. Also note that the CORS restrictions only applies to
+{{% notice "note" %}}
+CORS restrictions are not a replacement for writing auth rules, as it is possible for malicious actors to bypass these restrictions.
+Also, note that CORS restrictions only apply to browsers, and you should never use CORS as a way to secure your system (CORS can only protect user data).
+{{% /notice %}}
