@@ -1,7 +1,7 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Functions"
-weight = 2 
+weight = 2
 [menu.main]
     parent = "query-language"
 +++
@@ -315,7 +315,7 @@ With `IE` replaced by
 * `le` less than or equal to
 * `lt` less than
 * `ge` greater than or equal to
-* `gt` greather than
+* `gt` greater than
 
 Schema Types: `int`, `float`, `string`, `dateTime`
 
@@ -390,6 +390,31 @@ than that of the movie Minority Report.
     name@en
     director.film @filter(ge(initial_release_date, val(d))) {
       initial_release_date
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+## between
+
+Syntax Example: `between(predicate, startDateValue, endDateValue)`
+
+Schema Types: Scalar types, including `dateTime`, `int`, `float` and `string`
+
+Index Required: `dateTime`
+
+Returns nodes that match a range of `dateTime` values. The `between` function
+performs a range check to improve query efficiency, helping to prevent a
+wide-ranging `dateTime` query on a large set of data from running slowly.
+
+Query Example: Movies released between 1976 and 1983, listed by genre.
+
+{{< runnable >}}
+{
+  me(func: between(initial_release_date, "1976-01-01", "1983-01-01")) {
+    name@en
+    genre {
       name@en
     }
   }
@@ -638,5 +663,3 @@ Matches all entities where the polygon describing the location given by `predica
   }
 }
 {{< /runnable >}}
-
-

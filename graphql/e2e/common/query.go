@@ -405,6 +405,9 @@ func inFilter(t *testing.T) {
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(result.QueryState))
+	queriedResult := map[string]*state{}
+	queriedResult[result.QueryState[0].Name] = result.QueryState[0]
+	queriedResult[result.QueryState[1].Name] = result.QueryState[1]
 
 	state1 := &state{
 		Name:    "A State",
@@ -417,9 +420,11 @@ func inFilter(t *testing.T) {
 		Capital: "Common Capital",
 	}
 
-	expected := []*state{state1, state2}
+	if diff := cmp.Diff(state1, queriedResult[state1.Name]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 
-	if diff := cmp.Diff(expected, result.QueryState); diff != "" {
+	if diff := cmp.Diff(state2, queriedResult[state2.Name]); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 

@@ -451,10 +451,24 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					if val, err = types.Convert(val, srcFn.atype); err != nil {
 						return err
 					}
-					if types.CompareVals(srcFn.fname, val, srcFn.eqTokens[0]) {
-						uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
-						break
+					switch srcFn.fname {
+					case "eq":
+						for _, eqToken := range srcFn.eqTokens {
+							if types.CompareVals(srcFn.fname, val, eqToken) {
+								uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+								break
+							}
+						}
+					case "between":
+						if types.CompareBetween(val, srcFn.eqTokens[0], srcFn.eqTokens[1]) {
+							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+						}
+					default:
+						if types.CompareVals(srcFn.fname, val, srcFn.eqTokens[0]) {
+							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+						}
 					}
+
 				} else {
 					vl.Values = append(vl.Values, newValue)
 				}
@@ -1328,8 +1342,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 		}
 	case arg.srcFn.fname == between:
 		compareFunc := func(dst types.Val) bool {
-			return types.CompareVals("ge", dst, arg.srcFn.eqTokens[0]) &&
-				types.CompareVals("le", dst, arg.srcFn.eqTokens[1])
+			return types.CompareBetween(dst, arg.srcFn.eqTokens[0], arg.srcFn.eqTokens[1])
 		}
 		if err := filterRow(0, compareFunc); err != nil {
 			return err
