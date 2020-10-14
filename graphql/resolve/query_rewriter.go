@@ -1020,6 +1020,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	// Each key in filter is either "and", "or", "not" or the field name it
 	// applies to such as "title" in: `title: { anyofterms: "GraphQL" }``
 	for _, field := range keys {
+		if filter[field] == nil {
+			continue
+		}
 		switch field {
 
 		// In 'and', 'or' and 'not' cases, filter[field] must be a map[string]interface{}
@@ -1076,7 +1079,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					for _, v := range vals {
 						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
 					}
-
+          
 				case "near":
 					//  For Geo type we have `near` filter which is written as follows:
 					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
@@ -1086,7 +1089,6 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					coordinate, _ := geoParams["coordinate"].(map[string]interface{})
 					lat := coordinate["latitude"]
 					long := coordinate["longitude"]
-
 					args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)},
 						gql.Arg{Value: fmt.Sprintf("%v", distance)})
 
@@ -1095,8 +1097,8 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					// 	between(numLikes,10,20). Order of arguments (min,max) is neccessary or
 					// it will return empty
 					vals := val.(map[string]interface{})
-					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["min"])})
-					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["max"])})
+					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["min"])}
+					  gql.Arg{Value: maybeQuoteArg(fn, vals["max"])})
 
 				default:
 					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, val)})
