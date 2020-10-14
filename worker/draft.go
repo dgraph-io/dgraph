@@ -679,6 +679,7 @@ func (n *node) processApplyCh() {
 			psz := proposal.Size()
 			totalSize += int64(psz)
 
+			glog.Infof("Lud: %b mut: %b start Ts: %d\n", x.WorkerConfig.LudicrousMode, proposal.Mutations != nil, proposal.Mutations.StartTs)
 			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil && proposal.Mutations.StartTs == 0 {
 				proposal.Mutations.StartTs = State.GetTimestamp(false)
 			}
