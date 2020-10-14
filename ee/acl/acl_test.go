@@ -3117,6 +3117,7 @@ func TestFailedLogin(t *testing.T) {
 	if err := grootClient.Alter(ctx, &op); err != nil {
 		t.Fatalf("Unable to cleanup db:%v", err)
 	}
+	require.NoError(t, err)
 
 	client, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
