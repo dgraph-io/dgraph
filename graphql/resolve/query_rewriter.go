@@ -1087,8 +1087,8 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					lat := coordinate["latitude"]
 					long := coordinate["longitude"]
 
-					args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)})
-					args = append(args, gql.Arg{Value: fmt.Sprintf("%v", distance)})
+					args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)},
+						gql.Arg{Value: fmt.Sprintf("%v", distance)})
 
 				case "between":
 					// numLikes: { between : { min : 10,  max:100 }} should be rewritten into

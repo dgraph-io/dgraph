@@ -435,7 +435,7 @@ func inFilter(t *testing.T) {
 func betweenFilter(t *testing.T) {
 	queryPostParams := &GraphQLParams{
 		Query: `query {
-			queryPost(filter: {numLikes: {between: {min:10, max:100}}}) {
+			queryPost(filter: {numLikes: {between: {min:90, max:100}}}) {
 				title
 				numLikes
 			}
@@ -451,8 +451,16 @@ func betweenFilter(t *testing.T) {
 
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
-	require.Equal(t, 3, len(result.QueryPost))
+	require.Equal(t, 1, len(result.QueryPost))
 
+	expected := &post{
+		Title:    "Introducing GraphQL in Dgraph",
+		NumLikes: 100,
+	}
+
+	if diff := cmp.Diff(expected, result.QueryPost[0]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func deepBetweenFilter(t *testing.T) {
