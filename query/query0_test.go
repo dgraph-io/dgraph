@@ -3283,6 +3283,42 @@ func TestBetweenCount(t *testing.T) {
 	}
 }
 
+func TestBetweenWithIndex(t *testing.T) {
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test Between on Indexed Predicate`,
+			`{
+				me(func :has(newname))  @filter(eq(newname,"P1","P3")){
+					newname
+				  }
+			 }`,
+			`{"data": {"me": [{"newname": "P1"},{"newname": "P3"}]}}`,
+		},
+		{
+			`Test Between on Indexed Predicate at child Node`,
+			`{
+				me(func :has(newname))  @filter(eq(newname,"P1","P3")){
+					newname
+					newfriend @filter(eq(newname, "P3", "P7")){
+					  newname
+					}
+				}
+			 }`,
+			`{"data": {"me": [{"newname": "P1", "newfriend": [{"newname": "P3"}]},{"newname": "P3", "newfriend": [{"newname": "P7"}]}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
 func TestBetweenWithoutIndex(t *testing.T) {
 	tests := []struct {
 		name   string
