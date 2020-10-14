@@ -319,7 +319,17 @@ type Parrot implements Animal {
 type Cheetah implements Animal {
     speed: Float
 }
-union HomeMember = Dog | Parrot | Human
+
+"""
+This type specifically doesn't implement any interface.
+We need this to test out all cases with union.
+"""
+type Plant {
+    id: ID!
+    breed: String # field with same name as a field in type Dog
+}
+
+union HomeMember = Dog | Parrot | Human | Plant
 
 type Zoo {
     id: ID!

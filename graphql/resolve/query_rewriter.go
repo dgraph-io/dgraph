@@ -670,12 +670,12 @@ func addSelectionSetFrom(
 
 	var authQueries []*gql.GraphQuery
 
-	// Only add dgraph.type as a child if this field is an interface type and has some children.
-	// dgraph.type would later be used in completeObject as different objects in the resulting
-	// JSON would return different fields based on their concrete type.
 	selSet := field.SelectionSet()
 	if len(selSet) > 0 {
-		if field.InterfaceType() {
+		// Only add dgraph.type as a child if this field is an abstract type and has some children.
+		// dgraph.type would later be used in completeObject as different objects in the resulting
+		// JSON would return different fields based on their concrete type.
+		if field.AbstractType() {
 			q.Children = append(q.Children, &gql.GraphQuery{
 				Attr: "dgraph.type",
 			})
@@ -734,6 +734,7 @@ func addSelectionSetFrom(
 		}
 		addOrder(child, f)
 		addPagination(child, f)
+		// TODO: check if cascade should be handled specially on the union field
 		addCascadeDirective(child, f)
 		rbac := auth.evaluateStaticRules(f.Type())
 

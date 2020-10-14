@@ -130,8 +130,8 @@ type Field interface {
 	Location() x.Location
 	DgraphPredicate() string
 	Operation() Operation
-	// InterfaceType tells us whether this field represents a GraphQL Interface.
-	InterfaceType() bool
+	// AbstractType tells us whether this field represents a GraphQL Interface.
+	AbstractType() bool
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
@@ -559,13 +559,8 @@ func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) 
 	repeatedFieldNames := make(map[string]bool)
 
 	for _, typ := range s.Types {
-		if typ.Kind != ast.Interface {
+		if !isAbstractKind(typ.Kind) {
 			continue
-		}
-
-		interfaceFields := make(map[string]bool)
-		for _, field := range typ.Fields {
-			interfaceFields[field.Name] = true
 		}
 
 		type fieldInfo struct {
@@ -580,12 +575,14 @@ func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) 
 				// ignore this field if it was inherited from the common interface or is of ID type.
 				// We ignore ID type fields too, because they map only to uid in dgraph and can't
 				// map to two different predicates.
-				if interfaceFields[field.Name] || field.Type.Name() == IDType {
+				if field.Type.Name() == IDType {
 					continue
 				}
 				// if we find a field with same name from types implementing a common interface
 				// and its DgraphPredicate is different than what was previously encountered, then
-				// we mark it as repeated field, so that queries will rewrite it with correct alias
+				// we mark it as repeated field, so that queries will rewrite it with correct alias.
+				// For fields, which these types have implemented from a common interface, their
+				// DgraphPredicate will be same, so they won't be marked as repeated.
 				dgPred := typPreds[field.Name]
 				if fInfo, ok := repeatedFieldsInTypesWithCommonAncestor[field.Name]; ok && fInfo.
 					dgPred != dgPred {
@@ -926,8 +923,12 @@ func (f *field) Type() Type {
 	}
 }
 
-func (f *field) InterfaceType() bool {
-	return f.op.inSchema.schema.Types[f.field.Definition.Type.Name()].Kind == ast.Interface
+func isAbstractKind(kind ast.DefinitionKind) bool {
+	return kind == ast.Interface || kind == ast.Union
+}
+
+func (f *field) AbstractType() bool {
+	return isAbstractKind(f.op.inSchema.schema.Types[f.field.Definition.Type.Name()].Kind)
 }
 
 func (f *field) GetObjectName() string {
@@ -1111,11 +1112,15 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 		}
 		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
 			if origTyp.Kind == ast.Object {
-				// If the field is from an interface implemented by this object,
-				// and was fetched not because of a fragment on this object,
-				// but because of a fragment on some other object, then we don't need to include it.
+				// For fields coming from fragments inside an abstract type, there are two cases:
+				// * If the field is from an interface implemented by this object, and was fetched
+				//	 not because of a fragment on this object, but because of a fragment on some
+				//	 other object, then we don't need to include it.
+				// * If the field was fetched because of a fragment on an interface, and that
+				//	 interface is not one of the interfaces implemented by this object, then we
+				//	 don't need to include it.
 				fragType, ok := f.op.interfaceImplFragFields[f.field]
-				if ok && fragType != origTyp.Name {
+				if ok && fragType != origTyp.Name && !x.HasString(origTyp.Interfaces, fragType) {
 					return false
 				}
 
@@ -1276,8 +1281,8 @@ func (q *query) DgraphPredicate() string {
 	return (*field)(q).DgraphPredicate()
 }
 
-func (q *query) InterfaceType() bool {
-	return (*field)(q).InterfaceType()
+func (q *query) AbstractType() bool {
+	return (*field)(q).AbstractType()
 }
 
 func (q *query) TypeName(dgraphTypes []interface{}) string {
@@ -1336,8 +1341,8 @@ func (m *mutation) Type() Type {
 	return (*field)(m).Type()
 }
 
-func (m *mutation) InterfaceType() bool {
-	return (*field)(m).InterfaceType()
+func (m *mutation) AbstractType() bool {
+	return (*field)(m).AbstractType()
 }
 
 func (m *mutation) XIDArg() string {

@@ -1753,8 +1753,7 @@
       }
     }
 
-- name: "query union field - without arguments on union field & with fragment on interface
-implemented by member-type"
+- name: "query union field - with fragment on interface implemented by member-types"
   gqlquery: |-
     query {
       queryHome {
@@ -1781,11 +1780,41 @@ implemented by member-type"
       queryHome(func: type(Home)) {
         address : Home.address
         members : Home.members {
+          dgraph.type
           category : Animal.category
-          breed : Dog.breed
+          Dog.breed : Dog.breed
           repeatsWords : Parrot.repeatsWords
           name : Character.name
           dob : Human.dob
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "query union field - with repeated field in member-types"
+  gqlquery: |-
+    query {
+      queryHome {
+        members {
+          ... on Dog {
+            category
+            breed
+          }
+          ... on Plant {
+            breed
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHome(func: type(Home)) {
+        members : Home.members {
+          dgraph.type
+          category : Animal.category
+          Dog.breed : Dog.breed
+          Plant.breed : Plant.breed
           dgraph.uid : uid
         }
         dgraph.uid : uid
@@ -1818,6 +1847,7 @@ implemented by member-type"
     query {
       queryHome(func: type(Home)) {
         members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Parrot))) (first: 5, offset: 10) {
+          dgraph.type
           id : uid
           repeatsWords : Parrot.repeatsWords
         }
@@ -1867,7 +1897,8 @@ implemented by member-type"
   dgquery: |-
     query {
       queryHome(func: type(Home)) {
-        members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Parrot) OR type(Human))) {
+        members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Parrot) OR type(Human) OR type(Plant))) {
+          dgraph.type
           id : uid
         }
         dgraph.uid : uid
@@ -1879,7 +1910,7 @@ implemented by member-type"
     query {
       queryHome {
         members(filter: {
-          memberTypes: [Dog, Human, Parrot]
+          memberTypes: [Dog, Human, Parrot, Plant]
           dogFilter:  {
             breed: { allofterms: "German Shepherd"}
           }
@@ -1893,7 +1924,8 @@ implemented by member-type"
   dgquery: |-
     query {
       queryHome(func: type(Home)) {
-        members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Human) OR type(Parrot))) {
+        members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Human) OR type(Parrot) OR type(Plant))) {
+          dgraph.type
           id : uid
         }
         dgraph.uid : uid
