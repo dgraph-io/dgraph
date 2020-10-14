@@ -19,5 +19,5 @@ In order to add origins to the allow list, please see the [settings page](https:
 
 {{% notice "note" %}}
 CORS restrictions are not a replacement for writing auth rules, as it is possible for malicious actors to bypass these restrictions.
-Also, note that CORS restrictions only apply to browsers, and you should never use CORS as a way to secure your system (CORS can only protect user data).
+Also, note that CORS restrictions only apply to browsers, so you should never use CORS as a way to secure your system (CORS can only protect user data).
 {{% /notice %}}
