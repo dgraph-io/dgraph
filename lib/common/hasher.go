@@ -26,12 +26,17 @@ import (
 
 // Blake2b128 returns the 128-bit blake2b hash of the input data
 func Blake2b128(in []byte) ([]byte, error) {
-	hasher, err := blake2b.New(16, []byte{})
+	h, err := blake2b.New(16, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return hasher.Sum([]byte{}), nil
+	_, err = h.Write(in)
+	if err != nil {
+		return nil, err
+	}
+
+	return h.Sum(nil), nil
 }
 
 // Blake2bHash returns the 256-bit blake2b hash of the input data
@@ -41,25 +46,30 @@ func Blake2bHash(in []byte) (Hash, error) {
 		return [32]byte{}, err
 	}
 
-	var res []byte
 	_, err = h.Write(in)
 	if err != nil {
 		return [32]byte{}, err
 	}
 
-	res = h.Sum(nil)
+	hash := h.Sum(nil)
 	var buf = [32]byte{}
-	copy(buf[:], res)
-	return buf, err
+	copy(buf[:], hash)
+	return buf, nil
 }
 
 // Keccak256 returns the keccak256 hash of the input data
-func Keccak256(in []byte) Hash {
+func Keccak256(in []byte) (Hash, error) {
 	h := sha3.NewLegacyKeccak256()
-	hash := h.Sum([]byte{})
+
+	_, err := h.Write(in)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
+	hash := h.Sum(nil)
 	var buf = [32]byte{}
 	copy(buf[:], hash)
-	return buf
+	return buf, nil
 }
 
 // Twox256 returns the twox256 hash of the input data

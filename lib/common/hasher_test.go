@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/scale"
 
 	"github.com/stretchr/testify/require"
 )
@@ -38,11 +37,10 @@ func TestBlake2b218_EmptyHash(t *testing.T) {
 }
 
 func TestBlake128(t *testing.T) {
-	t.Skip()
-	in, err := scale.Encode([]byte("static"))
-	require.NoError(t, err)
+	in := []byte("static")
 	h, err := common.Blake2b128(in)
 	require.NoError(t, err)
+
 	expected, err := common.HexToBytes("0x440973e4e50902f1d0ec97de357eb2fd")
 	require.NoError(t, err)
 	require.Equal(t, expected, h)
@@ -63,17 +61,19 @@ func TestBlake2bHash_EmptyHash(t *testing.T) {
 func TestKeccak256_EmptyHash(t *testing.T) {
 	// test case from https://github.com/debris/tiny-keccak/blob/master/tests/keccak.rs#L4
 	in := []byte{}
-	h := common.Keccak256(in)
+	h, err := common.Keccak256(in)
+	require.NoError(t, err)
+
 	expected, err := common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
 	require.NoError(t, err)
 	require.Equal(t, expected, h)
 }
 
 func TestKeccak256(t *testing.T) {
-	t.Skip()
-	in, err := scale.Encode([]byte("static"))
+	in := []byte("static")
+	h, err := common.Keccak256(in)
 	require.NoError(t, err)
-	h := common.Keccak256(in)
+
 	expected, err := common.HexToHash("0xd517392f8119f79c1623774b9346e00104a1d193f1fa641e6e659bf323c37967")
 	require.NoError(t, err)
 	require.Equal(t, expected, h)

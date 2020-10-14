@@ -440,7 +440,13 @@ func ext_keccak_256(c *wasmtime.Caller, data, length, out int32) {
 	logger.Trace("[ext_keccak_256] executing...")
 	m := c.GetExport("memory").Memory()
 	memory := m.UnsafeData()
-	hash := common.Keccak256(memory[data : data+length])
+
+	hash, err := common.Keccak256(memory[data : data+length])
+	if err != nil {
+		logger.Error("[ext_keccak_256]", "error", err)
+		return
+	}
+
 	logger.Trace("[ext_keccak_256]", "hash", hash)
 	copy(memory[out:out+32], hash[:])
 	runtime.KeepAlive(m)
