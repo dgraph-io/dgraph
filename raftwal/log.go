@@ -49,13 +49,9 @@ const (
 	maxNumEntries = 30000
 	// logFileOffset is offset in the log file where data is stored.
 	logFileOffset = 1 << 20 // 1MB
-	// baseIVsize is the size of random part of IV.
-	baseIVsize = 8
-	// keyIDsize is the size of keyID.
-	keyIDsize = 8
-	// encryptionKeyOffset is offset in the log file where keyID (first 8 bytes)
+	// encOffset is offset in the log file where keyID (first 8 bytes)
 	// and baseIV (remaining 8 bytes) are stored.
-	encryptionKeyOffset = logFileOffset - baseIVsize - keyIDsize // 1MB - 16B
+	encOffset = logFileOffset - 16 // 1MB - 16B
 	// logFileSize is the initial size of the log file.
 	logFileSize = 16 << 30
 	// entrySize is the size in bytes of a single entry.
@@ -109,6 +105,8 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 	var err error
 	encKey := x.WorkerConfig.EncryptionKey
 	// Initialize the registry for logFile if encryption in enabled.
+	// NOTE: If encryption is enabled then there is no going back because if we disable it
+	// later then the older log files which were previously encrypted can't be opened.
 	if len(encKey) > 0 {
 		krOpt := badger.KeyRegistryOptions{
 			ReadOnly:                      false,
@@ -134,8 +132,8 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 	} else if err != nil {
 		x.Check(err)
 	} else {
-		buf := lf.Data[encryptionKeyOffset : encryptionKeyOffset+baseIVsize+keyIDsize]
-		keyID := binary.BigEndian.Uint64(buf[:keyIDsize])
+		buf := lf.Data[encOffset : encOffset+16]
+		keyID := binary.BigEndian.Uint64(buf[:8])
 
 		// If keyID is non-zero, then the opened file is encrypted.
 		if keyID != 0 {
@@ -147,8 +145,8 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 			if lf.dataKey, err = lf.registry.DataKey(keyID); err != nil {
 				return nil, err
 			}
-			lf.baseIV = buf[keyIDsize:]
-			y.AssertTrue(len(lf.baseIV) == baseIVsize)
+			lf.baseIV = buf[8:]
+			y.AssertTrue(len(lf.baseIV) == 8)
 		}
 	}
 	return lf, nil
@@ -184,6 +182,7 @@ func (lf *logFile) GetRaftEntry(idx int) raftpb.Entry {
 	if lf.dataKey != nil && len(re.Data) > 0 {
 		// No need to worry about mmap. Because, XORBlock allocates a byte array to do the
 		// XOR. So, the given slice is not being mutated.
+		// NOTE: We can potentially use allocator for this allocation.
 		decoded, err := y.XORBlockAllocate(
 			re.Data, lf.dataKey.Data, lf.generateIV(entry.DataOffset()))
 		x.Check(err)
@@ -317,8 +316,8 @@ func (lf *logFile) generateIV(offset uint64) []byte {
 	iv := make([]byte, aes.BlockSize)
 	// IV is of 16 bytes, in which first 8 bytes are obtained from baseIV
 	// and the remaining 8 bytes is obtained from the offset.
-	y.AssertTrue(baseIVsize == copy(iv[:baseIVsize], lf.baseIV))
-	binary.BigEndian.PutUint64(iv[baseIVsize:], offset)
+	y.AssertTrue(8 == copy(iv[:8], lf.baseIV))
+	binary.BigEndian.PutUint64(iv[8:], offset)
 	return iv
 }
 
@@ -337,14 +336,15 @@ func (lf *logFile) bootstrap() error {
 	if lf.dataKey, err = lf.registry.LatestDataKey(); err != nil {
 		return y.Wrapf(err, "Error while retrieving datakey in logFile.bootstrap")
 	}
-	buf := lf.Data[encryptionKeyOffset : encryptionKeyOffset+keyIDsize+baseIVsize]
-	binary.BigEndian.PutUint64(buf[:keyIDsize], lf.keyID())
+	buf := lf.Data[encOffset : encOffset+16]
+	// Put keyID in the first 8 bytes.
+	binary.BigEndian.PutUint64(buf[:8], lf.keyID())
 
-	// fill in random bytes in the last baseIBsize bytes of buf
-	if _, err := cryptorand.Read(buf[keyIDsize:]); err != nil {
+	// fill in random bytes in the last 8 bytes of buf.
+	if _, err := cryptorand.Read(buf[8:]); err != nil {
 		return y.Wrapf(err, "Error while creating base IV, while creating logfile")
 	}
 	// Initialize base IV.
-	lf.baseIV = buf[keyIDsize:]
+	lf.baseIV = buf[8:]
 	return nil
 }
