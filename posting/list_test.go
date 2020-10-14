@@ -1259,20 +1259,8 @@ func TestSingleListRollup(t *testing.T) {
 	size := int(1e5)
 	ol, commits := createMultiPartList(t, size, true)
 
-	// Roll list into a single list.
-	kv := &bpb.KV{}
-	err := ol.SingleListRollup(kv)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(kv.UserMeta))
-	require.Equal(t, BitCompletePosting, kv.UserMeta[0])
-
-	plist := pb.PostingList{}
-	err = plist.Unmarshal(kv.Value)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(plist.Splits))
-
 	var labels []string
-	err = ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
+	err := ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
 		if len(p.Label) > 0 {
 			labels = append(labels, p.Label)
 		}
@@ -1283,6 +1271,16 @@ func TestSingleListRollup(t *testing.T) {
 	for i, label := range labels {
 		require.Equal(t, label, strconv.Itoa(int(i+1)))
 	}
+
+	var bl pb.BackupPostingList
+	kv, err := ol.ToBackupPostingList(&bl, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(kv.UserMeta))
+	require.Equal(t, BitCompletePosting, kv.UserMeta[0])
+
+	plist := FromBackupPostingList(&bl)
+	require.Equal(t, 0, len(plist.Splits))
+	// TODO: Need more testing here.
 }
 
 func TestRecursiveSplits(t *testing.T) {
