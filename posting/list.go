@@ -896,6 +896,11 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator)
 	kv.Key = alloc.Copy(l.key)
 	kv.Version = out.newMinTs
 	kv.Value = val[:n]
+	if isPlistEmpty(ol) {
+		kv.UserMeta = alloc.Copy([]byte{BitEmptyPosting})
+	} else {
+		kv.UserMeta = alloc.Copy([]byte{BitCompletePosting})
+	}
 	return kv, nil
 }
 
