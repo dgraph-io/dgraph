@@ -388,6 +388,7 @@ func RunAll(t *testing.T) {
 	t.Run("fragment in mutation", fragmentInMutation)
 	t.Run("fragment in query", fragmentInQuery)
 	t.Run("fragment in query on Interface", fragmentInQueryOnInterface)
+	t.Run("fragment in query on union", fragmentInQueryOnUnion)
 	t.Run("fragment in query on Object", fragmentInQueryOnObject)
 }
 

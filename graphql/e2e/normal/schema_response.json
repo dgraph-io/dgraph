@@ -341,6 +341,57 @@
             "type": "password"
         },
         {
+            "predicate": "Animal.category",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "hash"
+            ]
+        },
+        {
+            "predicate": "Dog.breed",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "term"
+            ]
+        },
+        {
+            "predicate": "Parrot.repeatsWords",
+            "type": "string",
+            "list": true
+        },
+        {
+            "predicate": "Cheetah.speed",
+            "type": "float"
+        },
+        {
+            "predicate": "Plant.breed",
+            "type": "string"
+        },
+        {
+            "predicate": "Zoo.animals",
+            "type": "uid",
+            "list": true
+        },
+        {
+            "predicate": "Zoo.city",
+            "type": "string"
+        },
+        {
+            "predicate": "Home.address",
+            "type": "string"
+        },
+        {
+            "predicate": "Home.members",
+            "type": "uid",
+            "list": true
+        },
+        {
+            "predicate": "Home.favouriteMember",
+            "type": "uid"
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
@@ -692,6 +743,80 @@
                 }
             ],
             "name": "User"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Animal.category"
+                }
+            ],
+            "name": "Animal"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Dog.breed"
+                }
+            ],
+            "name": "Dog"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Parrot.repeatsWords"
+                }
+            ],
+            "name": "Parrot"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Cheetah.speed"
+                }
+            ],
+            "name": "Cheetah"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Plant.breed"
+                }
+            ],
+            "name": "Plant"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Zoo.animals"
+                },
+                {
+                    "name": "Zoo.city"
+                }
+            ],
+            "name": "Zoo"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Home.address"
+                },
+                {
+                    "name": "Home.members"
+                },
+                {
+                    "name": "Home.favouriteMember"
+                }
+            ],
+            "name": "Home"
         },
         {
             "fields": [
