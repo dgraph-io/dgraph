@@ -20,12 +20,6 @@ type Z {
 #######################
 
 """
-The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
-Int64 can represent values in range [-(2^63),(2^63 - 1)].
-"""
-scalar Int64
-
-"""
 The DateTime scalar type represents date and time as a string in RFC3339 format.
 For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
 """
@@ -33,7 +27,6 @@ scalar DateTime
 
 enum DgraphIndex {
 	int
-	int64
 	float
 	bool
 	hash
@@ -91,10 +84,9 @@ directive @auth(
 	add: AuthRule,
 	update: AuthRule,
 	delete:AuthRule) on OBJECT
-directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-directive @cascade(fields: [String]) on FIELD
-directive @lambda on FIELD_DEFINITION
+directive @cascade on FIELD
 
 input IntFilter {
 	eq: Int
@@ -102,14 +94,6 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
-}
-
-input Int64Filter {
-	eq: Int64
-	le: Int64
-	lt: Int64
-	ge: Int64
-	gt: Int64
 }
 
 input FloatFilter {
@@ -152,45 +136,6 @@ input StringExactFilter {
 
 input StringHashFilter {
 	eq: String
-}
-
-#######################
-# Generated Enums
-#######################
-
-enum XHasFilter {
-	name
-	f1
-}
-
-enum YHasFilter {
-	f1
-}
-
-enum ZHasFilter {
-	add
-}
-
-#######################
-# Generated Inputs
-#######################
-
-input XFilter {
-	has: XHasFilter
-	and: XFilter
-	or: XFilter
-	not: XFilter
-}
-
-input YFilter {
-	not: YFilter
-}
-
-input ZFilter {
-	has: ZHasFilter
-	and: ZFilter
-	or: ZFilter
-	not: ZFilter
 }
 
 #######################
