@@ -1105,7 +1105,6 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					coordinate, _ := geoParams["coordinate"].(map[string]interface{})
 					lat := coordinate["latitude"]
 					long := coordinate["longitude"]
-
 					args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)},
 						gql.Arg{Value: fmt.Sprintf("%v", distance)})
 

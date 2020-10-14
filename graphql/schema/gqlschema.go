@@ -656,7 +656,6 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 
 		seen[def.Name] = true
 		cleanupInput(sch, sch.Types[nt], seen)
-		seen[def.Name] = false
 
 		// If after calling cleanup on an input type, it got deleted then it doesn't need to be
 		// in the fields for this type anymore.
@@ -1095,7 +1094,7 @@ func hasOrderables(defn *ast.Definition) bool {
 
 func isOrderable(fld *ast.FieldDefinition) bool {
 	// lists can't be ordered and NamedType will be empty for lists,
-	// so it will return false for list fields			})
+	// so it will return false for list fields
 	return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
 }
 
@@ -1237,7 +1236,6 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	addFilterArgument(schema, qry)
 	addOrderArgument(schema, qry)
 	addPaginationArguments(qry)
-
 	if schema.Types["Add"+defn.Name+"Input"] != nil {
 		schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
 			Kind:   ast.Object,
@@ -1434,6 +1432,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
+
 }
 
 func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
@@ -1587,7 +1586,6 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			(!hasID(schema.Types[fld.Type.Name()]) && !hasXID(schema.Types[fld.Type.Name()])) {
 			continue
 		}
-
 		fldList = append(fldList, createField(schema, fld))
 	}
 
