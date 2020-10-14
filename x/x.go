@@ -66,7 +66,7 @@ var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
 	ErrNoJwt        = errors.New("no accessJwt available")
-	// ErrorInvalidLogin is error when username or password is incorrect in login
+	// ErrorInvalidLogin is returned when username or password is incorrect in login
 	ErrorInvalidLogin = errors.New("invalid username or password")
 )
 
