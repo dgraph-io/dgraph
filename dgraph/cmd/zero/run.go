@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -51,8 +52,8 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
-
-	totalCache int64
+	tlsEnabledRoute   map[string]struct{}
+	totalCache        int64
 }
 
 var opts options
@@ -88,7 +89,12 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-	x.RegisterClientTLSFlags(flag)
+	// TLS configurations
+	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
+	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
+	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
+	flag.String("tls_enabled_route", "", "comma separated zero endpoint which will configured with TLS." +
+		"Valid values could be /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -161,6 +167,13 @@ func run() {
 	}
 
 	x.PrintVersion()
+	tlsRoutes := make(map[string]struct{})
+	if Zero.Conf.GetString("tls_enabled_route") != "" {
+		routes := strings.Split(Zero.Conf.GetString("tls_enabled_route"), ",")
+		for _, r := range routes {
+			tlsRoutes[r] = struct{}{}
+		}
+	}
 
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
@@ -171,6 +184,7 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
+		tlsEnabledRoute:   tlsRoutes,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 

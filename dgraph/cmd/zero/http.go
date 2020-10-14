@@ -17,17 +17,23 @@
 package zero
 
 import (
+	"bufio"
 	"context"
+	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
+	"github.com/soheilhy/cmux"
 )
 
 // intFromQueryParam checks for name as a query param, converts it to uint64 and returns it.
@@ -240,31 +246,86 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 }
 
 func (st *state) serveHTTP(l net.Listener) {
+	m := cmux.New(l)
+	startServers(m)
+
+	go func() {
+		defer st.zero.closer.Done()
+		err := m.Serve()
+		if err != nil {
+			glog.Errorf("error from cmux serve: %v", err)
+		}
+	}()
+}
+
+func serveHTTPServer(l net.Listener) {
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
 		IdleTimeout:  2 * time.Minute,
 	}
 
-	tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
-	x.Check(err)
+	err := srv.Serve(l)
+	glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
+	defer cancel()
+	err = srv.Shutdown(ctx)
+	glog.Infoln("All http(s) requests finished.")
+	if err != nil {
+		glog.Errorf("Http(s) shutdown err: %v", err)
+	}
+}
 
-	go func() {
-		defer st.zero.closer.Done()
-		switch {
-		case tlsCfg != nil:
-			srv.TLSConfig = tlsCfg
-			err = srv.ServeTLS(l, "", "")
-		default:
-			err = srv.Serve(l)
+func startServers(m cmux.CMux) {
+	if len(opts.tlsEnabledRoute) > 0 {
+		tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
+		x.Check(err)
+		if tlsCfg == nil {
+			glog.Fatalf("tls_enabled_route is set but tls config is not provided. Please define variable --tls_dir")
 		}
-		glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
-		ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
-		defer cancel()
-		err = srv.Shutdown(ctx)
-		glog.Infoln("All http(s) requests finished.")
-		if err != nil {
-			glog.Errorf("Http(s) shutdown err: %v", err)
-		}
-	}()
+
+		httpsRule := m.Match(func(r io.Reader) bool {
+			path, ok := parseRequestPath(r)
+			if !ok {
+				return false
+			}
+			_, ok = opts.tlsEnabledRoute[path]
+			return ok
+		})
+
+		go serveHTTPServer(tls.NewListener(httpsRule, tlsCfg))
+	}
+
+	httpRule := m.Match(cmux.Any())
+	go serveHTTPServer(httpRule)
+}
+
+func parseRequestPath(r io.Reader) (path string, ok bool) {
+	br := bufio.NewReader(&io.LimitedReader{R: r, N: 4096})
+	line, part, err := br.ReadLine()
+	if err != nil || part {
+		return "", false
+	}
+
+	_, reqUri, _, ok := parseRequestLine(string(line))
+	if !ok {
+		return "", false
+	}
+	parse, err := url.Parse(reqUri)
+	if err != nil {
+		return "", false
+	}
+	return parse.Path, true
+}
+
+// parseRequestLine parses "GET /foo HTTP/1.1" into its three parts.
+// grabbed from net/http package
+func parseRequestLine(line string) (method, requestURI, proto string, ok bool) {
+	s1 := strings.Index(line, " ")
+	s2 := strings.Index(line[s1+1:], " ")
+	if s1 < 0 || s2 < 0 {
+		return
+	}
+	s2 += s1 + 1
+	return line[:s1], line[s1+1 : s2], line[s2+1:], true
 }
