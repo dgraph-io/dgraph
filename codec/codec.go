@@ -57,10 +57,10 @@ func FreePack(pack *pb.UidPack) {
 	if pack == nil {
 		return
 	}
-	if pack.Allocator == 0 {
+	if pack.AllocRef == 0 {
 		return
 	}
-	alloc := z.AllocatorFrom(pack.Allocator)
+	alloc := z.AllocatorFrom(pack.AllocRef)
 	alloc.Release()
 }
 
@@ -139,7 +139,7 @@ func (e *Encoder) Add(uid uint64) {
 func (e *Encoder) Done() *pb.UidPack {
 	e.packBlock()
 	if e.pack != nil && e.alloc != nil {
-		e.pack.Allocator = e.alloc.Ref
+		e.pack.AllocRef = e.alloc.Ref
 	}
 	return e.pack
 }
