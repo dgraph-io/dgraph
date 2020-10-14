@@ -1207,15 +1207,7 @@ func rewriteObject(
 				if fieldDef.Type().IsUnion() {
 					frags = rewriteUnionField(ctx, typ, fieldDef, myUID, varGen,
 						withAdditionalDeletes, val, deepXID, xidMetadata)
-				} else {
-					// This field is another GraphQL object, which could either be linking to an
-					// existing node by it's ID
-					// { "title": "...", "author": { "id": "0x123" }
-					//          like here ^^
-					// or giving the data to create the object as part of a deep mutation
-					// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
-					//          like here ^^
-					if fieldDef.Type().IsPoint() {
+				} else if fieldDef.Type().IsPoint() {
 					// For Point type, the mutation json in Dgraph is as follows:
 					// { "type": "Point", "coordinates": [11.11, 22.22]}
 					lat := val["latitude"]
@@ -1230,7 +1222,15 @@ func rewriteObject(
 							),
 						},
 					}
-				} else {frags =
+				} else {
+					// This field is another GraphQL object, which could either be linking to an
+					// existing node by it's ID
+					// { "title": "...", "author": { "id": "0x123" }
+					//          like here ^^
+					// or giving the data to create the object as part of a deep mutation
+					// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
+					//          like here ^^
+					frags =
 						rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
 							withAdditionalDeletes, val, deepXID, xidMetadata)
 				}
