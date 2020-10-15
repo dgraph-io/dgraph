@@ -3107,3 +3107,30 @@ func TestMutationWithValueVar(t *testing.T) {
 
 	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson()))
 }
+
+func TestFailedLogin(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+
+	grootClient, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	op := api.Operation{DropAll: true}
+	if err := grootClient.Alter(ctx, &op); err != nil {
+		t.Fatalf("Unable to cleanup db:%v", err)
+	}
+	require.NoError(t, err)
+
+	client, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	// User is not present
+	err = client.Login(ctx, userid, "simplepassword")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
+
+	resetUser(t)
+	// User is present
+	err = client.Login(ctx, userid, "randomstring")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
+
+}
