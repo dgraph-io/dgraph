@@ -19,6 +19,7 @@ package x
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io/ioutil"
 	"path"
 	"strings"
@@ -47,6 +48,8 @@ type TLSHelperConfig struct {
 	RootCACert       string
 	ClientAuth       string
 	UseSystemCACerts bool
+	MinVersion       string
+	MaxVersion       string
 }
 
 // RegisterClientTLSFlags registers the required flags to set up a TLS client.
@@ -128,6 +131,8 @@ func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) 
 		conf.Cert = path.Join(conf.CertDir, tlsCertFile)
 		conf.Key = path.Join(conf.CertDir, tlsKeyFile)
 		conf.ClientAuth = v.GetString("tls_client_auth")
+		conf.MinVersion = v.GetString("tls_min_version")
+		conf.MaxVersion = v.GetString("tls_max_version")
 	}
 	conf.UseSystemCACerts = v.GetBool("tls_use_system_ca")
 
@@ -243,12 +248,37 @@ func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err e
 		}
 		tlsCfg.ClientAuth = auth
 
-		tlsCfg.MinVersion = tls.VersionTLS11
-		tlsCfg.MaxVersion = tls.VersionTLS12
-
+		err = setupVersion(tlsCfg, config.MinVersion, config.MaxVersion)
+		if err != nil {
+			return nil, err
+		}
 		return tlsCfg, nil
 	}
 	return nil, nil
+}
+
+func setupVersion(cfg *tls.Config, minVersion string, maxVersion string) error {
+	tlsVersion := map[string]uint16{
+		"TLS11": tls.VersionTLS11,
+		"TLS12": tls.VersionTLS12,
+	}
+
+	if val, has := tlsVersion[strings.ToUpper(minVersion)]; has {
+		cfg.MinVersion = val
+	} else {
+		return fmt.Errorf("invalid min_version '%s'. Valid values [TLS11, TLS12]", minVersion)
+	}
+
+	if val, has := tlsVersion[strings.ToUpper(maxVersion)]; has && val >= cfg.MinVersion {
+		cfg.MaxVersion = val
+	} else {
+		if has {
+			return fmt.Errorf("cannot use '%s' as max_version, it's lower than '%s'", maxVersion, minVersion)
+		}
+		return fmt.Errorf("invalid max_version '%s'. Valid values [TLS11, TLS12]", maxVersion)
+	}
+
+	return nil
 }
 
 // GenerateClientTLSConfig creates and returns a new client side *tls.Config with the

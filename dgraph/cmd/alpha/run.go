@@ -197,7 +197,8 @@ they form a Raft group and provide synchronous replication.
 		"connect as a client with the other nodes in the cluster.")
 	flag.String("tls_key", "", "(optional) The private key file name "+
 		"in tls_dir needed to connect as a client with the other nodes in the cluster.")
-
+	flag.String("tls_min_version", "TLS11", "min version of tls supported. Valid values are TLS11, TLS12")
+	flag.String("tls_max_version", "TLS12", "max version of tls supported. Valid values are TLS11, TLS12")
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
