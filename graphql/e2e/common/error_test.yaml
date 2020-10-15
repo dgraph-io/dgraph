@@ -210,3 +210,64 @@
   errors:
     [ { "message": "Type mismatched for Value `180143985094.0`, expected: Int64, got: 'Float'",
         "locations": [ { "line": 2, "column": 63 } ] } ]
+
+-
+  name: "Out of range error for int32 type given in variable"
+  gqlrequest: |
+    mutation($numLikes:Int) {
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numLikes:$numLikes}]){
+        post{
+          title
+            numLikes
+            author{
+              name
+            }
+          }
+        }
+      }
+  gqlvariables:
+    {"numLikes":2147483648 }
+  errors:
+    [ { "message": "Out of range value '2147483648', for type `Int`",
+        "path": [ { "variable","numLikes" } ] } ]
+
+-
+  name: "Out of range error for int64 type in variable"
+  gqlrequest: |
+    mutation($numViews:Int64) {
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:$numViews}]){
+        post{
+          title
+          numViews
+          author{
+            name
+          }
+        }
+      }
+    }
+  gqlvariables:
+    { "numViews":9223372036854775808}
+  errors:
+    [ { "message": "Out of range value '9223372036854775808', for type `Int64`",
+        "path": [ { "variable", "numViews" } ] } ]
+
+-
+  name: "Float value is Incompatible with Int64 type given in variable"
+  gqlrequest: |
+    mutation addPost($Post: [AddPostInput!]!){
+      addPost(input:$Post){
+        post{
+          title
+          numViews
+        }
+      }
+    }
+  gqlvariables:
+    { "Post": [
+      { "title": "Dgraph",
+        "numViews":180143985094.0
+      } ]
+    }
+  errors:
+    [ { "message": "strconv.ParseInt: parsing \"180143985094.0\": invalid syntax",
+        "path": [ { "variable", "Post",0,"numViews" } ] } ]
