@@ -207,7 +207,7 @@ Run `go test` in the root folder.
 
 * Once the draft release is published on Github by Travis, modify it to add the release notes. The release
   notes would mostly be the same as changes for the current version in `CHANGELOG.md`. Finally publish the 
-  release and announce to users on community Slack.
+  release and announce to users on [Discourse](https://discuss.dgraph.io).
 
 * To make sure that docs are added for the newly released version, add the version to
    `wiki/scripts/build.sh`. It is also important for a release branch for the version to exist,

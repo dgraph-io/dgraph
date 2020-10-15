@@ -194,7 +194,13 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 					Query:     tcase.GQLMutation,
 					Variables: vars,
 				})
-			require.NoError(t, err)
+			if tcase.ValidationError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tcase.ValidationError.Error(), err.Error())
+				return
+			} else {
+				require.NoError(t, err)
+			}
 			mut := test.GetMutation(t, op)
 			rewriterToTest := rewriterFactory()
 

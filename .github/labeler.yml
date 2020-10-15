@@ -1,5 +1,6 @@
 area/graphql:
   - graphql/**/*
+  - wiki/content/graphql/**/*
 area/documentation :
   - wiki/content/**/*
 area/bulk-loader:
@@ -16,5 +17,8 @@ area/testing/jepsen:
   - contrib/jepsen/**/* 
 area/commercial:
   - ee/**/*
+  - wiki/content/enterprise-features/**/*
 area/schema:
   - schema/**/*
+area/testing:
+  - systest/**/*

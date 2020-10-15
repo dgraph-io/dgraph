@@ -26,7 +26,6 @@ import (
 	"github.com/pkg/errors"
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -35,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
@@ -47,6 +47,8 @@ const (
 
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `
+	scalar DateTime
+
 	"""
 	Data about the GraphQL schema being served by Dgraph.
 	"""
@@ -63,6 +65,18 @@ const (
 		This is the schema that is being served by Dgraph at /graphql.
 		"""
 		generatedSchema: String!
+	}
+
+	type Cors @dgraph(type: "dgraph.cors"){
+		acceptedOrigins: [String]
+	}
+
+	"""
+	SchemaHistory contains the schema and the time when the schema has been created.
+	"""
+	type SchemaHistory @dgraph(type: "dgraph.graphql.history") {
+		schema: String! @id @dgraph(pred: "dgraph.graphql.schema_history")
+		created_at: DateTime! @dgraph(pred: "dgraph.graphql.schema_created_at")
 	}
 
 	"""
@@ -235,12 +249,12 @@ const (
 	}
 
 	input ConfigInput {
-
 		"""
-		Estimated memory the LRU cache can take. Actual usage by the process would be
-		more than specified here. (default -1 means no set limit)
+		Estimated memory the caches can take. Actual usage by the process would be
+		more than specified here. The caches will be updated according to the
+		cache_percentage flag.
 		"""
-		lruMb: Float
+		cacheMb: Float
 
 		"""
 		True value of logRequest enables logging of all the requests coming to alphas.
@@ -254,7 +268,7 @@ const (
 	}
 
 	type Config {
-		lruMb: Float
+		cacheMb: Float
 	}
 
 	` + adminTypes + `
@@ -264,7 +278,8 @@ const (
 		health: [NodeState]
 		state: MembershipState
 		config: Config
-
+		getAllowedCORSOrigins: Cors
+		querySchemaHistory(first: Int, offset: Int): [SchemaHistory]
 		` + adminQueries + `
 	}
 
@@ -297,6 +312,8 @@ const (
 		Alter the node's config.
 		"""
 		config(input: ConfigInput!): ConfigPayload
+		
+		replaceAllowedCORSOrigins(origins: [String]): Cors
 
 		` + adminMutations + `
 	}
@@ -309,49 +326,64 @@ var (
 	commonAdminQueryMWs = resolve.QueryMiddlewares{
 		resolve.IpWhitelistingMW4Query, // good to apply ip whitelisting before Guardian auth
 		resolve.GuardianAuthMW4Query,
+		resolve.LoggingMWQuery,
 	}
 	// commonAdminMutationMWs are the middlewares which should be applied to mutations served by
 	// admin server unless some exceptional behaviour is required
 	commonAdminMutationMWs = resolve.MutationMiddlewares{
 		resolve.IpWhitelistingMW4Mutation, // good to apply ip whitelisting before Guardian auth
 		resolve.GuardianAuthMW4Mutation,
+		resolve.LoggingMWMutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":        {resolve.IpWhitelistingMW4Query}, // dgraph checks Guardian auth for health
-		"state":         {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
+		"health":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
+		"state":         {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
 		"config":        commonAdminQueryMWs,
 		"listBackups":   commonAdminQueryMWs,
 		"restoreStatus": commonAdminQueryMWs,
 		"getGQLSchema":  commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"queryGroup":     {resolve.IpWhitelistingMW4Query},
-		"queryUser":      {resolve.IpWhitelistingMW4Query},
-		"getGroup":       {resolve.IpWhitelistingMW4Query},
-		"getCurrentUser": {resolve.IpWhitelistingMW4Query},
-		"getUser":        {resolve.IpWhitelistingMW4Query},
+		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"queryUser":             {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getGroup":              {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getCurrentUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getUser":               {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"querySchemaHistory":    {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getAllowedCORSOrigins": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
 		"backup":          commonAdminMutationMWs,
 		"config":          commonAdminMutationMWs,
 		"draining":        commonAdminMutationMWs,
 		"export":          commonAdminMutationMWs,
-		"login":           {resolve.IpWhitelistingMW4Mutation},
+		"login":           {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 		"restore":         commonAdminMutationMWs,
 		"shutdown":        commonAdminMutationMWs,
 		"updateGQLSchema": commonAdminMutationMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"addUser":     {resolve.IpWhitelistingMW4Mutation},
-		"addGroup":    {resolve.IpWhitelistingMW4Mutation},
-		"updateUser":  {resolve.IpWhitelistingMW4Mutation},
-		"updateGroup": {resolve.IpWhitelistingMW4Mutation},
-		"deleteUser":  {resolve.IpWhitelistingMW4Mutation},
-		"deleteGroup": {resolve.IpWhitelistingMW4Mutation},
+		"addUser":                   {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"addGroup":                  {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"updateUser":                {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"updateGroup":               {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"deleteUser":                {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"deleteGroup":               {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"replaceAllowedCORSOrigins": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
 )
+
+func SchemaValidate(sch string) error {
+	schHandler, err := schema.NewHandler(sch, true)
+	if err != nil {
+		return err
+	}
+
+	_, err = schema.FromString(schHandler.GQLSchema())
+	return err
+}
 
 // GraphQLHealth is used to report the health status of a GraphQL server.
 // It is required for kubernetes probing.
@@ -408,7 +440,7 @@ type adminServer struct {
 
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
-func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (web.IServeGraphQL,
+func NewServers(withIntrospection bool, globalEpoch *uint64, closer *z.Closer) (web.IServeGraphQL,
 	web.IServeGraphQL, *GraphQLHealthStore) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
@@ -416,7 +448,7 @@ func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (
 	}
 
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
-	mainServer := web.NewServer(globalEpoch, resolvers)
+	mainServer := web.NewServer(globalEpoch, resolvers, false)
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
@@ -426,7 +458,7 @@ func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (
 		Ex:  resolve.NewDgraphExecutor(),
 	}
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, globalEpoch, closer)
-	adminServer := web.NewServer(globalEpoch, adminResolvers)
+	adminServer := web.NewServer(globalEpoch, adminResolvers, true)
 
 	return mainServer, adminServer, mainHealthStore
 }
@@ -437,7 +469,7 @@ func newAdminResolver(
 	fns *resolve.ResolverFns,
 	withIntrospection bool,
 	epoch *uint64,
-	closer *y.Closer) *resolve.RequestResolver {
+	closer *z.Closer) *resolve.RequestResolver {
 
 	adminSchema, err := schema.FromString(graphqlAdminSchema)
 	if err != nil {
@@ -553,13 +585,31 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 						false
 				})
 		}).
+		WithMutationResolver("replaceAllowedCORSOrigins", func(m schema.Mutation) resolve.MutationResolver {
+			return resolve.MutationResolverFunc(
+				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: m},
+						false
+				})
+		}).
 		WithQueryResolver("getGQLSchema", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
 				})
+		}).
+		WithQueryResolver("getAllowedCORSOrigins", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(
+				func(ctx context.Context, query schema.Query) *resolve.Resolved {
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
+				})
+		}).
+		WithQueryResolver("querySchemaHistory", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(
+				func(ctx context.Context, query schema.Query) *resolve.Resolved {
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
+				})
 		})
-
 	for gqlMut, resolver := range adminMutationResolvers {
 		// gotta force go to evaluate the right function at each loop iteration
 		// otherwise you get variable capture issues
@@ -583,7 +633,7 @@ func getCurrentGraphQLSchema() (*gqlSchema, error) {
 }
 
 func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
-	schHandler, err := schema.NewHandler(sch.Schema)
+	schHandler, err := schema.NewHandler(sch.Schema, false)
 	if err != nil {
 		return nil, err
 	}
@@ -653,7 +703,9 @@ func (as *adminServer) addConnectedAdminResolvers() {
 
 	as.rf.WithMutationResolver("updateGQLSchema",
 		func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(resolveUpdateGQLSchema)
+			return &updateSchemaResolver{
+				admin: as,
+			}
 		}).
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
@@ -705,6 +757,18 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					dgEx,
 					resolve.StdQueryCompletion())
 			}).
+		WithQueryResolver("getAllowedCORSOrigins", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveGetCors)
+		}).
+		WithQueryResolver("querySchemaHistory", func(q schema.Query) resolve.QueryResolver {
+			// Add the desceding order to the created_at to get the schema history in
+			// descending order.
+			q.Arguments()["order"] = map[string]interface{}{"desc": "created_at"}
+			return resolve.NewQueryResolver(
+				qryRw,
+				dgEx,
+				resolve.StdQueryCompletion())
+		}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(
@@ -746,7 +810,10 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					resolve.NewDeleteRewriter(),
 					dgEx,
 					resolve.StdDeleteCompletion(m.Name()))
-			})
+			}).
+		WithMutationResolver("replaceAllowedCORSOrigins", func(m schema.Mutation) resolve.MutationResolver {
+			return resolve.MutationResolverFunc(resolveReplaceAllowedCORSOrigins)
+		})
 }
 
 func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
@@ -768,13 +835,18 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	// set status as updating schema
 	mainHealthStore.updatingSchema()
 
-	resolverFactory := resolverFactoryWithErrorMsg(errResolverNotFound)
-	// it is nil after drop_all
-	if gqlSchema != nil {
-		resolverFactory = resolverFactory.WithConventionResolvers(gqlSchema, as.fns)
-	}
-	if as.withIntrospection {
-		resolverFactory.WithSchemaIntrospection()
+	var resolverFactory resolve.ResolverFactory
+	// If schema is nil (which becomes after drop_all) then do not attach Resolver for
+	// introspection operations, and set GQL schema to empty.
+	if gqlSchema == nil {
+		resolverFactory = resolverFactoryWithErrorMsg(errNoGraphQLSchema)
+		gqlSchema, _ = schema.FromString("")
+	} else {
+		resolverFactory = resolverFactoryWithErrorMsg(errResolverNotFound).
+			WithConventionResolvers(gqlSchema, as.fns)
+		if as.withIntrospection {
+			resolverFactory.WithSchemaIntrospection()
+		}
 	}
 
 	// Increment the Epoch when you get a new schema. So, that subscription's local epoch

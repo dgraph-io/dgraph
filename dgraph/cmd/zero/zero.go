@@ -26,12 +26,12 @@ import (
 
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/telemetry"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -66,7 +66,7 @@ type Server struct {
 	// groupMap    map[uint32]*Group
 	nextGroup      uint32
 	leaderChangeCh chan struct{}
-	closer         *y.Closer  // Used to tell stream to close.
+	closer         *z.Closer  // Used to tell stream to close.
 	connectLock    sync.Mutex // Used to serialize connect requests from servers.
 
 	moveOngoing    chan struct{}
@@ -89,7 +89,7 @@ func (s *Server) Init() {
 	s.nextTxnTs = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
-	s.closer = y.NewCloser(2) // grpc and http
+	s.closer = z.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 
@@ -501,6 +501,9 @@ func (s *Server) Connect(ctx context.Context,
 			// IDs, the couter is incremented every time a proposal is created.
 			m.Id = s.nextRaftId
 			s.nextRaftId += 1
+			proposal.MaxRaftId = m.Id
+		} else if m.Id >= s.nextRaftId {
+			s.nextRaftId = m.Id + 1
 			proposal.MaxRaftId = m.Id
 		}
 

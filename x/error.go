@@ -82,6 +82,12 @@ func Panic(err error) {
 	}
 }
 
+func Log(err error, msg string) {
+	if err != nil {
+		log.Printf("%s Error: %v\n", msg, err)
+	}
+}
+
 // Ignore function is used to ignore errors deliberately, while keeping the
 // linter happy.
 func Ignore(_ error) {

@@ -469,7 +469,7 @@ func TestMillion(t *testing.T) {
 			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
 			// list.
 			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
-			kvs, err := ol.Rollup()
+			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -928,7 +928,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 		addMutationHelper(t, ol, edge, Set, &txn)
 		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup()
+			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -937,7 +937,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 		commits++
 	}
 
-	kvs, err := ol.Rollup()
+	kvs, err := ol.Rollup(nil)
 	for _, kv := range kvs {
 		require.Equal(t, uint64(size+1), kv.Version)
 	}
@@ -945,6 +945,8 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
+	require.Nil(t, ol.plist.Pack)
+	require.Equal(t, 0, len(ol.plist.Postings))
 	require.True(t, len(ol.plist.Splits) > 0)
 	verifySplits(t, ol.plist.Splits)
 
@@ -971,7 +973,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		addMutationHelper(t, ol, edge, Set, &txn)
 		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup()
+			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -992,7 +994,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		addMutationHelper(t, ol, edge, Del, &txn)
 		require.NoError(t, ol.commitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup()
+			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -1068,7 +1070,7 @@ func TestMultiPartListMarshal(t *testing.T) {
 	size := int(1e5)
 	ol, _ := createMultiPartList(t, size, false)
 
-	kvs, err := ol.Rollup()
+	kvs, err := ol.Rollup(nil)
 	require.NoError(t, err)
 	require.Equal(t, len(kvs), len(ol.plist.Splits)+1)
 	require.NoError(t, writePostingListToDisk(kvs))
@@ -1096,7 +1098,7 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 	size := int(1e5)
 	originalList, commits := createMultiPartList(t, size, false)
 
-	kvs, err := originalList.Rollup()
+	kvs, err := originalList.Rollup(nil)
 	require.NoError(t, err)
 	require.Equal(t, len(kvs), len(originalList.plist.Splits)+1)
 
@@ -1129,7 +1131,7 @@ func TestMultiPartListDelete(t *testing.T) {
 	})
 	require.Equal(t, 0, counter)
 
-	kvs, err := ol.Rollup()
+	kvs, err := ol.Rollup(nil)
 	require.NoError(t, err)
 	require.Equal(t, len(kvs), 1)
 
@@ -1163,7 +1165,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 		addMutationHelper(t, ol, edge, Set, &txn)
 		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup()
+			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -1190,7 +1192,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 		addMutationHelper(t, ol, edge, Del, &txn)
 		require.NoError(t, ol.commitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup()
+			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -1199,7 +1201,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	}
 
 	// Rollup list at the end of all the deletions.
-	kvs, err := ol.Rollup()
+	kvs, err := ol.Rollup(nil)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
@@ -1227,7 +1229,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 		require.NoError(t, ol.commitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
 
 		if i%2000 == 0 {
-			kvs, err := ol.Rollup()
+			kvs, err := ol.Rollup(nil)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			ol, err = getNew(key, ps, math.MaxUint64)
@@ -1236,7 +1238,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	}
 
 	// Rollup list at the end of all the additions
-	kvs, err = ol.Rollup()
+	kvs, err = ol.Rollup(nil)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
@@ -1257,20 +1259,8 @@ func TestSingleListRollup(t *testing.T) {
 	size := int(1e5)
 	ol, commits := createMultiPartList(t, size, true)
 
-	// Roll list into a single list.
-	kv := &bpb.KV{}
-	err := ol.SingleListRollup(kv)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(kv.UserMeta))
-	require.Equal(t, BitCompletePosting, kv.UserMeta[0])
-
-	plist := pb.PostingList{}
-	err = plist.Unmarshal(kv.Value)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(plist.Splits))
-
 	var labels []string
-	err = ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
+	err := ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
 		if len(p.Label) > 0 {
 			labels = append(labels, p.Label)
 		}
@@ -1281,6 +1271,16 @@ func TestSingleListRollup(t *testing.T) {
 	for i, label := range labels {
 		require.Equal(t, label, strconv.Itoa(int(i+1)))
 	}
+
+	var bl pb.BackupPostingList
+	kv, err := ol.ToBackupPostingList(&bl, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(kv.UserMeta))
+	require.Equal(t, BitCompletePosting, kv.UserMeta[0])
+
+	plist := FromBackupPostingList(&bl)
+	require.Equal(t, 0, len(plist.Splits))
+	// TODO: Need more testing here.
 }
 
 func TestRecursiveSplits(t *testing.T) {
@@ -1312,7 +1312,7 @@ func TestRecursiveSplits(t *testing.T) {
 	}
 
 	// Rollup the list. The final output should have more than two parts.
-	kvs, err := ol.Rollup()
+	kvs, err := ol.Rollup(nil)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
@@ -1338,7 +1338,6 @@ var ps *badger.DB
 
 func TestMain(m *testing.M) {
 	x.Init()
-	Config.AllottedMemory = 1024.0
 	Config.CommitFraction = 0.10
 
 	dir, err := ioutil.TempDir("", "storetest_")
@@ -1346,7 +1345,8 @@ func TestMain(m *testing.M) {
 
 	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))
 	x.Check(err)
-	Init(ps)
+	// Not using posting list cache
+	Init(ps, 0)
 	schema.Init(ps)
 
 	r := m.Run()
