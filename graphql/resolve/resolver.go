@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/types"
@@ -749,7 +751,7 @@ func completeDgraphResult(
 	// it should be using f.DgraphAlias() to get values from valToComplete.
 	// It works ATM because there hasn't been a scenario where there are two fields with same
 	// name in implementing types of an interface with @custom on some field in those types.
-	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.DgraphAlias()])
+	err = resolveCustomFields(ctx, field.SelectionSet(), valToComplete[field.DgraphAlias()])
 	if err != nil {
 		errs = append(errs, schema.AsGQLErrors(err)...)
 	}
@@ -810,7 +812,8 @@ type graphqlResp struct {
 	Errors x.GqlErrorList         `json:"errors,omitempty"`
 }
 
-func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+func resolveCustomField(ctx context.Context, f schema.Field, vals []interface{}, mu *sync.RWMutex,
+	errCh chan error) {
 	defer api.PanicHandler(func(err error) {
 		errCh <- internalServerError(err, f)
 	})
@@ -876,6 +879,8 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			body["query"] = fconf.RemoteGqlQuery
 			body["variables"] = map[string]interface{}{fconf.GraphqlBatchModeArgument: requestInput}
 			requestInput = body
+		} else if f.HasLambdaDirective() {
+			requestInput = getBodyForLambda(ctx, f, requestInput, nil)
 		}
 
 		b, err := json.Marshal(requestInput)
@@ -1040,7 +1045,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 // }
 // In the example above, resolveNestedFields would be called on classes field and vals would be the
 // list of all users.
-func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
+func resolveNestedFields(ctx context.Context, f schema.Field, vals []interface{}, mu *sync.RWMutex,
 	errCh chan error) {
 	defer api.PanicHandler(func(err error) {
 		errCh <- internalServerError(err, f)
@@ -1119,7 +1124,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 	}
 	mu.RUnlock()
 
-	if err := resolveCustomFields(f.SelectionSet(), input); err != nil {
+	if err := resolveCustomFields(ctx, f.SelectionSet(), input); err != nil {
 		errCh <- err
 		return
 	}
@@ -1183,7 +1188,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 // work.
 // TODO - We can be smarter about this and know before processing the query if we should be making
 // this recursive call upfront.
-func resolveCustomFields(fields []schema.Field, data interface{}) error {
+func resolveCustomFields(ctx context.Context, fields []schema.Field, data interface{}) error {
 	if data == nil {
 		return nil
 	}
@@ -1214,9 +1219,9 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 		numRoutines++
 		hasCustomDirective, _ := f.HasCustomDirective()
 		if !hasCustomDirective {
-			go resolveNestedFields(f, vals, mu, errCh)
+			go resolveNestedFields(ctx, f, vals, mu, errCh)
 		} else {
-			go resolveCustomField(f, vals, mu, errCh)
+			go resolveCustomField(ctx, f, vals, mu, errCh)
 		}
 	}
 
@@ -1789,6 +1794,23 @@ func makeRequest(client *http.Client, method, url, body string,
 	return b, err
 }
 
+func getBodyForLambda(ctx context.Context, field schema.Field, parents,
+	args interface{}) map[string]interface{} {
+	body := make(map[string]interface{})
+	body["resolver"] = field.GetObjectName() + "." + field.Name()
+	body["authHeader"] = map[string]interface{}{
+		"key":   authorization.GetHeader(),
+		"value": authorization.GetJwtToken(ctx),
+	}
+	if parents != nil {
+		body["parents"] = parents
+	}
+	if args != nil {
+		body["args"] = args
+	}
+	return body
+}
+
 func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Field) *Resolved {
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
@@ -1805,7 +1827,11 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 
 	var body string
 	if hrc.Template != nil {
-		b, err := json.Marshal(*hrc.Template)
+		jsonTemplate := *hrc.Template
+		if field.HasLambdaDirective() {
+			jsonTemplate = getBodyForLambda(ctx, field, nil, *hrc.Template)
+		}
+		b, err := json.Marshal(jsonTemplate)
 		if err != nil {
 			return emptyResult(jsonMarshalError(err, field, *hrc.Template))
 		}

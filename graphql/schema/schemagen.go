@@ -395,7 +395,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			pwdField := getPasswordField(def)
 
 			for _, f := range def.Fields {
-				if f.Type.Name() == "ID" {
+				if f.Type.Name() == "ID" || hasCustomOrLambda(f) {
 					continue
 				}
 

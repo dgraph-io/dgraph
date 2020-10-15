@@ -252,6 +252,18 @@ func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
 	return validateJWTCustomClaims(jwtToken[0])
 }
 
+func GetJwtToken(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	jwtToken := md.Get(string(AuthJwtCtxKey))
+	if len(jwtToken) != 1 {
+		return ""
+	}
+	return jwtToken[0]
+}
+
 func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	if metainfo.Algo == "" {
 		return nil, fmt.Errorf(
