@@ -92,7 +92,7 @@ instances to achieve high-availability.
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 
-	x.RegisterDgraphTLSFlags(flag)
+	x.RegisterClusterTLSFlags(flag)
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -116,7 +116,8 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
 	}
 
-	tlsConf, err := x.GenerateServerTLSConfig(x.LoadInternalTLSServerHelperConfig(Zero.Conf.GetString("dgraph_tls_dir")))
+	cnf := x.LoadClusterTLSServerHelperConfig(Zero.Conf.GetString("cluster_tls_dir"))
+	tlsConf, err := x.GenerateServerTLSConfig(cnf)
 	x.Check(err)
 
 	if tlsConf != nil {
@@ -174,7 +175,7 @@ func run() {
 
 	x.PrintVersion()
 
-	tlsConf, err := x.LoadInternalTLSClientHelperConfig(Zero.Conf)
+	tlsConf, err := x.LoadClusterTLSClientHelperConfig(Zero.Conf)
 	if err != nil {
 		glog.Error("unable to load tls config for internal communication ", err)
 		return

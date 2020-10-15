@@ -55,14 +55,14 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 		"provided by the client to the server.")
 }
 
-func RegisterDgraphTLSFlags(flag *pflag.FlagSet) {
-	flag.String("dgraph_tls_dir", "",
+func RegisterClusterTLSFlags(flag *pflag.FlagSet) {
+	flag.String("cluster_tls_dir", "",
 		"Path to directory that has mTLS certificates and keys for dgraph internal communication")
-	flag.String("dgraph_tls_server_name", "",
+	flag.String("cluster_tls_server_name", "",
 		"server name to be used for mTLS for dgraph internal communication")
 }
 
-func LoadInternalTLSServerHelperConfig(certDir string) *TLSHelperConfig {
+func LoadClusterTLSServerHelperConfig(certDir string) *TLSHelperConfig {
 	if certDir == "" {
 		return nil
 	}
@@ -78,22 +78,22 @@ func LoadInternalTLSServerHelperConfig(certDir string) *TLSHelperConfig {
 	return conf
 }
 
-func LoadInternalTLSClientHelperConfig(v *viper.Viper) (*TLSHelperConfig, error) {
+func LoadClusterTLSClientHelperConfig(v *viper.Viper) (*TLSHelperConfig, error) {
 	conf := &TLSHelperConfig{}
 	conf.UseSystemCACerts = true
-	conf.CertDir = v.GetString("dgraph_tls_dir")
+	conf.CertDir = v.GetString("cluster_tls_dir")
 	if conf.CertDir != "" {
 		conf.CertRequired = true
 		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
-		conf.Cert = path.Join(conf.CertDir, "client." + v.GetString("dgraph_tls_server_name") + ".crt")
-		conf.Key = path.Join(conf.CertDir, "client." + v.GetString("dgraph_tls_server_name") + ".key")
+		conf.Cert = path.Join(conf.CertDir, "client." + v.GetString("cluster_tls_server_name") + ".crt")
+		conf.Key = path.Join(conf.CertDir, "client." + v.GetString("cluster_tls_server_name") + ".key")
 		conf.ClientAuth = "REQUIREANDVERIFY"
-		conf.ServerName= v.GetString("dgraph_tls_server_name")
+		conf.ServerName= v.GetString("cluster_tls_server_name")
 		return conf, nil
 	}
 
-	if v.GetString("dgraph_tls_server_name") != "" {
-		return nil, errors.Errorf("--dgraph_tls_dir is required for enabling TLS")
+	if v.GetString("cluster_tls_server_name") != "" {
+		return nil, errors.Errorf("--cluster_tls_dir is required for enabling TLS")
 	}
 
 	return nil, nil

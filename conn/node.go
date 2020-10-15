@@ -66,16 +66,16 @@ type Node struct {
 	_raft      raft.Node
 
 	// Fields which are never changed after init.
-	StartTime   time.Time
-	Cfg         *raft.Config
-	MyAddr      string
-	Id          uint64
-	peers       map[uint64]string
-	confChanges map[uint64]chan error
-	messages    chan sendmsg
-	RaftContext *pb.RaftContext
-	Store       *raftwal.DiskStorage
-	Rand        *rand.Rand
+	StartTime       time.Time
+	Cfg             *raft.Config
+	MyAddr          string
+	Id              uint64
+	peers           map[uint64]string
+	confChanges     map[uint64]chan error
+	messages        chan sendmsg
+	RaftContext     *pb.RaftContext
+	Store           *raftwal.DiskStorage
+	Rand            *rand.Rand
 	tlsClientConfig *x.TLSHelperConfig
 
 	Proposals proposals
