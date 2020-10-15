@@ -20,6 +20,9 @@ BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME  = unnamed
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
+GOVERSION      ?=
+GOOS          ?= $(shell go env GOOS)
+GOARCH        ?= $(shell go env GOARCH)
 
 # Use the next build version on master branch
 # NOTE: this needs to be updated with each new release
@@ -30,10 +33,11 @@ else
 BUILD_VERSION ?= $(shell git describe --always --tags)
 endif
 
-GOOS          ?= $(shell go env GOOS)
 # Only build with jemalloc on Linux
 ifeq ($(GOOS),linux)
 	BUILD_TAGS ?= jemalloc
+	XGO_FLAGS  ?= -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2 \
+		      -depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof'
 endif
 GOPATH        ?= $(shell go env GOPATH)
 MODIFIED = $(shell git diff-index --quiet HEAD || echo "-mod")
@@ -71,11 +75,15 @@ endif
 HAS_JEMALLOC = $(shell test -f /usr/local/lib/libjemalloc.a && echo "jemalloc")
 JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2"
 
-.PHONY: all $(BIN)
+.PHONY: all $(BIN) clean build_flags uninstall install jemalloc
 all: $(BIN)
 
 $(BIN): clean jemalloc
+ifneq ($(XGO),)
+	xgo -go=go-$(GOVERSION) --targets=$(GOOS)/$(GOARCH) $(BUILD_FLAGS) $(XGO_FLAGS) .
+else
 	@go build $(BUILD_FLAGS) -o $(BIN)
+endif
 
 clean:
 	@rm -f $(BIN)
@@ -86,7 +94,7 @@ uninstall:
 install: jemalloc
 	@echo "Commit SHA256: `git rev-parse HEAD`"
 	@echo "Old SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
-	@go install $(BUILD_FLAGS)
+	@$(XGO) install $(BUILD_FLAGS)
 	@echo "New SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
 
 jemalloc:
