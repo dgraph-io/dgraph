@@ -96,6 +96,9 @@ instances to achieve high-availability.
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
 	flag.String("tls_disabled_route", "", "comma separated zero endpoint which will be disabled from TLS encryption."+
 		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
+
+	flag.String("tls_min_version", "TLS11", "min version of tls supported. Valid values are TLS11, TLS12")
+	flag.String("tls_max_version", "TLS12", "max version of tls supported. Valid values are TLS11, TLS12")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {

@@ -172,7 +172,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-
+	flag.String("tls_min_version", "TLS11", "min version of tls supported. Valid values are TLS11, TLS12")
+	flag.String("tls_max_version", "TLS12", "max version of tls supported. Valid values are TLS11, TLS12")
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
