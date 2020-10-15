@@ -17,6 +17,7 @@
 package transaction
 
 import (
+	"container/heap"
 	"errors"
 	"sync"
 
@@ -27,154 +28,144 @@ import (
 // ErrTransactionExists is returned when trying to add a transaction to the queue that already exists
 var ErrTransactionExists = errors.New("transaction is already in queue")
 
-// PriorityQueue implements a priority queue using a double linked list
-type PriorityQueue struct {
-	head  *node
-	mutex sync.Mutex
-	txs   map[common.Hash]*ValidTransaction
+// An Item is something we manage in a priority queue.
+type Item struct {
+	data *ValidTransaction
+	hash common.Hash
+
+	priority uint64 // The priority of the item in the queue.
+
+	// The order is an monotonically increasing sequence and is used to differentiate between `Item`
+	// having the same priority value.
+	order uint64
+
+	// The index is needed by update and is maintained by the heap.Interface methods.
+	index int // The index of the item in the heap.
 }
 
-type node struct {
-	data   *ValidTransaction
-	parent *node
-	child  *node
-	hash   common.Hash
-}
+// A PriorityQueue implements heap.Interface and holds Items.
+type priorityQueue []*Item
 
-// NewPriorityQueue creates new instance of PriorityQueue
-func NewPriorityQueue() *PriorityQueue {
-	pq := PriorityQueue{
-		head:  nil,
-		mutex: sync.Mutex{},
-		txs:   make(map[common.Hash]*ValidTransaction),
+func (pq priorityQueue) Len() int { return len(pq) }
+
+func (pq priorityQueue) Less(i, j int) bool {
+	// For Item having same priority value we compare them based on their insertion order(FIFO).
+	if pq[i].priority == pq[j].priority {
+		return pq[i].order < pq[j].order
 	}
-
-	return &pq
+	// We want Pop to give us the highest, not lowest, priority so we use greater than here.
+	return pq[i].priority > pq[j].priority
 }
 
-// RemoveExtrinsic removes an extrinsic from the queue
-func (q *PriorityQueue) RemoveExtrinsic(ext types.Extrinsic) {
+func (pq priorityQueue) Swap(i, j int) {
+	pq[i], pq[j] = pq[j], pq[i]
+	pq[i].index = i
+	pq[j].index = j
+}
+
+func (pq *priorityQueue) Push(x interface{}) {
+	n := len(*pq)
+	item := x.(*Item)
+	item.index = n
+	*pq = append(*pq, item)
+}
+
+func (pq *priorityQueue) Pop() interface{} {
+	old := *pq
+	n := len(old)
+	item := old[n-1]
+	old[n-1] = nil  // avoid memory leak
+	item.index = -1 // for safety
+	*pq = old[0 : n-1]
+	return item
+}
+
+// PriorityQueue is a thread safe wrapper over `priorityQueue`
+type PriorityQueue struct {
+	pq        priorityQueue
+	currOrder uint64
+	txs       map[common.Hash]*Item
+	sync.Mutex
+}
+
+func NewPriorityQueue() *PriorityQueue {
+	spq := &PriorityQueue{
+		pq:  make(priorityQueue, 0),
+		txs: make(map[common.Hash]*Item),
+	}
+	heap.Init(&spq.pq)
+	return spq
+}
+
+func (spq *PriorityQueue) RemoveExtrinsic(ext types.Extrinsic) {
+	spq.Lock()
+	defer spq.Unlock()
+
 	hash := ext.Hash()
-
-	q.mutex.Lock()
-	defer q.mutex.Unlock()
-
-	if q.txs[hash] == nil {
+	item, ok := spq.txs[hash]
+	if !ok {
 		return
 	}
 
-	curr := q.head
-	for ; curr != nil; curr = curr.child {
-		if curr.data.Extrinsic.Hash() == hash {
-			if curr.parent != nil {
-				curr.parent.child = curr.child
-			} else {
-				// head of queue
-				q.head = curr.child
-			}
-
-			if curr.child != nil {
-				curr.child.parent = curr.parent
-			}
-		}
-	}
-
-	delete(q.txs, hash)
+	heap.Remove(&spq.pq, item.index)
+	delete(spq.txs, hash)
 }
 
-// Pop removes the head of the queue and returns it
-func (q *PriorityQueue) Pop() *ValidTransaction {
-	q.mutex.Lock()
-	defer q.mutex.Unlock()
-	if q.head == nil {
-		return nil
-	}
-	head := q.head
-	q.head = head.child
+// Push inserts a valid transaction with priority p into the queue
+func (spq *PriorityQueue) Push(txn *ValidTransaction) (common.Hash, error) {
+	spq.Lock()
+	defer spq.Unlock()
 
-	delete(q.txs, head.hash)
-
-	return head.data
-}
-
-// Peek returns the next item without removing it from the queue
-func (q *PriorityQueue) Peek() *ValidTransaction {
-	q.mutex.Lock()
-	defer q.mutex.Unlock()
-	if q.head == nil {
-		return nil
-	}
-	return q.head.data
-}
-
-// Pending returns all the transactions currently in the queue
-func (q *PriorityQueue) Pending() []*ValidTransaction {
-	q.mutex.Lock()
-	defer q.mutex.Unlock()
-
-	txs := []*ValidTransaction{}
-
-	curr := q.head
-	for {
-		if curr == nil {
-			return txs
-		}
-
-		txs = append(txs, curr.data)
-		curr = curr.child
-	}
-}
-
-// Push traverses the list and places a valid transaction with priority p directly before the
-// first node with priority p-1. If there are other nodes with priority p, the new node is placed
-// behind them.
-func (q *PriorityQueue) Push(vt *ValidTransaction) (common.Hash, error) {
-	q.mutex.Lock()
-	defer q.mutex.Unlock()
-	curr := q.head
-
-	hash := vt.Extrinsic.Hash()
-	if q.txs[hash] != nil {
+	hash := txn.Extrinsic.Hash()
+	if spq.txs[hash] != nil {
 		return hash, ErrTransactionExists
 	}
 
-	if curr == nil {
-		q.head = &node{data: vt, hash: hash}
-		q.txs[hash] = vt
-		return hash, nil
+	item := &Item{
+		data:     txn,
+		hash:     hash,
+		order:    spq.currOrder,
+		priority: txn.Validity.Priority,
+	}
+	spq.currOrder++
+	heap.Push(&spq.pq, item)
+	spq.txs[hash] = item
+
+	return hash, nil
+}
+
+// Pop removes the transaction with has the highest priority value from the queue and returns it.
+// If there are multiple transaction with same priority value then it return them in FIFO order.
+func (spq *PriorityQueue) Pop() *ValidTransaction {
+	spq.Lock()
+	defer spq.Unlock()
+	if spq.pq.Len() == 0 {
+		return nil
 	}
 
-	for ; curr != nil; curr = curr.child {
-		currPriority := curr.data.Validity.Priority
-		if vt.Validity.Priority > currPriority {
-			newNode := &node{
-				data:   vt,
-				parent: curr.parent,
-				child:  curr,
-				hash:   hash,
-			}
+	item := heap.Pop(&spq.pq).(*Item)
+	delete(spq.txs, item.hash)
+	return item.data
+}
 
-			if curr.parent == nil {
-				q.head = newNode
-			} else {
-				curr.parent.child = newNode
-			}
-			curr.parent = newNode
-
-			q.txs[hash] = vt
-			return hash, nil
-		} else if curr.child == nil {
-			newNode := &node{
-				data:   vt,
-				parent: curr,
-				hash:   hash,
-			}
-			curr.child = newNode
-
-			q.txs[hash] = vt
-			return hash, nil
-		}
+// Peek returns the next item without removing it from the queue
+func (spq *PriorityQueue) Peek() *ValidTransaction {
+	spq.Lock()
+	defer spq.Unlock()
+	if spq.pq.Len() == 0 {
+		return nil
 	}
+	return spq.pq[0].data
+}
 
-	return common.Hash{}, nil
+// Pending returns all the transactions currently in the queue
+func (spq *PriorityQueue) Pending() []*ValidTransaction {
+	spq.Lock()
+	defer spq.Unlock()
+
+	var txns []*ValidTransaction
+	for idx := 0; idx < spq.pq.Len(); idx++ {
+		txns = append(txns, spq.pq[idx].data)
+	}
+	return txns
 }
