@@ -734,7 +734,6 @@ func addSelectionSetFrom(
 		}
 		addOrder(child, f)
 		addPagination(child, f)
-		// TODO: check if cascade should be handled specially on the union field
 		addCascadeDirective(child, f)
 		rbac := auth.evaluateStaticRules(f.Type())
 
@@ -959,6 +958,7 @@ func idFilter(filter map[string]interface{}, idField schema.FieldDefinition) []u
 
 // addFilter adds a filter to the input DQL query. It returns false if the field for which the
 // filter was specified should not be included in the DQL query.
+// Currently, it would only be false for a union field when no memberTypes are queried.
 func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}) bool {
 	if len(filter) == 0 {
 		return true

@@ -1206,7 +1206,7 @@ func rewriteObject(
 			case map[string]interface{}:
 				if fieldDef.Type().IsUnion() {
 					frags = rewriteUnionField(ctx, typ, fieldDef, myUID, varGen,
-						withAdditionalDeletes, val, deepXID, xidMetadata)
+						withAdditionalDeletes, val, deepXID, xidMetadata, -1)
 				} else if fieldDef.Type().IsPoint() {
 					// For Point type, the mutation json in Dgraph is as follows:
 					// { "type": "Point", "coordinates": [11.11, 22.22]}
@@ -1319,12 +1319,21 @@ func rewriteUnionField(ctx context.Context,
 	withAdditionalDeletes bool,
 	obj map[string]interface{},
 	deepXID int,
-	xidMetadata *xidMetadata) *mutationRes {
+	xidMetadata *xidMetadata,
+	listIndex int) *mutationRes {
 	if len(obj) != 1 {
 		errFrag := newFragment(nil)
-		errFrag.err = fmt.Errorf(
-			"Value for field `%s` must have exactly one child, found %d children",
-			srcField.DgraphPredicate(), len(obj))
+		// if this was called from rewriteList,
+		// the listIndex will tell which particular item in the list has an error.
+		if listIndex >= 0 {
+			errFrag.err = fmt.Errorf(
+				"value for field `%s` in type `%s` index `%d` must have exactly one child, "+
+					"found %d children", srcField.Name(), parentTyp.Name(), listIndex, len(obj))
+		} else {
+			errFrag.err = fmt.Errorf(
+				"value for field `%s` in type `%s` must have exactly one child, found %d children",
+				srcField.Name(), parentTyp.Name(), len(obj))
+		}
 		return &mutationRes{secondPass: []*mutationFragment{errFrag}}
 	}
 
@@ -1786,13 +1795,13 @@ func rewriteList(
 	result.secondPass = []*mutationFragment{newFragment(make([]interface{}, 0))}
 	foundSecondPass := false
 
-	for _, obj := range objects {
+	for i, obj := range objects {
 		switch obj := obj.(type) {
 		case map[string]interface{}:
 			var frag *mutationRes
 			if typ.IsUnion() {
 				frag = rewriteUnionField(ctx, parentTyp, srcField, srcUID, varGen,
-					withAdditionalDeletes, obj, deepXID, xidMetadata)
+					withAdditionalDeletes, obj, deepXID, xidMetadata, i)
 			} else {
 				frag = rewriteObject(ctx, parentTyp, typ, srcField, srcUID, varGen,
 					withAdditionalDeletes, obj, deepXID, xidMetadata)
