@@ -286,6 +286,9 @@ func run() {
 		x.RemoveCidFile()
 	}()
 
+	st.zero.closer.AddRunning(1)
+	go x.MonitorMemoryMetrics(st.zero.closer)
+
 	glog.Infoln("Running Dgraph Zero...")
 	st.zero.closer.Wait()
 	glog.Infoln("Closer closed.")

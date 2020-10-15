@@ -19,8 +19,15 @@ package x
 import (
 	"context"
 	"expvar"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"os/exec"
+	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.opencensus.io/trace"
@@ -28,10 +35,13 @@ import (
 	"contrib.go.opencensus.io/exporter/jaeger"
 	oc_prom "contrib.go.opencensus.io/exporter/prometheus"
 	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/viper"
 	"go.opencensus.io/stats"
+	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 )
@@ -399,4 +409,120 @@ func RegisterExporters(conf *viper.Viper, service string) {
 	// if err := view.Register(views...); err != nil {
 	// 	glog.Fatalf("Unable to register OpenCensus stats: %v", err)
 	// }
+}
+
+// MonitorCacheHealth periodically monitors the cache metrics and reports if
+// there is high contention in the cache.
+func MonitorCacheHealth(db *badger.DB, closer *z.Closer) {
+	defer closer.Done()
+
+	record := func(ct string) {
+		switch ct {
+		case "pstore-block":
+			metrics := db.BlockCacheMetrics()
+			ostats.Record(context.Background(), PBlockHitRatio.M(metrics.Ratio()))
+		case "pstore-index":
+			metrics := db.IndexCacheMetrics()
+			ostats.Record(context.Background(), PIndexHitRatio.M(metrics.Ratio()))
+		default:
+			panic("invalid cache type")
+		}
+	}
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			record("pstore-block")
+			record("pstore-index")
+		case <-closer.HasBeenClosed():
+			return
+		}
+	}
+}
+
+func MonitorMemoryMetrics(lc *z.Closer) {
+	defer lc.Done()
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	update := func() {
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+
+		inUse := ms.HeapInuse + ms.StackInuse
+		// From runtime/mstats.go:
+		// HeapIdle minus HeapReleased estimates the amount of memory
+		// that could be returned to the OS, but is being retained by
+		// the runtime so it can grow the heap without requesting more
+		// memory from the OS. If this difference is significantly
+		// larger than the heap size, it indicates there was a recent
+		// transient spike in live heap size.
+		idle := ms.HeapIdle - ms.HeapReleased
+
+		ostats.Record(context.Background(),
+			MemoryInUse.M(int64(inUse)),
+			MemoryIdle.M(int64(idle)),
+			MemoryProc.M(int64(getMemUsage())))
+	}
+	// Call update immediately so that Dgraph reports memory stats without
+	// having to wait for the first tick.
+	update()
+
+	for {
+		select {
+		case <-lc.HasBeenClosed():
+			return
+		case <-ticker.C:
+			update()
+		}
+	}
+}
+
+func getMemUsage() int {
+	if runtime.GOOS != "linux" {
+		pid := os.Getpid()
+		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
+		c1, err := exec.Command("bash", "-c", cmd).Output()
+		if err != nil {
+			// In case of error running the command, resort to go way
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			megs := ms.Alloc
+			return int(megs)
+		}
+
+		rss := strings.Split(string(c1), " ")[0]
+		kbs, err := strconv.Atoi(rss)
+		if err != nil {
+			return 0
+		}
+
+		megs := kbs << 10
+		return megs
+	}
+
+	contents, err := ioutil.ReadFile("/proc/self/stat")
+	if err != nil {
+		glog.Errorf("Can't read the proc file. Err: %v\n", err)
+		return 0
+	}
+
+	cont := strings.Split(string(contents), " ")
+	// 24th entry of the file is the RSS which denotes the number of pages
+	// used by the process.
+	if len(cont) < 24 {
+		glog.Errorln("Error in RSS from stat")
+		return 0
+	}
+
+	rss, err := strconv.Atoi(cont[23])
+	if err != nil {
+		glog.Errorln(err)
+		return 0
+	}
+
+	return rss * os.Getpagesize()
 }
