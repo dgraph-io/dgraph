@@ -1272,6 +1272,10 @@ func completeObject(
 	var buf bytes.Buffer
 	comma := ""
 
+	// Below map keeps track of fields which have been seen as part of
+	// interface to avoid double entry in the resulting response
+	seenField := make(map[string]bool)
+
 	x.Check2(buf.WriteRune('{'))
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
@@ -1289,6 +1293,9 @@ func completeObject(
 		if len(dgraphTypes) > 0 {
 			includeField = f.IncludeInterfaceField(dgraphTypes)
 		}
+		if _, ok := seenField[f.ResponseName()]; ok {
+			includeField = false
+		}
 		if !includeField {
 			continue
 		}
@@ -1297,6 +1304,8 @@ func completeObject(
 		x.Check2(buf.WriteRune('"'))
 		x.Check2(buf.WriteString(f.ResponseName()))
 		x.Check2(buf.WriteString(`": `))
+
+		seenField[f.ResponseName()] = true
 
 		val := res[f.DgraphAlias()]
 		if f.Name() == schema.Typename {
