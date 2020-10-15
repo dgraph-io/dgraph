@@ -1079,7 +1079,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					for _, v := range vals {
 						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
 					}
-          
+
 				case "near":
 					//  For Geo type we have `near` filter which is written as follows:
 					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
@@ -1097,8 +1097,8 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					// 	between(numLikes,10,20). Order of arguments (min,max) is neccessary or
 					// it will return empty
 					vals := val.(map[string]interface{})
-					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["min"])}
-					  gql.Arg{Value: maybeQuoteArg(fn, vals["max"])})
+					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["min"])},
+						gql.Arg{Value: maybeQuoteArg(fn, vals["max"])})
 
 				default:
 					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, val)})
