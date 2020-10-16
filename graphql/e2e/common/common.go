@@ -266,7 +266,7 @@ func BootstrapServer(schema, data []byte) {
 
 // RunAll runs all the test functions in this package as sub tests.
 func RunAll(t *testing.T) {
-	// admin tests
+	//admin tests
 	t.Run("admin", admin)
 	t.Run("health", health)
 	t.Run("partial health", partialHealth)

@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -47,10 +48,10 @@ const (
 )
 
 type ErrorCase struct {
-	Name       string
-	GQLRequest string
-	variables  map[string]interface{}
-	Errors     x.GqlErrorList
+	Name         string
+	GQLRequest   string
+	GQLVariables string
+	Errors       x.GqlErrorList
 }
 
 func graphQLCompletionOn(t *testing.T) {
@@ -188,12 +189,20 @@ func requestValidationErrors(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
+			// -- Arrange --
+			var vars map[string]interface{}
+			if tcase.GQLVariables != "" {
+				d := json.NewDecoder(strings.NewReader(tcase.GQLVariables))
+				d.UseNumber()
+				err := d.Decode(&vars)
+				require.NoError(t, err)
+			}
 			test := &GraphQLParams{
 				Query:     tcase.GQLRequest,
-				Variables: tcase.variables,
+				Variables: vars,
 			}
 			gqlResponse := test.ExecuteAsPost(t, GraphqlURL)
-
+			fmt.Printf("%s", string(gqlResponse.Data))
 			require.Nil(t, gqlResponse.Data)
 			if diff := cmp.Diff(tcase.Errors, gqlResponse.Errors); diff != "" {
 				t.Errorf("errors mismatch (-want +got):\n%s", diff)

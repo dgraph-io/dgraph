@@ -4,7 +4,7 @@
     query {
       getAuthorszzz(id: "0x1") { name }
     }
-  gqlvariables: 
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Cannot query field \"getAuthorszzz\" on type \"Query\". Did you mean
@@ -17,7 +17,7 @@
     query {
       getAuthor(id: "0x1") { namezzz }
     }
-  gqlvariables: 
+  gqlvariables: | 
     { }
   errors:
     [ { "message": "Cannot query field \"namezzz\" on type \"Author\". Did you mean \"name\"?",
@@ -29,7 +29,7 @@
     query {
       getAuthor(id: $theID) { name }
     }
-  gqlvariables: 
+  gqlvariables: | 
     { }
   errors:
     [ { "message": "Variable \"$theID\" is not defined.",
@@ -41,7 +41,7 @@
     query {
       queryAuthor(filter: { reputation: { le: "hi there" } }) { name }
     }
-  gqlvariables: 
+  gqlvariables: | 
     { }
   errors:
     [ { "message": "Expected type Float, found \"hi there\".",
@@ -53,7 +53,7 @@
     query queryAuthor($filter: AuthorFiltarzzz!) {
       queryAuthor(filter: $filter) { name }
     }
-  gqlvariables: 
+  gqlvariables: | 
     { "filter": "type was wrong" }
   errors:
     [ { "message": "Variable type provided AuthorFiltarzzz! is incompatible with expected
@@ -71,7 +71,7 @@
     query queryAuthor($filter: AuthorFilter!) {
       queryAuthor(filter: $filter) { name }
     }
-  gqlvariables: 
+  gqlvariables: | 
     { "filter": 57 }
   errors:
     [ { "message": "must be defined",
@@ -83,8 +83,8 @@
     query queryAuthor($filter: AuthorFilter!) {
       queryAuthor(filter: $filter) { name }
     }
-  gqlvariables: 
-    { "filter": { "reputation": { le: "hi there" } } }
+  gqlvariables: |
+    { "filter": { "reputation": { "le" : "hi there" } } }
   errors:
     [ { "message": "must be defined",
       "path": [ "variable", "filter"] } ]
@@ -94,7 +94,7 @@
     subscription {
       getAuthor(id: "0x1") { name }
     }
-  gqlvariables:
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Cannot query field \"getAuthor\" on type \"Subscription\".",
@@ -109,7 +109,7 @@
         reputation
       }
     }
-  gqlvariables:
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Field `title` is not present in type `Author`. You can only use fields which are in type `Author`",
@@ -129,7 +129,7 @@
         }
       }
     }
-  gqlvariables:
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Out of range value '2147483648', for type `Int`",
@@ -149,7 +149,7 @@
         }
       }
     }
-  gqlvariables:
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Out of range value '9223372036854775808', for type `Int64`",
@@ -165,7 +165,7 @@
         }
       }
     }
-  gqlvariables:
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Field `name` is not present in type `AddAuthorPayload`. You can only use fields which are in type `AddAuthorPayload`",
@@ -185,7 +185,7 @@
         }
       }
     }
-  gqlvariables:
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Type mismatched for Value `180143985094`, expected: Int64, got: 'String'",
@@ -205,7 +205,7 @@
         }
       }
     }
-  gqlvariables:
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Type mismatched for Value `180143985094.0`, expected: Int64, got: 'Float'",
@@ -225,11 +225,11 @@
           }
         }
       }
-  gqlvariables:
-    {"numLikes":2147483648 }
+  gqlvariables: |
+    { "numLikes": 2147483648 }
   errors:
     [ { "message": "Out of range value '2147483648', for type `Int`",
-        "path": [ { "variable","numLikes" } ] } ]
+        "path": [ "variable","numLikes" ] } ]
 
 -
   name: "Out of range error for int64 type in variable"
@@ -245,11 +245,11 @@
         }
       }
     }
-  gqlvariables:
+  gqlvariables: |
     { "numViews":9223372036854775808}
   errors:
     [ { "message": "Out of range value '9223372036854775808', for type `Int64`",
-        "path": [ { "variable", "numViews" } ] } ]
+        "path": [ "variable", "numViews" ] } ]
 
 -
   name: "Float value is Incompatible with Int64 type given in variable"
@@ -259,15 +259,19 @@
         post{
           title
           numViews
+          author{
+            name
+          }
         }
       }
     }
-  gqlvariables:
+  gqlvariables: |
     { "Post": [
       { "title": "Dgraph",
+        "author":{"name":"Alice"},
         "numViews":180143985094.0
       } ]
     }
   errors:
     [ { "message": "strconv.ParseInt: parsing \"180143985094.0\": invalid syntax",
-        "path": [ { "variable", "Post",0,"numViews" } ] } ]
+        "path": [ "variable", "Post",0.0,"numViews" ] } ]
