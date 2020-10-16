@@ -367,7 +367,7 @@ message UidBlock {
 message UidPack {
 	uint32 block_size        = 1;
 	repeated UidBlock blocks = 2;
-	uint64 allocator = 23; // This field should be set to 0 during marshal.
+	uint64 alloc_ref = 23; // This field should be set to 0 during marshal.
 }
 
 message PostingList {

@@ -2,7 +2,6 @@
 title = "Admin"
 weight = 12
 [menu.main]
-  url = "/graphql/admin/"
   name = "Admin"
   identifier = "graphql-admin"
   parent = "graphql"

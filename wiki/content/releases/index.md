@@ -1,7 +1,6 @@
 +++
 title = "Dgraph Releases"
 [menu.main]
-  url = "/releases/"
   name = "Releases"
   identifier = "releases"
   weight = 14

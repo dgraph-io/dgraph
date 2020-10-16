@@ -2,7 +2,6 @@
 title = "Quick Start"
 weight = 1
 [menu.main]
-  url = "/graphql/quick-start/"
   name = "Quick Start"
   identifier = "graphql-quick-start"
   parent = "graphql"

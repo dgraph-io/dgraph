@@ -2,7 +2,6 @@
 title = "Overview"
 weight = 1
 [menu.main]
-  url = "/graphql/overview/"
   name = "Overview"
   identifier = "graphql-overview"
   parent = "graphql"
