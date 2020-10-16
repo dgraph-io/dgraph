@@ -94,7 +94,7 @@ func (c *countIndexer) addCountEntry(ce countEntry) {
 	}
 
 	if !sameIndexKey {
-		if c.countBuf.Len() > 0 {
+		if c.countBuf.LenNoPadding() > 0 {
 			c.wg.Add(1)
 			go c.writeIndex(c.countBuf)
 			c.countBuf = getBuf()
@@ -164,22 +164,21 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		}
 	}
 
-	slice, next := []byte{}, 1
-	for next != 0 {
-		slice, next = buf.Slice(next)
+	buf.SliceIterate(func(slice []byte) error {
 		ce := countEntry(slice)
 		if !bytes.Equal(lastCe.Key(), ce.Key()) {
 			encode()
 		}
 		encoder.Add(ce.Uid())
 		lastCe = ce
-	}
+		return nil
+	})
 	encode()
 	x.Check(c.writer.Write(list))
 }
 
 func (c *countIndexer) wait() {
-	if c.countBuf.Len() > 0 {
+	if c.countBuf.LenNoPadding() > 0 {
 		c.wg.Add(1)
 		go c.writeIndex(c.countBuf)
 	} else {

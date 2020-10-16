@@ -62,7 +62,7 @@ func (t *Trie) Put(key string, uid uint64) {
 
 // Size returns the size of Arena used by this Trie so far.
 func (t *Trie) Size() uint32 {
-	return uint32(t.buf.Len())
+	return uint32(t.buf.LenNoPadding())
 }
 
 // Release would release the resources used by the Arena.
