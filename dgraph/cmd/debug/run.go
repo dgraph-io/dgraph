@@ -545,6 +545,10 @@ func printKeys(db *badger.DB) {
 			if !bytes.Equal(item.Key(), key) {
 				break
 			}
+			if item.IsDeletedOrExpired() {
+				x.Check2(buf.WriteString(" {v.del}"))
+				break
+			}
 			switch item.UserMeta() {
 			// This is rather a default case as one of the 4 bit must be set.
 			case posting.BitCompletePosting, posting.BitEmptyPosting, posting.BitSchemaPosting:
