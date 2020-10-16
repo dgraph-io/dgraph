@@ -242,7 +242,7 @@ func run() {
 	// Initialize the servers.
 	var st state
 	st.serveGRPC(grpcListener, store)
-	st.serveHTTP(httpListener)
+	st.startListenHttpAndHttps(httpListener)
 
 	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)

@@ -243,7 +243,7 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("OK"))
 }
 
-func (st *state) serveHTTP(l net.Listener) {
+func (st *state) startListenHttpAndHttps(l net.Listener) {
 	m := cmux.New(l)
 	startServers(m)
 
@@ -256,7 +256,35 @@ func (st *state) serveHTTP(l net.Listener) {
 	}()
 }
 
-func serveHTTPServer(l net.Listener) {
+func startServers(m cmux.CMux) {
+	// if tls enabled http rule will check that the requested route should not be part of tls_enabled_routes
+	// though with tls enabled, all routes irrespective of config are encrypted using tls.
+	httpRule := m.Match(func(r io.Reader) bool {
+		path, ok := parseRequestPath(r)
+		if !ok {
+			return false
+		}
+		_, ok = opts.tlsEnabledRoute[path]
+		return !ok
+	})
+	go startListen(httpRule)
+
+	// if enabled, tls has to be default behaviour because there is no clean way to decrypt request params using cmux.
+	// So when it says tlsEnabledRoute, these route will not be available without TLS.
+	if len(opts.tlsEnabledRoute) > 0 {
+		tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
+		x.Check(err)
+		if tlsCfg == nil {
+			glog.Fatalf("tls_enabled_route is set but tls config is not provided. Please define variable --tls_dir")
+		}
+
+		httpsRule := m.Match(cmux.Any())
+		//this is chained listener. tls listener will decrypt the message and send it in plain text to HTTP server
+		go startListen(tls.NewListener(httpsRule, tlsCfg))
+	}
+}
+
+func startListen(l net.Listener) {
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
@@ -271,33 +299,6 @@ func serveHTTPServer(l net.Listener) {
 	glog.Infoln("All http(s) requests finished.")
 	if err != nil {
 		glog.Errorf("Http(s) shutdown err: %v", err)
-	}
-}
-
-func startServers(m cmux.CMux) {
-	// if tls enabled http rule will check that the requested route should not be part of tls_enabled_routes
-	// though with tls enabled, all routes irrespective of config are encrypted using tls.
-	httpRule := m.Match(func(r io.Reader) bool {
-		path, ok := parseRequestPath(r)
-		if !ok {
-			return false
-		}
-		_, ok = opts.tlsEnabledRoute[path]
-		return !ok
-	})
-	go serveHTTPServer(httpRule)
-
-	// if enabled, tls has to be default behaviour because there is no clean way to decrypt request params using cmux.
-	// So when it says tlsEnabledRoute, these route will not be available without TLS.
-	if len(opts.tlsEnabledRoute) > 0 {
-		tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
-		x.Check(err)
-		if tlsCfg == nil {
-			glog.Fatalf("tls_enabled_route is set but tls config is not provided. Please define variable --tls_dir")
-		}
-
-		httpsRule := m.Match(cmux.Any())
-		go serveHTTPServer(tls.NewListener(httpsRule, tlsCfg))
 	}
 }
 
