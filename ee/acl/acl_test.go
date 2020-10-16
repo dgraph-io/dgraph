@@ -131,7 +131,7 @@ func deleteGroup(t *testing.T, accessToken, name string, confirmDeletion bool) *
 	return resp
 }
 
-func deleteUsingNQuad(userClient *dgo.Dgraph, sub string, pred string, val string) (*api.Response, error) {
+func deleteUsingNQuad(userClient *dgo.Dgraph, sub, pred, val string) (*api.Response, error) {
 	ctx := context.Background()
 	txn := userClient.NewTxn()
 	mutString := fmt.Sprintf("%s %s %s .", sub, pred, val)
@@ -3219,6 +3219,8 @@ func TestDeleteGrootUserShouldFail(t *testing.T) {
 		UserID:   x.GrootId,
 		Passwd:   "password",
 	})
+	require.NoError(t, err, "login failed")
+
 
 	resp := deleteUser(t, accessJwt, "groot", false)
 	require.Contains(t, resp.Errors.Error(),
