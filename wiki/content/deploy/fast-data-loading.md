@@ -80,6 +80,8 @@ Alpha server.
 
 `-x, --xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
 
+`--ludicrous_mode` (default: false): Live Loader, by default, does smart batching to ingest data faster. This behavior is not required in ludicrous mode and ends up taking more time and memory. This option allows the user to notify Live Loader that the Alpha server is running in ludicrous mode. This mode disables smart batching, increasing speed, and memory. This option should only be used if Dgraph is running in ludicrous mode.
+
 `--vault_*` flags specifies the Vault server address, role id, secret id and 
 field that contains the encryption key that can be used to decrypt the encrypted export. 
 

@@ -227,7 +227,7 @@ type fastJsonNode *node
 // newNode returns a fastJsonNode with its attr set to attr,
 // and all other meta set to their default value.
 func (enc *encoder) newNode(attr uint16) fastJsonNode {
-	b := enc.alloc.Allocate(nodeSize)
+	b := enc.alloc.AllocateAligned(nodeSize)
 	n := (*node)(unsafe.Pointer(&b[0]))
 	enc.setAttr(n, attr)
 	return n

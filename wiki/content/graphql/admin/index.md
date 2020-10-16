@@ -2,7 +2,6 @@
 title = "Admin"
 weight = 12
 [menu.main]
-  url = "/graphql/admin/"
   name = "Admin"
   identifier = "graphql-admin"
   parent = "graphql"
@@ -252,12 +251,12 @@ Here are the important types, queries, and mutations from the `admin` schema.
 	}
 
 	input ConfigInput {
-
 		"""
-		Estimated memory the LRU cache can take. Actual usage by the process would be
-		more than specified here. (default -1 means no set limit)
+		Estimated memory the caches can take. Actual usage by the process would be
+		more than specified here. The caches will be updated according to the
+        cache_percentage flag.
 		"""
-		lruMb: Float
+		cacheMb: Float
 
 		"""
 		True value of logRequest enables logging of all the requests coming to alphas.
@@ -271,7 +270,7 @@ Here are the important types, queries, and mutations from the `admin` schema.
 	}
 
 	type Config {
-		lruMb: Float
+		cacheMb: Float
 	}
 
 	type Query {

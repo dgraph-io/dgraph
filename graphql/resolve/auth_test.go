@@ -281,7 +281,7 @@ func TestVerificationWithJWKUrl(t *testing.T) {
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
 	_, err = authorization.ExtractCustomClaims(ctx)
-	require.True(t, strings.Contains(err.Error(), "token is expired"))
+	require.True(t, strings.Contains(err.Error(), "unable to parse jwt token:token is unverifiable: Keyfunc returned an error"))
 
 }
 

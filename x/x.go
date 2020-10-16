@@ -45,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dustin/go-humanize"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -65,6 +66,8 @@ var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
 	ErrNoJwt        = errors.New("no accessJwt available")
+	// ErrorInvalidLogin is returned when username or password is incorrect in login
+	ErrorInvalidLogin = errors.New("invalid username or password")
 )
 
 const (
@@ -320,6 +323,7 @@ func (gqlErr *GqlError) WithPath(path []interface{}) *GqlError {
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
+	w.Header().Set("Content-Type", "application/json")
 	var qr queryRes
 	ext := make(map[string]interface{})
 	ext["code"] = code
@@ -409,6 +413,20 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+// AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
+func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
+	if authToken := r.Header.Get("X-Dgraph-AuthToken"); authToken != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("auth-token", authToken)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
 }
 
 // AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
@@ -1062,36 +1080,33 @@ func MonitorCacheHealth(db *badger.DB, closer *z.Closer) {
 // Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
 func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
-	// Get initial size on start.
-	_, lastVlogSize := store.Size()
-	const GB = int64(1 << 30)
 
 	// Runs every 1m, checks size of vlog and runs GC conditionally.
-	vlogTicker := time.NewTicker(1 * time.Minute)
-	defer vlogTicker.Stop()
-	// Runs vlog GC unconditionally every 10 minutes.
-	mandatoryVlogTicker := time.NewTicker(10 * time.Minute)
-	defer mandatoryVlogTicker.Stop()
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
 
 	runGC := func() {
+		_, before := store.Size()
+		var runs int
 		for err := error(nil); err == nil; {
 			// If a GC is successful, immediately run it again.
+			runs++
 			err = store.RunValueLogGC(0.7)
 		}
-		_, lastVlogSize = store.Size()
+		if runs == 0 {
+			return
+		}
+		_, after := store.Size()
+		glog.V(2).Infof("Ran Value log GC %d times. Before: %s After: %s",
+			runs, humanize.IBytes(uint64(before)), humanize.IBytes(uint64(after)))
 	}
 
+	runGC()
 	for {
 		select {
 		case <-closer.HasBeenClosed():
 			return
-		case <-vlogTicker.C:
-			_, currentVlogSize := store.Size()
-			if currentVlogSize < lastVlogSize+GB {
-				continue
-			}
-			runGC()
-		case <-mandatoryVlogTicker.C:
+		case <-ticker.C:
 			runGC()
 		}
 	}

@@ -522,7 +522,7 @@ func main() {
 		"extra flags for alphas.")
 	cmd.PersistentFlags().StringVar(&opts.ZeroFlags, "extra_zero_flags", "",
 		"extra flags for zeros.")
-	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", false,
+	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", true,
 		"set container names in docker compose.")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {

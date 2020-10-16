@@ -108,8 +108,10 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// Options around how to set up Badger.
-	flag.Int("badger.compression_level", 1,
-		"The compression level for Badger. A higher value uses more resources.")
+	flag.String("badger.compression", "snappy",
+		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
+			"level (if applicable) for the postings directory. none would disable compression,"+
+			" while zstd:1 would set zstd compression at level 1.")
 	flag.Int64("badger.cache_mb", 64, "Total size of cache (in MB) per shard in reducer.")
 	flag.String("badger.cache_percentage", "70,30",
 		"Cache percentages summing up to 100 for various caches"+
@@ -120,6 +122,7 @@ func init() {
 }
 
 func run() {
+	ctype, clevel := x.ParseCompression(Bulk.Conf.GetString("badger.compression"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
@@ -147,7 +150,8 @@ func run() {
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
 		ClientDir:        Bulk.Conf.GetString("xidmap"),
 		// Badger options
-		BadgerCompressionLevel: Bulk.Conf.GetInt("badger.compression_level"),
+		BadgerCompression:      ctype,
+		BadgerCompressionLevel: clevel,
 	}
 
 	x.PrintVersion()

@@ -72,7 +72,7 @@ func touchedUidsHeader(t *testing.T) {
 			}
 		}`,
 	}
-	req, err := query.createGQLPost(GraphqlURL)
+	req, err := query.CreateGQLPost(GraphqlURL)
 	require.NoError(t, err)
 
 	client := http.Client{Timeout: 10 * time.Second}
@@ -344,6 +344,92 @@ func allPosts(t *testing.T) []*post {
 	require.Equal(t, 4, len(result.QueryPost))
 
 	return result.QueryPost
+}
+
+func inFilter(t *testing.T) {
+	addStateParams := &GraphQLParams{
+		Query: `mutation addState($name1: String!, $code1: String!, $name2: String!, $code2: String! ) {
+			addState(input: [{name: $name1, xcode: $code1},{name: $name2, xcode: $code2}]) {
+				state {
+					xcode
+					name
+				}
+			}
+		}`,
+
+		Variables: map[string]interface{}{
+			"name1": "A State",
+			"code1": "abc",
+			"name2": "B State",
+			"code2": "def",
+		},
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	updateStateParams := &GraphQLParams{
+		Query: `mutation{
+			updateState(input: { 
+				filter: {
+					xcode: { in: ["abc", "def"]}},
+				set: { 
+					capital: "Common Capital"} }){
+				state{
+					xcode
+					name
+					capital
+				}
+			}
+		  }`,
+	}
+	gqlResponse = updateStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	getStateParams := &GraphQLParams{
+		Query: `query{
+			queryState(filter: {xcode: {in: ["abc", "def"]}}){
+				xcode
+				name
+				capital
+			}
+		}`,
+	}
+
+	gqlResponse = getStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryState []*state
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(result.QueryState))
+	queriedResult := map[string]*state{}
+	queriedResult[result.QueryState[0].Name] = result.QueryState[0]
+	queriedResult[result.QueryState[1].Name] = result.QueryState[1]
+
+	state1 := &state{
+		Name:    "A State",
+		Code:    "abc",
+		Capital: "Common Capital",
+	}
+	state2 := &state{
+		Name:    "B State",
+		Code:    "def",
+		Capital: "Common Capital",
+	}
+
+	if diff := cmp.Diff(state1, queriedResult[state1.Name]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	if diff := cmp.Diff(state2, queriedResult[state2.Name]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	deleteFilter := map[string]interface{}{"xcode": map[string]interface{}{"in": []string{"abc", "def"}}}
+	deleteGqlType(t, "State", deleteFilter, 2, nil)
 }
 
 func deepFilter(t *testing.T) {

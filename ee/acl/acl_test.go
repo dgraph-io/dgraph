@@ -2587,7 +2587,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			name: "config update has guardian auth",
 			query: `
 					mutation {
-					  config(input: {lruMb: 1}) {
+					  config(input: {cacheMb: -1}) {
 						response {
 						  code
 						  message
@@ -2597,7 +2597,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "config",
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
-				Message:   "resolving config failed because lru_mb must be at least 1024\n",
+				Message:   "resolving config failed because cache_mb must be non-negative",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"config": null}`,
@@ -2607,7 +2607,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			query: `
 					query {
 					  config {
-						lruMb
+						cacheMb
 					  }
 					}`,
 			queryName:          "config",
@@ -3106,4 +3106,31 @@ func TestMutationWithValueVar(t *testing.T) {
 	require.NoError(t, err)
 
 	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson()))
+}
+
+func TestFailedLogin(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+
+	grootClient, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	op := api.Operation{DropAll: true}
+	if err := grootClient.Alter(ctx, &op); err != nil {
+		t.Fatalf("Unable to cleanup db:%v", err)
+	}
+	require.NoError(t, err)
+
+	client, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	// User is not present
+	err = client.Login(ctx, userid, "simplepassword")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
+
+	resetUser(t)
+	// User is present
+	err = client.Login(ctx, userid, "randomstring")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
+
 }

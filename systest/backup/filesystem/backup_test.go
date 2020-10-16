@@ -63,11 +63,23 @@ func TestBackupFilesystem(t *testing.T) {
 
 	// Add schema and types.
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .
-		type Node {
-			movie
-		}`}))
+	 name: string @index(hash) .
+     type Node {
+         movie
+     }`}))
 
+	var buf bytes.Buffer
+	for i := 0; i < 10000; i++ {
+		buf.Write([]byte(fmt.Sprintf(`<_:x%d> <name> "ibrahim" .
+		`, i)))
+	}
 	// Add initial data.
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: buf.Bytes(),
+	})
+
+	require.NoError(t, err)
 	original, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
@@ -108,10 +120,23 @@ func TestBackupFilesystem(t *testing.T) {
 
 	// Check the predicates and types in the schema are as expected.
 	// TODO: refactor tests so that minio and filesystem tests share most of their logic.
-	preds := []string{"dgraph.graphql.schema", "dgraph.cors", "dgraph.graphql.xid", "dgraph.type", "movie",
-		"dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at"}
+	preds := []string{"dgraph.graphql.schema", "dgraph.cors", "name", "dgraph.graphql.xid",
+		"dgraph.type", "movie", "dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at"}
 	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.history"}
 	testutil.CheckSchema(t, preds, types)
+
+	verifyUids := func() {
+		query := `
+		{
+			me(func: eq(name, "ibrahim")) {
+				count(uid)
+			}
+		}`
+		res, err := dg.NewTxn().Query(context.Background(), query)
+		require.NoError(t, err)
+		require.JSONEq(t, string(res.GetJson()), `{"me":[{"count":10000}]}`)
+	}
+	verifyUids()
 
 	checks := []struct {
 		blank, expected string
@@ -141,6 +166,7 @@ func TestBackupFilesystem(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `
 		movie: string .
 		actor: string .
+		name: string @index(hash) .
 		type Node {
 			movie
 		}
@@ -222,6 +248,7 @@ func TestBackupFilesystem(t *testing.T) {
 		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
 
+	verifyUids()
 	// Remove the full backup testDirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))

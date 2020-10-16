@@ -1,4 +1,22 @@
 -
+  name: "in filter"
+  gqlquery: |
+    query {
+      queryState(filter: {code: {in: ["abc", "def", "ghi"]}}) {
+        code
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryState(func: type(State)) @filter(eq(State.code, "abc", "def", "ghi")) {
+        code : State.code
+        name : State.name
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "Geo query"
   gqlquery: |
     query {
@@ -177,6 +195,22 @@
   gqlquery: |
     query {
       queryAuthor(filter: { name: { eq: "A. N. Author" } }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter connectives with null values gets skipped "
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" },not:null }) {
         name
       }
     }
