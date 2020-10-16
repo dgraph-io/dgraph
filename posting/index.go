@@ -196,7 +196,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 
 	// For single uid predicates, updating the reverse index requires that the existing
 	// entries for this key in the index are removed.
-	pred, ok := schema.State().Get(ctx, t.Attr)
+	pred, ok := schema.State().Get(t.Attr)
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
 		t.Op == pb.DirectedEdge_SET && t.ValueId != 0
 	if isSingleUidUpdate {
@@ -213,7 +213,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 				Attr:    t.Attr,
 				Op:      pb.DirectedEdge_DEL,
 			}
-			return txn.addReverseAndCountMutation(ctx, delEdge)
+			return txn.addReverseAndCountMutation(delEdge)
 		})
 		if err != nil {
 			return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
@@ -421,12 +421,12 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 		return l.handleDeleteAll(ctx, edge, txn)
 	}
 
-	doUpdateIndex := pstore != nil && schema.State().IsIndexed(ctx, edge.Attr)
-	hasCountIndex := schema.State().HasCount(ctx, edge.Attr)
+	doUpdateIndex := pstore != nil && schema.State().IsIndexed(edge.Attr)
+	hasCountIndex := schema.State().HasCount(edge.Attr)
 
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
-	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(ctx, edge.Attr) {
+	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(edge.Attr) {
 		if err := txn.addReverseAndCountMutation(ctx, edge); err != nil {
 			return err
 		}
