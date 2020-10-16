@@ -534,11 +534,7 @@ func printKeys(db *badger.DB) {
 		if pk.StartUid > 0 {
 			fmt.Fprintf(&buf, " startUid: %d ", pk.StartUid)
 		}
-		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(key))
-		if opt.itemMeta {
-			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
-			fmt.Fprintf(&buf, " ts: %d", item.Version())
-		}
+
 		var sz, deltaCount int64
 		for ; itr.ValidForPrefix(prefix); itr.Next() {
 			item := itr.Item()
@@ -557,6 +553,8 @@ func printKeys(db *badger.DB) {
 			case posting.BitDeltaPosting:
 				sz += item.EstimatedSize()
 				deltaCount++
+			default:
+				fmt.Printf("No user meta found for key: %s\n", hex.EncodeToString(key))
 			}
 			if item.DiscardEarlierVersions() {
 				x.Check2(buf.WriteString(" {v.las}"))
@@ -570,7 +568,13 @@ func printKeys(db *badger.DB) {
 				break
 			}
 		}
-		fmt.Fprintf(&buf, " TotalSize: %d, deltas: %d", sz, deltaCount)
+
+		if opt.itemMeta {
+			fmt.Fprintf(&buf, " ts: %d", item.Version())
+			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
+		}
+		fmt.Fprintf(&buf, " sz: %d dcnt: %d", sz, deltaCount)
+		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(key))
 		fmt.Println(buf.String())
 		loop++
 	}
