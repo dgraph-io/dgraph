@@ -21,89 +21,30 @@ aliases = ["/contribute"]
     <a  href="{{< relref "graphql/overview/index.md">}}">
       <h2>GraphQL</h2>
       <p>
-        Dgraph gives you GraphQL, not a translation layer.
+        Dgraph gives you GraphQL, not a translation layer
       </p>
+<!--
       <p class="cta">
         Get Started with GraphQL
       </p>
-    </a>
-  </div>
-  <div class="item">
-    <div class="icon"><i class="lni lni-cloud"></i></div>
-    <a href="{{< relref "slash-graphql/introduction.md">}}">
-      <h2>Run Dgraph in the Cloud</h2>
-      <p>
-        Work with your data in a fully-managed cloud service.
-      </p>
-      <p class="cta">
-        Get started with Slash GraphQL
-      </p>
-    </a>
-  </div>
-  <div class="item">
-    <div class="icon"><i class="lni lni-play"></i></div>
-    <a href="{{< relref "get-started/index.md">}}">
-      <h2>Quickstart Guide</h2>
-      <p>
-        A single page quickstart guide to get started with Dgraph
-      </p>
-      <p class="cta">
-        Quickstart Guide
-      </p>
-    </a>
-  </div>
-  <div class="item">
-    <div class="icon"><i class="fa fa-book" aria-hidden="true"></i></div>
-    <a href="https://dgraph.io/tour/" target="_blank">
-      <h2>Tour of Dgraph</h2>
-      <p>
-        Take an interactive tour of Dgraph to learn the concepts
-      </p>
-    </a>
-  </div>
-  <div class="item">
-    <div class="icon"><i class="fa fa-university" aria-hidden="true"></i></div>
-    <a href="{{< relref "tutorials/index.md">}}">
-      <h2>Tutorials</h2>
-      <p>
-        Get Started with Dgraph alongside a series of tutorials
-      </p>
+-->
     </a>
   </div>
   <div class="item">
     <div class="icon"><i class="fa fa-code-fork" aria-hidden="true"></i></div>
     <a href="{{< relref "query-language/_index.md">}}">
-      <h2>Dgraph Query Language</h2>
+      <h2>DQL</h2>
       <p>
-        A reference guide for Dgraph query language
+        A reference guide for Dgraph Query Language (DQL)
       </p>
     </a>
   </div>
-  <div class="item">
-    <div class="icon"><i class="lni lni-graduation"></i></div>
-    <a href="{{< relref "tips/index.md">}}">
-      <h2>GraphQL+- Tips and Tricks</h2>
-      <p>
-        A list of commonly used GraphQL+- query snippets
-      </p>
-    </a>
-  </div>
-  <div class="item">
-    <div class="icon"><i class="lni lni-fireworks"></i></div>
-    <a href="{{< relref "clients/_index.md">}}">
-      <h2>Clients</h2>
-    <p>
-      Dgraph clients in various programming languages
-    </p>
-    </a>
-  </div>
-
   <div class="item">
     <div class="icon"><i class="fa fa-wrench" aria-hidden="true"></i></div>
     <a href="{{< relref "deploy/_index.md">}}">
       <h2>Deploy</h2>
       <p>
-        Running Dgraph cluster in production
+        Running a Dgraph cluster in production
       </p>
     </a>
   </div>
