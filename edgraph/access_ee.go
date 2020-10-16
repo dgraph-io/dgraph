@@ -453,7 +453,6 @@ func ResetAcl(closer *z.Closer) {
 		}
 		atomic.StoreUint64(&x.GuardiansGroupUid, guardiansGroupUidUint)
 
-		glog.Infof("guardians group uid: %d", guardiansGroupUidUint)
 		glog.Infof("Successfully upserted the guardians group")
 		return nil
 	}
@@ -522,7 +521,7 @@ func ResetAcl(closer *z.Closer) {
 			return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
 		}
 		atomic.StoreUint64(&x.GrootUserUid, grootUserUidUint)
-		glog.Infof("groot user uid: %d", grootUserUidUint)
+
 		glog.Infof("Successfully upserted groot account")
 		return nil
 	}
