@@ -397,6 +397,13 @@ func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
 		}
 		return false
 	}
+	// TODO(Anurag): Below check can be expanded to check deeper equivalence
+	if sg.Filters != nil {
+		if ssg.Filters != nil && len(sg.Filters) == len(ssg.Filters) {
+			return true
+		}
+		return false
+	}
 	return true
 }
 
