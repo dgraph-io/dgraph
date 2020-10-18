@@ -1958,12 +1958,12 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				temp.Children = append(temp.Children, s)
 			}
 
-			for _, ch := range sg.Children {
-				if ch.isSimilar(temp) {
-					return out, errors.Errorf("Repeated subgraph: [%s] while using expand()",
-						ch.Attr)
-				}
-			}
+			// for _, ch := range sg.Children {
+			// 	if ch.isSimilar(temp) {
+			// 		return out, errors.Errorf("Repeated subgraph: [%s] while using expand()",
+			// 			ch.Attr)
+			// 	}
+			// }
 			out = append(out, temp)
 		}
 	}
