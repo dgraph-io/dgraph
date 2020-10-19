@@ -184,13 +184,13 @@ Car and Bus movement for each relation is modeled as facets and specified in the
     _:b <friend> _:c (weightCar=20, weightBus=1) .
     _:c <friend> _:d (weightCar=11, weightBus=1.1) .
     _:a <friend> _:d (weightCar=70, weightBus=2) .
-    _:a <name> "Alice7" .
+    _:a <name> "Alice" .
     _:a <dgraph.type> "Person" .
-    _:b <name> "Bob7" .
+    _:b <name> "Bob" .
     _:b <dgraph.type> "Person" .
-    _:c <name> "Tom7" .
+    _:c <name> "Tom" .
     _:c <dgraph.type> "Person" .
-    _:d <name> "Mallory7" .
+    _:d <name> "Mallory" .
     _:d <dgraph.type> "Person" .
   }
 }
@@ -201,8 +201,8 @@ Query to find the shortest path relying on `Car` and `Bus`:
 ```graphql
 {
 
- A as var(func: eq(name, "Alice7"))
- M as var(func: eq(name, "Mallory7"))
+ A as var(func: eq(name, "Alice"))
+ M as var(func: eq(name, "Mallory"))
 
  sPathBus as shortest(from: uid(A), to: uid(M)) {  
   friend
@@ -229,24 +229,24 @@ The response contains the following paths conforming to the specified weights:
 ```
     "pathBus": [
       {
-        "name": "Alice7"
+        "name": "Alice"
       },
       {
-        "name": "Mallory7"
+        "name": "Mallory"
       }
     ],
     "pathCar": [
       {
-        "name": "Alice7"
+        "name": "Alice"
       },
       {
-        "name": "Bob7"
+        "name": "Bob"
       },
       {
-        "name": "Tom7"
+        "name": "Tom"
       },
       {
-        "name": "Mallory7"
+        "name": "Mallory"
       }
     ]
 ```
