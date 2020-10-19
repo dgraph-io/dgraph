@@ -2,7 +2,6 @@
 title = "Get Started - Quickstart Guide"
 aliases = ["/get-started-old"]
 [menu.main]
-  url = "/get-started"
   name = "Get Started"
   identifier = "get-started"
   parent = "dql"

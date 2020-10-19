@@ -6,6 +6,7 @@ interface Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	enemyOf(filter: ResidentFilter): Resident
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
 }
 
@@ -13,6 +14,7 @@ type Human implements Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	enemyOf(filter: ResidentFilter): Resident
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	totalCredits: Int
@@ -22,6 +24,7 @@ type Droid implements Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	enemyOf(filter: ResidentFilter): Resident
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	primaryFunction: String
 }
@@ -36,6 +39,17 @@ type Starship {
 	id: ID!
 	name: String! @search(by: [term])
 	length: Float
+}
+
+union Resident = Human | Droid | Starship
+
+union Tool @remote = Droid | Starship
+
+type Planet {
+	id: ID!
+	name: String!
+	residents(filter: ResidentFilter, first: Int, offset: Int): [Resident!] @dgraph(pred: "residents")
+	bestTool: Tool @custom(http: {url:"http://mock:8888/tool/$id",method:"GET"})
 }
 
 #######################
@@ -213,6 +227,11 @@ type AddHumanPayload {
 	numUids: Int
 }
 
+type AddPlanetPayload {
+	planet(filter: PlanetFilter, order: PlanetOrder, first: Int, offset: Int): [Planet]
+	numUids: Int
+}
+
 type AddStarshipPayload {
 	starship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	numUids: Int
@@ -232,6 +251,12 @@ type DeleteDroidPayload {
 
 type DeleteHumanPayload {
 	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	msg: String
+	numUids: Int
+}
+
+type DeletePlanetPayload {
+	planet(filter: PlanetFilter, order: PlanetOrder, first: Int, offset: Int): [Planet]
 	msg: String
 	numUids: Int
 }
@@ -257,6 +282,11 @@ type UpdateHumanPayload {
 	numUids: Int
 }
 
+type UpdatePlanetPayload {
+	planet(filter: PlanetFilter, order: PlanetOrder, first: Int, offset: Int): [Planet]
+	numUids: Int
+}
+
 type UpdateStarshipPayload {
 	starship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	numUids: Int
@@ -269,6 +299,7 @@ type UpdateStarshipPayload {
 enum CharacterHasFilter {
 	name
 	friends
+	enemyOf
 	appearsIn
 }
 
@@ -279,6 +310,7 @@ enum CharacterOrderable {
 enum DroidHasFilter {
 	name
 	friends
+	enemyOf
 	appearsIn
 	primaryFunction
 }
@@ -291,6 +323,7 @@ enum DroidOrderable {
 enum HumanHasFilter {
 	name
 	friends
+	enemyOf
 	appearsIn
 	starships
 	totalCredits
@@ -299,6 +332,21 @@ enum HumanHasFilter {
 enum HumanOrderable {
 	name
 	totalCredits
+}
+
+enum PlanetHasFilter {
+	name
+	residents
+}
+
+enum PlanetOrderable {
+	name
+}
+
+enum ResidentType {
+	Human
+	Droid
+	Starship
 }
 
 enum StarshipHasFilter {
@@ -318,6 +366,7 @@ enum StarshipOrderable {
 input AddDroidInput {
 	name: String!
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]!
 	primaryFunction: String
 }
@@ -325,9 +374,15 @@ input AddDroidInput {
 input AddHumanInput {
 	name: String!
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]!
 	starships: [StarshipRef]
 	totalCredits: Int
+}
+
+input AddPlanetInput {
+	name: String!
+	residents: [ResidentRef!]
 }
 
 input AddStarshipInput {
@@ -354,6 +409,7 @@ input CharacterOrder {
 input CharacterPatch {
 	name: String
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]
 }
 
@@ -380,6 +436,7 @@ input DroidOrder {
 input DroidPatch {
 	name: String
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]
 	primaryFunction: String
 }
@@ -388,6 +445,7 @@ input DroidRef {
 	id: ID
 	name: String
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]
 	primaryFunction: String
 }
@@ -416,6 +474,7 @@ input HumanOrder {
 input HumanPatch {
 	name: String
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]
 	starships: [StarshipRef]
 	totalCredits: Int
@@ -425,9 +484,48 @@ input HumanRef {
 	id: ID
 	name: String
 	friends: [CharacterRef]
+	enemyOf: ResidentRef
 	appearsIn: [Episode!]
 	starships: [StarshipRef]
 	totalCredits: Int
+}
+
+input PlanetFilter {
+	id: [ID!]
+	has: PlanetHasFilter
+	and: PlanetFilter
+	or: PlanetFilter
+	not: PlanetFilter
+}
+
+input PlanetOrder {
+	asc: PlanetOrderable
+	desc: PlanetOrderable
+	then: PlanetOrder
+}
+
+input PlanetPatch {
+	name: String
+	residents: [ResidentRef!]
+}
+
+input PlanetRef {
+	id: ID
+	name: String
+	residents: [ResidentRef!]
+}
+
+input ResidentFilter {
+	memberTypes: [ResidentType!]
+	humanFilter: HumanFilter
+	droidFilter: DroidFilter
+	starshipFilter: StarshipFilter
+}
+
+input ResidentRef {
+	humanRef: HumanRef
+	droidRef: DroidRef
+	starshipRef: StarshipRef
 }
 
 input StarshipFilter {
@@ -474,6 +572,12 @@ input UpdateHumanInput {
 	remove: HumanPatch
 }
 
+input UpdatePlanetInput {
+	filter: PlanetFilter!
+	set: PlanetPatch
+	remove: PlanetPatch
+}
+
 input UpdateStarshipInput {
 	filter: StarshipFilter!
 	set: StarshipPatch
@@ -493,6 +597,8 @@ type Query {
 	queryDroid(filter: DroidFilter, order: DroidOrder, first: Int, offset: Int): [Droid]
 	getStarship(id: ID!): Starship
 	queryStarship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
+	getPlanet(id: ID!): Planet
+	queryPlanet(filter: PlanetFilter, order: PlanetOrder, first: Int, offset: Int): [Planet]
 }
 
 #######################
@@ -511,5 +617,8 @@ type Mutation {
 	addStarship(input: [AddStarshipInput!]!): AddStarshipPayload
 	updateStarship(input: UpdateStarshipInput!): UpdateStarshipPayload
 	deleteStarship(filter: StarshipFilter!): DeleteStarshipPayload
+	addPlanet(input: [AddPlanetInput!]!): AddPlanetPayload
+	updatePlanet(input: UpdatePlanetInput!): UpdatePlanetPayload
+	deletePlanet(filter: PlanetFilter!): DeletePlanetPayload
 }
 
