@@ -661,7 +661,8 @@ func (n *node) processApplyCh() {
 			psz := proposal.Size()
 			totalSize += int64(psz)
 
-			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil && proposal.Mutations.StartTs == 0 {
+			// In case of upserts the startTs would be > 0, so, no need to check startTs is 0
+			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil {
 				proposal.Mutations.StartTs = State.GetTimestamp(false)
 			}
 
