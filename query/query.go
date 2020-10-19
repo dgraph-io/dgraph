@@ -397,7 +397,8 @@ func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
 		}
 		return false
 	}
-	// TODO(Anurag): Below check can be expanded to check deeper equivalence
+	// Below check doesn't differentiate between different filters.
+	// It is added to differential between `hasFriend` and `hasFriend @filter()`
 	if sg.Filters != nil {
 		if ssg.Filters != nil && len(sg.Filters) == len(ssg.Filters) {
 			return true

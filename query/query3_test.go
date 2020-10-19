@@ -2341,7 +2341,7 @@ func TestPasswordExpandAll1(t *testing.T) {
     }
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"alive":true, "gender":"female","name":"Michonne"}]}}`, js)
 }
 
 func TestPasswordExpandAll2(t *testing.T) {
@@ -2354,7 +2354,8 @@ func TestPasswordExpandAll2(t *testing.T) {
     }
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne", "checkpwd(password)":false}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"alive":true, "checkpwd(password)":false,
+	"gender":"female", "name":"Michonne"}]}}`, js)
 }
 
 func TestPasswordExpandError(t *testing.T) {
@@ -3069,7 +3070,8 @@ func TestTypeFunction(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"uid":"0x2"}, {"uid":"0x3"}, {"uid":"0x4"}, {"uid":"0xcb"}]}}`,
+		`{"data": {"me":[{"uid":"0x2"}, {"uid":"0x3"}, {"uid":"0x4"},{"uid":"0x17"},
+		{"uid":"0x18"},{"uid":"0x19"}, {"uid":"0x1f"}, {"uid":"0xcb"}]}}`,
 		js)
 }
 
@@ -3143,17 +3145,17 @@ func TestQueryUnknownType(t *testing.T) {
 func TestQuerySingleType(t *testing.T) {
 	query := `schema(type: Person) {}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"types":[{"name":"Person",
-		"fields":[{"name":"name"}, {"name":"pet"}]}]}}`,
+	require.JSONEq(t, `{"data":{"types":[{"fields":[{"name":"name"},{"name":"pet"},
+	{"name":"friend"},{"name":"gender"},{"name":"alive"}],"name":"Person"}]}}`,
 		js)
 }
 
 func TestQueryMultipleTypes(t *testing.T) {
 	query := `schema(type: [Person, Animal]) {}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"types":[{"name":"Animal",
-		"fields":[{"name":"name"}]},
-	{"name":"Person", "fields":[{"name":"name"}, {"name":"pet"}]}]}}`, js)
+	require.JSONEq(t, `{"data":{"types":[{"fields":[{"name":"name"}],"name":"Animal"},
+	{"fields":[{"name":"name"},{"name":"pet"},{"name":"friend"},{"name":"gender"},
+	{"name":"alive"}],"name":"Person"}]}}`, js)
 }
 
 func TestRegexInFilterNoDataOnRoot(t *testing.T) {
@@ -3193,7 +3195,8 @@ func TestMultiRegexInFilter(t *testing.T) {
 		}
 	`
 	res := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"q": [{"name": "Michonne"}]}}`, res)
+	require.JSONEq(t, `{"data": {"q": [{"alive":true, "gender":"female",
+	"name":"Michonne"}]}}`, res)
 }
 
 func TestMultiRegexInFilter2(t *testing.T) {

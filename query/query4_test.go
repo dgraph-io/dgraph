@@ -633,8 +633,6 @@ func TestFilterAtSameLevelOnUIDWithExpand(t *testing.T) {
 		}
 	}`
 	js := processQueryNoErr(t, query)
-	// res, _ := json.MarshalIndent(js, " ", "\t")
-	fmt.Println("JS: ", string(js))
 	require.JSONEq(t, `{"data":{"q":[{"name":"Michonne","gender":"female","alive":true,
 	"friend":[{"gender":"male","alive":true,"name":"Rick Grimes"}]}]}}`, js)
 }
