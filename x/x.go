@@ -66,6 +66,8 @@ var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
 	ErrNoJwt        = errors.New("no accessJwt available")
+	// ErrorInvalidLogin is returned when username or password is incorrect in login
+	ErrorInvalidLogin = errors.New("invalid username or password")
 )
 
 const (
@@ -174,10 +176,16 @@ var (
 	Nilbyte []byte
 	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
+	// GuardiansGroupUid is Uid of guardians group node.
+	GuardiansGroupUid uint64
+	// GrootUser Uid is Uid of groot user node.
+	GrootUserUid uint64
 )
 
 func init() {
 	AcceptedOrigins.Store(map[string]struct{}{})
+	atomic.StoreUint64(&GuardiansGroupUid, 0)
+	atomic.StoreUint64(&GrootUserUid, 0)
 }
 
 // UpdateCorsOrigins updates the cors allowlist with the given origins.

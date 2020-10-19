@@ -24,6 +24,8 @@ type Post {
 
 In a single page app, you'll want to render the page for `http://.../posts/0x123` when a user clicks to view the post with id `0x123`.  You app can then use a `getPost(id: "0x123") { ... }` GraphQL query to fetch the data to generate the page.
 
+For input and output, `ID`s are treated as strings.
+
 You'll also be able to update and delete posts by id.
 
 ### The @id directive
@@ -45,8 +47,12 @@ Dgraph will then require a unique username when creating a new user --- it'll ge
 
 Identities created with `@id` are reusable - if you delete an existing user, you can reuse the username.
 
+Fields with the `@id` directive must have the type `String!`.
+
 As with `ID` types, Dgraph will generate queries and mutations so you'll also be able to query, update and delete by id.
 
 ### More to come
+
+We are currently considering allowing types other than `String` with `@id`, see [here](https://discuss.dgraph.io/t/id-with-type-int/10402)
 
 We are currently considering expanding uniqueness to include composite ids and multiple unique fields (e.g. [this](https://discuss.dgraph.io/t/support-multiple-unique-fields-in-dgraph-graphql/8512) issue).

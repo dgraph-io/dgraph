@@ -1584,3 +1584,87 @@
         Computer5 as ComputerOwner.computers @filter(NOT (uid(Computer4)))
       }
     }
+
+-
+  name: "Add mutation with union"
+  gqlmutation: |
+    mutation($patch: UpdateHomeInput!) {
+      updateHome(input: $patch) {
+        home {
+          address
+          members {
+            ... on Dog {
+              breed
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "patch": {
+        "filter": {
+          "id": ["0x123"]
+        },
+        "set": {
+          "address": "United Street",
+          "members": [
+            { "dogRef": { "category": "Mammal", "breed": "German Shephard"} },
+            { "parrotRef": { "category": "Bird", "repeatsWords": ["squawk"]} },
+            { "humanRef": { "name": "Han Solo", "ename": "Han_emp"} }
+          ],
+          "favouriteMember": { "parrotRef": { "id": "0x124"} }
+        },
+        "remove": {
+          "members": [ { "parrotRef": { "id": "0x125"} } ]
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateHome(func: uid(0x123)) @filter(type(Home)) {
+        uid
+      }
+      Parrot3 as Parrot3(func: uid(0x124)) @filter(type(Parrot)) {
+        uid
+      }
+      Parrot8 as Parrot8(func: uid(0x125)) @filter(type(Parrot)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Home.address": "United Street",
+          "Home.favouriteMember": {
+            "uid": "0x124"
+          },
+          "Home.members": [{
+            "Animal.category": "Mammal",
+            "Dog.breed": "German Shephard",
+            "dgraph.type": ["Dog", "Animal"],
+            "uid": "_:Dog4"
+          }, {
+            "Animal.category": "Bird",
+            "Parrot.repeatsWords": ["squawk"],
+            "dgraph.type": ["Parrot", "Animal"],
+            "uid": "_:Parrot5"
+          }, {
+            "Character.name": "Han Solo",
+            "Employee.ename": "Han_emp",
+            "dgraph.type": ["Human", "Character", "Employee"],
+            "uid": "_:Human6"
+          }],
+          "uid": "uid(x)"
+        }
+      cond: "@if(eq(len(Parrot3), 1) AND gt(len(x), 0))"
+    - deletejson: |
+        {
+          "Home.members": [
+            {
+              "uid": "0x125"
+            }
+          ],
+          "uid": "uid(x)"
+        }
+      cond: "@if(eq(len(Parrot8), 1) AND gt(len(x), 0))"

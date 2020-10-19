@@ -2376,7 +2376,7 @@ func addDroid(t *testing.T) string {
 }
 
 func addThingOne(t *testing.T) string {
-	addDroidParams := &GraphQLParams{
+	addThingOneParams := &GraphQLParams{
 		Query: `mutation addThingOne($input: AddThingOneInput!) {
 			addThingOne(input: [$input]) {
 				thingOne {
@@ -2391,7 +2391,7 @@ func addThingOne(t *testing.T) string {
 		}},
 	}
 
-	gqlResponse := addDroidParams.ExecuteAsPost(t, GraphqlURL)
+	gqlResponse := addThingOneParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -2409,7 +2409,7 @@ func addThingOne(t *testing.T) string {
 }
 
 func addThingTwo(t *testing.T) string {
-	addDroidParams := &GraphQLParams{
+	addThingTwoParams := &GraphQLParams{
 		Query: `mutation addThingTwo($input: AddThingTwoInput!) {
 			addThingTwo(input: [$input]) {
 				thingTwo {
@@ -2424,7 +2424,7 @@ func addThingTwo(t *testing.T) string {
 		}},
 	}
 
-	gqlResponse := addDroidParams.ExecuteAsPost(t, GraphqlURL)
+	gqlResponse := addThingTwoParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -2439,6 +2439,111 @@ func addThingTwo(t *testing.T) string {
 
 	requireUID(t, result.AddThingTwo.ThingTwo[0].ID)
 	return result.AddThingTwo.ThingTwo[0].ID
+}
+
+func addHome(t *testing.T, humanId string) (string, string, string, string) {
+	addHomeParams := &GraphQLParams{
+		Query: `mutation addHome($input: AddHomeInput!) {
+			addHome(input: [$input]) {
+				home {
+					id
+					members {
+						__typename
+						... on Animal {
+							id
+						}
+						... on Human {
+							id
+						}
+						... on Plant {
+							id
+						}
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"input": map[string]interface{}{
+				"address": "Avenger Street",
+				"members": []interface{}{
+					map[string]interface{}{
+						"dogRef": map[string]interface{}{
+							"category": "Mammal",
+							"breed":    "German Shephard",
+						},
+					},
+					map[string]interface{}{
+						"parrotRef": map[string]interface{}{
+							"category": "Bird",
+							"repeatsWords": []interface{}{
+								"squawk",
+								"Good Morning!",
+							},
+						},
+					},
+					map[string]interface{}{
+						"humanRef": map[string]interface{}{
+							"id": humanId,
+						},
+					},
+					map[string]interface{}{
+						"plantRef": map[string]interface{}{
+							"breed": "Flower",
+						},
+					},
+				},
+				"favouriteMember": map[string]interface{}{
+					"humanRef": map[string]interface{}{
+						"id": humanId,
+					},
+				},
+			},
+		},
+	}
+
+	gqlResponse := addHomeParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		AddHome struct {
+			Home []struct {
+				ID      string
+				Members []struct {
+					Typename string `json:"__typename"`
+					ID       string
+				}
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	homeId := result.AddHome.Home[0].ID
+	requireUID(t, homeId)
+
+	var dogId, parrotId, plantId string
+	for _, member := range result.AddHome.Home[0].Members {
+		switch member.Typename {
+		case "Dog":
+			dogId = member.ID
+		case "Parrot":
+			parrotId = member.ID
+		case "Plant":
+			plantId = member.ID
+		}
+	}
+	return homeId, dogId, parrotId, plantId
+}
+
+func deleteHome(t *testing.T, homeId, dogId, parrotId, plantId string) {
+	homeFilter := map[string]interface{}{"id": []string{homeId}}
+	deleteGqlType(t, "Home", homeFilter, 1, nil)
+	dogFilter := map[string]interface{}{"id": []string{dogId}}
+	deleteGqlType(t, "Dog", dogFilter, 1, nil)
+	parrotFilter := map[string]interface{}{"id": []string{parrotId}}
+	deleteGqlType(t, "Parrot", parrotFilter, 1, nil)
+	plantFilter := map[string]interface{}{"id": []string{plantId}}
+	deleteGqlType(t, "Plant", plantFilter, 1, nil)
 }
 
 func deleteThingOne(t *testing.T, thingOneId string) {

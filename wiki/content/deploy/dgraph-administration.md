@@ -6,7 +6,41 @@ weight = 18
     parent = "deploy"
 +++
 
-Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.
+Each Dgraph Alpha exposes various administrative (admin) endpoints both over
+HTTP and GraphQL, for example endpoints to export data and to perform a clean
+shutdown. All such admin endpoints are protected by three layers of authentication:
+
+1. IP White-listing (use `--whitelist` flag in alpha to whitelist IPs other than
+   localhost).
+2. Poor-man's auth, if alpha is started with the `--auth_token` flag (means you
+   will need to pass the `auth_token` as `X-Dgraph-AuthToken` header while
+   making the HTTP request).
+3. Guardian-only access, if ACL is enabled (means you need to pass the ACL-JWT
+   of a Guardian user using the `X-Dgraph-AccessToken` header while making the
+  HTTP request).
+
+An admin endpoint is any HTTP endpoint which provides admin functionality.
+Admin endpoints usually start with the `/admin` path. The current list of admin
+endpoints includes the following:
+
+* `/admin`
+* `/admin/backup`
+* `/admin/config/lru_mb`
+* `/admin/draining`
+* `/admin/export`
+* `/admin/shutdown`
+* `/admin/schema`
+* `/alter`
+* `/login`
+
+There are a few exceptions to the general rule described above:
+
+* `/login`: This endpoint logs-in an ACL user, and provides them with a JWT.
+  Only IP Whitelisting and Poor-man's auth checks are performed for this endpoint.
+* `/admin`: This endpoint provides GraphQL queries/mutations corresponding to
+  the HTTP admin endpoints. All of the queries/mutations on `/admin` have all
+  three layers of authentication, except for `login (mutation)`, which has the
+  same behavior as the above HTTP `/login` endpoint.
 
 ## Whitelisting Admin Operations
 
@@ -215,7 +249,7 @@ dgraph upgrade --acl -a localhost:9080 -u groot -p password
     They have now been renamed as `dgraph.type.User`, `dgraph.type.Group` and `dgraph.type.Rule`, to
     keep them in dgraph's internal namespace. This upgrade just changes the type-names for the ACL
     nodes to the new type-names.
-    
+
     You can use `--dry-run` option in `dgraph upgrade` command to see a dry run of what the upgrade
     command will do.
 8. If you have types or predicates in your schema whose names start with `dgraph.`, then

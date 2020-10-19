@@ -23,6 +23,16 @@ enum AnEnum {
 	AnotherVal
 }
 
+"""Desc"""
+union A_Union = T
+
+"""Desc"""
+input AnInput {
+	id: ID!
+	"""Desc"""
+	i: Int
+}
+
 #######################
 # Extended Definitions
 #######################
@@ -166,7 +176,7 @@ directive @auth(
 	update: AuthRule,
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
-directive @remote on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 
@@ -254,6 +264,10 @@ type UpdateTPayload {
 # Generated Enums
 #######################
 
+enum A_UnionType {
+	T
+}
+
 enum IHasFilter {
 	s
 }
@@ -275,6 +289,15 @@ enum TOrderable {
 #######################
 # Generated Inputs
 #######################
+
+input A_UnionFilter {
+	memberTypes: [A_UnionType!]
+	tFilter: TFilter
+}
+
+input A_UnionRef {
+	tRef: TRef
+}
 
 input AddTInput {
 	s: String!

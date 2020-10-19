@@ -44,11 +44,10 @@ func main() {
 		return b - a
 	}
 
+	ticker := time.NewTicker(10 * time.Second)
+
 	// Make sure the garbage collector is run periodically.
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
 		minDiff := uint64(2 << 30)
 
 		var ms runtime.MemStats
@@ -98,5 +97,12 @@ func main() {
 		}
 	}()
 
+	// Run the program.
 	cmd.Execute()
+
+	ticker.Stop()
+	fmt.Printf("Allocated Bytes at program end: %s\n", humanize.Bytes(uint64(z.NumAllocBytes())))
+	if z.NumAllocBytes() > 0 {
+		z.PrintLeaks()
+	}
 }
