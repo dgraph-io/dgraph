@@ -30,6 +30,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -37,7 +38,7 @@ import (
 )
 
 const (
-	graphqlURL      = "http://localhost:8180/graphql"
+	GraphqlURL      = "http://localhost:8180/graphql"
 	graphqlAdminURL = "http://localhost:8180/admin"
 	AlphagRPC       = "localhost:9180"
 
@@ -97,6 +98,20 @@ type GraphQLResponse struct {
 	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     x.GqlErrorList         `json:"errors,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+type Tweets struct {
+	Id        string `json:"id,omitempty"`
+	Text      string `json:"text,omitempty"`
+	Timestamp string `json:"timestamp,omitempty"`
+	User      *User  `json:"user,omitempty"`
+}
+
+type User struct {
+	Username string `json:"username,omitempty"`
+	Age      uint64 `json:"age,omitempty"`
+	IsPublic bool   `json:"isPublic,omitempty"`
+	Disabled bool   `json:"disabled,omitempty"`
 }
 
 type country struct {
@@ -169,6 +184,46 @@ type student struct {
 	Xid      string     `json:"xid,omitempty"`
 	Name     string     `json:"name,omitempty"`
 	TaughtBy []*teacher `json:"taughtBy,omitempty"`
+}
+
+type UserSecret struct {
+	Id      string `json:"id,omitempty"`
+	ASecret string `json:"aSecret,omitempty"`
+	OwnedBy string `json:"ownedBy,omitempty"`
+}
+
+func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.AuthMeta) {
+	getParams := &GraphQLParams{
+		Headers: GetJWT(t, user, "", metaInfo),
+		Query: `
+			mutation delTweets ($filter : TweetsFilter!){
+			  	deleteTweets (filter: $filter) {
+					numUids
+			  	}
+			}
+		`,
+		Variables: map[string]interface{}{"filter": map[string]interface{}{
+			"id": map[string]interface{}{"eq": twt.Id},
+		}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) {
+	getParams := &GraphQLParams{
+		Headers: GetJWT(t, user, role, metaInfo),
+		Query: `
+			mutation deleteUserSecret($ids: [ID!]) {
+				deleteUserSecret(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{us.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
 }
 
 func BootstrapServer(schema, data []byte) {
@@ -301,6 +356,9 @@ func RunAll(t *testing.T) {
 	t.Run("deep mutations", deepMutations)
 	t.Run("add multiple mutations", testMultipleMutations)
 	t.Run("deep XID mutations", deepXIDMutations)
+	t.Run("three level xid", testThreeLevelXID)
+	t.Run("nested add mutation with @hasInverse", nestedAddMutationWithHasInverse)
+	t.Run("add mutation with @hasInverse overrides correctly", addMutationWithHasInverseOverridesCorrectly)
 	t.Run("error in multiple mutations", addMultipleMutationWithOneError)
 	t.Run("dgraph directive with reverse edge adds data correctly",
 		addMutationWithReverseDgraphEdge)
@@ -369,12 +427,12 @@ func gzipCompressionHeader(t *testing.T) {
 		}`,
 	}
 
-	req, err := queryCountry.createGQLPost(graphqlURL)
+	req, err := queryCountry.CreateGQLPost(GraphqlURL)
 	require.NoError(t, err)
 
 	req.Header.Set("Content-Encoding", "gzip")
 
-	resData, err := runGQLRequest(req)
+	resData, err := RunGQLRequest(req)
 	require.NoError(t, err)
 
 	var result *GraphQLResponse
@@ -396,11 +454,11 @@ func gzipCompressionNoHeader(t *testing.T) {
 		gzipEncoding: true,
 	}
 
-	req, err := queryCountry.createGQLPost(graphqlURL)
+	req, err := queryCountry.CreateGQLPost(GraphqlURL)
 	require.NoError(t, err)
 
 	req.Header.Del("Content-Encoding")
-	resData, err := runGQLRequest(req)
+	resData, err := RunGQLRequest(req)
 	require.NoError(t, err)
 
 	var result *GraphQLResponse
@@ -422,7 +480,7 @@ func getQueryEmptyVariable(t *testing.T) {
 			}
 		}`,
 	}
-	req, err := queryCountry.createGQLGet(graphqlURL)
+	req, err := queryCountry.createGQLGet(GraphqlURL)
 	require.NoError(t, err)
 
 	q := req.URL.Query()
@@ -439,7 +497,7 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 	for h := range params.Headers {
 		req.Header.Set(h, params.Headers.Get(h))
 	}
-	res, err := runGQLRequest(req)
+	res, err := RunGQLRequest(req)
 	require.NoError(t, err)
 
 	var result *GraphQLResponse
@@ -457,7 +515,7 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
 // and executes the request to url.
 func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
-	req, err := params.createGQLPost(url)
+	req, err := params.CreateGQLPost(url)
 	require.NoError(t, err)
 
 	return params.Execute(t, req)
@@ -538,7 +596,7 @@ func (params *GraphQLParams) buildPostRequest(url string, body []byte, contentTy
 	return req, nil
 }
 
-func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
+func (params *GraphQLParams) CreateGQLPost(url string) (*http.Request, error) {
 	body, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
@@ -551,9 +609,9 @@ func (params *GraphQLParams) createApplicationGQLPost(url string) (*http.Request
 	return params.buildPostRequest(url, []byte(params.Query), "application/graphql")
 }
 
-// runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
-func runGQLRequest(req *http.Request) ([]byte, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
+// RunGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
+func RunGQLRequest(req *http.Request) ([]byte, error) {
+	client := &http.Client{Timeout: 50 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -632,13 +690,13 @@ func allCountriesAdded() ([]*country, error) {
 		return nil, errors.Wrap(err, "unable to build GraphQL query")
 	}
 
-	req, err := http.NewRequest("POST", graphqlURL, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", GraphqlURL, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to build GraphQL request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := runGQLRequest(req)
+	resp, err := RunGQLRequest(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "error running GraphQL query")
 	}
@@ -681,12 +739,12 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 	schemaQry := &GraphQLParams{
 		Query: `query { getGQLSchema { schema } }`,
 	}
-	req, err := schemaQry.createGQLPost(url)
+	req, err := schemaQry.CreateGQLPost(url)
 	if err != nil {
 		return false, errors.Wrap(err, "while creating gql post")
 	}
 
-	res, err := runGQLRequest(req)
+	res, err := RunGQLRequest(req)
 	if err != nil {
 		return false, errors.Wrap(err, "error running GraphQL query")
 	}
@@ -730,12 +788,12 @@ func addSchema(url, schema string) error {
 		}`,
 		Variables: map[string]interface{}{"sch": schema},
 	}
-	req, err := add.createGQLPost(url)
+	req, err := add.CreateGQLPost(url)
 	if err != nil {
 		return errors.Wrap(err, "error creating GraphQL query")
 	}
 
-	resp, err := runGQLRequest(req)
+	resp, err := RunGQLRequest(req)
 	if err != nil {
 		return errors.Wrap(err, "error running GraphQL query")
 	}
@@ -773,7 +831,7 @@ func addSchemaThroughAdminSchemaEndpt(url, schema string) error {
 		return errors.Wrap(err, "error running GraphQL query")
 	}
 
-	resp, err := runGQLRequest(req)
+	resp, err := RunGQLRequest(req)
 	if err != nil {
 		return errors.Wrap(err, "error running GraphQL query")
 	}
@@ -795,4 +853,23 @@ func addSchemaThroughAdminSchemaEndpt(url, schema string) error {
 	}
 
 	return nil
+}
+
+func GetJWT(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) http.Header {
+	metaInfo.AuthVars = map[string]interface{}{}
+	if user != "" {
+		metaInfo.AuthVars["USER"] = user
+	}
+
+	if role != "" {
+		metaInfo.AuthVars["ROLE"] = role
+	}
+
+	require.NotNil(t, metaInfo.PrivateKeyPath)
+	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
+	require.NoError(t, err)
+
+	h := make(http.Header)
+	h.Add(metaInfo.Header, jwtToken)
+	return h
 }

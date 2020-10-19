@@ -60,6 +60,10 @@ const (
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
 	schemaExtras = `
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
 scalar DateTime
 
 enum DgraphIndex {
@@ -834,7 +838,11 @@ func hasFilterable(defn *ast.Definition) bool {
 
 func hasOrderables(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return orderable[fld.Type.Name()] })
+		func(fld *ast.FieldDefinition) bool {
+			// lists can't be ordered and NamedType will be empty for lists,
+			// so it will return false for list fields
+			return orderable[fld.Type.NamedType]
+		})
 }
 
 func hasID(defn *ast.Definition) bool {
@@ -955,7 +963,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if orderable[fld.Type.Name()] {
+		if fld.Type.NamedType != "" && orderable[fld.Type.NamedType] {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}

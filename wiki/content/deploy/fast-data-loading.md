@@ -270,7 +270,8 @@ ending in .rdf, .rdf.gz, .json, and .json.gz will be loaded.
 `--format`: Specify file format (rdf or json) instead of getting it from
 filenames. This is useful if you need to define a strict format manually.
 
-`--store_xids`: Generate a xid edge for each node. It will store the XIDs (The identifier / Blank-nodes) in an attribute named `xid` in the entity itself. It is useful if you gonna use [External IDs](/mutations#external-ids).
+`--store_xids`: Generate a xid edge for each node. It will store the XIDs (The identifier / Blank-nodes) in an attribute named `xid` in the entity itself. It is useful if you gonna
+use [External IDs]({{< relref "mutations/external-ids.md" >}}).
 
 `--xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
 

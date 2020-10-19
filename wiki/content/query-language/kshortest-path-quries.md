@@ -100,7 +100,7 @@ curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
-{{% notice "note" %}}In the query above, instead of using UID literals, we query both people using var blocks and the `uid()` function. You can also combine it with [GraphQL Variables]({{< relref "#graphql-variables" >}}).{{% /notice %}}
+{{% notice "note" %}}In the query above, instead of using UID literals, we query both people using var blocks and the `uid()` function. You can also combine it with [GraphQL Variables]({{< relref "query-language/graphql-variables.md" >}}).{{% /notice %}}
 
 Edges weights are included by using facets on the edges as follows.
 

@@ -516,12 +516,12 @@ func mutatedTypeMapping(s *schema,
 		default:
 		}
 		// This is a convoluted way of getting the type for mutatedTypeName. We get the definition
-		// for UpdateTPayload and get the type from the first field. There is no direct way to get
-		// the type from the definition of an object. We use Update and not Add here because
-		// Interfaces only have Update.
+		// for AddTPayload and get the type from the first field. There is no direct way to get
+		// the type from the definition of an object. Interfaces can't have Add and if there is no non Id
+		// field then Update also will not be there, so we use Delete if there is no AddTPayload.
 		var def *ast.Definition
-		if def = s.schema.Types["Update"+mutatedTypeName+"Payload"]; def == nil {
-			def = s.schema.Types["Add"+mutatedTypeName+"Payload"]
+		if def = s.schema.Types["Add"+mutatedTypeName+"Payload"]; def == nil {
+			def = s.schema.Types["Delete"+mutatedTypeName+"Payload"]
 		}
 
 		if def == nil {
@@ -672,7 +672,19 @@ func (f *field) DgraphAlias() string {
 	// if this field is repeated, then it should be aliased using its dgraph predicate which will be
 	// unique across repeated fields
 	if f.op.inSchema.repeatedFieldNames[f.Name()] {
-		return f.DgraphPredicate()
+		dgraphPredicate := f.DgraphPredicate()
+		// There won't be any dgraph predicate for fields in introspection queries, as they are not
+		// stored in dgraph. So we identify those fields using this condition, and just let the
+		// field name get returned for introspection query fields, because the raw data response is
+		// prepared for them using only the field name, so that is what should be used to pick them
+		// back up from that raw data response before completion is performed.
+		// Now, the reason to not combine this if check with the outer one is because this
+		// function is performance critical. If there are a million fields in the output,
+		// it would be called a million times. So, better to perform this check and allocate memory
+		// for the variable only when necessary to do so.
+		if dgraphPredicate != "" {
+			return dgraphPredicate
+		}
 	}
 	// if not repeated, alias it using its name
 	return f.Name()

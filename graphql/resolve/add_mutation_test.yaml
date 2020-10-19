@@ -1600,7 +1600,7 @@
     {
       "auth": {
         "name": "A.N. Author",
-        "posts": [ { "postID": "0x456" } ]
+        "posts": [ { "postID": "0x456" }, {"title": "New Post", "author": {"name": "Abhimanyu"}} ]
       }
     }
   dgmutations:
@@ -1612,6 +1612,12 @@
           "Author.posts": [
             {
               "uid": "0x456",
+              "Post.author": { "uid": "_:Author1" }
+            },
+            {
+              "uid": "_:Post4",
+              "dgraph.type": ["Post"],
+              "Post.title": "New Post",
               "Post.author": { "uid": "_:Author1" }
             }
           ]
@@ -1647,13 +1653,19 @@
     {
       "inp": {
         "name": "A Country",
-        "states": [ { "code": "abc", "name": "Alphabet" } ]
+        "states": [
+          { "code": "abc", "name": "Alphabet" },
+          { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
+        ]
       }
     }
 
   dgquery: |-
     query {
       State3 as State3(func: eq(State.code, "abc")) @filter(type(State)) {
+        uid
+      }
+      State6 as State6(func: eq(State.code, "def")) @filter(type(State)) {
         uid
       }
     }
@@ -1668,6 +1680,16 @@
           "uid": "_:State3"
         }
       cond: "@if(eq(len(State3), 0))"
+    - setjson: |
+        {
+          "State.code": "def",
+          "State.name": "Vowel",
+          "dgraph.type": [
+            "State"
+          ],
+          "uid": "_:State6"
+        }
+      cond: "@if(eq(len(State6), 0))"
 
   dgquerysec: |-
     query {
@@ -1676,6 +1698,12 @@
       }
       var(func: uid(State3)) {
         Country4 as State.country
+      }
+      State6 as State6(func: eq(State.code, "def")) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State6)) {
+        Country7 as State.country
       }
     }
   dgmutationssec:
@@ -1688,6 +1716,10 @@
             {
               "uid": "uid(State3)",
               "State.country": { "uid": "_:Country1" }
+            },
+            {
+              "uid": "uid(State6)",
+              "State.country": { "uid": "_:Country1" }
             }
           ]
         }
@@ -1696,9 +1728,13 @@
           {
             "uid": "uid(Country4)",
             "Country.states": [ { "uid": "uid(State3)" } ]
+          },
+          {
+            "uid": "uid(Country7)",
+            "Country.states": [ { "uid": "uid(State6)" } ]
           }
         ]
-      cond: "@if(eq(len(State3), 1))"
+      cond: "@if(eq(len(State3), 1) AND eq(len(State6), 1))"
 
 - name: "Deep XID 4 level deep"
   gqlmutation: |
@@ -2216,8 +2252,8 @@
 
 - name: "Deep mutation three level xid"
   gqlmutation: |
-    mutation($auth: AddPost1Input!) {
-      addPost1(input: [$auth]) {
+    mutation($auth: [AddPost1Input!]!) {
+      addPost1(input: $auth) {
         post1 {
           id
           comments {
@@ -2232,7 +2268,7 @@
 
   gqlvariables: |
     {
-      "auth": {
+      "auth": [{
         "id": "post1",
         "comments": [{
           "id": "comment1",
@@ -2240,7 +2276,16 @@
             "id": "reply1"
           }]
         }]
-      }
+      },
+      {
+        "id": "post2",
+        "comments": [{
+          "id": "comment2",
+          "replies": [{
+            "id": "reply1"
+          }]
+        }]
+      }]
     }
   dgquery: |-
     query {
@@ -2250,8 +2295,12 @@
       Comment16 as Comment16(func: eq(Comment1.id, "reply1")) @filter(type(Comment1)) {
         uid
       }
+      Comment110 as Comment110(func: eq(Comment1.id, "comment2")) @filter(type(Comment1)) {
+        uid
+      }
     }
   dgmutations:
+    # Create comment1 if it doesn't exist.
     - setjson: |
         {
           "Comment1.id": "comment1",
@@ -2261,6 +2310,7 @@
           "uid": "_:Comment14"
         }
       cond: "@if(eq(len(Comment14), 0))"
+    # Create reply1 if it doesn't exist.
     - setjson: |
         {
           "Comment1.id": "reply1",
@@ -2270,21 +2320,63 @@
           "uid": "_:Comment16"
         }
       cond: "@if(eq(len(Comment16), 0) AND eq(len(Comment14), 0))"
+    # Link comment1 and reply1 if reply exists but comment doesn't.
     - setjson: |
         {"uid":"_:Comment14", "Comment1.replies": [{"uid": "uid(Comment16)"}]}
       cond: "@if(eq(len(Comment16), 1) AND eq(len(Comment14), 0))"
+    # Link comment1 and reply1 if both don't exist.
     - setjson: |
         {"uid":"_:Comment14", "Comment1.replies": [{"uid": "_:Comment16"}]}
       cond: "@if(eq(len(Comment16), 0) AND eq(len(Comment14), 0))"
+    # useless mutation which needs investigation
     - setjson: |
         {"uid":"uid(Comment16)"}
       cond: "@if(eq(len(Comment16), 1) AND eq(len(Comment14), 0))"
+    # create comment2 if it doesn't exist
+    - setjson: |
+        {
+          "Comment1.id": "comment2",
+          "dgraph.type": [
+            "Comment1"
+          ],
+          "uid": "_:Comment110"
+        }
+      cond: "@if(eq(len(Comment110), 0))"
+    # Create reply1 if it doesn't exist.
+    - setjson: |
+        {
+          "Comment1.id": "reply1",
+          "dgraph.type": [
+            "Comment1"
+          ],
+          "uid": "_:Comment16"
+        }
+      cond: "@if(eq(len(Comment16), 0) AND eq(len(Comment110), 0))"
+    # Link comment2 and reply1 if reply exists but comment doesn't.
+    - setjson: |
+        {"uid":"_:Comment110", "Comment1.replies": [{"uid": "uid(Comment16)"}]}
+      cond: "@if(eq(len(Comment16), 1) AND eq(len(Comment110), 0))"
+    # Link comment2 and reply1 if both don't exist.
+    - setjson: |
+        {"uid":"_:Comment110", "Comment1.replies": [{"uid": "_:Comment16"}]}
+      cond: "@if(eq(len(Comment16), 0) AND eq(len(Comment110), 0))"
+    # useless mutation which needs investigation
+
+    - setjson: |
+        {"uid":"uid(Comment16)"}
+      cond: "@if(eq(len(Comment16), 1) AND eq(len(Comment110), 0))"
   dgquerysec: |-
     query {
       Post12 as Post12(func: eq(Post1.id, "post1")) @filter(type(Post1)) {
         uid
       }
       Comment14 as Comment14(func: eq(Comment1.id, "comment1")) @filter(type(Comment1)) {
+        uid
+      }
+      Post18 as Post18(func: eq(Post1.id, "post2")) @filter(type(Post1)) {
+        uid
+      }
+      Comment110 as Comment110(func: eq(Comment1.id, "comment2")) @filter(type(Comment1)) {
         uid
       }
     }
@@ -2300,6 +2392,18 @@
           "uid":"_:Post12"
         }
       cond: "@if(eq(len(Post12), 0) AND eq(len(Comment14), 1))"
+    - setjson: |
+        {
+          "Post1.comments":
+            [{
+              "uid":"uid(Comment110)"
+            }],
+          "Post1.id":"post2",
+          "dgraph.type":["Post1"],
+          "uid":"_:Post18"
+        }
+      cond: "@if(eq(len(Post18), 0) AND eq(len(Comment110), 1))"
+
 -
   name: "Add mutation error on @id field for empty value"
   gqlmutation: |
@@ -2345,3 +2449,61 @@
   explanation: "The add mutation should not be allowed since value of @id field is empty."
   error:
     { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }
+
+-
+  name: "Add mutation for person with @hasInverse"
+  gqlmutation: |
+    mutation($input: [AddPersonInput!]!) {
+      addPerson(input: $input) {
+        person {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Or",
+          "friends": [
+            { "name": "Michal", "friends": [{ "name": "Justin" }] }
+          ]
+        }
+      ]
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Person.friends": [
+            {
+              "Person.friends": [
+                {
+                  "uid": "_:Person1"
+                },
+                {
+                  "Person.friends": [
+                    {
+                      "uid": "_:Person2"
+                    }
+                  ],
+                  "Person.name": "Justin",
+                  "dgraph.type": [
+                    "Person"
+                  ],
+                  "uid": "_:Person3"
+                }
+              ],
+              "Person.name": "Michal",
+              "dgraph.type": [
+                "Person"
+              ],
+              "uid": "_:Person2"
+            }
+          ],
+          "Person.name": "Or",
+          "dgraph.type": [
+            "Person"
+          ],
+          "uid": "_:Person1"
+        }
+
