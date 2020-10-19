@@ -552,21 +552,21 @@ func (r *reducer) toList(req *encodeRequest) {
 	kvList := &bpb.KVList{}
 	trackCountIndex := make(map[string]bool)
 
-	var freePostings []*pb.Posting
+	// var freePostings []*pb.Posting
 
-	getPosting := func() *pb.Posting {
-		if sz := len(freePostings); sz > 0 {
-			last := freePostings[sz-1]
-			freePostings = freePostings[:sz-1]
-			return last
-		}
-		return &pb.Posting{}
-	}
+	// getPosting := func() *pb.Posting {
+	// 	if sz := len(freePostings); sz > 0 {
+	// 		last := freePostings[sz-1]
+	// 		freePostings = freePostings[:sz-1]
+	// 		return last
+	// 	}
+	// 	return &pb.Posting{}
+	// }
 
-	freePosting := func(p *pb.Posting) {
-		p.Reset()
-		freePostings = append(freePostings, p)
-	}
+	// freePosting := func(p *pb.Posting) {
+	// 	p.Reset()
+	// 	freePostings = append(freePostings, p)
+	// }
 
 	start, end, num := 1, 1, 0
 	appendToList := func() {
@@ -609,9 +609,7 @@ func (r *reducer) toList(req *encodeRequest) {
 
 			enc.Add(uid)
 			if pbuf := me.Plist(); len(pbuf) > 0 {
-				p := getPosting()
-				x.Check(p.Unmarshal(pbuf))
-				pl.Postings = append(pl.Postings, p)
+				pl.Postings = append(pl.Postings, pbuf)
 			}
 		}
 
@@ -673,9 +671,9 @@ func (r *reducer) toList(req *encodeRequest) {
 			kvList.Kv = append(kvList.Kv, kv)
 		}
 
-		for _, p := range pl.Postings {
-			freePosting(p)
-		}
+		// for _, p := range pl.Postings {
+		// 	freePosting(p)
+		// }
 		pl.Reset()
 	}
 

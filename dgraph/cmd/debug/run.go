@@ -30,6 +30,8 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/fb"
+	"github.com/dgraph-io/dgraph/fbx"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -99,9 +101,9 @@ func init() {
 	enc.RegisterFlags(flag)
 }
 
-func toInt(o *pb.Posting) int {
+func toInt(o *fb.Posting) int {
 	from := types.Val{
-		Tid:   types.TypeID(o.ValType),
+		Tid:   types.TypeID(o.ValueType()),
 		Value: o.Value,
 	}
 	out, err := types.Convert(from, types.StringID)
@@ -142,9 +144,9 @@ func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
 		if err != nil {
 			log.Fatalf("Unable to read posting list: %v", err)
 		}
-		err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
+		err = pl.Iterate(math.MaxUint64, 0, func(o *fb.Posting) error {
 			from := types.Val{
-				Tid:   types.TypeID(o.ValType),
+				Tid:   types.TypeID(o.ValueType()),
 				Value: o.Value,
 			}
 			out, err := types.Convert(from, types.StringID)
@@ -284,9 +286,10 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 
 		x.AssertTrue(len(plist.Postings) <= 1)
 		var num int
-		for _, p := range plist.Postings {
-			num = toInt(p)
-			appendPosting(&buf, p)
+		for _, bs := range plist.Postings {
+			posting := fbx.AsPosting(bs)
+			num = toInt(posting)
+			appendPosting(&buf, posting)
 		}
 		if num > 0 && acc != nil {
 			switch {
@@ -388,16 +391,18 @@ func history(lookup []byte, itr *badger.Iterator) {
 		if meta&posting.BitDeltaPosting > 0 {
 			plist := &pb.PostingList{}
 			x.Check(plist.Unmarshal(val))
-			for _, p := range plist.Postings {
-				appendPosting(&buf, p)
+			for _, bs := range plist.Postings {
+				posting := fbx.AsPosting(bs)
+				appendPosting(&buf, posting)
 			}
 		}
 		if meta&posting.BitCompletePosting > 0 {
 			var plist pb.PostingList
 			x.Check(plist.Unmarshal(val))
 
-			for _, p := range plist.Postings {
-				appendPosting(&buf, p)
+			for _, bs := range plist.Postings {
+				posting := fbx.AsPosting(bs)
+				appendPosting(&buf, posting)
 			}
 
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
@@ -414,13 +419,13 @@ func history(lookup []byte, itr *badger.Iterator) {
 	fmt.Println(buf.String())
 }
 
-func appendPosting(w io.Writer, o *pb.Posting) {
+func appendPosting(w io.Writer, o *fb.Posting) {
 	fmt.Fprintf(w, " Uid: %d Op: %d ", o.Uid, o.Op)
 
-	if len(o.Value) > 0 {
-		fmt.Fprintf(w, " Type: %v. ", o.ValType)
+	if o.ValueLength() > 0 {
+		fmt.Fprintf(w, " Type: %v. ", o.ValueType())
 		from := types.Val{
-			Tid:   types.TypeID(o.ValType),
+			Tid:   types.TypeID(o.ValueType()),
 			Value: o.Value,
 		}
 		out, err := types.Convert(from, types.StringID)
@@ -473,7 +478,7 @@ func lookup(db *badger.DB) {
 		fmt.Fprintf(&buf, " Start UID of parts: %v\n", splits)
 	}
 
-	err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
+	err = pl.Iterate(math.MaxUint64, 0, func(o *fb.Posting) error {
 		appendPosting(&buf, o)
 		return nil
 	})

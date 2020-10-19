@@ -32,13 +32,14 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
+	"github.com/dgraph-io/dgraph/fb"
+	"github.com/dgraph-io/dgraph/fbx"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/protobuf/proto"
 )
 
 var (
@@ -49,7 +50,6 @@ var (
 	ErrNoValue = errors.New("No value found")
 	// ErrStopIteration is returned when an iteration is terminated early.
 	ErrStopIteration = errors.New("Stop iteration")
-	emptyPosting     = &pb.Posting{}
 	maxListSize      = mb / 2
 )
 
@@ -99,7 +99,7 @@ func (l *List) maxVersion() uint64 {
 type pIterator struct {
 	l          *List
 	plist      *pb.PostingList
-	uidPosting *pb.Posting
+	uidPosting *fb.Posting
 	pidx       int // index of postings
 	plen       int
 
@@ -141,15 +141,16 @@ func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 		return nil
 	}
 
-	it.uidPosting = &pb.Posting{}
+	it.uidPosting = fbx.NewPosting().Build()
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
 	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
 	it.uidx = 0
 
 	it.plen = len(it.plist.Postings)
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
-		p := it.plist.Postings[idx]
-		return it.afterUid < p.Uid
+		bs := it.plist.Postings[idx]
+		posting := fbx.AsPosting(bs)
+		return it.afterUid < posting.Uid()
 	})
 	return nil
 }
@@ -186,7 +187,7 @@ func (it *pIterator) moveToNextPart() error {
 	}
 	it.plist = plist
 
-	it.uidPosting = &pb.Posting{}
+	it.uidPosting = fbx.NewPosting().Build()
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
 	// codec.SeekCurrent makes sure we skip returning afterUid during seek.
 	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
@@ -194,8 +195,9 @@ func (it *pIterator) moveToNextPart() error {
 
 	it.plen = len(it.plist.Postings)
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
-		p := it.plist.Postings[idx]
-		return it.afterUid < p.Uid
+		bs := it.plist.Postings[idx]
+		posting := fbx.AsPosting(bs)
+		return it.afterUid < posting.Uid()
 	})
 
 	return nil
@@ -260,20 +262,21 @@ func (it *pIterator) valid() (bool, error) {
 	}
 }
 
-func (it *pIterator) posting() *pb.Posting {
+func (it *pIterator) posting() *fb.Posting {
 	uid := it.uids[it.uidx]
 
 	for it.pidx < it.plen {
-		p := it.plist.Postings[it.pidx]
-		if p.Uid > uid {
+		bs := it.plist.Postings[it.pidx]
+		posting := fbx.AsPosting(bs)
+		if posting.Uid() > uid {
 			break
 		}
-		if p.Uid == uid {
-			return p
+		if posting.Uid() == uid {
+			return posting
 		}
 		it.pidx++
 	}
-	it.uidPosting.Uid = uid
+	it.uidPosting.MutateUid(uid)
 	return it.uidPosting
 }
 
@@ -286,7 +289,7 @@ type ListOptions struct {
 }
 
 // NewPosting takes the given edge and returns its equivalent representation as a posting.
-func NewPosting(t *pb.DirectedEdge) *pb.Posting {
+func NewPosting(t *pb.DirectedEdge) *fbx.Posting {
 	var op uint32
 	switch t.Op {
 	case pb.DirectedEdge_SET:
@@ -297,37 +300,38 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		x.Fatalf("Unhandled operation: %+v", t)
 	}
 
-	var postingType pb.Posting_PostingType
+	var postingType fb.PostingType
 	switch {
 	case len(t.Lang) > 0:
-		postingType = pb.Posting_VALUE_LANG
+		postingType = fb.PostingTypeVALUE_LANG
 	case t.ValueId == 0:
-		postingType = pb.Posting_VALUE
+		postingType = fb.PostingTypeVALUE
 	default:
-		postingType = pb.Posting_REF
+		postingType = fb.PostingTypeREF
 	}
 
-	p := &pb.Posting{
-		Uid:         t.ValueId,
-		Value:       t.Value,
-		ValType:     t.ValueType,
-		PostingType: postingType,
-		LangTag:     []byte(t.Lang),
-		Label:       t.Label,
-		Op:          op,
-		Facets:      t.Facets,
-	}
+	p := fbx.
+		NewPosting().
+		SetUid(t.ValueId).
+		SetValue(t.Value).
+		SetValueType(t.ValueType).
+		SetPostingType(postingType).
+		SetLangTag([]byte(t.Lang)).
+		SetLabel(t.Label).
+		SetOp(op).
+		SetFacets(t.Facets)
+
 	return p
 }
 
-func hasDeleteAll(mpost *pb.Posting) bool {
-	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) && len(mpost.LangTag) == 0
+func hasDeleteAll(mpost *fb.Posting) bool {
+	return mpost.Op() == Del && bytes.Equal(mpost.ValueBytes(), []byte(x.Star)) && mpost.LangTagLength() == 0
 }
 
 // Ensure that you either abort the uncommitted postings or commit them before calling me.
-func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) error {
+func (l *List) updateMutationLayer(mpost *fb.Posting, singleUidUpdate bool) error {
 	l.AssertLock()
-	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
+	x.AssertTrue(mpost.Op() == Set || mpost.Op() == Del)
 
 	// Keys are added to the rollup batches here instead of at the point at which the
 	// transaction is committed because the transaction context does not keep track
@@ -340,21 +344,21 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 	// If we have a delete all, then we replace the map entry with just one.
 	if hasDeleteAll(mpost) {
 		plist := &pb.PostingList{}
-		plist.Postings = append(plist.Postings, mpost)
+		plist.Postings = append(plist.Postings, mpost.Table().Bytes)
 		if l.mutationMap == nil {
 			l.mutationMap = make(map[uint64]*pb.PostingList)
 		}
-		l.mutationMap[mpost.StartTs] = plist
+		l.mutationMap[mpost.StartTs()] = plist
 		return nil
 	}
 
-	plist, ok := l.mutationMap[mpost.StartTs]
+	plist, ok := l.mutationMap[mpost.StartTs()]
 	if !ok {
 		plist = &pb.PostingList{}
 		if l.mutationMap == nil {
 			l.mutationMap = make(map[uint64]*pb.PostingList)
 		}
-		l.mutationMap[mpost.StartTs] = plist
+		l.mutationMap[mpost.StartTs()] = plist
 	}
 
 	if singleUidUpdate {
@@ -363,30 +367,36 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 		// be done because the fingerprint for the value is not math.MaxUint64 as is
 		// the case with the rest of the scalar predicates.
 		newPlist := &pb.PostingList{}
-		newPlist.Postings = append(newPlist.Postings, mpost)
+		newPlist.Postings = append(newPlist.Postings, mpost.Table().Bytes)
 
 		// Add the deletions in the existing plist because those postings are not picked
 		// up by iterating. Not doing so would result in delete operations that are not
 		// applied when the transaction is committed.
-		for _, post := range plist.Postings {
-			if post.Op == Del && post.Uid != mpost.Uid {
-				newPlist.Postings = append(newPlist.Postings, post)
+		for _, bs := range plist.Postings {
+			posting := fbx.AsPosting(bs)
+			if posting.Op() == Del && posting.Uid() != mpost.Uid() {
+				newPlist.Postings = append(newPlist.Postings, posting.Table().Bytes)
 			}
 		}
 
-		err := l.iterate(mpost.StartTs, 0, func(obj *pb.Posting) error {
+		err := l.iterate(mpost.StartTs(), 0, func(obj *fb.Posting) error {
 			// Ignore values which have the same uid as they will get replaced
 			// by the current value.
-			if obj.Uid == mpost.Uid {
+			if obj.Uid() == mpost.Uid() {
 				return nil
 			}
 
 			// Mark all other values as deleted. By the end of the iteration, the
 			// list of postings will contain deleted operations and only one set
 			// for the mutation stored in mpost.
-			objCopy := proto.Clone(obj).(*pb.Posting)
-			objCopy.Op = Del
-			newPlist.Postings = append(newPlist.Postings, objCopy)
+			objBs := obj.Table().Bytes
+			objCopyBs := make([]byte, len(objBs))
+			copy(objCopyBs, objBs)
+
+			objCopy := fbx.AsPosting(objCopyBs)
+			objCopy.MutateOp(Del)
+
+			newPlist.Postings = append(newPlist.Postings, objCopy.Table().Bytes)
 			return nil
 		})
 		if err != nil {
@@ -395,18 +405,19 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 
 		// Update the mutation map with the new plist. Return here since the code below
 		// does not apply for predicates of type uid.
-		l.mutationMap[mpost.StartTs] = newPlist
+		l.mutationMap[mpost.StartTs()] = newPlist
 		return nil
 	}
 
 	// Even if we have a delete all in this transaction, we should still pick up any updates since.
-	for i, prev := range plist.Postings {
-		if prev.Uid == mpost.Uid {
-			plist.Postings[i] = mpost
+	for i, prevBs := range plist.Postings {
+		prevPosting := fbx.AsPosting(prevBs)
+		if prevPosting.Uid() == mpost.Uid() {
+			plist.Postings[i] = mpost.Table().Bytes
 			return nil
 		}
 	}
-	plist.Postings = append(plist.Postings, mpost)
+	plist.Postings = append(plist.Postings, mpost.Table().Bytes)
 	return nil
 }
 
@@ -507,11 +518,11 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		return zero.ErrConflict
 	}
 
-	mpost := NewPosting(t)
-	mpost.StartTs = txn.StartTs
-	if mpost.PostingType != pb.Posting_REF {
+	mpost := NewPosting(t).Build()
+	mpost.MutateStartTs(txn.StartTs)
+	if mpost.PostingType() != fb.PostingTypeREF {
 		t.ValueId = fingerprintEdge(t)
-		mpost.Uid = t.ValueId
+		mpost.MutateUid(t.ValueId)
 	}
 
 	// Check whether this mutation is an update for a predicate of type uid.
@@ -522,7 +533,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	}
 	pred, ok := schema.State().Get(ctx, t.Attr)
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
-		pk.IsData() && mpost.Op == Set && mpost.PostingType == pb.Posting_REF
+		pk.IsData() && mpost.Op() == Set && mpost.PostingType() == fb.PostingTypeREF
 
 	if err != l.updateMutationLayer(mpost, isSingleUidUpdate) {
 		return errors.Wrapf(err, "cannot update mutation layer of key %s with value %+v",
@@ -546,8 +557,9 @@ func (l *List) getMutation(startTs uint64) []byte {
 	l.Lock()
 	defer l.Unlock()
 	if pl, ok := l.mutationMap[startTs]; ok {
-		for _, p := range pl.GetPostings() {
-			p.StartTs = 0
+		for _, bs := range pl.GetPostings() {
+			posting := fbx.AsPosting(bs)
+			posting.MutateStartTs(0)
 		}
 		data, err := pl.Marshal()
 		x.Check(err)
@@ -579,7 +591,7 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 //    return nil // to continue iteration.
 //    return errStopIteration // to break iteration.
 //  })
-func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *fb.Posting) error) error {
 	l.RLock()
 	defer l.RUnlock()
 	return l.iterate(readTs, afterUid, f)
@@ -589,7 +601,7 @@ func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 // along with the timestamp of the delete marker, if any. If this timestamp is greater
 // than zero, it indicates that the immutable layer should be ignored during traversals.
 // If greater than zero, this timestamp must thus be greater than l.minTs.
-func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
+func (l *List) pickPostings(readTs uint64) (uint64, []*fb.Posting) {
 	// This function would return zero ts for entries above readTs.
 	effective := func(start, commit uint64) uint64 {
 		if commit > 0 && commit <= readTs {
@@ -605,18 +617,19 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 
 	// First pick up the postings.
 	var deleteBelowTs uint64
-	var posts []*pb.Posting
+	var posts []*fb.Posting
 	for startTs, plist := range l.mutationMap {
 		// Pick up the transactions which are either committed, or the one which is ME.
 		effectiveTs := effective(startTs, plist.CommitTs)
 		if effectiveTs > deleteBelowTs {
 			// We're above the deleteBelowTs marker. We wouldn't reach here if effectiveTs is zero.
-			for _, mpost := range plist.Postings {
+			for _, bs := range plist.Postings {
+				mpost := fbx.AsPosting(bs)
 				if hasDeleteAll(mpost) {
 					deleteBelowTs = effectiveTs
 					continue
 				}
-				mpost.StartTs = startTs
+				mpost.MutateStartTs(startTs)
 				posts = append(posts, mpost)
 			}
 		}
@@ -626,7 +639,7 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 		// There was a delete all marker. So, trim down the list of postings.
 		result := posts[:0]
 		for _, post := range posts {
-			effectiveTs := effective(post.StartTs, post.CommitTs)
+			effectiveTs := effective(post.StartTs(), post.CommitTs())
 			if effectiveTs < deleteBelowTs { // Do pick the posts at effectiveTs == deleteBelowTs.
 				continue
 			}
@@ -639,17 +652,17 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	sort.Slice(posts, func(i, j int) bool {
 		pi := posts[i]
 		pj := posts[j]
-		if pi.Uid == pj.Uid {
-			ei := effective(pi.StartTs, pi.CommitTs)
-			ej := effective(pj.StartTs, pj.CommitTs)
+		if pi.Uid() == pj.Uid() {
+			ei := effective(pi.StartTs(), pi.CommitTs())
+			ej := effective(pj.StartTs(), pj.CommitTs())
 			return ei > ej // Pick the higher, so we can discard older commits for the same UID.
 		}
-		return pi.Uid < pj.Uid
+		return pi.Uid() < pj.Uid()
 	})
 	return deleteBelowTs, posts
 }
 
-func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *fb.Posting) error) error {
 	l.AssertRLock()
 
 	deleteBelowTs, mposts := l.pickPostings(readTs)
@@ -661,12 +674,12 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	if afterUid > 0 {
 		midx = sort.Search(mlen, func(idx int) bool {
 			mp := mposts[idx]
-			return afterUid < mp.Uid
+			return afterUid < mp.Uid()
 		})
 	}
 
 	var (
-		mp, pp  *pb.Posting
+		mp, pp  *fb.Posting
 		pitr    pIterator
 		prevUid uint64
 		err     error
@@ -681,7 +694,7 @@ loop:
 		if midx < mlen {
 			mp = mposts[midx]
 		} else {
-			mp = emptyPosting
+			mp = fbx.NewPosting().Build()
 		}
 
 		valid, err := pitr.valid()
@@ -691,18 +704,18 @@ loop:
 		case valid:
 			pp = pitr.posting()
 		default:
-			pp = emptyPosting
+			pp = fbx.NewPosting().Build()
 		}
 
 		switch {
-		case mp.Uid > 0 && mp.Uid == prevUid:
+		case mp.Uid() > 0 && mp.Uid() == prevUid:
 			// Only pick the latest version of this posting.
 			// mp.Uid can be zero if it's an empty posting.
 			midx++
-		case pp.Uid == 0 && mp.Uid == 0:
+		case pp.Uid() == 0 && mp.Uid() == 0:
 			// Reached empty posting for both iterators.
 			return nil
-		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
+		case mp.Uid() == 0 || (pp.Uid() > 0 && pp.Uid() < mp.Uid()):
 			// Either mp is empty, or pp is lower than mp.
 			err = f(pp)
 			if err != nil {
@@ -712,24 +725,24 @@ loop:
 			if err = pitr.next(); err != nil {
 				break loop
 			}
-		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
+		case pp.Uid() == 0 || (mp.Uid() > 0 && mp.Uid() < pp.Uid()):
 			// Either pp is empty, or mp is lower than pp.
-			if mp.Op != Del {
+			if mp.Op() != Del {
 				err = f(mp)
 				if err != nil {
 					break loop
 				}
 			}
-			prevUid = mp.Uid
+			prevUid = mp.Uid()
 			midx++
-		case pp.Uid == mp.Uid:
-			if mp.Op != Del {
+		case pp.Uid() == mp.Uid():
+			if mp.Op() != Del {
 				err = f(mp)
 				if err != nil {
 					break loop
 				}
 			}
-			prevUid = mp.Uid
+			prevUid = mp.Uid()
 			if err = pitr.next(); err != nil {
 				break loop
 			}
@@ -749,7 +762,7 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	l.RLock()
 	defer l.RUnlock()
 	var count int
-	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
+	err := l.iterate(readTs, afterUid, func(p *fb.Posting) error {
 		count++
 		return ErrStopIteration
 	})
@@ -759,13 +772,13 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	return count == 0, nil
 }
 
-func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
+func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *fb.Posting) {
 	l.AssertRLock()
 	var count int
 	var found bool
-	var post *pb.Posting
-	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
-		if p.Uid == uid {
+	var post *fb.Posting
+	err := l.iterate(readTs, afterUid, func(p *fb.Posting) error {
+		if p.Uid() == uid {
 			post = p
 			found = true
 		}
@@ -782,7 +795,7 @@ func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb
 func (l *List) length(readTs, afterUid uint64) int {
 	l.AssertRLock()
 	count := 0
-	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
+	err := l.iterate(readTs, afterUid, func(p *fb.Posting) error {
 		count++
 		return nil
 	})
@@ -1017,8 +1030,8 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 		initializeSplit()
 	}
 
-	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-		if p.Uid > endUid && split {
+	err := l.iterate(readTs, 0, func(p *fb.Posting) error {
+		if p.Uid() > endUid && split {
 			plist.Pack = enc.Done()
 			out.parts[startUid] = plist
 
@@ -1026,9 +1039,9 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 			initializeSplit()
 		}
 
-		enc.Add(p.Uid)
-		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
-			plist.Postings = append(plist.Postings, p)
+		enc.Add(p.Uid())
+		if p.PostingType() != fb.PostingTypeREF || len(p.Label()) != 0 {
+			plist.Postings = append(plist.Postings, p.Table().Bytes)
 		}
 		return nil
 	})
@@ -1088,7 +1101,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 		deleteBelowTs, mposts := l.pickPostings(readTs)
 		maxCommitTs = x.Max(maxCommitTs, deleteBelowTs)
 		for _, mp := range mposts {
-			maxCommitTs = x.Max(maxCommitTs, mp.CommitTs)
+			maxCommitTs = x.Max(maxCommitTs, mp.CommitTs())
 		}
 	}
 
@@ -1131,9 +1144,9 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil
 	}
 
-	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
-		if p.PostingType == pb.Posting_REF {
-			res = append(res, p.Uid)
+	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *fb.Posting) error {
+		if p.PostingType() == fb.PostingTypeREF {
+			res = append(res, p.Uid())
 		}
 		return nil
 	})
@@ -1153,12 +1166,12 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 
 // Postings calls postFn with the postings that are common with
 // UIDs in the opt ListOptions.
-func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) error) error {
+func (l *List) Postings(opt ListOptions, postFn func(*fb.Posting) error) error {
 	l.RLock()
 	defer l.RUnlock()
 
-	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
-		if p.PostingType != pb.Posting_REF {
+	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *fb.Posting) error {
+		if p.PostingType() != fb.PostingTypeREF {
 			return nil
 		}
 		return postFn(p)
@@ -1173,10 +1186,10 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	defer l.RUnlock()
 
 	var vals []types.Val
-	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-		if len(p.LangTag) == 0 {
+	err := l.iterate(readTs, 0, func(p *fb.Posting) error {
+		if p.LangTagLength() == 0 {
 			vals = append(vals, types.Val{
-				Tid:   types.TypeID(p.ValType),
+				Tid:   types.TypeID(p.ValueType()),
 				Value: p.Value,
 			})
 		}
@@ -1191,9 +1204,9 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 func (l *List) allUntaggedFacets(readTs uint64) ([]*pb.Facets, error) {
 	l.AssertRLock()
 	var facets []*pb.Facets
-	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-		if len(p.LangTag) == 0 {
-			facets = append(facets, &pb.Facets{Facets: p.Facets})
+	err := l.iterate(readTs, 0, func(p *fb.Posting) error {
+		if p.LangTagLength() == 0 {
+			facets = append(facets, &pb.Facets{Facets: fbx.PostingFacets(p)})
 		}
 		return nil
 	})
@@ -1208,9 +1221,9 @@ func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
 	defer l.RUnlock()
 
 	var vals []types.Val
-	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
+	err := l.iterate(readTs, 0, func(p *fb.Posting) error {
 		vals = append(vals, types.Val{
-			Tid:   types.TypeID(p.ValType),
+			Tid:   types.TypeID(p.ValueType()),
 			Value: p.Value,
 		})
 		return nil
@@ -1225,8 +1238,8 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 	defer l.RUnlock()
 
 	var tags []string
-	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-		tags = append(tags, string(p.LangTag))
+	err := l.iterate(readTs, 0, func(p *fb.Posting) error {
+		tags = append(tags, string(p.LangTagBytes()))
 		return nil
 	})
 	return tags, errors.Wrapf(err, "cannot retrieve language tags from list with key %s",
@@ -1269,13 +1282,13 @@ func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr err
 }
 
 // PostingFor returns the posting according to the preferred language list.
-func (l *List) PostingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error) {
+func (l *List) PostingFor(readTs uint64, langs []string) (p *fb.Posting, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
 	return l.postingFor(readTs, langs)
 }
 
-func (l *List) postingFor(readTs uint64, langs []string) (p *pb.Posting, rerr error) {
+func (l *List) postingFor(readTs uint64, langs []string) (p *fb.Posting, rerr error) {
 	l.AssertRLock() // Avoid recursive locking by asserting a lock here.
 	return l.postingForLangs(readTs, langs)
 }
@@ -1291,15 +1304,15 @@ func (l *List) ValueForTag(readTs uint64, tag string) (rval types.Val, rerr erro
 	return valueToTypesVal(p), nil
 }
 
-func valueToTypesVal(p *pb.Posting) (rval types.Val) {
+func valueToTypesVal(p *fb.Posting) (rval types.Val) {
 	// This is ok because we dont modify the value of a posting. We create a newPosting
 	// and add it to the PostingList to do a set.
 	rval.Value = p.Value
-	rval.Tid = types.TypeID(p.ValType)
+	rval.Tid = types.TypeID(p.ValueType())
 	return
 }
 
-func (l *List) postingForLangs(readTs uint64, langs []string) (*pb.Posting, error) {
+func (l *List) postingForLangs(readTs uint64, langs []string) (*fb.Posting, error) {
 	l.AssertRLock()
 
 	any := false
@@ -1329,11 +1342,11 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (*pb.Posting, erro
 	}
 
 	var found bool
-	var pos *pb.Posting
+	var pos *fb.Posting
 	// last resort - return value with smallest lang UID.
 	if any {
-		err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-			if p.PostingType == pb.Posting_VALUE_LANG {
+		err := l.iterate(readTs, 0, func(p *fb.Posting) error {
+			if p.PostingType() == fb.PostingTypeVALUE_LANG {
 				pos = p
 				found = true
 				return ErrStopIteration
@@ -1354,7 +1367,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (*pb.Posting, erro
 	return pos, ErrNoValue
 }
 
-func (l *List) postingForTag(readTs uint64, tag string) (p *pb.Posting, rerr error) {
+func (l *List) postingForTag(readTs uint64, tag string) (p *fb.Posting, rerr error) {
 	l.AssertRLock()
 	uid := farm.Fingerprint64([]byte(tag))
 	found, p, err := l.findPosting(readTs, uid)
@@ -1378,10 +1391,10 @@ func (l *List) findValue(readTs, uid uint64) (rval types.Val, found bool, err er
 	return valueToTypesVal(p), true, nil
 }
 
-func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posting, err error) {
+func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *fb.Posting, err error) {
 	// Iterate starts iterating after the given argument, so we pass UID - 1
-	err = l.iterate(readTs, uid-1, func(p *pb.Posting) error {
-		if p.Uid == uid {
+	err = l.iterate(readTs, uid-1, func(p *fb.Posting) error {
+		if p.Uid() == uid {
 			pos = p
 			found = true
 		}
@@ -1418,7 +1431,7 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
 	case err != nil:
 		return nil, errors.Wrapf(err, "cannot retrieve facet")
 	}
-	fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, param)})
+	fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(fbx.PostingFacets(p), param)})
 	return fcs, nil
 }
 
@@ -1536,7 +1549,9 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 
 	// Add elements in plist.Postings to the corresponding list.
 	pidx := sort.Search(len(plist.Postings), func(idx int) bool {
-		return plist.Postings[idx].Uid >= midUid
+		bs := plist.Postings[idx]
+		posting := fbx.AsPosting(bs)
+		return posting.Uid() >= midUid
 	})
 	lowPl.Postings = plist.Postings[:pidx]
 	highPl.Postings = plist.Postings[pidx:]

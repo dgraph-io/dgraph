@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/fbx"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -364,10 +365,11 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 					return err
 				}
 				pl.CommitTs = item.Version()
-				for _, mpost := range pl.Postings {
+				for _, bs := range pl.Postings {
+					mpost := fbx.AsPosting(bs)
 					// commitTs, startTs are meant to be only in memory, not
 					// stored on disk.
-					mpost.CommitTs = item.Version()
+					mpost.MutateCommitTs(item.Version())
 				}
 				if l.mutationMap == nil {
 					l.mutationMap = make(map[uint64]*pb.PostingList)

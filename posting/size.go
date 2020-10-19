@@ -101,7 +101,7 @@ func calculatePostingListSize(list *pb.PostingList) uint64 {
 	size += uint64(cap(list.Postings)) * 8
 	for _, p := range list.Postings {
 		// add the size of each posting.
-		size += calculatePostingSize(p)
+		size += uint64(cap(p))
 	}
 
 	// Each entry take one word.
@@ -111,45 +111,6 @@ func calculatePostingListSize(list *pb.PostingList) uint64 {
 	// XXX_unrecognized take one byte.
 	// Adding size of each entry.
 	size += uint64(cap(list.XXX_unrecognized))
-
-	return size
-}
-
-// calculatePostingSize is used to calculate the size of a posting
-func calculatePostingSize(posting *pb.Posting) uint64 {
-	if posting == nil {
-		return 0
-	}
-
-	var size uint64 = 1*8 + // Uid consists of 1 word.
-		3*8 + // Value byte array take 3 words.
-		1*8 + // ValType consists 1 word.
-		1*8 + // PostingType consists of 1 word.
-		3*8 + // LangTag array consists of 3 words.
-		1*8 + // Label consists of 1 word.
-		3*8 + // Facets array consists of 3 word.
-		1*8 + // Op consists of 1 word.
-		1*8 + // StartTs consists of 1 word.
-		1*8 + // CommitTs consists of 1 word.
-		0*8 + // XXX_NoUnkeyedLiteral consists of 0 word. Because, it is empty struct.
-		3*8 + // XXX_unrecognized array consists of 3 words.
-		1*8 // XXX_sizecache consists of 1 word.
-	// Adding the size of each entry in Value array.
-	size += uint64(cap(posting.Value))
-
-	// Adding the size of each entry in LangTag array.
-	size += uint64(cap(posting.LangTag))
-
-	// Adding the size of each entry in Lables array.
-	size += uint64(len(posting.Label))
-
-	for _, f := range posting.Facets {
-		// Add the size of each facet.
-		size += calculateFacet(f)
-	}
-
-	// Add the size of each entry in XXX_unrecognized array.
-	size += uint64(cap(posting.XXX_unrecognized))
 
 	return size
 }

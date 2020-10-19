@@ -36,6 +36,8 @@ import (
 	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgraph/fb"
+	"github.com/dgraph-io/dgraph/fbx"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -228,10 +230,10 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 			return errors.Wrapf(err, "cannot find single uid list to update with key %s",
 				hex.Dump(dataKey))
 		}
-		err = dataList.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		err = dataList.Iterate(txn.StartTs, 0, func(p *fb.Posting) error {
 			delEdge := &pb.DirectedEdge{
 				Entity:  t.Entity,
-				ValueId: p.Uid,
+				ValueId: p.Uid(),
 				Attr:    t.Attr,
 				Op:      pb.DirectedEdge_DEL,
 			}
@@ -278,17 +280,17 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 	}
 	// To calculate length of posting list. Used for deletion of count index.
 	var plen int
-	err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+	err := l.Iterate(txn.StartTs, 0, func(p *fb.Posting) error {
 		plen++
 		switch {
 		case isReversed:
 			// Delete reverse edge for each posting.
-			delEdge.ValueId = p.Uid
+			delEdge.ValueId = p.Uid()
 			return txn.addReverseAndCountMutation(ctx, delEdge)
 		case isIndexed:
 			// Delete index edge of each posting.
 			val := types.Val{
-				Tid:   types.TypeID(p.ValType),
+				Tid:   types.TypeID(p.ValueType()),
 				Value: p.Value,
 			}
 			return txn.addIndexMutations(ctx, &indexMutationInfo{
@@ -396,7 +398,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	// list, hence will are calling l.getPostingAndLength(). If doUpdateIndex or delNonListPredicate
 	// is true, we just need to get the posting for uid, hence calling l.findPosting().
 	countBefore, countAfter := 0, 0
-	var currPost *pb.Posting
+	var currPost *fb.Posting
 	var val types.Val
 	var found bool
 	var err error
@@ -420,7 +422,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	// If the predicate schema is not a list, ignore delete triples whose object is not a star or
 	// a value that does not match the existing value.
 	if delNonListPredicate {
-		newPost := NewPosting(t)
+		newPost := NewPosting(t).Build()
 
 		// This is a scalar value of non-list type and a delete edge mutation, so if the value
 		// given by the user doesn't match the value we have, we return found to be false, to avoid
@@ -428,8 +430,8 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		// This second check is required because we fingerprint the scalar values as math.MaxUint64,
 		// so even though they might be different the check in the doUpdateIndex block above would
 		// return found to be true.
-		if found && !(bytes.Equal(currPost.Value, newPost.Value) &&
-			types.TypeID(currPost.ValType) == types.TypeID(newPost.ValType)) {
+		if found && !(bytes.Equal(currPost.ValueBytes(), newPost.ValueBytes()) &&
+			types.TypeID(currPost.ValueType()) == types.TypeID(newPost.ValueType())) {
 			return val, false, emptyCountParams, nil
 		}
 	}
@@ -975,13 +977,13 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
-		return pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		return pl.Iterate(txn.StartTs, 0, func(p *fb.Posting) error {
 			// Add index entries based on p.
 			val := types.Val{
 				Value: p.Value,
-				Tid:   types.TypeID(p.ValType),
+				Tid:   types.TypeID(p.ValueType()),
 			}
-			edge.Lang = string(p.LangTag)
+			edge.Lang = string(p.LangTagBytes())
 
 			for {
 				err := txn.addIndexMutations(ctx, &indexMutationInfo{
@@ -1138,13 +1140,13 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
-		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
-			puid := pp.Uid
+		return pl.Iterate(txn.StartTs, 0, func(pp *fb.Posting) error {
+			puid := pp.Uid()
 			// Add reverse entries based on p.
 			edge.ValueId = puid
 			edge.Op = pb.DirectedEdge_SET
-			edge.Facets = pp.Facets
-			edge.Label = pp.Label
+			edge.Facets = fbx.PostingFacets(pp)
+			edge.Label = string(pp.Label())
 
 			for {
 				// we only need to build reverse index here.
@@ -1191,11 +1193,11 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
-		var mpost *pb.Posting
-		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		var mpost *fb.Posting
+		err := pl.Iterate(txn.StartTs, 0, func(p *fb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
 			// lang tag.
-			if p.Uid == math.MaxUint64 {
+			if p.Uid() == math.MaxUint64 {
 				mpost = p
 			}
 			return nil
@@ -1208,7 +1210,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		}
 		// Delete the old edge corresponding to ValueId math.MaxUint64
 		t := &pb.DirectedEdge{
-			ValueId: mpost.Uid,
+			ValueId: mpost.Uid(),
 			Attr:    rb.Attr,
 			Op:      pb.DirectedEdge_DEL,
 		}
@@ -1222,11 +1224,11 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		// Add the new edge with the fingerprinted value id.
 		newEdge := &pb.DirectedEdge{
 			Attr:      rb.Attr,
-			Value:     mpost.Value,
-			ValueType: mpost.ValType,
+			Value:     mpost.ValueBytes(),
+			ValueType: pb.Posting_ValType(mpost.ValueType()),
 			Op:        pb.DirectedEdge_SET,
-			Label:     mpost.Label,
-			Facets:    mpost.Facets,
+			Label:     string(mpost.Label()),
+			Facets:    fbx.PostingFacets(mpost),
 		}
 		return pl.addMutation(ctx, txn, newEdge)
 	}

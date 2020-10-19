@@ -28,6 +28,8 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/fb"
+	"github.com/dgraph-io/dgraph/fbx"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -40,7 +42,6 @@ import (
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/golang/protobuf/proto"
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
 	"github.com/pkg/errors"
@@ -535,10 +536,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 }
 
 func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *facetsTree,
-	listType bool, fn func(p *pb.Posting)) error {
+	listType bool, fn func(p *fb.Posting)) error {
 	q := args.q
 
-	var langMatch *pb.Posting
+	var langMatch *fb.Posting
 	var err error
 
 	// We need to pick multiple postings only in two cases:
@@ -557,23 +558,23 @@ func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *f
 	// TODO(Ashish): This function starts iteration from start(afterUID is always 0). This can be
 	// optimized in come cases. For example when we know lang tag to fetch, we can directly jump
 	// to posting starting with that UID(check list.ValueFor()).
-	return pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+	return pl.Iterate(q.ReadTs, 0, func(p *fb.Posting) error {
 		if q.ExpandAll {
 			// If q.ExpandAll is true we need to consider all postings irrespective of langs.
 		} else if listType && len(q.Langs) == 0 {
 			// Don't retrieve tagged values unless explicitly asked.
-			if len(p.LangTag) > 0 {
+			if p.LangTagLength() > 0 {
 				return nil
 			}
 		} else {
 			// Only consider the posting that matches our language preferences.
-			if !proto.Equal(p, langMatch) {
+			if !fbx.PostingEq(p, langMatch) {
 				return nil
 			}
 		}
 
 		// If filterTree is nil, applyFacetsTree returns true and nil error.
-		picked, err := applyFacetsTree(p.Facets, facetsTree)
+		picked, err := applyFacetsTree(fbx.PostingFacets(p), facetsTree)
 		if err != nil {
 			return err
 		}
@@ -593,7 +594,7 @@ func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *f
 func countForValuePostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
 	listType bool) (int, error) {
 	var filteredCount int
-	err := facetsFilterValuePostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
+	err := facetsFilterValuePostingList(args, pl, facetsTree, listType, func(p *fb.Posting) {
 		filteredCount++
 	})
 	if err != nil {
@@ -609,13 +610,13 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 	var vals []types.Val
 	var fcs []*pb.Facets
 
-	err := facetsFilterValuePostingList(args, pl, facetsTree, listType, func(p *pb.Posting) {
+	err := facetsFilterValuePostingList(args, pl, facetsTree, listType, func(p *fb.Posting) {
 		vals = append(vals, types.Val{
-			Tid:   types.TypeID(p.ValType),
+			Tid:   types.TypeID(p.ValueType()),
 			Value: p.Value,
 		})
 		if q.FacetParam != nil {
-			fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, q.FacetParam)})
+			fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(fbx.PostingFacets(p), q.FacetParam)})
 		}
 	})
 	if err != nil {
@@ -626,11 +627,11 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 }
 
 func facetsFilterUidPostingList(pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions,
-	fn func(*pb.Posting)) error {
+	fn func(*fb.Posting)) error {
 
-	return pl.Postings(opts, func(p *pb.Posting) error {
+	return pl.Postings(opts, func(p *fb.Posting) error {
 		// If filterTree is nil, applyFacetsTree returns true and nil error.
-		pick, err := applyFacetsTree(p.Facets, facetsTree)
+		pick, err := applyFacetsTree(fbx.PostingFacets(p), facetsTree)
 		if err != nil {
 			return err
 		}
@@ -645,7 +646,7 @@ func countForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree
 	opts posting.ListOptions) (int, error) {
 
 	var filteredCount int
-	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
+	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *fb.Posting) {
 		filteredCount++
 	})
 	if err != nil {
@@ -664,11 +665,11 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 		Uids: make([]uint64, 0, pl.ApproxLen()), // preallocate uid slice.
 	}
 
-	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
-		uidList.Uids = append(uidList.Uids, p.Uid)
+	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *fb.Posting) {
+		uidList.Uids = append(uidList.Uids, p.Uid())
 		if q.FacetParam != nil {
 			fcsList = append(fcsList, &pb.Facets{
-				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
+				Facets: facets.CopyFacets(fbx.PostingFacets(p), q.FacetParam),
 			})
 		}
 	})
@@ -1478,9 +1479,9 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 				return err
 			}
 			var tv pb.TaskValue
-			err = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
-				tv.ValType = p.ValType
-				tv.Val = p.Value
+			err = pl.Iterate(arg.q.ReadTs, 0, func(p *fb.Posting) error {
+				tv.ValType = pb.Posting_ValType(p.ValueType())
+				tv.Val = p.ValueBytes()
 				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
 					out.Uids = append(out.Uids, uid)
 					return posting.ErrStopIteration

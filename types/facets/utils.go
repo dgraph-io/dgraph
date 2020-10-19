@@ -23,6 +23,7 @@ import (
 	"unicode"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/fb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -183,10 +184,38 @@ func TypeIDFor(f *api.Facet) (types.TypeID, error) {
 	}
 }
 
+func TypeIDForFb(f *fb.Facet) (types.TypeID, error) {
+	switch valType := api.Facet_ValType(f.ValueType()); valType {
+	case api.Facet_INT:
+		return types.IntID, nil
+	case api.Facet_FLOAT:
+		return types.FloatID, nil
+	case api.Facet_BOOL:
+		return types.BoolID, nil
+	case api.Facet_DATETIME:
+		return types.DateTimeID, nil
+	case api.Facet_STRING:
+		return types.StringID, nil
+	default:
+		return types.DefaultID, errors.Errorf("Unrecognized facet type: %v", valType)
+	}
+}
+
 // ValFor converts Facet into types.Val.
 func ValFor(f *api.Facet) (types.Val, error) {
 	val := types.Val{Tid: types.BinaryID, Value: f.Value}
 	facetTid, err := TypeIDFor(f)
+	if err != nil {
+		return types.Val{}, err
+	}
+
+	return types.Convert(val, facetTid)
+}
+
+// ValFor converts Facet into types.Val.
+func ValForFb(f *fb.Facet) (types.Val, error) {
+	val := types.Val{Tid: types.BinaryID, Value: f.Value}
+	facetTid, err := TypeIDForFb(f)
 	if err != nil {
 		return types.Val{}, err
 	}

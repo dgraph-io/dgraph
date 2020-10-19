@@ -27,6 +27,7 @@ import (
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/fbx"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
@@ -312,7 +313,7 @@ const (
 		Alter the node's config.
 		"""
 		config(input: ConfigInput!): ConfigPayload
-		
+
 		replaceAllowedCORSOrigins(origins: [String]): Cors
 
 		` + adminMutations + `
@@ -521,7 +522,7 @@ func newAdminResolver(
 
 		newSchema := &gqlSchema{
 			ID:     query.UidToHex(pk.Uid),
-			Schema: string(pl.Postings[0].Value),
+			Schema: string(fbx.AsPosting(pl.Postings[0]).ValueBytes()),
 		}
 
 		var gqlSchema schema.Schema

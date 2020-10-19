@@ -22,8 +22,8 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/fb"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -88,8 +88,8 @@ func GetPredicateValues(pdir, attr string, readTs uint64) (map[string]string, er
 			return nil, err
 		}
 
-		err = pl.Iterate(readTs, 0, func(p *pb.Posting) error {
-			vID := types.TypeID(p.ValType)
+		err = pl.Iterate(readTs, 0, func(p *fb.Posting) error {
+			vID := types.TypeID(p.ValueType())
 			src := types.ValueForType(vID)
 			src.Value = p.Value
 			str, err := types.Convert(src, types.StringID)

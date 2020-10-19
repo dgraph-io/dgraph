@@ -33,6 +33,8 @@ import (
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/fb"
+	"github.com/dgraph-io/dgraph/fbx"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -82,26 +84,27 @@ type MapEntry []byte
 // 	plist []byte
 // }
 
-func mapEntrySize(key []byte, p *pb.Posting) int {
-	return 8 + 4 + 4 + len(key) + p.Size()
+func mapEntrySize(key []byte, p *fb.Posting) int {
+	return 8 + 4 + 4 + len(key) + len(p.Table().Bytes)
 }
 
-func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
+func marshalMapEntry(dst []byte, uid uint64, key []byte, p *fb.Posting) {
 	if p != nil {
-		uid = p.Uid
+		uid = p.Uid()
 	}
 	binary.BigEndian.PutUint64(dst[0:8], uid)
 	binary.BigEndian.PutUint32(dst[8:12], uint32(len(key)))
 
-	psz := p.Size()
+	psz := len(p.Table().Bytes)
 	binary.BigEndian.PutUint32(dst[12:16], uint32(psz))
 
 	n := copy(dst[16:], key)
 
 	if psz > 0 {
-		pbuf := dst[16+n:]
-		_, err := p.MarshalToSizedBuffer(pbuf[:psz])
-		x.Check(err)
+		// TODO(ajeet) what's happening here?
+		// pbuf := dst[16+n:]
+		// _, err := p.MarshalToSizedBuffer(pbuf[:psz])
+		// x.Check(err)
 	}
 
 	x.AssertTrue(len(dst) == 16+n+psz)
@@ -270,11 +273,11 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 	}
 }
 
-func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
+func (m *mapper) addMapEntry(key []byte, p *fb.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
-	uid := p.Uid
-	if p.PostingType != pb.Posting_REF || len(p.Facets) > 0 {
+	uid := p.Uid()
+	if p.PostingType() != fb.PostingTypeREF || p.FacetsLength() > 0 {
 		// Keep p
 	} else {
 		// We only needed the UID.
@@ -364,7 +367,7 @@ func (m *mapper) lookupUid(xid string) uint64 {
 }
 
 func (m *mapper) createPostings(nq gql.NQuad,
-	de *pb.DirectedEdge) (*pb.Posting, *pb.Posting) {
+	de *pb.DirectedEdge) (*fb.Posting, *fb.Posting) {
 
 	m.schema.validateType(de, nq.ObjectValue == nil)
 
@@ -374,18 +377,18 @@ func (m *mapper) createPostings(nq gql.NQuad,
 		lang := de.GetLang()
 		switch {
 		case len(lang) > 0:
-			p.Uid = farm.Fingerprint64([]byte(lang))
+			p.SetUid(farm.Fingerprint64([]byte(lang)))
 		case sch.List:
-			p.Uid = farm.Fingerprint64(de.Value)
+			p.SetUid(farm.Fingerprint64(de.Value))
 		default:
-			p.Uid = math.MaxUint64
+			p.SetUid(math.MaxUint64)
 		}
 	}
-	p.Facets = nq.Facets
+	p.SetFacets(nq.Facets)
 
 	// Early exit for no reverse edge.
 	if sch.GetDirective() != pb.SchemaUpdate_REVERSE {
-		return p, nil
+		return p.Build(), nil
 	}
 
 	// Reverse predicate
@@ -396,7 +399,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
 
-	return p, rp
+	return p.Build(), rp.Build()
 }
 
 func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
@@ -432,10 +435,10 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 		for _, t := range toks {
 			m.addMapEntry(
 				x.IndexKey(nq.Predicate, t),
-				&pb.Posting{
-					Uid:         de.GetEntity(),
-					PostingType: pb.Posting_REF,
-				},
+				fbx.NewPosting().
+					SetUid(de.GetEntity()).
+					SetPostingType(fb.PostingTypeREF).
+					Build(),
 				m.state.shards.shardFor(nq.Predicate),
 			)
 		}

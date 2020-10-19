@@ -42,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/fb"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -122,6 +123,21 @@ func facetToString(fct *api.Facet) (string, error) {
 	return v2.Value.(string), nil
 }
 
+// facetToString convert a facet value to a string.
+func facetToStringFb(fct *fb.Facet) (string, error) {
+	v1, err := facets.ValForFb(fct)
+	if err != nil {
+		return "", errors.Wrapf(err, "getting value from facet %#v", fct)
+	}
+
+	v2 := &types.Val{Tid: types.StringID}
+	if err = types.Marshal(v1, v2); err != nil {
+		return "", errors.Wrapf(err, "marshaling facet value %v to string", v1)
+	}
+
+	return v2.Value.(string), nil
+}
+
 // escapedString converts a string into an escaped string for exports.
 func escapedString(str string) string {
 	// We use the Marshal function in the JSON package for all export formats
@@ -143,7 +159,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 
 	continuing := false
 	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, e.uid)
-	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
+	err := e.pl.Iterate(e.readTs, 0, func(p *fb.Posting) error {
 		if continuing {
 			fmt.Fprint(bp, ",\n")
 		} else {
@@ -151,18 +167,18 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 		}
 
 		fmt.Fprint(bp, mapStart)
-		if p.PostingType == pb.Posting_REF {
+		if p.PostingType() == fb.PostingTypeREF {
 			fmt.Fprintf(bp, `,"%s":[`, e.attr)
 			fmt.Fprintf(bp, "{\"uid\":"+uidFmtStrJson+"}", p.Uid)
 			fmt.Fprint(bp, "]")
 		} else {
-			if p.PostingType == pb.Posting_VALUE_LANG {
-				fmt.Fprintf(bp, `,"%s@%s":`, e.attr, string(p.LangTag))
+			if p.PostingType() == fb.PostingTypeVALUE_LANG {
+				fmt.Fprintf(bp, `,"%s@%s":`, e.attr, string(p.LangTagBytes()))
 			} else {
 				fmt.Fprintf(bp, `,"%s":`, e.attr)
 			}
 
-			val := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
+			val := types.Val{Tid: types.TypeID(p.ValueType()), Value: p.Value}
 			str, err := valToStr(val)
 			if err != nil {
 				// Copying this behavior from RDF exporter.
@@ -179,16 +195,19 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			fmt.Fprint(bp, str)
 		}
 
-		for _, fct := range p.Facets {
-			fmt.Fprintf(bp, `,"%s|%s":`, e.attr, fct.Key)
+		for i := 0; i < p.FacetsLength(); i++ {
+			var fct *fb.Facet
+			p.Facets(fct, i)
 
-			str, err := facetToString(fct)
+			fmt.Fprintf(bp, `,"%s|%s":`, e.attr, string(fct.Key()))
+
+			str, err := facetToStringFb(fct)
 			if err != nil {
 				glog.Errorf("Ignoring error: %+v", err)
 				return nil
 			}
 
-			tid, err := facets.TypeIDFor(fct)
+			tid, err := facets.TypeIDForFb(fct)
 			if err != nil {
 				glog.Errorf("Error getting type id from facet %#v: %v", fct, err)
 				continue
@@ -216,12 +235,12 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	bp := new(bytes.Buffer)
 
 	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", e.uid, e.attr)
-	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
+	err := e.pl.Iterate(e.readTs, 0, func(p *fb.Posting) error {
 		fmt.Fprint(bp, prefix)
-		if p.PostingType == pb.Posting_REF {
+		if p.PostingType() == fb.PostingTypeREF {
 			fmt.Fprint(bp, fmt.Sprintf(uidFmtStrRdf, p.Uid))
 		} else {
-			val := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
+			val := types.Val{Tid: types.TypeID(p.ValueType()), Value: p.Value}
 			str, err := valToStr(val)
 			if err != nil {
 				glog.Errorf("Ignoring error: %+v\n", err)
@@ -229,9 +248,9 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 			}
 			fmt.Fprintf(bp, "%s", escapedString(str))
 
-			tid := types.TypeID(p.ValType)
-			if p.PostingType == pb.Posting_VALUE_LANG {
-				fmt.Fprint(bp, "@"+string(p.LangTag))
+			tid := types.TypeID(p.ValueType())
+			if p.PostingType() == fb.PostingTypeVALUE_LANG {
+				fmt.Fprint(bp, "@"+string(p.LangTagBytes()))
 			} else if tid != types.DefaultID {
 				rdfType, ok := rdfTypeMap[tid]
 				x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", tid.Name())
@@ -241,21 +260,24 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 		// Let's skip labels. Dgraph doesn't support them for any functionality.
 
 		// Facets.
-		if len(p.Facets) != 0 {
+		if p.FacetsLength() > 0 {
 			fmt.Fprint(bp, " (")
-			for i, fct := range p.Facets {
+			for i := 0; i < p.FacetsLength(); i++ {
+				var fct *fb.Facet
+				p.Facets(fct, i)
+
 				if i != 0 {
 					fmt.Fprint(bp, ",")
 				}
-				fmt.Fprint(bp, fct.Key+"=")
+				fmt.Fprint(bp, string(fct.Key())+"=")
 
-				str, err := facetToString(fct)
+				str, err := facetToStringFb(fct)
 				if err != nil {
 					glog.Errorf("Ignoring error: %+v", err)
 					return nil
 				}
 
-				tid, err := facets.TypeIDFor(fct)
+				tid, err := facets.TypeIDForFb(fct)
 				if err != nil {
 					glog.Errorf("Error getting type id from facet %#v: %v", fct, err)
 					continue

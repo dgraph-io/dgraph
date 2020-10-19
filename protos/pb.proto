@@ -645,7 +645,7 @@ message BackupKey {
 // A posting list stored in the format used for writing backups.
 message BackupPostingList {
 	repeated uint64 uids = 1;
-	repeated Posting postings = 2;
+	repeated bytes postings = 2;
 	uint64 commit_ts = 3;
   repeated uint64 splits = 4;
 	bytes uid_bytes = 5;

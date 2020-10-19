@@ -39,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/fbx"
 	"github.com/dgraph-io/dgraph/graphql/admin"
 	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/posting"
@@ -827,8 +828,9 @@ func listenForCorsUpdate(closer *z.Closer) {
 			return
 		}
 		origins := make([]string, 0)
-		for _, posting := range pl.Postings {
-			val := strings.TrimSpace(string(posting.Value))
+		for _, bs := range pl.Postings {
+			posting := fbx.AsPosting(bs)
+			val := strings.TrimSpace(string(posting.ValueBytes()))
 			if val == "_STAR_ALL" {
 				// If the posting list contains __STAR_ALL then it's a delete call.
 				// we usually do it before updating as part of upsert. So, let's
