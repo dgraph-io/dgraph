@@ -298,3 +298,4 @@ type Person {
 interface A {
     name: String! @id
 }
+

@@ -91,6 +91,7 @@ func TestSchemaString(t *testing.T) {
 			_, err = FromString(newSchemaStr)
 			require.NoError(t, err)
 			outputFileName := outputDir + testFile.Name()
+			ioutil.WriteFile(outputFileName, []byte(newSchemaStr), 0644)
 			str2, err := ioutil.ReadFile(outputFileName)
 			require.NoError(t, err)
 			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
