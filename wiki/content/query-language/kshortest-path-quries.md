@@ -8,7 +8,9 @@ weight = 23
 
 The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (at least one) that have to be considered for traversal. A `shortest` query block returns the shortest path under `_path_` in the query response. The path can also be stored in a variable which is used in other query blocks.
 
-**K-Shortest Path queries:** By default the shortest path is returned. With `numpaths: k`, and `k > 1`, the k-shortest paths are returned. Cyclical paths are pruned out from the result of k-shortest path query. With `depth: n`, the paths up to `n` depth away are returned.
+## K-Shortest Path queries
+
+By default the shortest path is returned. With `numpaths: k`, and `k > 1`, the k-shortest paths are returned. Cyclical paths are pruned out from the result of k-shortest path query. With `depth: n`, the paths up to `n` depth away are returned.
 
 {{% notice "note" %}}
 - If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.
@@ -23,8 +25,7 @@ curl localhost:8080/alter -XPOST -d $'
 ' | python -m json.tool | less
 ```
 
-```sh
-curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XPOST -d $'
+```graphql
 {
   set {
     _:a <friend> _:b (weight=0.1) .
@@ -40,23 +41,27 @@ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XP
     _:d <name> "Mallory" .
     _:d <dgraph.type> "Person" .
   }
-}' | python -m json.tool | less
+}
 ```
 
-The shortest path between Alice and Mallory (assuming UIDs 0x2 and 0x5 respectively) can be found with query:
+The shortest path between Alice and Mallory (assuming UIDs `0x2` and `0x5` respectively) can be found with this query:
 
-```sh
-curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
+```graphql
+{
  path as shortest(from: 0x2, to: 0x5) {
   friend
  }
  path(func: uid(path)) {
    name
  }
-}' | python -m json.tool | less
+}
 ```
 
-Which returns the following results. (Note, without considering the `weight` facet, each edges' weight is considered as 1)
+Which returns the following results. 
+
+{{% notice "note" %}}
+without considering the `weight` facet, each edges' weight is considered as `1`
+{{% /notice %}}
 
 ```
 {
@@ -85,8 +90,8 @@ Which returns the following results. (Note, without considering the `weight` fac
 
 We can return more paths by specifying `numpaths`. Setting `numpaths: 2` returns the shortest two paths:
 
-```sh
-curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
+```graphql
+{
 
  A as var(func: eq(name, "Alice"))
  M as var(func: eq(name, "Mallory"))
@@ -97,17 +102,19 @@ curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
  path(func: uid(path)) {
    name
  }
-}' | python -m json.tool | less
+}
 ```
 
 {{% notice "note" %}}In the query above, instead of using UID literals, we query both people using var blocks and the `uid()` function. You can also combine it with [GraphQL Variables]({{< relref "query-language/graphql-variables.md" >}}).{{% /notice %}}
 
-Edges weights are included by using facets on the edges as follows.
+## Edge weight
+
+The shortest path implementation in Dgraph relies on facets to provide weights. Using `facets` on the edges let you define the edges' weight as follows:
 
 {{% notice "note" %}}Only one facet per predicate is allowed in the shortest query block.{{% /notice %}}
 
-```sh
-curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
+```graphql
+{
  path as shortest(from: 0x2, to: 0x5) {
   friend @facets(weight)
  }
@@ -115,7 +122,7 @@ curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
  path(func: uid(path)) {
   name
  }
-}' | python -m json.tool | less
+}
 ```
 
 ```
@@ -162,10 +169,94 @@ curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
 }
 ```
 
+### Traverse example
+
+Here is a graph traversal example that allows you to find the shortest path between friends using a `Car` or a `Bus`. 
+
+{{% notice "tip" %}}
+Car and Bus movement for each relation is modeled as facets and specified in the shortest query
+{{% /notice %}}
+
+```graphql
+{
+  set {
+    _:a <friend> _:b (weightCar=10, weightBus=1 ) .
+    _:b <friend> _:c (weightCar=20, weightBus=1) .
+    _:c <friend> _:d (weightCar=11, weightBus=1.1) .
+    _:a <friend> _:d (weightCar=70, weightBus=2) .
+    _:a <name> "Alice" .
+    _:a <dgraph.type> "Person" .
+    _:b <name> "Bob" .
+    _:b <dgraph.type> "Person" .
+    _:c <name> "Tom" .
+    _:c <dgraph.type> "Person" .
+    _:d <name> "Mallory" .
+    _:d <dgraph.type> "Person" .
+  }
+}
+```
+
+Query to find the shortest path relying on `Car` and `Bus`:
+
+```graphql
+{
+
+ A as var(func: eq(name, "Alice"))
+ M as var(func: eq(name, "Mallory"))
+
+ sPathBus as shortest(from: uid(A), to: uid(M)) {  
+  friend
+  @facets(weightBus)
+ }
+
+ sPathCar as shortest(from: uid(A), to: uid(M)) {  
+  friend
+  @facets(weightCar)
+ }  
+  
+ pathBus(func: uid(sPathBus)) {
+   name   
+ }
+  
+ pathCar(func: uid(sPathCar)) {
+   name   
+ }
+}
+```
+
+The response contains the following paths conforming to the specified weights:
+
+```
+    "pathBus": [
+      {
+        "name": "Alice"
+      },
+      {
+        "name": "Mallory"
+      }
+    ],
+    "pathCar": [
+      {
+        "name": "Alice"
+      },
+      {
+        "name": "Bob"
+      },
+      {
+        "name": "Tom"
+      },
+      {
+        "name": "Mallory"
+      }
+    ]
+```
+
+## Constraints
+
 Constraints can be applied to the intermediate nodes as follows.
 
-```sh
-curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
+```graphql
+{
   path as shortest(from: 0x2, to: 0x5) {
     friend @filter(not eq(name, "Bob")) @facets(weight)
     relative @facets(liking)
@@ -174,21 +265,23 @@ curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
   relationship(func: uid(path)) {
     name
   }
-}' | python -m json.tool | less
+}
 ```
 
 The k-shortest path algorithm (used when `numpaths` > 1) also accepts the arguments `minweight` and `maxweight`, which take a float as their value. When they are passed, only paths within the weight range `[minweight, maxweight]` will be considered as valid paths. This can be used, for example, to query the shortest paths that traverse between 2 and 4 nodes.
 
-```sh
-curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
+```graphql
+{
  path as shortest(from: 0x2, to: 0x5, numpaths: 2, minweight: 2, maxweight: 4) {
   friend
  }
  path(func: uid(path)) {
    name
  }
-}' | python -m json.tool | less
+}
 ```
+
+## Notes
 
 Some points to keep in mind for shortest path queries:
 
