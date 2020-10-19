@@ -656,6 +656,24 @@ schemas:
         })
       }
 
+  -
+    name: "custom field shouldn't be part of dgraph schema"
+    input: |
+      type User {
+        id: ID!
+        name: String!
+        bio: String! @lambda
+        friends: [User] @custom(http: {
+          url: "http://mock:8888/users",
+          method: "GET"
+        })
+      }
+    output: |
+      type User {
+        User.name
+      }
+      User.name: string .
+
   - name: "Geo field in schema."
     input: |
       type Hotel {

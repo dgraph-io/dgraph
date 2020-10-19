@@ -1345,52 +1345,57 @@ func rewriteUnionField(ctx context.Context,
 		withAdditionalDeletes, obj, deepXID, xidMetadata)
 }
 
-func makePolygon(val map[string]interface{}) []interface{} {
+// rewriteGeoObject rewrites the given value correctly based on the underlying Geo type.
+// Currently, it supports Point, Polygon and MultiPolygon.
+func rewriteGeoObject(val map[string]interface{}, typ schema.Type) []interface{} {
+	switch typ.Name() {
+	case schema.Point:
+		return rewritePoint(val)
+	case schema.Polygon:
+		return rewritePolygon(val)
+	case schema.MultiPolygon:
+		return rewriteMultiPolygon(val)
+	}
+	return nil
+}
+
+// rewritePoint constructs coordinates for Point type.
+// For Point type, the mutation json is as follows:
+// { "type": "Point", "coordinates": [11.11, 22.22] }
+func rewritePoint(point map[string]interface{}) []interface{} {
+	return []interface{}{point[schema.Longitude], point[schema.Latitude]}
+}
+
+// rewritePolygon constructs coordinates for Polygon type.
+// For Polygon type, the mutation json is as follows:
+//	{
+//		"type": "Polygon",
+//		"coordinates": [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
+//	}
+func rewritePolygon(val map[string]interface{}) []interface{} {
 	var resPoly []interface{}
-	coordinates, _ := val["coordinates"].([]interface{})
-	for _, vc := range coordinates {
-		ring := vc.(map[string]interface{})
-		points, _ := ring["points"].([]interface{})
-		var resRing []interface{}
-		for _, p := range points {
-			point := p.(map[string]interface{})
-			resRing = append(resRing, []interface{}{point["longitude"], point["latitude"]})
+	for _, pointList := range val[schema.Coordinates].([]interface{}) {
+		var resPointList []interface{}
+		for _, point := range pointList.(map[string]interface{})[schema.Points].([]interface{}) {
+			resPointList = append(resPointList, rewritePoint(point.(map[string]interface{})))
 		}
-		resPoly = append(resPoly, resRing)
+		resPoly = append(resPoly, resPointList)
 	}
 	return resPoly
 }
 
-func rewriteGeoObject(val map[string]interface{}, typ schema.Type) []interface{} {
-	switch typ.Name() {
-	case "Point":
-		// For Point type, the mutation json is as follows:
-		// { "type": "Point", "coordinates": [11.11, 22.22]}
-		lat := val["latitude"]
-		long := val["longitude"]
-		return []interface{}{long, lat}
-	case "Polygon":
-		// For Polygon type, the mutation json is as follows:
-		// {
-		//   "type": "Polygon",
-		//   "coordinates": [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
-		// }
-		return makePolygon(val)
-	case "MultiPolygon":
-		// For MultiPolygon type, the mutation json is as follows:
-		// {
-		//   "type": "MultiPolygon",
-		//   "coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
-		// }
-		polygons, _ := val["polygons"].([]interface{})
-		var res []interface{}
-		for _, p := range polygons {
-			polygon, _ := p.(map[string]interface{})
-			res = append(res, makePolygon(polygon))
-		}
-		return res
+// rewriteMultiPolygon constructs coordinates for MultiPolygon type.
+// For MultiPolygon type, the mutation json is as follows:
+//	{
+//		"type": "MultiPolygon",
+//		"coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
+//	}
+func rewriteMultiPolygon(val map[string]interface{}) []interface{} {
+	var coordinates []interface{}
+	for _, polygon := range val[schema.Polygons].([]interface{}) {
+		coordinates = append(coordinates, rewritePolygon(polygon.(map[string]interface{})))
 	}
-	return nil
+	return coordinates
 }
 
 func invalidObjectFragment(

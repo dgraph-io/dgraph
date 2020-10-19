@@ -60,6 +60,16 @@ const (
 	BATCH       = "BATCH"
 	SINGLE      = "SINGLE"
 
+	// geo type names and fields
+	Point        = "Point"
+	Polygon      = "Polygon"
+	MultiPolygon = "MultiPolygon"
+	Latitude     = "latitude"
+	Longitude    = "longitude"
+	Points       = "points"
+	Coordinates  = "coordinates"
+	Polygons     = "polygons"
+
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
 	Msg                 = "msg"

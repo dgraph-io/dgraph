@@ -3860,6 +3860,7 @@ func mutationPointType(t *testing.T) {
 			hotel {
 			  name
 			  location {
+				__typename
 				latitude
 				longitude
 			  }
@@ -3883,6 +3884,7 @@ func mutationPointType(t *testing.T) {
 			"hotel": [{
 				"name": "Taj Hotel",
 				"location": {
+					"__typename": "Point",
 					"latitude": 11.11,
 					"longitude": 22.22
 				}
@@ -4002,6 +4004,199 @@ func mutationPolygonType(t *testing.T) {
 						"longitude": 22.28
 					  }]
 				  }]
+				}
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
+
+	// Cleanup
+	deleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
+}
+
+func mutationMultiPolygonType(t *testing.T) {
+	addHotelParams := &GraphQLParams{
+		Query: `
+		mutation addHotel {
+		  addHotel(input: [{
+			name: "Taj Hotel"
+			branches : {
+				polygons: [{
+					coordinates: [{
+						points: [{
+							latitude: 11.11,
+							longitude: 22.22
+						}, {
+							latitude: 15.15,
+							longitude: 16.16
+						}, {
+							latitude: 20.20,
+							longitude: 21.21
+						}, {
+							latitude: 11.11,
+							longitude: 22.22
+						}]
+					}, {
+						points: [{
+							latitude: 11.18,
+							longitude: 22.28
+						}, {
+							latitude: 15.18,
+							longitude: 16.18
+						}, {
+							latitude: 20.28,
+							longitude: 21.28
+						}, {
+							latitude: 11.18,
+							longitude: 22.28
+						}]
+					}]
+				}, {
+					coordinates: [{
+						points: [{
+							latitude: 91.11,
+							longitude: 92.22
+						}, {
+							latitude: 15.15,
+							longitude: 16.16
+						}, {
+							latitude: 20.20,
+							longitude: 21.21
+						}, {
+							latitude: 91.11,
+							longitude: 92.22
+						}]
+					}, {
+						points: [{
+							latitude: 11.18,
+							longitude: 22.28
+						}, {
+							latitude: 15.18,
+							longitude: 16.18
+						}, {
+							latitude: 20.28,
+							longitude: 21.28
+						}, {
+							latitude: 11.18,
+							longitude: 22.28
+						}]
+					}]
+				}]
+			}
+		  }]) {
+			hotel {
+			  name
+			  branches {
+				__typename
+				polygons {
+					__typename
+					coordinates {
+					  __typename
+					  points {
+						latitude
+						__typename
+						longitude
+					  }
+					}
+				}
+			  }
+			}
+		  }
+		}`,
+	}
+	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addHotelExpected := `
+	{
+		"addHotel": {
+			"hotel": [{
+				"name": "Taj Hotel",
+				"branches": {
+					"__typename": "MultiPolygon",
+					"polygons": [{
+					  "__typename": "Polygon",
+					  "coordinates": [{
+						"__typename": "PointList",
+						"points": [{
+						  "__typename": "Point",
+						  "latitude": 11.11,
+						  "longitude": 22.22
+						}, {
+						  "__typename": "Point",
+						  "latitude": 15.15,
+						  "longitude": 16.16
+						}, {
+						  "__typename": "Point",
+						  "latitude": 20.20,
+						  "longitude": 21.21
+						},{
+						  "__typename": "Point",
+						  "latitude": 11.11,
+						  "longitude": 22.22
+						}]
+					  }, {
+						  "__typename": "PointList",
+						  "points": [{
+							"__typename": "Point",
+							"latitude": 11.18,
+							"longitude": 22.28
+						  }, {
+							"__typename": "Point",
+							"latitude": 15.18,
+							"longitude": 16.18
+						  }, {
+							"__typename": "Point",
+							"latitude": 20.28,
+							"longitude": 21.28
+						  }, {
+							"__typename": "Point",
+							"latitude": 11.18,
+							"longitude": 22.28
+						  }]
+					  }]
+					}, {
+					  "__typename": "Polygon",
+					  "coordinates": [{
+						"__typename": "PointList",
+						"points": [{
+						  "__typename": "Point",
+						  "latitude": 91.11,
+						  "longitude": 92.22
+						}, {
+						  "__typename": "Point",
+						  "latitude": 15.15,
+						  "longitude": 16.16
+						}, {
+						  "__typename": "Point",
+						  "latitude": 20.20,
+						  "longitude": 21.21
+						},{
+						  "__typename": "Point",
+						  "latitude": 91.11,
+						  "longitude": 92.22
+						}]
+					  }, {
+						  "__typename": "PointList",
+						  "points": [{
+							"__typename": "Point",
+							"latitude": 11.18,
+							"longitude": 22.28
+						  }, {
+							"__typename": "Point",
+							"latitude": 15.18,
+							"longitude": 16.18
+						  }, {
+							"__typename": "Point",
+							"latitude": 20.28,
+							"longitude": 21.28
+						  }, {
+							"__typename": "Point",
+							"latitude": 11.18,
+							"longitude": 22.28
+						  }]
+					  }]
+					}]
 				}
 			}]
 		}

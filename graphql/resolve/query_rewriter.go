@@ -999,45 +999,6 @@ func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}
 	return true
 }
 
-func writeMultiPolygon(multipolygon map[string]interface{}, buf *bytes.Buffer) {
-	polygons, _ := multipolygon["polygons"].([]interface{})
-	x.Check2(buf.WriteString("["))
-	comma := ""
-	for _, v := range polygons {
-		polygon := v.(map[string]interface{})
-		x.Check2(buf.WriteString(comma))
-		writePolygon(polygon, buf)
-		comma = ","
-	}
-	x.Check2(buf.WriteString("]"))
-}
-
-func writePolygon(polygon map[string]interface{}, buf *bytes.Buffer) {
-	coordinates, _ := polygon["coordinates"].([]interface{})
-	x.Check2(buf.WriteString("["))
-	comma1 := ""
-	for _, vc := range coordinates {
-		ring := vc.(map[string]interface{})
-		points, _ := ring["points"].([]interface{})
-		x.Check2(buf.WriteString(comma1))
-		x.Check2(buf.WriteString("["))
-		comma2 := ""
-		for _, p := range points {
-			point := p.(map[string]interface{})
-			x.Check2(buf.WriteString(
-				fmt.Sprintf("%s[%v,%v]", comma2, point["longitude"], point["latitude"])))
-			comma2 = ","
-		}
-		x.Check2(buf.WriteString("]"))
-		comma1 = ","
-	}
-	x.Check2(buf.WriteString("]"))
-}
-
-func writePoint(point map[string]interface{}) string {
-	return fmt.Sprintf("[%v,%v]", point["longitude"], point["latitude"])
-}
-
 // buildFilter builds a Dgraph gql.FilterTree from a GraphQL 'filter' arg.
 //
 // All the 'filter' args built by the GraphQL layer look like
@@ -1122,9 +1083,10 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// numLikes: { le: 10 } -> le(Post.numLikes, 10)
 
 				fn, val := first(dgFunc)
-				args := []gql.Arg{
-					{Value: typ.DgraphPredicate(field)},
+				if val == nil {
+					continue
 				}
+				args := []gql.Arg{{Value: typ.DgraphPredicate(field)}}
 				switch fn {
 				// in takes List of Scalars as argument, for eg:
 				// code : { in: ["abc", "def", "ghi"] } -> eq(State.code,"abc","def","ghi")
@@ -1140,51 +1102,42 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				case "near":
 					// For Geo type we have `near` filter which is written as follows:
 					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
-					geoParams := val.(map[string]interface{})
-					distance := geoParams["distance"]
-
-					coordinate, _ := geoParams["coordinate"].(map[string]interface{})
-					if coordinate == nil {
-						return nil
-					}
-					args = append(args, gql.Arg{Value: writePoint(coordinate)},
-						gql.Arg{Value: fmt.Sprintf("%v", distance)})
+					near := val.(map[string]interface{})
+					coordinate := near["coordinate"].(map[string]interface{})
+					var buf bytes.Buffer
+					buildPoint(coordinate, &buf)
+					args = append(args, gql.Arg{Value: buf.String()},
+						gql.Arg{Value: fmt.Sprintf("%v", near["distance"])})
 				case "within":
 					// For Geo type we have `within` filter which is written as follows:
 					// { within: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
-					geoParams := val.(map[string]interface{})
-					polygon, _ := geoParams["polygon"].(map[string]interface{})
-					if polygon == nil {
-						return nil
-					}
-
+					within := val.(map[string]interface{})
+					polygon := within["polygon"].(map[string]interface{})
 					var buf bytes.Buffer
-					writePolygon(polygon, &buf)
+					buildPolygon(polygon, &buf)
 					args = append(args, gql.Arg{Value: buf.String()})
 				case "contains":
 					// For Geo type we have `contains` filter which is either point or polygon and is written as follows:
 					// For point: { contains: { point: { latitude: 11.11, longitude: 22.22 }}}
 					// For polygon: { contains: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
-					geoParams := val.(map[string]interface{})
-					var res string
-					if polygon, ok := geoParams["polygon"].(map[string]interface{}); ok {
-						var buf bytes.Buffer
-						writePolygon(polygon, &buf)
-						res = buf.String()
-					} else if point, ok := geoParams["point"].(map[string]interface{}); ok {
-						res = writePoint(point)
-					}
-					args = append(args, gql.Arg{Value: res})
-				case "intersects":
-					// For Geo type we have `contains` filter which is either multi-polygon or polygon and is written as follows:
-					// For multi-polygon : { intersect: { multiPolygon: { coordinates: [{ coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] }] } } }
-					// For polygon: { intersect: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
-					geoParams := val.(map[string]interface{})
+					contains := val.(map[string]interface{})
 					var buf bytes.Buffer
-					if polygon, ok := geoParams["polygon"].(map[string]interface{}); ok {
-						writePolygon(polygon, &buf)
-					} else if multiPolygon, ok := geoParams["multiPolygon"].(map[string]interface{}); ok {
-						writeMultiPolygon(multiPolygon, &buf)
+					if polygon, ok := contains["polygon"].(map[string]interface{}); ok {
+						buildPolygon(polygon, &buf)
+					} else if point, ok := contains["point"].(map[string]interface{}); ok {
+						buildPoint(point, &buf)
+					}
+					args = append(args, gql.Arg{Value: buf.String()})
+				case "intersects":
+					// For Geo type we have `intersects` filter which is either multi-polygon or polygon and is written as follows:
+					// For polygon: { intersect: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					// For multi-polygon : { intersect: { multiPolygon: { polygons: [{ coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] }] } } }
+					intersects := val.(map[string]interface{})
+					var buf bytes.Buffer
+					if polygon, ok := intersects["polygon"].(map[string]interface{}); ok {
+						buildPolygon(polygon, &buf)
+					} else if multiPolygon, ok := intersects["multiPolygon"].(map[string]interface{}); ok {
+						buildMultiPolygon(multiPolygon, &buf)
 					}
 					args = append(args, gql.Arg{Value: buf.String()})
 				default:
@@ -1259,6 +1212,49 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	}
 }
 
+func buildPoint(point map[string]interface{}, buf *bytes.Buffer) {
+	x.Check2(buf.WriteString(fmt.Sprintf("[%v,%v]", point[schema.Longitude],
+		point[schema.Latitude])))
+}
+
+func buildPolygon(polygon map[string]interface{}, buf *bytes.Buffer) {
+	coordinates, _ := polygon[schema.Coordinates].([]interface{})
+	comma1 := ""
+
+	x.Check2(buf.WriteString("["))
+	for _, r := range coordinates {
+		ring, _ := r.(map[string]interface{})
+		points, _ := ring[schema.Points].([]interface{})
+		comma2 := ""
+
+		x.Check2(buf.WriteString(comma1))
+		x.Check2(buf.WriteString("["))
+		for _, p := range points {
+			x.Check2(buf.WriteString(comma2))
+			point, _ := p.(map[string]interface{})
+			buildPoint(point, buf)
+			comma2 = ","
+		}
+		x.Check2(buf.WriteString("]"))
+		comma1 = ","
+	}
+	x.Check2(buf.WriteString("]"))
+}
+
+func buildMultiPolygon(multipolygon map[string]interface{}, buf *bytes.Buffer) {
+	polygons, _ := multipolygon[schema.Polygons].([]interface{})
+	comma := ""
+
+	x.Check2(buf.WriteString("["))
+	for _, p := range polygons {
+		polygon, _ := p.(map[string]interface{})
+		x.Check2(buf.WriteString(comma))
+		buildPolygon(polygon, buf)
+		comma = ","
+	}
+	x.Check2(buf.WriteString("]"))
+}
+
 func buildUnionFilter(typ schema.Type, filter map[string]interface{}) (*gql.FilterTree, bool) {
 	memberTypesList, ok := filter["memberTypes"].([]interface{})
 	// if memberTypes was specified to be an empty list like: { memberTypes: [], ...},
@@ -1309,7 +1305,7 @@ func maybeQuoteArg(fn string, arg interface{}) string {
 	}
 }
 
-// fst returns the first element it finds in a map - we bump into lots of one-element
+// first returns the first element it finds in a map - we bump into lots of one-element
 // maps like { "anyofterms": "GraphQL" }.  fst helps extract that single mapping.
 func first(aMap map[string]interface{}) (string, interface{}) {
 	for key, val := range aMap {
