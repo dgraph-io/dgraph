@@ -131,8 +131,8 @@ type Field interface {
 	Location() x.Location
 	DgraphPredicate() string
 	Operation() Operation
-	// InterfaceType tells us whether this field represents a GraphQL Interface.
-	InterfaceType() bool
+	// AbstractType tells us whether this field represents a GraphQL Interface.
+	AbstractType() bool
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
@@ -173,6 +173,10 @@ type Type interface {
 	DgraphName() string
 	DgraphPredicate(fld string) string
 	Nullable() bool
+	// true if this is a union type
+	IsUnion() bool
+	// returns a list of member types for this union
+	UnionMembers([]interface{}) []Type
 	ListType() Type
 	Interfaces() []string
 	EnsureNonNulls(map[string]interface{}, string) error
@@ -194,6 +198,7 @@ type FieldDefinition interface {
 	IsID() bool
 	HasIDDirective() bool
 	Inverse() FieldDefinition
+	WithMemberType(string) FieldDefinition
 	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
 	ForwardEdge() FieldDefinition
 }
@@ -559,13 +564,8 @@ func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) 
 	repeatedFieldNames := make(map[string]bool)
 
 	for _, typ := range s.Types {
-		if typ.Kind != ast.Interface {
+		if !isAbstractKind(typ.Kind) {
 			continue
-		}
-
-		interfaceFields := make(map[string]bool)
-		for _, field := range typ.Fields {
-			interfaceFields[field.Name] = true
 		}
 
 		type fieldInfo struct {
@@ -580,12 +580,14 @@ func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) 
 				// ignore this field if it was inherited from the common interface or is of ID type.
 				// We ignore ID type fields too, because they map only to uid in dgraph and can't
 				// map to two different predicates.
-				if interfaceFields[field.Name] || field.Type.Name() == IDType {
+				if field.Type.Name() == IDType {
 					continue
 				}
 				// if we find a field with same name from types implementing a common interface
 				// and its DgraphPredicate is different than what was previously encountered, then
-				// we mark it as repeated field, so that queries will rewrite it with correct alias
+				// we mark it as repeated field, so that queries will rewrite it with correct alias.
+				// For fields, which these types have implemented from a common interface, their
+				// DgraphPredicate will be same, so they won't be marked as repeated.
 				dgPred := typPreds[field.Name]
 				if fInfo, ok := repeatedFieldsInTypesWithCommonAncestor[field.Name]; ok && fInfo.
 					dgPred != dgPred {
@@ -1065,8 +1067,12 @@ func (f *field) Type() Type {
 	}
 }
 
-func (f *field) InterfaceType() bool {
-	return f.op.inSchema.schema.Types[f.field.Definition.Type.Name()].Kind == ast.Interface
+func isAbstractKind(kind ast.DefinitionKind) bool {
+	return kind == ast.Interface || kind == ast.Union
+}
+
+func (f *field) AbstractType() bool {
+	return isAbstractKind(f.op.inSchema.schema.Types[f.field.Definition.Type.Name()].Kind)
 }
 
 func (f *field) GetObjectName() string {
@@ -1252,11 +1258,15 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 		}
 		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
 			if origTyp.Kind == ast.Object {
-				// If the field is from an interface implemented by this object,
-				// and was fetched not because of a fragment on this object,
-				// but because of a fragment on some other object, then we don't need to include it.
+				// For fields coming from fragments inside an abstract type, there are two cases:
+				// * If the field is from an interface implemented by this object, and was fetched
+				//	 not because of a fragment on this object, but because of a fragment on some
+				//	 other object, then we don't need to include it.
+				// * If the field was fetched because of a fragment on an interface, and that
+				//	 interface is not one of the interfaces implemented by this object, then we
+				//	 don't need to include it.
 				fragType, ok := f.op.interfaceImplFragFields[f.field]
-				if ok && fragType != origTyp.Name {
+				if ok && fragType != origTyp.Name && !x.HasString(origTyp.Interfaces, fragType) {
 					return false
 				}
 
@@ -1421,8 +1431,8 @@ func (q *query) DgraphPredicate() string {
 	return (*field)(q).DgraphPredicate()
 }
 
-func (q *query) InterfaceType() bool {
-	return (*field)(q).InterfaceType()
+func (q *query) AbstractType() bool {
+	return (*field)(q).AbstractType()
 }
 
 func (q *query) TypeName(dgraphTypes []interface{}) string {
@@ -1485,8 +1495,8 @@ func (m *mutation) Type() Type {
 	return (*field)(m).Type()
 }
 
-func (m *mutation) InterfaceType() bool {
-	return (*field)(m).InterfaceType()
+func (m *mutation) AbstractType() bool {
+	return (*field)(m).AbstractType()
 }
 
 func (m *mutation) XIDArg() string {
@@ -1703,6 +1713,23 @@ func (fd *fieldDefinition) Inverse() FieldDefinition {
 	}
 }
 
+func (fd *fieldDefinition) WithMemberType(memberType string) FieldDefinition {
+	// just need to return a copy of this fieldDefinition with type set to memberType
+	return &fieldDefinition{
+		fieldDef: &ast.FieldDefinition{
+			Name:         fd.fieldDef.Name,
+			Arguments:    fd.fieldDef.Arguments,
+			DefaultValue: fd.fieldDef.DefaultValue,
+			Type:         &ast.Type{NamedType: memberType},
+			Directives:   fd.fieldDef.Directives,
+			Position:     fd.fieldDef.Position,
+		},
+		inSchema:        fd.inSchema,
+		dgraphPredicate: fd.dgraphPredicate,
+		parentType:      fd.parentType,
+	}
+}
+
 // ForwardEdge gets the field definition for a forward edge if this field is a reverse edge
 // i.e. if it has a dgraph directive like
 // @dgraph(name: "~movies")
@@ -1771,6 +1798,34 @@ func (t *astType) DgraphName() string {
 
 func (t *astType) Nullable() bool {
 	return !t.typ.NonNull
+}
+
+func (t *astType) IsUnion() bool {
+	return t.inSchema.schema.Types[t.typ.Name()].Kind == ast.Union
+}
+
+func (t *astType) UnionMembers(memberTypesList []interface{}) []Type {
+	var memberTypes []Type
+	if (memberTypesList) == nil {
+		// if no specific members were requested, find out all the members of this union
+		for _, typName := range t.inSchema.schema.Types[t.typ.Name()].Types {
+			memberTypes = append(memberTypes, &astType{
+				typ:             &ast.Type{NamedType: typName},
+				inSchema:        t.inSchema,
+				dgraphPredicate: t.dgraphPredicate,
+			})
+		}
+	} else {
+		// else return wrapper for only the members which were requested
+		for _, typName := range memberTypesList {
+			memberTypes = append(memberTypes, &astType{
+				typ:             &ast.Type{NamedType: typName.(string)},
+				inSchema:        t.inSchema,
+				dgraphPredicate: t.dgraphPredicate,
+			})
+		}
+	}
+	return memberTypes
 }
 
 func (t *astType) ListType() Type {
