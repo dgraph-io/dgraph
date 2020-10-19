@@ -1,0 +1,10 @@
+type Person @generate(
+    mutation: {
+        add: false,
+        update: false,
+        delete: true
+    }
+) {
+    id: ID!
+    name: String!
+}
