@@ -202,7 +202,6 @@ func requestValidationErrors(t *testing.T) {
 				Variables: vars,
 			}
 			gqlResponse := test.ExecuteAsPost(t, GraphqlURL)
-			fmt.Printf("%s", string(gqlResponse.Data))
 			require.Nil(t, gqlResponse.Data)
 			if diff := cmp.Diff(tcase.Errors, gqlResponse.Errors); diff != "" {
 				t.Errorf("errors mismatch (-want +got):\n%s", diff)

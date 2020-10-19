@@ -74,20 +74,9 @@
   gqlvariables: | 
     { "filter": 57 }
   errors:
-    [ { "message": "must be defined",
+    [ { "message": "must be a AuthorFilter",
       "path": [ "variable", "filter"] } ]
 
--
-  name: "variable field of wrong type"
-  gqlrequest: |
-    query queryAuthor($filter: AuthorFilter!) {
-      queryAuthor(filter: $filter) { name }
-    }
-  gqlvariables: |
-    { "filter": { "reputation": { "le" : "hi there" } } }
-  errors:
-    [ { "message": "must be defined",
-      "path": [ "variable", "filter"] } ]
 -
   name: "subscription on type without @withSubscription directive should return error"
   gqlrequest: |

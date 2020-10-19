@@ -148,7 +148,6 @@ func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val refle
 		}
 		return nil
 	}
-
 	def := schema.Types[typ.NamedType]
 	if !typ.NonNull && !val.IsValid() {
 		// If the type is not null and we got a invalid value namely null/nil, then it's valid
