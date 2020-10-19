@@ -535,6 +535,11 @@ func printKeys(db *badger.DB) {
 			fmt.Fprintf(&buf, " startUid: %d ", pk.StartUid)
 		}
 
+		if opt.itemMeta {
+			fmt.Fprintf(&buf, " ts: %d", item.Version())
+			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
+		}
+
 		var sz, deltaCount int64
 		for ; itr.ValidForPrefix(prefix); itr.Next() {
 			item := itr.Item()
@@ -569,10 +574,6 @@ func printKeys(db *badger.DB) {
 			}
 		}
 
-		if opt.itemMeta {
-			fmt.Fprintf(&buf, " ts: %d", item.Version())
-			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
-		}
 		fmt.Fprintf(&buf, " sz: %d dcnt: %d", sz, deltaCount)
 		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(key))
 		fmt.Println(buf.String())
