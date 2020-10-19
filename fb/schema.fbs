@@ -1,0 +1,28 @@
+namespace fb;
+
+enum PostingType : int32 {
+	REF,
+	VALUE,
+	VALUE_LANG,
+}
+
+table Facet {
+	key:string;
+	value:[ubyte];
+	value_type:int32;
+	tokens:[string];
+	alias:string;
+}
+
+table Posting {
+	uid:uint64;
+	value:[ubyte];
+	value_type:int32; // pb.Posting_ValType
+	posting_type:PostingType;
+	lang_tag:[ubyte];
+	label:string;
+	facets:[Facet];
+	op:uint32;
+	start_ts:uint64;
+	commit_ts:uint64;
+}
