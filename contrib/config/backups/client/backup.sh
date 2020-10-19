@@ -7,12 +7,11 @@ main() {
 parse_command() {
   ## Check for GNU getopt
   if [[ "$(getopt --version)" =~ "--" ]]; then
-    printf "ERROR: GNU getopt not found.  Please use GNU getopt" 1>&2
+    printf "ERROR: GNU getopt not found.  Please install GNU getopt\n\n" 1>&2
     if [[ "$(uname -s)" =~ "Darwin" ]]; then
       printf "On macOS with Homebrew (https://brew.sh/), gnu-getopt can be installed with:\n" 1>&2
       printf " brew install gnu-getopt\n" 1>&2
-      printf ' export PATH="/usr/local/opt/gnu-getopt/bin:$PATH"\n' 1>&2
-      printf "Info: https://formulae.brew.sh/formula/gnu-getopt" 1>&2
+      printf ' export PATH="/usr/local/opt/gnu-getopt/bin:$PATH"\n\n' 1>&2
     fi
     exit 1
   fi
