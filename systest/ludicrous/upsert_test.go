@@ -1,4 +1,19 @@
-package worker
+/*
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package main
 
 import (
 	"context"
@@ -14,7 +29,6 @@ import (
 
 type Person struct {
 	Name  string `json:"name,omitempty"`
-	email string
 	count int
 }
 
@@ -28,11 +42,10 @@ type ResponseData struct {
 
 func InitData(t *testing.T) {
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
-	testutil.DropAll(t, dg)
 	require.NoError(t, err)
+	testutil.DropAll(t, dg)
 	schema := `
 		name: string @index(exact) .
-		email: string @index(exact) .
 		count: [int]  .
 	`
 
@@ -41,7 +54,6 @@ func InitData(t *testing.T) {
 
 	p := Person{
 		Name:  "Alice",
-		email: "alice@dgraph.io",
 		count: 1,
 	}
 	pb, err := json.Marshal(p)
@@ -70,9 +82,9 @@ func TestConcurrentUpdate(t *testing.T) {
 	wg.Add(count)
 	mutation := func(i int) {
 		defer wg.Done()
-		query := fmt.Sprintf(`query {
+		query := `query {
 			user as var(func: eq(name, "Alice"))
-			}`)
+			}`
 		mu := &api.Mutation{
 			SetNquads: []byte(fmt.Sprintf(`uid(user) <count> "%d" .`, i)),
 		}
@@ -107,7 +119,6 @@ func TestConcurrentUpdate(t *testing.T) {
 }
 
 func TestSequentialUpdate(t *testing.T) {
-	t.Log("TestSequentialUpdate")
 	InitData(t)
 	ctx := context.Background()
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
@@ -115,9 +126,9 @@ func TestSequentialUpdate(t *testing.T) {
 
 	count := 10
 	mutation := func(i int) {
-		query := fmt.Sprintf(`query {
+		query := `query {
 			user as var(func: eq(name, "Alice"))
-			}`)
+			}`
 		mu := &api.Mutation{
 			SetNquads: []byte(fmt.Sprintf(`uid(user) <count> "%d" .`, i)),
 		}
