@@ -2,12 +2,9 @@
 # Input Schema
 #######################
 
-type Message {
+type Person @generate(mutation: {add:false,update:false,delete:true}) {
 	id: ID!
-	content: String!
-	author: String
-	uniqueId: Int64
-	datePosted: DateTime
+	name: String!
 }
 
 #######################
@@ -25,31 +22,6 @@ The DateTime scalar type represents date and time as a string in RFC3339 format.
 For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
 """
 scalar DateTime
-
-input IntRange{
-	min: Int
-	max: Int
-}
-
-input FloatRange{
-	min: Float
-	max: Float
-}
-
-input Int64Range{
-	min: Int64
-	max: Int64
-}
-
-input DateTimeRange{
-	min: DateTime
-	max: DateTime
-}
-
-input StringRange{
-	min: String
-	max: String
-}
 
 enum DgraphIndex {
 	int
@@ -117,53 +89,7 @@ input NearFilter {
 }
 
 input PointGeoFilter {
-	near: NearFilter
-	within: WithinFilter
-}
-
-type PointList {
-	points: [Point!]!
-}
-
-input PointListRef {
-	points: [PointRef!]!
-}
-
-type Polygon {
-	coordinates: [PointList!]!
-}
-
-input PolygonRef {
-	coordinates: [PointListRef!]!
-}
-
-type MultiPolygon {
-	polygons: [Polygon!]!
-}
-
-input MultiPolygonRef {
-	polygons: [PolygonRef!]!
-}
-
-input WithinFilter {
-	polygon: PolygonRef!
-}
-
-input ContainsFilter {
-	point: PointRef
-	polygon: PolygonRef
-}
-
-input IntersectsFilter {
-	polygon: PolygonRef
-	multiPolygon: MultiPolygonRef
-}
-
-input PolygonGeoFilter {
-	near: NearFilter
-	within: WithinFilter
-	contains: ContainsFilter
-	intersects: IntersectsFilter
+	near: NearFilter!
 }
 
 input GenerateQueryParams {
@@ -203,7 +129,6 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
-	between: IntRange
 }
 
 input Int64Filter {
@@ -212,7 +137,6 @@ input Int64Filter {
 	lt: Int64
 	ge: Int64
 	gt: Int64
-	between: Int64Range
 }
 
 input FloatFilter {
@@ -221,7 +145,6 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
-	between: FloatRange
 }
 
 input DateTimeFilter {
@@ -230,7 +153,6 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
-	between: DateTimeRange
 }
 
 input StringTermFilter {
@@ -254,7 +176,6 @@ input StringExactFilter {
 	lt: String
 	ge: String
 	gt: String
-	between: StringRange
 }
 
 input StringHashFilter {
@@ -266,19 +187,19 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddMessagePayload {
-	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+type AddPersonPayload {
+	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 	numUids: Int
 }
 
-type DeleteMessagePayload {
-	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+type DeletePersonPayload {
+	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 	msg: String
 	numUids: Int
 }
 
-type UpdateMessagePayload {
-	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+type UpdatePersonPayload {
+	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 	numUids: Int
 }
 
@@ -286,64 +207,49 @@ type UpdateMessagePayload {
 # Generated Enums
 #######################
 
-enum MessageHasFilter {
-	content
-	author
-	uniqueId
-	datePosted
+enum PersonHasFilter {
+	name
 }
 
-enum MessageOrderable {
-	content
-	author
-	uniqueId
-	datePosted
+enum PersonOrderable {
+	name
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddMessageInput {
-	content: String!
-	author: String
-	uniqueId: Int64
-	datePosted: DateTime
+input AddPersonInput {
+	name: String!
 }
 
-input MessageFilter {
+input PersonFilter {
 	id: [ID!]
-	has: MessageHasFilter
-	and: MessageFilter
-	or: MessageFilter
-	not: MessageFilter
+	has: PersonHasFilter
+	and: PersonFilter
+	or: PersonFilter
+	not: PersonFilter
 }
 
-input MessageOrder {
-	asc: MessageOrderable
-	desc: MessageOrderable
-	then: MessageOrder
+input PersonOrder {
+	asc: PersonOrderable
+	desc: PersonOrderable
+	then: PersonOrder
 }
 
-input MessagePatch {
-	content: String
-	author: String
-	uniqueId: Int64
-	datePosted: DateTime
+input PersonPatch {
+	name: String
 }
 
-input MessageRef {
+input PersonRef {
 	id: ID
-	content: String
-	author: String
-	uniqueId: Int64
-	datePosted: DateTime
+	name: String
 }
 
-input UpdateMessageInput {
-	filter: MessageFilter!
-	set: MessagePatch
-	remove: MessagePatch
+input UpdatePersonInput {
+	filter: PersonFilter!
+	set: PersonPatch
+	remove: PersonPatch
 }
 
 #######################
@@ -351,8 +257,8 @@ input UpdateMessageInput {
 #######################
 
 type Query {
-	getMessage(id: ID!): Message
-	queryMessage(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	getPerson(id: ID!): Person
+	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 }
 
 #######################
@@ -360,8 +266,6 @@ type Query {
 #######################
 
 type Mutation {
-	addMessage(input: [AddMessageInput!]!): AddMessagePayload
-	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
-	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
+	deletePerson(filter: PersonFilter!): DeletePersonPayload
 }
 

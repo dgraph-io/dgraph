@@ -299,7 +299,7 @@ func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {
 		GrootUser []userNode `json:"grootUser"`
 	}
 
-	resp,err := txn.Query(ctx, grootUserQuery)
+	resp, err := txn.Query(ctx, grootUserQuery)
 	require.NoError(t, err, "groot user query failed")
 
 	var userResp userQryResp
@@ -939,7 +939,7 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
 
-	_, err = deleteUsingNQuad(userClient, "<" + nodeUID + ">", "<" + unAuthPred + ">", "*")
+	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "<"+unAuthPred+">", "*")
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "PermissionDenied")
@@ -1395,7 +1395,7 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// delete S * * (user now has permission to name and age)
-	_, err = deleteUsingNQuad(userClient, "<" + nodeUID + ">", "*", "*")
+	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "*", "*")
 	require.NoError(t, err)
 
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -1416,7 +1416,7 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// delete S * * (user now has permission to name, age and dgraph.type)
-	_, err = deleteUsingNQuad(userClient, "<" + nodeUID + ">", "*", "*")
+	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "*", "*")
 	require.NoError(t, err)
 
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -3221,7 +3221,6 @@ func TestDeleteGrootUserShouldFail(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 
-
 	resp := deleteUser(t, accessJwt, "groot", false)
 	require.Contains(t, resp.Errors.Error(),
 		"guardians group and groot user cannot be deleted.")
@@ -3252,12 +3251,12 @@ func TestDeleteGrootAndGuardiansUsingDelNQuadShouldFail(t *testing.T) {
 	grootUid, guardiansUid := getGrootAndGuardiansUid(t, dg)
 
 	// Try deleting groot user
-	_, err = deleteUsingNQuad(dg, "<" + grootUid + ">", "*", "*")
+	_, err = deleteUsingNQuad(dg, "<"+grootUid+">", "*", "*")
 	require.Error(t, err, "Deleting groot user should have returned an error")
 	require.Contains(t, err.Error(), "Properties of guardians group and groot user cannot be deleted")
 
 	// Try deleting guardians group
-	_, err = deleteUsingNQuad(dg, "<" + guardiansUid + ">", "*", "*")
+	_, err = deleteUsingNQuad(dg, "<"+guardiansUid+">", "*", "*")
 	require.Error(t, err, "Deleting guardians group should have returned an error")
 	require.Contains(t, err.Error(), "Properties of guardians group and groot user cannot be deleted")
 }
@@ -3291,7 +3290,7 @@ func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
 	// Try Drop All
 	op := api.Operation{
 		DropAll: true,
-		DropOp: api.Operation_ALL,
+		DropOp:  api.Operation_ALL,
 	}
 	if err := dg.Alter(ctx, &op); err != nil {
 		t.Fatalf("Unable to drop all. Error:%v", err)
@@ -3302,7 +3301,7 @@ func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
 
 	// Try Drop Data
 	op = api.Operation{
-		DropOp:  api.Operation_DATA,
+		DropOp: api.Operation_DATA,
 	}
 	if err := dg.Alter(ctx, &op); err != nil {
 		t.Fatalf("Unable to drop data. Error:%v", err)

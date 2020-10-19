@@ -1,0 +1,15 @@
+type Person @withSubscription @generate(
+    query: {
+        get: false,
+        query: true
+    },
+    mutation: {
+        add: false,
+        update: false,
+        delete: false
+    },
+    subscription: false
+) {
+    id: ID!
+    name: String!
+}
