@@ -264,18 +264,18 @@ func startServers(m cmux.CMux) {
 		if !ok {
 			return false
 		}
-		_, ok = opts.tlsEnabledRoute[path]
-		return !ok
+		enabled, ok := opts.tlsEnabledRoute[path]
+		return ok && !enabled
 	})
 	go startListen(httpRule)
 
 	// if enabled, tls has to be default behaviour because there is no clean way to decrypt request params using cmux.
 	// So when it says tlsEnabledRoute, these route will not be available without TLS.
-	if len(opts.tlsEnabledRoute) > 0 {
+	if Zero.Conf.GetString("tls_dir") != "" {
 		tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
 		x.Check(err)
 		if tlsCfg == nil {
-			glog.Fatalf("tls_enabled_route is set but tls config is not provided. Please define variable --tls_dir")
+			glog.Fatalf("tls_enabled_route is set but tls config provided is not correct. Please define correct variable --tls_dir")
 		}
 
 		httpsRule := m.Match(cmux.Any())
