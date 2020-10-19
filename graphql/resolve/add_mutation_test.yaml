@@ -1397,11 +1397,15 @@
         {
           "name": "NY",
           "district": {"code": "D1", "name": "Dist1"}
+        },
+        {
+         "name": "Sydney",
+         "district": {"code": "D1"}
         }
       ]
     }
   explanation: "When duplicate XIDs are given as input to deep mutation but the object structure
-  is same, it should not return error."
+  is same or contains just xid, it should not return error."
   dgquery: |-
     query {
       District3 as District3(func: eq(District.code, "D1")) @filter(type(District)) {
@@ -1447,6 +1451,17 @@
             },
           "dgraph.type":["City"],
           "uid":"_:City4"
+        }
+      cond: "@if(eq(len(District3), 1))"
+    - setjson: |
+        {
+          "City.name":"Sydney",
+          "City.district":{
+              "District.cities":[{"uid":"_:City6"}],
+              "uid":"uid(District3)"
+            },
+          "dgraph.type":["City"],
+          "uid":"_:City6"
         }
       cond: "@if(eq(len(District3), 1))"
 

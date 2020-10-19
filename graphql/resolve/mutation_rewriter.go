@@ -73,7 +73,7 @@ type mutationFragment struct {
 // single mutation
 type xidMetadata struct {
 	// variableObjMap stores the mapping of xidVariable -> the input object which contains that xid
-	variableObjMap map[string]interface{}
+	variableObjMap map[string]map[string]interface{}
 	// seenAtTopLevel tells whether the xidVariable has been previously seen at top level or not
 	seenAtTopLevel map[string]bool
 	// queryExists tells whether the query part in upsert has already been created for xidVariable
@@ -151,10 +151,37 @@ func NewDeleteRewriter() MutationRewriter {
 // newXidMetadata returns a new empty *xidMetadata for storing the metadata.
 func newXidMetadata() *xidMetadata {
 	return &xidMetadata{
-		variableObjMap: make(map[string]interface{}),
+		variableObjMap: make(map[string]map[string]interface{}),
 		seenAtTopLevel: make(map[string]bool),
 		queryExists:    make(map[string]bool),
 	}
+}
+
+// isDuplicateXid returns true if:
+// 1. we are at top level and this xid has already been seen at top level, OR
+// 2. we are in a deep mutation and:
+//		a. this newXidObj has a field which is inverse of srcField and that
+//		invField is not of List type, OR
+//		b. newXidObj has some values other than xid and isn't equal to existingXidObject
+// It is used in places where we don't want to allow duplicates.
+func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
+	newXidObj map[string]interface{}, srcField schema.FieldDefinition) bool {
+	if atTopLevel && xidMetadata.seenAtTopLevel[xidVar] {
+		return true
+	}
+
+	if srcField != nil {
+		invField := srcField.Inverse()
+		if invField != nil && invField.Type().ListType() == nil {
+			return true
+		}
+	}
+
+	if len(newXidObj) > 1 && !reflect.DeepEqual(xidMetadata.variableObjMap[xidVar], newXidObj) {
+		return true
+	}
+
+	return false
 }
 
 // Rewrite takes a GraphQL schema.Mutation add and builds a Dgraph upsert mutation.
@@ -957,20 +984,10 @@ func rewriteObject(
 			// to handle duplicate object addition/updation
 			variable = varGen.Next(typ, xid.Name(), xidString, false)
 			// check if an object with same xid has been encountered earlier
-			if xidObj := xidMetadata.variableObjMap[variable]; xidObj != nil {
-				// if we already encountered an object with same xid earlier, then we give error if:
-				// 1. We are at top level and this object has already been seen at top level, as no
-				//    duplicates are allowed for top level
-				// 2. OR, we are in a deep mutation and:
-				//		a. this obj is different from its first encounter
-				//		b. OR, this object has a field which is inverse of srcField and that
-				//		invField is not of List type
-				var invField schema.FieldDefinition
-				if srcField != nil {
-					invField = srcField.Inverse()
-				}
-				if (atTopLevel && xidMetadata.seenAtTopLevel[variable]) || !reflect.DeepEqual(
-					xidObj, obj) || (invField != nil && invField.Type().ListType() == nil) {
+			if xidMetadata.variableObjMap[variable] != nil {
+				// if we already encountered an object with same xid earlier, and this object is
+				// considered a duplicate of the existing object, then return error.
+				if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
 					errFrag := newFragment(nil)
 					errFrag.err = errors.Errorf("duplicate XID found: %s", xidString)
 					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
