@@ -165,7 +165,46 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		}
 	}
 
+	for _, typ := range s.Types {
+		name := typeName(typ)
+		if typ.Kind == ast.Object {
+			for _, interfaceName := range typ.Interfaces {
+				if authRules[interfaceName].Rules != nil {
+					authRules[name].Rules = mergeAuthRules(authRules, name, interfaceName)
+				}
+			}
+		}
+	}
+
 	return authRules, errResult
+}
+
+func mergeAuthNode(objectAuth, interfaceAuth *RuleNode) *RuleNode {
+	if objectAuth == nil {
+		return interfaceAuth
+	}
+
+	if interfaceAuth == nil {
+		return objectAuth
+	}
+
+	ruleNode := &RuleNode{}
+	ruleNode.And = append(ruleNode.And, objectAuth, interfaceAuth)
+	return ruleNode
+}
+
+func mergeAuthRules(authRules map[string]*TypeAuth, objectName string, interfaceName string) *AuthContainer {
+	objectAuthRules := authRules[objectName].Rules
+	interfaceAuthRules := authRules[interfaceName].Rules
+	if objectAuthRules == nil {
+		return interfaceAuthRules
+	}
+
+	objectAuthRules.Query = mergeAuthNode(objectAuthRules.Query, interfaceAuthRules.Query)
+	objectAuthRules.Add = mergeAuthNode(objectAuthRules.Add, interfaceAuthRules.Add)
+	objectAuthRules.Delete = mergeAuthNode(objectAuthRules.Delete, interfaceAuthRules.Delete)
+	objectAuthRules.Update = mergeAuthNode(objectAuthRules.Update, interfaceAuthRules.Update)
+	return objectAuthRules
 }
 
 func parseAuthDirective(

@@ -1059,3 +1059,31 @@
         dgraph.uid : uid
       }
     }
+
+- name: "Auth on interfaces"
+  gqlquery: |
+    query {
+      queryQuestion {
+        id
+        text
+      }
+    }
+  jwtvar:
+    TEXT: "post1"
+    ANS: "true"
+  dgquery: |-
+    query {
+      queryQuestion(func: uid(QuestionRoot)) {
+        id : uid
+        text : Post.text
+      }
+      QuestionRoot as var(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3)))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @filter(eq(Post.text, "post1")) @cascade {
+        dgraph.type
+        id : uid
+      }
+    }
