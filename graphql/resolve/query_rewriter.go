@@ -1073,9 +1073,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					Child: []*gql.FilterTree{not},
 				})
 		default:
-			// It's a base case like:
-			// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
-
+			//// It's a base case like:
+			//// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
+			//// numLikes: { between : { min : 10,  max:100 }}
 			switch dgFunc := filter[field].(type) {
 			case map[string]interface{}:
 				// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title, "GraphQL")
@@ -1099,6 +1099,13 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					for _, v := range vals {
 						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
 					}
+				case "between":
+					// numLikes: { between : { min : 10,  max:100 }} should be rewritten into
+					// 	between(numLikes,10,20). Order of arguments (min,max) is neccessary or
+					// it will return empty
+					vals := val.(map[string]interface{})
+					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["min"])},
+						gql.Arg{Value: maybeQuoteArg(fn, vals["max"])})
 				case "near":
 					// For Geo type we have `near` filter which is written as follows:
 					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }

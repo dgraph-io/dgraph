@@ -1773,6 +1773,51 @@
     }
 
 -
+  name: "Between filter"
+  gqlquery: |
+    query {
+      queryPost(filter: { numLikes: { between : { min :10, max: 20 }}}) {
+        title
+        text
+      }
+    }
+  dgquery: |-
+    query {
+      queryPost(func: type(Post)) @filter(between(Post.numLikes, 10, 20)) {
+        title : Post.title
+        text : Post.text
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "deep Between filter"
+  gqlquery: |
+    query{
+      queryAuthor(filter: {reputation: {between: {min:6.0, max: 7.2}}}){
+        name
+        reputation
+        posts(filter: {numLikes: {between: {min: 10, max: 100}}}){
+          title
+          numLikes
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(between(Author.reputation, 6, 7.2)) {
+        name : Author.name
+        reputation : Author.reputation
+        posts : Author.posts @filter(between(Post.numLikes, 10, 100)) {
+          title : Post.title
+          numLikes : Post.numLikes
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "Filter with id inside and argument doesn't use uid func at root."
   gqlquery: |
     query {

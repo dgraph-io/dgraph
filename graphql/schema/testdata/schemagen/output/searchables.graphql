@@ -51,6 +51,31 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 """
 scalar DateTime
 
+input IntRange{
+	min: Int
+	max: Int
+}
+
+input FloatRange{
+	min: Float
+	max: Float
+}
+
+input Int64Range{
+	min: Int64
+	max: Int64
+}
+
+input DateTimeRange{
+	min: DateTime
+	max: DateTime
+}
+
+input StringRange{
+	min: String
+	max: String
+}
+
 enum DgraphIndex {
 	int
 	int64
@@ -188,6 +213,7 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
@@ -196,6 +222,7 @@ input Int64Filter {
 	lt: Int64
 	ge: Int64
 	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
@@ -204,6 +231,7 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
@@ -212,6 +240,7 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
@@ -235,6 +264,7 @@ input StringExactFilter {
 	lt: String
 	ge: String
 	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
@@ -433,6 +463,7 @@ input PostType_exact {
 	lt: PostType
 	ge: PostType
 	gt: PostType
+	between: PostType
 }
 
 input PostType_exact_StringRegExpFilter {
@@ -442,6 +473,7 @@ input PostType_exact_StringRegExpFilter {
 	lt: PostType
 	ge: PostType
 	gt: PostType
+	between: PostType
 	regexp: String
 }
 
