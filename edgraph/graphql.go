@@ -94,7 +94,7 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 	return err
 }
 
-// GetCorsOrigins retrive all the cors origin from the database.
+// GetCorsOrigins retrieve all the cors origin from the database.
 func GetCorsOrigins(ctx context.Context) ([]string, error) {
 	req := &api.Request{
 		Query: `query{
