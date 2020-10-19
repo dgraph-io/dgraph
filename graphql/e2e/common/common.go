@@ -139,6 +139,7 @@ type post struct {
 	Title       string    `json:"title,omitempty"`
 	Text        string    `json:"text,omitempty"`
 	Tags        []string  `json:"tags,omitempty"`
+	Topic       string    `json:"topic,omitempty"`
 	NumLikes    int       `json:"numLikes,omitempty"`
 	NumViews    int64     `json:"numViews,omitempty"`
 	IsPublished bool      `json:"isPublished,omitempty"`
@@ -298,6 +299,8 @@ func RunAll(t *testing.T) {
 	t.Run("multiple search indexes wrong field", multipleSearchIndexesWrongField)
 	t.Run("hash search", hashSearch)
 	t.Run("in filter", inFilter)
+	t.Run("between filter", betweenFilter)
+	t.Run("deep between filter", deepBetweenFilter)
 	t.Run("deep filter", deepFilter)
 	t.Run("deep has filter", deepHasFilter)
 	t.Run("many queries", manyQueries)
