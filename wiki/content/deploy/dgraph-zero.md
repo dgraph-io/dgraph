@@ -6,13 +6,15 @@ weight = 8
     parent = "deploy"
 +++
 
-Dgraph Zero controls the Dgraph cluster. It automatically moves data between
-different Dgraph Alpha instances based on the size of the data served by each Alpha instance.
+Dgraph Zero controls the Dgraph cluster, and stores information about it. It
+automatically moves data between different Dgraph Alpha instances based on the
+size of the data served by each Alpha instance.
 
-It is mandatory to run at least one `dgraph zero` node before running any `dgraph alpha`.
-Options present for `dgraph zero` can be seen by running `dgraph zero --help`.
+Before you can run `dgraph alpha`, you must run at least one `dgraph zero` node.
+You can see the options available for `dgraph zero` using the following command:
 
-* Zero stores information about the cluster.
+`dgraph zero --help`
+
 * `--replicas` is the option that controls the replication factor. (i.e. number of replicas per data shard, including the original shard)
 * When a new Alpha joins the cluster, it is assigned a group based on the replication factor. If the replication factor is 1 then each Alpha node will serve different group. If replication factor is 2 and you launch 4 Alphas, then first two Alphas would serve group 1 and next two machines would serve group 2.
 * Zero also monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
@@ -62,118 +64,87 @@ The `/state` endpoint of Dgraph Zero returns a JSON document of the current grou
 - Max Leased UID.
 - CID (Cluster ID).
 
-Here’s an example of JSON returned from `/state` endpoint for a 6-node Dgraph cluster with three replicas:
+Here’s an example of JSON returned from the `/state` endpoint:
 
 ```json
 {
-  "counter": "15",
-  "groups": {
-    "1": {
-      "members": {
-        "1": {
-          "id": "1",
-          "groupId": 1,
-          "addr": "alpha1:7080",
-          "leader": true,
-          "lastUpdate": "1576112366"
-        },
-        "2": {
-          "id": "2",
-          "groupId": 1,
-          "addr": "alpha2:7080"
-        },
-        "3": {
-          "id": "3",
-          "groupId": 1,
-          "addr": "alpha3:7080"
-        }
-      },
-      "tablets": {
-        "counter.val": {
-          "groupId": 1,
-          "predicate": "counter.val"
-        },
-        "dgraph.type": {
-          "groupId": 1,
-          "predicate": "dgraph.type"
-        }
-      },
-      "checksum": "1021598189643258447"
-    }
-  },
   "zeros": {
     "1": {
       "id": "1",
-      "addr": "zero1:5080",
-      "leader": true
+      "groupId": 0,
+      "addr": "localhost:5080",
+      "leader": true,
+      "amDead": false,
+      "lastUpdate": "0",
+      "clusterInfoOnly": false,
+      "forceGroupId": false
     },
     "2": {
       "id": "2",
-      "addr": "zero2:5080"
-    },
-    "3": {
-      "id": "3",
-      "addr": "zero3:5080"
+      "groupId": 0,
+      "addr": "localhost:5081",
+      "leader": false,
+      "amDead": false,
+      "lastUpdate": "0",
+      "clusterInfoOnly": false,
+      "forceGroupId": false
     }
   },
-  "maxLeaseId": "10000",
+  "maxLeaseId": "0",
   "maxTxnTs": "10000",
-  "cid": "3602537a-ee49-43cb-9792-c766eea683dc",
+  "maxRaftId": "2",
+  "removed": [],
+  "cid": "cdcb1edb-8c81-4557-af99-ebed2b383e3c",
   "license": {
+    "user": "",
     "maxNodes": "18446744073709551615",
-    "expiryTs": "1578704367",
+    "expiryTs": "1597232699",
     "enabled": true
   }
 }
 ```
 
-Here’s the information the above JSON document provides:
+The JSON document above provides the following information:
 
-- Group 0
+- Group 1
   - members
     - zero1:5080, id: 1, leader
-    - zero2:5080, id: 2
-    - zero3:5080, id: 3
-- Group 1
-    - members
-        - alpha1:7080, id: 1, leader
-        - alpha2:7080, id: 2
-        - alpha3:7080, id: 3
-    - predicates
-        - dgraph.type
-        - counter.val
+    - zero2:5081, id: 2
 - Enterprise license
     - Enabled
     - maxNodes: unlimited
-    - License expires on Friday, January 10, 2020 4:59:27 PM GMT-08:00 (converted from epoch timestamp)
+    - License expiration, shown in seconds since the Unix epoch.
 - Other data:
     - maxTxnTs
-        - The current max lease of transaction timestamps used to hand out start timestamps
-          and commit timestamps.
-        - This increments in batches of 10,000 IDs. Once the max lease is reached, another
-          10,000 IDs are leased. In the event that the Zero leader is lost, then the new
-          leader starts a brand new lease from maxTxnTs+1 . Any lost transaction IDs
-          in-between will never be used.
+        - The current maximum lease of transaction timestamps used to hand out
+          start timestamps and commit timestamps. This increments in batches of
+          10,000 IDs. After the max lease is reached, another 10,000 IDs are
+          leased. If the Zero leader is lost, then the new leader starts a new
+          lease from `maxTxnTs`+1 . Any lost transaction IDs between these
+          leases will never be used.
         - An admin can use the Zero endpoint HTTP GET `/assign?what=timestamps&num=1000` to
-          increase the current transaction timestamp (in this case, by 1000). This is mainly
-          useful in special-case scenarios, e.g., using an existing p directory to a fresh
-          cluster in order to be able to query the latest data in the DB.
+          increase the current transaction timestamp (in this case, by 1000).
+          This is mainly useful in special-case scenarios; for example, using an
+          existing `-p directory` to create a fresh cluster to be able to query the
+          latest data in the DB.
+    - maxRaftId
+        - The number of Zeros available to serve as a leader node. Used by the
+          [RAFT](/design-concepts/raft/) consensus algorithm.
     - maxLeaseId
-        - The current max lease of UIDs used for blank node UID assignment.
-        - This increments in batches of 10,000 IDs. Once the max lease is reached, another
-          10,000 IDs are leased. In the event that the Zero leader is lost, the new leader
-          starts a brand new lease from maxLeaseId+1. Any UIDs lost in-between will never
-          be used for blank-node UID assignment.
+        - The current maximum lease of UIDs used for blank node UID assignment.
+        - This increments in batches of 10,000 IDs. Once the maximum lease is
+          reached, another 10,000 IDs are leased. In the event that the Zero
+          leader is lost, the new leader starts a new lease from
+          `maxLeaseId`+1. Any UIDs lost between these leases will never be used
+          for blank-node UID assignment.
         - An admin can use the Zero endpoint HTTP GET `/assign?what=uids&num=1000` to
-          reserve a range of UIDs (in this case, 1000) to use externally (Zero will NEVER
+          reserve a range of UIDs (in this case, 1000) to use externally. Zero will NEVER
           use these UIDs for blank node UID assignment, so the user can use the range
           to assign UIDs manually to their own data sets.
     - CID
         - This is a unique UUID representing the *cluster-ID* for this cluster. It is generated
           during the initial DB startup and is retained across restarts.
-    - Group checksum
-        - This is the checksum verification of the data per Alpha group. This is used internally
-          to verify group memberships in the event of a tablet move.
+
 
 {{% notice "note" %}}
 "tablet", "predicate", and "edge" are synonymous terms today. The future plan to
