@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -200,6 +201,44 @@ func requestValidationErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+// notGeneratedAPIErrors check that the mutations and queries explicitly asked to be not
+// generated using the generate directive are indeed not generated
+func notGeneratedAPIErrors(t *testing.T) {
+	// Add and update university
+	universityID := addUniversity(t)
+	updateUniversity(t, universityID)
+
+	// Try querying, should throw error as query API is not generated
+	query := `
+		query {
+			queryUniversity {
+				name
+			}
+		}`
+	params := &GraphQLParams{Query: query}
+	gqlResponse := params.ExecuteAsPost(t, GraphqlURL)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Nil(t, gqlResponse.Data, string(gqlResponse.Data))
+	require.Equal(t, 1, len(gqlResponse.Errors))
+	require.True(t, strings.Contains(gqlResponse.Errors[0].Message,
+		"Cannot query field \"queryUniversity\" on type \"Query\"."))
+
+	// Try deleting university, should throw error as delete API does not exist
+	mutation := `
+		mutation {
+			deleteUniversity(filter: {}) {
+				name
+			}
+		}`
+	params = &GraphQLParams{Query: mutation}
+	gqlResponse = params.ExecuteAsPost(t, GraphqlURL)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Nil(t, gqlResponse.Data, string(gqlResponse.Data))
+	require.Equal(t, 1, len(gqlResponse.Errors))
+	require.True(t, strings.Contains(gqlResponse.Errors[0].Message,
+		"Cannot query field \"deleteUniversity\" on type \"Mutation\"."))
 }
 
 // panicCatcher tests that the GraphQL server behaves properly when an internal

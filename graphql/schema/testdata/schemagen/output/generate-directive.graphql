@@ -2,7 +2,20 @@
 # Input Schema
 #######################
 
-type Person @generate(query: {get:true,query:false}, mutation: {add:true,update:false,delete:true}, subscription: true) {
+interface Character @secret(field: "password") @generate(query: {get:false,password:false}, subscription: false) {
+	id: ID!
+	name: String! @search(by: [exact])
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+}
+
+type Human implements Character @generate(subscription: true) @secret(field: "password") {
+	id: ID!
+	name: String! @search(by: [exact])
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	totalCredits: Int
+}
+
+type Person @withSubscription @generate(query: {get:false,query:true,password:true}, mutation: {add:false,delete:false}, subscription: false) {
 	id: ID!
 	name: String!
 }
@@ -95,6 +108,7 @@ input PointGeoFilter {
 input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
+	password: Boolean
 }
 
 input GenerateMutationParams {
@@ -187,14 +201,30 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddPersonPayload {
-	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+type AddHumanPayload {
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	numUids: Int
 }
 
-type DeletePersonPayload {
-	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+type DeleteCharacterPayload {
+	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	msg: String
+	numUids: Int
+}
+
+type DeleteHumanPayload {
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	msg: String
+	numUids: Int
+}
+
+type UpdateCharacterPayload {
+	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	numUids: Int
+}
+
+type UpdateHumanPayload {
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	numUids: Int
 }
 
@@ -206,6 +236,26 @@ type UpdatePersonPayload {
 #######################
 # Generated Enums
 #######################
+
+enum CharacterHasFilter {
+	name
+	friends
+}
+
+enum CharacterOrderable {
+	name
+}
+
+enum HumanHasFilter {
+	name
+	friends
+	totalCredits
+}
+
+enum HumanOrderable {
+	name
+	totalCredits
+}
 
 enum PersonHasFilter {
 	name
@@ -219,8 +269,66 @@ enum PersonOrderable {
 # Generated Inputs
 #######################
 
-input AddPersonInput {
+input AddHumanInput {
 	name: String!
+	friends: [CharacterRef]
+	totalCredits: Int
+	password: String!
+}
+
+input CharacterFilter {
+	id: [ID!]
+	name: StringExactFilter
+	has: CharacterHasFilter
+	and: CharacterFilter
+	or: CharacterFilter
+	not: CharacterFilter
+}
+
+input CharacterOrder {
+	asc: CharacterOrderable
+	desc: CharacterOrderable
+	then: CharacterOrder
+}
+
+input CharacterPatch {
+	name: String
+	friends: [CharacterRef]
+	password: String
+}
+
+input CharacterRef {
+	id: ID!
+}
+
+input HumanFilter {
+	id: [ID!]
+	name: StringExactFilter
+	has: HumanHasFilter
+	and: HumanFilter
+	or: HumanFilter
+	not: HumanFilter
+}
+
+input HumanOrder {
+	asc: HumanOrderable
+	desc: HumanOrderable
+	then: HumanOrder
+}
+
+input HumanPatch {
+	name: String
+	friends: [CharacterRef]
+	totalCredits: Int
+	password: String
+}
+
+input HumanRef {
+	id: ID
+	name: String
+	friends: [CharacterRef]
+	totalCredits: Int
+	password: String
 }
 
 input PersonFilter {
@@ -246,6 +354,18 @@ input PersonRef {
 	name: String
 }
 
+input UpdateCharacterInput {
+	filter: CharacterFilter!
+	set: CharacterPatch
+	remove: CharacterPatch
+}
+
+input UpdateHumanInput {
+	filter: HumanFilter!
+	set: HumanPatch
+	remove: HumanPatch
+}
+
 input UpdatePersonInput {
 	filter: PersonFilter!
 	set: PersonPatch
@@ -257,7 +377,11 @@ input UpdatePersonInput {
 #######################
 
 type Query {
-	getPerson(id: ID!): Person
+	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	getHuman(id: ID!): Human
+	checkHumanPassword(id: ID!, password: String!): Human
+	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 }
 
 #######################
@@ -265,8 +389,12 @@ type Query {
 #######################
 
 type Mutation {
-	addPerson(input: [AddPersonInput!]!): AddPersonPayload
-	deletePerson(filter: PersonFilter!): DeletePersonPayload
+	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
+	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
+	addHuman(input: [AddHumanInput!]!): AddHumanPayload
+	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
+	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
+	updatePerson(input: UpdatePersonInput!): UpdatePersonPayload
 }
 
 #######################
@@ -274,5 +402,7 @@ type Mutation {
 #######################
 
 type Subscription {
-	getPerson(id: ID!): Person
+	getHuman(id: ID!): Human
+	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 }

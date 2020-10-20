@@ -50,6 +50,7 @@ const (
 	generateQueryArg        = "query"
 	generateGetField        = "get"
 	generateQueryField      = "query"
+	generatePasswordField   = "password"
 	generateMutationArg     = "mutation"
 	generateAddField        = "add"
 	generateUpdateField     = "update"
@@ -245,6 +246,7 @@ input PolygonGeoFilter {
 input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
+	password: Boolean
 }
 
 input GenerateMutationParams {
@@ -518,6 +520,7 @@ var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
 type GenerateDirectiveParams struct {
 	generateGetQuery       bool
 	generateFilterQuery    bool
+	generatePasswordQuery  bool
 	generateAddMutation    bool
 	generateUpdateMutation bool
 	generateDeleteMutation bool
@@ -528,6 +531,7 @@ func parseGenerateDirectiveParams(defn *ast.Definition) *GenerateDirectiveParams
 	ret := &GenerateDirectiveParams{
 		generateGetQuery:       true,
 		generateFilterQuery:    true,
+		generatePasswordQuery:  true,
 		generateAddMutation:    true,
 		generateUpdateMutation: true,
 		generateDeleteMutation: true,
@@ -545,6 +549,11 @@ func parseGenerateDirectiveParams(defn *ast.Definition) *GenerateDirectiveParams
 			if queryField := queryArg.Value.Children.ForName(generateQueryField); queryField != nil {
 				if queryFieldVal, err := queryField.Value(nil); err == nil {
 					ret.generateFilterQuery = queryFieldVal.(bool)
+				}
+			}
+			if passwordField := queryArg.Value.Children.ForName(generatePasswordField); passwordField != nil {
+				if passwordFieldVal, err := passwordField.Value(nil); err == nil {
+					ret.generatePasswordQuery = passwordFieldVal.(bool)
 				}
 			}
 		}
@@ -795,26 +804,34 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 
 		// Common types to both Interface and Object.
 		addReferenceType(sch, defn)
-		addPatchType(sch, defn)
-		addUpdateType(sch, defn)
-		addUpdatePayloadType(sch, defn)
-		addDeletePayloadType(sch, defn)
+
+		if params.generateUpdateMutation {
+			addPatchType(sch, defn)
+			addUpdateType(sch, defn)
+			addUpdatePayloadType(sch, defn)
+		}
+
+		if params.generateDeleteMutation {
+			addDeletePayloadType(sch, defn)
+		}
 
 		switch defn.Kind {
 		case ast.Interface:
 			// addInputType doesn't make sense as interface is like an abstract class and we can't
 			// create objects of its type.
-			if params.generateUpdateMutation == true {
+			if params.generateUpdateMutation {
 				addUpdateMutation(sch, defn)
 			}
-			if params.generateDeleteMutation == true {
+			if params.generateDeleteMutation {
 				addDeleteMutation(sch, defn)
 			}
 
 		case ast.Object:
 			// types and inputs needed for mutations
-			addInputType(sch, defn)
-			addAddPayloadType(sch, defn)
+			if params.generateAddMutation {
+				addInputType(sch, defn)
+				addAddPayloadType(sch, defn)
+			}
 			addMutations(sch, defn, params)
 		}
 
@@ -1601,18 +1618,24 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addQueries(schema *ast.Schema, defn *ast.Definition, params *GenerateDirectiveParams) {
-	if params.generateGetQuery == true {
+	if params.generateGetQuery {
 		addGetQuery(schema, defn, params.generateSubscription)
 	}
 
-	addPasswordQuery(schema, defn)
+	if params.generatePasswordQuery {
+		addPasswordQuery(schema, defn)
+	}
 
-	if params.generateFilterQuery == true {
+	if params.generateFilterQuery {
 		addFilterQuery(schema, defn, params.generateSubscription)
 	}
 }
 
 func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
+	if schema.Types["Add"+defn.Name+"Input"] == nil {
+		return
+	}
+
 	add := &ast.FieldDefinition{
 		Name: "add" + defn.Name,
 		Type: &ast.Type{
@@ -1680,17 +1703,13 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addMutations(schema *ast.Schema, defn *ast.Definition, params *GenerateDirectiveParams) {
-	if schema.Types["Add"+defn.Name+"Input"] == nil {
-		return
-	}
-
-	if params.generateAddMutation == true {
+	if params.generateAddMutation {
 		addAddMutation(schema, defn)
 	}
-	if params.generateUpdateMutation == true {
+	if params.generateUpdateMutation {
 		addUpdateMutation(schema, defn)
 	}
-	if params.generateDeleteMutation == true {
+	if params.generateDeleteMutation {
 		addDeleteMutation(schema, defn)
 	}
 }

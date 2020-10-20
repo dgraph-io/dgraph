@@ -169,6 +169,7 @@ input PolygonGeoFilter {
 input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
+	password: Boolean
 }
 
 input GenerateMutationParams {

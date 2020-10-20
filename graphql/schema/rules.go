@@ -1267,6 +1267,15 @@ func generateDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gqlerr
 					"only be true/false, found: `%s",
 				typ.Name, queryField.Raw))
 		}
+
+		passwordField := queryArg.Value.Children.ForName(generatePasswordField)
+		if passwordField != nil && passwordField.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				passwordField.Position,
+				"Type %s; password field inside query argument of @generate directive can "+
+					"only be true/false, found: `%s",
+				typ.Name, passwordField.Raw))
+		}
 	}
 
 	mutationArg := dir.Arguments.ForName(generateMutationArg)
