@@ -119,7 +119,53 @@ input NearFilter {
 }
 
 input PointGeoFilter {
-	near: NearFilter!
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION

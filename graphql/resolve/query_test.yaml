@@ -17,7 +17,7 @@
     }
 
 -
-  name: "Geo query"
+  name: "Point query near filter"
   gqlquery: |
     query {
       queryHotel(filter: { location: { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22} } } }) {
@@ -33,6 +33,511 @@
       queryHotel(func: type(Hotel)) @filter(near(Hotel.location, [22.22,11.11], 33.33)) {
         name : Hotel.name
         location : Hotel.location
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Point query within filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: { location: { within: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}, { points: [{ latitude: 11.18, longitude: 22.28}, { latitude: 15.18, longitude: 16.18} , { latitude: 20.28, longitude: 21.28}]} ] } } } }) {
+        name
+        location {
+          latitude
+          longitude
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(within(Hotel.location, [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]])) {
+        name : Hotel.name
+        location : Hotel.location
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Polygon query near filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: { area: { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22} } } }) {
+        name
+        area {
+          coordinates {
+            points {
+              latitude
+              longitude
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(near(Hotel.area, [22.22,11.11], 33.33)) {
+        name : Hotel.name
+        area : Hotel.area
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Polygon query within filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: { area: { within: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}, { points: [{ latitude: 11.18, longitude: 22.28}, { latitude: 15.18, longitude: 16.18} , { latitude: 20.28, longitude: 21.28}]} ] } } } }) {
+        name
+        area {
+          coordinates {
+            points {
+              latitude
+              longitude
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(within(Hotel.area, [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]])) {
+        name : Hotel.name
+        area : Hotel.area
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Polygon query contains polygon filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: { area: { contains: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}, { points: [{ latitude: 11.18, longitude: 22.28}, { latitude: 15.18, longitude: 16.18} , { latitude: 20.28, longitude: 21.28}]} ] } } } }) {
+        name
+        area {
+          coordinates {
+            points {
+              latitude
+              longitude
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(contains(Hotel.area, [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]])) {
+        name : Hotel.name
+        area : Hotel.area
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Polygon query contains point filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: { area: { contains: { point: { latitude: 11.11, longitude: 22.22}} } }) {
+        name
+        area {
+          coordinates {
+            points {
+              latitude
+              longitude
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(contains(Hotel.area, [22.22,11.11])) {
+        name : Hotel.name
+        area : Hotel.area
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Polygon query intersect polygon filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: {
+        area: {
+          intersects: {
+            polygon: {
+              coordinates: [{
+                points: [{
+                  latitude: 11.11,
+                  longitude: 22.22
+                }, {
+                  latitude: 15.15,
+                  longitude: 16.16
+                }, {
+                  latitude: 20.20,
+                  longitude: 21.21
+                }]
+              }, {
+                points: [{
+                  latitude: 11.18,
+                  longitude: 22.28
+                }, {
+                  latitude: 15.18,
+                  longitude: 16.18
+                }, {
+                  latitude: 20.28,
+                  longitude: 21.28
+                }]
+              }]
+            }
+          }
+        }
+      }) {
+        name
+        area {
+          coordinates {
+            points {
+              latitude
+              longitude
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(intersects(Hotel.area, [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]])) {
+        name : Hotel.name
+        area : Hotel.area
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Polygon query intersect multi-polygon filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: {
+        area: {
+          intersects: {
+            multiPolygon: {
+              polygons: [{
+                coordinates: [{
+                  points: [{
+                    latitude: 11.11,
+                    longitude: 22.22
+                  }, {
+                    latitude: 15.15,
+                    longitude: 16.16
+                  }, {
+                    latitude: 20.20,
+                    longitude: 21.21
+                  }]
+                }, {
+                  points: [{
+                    latitude: 11.18,
+                    longitude: 22.28
+                  }, {
+                    latitude: 15.18,
+                    longitude: 16.18
+                  }, {
+                    latitude: 20.28,
+                    longitude: 21.28
+                  }]
+                }]
+              }, {
+                coordinates: [{
+                  points: [{
+                    latitude: 91.11,
+                    longitude: 92.22
+                  }, {
+                    latitude: 15.15,
+                    longitude: 16.16
+                  }, {
+                    latitude: 20.20,
+                    longitude: 21.21
+                  }]
+                }, {
+                  points: [{
+                    latitude: 11.18,
+                    longitude: 22.28
+                  }, {
+                    latitude: 15.18,
+                    longitude: 16.18
+                  }, {
+                    latitude: 20.28,
+                    longitude: 21.28
+                  }]
+                }]
+              }]
+            }
+          }
+        }
+      }) {
+        name
+        area {
+          coordinates {
+            points {
+              latitude
+              longitude
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(intersects(Hotel.area, [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]])) {
+        name : Hotel.name
+        area : Hotel.area
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "MultiPolygon query near filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: { branches: { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22} } } }) {
+        name
+        branches {
+          polygons {
+            coordinates {
+              points {
+                latitude
+                longitude
+              }
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(near(Hotel.branches, [22.22,11.11], 33.33)) {
+        name : Hotel.name
+        branches : Hotel.branches
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "MultiPolygon query within filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: { branches: { within: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}, { points: [{ latitude: 11.18, longitude: 22.28}, { latitude: 15.18, longitude: 16.18} , { latitude: 20.28, longitude: 21.28}]} ] } } } }) {
+        name
+        branches {
+          polygons {
+            coordinates {
+              points {
+                latitude
+                longitude
+              }
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(within(Hotel.branches, [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]])) {
+        name : Hotel.name
+        branches : Hotel.branches
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "MultiPolygon query contains polygon filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: { branches: { contains: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}, { points: [{ latitude: 11.18, longitude: 22.28}, { latitude: 15.18, longitude: 16.18} , { latitude: 20.28, longitude: 21.28}]} ] } } } }) {
+        name
+        branches {
+          polygons {
+            coordinates {
+              points {
+                latitude
+                longitude
+              }
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(contains(Hotel.branches, [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]])) {
+        name : Hotel.name
+        branches : Hotel.branches
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "MultiPolygon query contains point filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: { branches: { contains: { point: { latitude: 11.11, longitude: 22.22}} } }) {
+        name
+        branches {
+          polygons {
+            coordinates {
+              points {
+                latitude
+                longitude
+              }
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(contains(Hotel.branches, [22.22,11.11])) {
+        name : Hotel.name
+        branches : Hotel.branches
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "MultiPolygon query intersect polygon filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: {
+        branches: {
+          intersects: {
+            polygon: {
+              coordinates: [{
+                points: [{
+                  latitude: 11.11,
+                  longitude: 22.22
+                }, {
+                  latitude: 15.15,
+                  longitude: 16.16
+                }, {
+                  latitude: 20.20,
+                  longitude: 21.21
+                }]
+              }, {
+                points: [{
+                  latitude: 11.18,
+                  longitude: 22.28
+                }, {
+                  latitude: 15.18,
+                  longitude: 16.18
+                }, {
+                  latitude: 20.28,
+                  longitude: 21.28
+                }]
+              }]
+            }
+          }
+        }
+      }) {
+        name
+        branches {
+          polygons {
+            coordinates {
+              points {
+                latitude
+                longitude
+              }
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(intersects(Hotel.branches, [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]])) {
+        name : Hotel.name
+        branches : Hotel.branches
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "MultiPolygon query intersect multi-polygon filter"
+  gqlquery: |
+    query {
+      queryHotel(filter: {
+        branches: {
+          intersects: {
+            multiPolygon: {
+              polygons: [{
+                coordinates: [{
+                  points: [{
+                    latitude: 11.11,
+                    longitude: 22.22
+                  }, {
+                    latitude: 15.15,
+                    longitude: 16.16
+                  }, {
+                    latitude: 20.20,
+                    longitude: 21.21
+                  }]
+                }, {
+                  points: [{
+                    latitude: 11.18,
+                    longitude: 22.28
+                  }, {
+                    latitude: 15.18,
+                    longitude: 16.18
+                  }, {
+                    latitude: 20.28,
+                    longitude: 21.28
+                  }]
+                }]
+              }, {
+                coordinates: [{
+                  points: [{
+                    latitude: 91.11,
+                    longitude: 92.22
+                  }, {
+                    latitude: 15.15,
+                    longitude: 16.16
+                  }, {
+                    latitude: 20.20,
+                    longitude: 21.21
+                  }]
+                }, {
+                  points: [{
+                    latitude: 11.18,
+                    longitude: 22.28
+                  }, {
+                    latitude: 15.18,
+                    longitude: 16.18
+                  }, {
+                    latitude: 20.28,
+                    longitude: 21.28
+                  }]
+                }]
+              }]
+            }
+          }
+        }
+      }) {
+        name
+        branches {
+          polygons {
+            coordinates {
+              points {
+                latitude
+                longitude
+              }
+            }
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryHotel(func: type(Hotel)) @filter(intersects(Hotel.branches, [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]])) {
+        name : Hotel.name
+        branches : Hotel.branches
         dgraph.uid : uid
       }
     }

@@ -33,22 +33,6 @@
             ]
         },
         {
-            "predicate": "Hotel.location",
-            "type": "geo",
-            "index": true,
-            "tokenizer": [
-                "geo"
-            ]
-        },
-        {
-            "predicate": "Hotel.name",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ]
-        },
-        {
             "predicate": "Human.starships",
             "type": "uid",
             "list": true
@@ -439,6 +423,36 @@
         {
             "predicate": "Home.favouriteMember",
             "type": "uid"
+        },
+        {
+            "predicate": "Hotel.name",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ]
+        },
+        {
+            "predicate": "Hotel.location",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.area",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.branches",
+            "type": "geo",
+            "index": true,
+            "tokenizer": ["geo"]
         }
     ],
     "types": [
@@ -474,17 +488,6 @@
                 }
             ],
             "name": "Country"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Hotel.name"
-                },
-                {
-                    "name": "Hotel.location"
-                }
-            ],
-            "name": "Hotel"
         },
         {
             "fields": [
@@ -869,6 +872,15 @@
                 }
             ],
             "name": "Home"
+        },
+        {
+            "fields": [
+                { "name": "Hotel.name"},
+                { "name": "Hotel.location"},
+                { "name": "Hotel.area"},
+                { "name": "Hotel.branches"}
+            ],
+            "name": "Hotel"
         }
     ]
 }

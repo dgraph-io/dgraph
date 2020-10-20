@@ -383,7 +383,9 @@ func RunAll(t *testing.T) {
 	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
 	t.Run("Input coercing for int64 type", int64BoundaryTesting)
 	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
-	t.Run("Geo type", mutationGeoType)
+	t.Run("Geo - Point type", mutationPointType)
+	t.Run("Geo - Polygon type", mutationPolygonType)
+	t.Run("Geo - MultiPolygon type", mutationMultiPolygonType)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

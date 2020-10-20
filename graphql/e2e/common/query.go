@@ -388,7 +388,7 @@ func inFilter(t *testing.T) {
 
 	getStateParams := &GraphQLParams{
 		Query: `query{
-			queryState(filter: {xcode: {in: ["abc", "def"]}}){
+			queryState(filter: {xcode: {in: ["abc", "def"]}}, order: { asc: name }){
 				xcode
 				name
 				capital
