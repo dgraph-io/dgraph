@@ -1323,7 +1323,7 @@ func generateDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gqlerr
 			typ.Name, subscriptionArg.Value.Raw))
 	}
 
-	return nil
+	return errs
 }
 
 func customDirectiveValidation(sch *ast.Schema,
