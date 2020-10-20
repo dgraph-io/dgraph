@@ -2,6 +2,7 @@ package fbx
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/fb"
@@ -38,6 +39,21 @@ func PostingEq(p1, p2 *fb.Posting) bool {
 		p1.Op() == p2.Op() &&
 		p1.StartTs() == p2.StartTs() &&
 		p1.CommitTs() == p2.CommitTs()
+}
+
+func PostingDump(p *fb.Posting) string {
+	return fmt.Sprintf(
+		"{uid:%d value:%s value_type:%d posting_type:%s lang_tag:%s label:%s op:%d start_ts:%d commit_ts:%d}",
+		p.Uid(),
+		p.ValueBytes(),
+		p.ValueType(),
+		p.PostingType().String(),
+		p.LangTagBytes(),
+		p.Label(),
+		p.Op(),
+		p.StartTs(),
+		p.CommitTs(),
+	)
 }
 
 func postingFacetsEq(p1, p2 *fb.Posting) bool {
