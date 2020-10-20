@@ -20,12 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
-	"testing"
-
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
+	"sync"
+	"testing"
+	"time"
 )
 
 type Person struct {
@@ -101,7 +101,7 @@ func TestConcurrentUpdate(t *testing.T) {
 		go mutation(i)
 	}
 	wg.Wait()
-
+	time.Sleep(time.Second * 1)
 	q := `query all($a: string) {
 			all(func: eq(name, $a)) {
 			  name
