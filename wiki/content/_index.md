@@ -21,91 +21,58 @@ aliases = ["/contribute"]
     <a  href="{{< relref "graphql/overview/index.md">}}">
       <h2>GraphQL</h2>
       <p>
-        Dgraph gives you GraphQL, not a translation layer.
-      </p>
-      <p class="cta">
-        Get Started with GraphQL
-      </p>
-    </a>
-  </div>
-  <div class="item">
-    <div class="icon"><i class="lni lni-cloud"></i></div>
-    <a href="{{< relref "slash-graphql/introduction.md">}}">
-      <h2>Run Dgraph in the Cloud</h2>
-      <p>
-        Work with your data in a fully-managed cloud service.
-      </p>
-      <p class="cta">
-        Get started with Slash GraphQL
-      </p>
-    </a>
-  </div>
-  <div class="item">
-    <div class="icon"><i class="lni lni-play"></i></div>
-    <a href="{{< relref "get-started/index.md">}}">
-      <h2>Quickstart Guide</h2>
-      <p>
-        A single page quickstart guide to get started with Dgraph
-      </p>
-      <p class="cta">
-        Quickstart Guide
-      </p>
-    </a>
-  </div>
-  <div class="item">
-    <div class="icon"><i class="fa fa-book" aria-hidden="true"></i></div>
-    <a href="https://dgraph.io/tour/" target="_blank">
-      <h2>Tour of Dgraph</h2>
-      <p>
-        Take an interactive tour of Dgraph to learn the concepts
-      </p>
-    </a>
-  </div>
-  <div class="item">
-    <div class="icon"><i class="fa fa-university" aria-hidden="true"></i></div>
-    <a href="{{< relref "tutorials/index.md">}}">
-      <h2>Tutorials</h2>
-      <p>
-        Get Started with Dgraph alongside a series of tutorials
-      </p>
-    </a>
+        Dgraph gives you GraphQL, not a translation layer
+      </p></a>
+      <ul>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 1</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 2</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 3</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 4</a></li>
+      </ul>
   </div>
   <div class="item">
     <div class="icon"><i class="fa fa-code-fork" aria-hidden="true"></i></div>
-    <a href="{{< relref "query-language/_index.md">}}">
-      <h2>Dgraph Query Language</h2>
+    <a href="{{< relref "dql/_index.md">}}">
+      <h2>DQL</h2>
       <p>
-        A reference guide for Dgraph query language
+        A reference guide for Dgraph Query Language (DQL)
       </p>
     </a>
+      <ul>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 1</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 2</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 3</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 4</a></li>
+      </ul>
   </div>
-  <div class="item">
-    <div class="icon"><i class="lni lni-graduation"></i></div>
-    <a href="{{< relref "tips/index.md">}}">
-      <h2>GraphQL+- Tips and Tricks</h2>
-      <p>
-        A list of commonly used GraphQL+- query snippets
-      </p>
-    </a>
-  </div>
-  <div class="item">
-    <div class="icon"><i class="lni lni-fireworks"></i></div>
-    <a href="{{< relref "clients/_index.md">}}">
-      <h2>Clients</h2>
-    <p>
-      Dgraph clients in various programming languages
-    </p>
-    </a>
-  </div>
-
   <div class="item">
     <div class="icon"><i class="fa fa-wrench" aria-hidden="true"></i></div>
     <a href="{{< relref "deploy/_index.md">}}">
       <h2>Deploy</h2>
       <p>
-        Running Dgraph cluster in production
+        Running a Dgraph cluster in production
       </p>
     </a>
+      <ul>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 1</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 2</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 3</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 4</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 5</a></li>
+      </ul>
   </div>
 
   <div class="item">
@@ -116,15 +83,34 @@ aliases = ["/contribute"]
         Exclusive features like ACLs, binary backups, encryption at rest, and more
       </p>
     </a>
+      <ul>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 1</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 2</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 3</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 4</a></li>
+      </ul>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-question-circle-o" aria-hidden="true"></i></div>
-    <a href="/faq">
-      <h2>FAQ</h2>
+    <div class="icon"><i class="lni lni-cloud" aria-hidden="true"></i></div>
+    <a href="{{< relref "slash-graphql/_index.md">}}">
+      <h2>Slash GraphQL</h2>
       <p>
-        Frequently asked questions
+        Run Dgraph in the Cloud. 
+        Work with your data in a fully-managed cloud service.
       </p>
     </a>
+      <ul>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 1</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 2</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 3</a></li>
+      </ul>
   </div>
   <div class="item">
     <div class="icon"><i class="fa fa-cog" aria-hidden="true"></i></div>
@@ -134,7 +120,28 @@ aliases = ["/contribute"]
         Embeddable, persistent and fast key-value database that powers Dgraph
       </p>
     </a>
+      <ul>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 1</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 2</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 3</a></li>
+      <li>
+      <a class="cta" href="{{< relref "graphql/overview/index.md">}}">Topic 4</a></li>
+      </ul>
   </div>
+
+  <div class="item">
+    <div class="icon"><i class="fa fa-question-circle-o" aria-hidden="true"></i></div>
+    <a href="{{< relref "faq/_index.md">}}">
+      <h2>FAQ</h2>
+      <p>
+        Frequently asked questions
+      </p>
+    </a>
+  </div>
+
 </div>
 
 ## Contribute
@@ -203,6 +210,9 @@ aliases = ["/contribute"]
 </section>
 
 <style>
+  a.cta {
+    color: #fb5812;
+  }
   .content-wrapper {
     margin: 0 auto;
     max-width: 1200px;
