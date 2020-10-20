@@ -54,7 +54,7 @@ services:
       target: /data/backup
       read_only: false
     - type: bind
-      source: ../tls/alpha1
+      source: ../tls/alpha2
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 102 --my=alpha2:7182 --zero=zero1:5180
@@ -85,7 +85,7 @@ services:
       target: /data/backup
       read_only: false
     - type: bind
-      source: ../tls/alpha1
+      source: ../tls/alpha3
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 103 --my=alpha3:7183 --zero=zero1:5180
@@ -116,7 +116,7 @@ services:
       target: /data/backup
       read_only: false
     - type: bind
-      source: ../tls/alpha1
+      source: ../tls/alpha4
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 104 --my=alpha4:7184 --zero=zero1:5180
@@ -147,7 +147,7 @@ services:
       target: /data/backup
       read_only: false
     - type: bind
-      source: ../tls/alpha1
+      source: ../tls/alpha5
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 105 --my=alpha5:7185 --zero=zero1:5180
@@ -178,7 +178,7 @@ services:
       target: /data/backup
       read_only: false
     - type: bind
-      source: ../tls/alpha1
+      source: ../tls/alpha6
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 106 --my=alpha6:7186 --zero=zero1:5180
@@ -205,7 +205,7 @@ services:
       target: /gobin
       read_only: true
     - type: bind
-      source: ../tls/alpha1
+      source: ../tls/zero1
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --cluster_tls_dir /dgraph-tls --cluster_tls_server_name zero1 --logtostderr
