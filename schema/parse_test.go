@@ -57,19 +57,19 @@ func TestSchema(t *testing.T) {
 	checkSchema(t, State().predicate, []nameType{
 		{"name", &pb.SchemaUpdate{
 			Predicate: "name",
-			ValueType: pb.Posting_STRING,
+			ValueType: pb.PostingValType_STRING,
 		}},
 		{"address", &pb.SchemaUpdate{
 			Predicate: "address",
-			ValueType: pb.Posting_STRING,
+			ValueType: pb.PostingValType_STRING,
 		}},
 		{"http://scalar.com/helloworld/", &pb.SchemaUpdate{
 			Predicate: "http://scalar.com/helloworld/",
-			ValueType: pb.Posting_STRING,
+			ValueType: pb.PostingValType_STRING,
 		}},
 		{"age", &pb.SchemaUpdate{
 			Predicate: "age",
-			ValueType: pb.Posting_INT,
+			ValueType: pb.PostingValType_INT,
 		}},
 	})
 
@@ -167,25 +167,25 @@ func TestSchemaIndexCustom(t *testing.T) {
 	checkSchema(t, State().predicate, []nameType{
 		{"name", &pb.SchemaUpdate{
 			Predicate: "name",
-			ValueType: pb.Posting_STRING,
+			ValueType: pb.PostingValType_STRING,
 			Tokenizer: []string{"exact"},
 			Directive: pb.SchemaUpdate_INDEX,
 			Count:     true,
 		}},
 		{"address", &pb.SchemaUpdate{
 			Predicate: "address",
-			ValueType: pb.Posting_STRING,
+			ValueType: pb.PostingValType_STRING,
 			Tokenizer: []string{"term"},
 			Directive: pb.SchemaUpdate_INDEX,
 		}},
 		{"age", &pb.SchemaUpdate{
 			Predicate: "age",
-			ValueType: pb.Posting_INT,
+			ValueType: pb.PostingValType_INT,
 			Tokenizer: []string{"int"},
 			Directive: pb.SchemaUpdate_INDEX,
 		}},
 		{"friend", &pb.SchemaUpdate{
-			ValueType: pb.Posting_UID,
+			ValueType: pb.PostingValType_UID,
 			Predicate: "friend",
 			Directive: pb.SchemaUpdate_REVERSE,
 			Count:     true,

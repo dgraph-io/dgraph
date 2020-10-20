@@ -12,7 +12,7 @@ type Posting struct {
 
 	uid         uint64
 	value       flatbuffers.UOffsetT
-	valueType   pb.Posting_ValType
+	valueType   pb.PostingValType
 	postingType fb.PostingType
 	langTag     flatbuffers.UOffsetT
 	label       flatbuffers.UOffsetT
@@ -38,7 +38,7 @@ func (p *Posting) SetValue(value []byte) *Posting {
 	return p
 }
 
-func (p *Posting) SetValueType(valueType pb.Posting_ValType) *Posting {
+func (p *Posting) SetValueType(valueType pb.PostingValType) *Posting {
 	p.valueType = valueType
 	return p
 }

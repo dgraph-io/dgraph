@@ -1480,7 +1480,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 			}
 			var tv pb.TaskValue
 			err = pl.Iterate(arg.q.ReadTs, 0, func(p *fb.Posting) error {
-				tv.ValType = pb.Posting_ValType(p.ValueType())
+				tv.ValType = pb.PostingValType(p.ValueType())
 				tv.Val = p.ValueBytes()
 				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
 					out.Uids = append(out.Uids, uid)

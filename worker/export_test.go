@@ -126,7 +126,7 @@ func populateGraphExport(t *testing.T) {
 func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, schema.ParseBytes([]byte(schemaStr), 1))
 
-	val, err := (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
+	val, err := (&pb.SchemaUpdate{ValueType: pb.PostingValType_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
@@ -135,7 +135,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, txn.CommitAt(1, nil))
 
 	require.NoError(t, err)
-	val, err = (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
+	val, err = (&pb.SchemaUpdate{ValueType: pb.PostingValType_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
@@ -437,7 +437,7 @@ func TestToSchema(t *testing.T) {
 				attr: "Alice",
 				schema: pb.SchemaUpdate{
 					Predicate: "mother",
-					ValueType: pb.Posting_STRING,
+					ValueType: pb.PostingValType_STRING,
 					Directive: pb.SchemaUpdate_REVERSE,
 					List:      false,
 					Count:     true,
@@ -452,7 +452,7 @@ func TestToSchema(t *testing.T) {
 				attr: "Alice:best",
 				schema: pb.SchemaUpdate{
 					Predicate: "mother",
-					ValueType: pb.Posting_STRING,
+					ValueType: pb.PostingValType_STRING,
 					Directive: pb.SchemaUpdate_REVERSE,
 					List:      false,
 					Count:     false,
@@ -467,7 +467,7 @@ func TestToSchema(t *testing.T) {
 				attr: "username/password",
 				schema: pb.SchemaUpdate{
 					Predicate: "",
-					ValueType: pb.Posting_STRING,
+					ValueType: pb.PostingValType_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
 					Count:     false,
@@ -482,7 +482,7 @@ func TestToSchema(t *testing.T) {
 				attr: "B*-tree",
 				schema: pb.SchemaUpdate{
 					Predicate: "",
-					ValueType: pb.Posting_UID,
+					ValueType: pb.PostingValType_UID,
 					Directive: pb.SchemaUpdate_REVERSE,
 					List:      true,
 					Count:     false,
@@ -497,7 +497,7 @@ func TestToSchema(t *testing.T) {
 				attr: "base_de_données",
 				schema: pb.SchemaUpdate{
 					Predicate: "",
-					ValueType: pb.Posting_STRING,
+					ValueType: pb.PostingValType_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
 					Count:     false,
@@ -512,7 +512,7 @@ func TestToSchema(t *testing.T) {
 				attr: "data_base",
 				schema: pb.SchemaUpdate{
 					Predicate: "",
-					ValueType: pb.Posting_STRING,
+					ValueType: pb.PostingValType_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
 					Count:     false,
@@ -527,7 +527,7 @@ func TestToSchema(t *testing.T) {
 				attr: "data.base",
 				schema: pb.SchemaUpdate{
 					Predicate: "",
-					ValueType: pb.Posting_STRING,
+					ValueType: pb.PostingValType_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
 					Count:     false,

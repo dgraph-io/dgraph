@@ -421,8 +421,8 @@ func TestRebuildReverseEdges(t *testing.T) {
 
 func TestNeedsTokIndexRebuild(t *testing.T) {
 	rb := IndexRebuild{}
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID}
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID}
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID}
 	rebuildInfo := rb.needsTokIndexRebuild()
 	require.Equal(t, indexOp(indexNoop), rebuildInfo.op)
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToDelete)
@@ -434,9 +434,9 @@ func TestNeedsTokIndexRebuild(t *testing.T) {
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToDelete)
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToRebuild)
 
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_STRING,
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_STRING,
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
 	rebuildInfo = rb.needsTokIndexRebuild()
@@ -444,18 +444,18 @@ func TestNeedsTokIndexRebuild(t *testing.T) {
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToDelete)
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToRebuild)
 
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"term"}}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_STRING,
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_STRING,
 		Directive: pb.SchemaUpdate_INDEX}
 	rebuildInfo = rb.needsTokIndexRebuild()
 	require.Equal(t, indexOp(indexRebuild), rebuildInfo.op)
 	require.Equal(t, []string{"term"}, rebuildInfo.tokenizersToDelete)
 	require.Equal(t, []string(nil), rebuildInfo.tokenizersToRebuild)
 
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_FLOAT,
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_FLOAT,
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
 	rebuildInfo = rb.needsTokIndexRebuild()
@@ -463,9 +463,9 @@ func TestNeedsTokIndexRebuild(t *testing.T) {
 	require.Equal(t, []string{"exact"}, rebuildInfo.tokenizersToDelete)
 	require.Equal(t, []string{"exact"}, rebuildInfo.tokenizersToRebuild)
 
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_FLOAT,
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_FLOAT,
 		Directive: pb.SchemaUpdate_NONE}
 	rebuildInfo = rb.needsTokIndexRebuild()
 	require.Equal(t, indexOp(indexDelete), rebuildInfo.op)
@@ -475,48 +475,48 @@ func TestNeedsTokIndexRebuild(t *testing.T) {
 
 func TestNeedsCountIndexRebuild(t *testing.T) {
 	rb := IndexRebuild{}
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: true}
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID}
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID, Count: true}
 	require.Equal(t, indexOp(indexRebuild), rb.needsCountIndexRebuild())
 
 	rb.OldSchema = nil
 	require.Equal(t, indexOp(indexRebuild), rb.needsCountIndexRebuild())
 
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: false}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: false}
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID, Count: false}
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID, Count: false}
 	require.Equal(t, indexOp(indexNoop), rb.needsCountIndexRebuild())
 
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: true}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: false}
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID, Count: true}
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID, Count: false}
 	require.Equal(t, indexOp(indexDelete), rb.needsCountIndexRebuild())
 }
 
 func TestNeedsReverseEdgesRebuild(t *testing.T) {
 	rb := IndexRebuild{}
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_INDEX}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID,
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID, Directive: pb.SchemaUpdate_INDEX}
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID,
 		Directive: pb.SchemaUpdate_REVERSE}
 	require.Equal(t, indexOp(indexRebuild), rb.needsReverseEdgesRebuild())
 
 	rb.OldSchema = nil
 	require.Equal(t, indexOp(indexRebuild), rb.needsReverseEdgesRebuild())
 
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID,
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID, Directive: pb.SchemaUpdate_REVERSE}
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID,
 		Directive: pb.SchemaUpdate_REVERSE}
 	require.Equal(t, indexOp(indexNoop), rb.needsReverseEdgesRebuild())
 
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID,
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID,
 		Directive: pb.SchemaUpdate_REVERSE}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID,
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID,
 		Directive: pb.SchemaUpdate_INDEX}
 	require.Equal(t, indexOp(indexDelete), rb.needsReverseEdgesRebuild())
 }
 
 func TestNeedsListTypeRebuild(t *testing.T) {
 	rb := IndexRebuild{}
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, List: false}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, List: true}
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID, List: false}
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID, List: true}
 	rebuild, err := rb.needsListTypeRebuild()
 	require.True(t, rebuild)
 	require.NoError(t, err)
@@ -526,8 +526,8 @@ func TestNeedsListTypeRebuild(t *testing.T) {
 	require.False(t, rebuild)
 	require.NoError(t, err)
 
-	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, List: true}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, List: false}
+	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID, List: true}
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.PostingValType_UID, List: false}
 	rebuild, err = rb.needsListTypeRebuild()
 	require.False(t, rebuild)
 	require.Error(t, err)

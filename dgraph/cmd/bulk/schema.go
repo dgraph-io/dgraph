@@ -57,7 +57,7 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 
 	if opt.StoreXids {
 		s.schemaMap["xid"] = &pb.SchemaUpdate{
-			ValueType: pb.Posting_STRING,
+			ValueType: pb.PostingValType_STRING,
 			Tokenizer: []string{"hash"},
 		}
 	}
@@ -95,7 +95,7 @@ func (s *schemaStore) setSchemaAsList(pred string) {
 
 func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
 	if objectIsUID {
-		de.ValueType = pb.Posting_UID
+		de.ValueType = pb.PostingValType_UID
 	}
 
 	s.RLock()

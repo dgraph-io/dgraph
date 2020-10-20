@@ -90,7 +90,7 @@ func TestConvertEdgeType(t *testing.T) {
 	for _, testEdge := range testEdges {
 		err := ValidateAndConvert(testEdge.input,
 			&pb.SchemaUpdate{
-				ValueType: pb.Posting_ValType(testEdge.to),
+				ValueType: pb.PostingValType(testEdge.to),
 			})
 		if testEdge.expectErr {
 			require.Error(t, err)
@@ -111,7 +111,7 @@ func TestValidateEdgeTypeError(t *testing.T) {
 
 	err := ValidateAndConvert(edge,
 		&pb.SchemaUpdate{
-			ValueType: pb.Posting_ValType(types.DateTimeID),
+			ValueType: pb.PostingValType(types.DateTimeID),
 		})
 	require.Error(t, err)
 }
@@ -138,61 +138,61 @@ func TestCheckSchema(t *testing.T) {
 	require.NoError(t, posting.DeleteAll())
 	initTest(t, "name:string @index(term) .")
 	// non uid to uid
-	s1 := &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_UID}
+	s1 := &pb.SchemaUpdate{Predicate: "name", ValueType: pb.PostingValType_UID}
 	require.NoError(t, checkSchema(s1))
 
 	// uid to non uid
 	err := schema.ParseBytes([]byte("name:uid ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.PostingValType_STRING}
 	require.NoError(t, checkSchema(s1))
 
 	// string to password
 	err = schema.ParseBytes([]byte("name:string ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.PostingValType_PASSWORD}
 	require.Error(t, checkSchema(s1))
 
 	// password to string
 	err = schema.ParseBytes([]byte("name:password ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.PostingValType_STRING}
 	require.Error(t, checkSchema(s1))
 
 	// int to password
 	err = schema.ParseBytes([]byte("name:int ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.PostingValType_PASSWORD}
 	require.Error(t, checkSchema(s1))
 
 	// password to password
 	err = schema.ParseBytes([]byte("name:password ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.PostingValType_PASSWORD}
 	require.NoError(t, checkSchema(s1))
 
 	// string to int
 	err = schema.ParseBytes([]byte("name:string ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_FLOAT}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.PostingValType_FLOAT}
 	require.NoError(t, checkSchema(s1))
 
 	// index on uid type
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_INDEX}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.PostingValType_UID, Directive: pb.SchemaUpdate_INDEX}
 	require.Error(t, checkSchema(s1))
 
 	// reverse on non-uid type
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_REVERSE}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.PostingValType_STRING, Directive: pb.SchemaUpdate_REVERSE}
 	require.Error(t, checkSchema(s1))
 
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.PostingValType_FLOAT, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
 	require.NoError(t, checkSchema(s1))
 
-	s1 = &pb.SchemaUpdate{Predicate: "friend", ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
+	s1 = &pb.SchemaUpdate{Predicate: "friend", ValueType: pb.PostingValType_UID, Directive: pb.SchemaUpdate_REVERSE}
 	require.NoError(t, checkSchema(s1))
 
 	// Schema with internal predicate.
-	s1 = &pb.SchemaUpdate{Predicate: "uid", ValueType: pb.Posting_STRING}
+	s1 = &pb.SchemaUpdate{Predicate: "uid", ValueType: pb.PostingValType_STRING}
 	require.Error(t, checkSchema(s1))
 
 	s := `jobs: string @upsert .`
@@ -233,7 +233,7 @@ func TestTypeSanityCheck(t *testing.T) {
 		Fields: []*pb.SchemaUpdate{
 			{
 				Predicate: "name",
-				ValueType: pb.Posting_OBJECT,
+				ValueType: pb.PostingValType_OBJECT,
 			},
 		},
 	}

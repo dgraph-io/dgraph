@@ -17,7 +17,7 @@ table Facet {
 table Posting {
 	uid:uint64;
 	value:[ubyte];
-	value_type:int32; // pb.Posting_ValType
+	value_type:int32; // pb.PostingValType
 	posting_type:PostingType;
 	lang_tag:[ubyte];
 	label:string;

@@ -484,7 +484,7 @@ func LoadSchemaFromDb() error {
 		var s pb.SchemaUpdate
 		err = item.Value(func(val []byte) error {
 			if len(val) == 0 {
-				s = pb.SchemaUpdate{Predicate: attr, ValueType: pb.Posting_DEFAULT}
+				s = pb.SchemaUpdate{Predicate: attr, ValueType: pb.PostingValType_DEFAULT}
 			}
 			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
 			State().Set(attr, &s)
@@ -559,11 +559,11 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 			Fields: []*pb.SchemaUpdate{
 				{
 					Predicate: "dgraph.graphql.schema",
-					ValueType: pb.Posting_STRING,
+					ValueType: pb.PostingValType_STRING,
 				},
 				{
 					Predicate: "dgraph.graphql.xid",
-					ValueType: pb.Posting_STRING,
+					ValueType: pb.PostingValType_STRING,
 				},
 			},
 		}, &pb.TypeUpdate{
@@ -571,10 +571,10 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 			Fields: []*pb.SchemaUpdate{
 				{
 					Predicate: "dgraph.graphql.schema_history",
-					ValueType: pb.Posting_STRING,
+					ValueType: pb.PostingValType_STRING,
 				}, {
 					Predicate: "dgraph.graphql.schema_created_at",
-					ValueType: pb.Posting_DATETIME,
+					ValueType: pb.PostingValType_DATETIME,
 				},
 			},
 		})
@@ -587,15 +587,15 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 			Fields: []*pb.SchemaUpdate{
 				{
 					Predicate: "dgraph.xid",
-					ValueType: pb.Posting_STRING,
+					ValueType: pb.PostingValType_STRING,
 				},
 				{
 					Predicate: "dgraph.password",
-					ValueType: pb.Posting_PASSWORD,
+					ValueType: pb.PostingValType_PASSWORD,
 				},
 				{
 					Predicate: "dgraph.user.group",
-					ValueType: pb.Posting_UID,
+					ValueType: pb.PostingValType_UID,
 				},
 			},
 		},
@@ -604,11 +604,11 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 				Fields: []*pb.SchemaUpdate{
 					{
 						Predicate: "dgraph.xid",
-						ValueType: pb.Posting_STRING,
+						ValueType: pb.PostingValType_STRING,
 					},
 					{
 						Predicate: "dgraph.acl.rule",
-						ValueType: pb.Posting_UID,
+						ValueType: pb.PostingValType_UID,
 					},
 				},
 			},
@@ -617,11 +617,11 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 				Fields: []*pb.SchemaUpdate{
 					{
 						Predicate: "dgraph.rule.predicate",
-						ValueType: pb.Posting_STRING,
+						ValueType: pb.PostingValType_STRING,
 					},
 					{
 						Predicate: "dgraph.rule.permission",
-						ValueType: pb.Posting_INT,
+						ValueType: pb.PostingValType_INT,
 					},
 				},
 			})
@@ -652,32 +652,32 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	initialSchema = append(initialSchema,
 		&pb.SchemaUpdate{
 			Predicate: "dgraph.cors",
-			ValueType: pb.Posting_STRING,
+			ValueType: pb.PostingValType_STRING,
 			List:      true,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.type",
-			ValueType: pb.Posting_STRING,
+			ValueType: pb.PostingValType_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			List:      true,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.schema",
-			ValueType: pb.Posting_STRING,
+			ValueType: pb.PostingValType_STRING,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.xid",
-			ValueType: pb.Posting_STRING,
+			ValueType: pb.PostingValType_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.schema_history",
-			ValueType: pb.Posting_STRING,
+			ValueType: pb.PostingValType_STRING,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.schema_created_at",
-			ValueType: pb.Posting_DATETIME,
+			ValueType: pb.PostingValType_DATETIME,
 		})
 
 	if all || x.WorkerConfig.AclEnabled {
@@ -685,36 +685,36 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 		initialSchema = append(initialSchema, []*pb.SchemaUpdate{
 			{
 				Predicate: "dgraph.xid",
-				ValueType: pb.Posting_STRING,
+				ValueType: pb.PostingValType_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Upsert:    true,
 				Tokenizer: []string{"exact"},
 			},
 			{
 				Predicate: "dgraph.password",
-				ValueType: pb.Posting_PASSWORD,
+				ValueType: pb.PostingValType_PASSWORD,
 			},
 			{
 				Predicate: "dgraph.user.group",
 				Directive: pb.SchemaUpdate_REVERSE,
-				ValueType: pb.Posting_UID,
+				ValueType: pb.PostingValType_UID,
 				List:      true,
 			},
 			{
 				Predicate: "dgraph.acl.rule",
-				ValueType: pb.Posting_UID,
+				ValueType: pb.PostingValType_UID,
 				List:      true,
 			},
 			{
 				Predicate: "dgraph.rule.predicate",
-				ValueType: pb.Posting_STRING,
+				ValueType: pb.PostingValType_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Tokenizer: []string{"exact"},
 				Upsert:    true, // Not really sure if this will work.
 			},
 			{
 				Predicate: "dgraph.rule.permission",
-				ValueType: pb.Posting_INT,
+				ValueType: pb.PostingValType_INT,
 			},
 		}...)
 	}

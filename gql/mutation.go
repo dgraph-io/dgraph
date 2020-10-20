@@ -128,7 +128,7 @@ func (nq NQuad) createEdgePrototype(subjectUid uint64) *pb.DirectedEdge {
 func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *pb.DirectedEdge {
 	out := nq.createEdgePrototype(subjectUid)
 	out.ValueId = objectUid
-	out.ValueType = pb.Posting_UID
+	out.ValueType = pb.PostingValType_UID
 	return out
 }
 

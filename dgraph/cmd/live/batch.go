@@ -216,7 +216,7 @@ func createUidEdge(nq *api.NQuad, sid, oid uint64) *pb.DirectedEdge {
 		Lang:      nq.Lang,
 		Facets:    nq.Facets,
 		ValueId:   oid,
-		ValueType: pb.Posting_UID,
+		ValueType: pb.PostingValType_UID,
 	}
 }
 

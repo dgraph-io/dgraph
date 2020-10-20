@@ -27,7 +27,7 @@ type DirectedEdge struct {
   Entity      uint64
   Attr        string
   Value       []byte
-  ValueType   Posting_ValType
+  ValueType   PostingValType
   ValueId     uint64
   Label       string
   Lang 	      string

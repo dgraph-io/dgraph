@@ -638,7 +638,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		x.Check(err)
 		if parsedKey.IsData() {
 			schema := r.state.schema.getSchema(parsedKey.Attr)
-			if schema.GetValueType() == pb.Posting_UID && !schema.GetList() && numUids > 1 {
+			if schema.GetValueType() == pb.PostingValType_UID && !schema.GetList() && numUids > 1 {
 				fmt.Printf("Schema for pred %s specifies that this is not a list but more than  "+
 					"one UID has been found. Forcing the schema to be a list to avoid any "+
 					"data loss. Please fix the data to your specifications once Dgraph is up.\n",

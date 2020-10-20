@@ -501,7 +501,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 	for readTs = 1; readTs < 10; readTs++ {
 		edge := &pb.DirectedEdge{
 			ValueId:   readTs,
-			ValueType: pb.Posting_INT,
+			ValueType: pb.PostingValType_INT,
 		}
 		txn := &Txn{StartTs: readTs}
 		addMutationHelper(t, ol, edge, Set, txn)
@@ -533,7 +533,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		// Add edge just to test that the deletion still happens.
 		edge = &pb.DirectedEdge{
 			ValueId:   7,
-			ValueType: pb.Posting_INT,
+			ValueType: pb.PostingValType_INT,
 		}
 		err = ol.addMutation(ctx, txn, edge)
 		require.NoError(t, err)

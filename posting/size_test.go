@@ -34,6 +34,8 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/fb"
+	"github.com/dgraph-io/dgraph/fbx"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -46,7 +48,7 @@ var (
 	list    *List
 	pack    *pb.UidPack
 	block   *pb.UidBlock
-	posting *pb.Posting
+	posting *fb.Posting
 	facet   *api.Facet
 )
 
@@ -71,7 +73,7 @@ func BenchmarkUidBlock(b *testing.B) {
 
 func BenchmarkPosting(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		posting = &pb.Posting{}
+		posting = fbx.NewPosting().Build()
 	}
 }
 

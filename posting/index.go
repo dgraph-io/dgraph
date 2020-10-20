@@ -221,7 +221,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	// For single uid predicates, updating the reverse index requires that the existing
 	// entries for this key in the index are removed.
 	pred, ok := schema.State().Get(ctx, t.Attr)
-	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
+	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.PostingValType_UID &&
 		t.Op == pb.DirectedEdge_SET && t.ValueId != 0
 	if isSingleUidUpdate {
 		dataKey := x.DataKey(t.Attr, t.Entity)
@@ -388,7 +388,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	}
 
 	getUID := func(t *pb.DirectedEdge) uint64 {
-		if t.ValueType == pb.Posting_UID {
+		if t.ValueType == pb.PostingValType_UID {
 			return t.ValueId
 		}
 		return fingerprintEdge(t)
@@ -1225,7 +1225,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		newEdge := &pb.DirectedEdge{
 			Attr:      rb.Attr,
 			Value:     mpost.ValueBytes(),
-			ValueType: pb.Posting_ValType(mpost.ValueType()),
+			ValueType: pb.PostingValType(mpost.ValueType()),
 			Op:        pb.DirectedEdge_SET,
 			Label:     string(mpost.Label()),
 			Facets:    fbx.PostingFacets(mpost),

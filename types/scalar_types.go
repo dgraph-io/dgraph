@@ -36,25 +36,25 @@ const dateTimeFormat = "2006-01-02T15:04:05"
 // Never delete anything from this list even if it becomes unused.
 const (
 	// DefaultID represents the default type.
-	DefaultID = TypeID(pb.Posting_DEFAULT)
+	DefaultID = TypeID(pb.PostingValType_DEFAULT)
 	// BinaryID represents the binary data type.
-	BinaryID = TypeID(pb.Posting_BINARY)
+	BinaryID = TypeID(pb.PostingValType_BINARY)
 	// IntID represents the integer type.
-	IntID = TypeID(pb.Posting_INT)
+	IntID = TypeID(pb.PostingValType_INT)
 	// FloatID represents the floating-point number type.
-	FloatID = TypeID(pb.Posting_FLOAT)
+	FloatID = TypeID(pb.PostingValType_FLOAT)
 	// FloatID represents the boolean type.
-	BoolID = TypeID(pb.Posting_BOOL)
+	BoolID = TypeID(pb.PostingValType_BOOL)
 	// DateTimeID represents the datetime type.
-	DateTimeID = TypeID(pb.Posting_DATETIME)
+	DateTimeID = TypeID(pb.PostingValType_DATETIME)
 	// GeoID represents the geo-location data type.
-	GeoID = TypeID(pb.Posting_GEO)
+	GeoID = TypeID(pb.PostingValType_GEO)
 	// UidID represents the uid type.
-	UidID = TypeID(pb.Posting_UID)
+	UidID = TypeID(pb.PostingValType_UID)
 	// PasswordID represents the password type.
-	PasswordID = TypeID(pb.Posting_PASSWORD)
+	PasswordID = TypeID(pb.PostingValType_PASSWORD)
 	// StringID represents the string type.
-	StringID = TypeID(pb.Posting_STRING)
+	StringID = TypeID(pb.PostingValType_STRING)
 	// UndefinedID represents the undefined type.
 	UndefinedID = TypeID(100)
 )
@@ -73,11 +73,11 @@ var typeNameMap = map[string]TypeID{
 }
 
 // TypeID represents the type of the data.
-type TypeID pb.Posting_ValType
+type TypeID pb.PostingValType
 
 // Enum takes a TypeID value and returns the corresponding ValType enum value.
-func (t TypeID) Enum() pb.Posting_ValType {
-	return pb.Posting_ValType(t)
+func (t TypeID) Enum() pb.PostingValType {
+	return pb.PostingValType(t)
 }
 
 // Name returns the name of the type.

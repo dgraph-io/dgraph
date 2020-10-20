@@ -92,7 +92,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	case len(su.GetTokenizer()) > 0 || su.GetCount():
 		// Any index or count index.
 		getFn = txn.Get
-	case su.GetValueType() == pb.Posting_UID && !su.GetList():
+	case su.GetValueType() == pb.PostingValType_UID && !su.GetList():
 		// Single UID, not a list.
 		getFn = txn.Get
 	case edge.Op == pb.DirectedEdge_DEL:
@@ -403,7 +403,7 @@ func checkSchema(s *pb.SchemaUpdate) error {
 
 	// schema was defined already
 	switch {
-	case t.IsScalar() && (t.Enum() == pb.Posting_PASSWORD || s.ValueType == pb.Posting_PASSWORD):
+	case t.IsScalar() && (t.Enum() == pb.PostingValType_PASSWORD || s.ValueType == pb.PostingValType_PASSWORD):
 		// can't change password -> x, x -> password
 		if t.Enum() != s.ValueType {
 			return errors.Errorf("Schema change not allowed from %s to %s",
@@ -746,7 +746,7 @@ func typeSanityCheck(t *pb.TypeUpdate) error {
 			return errors.Errorf("Field in type definition must have a name")
 		}
 
-		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
+		if field.ValueType == pb.PostingValType_OBJECT && len(field.ObjectTypeName) == 0 {
 			return errors.Errorf(
 				"Field with value type OBJECT must specify the name of the object type")
 		}
