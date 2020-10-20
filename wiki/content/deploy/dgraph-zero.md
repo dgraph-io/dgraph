@@ -15,44 +15,53 @@ You can see the options available for `dgraph zero` using the following command:
 
 `dgraph zero --help`
 
-* `--replicas` is the option that controls the replication factor. (i.e. number of replicas per data shard, including the original shard)
-* When a new Alpha joins the cluster, it is assigned a group based on the replication factor. If the replication factor is 1 then each Alpha node will serve different group. If replication factor is 2 and you launch 4 Alphas, then first two Alphas would serve group 1 and next two machines would serve group 2.
-* Zero also monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
+`--replicas` is the option that controls the replication factor, the number
+ of replicas per data shard, including the original shard. When a new Alpha
+joins the cluster, it is assigned to a group based on the replication factor.
+If the replication factor is set to `1`, then each Alpha node will serve a
+different group. If the replication factor is set to `2` and you launch four
+ Alpha nodes, then first two Alpha nodes would serve group 1 and next two
+machines would serve group 2. Zero monitors the space occupied by predicates in
+each group and moves them around to rebalance the cluster.
 
-Like Alpha, Zero also exposes HTTP on 6080 (+ any `--port_offset`). You can query (**GET** request) it
-to see useful information, like the following:
+Like Alpha, Zero also exposes HTTP on port 6080 (plus any ports specified by
+`--port_offset`). You can query this port using a **GET** request to access the
+following endpoints:
 
-* `/state` Information about the nodes that are part of the cluster. Also contains information about
-size of predicates and groups they belong to.
-* `/assign?what=uids&num=100` This would allocate `num` uids and return a JSON map
-containing `startId` and `endId`, both inclusive. This id range can be safely assigned
-externally to new nodes during data ingestion.
-* `/assign?what=timestamps&num=100` This would request timestamps from Zero.
-This is useful to fast forward Zero state when starting from a postings
-directory, which already has commits higher than Zero's leased timestamp.
-* `/removeNode?id=3&group=2` If a replica goes down and can't be recovered, you
-can remove it and add a new node to the quorum. This endpoint can be used to
-remove a dead Zero or Dgraph Alpha node. To remove dead Zero nodes, pass
-`group=0` and the id of the Zero node.
+* `/state` returns information about the nodes that are part of the cluster. This
+includes information about the size of predicates and which groups they belong
+to.
+* `/assign?what=uids&num=100` allocates a range of UIDs specified
+by the `num` argument, and returns a JSON map containing the `startId` and
+ `endId` that defines the range of UIDs (inclusive). This UID range can be
+safely assigned externally to new nodes during data ingestion.
+* `/assign?what=timestamps&num=100` requests timestamps from Zero. This is
+useful to "fast forward" the state of the Zero node when starting from a
+postings directory that already has commits higher than Zero's leased timestamp.
+* `/removeNode?id=3&group=2` removes a dead Zero or Alpha node. When a replica
+node goes offline and can't be recovered, you can remove it and add a new node to th
+quorum. To remove dead Zero nodes, pass `group=0` and the id of the Zero node to
+this endpoint.
 
 {{% notice "note" %}}
-Before using the API ensure that the node is down and ensure that it doesn't come back up ever again.
-
-You should not use the same `idx` of a node that was removed earlier.
+Before using the API ensure that the node is down and ensure that it doesn't
+come back up ever again. Do not use the same `idx` of a node that was removed
+earlier.
 {{% /notice %}}
 
-* `/moveTablet?tablet=name&group=2` This endpoint can be used to move a tablet to a group. Zero
-already does shard rebalancing every 8 mins, this endpoint can be used to force move a tablet.
+* `/moveTablet?tablet=name&group=2` Moves a tablet to a group. Zero already
+rebalances shards every 8 mins, but this endpoint can be used to force move a
+tablet.
 
+You can also use the following **POST** endpoint on HTTP port 6080:
 
-These are the **POST** endpoints available:
+* `/enterpriseLicense` applies an enterprise license to the
+cluster by supplying it as part of the body.
 
-* `/enterpriseLicense` Use endpoint to apply an enterprise license to the cluster by supplying it
-as part of the body.
+## More about the /state endpoint
 
-## More about /state endpoint
-
-The `/state` endpoint of Dgraph Zero returns a JSON document of the current group membership info:
+The `/state` endpoint of Dgraph Zero returns a JSON document of the current
+group membership info, which includes the following:
 
 - Instances which are part of the cluster.
 - Number of instances in Zero group and each Alpha groups.
@@ -104,7 +113,7 @@ Here’s an example of JSON returned from the `/state` endpoint:
 }
 ```
 
-The JSON document above provides the following information:
+The JSON document above provides information that includes the following:
 
 - Group 1
   - members
@@ -147,7 +156,7 @@ The JSON document above provides the following information:
 
 
 {{% notice "note" %}}
-"tablet", "predicate", and "edge" are synonymous terms today. The future plan to
-improve data scalability is to shard a predicate into separate tablets that could
-be assigned to different groups.
+The terms "tablet", "predicate", and "edge" are currently synonymous. In future,
+Dgraph might improve data scalability to shard a predicate into separate tablets
+that can be assigned to different groups.
 {{% /notice %}}
