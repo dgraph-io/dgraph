@@ -242,44 +242,17 @@
 		"UserSecret.aSecret": "Sensitive information",
 		"UserSecret.ownedBy": "user1"
 	},
-	{
-		"uid": "_:author1",
-		"dgraph.type": "Author",
-		"Author.name": "Author1"
-	},
-	{
-		"uid": "_:author2",
-		"dgraph.type": "Author",
-		"Author.name": "Author2"
-	},
-	{
-		"uid": "_:question1",
-		"dgraph.type": "Question",
-		"Question.Author":{
-			"uid": "_:author1"
-		},
-		"Question.text": "A Question",
-		"Question.answered": true
-
-	},
-	{
-		"uid": "_:question2",
-		"dgraph.type": "Question",
-		"Question.Author":{
-			"uid": "_:author1"
-		},
-		"Question.text": "B Question",
-		"Question.answered": false
-
-	},
-	{
-		"uid": "_:answer1",
-		"dgraph.type": "Answer",
-		"Answer.Author":{
-			"uid": "_:author1"
-		},
-		"Answer.text": "A Answer",
-		"Answer.markedUseful": true
-
-	}
+	{"uid":"_:author1","Author.name":"minhaj@dgraph.io"},
+	{"uid":"_:author1","dgraph.type":"Author"},
+	{"uid":"_:author1","Author.posts":[{"uid":"_:post1"}]},
+	{"uid":"_:post1","Post.text":"A Post"},
+	{"uid":"_:post1","Post.author":[{"uid":"_:author1"}]},
+	{"uid":"_:post1","dgraph.type":"Post"},
+	{"uid":"_:post1","dgraph.type":"Question"},	
+	{"uid":"_:post1","Question.answered":"true"},
+	{"uid":"_:post2","Post.text":"B Post"},
+	{"uid":"_:post2","Post.author":[{"uid":"_:author1"}]},
+	{"uid":"_:post2","dgraph.type":"Post"},
+	{"uid":"_:post2","dgraph.type":"Question"},	
+	{"uid":"_:post2","Question.answered":"false"}
 ]

@@ -61,6 +61,18 @@ type Issue struct {
 	Owner *common.User `json:"owner,omitempty"`
 }
 
+type Author struct {
+	Id    string      `json:"id,omitempty"`
+	Name  string      `json:"name,omitempty"`
+	Posts []*Question `json:"posts,omitempty"`
+}
+
+type Question struct {
+	Id     string  `json:"id,omitempty"`
+	Text   string  `json:"text,omitempty"`
+	Author *Author `json:"author,omitempty"`
+}
+
 type Log struct {
 	Id     string `json:"id,omitempty"`
 	Logs   string `json:"logs,omitempty"`
@@ -353,27 +365,22 @@ func TestAuthWithDgraphDirective(t *testing.T) {
 
 func TestAuthOnInterfaces(t *testing.T) {
 	testCase := TestCase{
-		name: "Test1",
+		name: "Types inherit Interface's auth rules and its own rules",
 		query: `
-		query {
-		  queryQuestion{
-			  text
-			  author{
-				  name
-			  }
-			  answered
-		  }
+		query{
+			queryQuestion{
+				text
+			}
 		}
 		`,
-		user:   "Author1",
-		role:   "ADMIN",
+		user:   "minhaj@dgraph.io",
 		ans:    true,
-		result: `{"queryQuestion":[{"text": "ans"}]}`,
+		result: `{"queryQuestion":[{"text": "A Post"}]}`,
 	}
 
 	queryParams := &common.GraphQLParams{
 		Query:   testCase.query,
-		Headers: common.GetJWTForInterfaces(t, testCase.user, testCase.role, testCase.ans, metaInfo),
+		Headers: common.GetJWTForInterfaceAuth(t, testCase.user, "", testCase.ans, metaInfo),
 	}
 	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
@@ -1343,7 +1350,6 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
-
 	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem")

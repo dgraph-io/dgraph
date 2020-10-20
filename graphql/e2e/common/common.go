@@ -894,7 +894,7 @@ func GetJWT(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) http.H
 	return h
 }
 
-func GetJWTForInterfaces(t *testing.T, user, role string, ans bool, metaInfo *testutil.AuthMeta) http.Header {
+func GetJWTForInterfaceAuth(t *testing.T, user, role string, ans bool, metaInfo *testutil.AuthMeta) http.Header {
 	metaInfo.AuthVars = map[string]interface{}{}
 	if user != "" {
 		metaInfo.AuthVars["USER"] = user

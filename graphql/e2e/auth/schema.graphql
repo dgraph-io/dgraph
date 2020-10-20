@@ -587,7 +587,7 @@ type TaskOccurrence @auth(
 
 type Author {
   id: ID!
-  name: String! @search(by: [hash])
+  name: String! @search(by: [exact])
   posts: [Post] @hasInverse(field: author)
 }
 
@@ -602,7 +602,7 @@ interface Post @auth(
             }""" }
 ){
     id: ID!
-    text: String @search(by: [exact])
+    text: String! @search(by: [exact])
     datePublished: DateTime @search
     author: Author! 
 }
@@ -624,7 +624,6 @@ type Question implements Post  @auth(
 ){
     answered:  Boolean @search
 }
-
 
 type FbPost implements Post & MsgPost {
     postCount: Int!
