@@ -137,8 +137,8 @@ func fetchTestsForBuild(buildID int, ch chan<- map[string]TestData) {
 	ch <- testDataMap
 }
 
-func fetchAllBuildsSince(buildType string, date string) []BuildData {
-	url := fmt.Sprintf("%s/app/rest/builds/?locator=branch:refs/heads/master,buildType:%s,sinceDate:%s", TEAMCITY_BASEURL, buildType, date)
+func fetchAllBuildsSince(branchName string, buildType string, date string) []BuildData {
+	url := fmt.Sprintf("%s/app/rest/builds/?locator=branch:%s,buildType:%s,sinceDate:%s", TEAMCITY_BASEURL, branchName, buildType, date)
 	url = strings.ReplaceAll(url, "+", "%2B")
 	var buildDatas []BuildData
 	for {
@@ -167,12 +167,12 @@ func fetchAllBuildsSince(buildType string, date string) []BuildData {
 	return buildDatas
 }
 
-func outputTestsStats(buildType string, days int) {
+func outputTestsStats(branchName string, buildType string, days int) {
 	now := time.Now()
 	since := now.AddDate(0, 0, -days)
 	sinceString := since.Format("20060102T150405+0000")
 
-	buildDataList := fetchAllBuildsSince(buildType, sinceString)
+	buildDataList := fetchAllBuildsSince(branchName, buildType, sinceString)
 
 	// Get the tests that ran on the last build
 	if len(buildDataList) == 0 {
@@ -244,17 +244,19 @@ func outputTestsStats(buildType string, days int) {
 func main() {
 	var days int
 	var buildType string
+	var branchName string
 	var cmd = &cobra.Command{
 		Use:     "test_stats",
 		Short:   "Tests stats from TeamCity",
 		Long:    "Aggregate stats for tests that run on TeamCity",
-		Example: "$ teamcity test_stats -d=30 -b=Dgraph_Ci # fetches stats for last month",
+		Example: "$ teamcity test_stats -d=30 -bu=Dgraph_Ci # fetches stats for last month",
 		Run: func(cmd *cobra.Command, args []string) {
-			outputTestsStats(buildType, days)
+			outputTestsStats(branchName, buildType, days)
 		},
 	}
 	cmd.Flags().IntVarP(&days, "days", "d", 7, "Past days for which stats are to be computed")
-	cmd.Flags().StringVarP(&buildType, "build_type", "b", "Dgraph_Ci", "Build Type for which stats need to be computed")
+	cmd.Flags().StringVarP(&buildType, "ci-build-type", "c", "Dgraph_Ci", "Build Type for which stats need to be computed")
+	cmd.Flags().StringVarP(&branchName, "branch-name", "b", "refs/heads/master", "Branch name for which stats need to be computed")
 
 	var rootCmd = &cobra.Command{Use: "teamcity"}
 	rootCmd.AddCommand(cmd)
