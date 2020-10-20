@@ -120,6 +120,7 @@ type TaskOccurrence struct {
 type TestCase struct {
 	user      string
 	role      string
+	ans       bool
 	result    string
 	name      string
 	filter    map[string]interface{}
@@ -350,6 +351,35 @@ func TestAuthWithDgraphDirective(t *testing.T) {
 	}
 }
 
+func TestAuthOnInterfaces(t *testing.T) {
+	testCase := TestCase{
+		name: "Test1",
+		query: `
+		query {
+		  queryQuestion{
+			  text
+			  author{
+				  name
+			  }
+			  answered
+		  }
+		}
+		`,
+		user:   "Author1",
+		role:   "ADMIN",
+		ans:    true,
+		result: `{"queryQuestion":[{"text": "ans"}]}`,
+	}
+
+	queryParams := &common.GraphQLParams{
+		Query:   testCase.query,
+		Headers: common.GetJWTForInterfaces(t, testCase.user, testCase.role, testCase.ans, metaInfo),
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, testCase.result, string(gqlResponse.Data))
+
+}
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Query non auth field without JWT Token",

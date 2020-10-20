@@ -241,5 +241,45 @@
 		"dgraph.type": "UserSecret",
 		"UserSecret.aSecret": "Sensitive information",
 		"UserSecret.ownedBy": "user1"
+	},
+	{
+		"uid": "_:author1",
+		"dgraph.type": "Author",
+		"Author.name": "Author1"
+	},
+	{
+		"uid": "_:author2",
+		"dgraph.type": "Author",
+		"Author.name": "Author2"
+	},
+	{
+		"uid": "_:question1",
+		"dgraph.type": "Question",
+		"Question.Author":{
+			"uid": "_:author1"
+		},
+		"Question.text": "A Question",
+		"Question.answered": true
+
+	},
+	{
+		"uid": "_:question2",
+		"dgraph.type": "Question",
+		"Question.Author":{
+			"uid": "_:author1"
+		},
+		"Question.text": "B Question",
+		"Question.answered": false
+
+	},
+	{
+		"uid": "_:answer1",
+		"dgraph.type": "Answer",
+		"Answer.Author":{
+			"uid": "_:author1"
+		},
+		"Answer.text": "A Answer",
+		"Answer.markedUseful": true
+
 	}
 ]
