@@ -1069,8 +1069,10 @@
       }
     }
   jwtvar:
+    ROLE: "ADMIN"
     TEXT: "post1"
     ANS: "true"
+    USER: "Random"
   dgquery: |-
     query {
       queryQuestion(func: uid(QuestionRoot)) {
@@ -1082,8 +1084,74 @@
       QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
         id : uid
       }
-      QuestionAuth3 as var(func: uid(Question1)) @filter(eq(Post.text, "post1")) @cascade {
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
         dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Auth on interfaces with Auth rule only on interface"
+  gqlquery: |
+    query {
+      queryAnswer {
+        id
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    TEXT: "post1"
+    ANS: "true"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryAnswer(func: uid(AnswerRoot)) {
         id : uid
+        text : Post.text
+      }
+      AnswerRoot as var(func: uid(Answer1)) @filter(uid(AnswerAuth2))
+      Answer1 as var(func: type(Answer))
+      AnswerAuth2 as var(func: uid(Answer1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Auth on interfaces with different Auth rules interfaces"
+  gqlquery: |
+    query {
+      queryFbPost {
+        id
+        postCount
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    TEXT: "post1"
+    ANS: "true"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryFbPost(func: uid(FbPostRoot)) {
+        id : uid
+        postCount : FbPost.postCount
+      }
+      FbPostRoot as var(func: uid(FbPost1)) @filter(uid(FbPostAuth2))
+      FbPost1 as var(func: type(FbPost))
+      FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
       }
     }

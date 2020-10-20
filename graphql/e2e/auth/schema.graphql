@@ -593,9 +593,11 @@ type Author {
 
 interface Post @auth(
     query: { rule: """
-            query($TEXT: String!) { 
-              queryPost(filter: { text : {eq: $TEXT } } ) { 
-                id 
+            query($USER: String!) { 
+              queryPost{
+                  author(filter: {name: {eq: $USER}}){
+                      name
+                  }
               } 
             }""" }
 ){
@@ -603,6 +605,13 @@ interface Post @auth(
     text: String @search(by: [exact])
     datePublished: DateTime @search
     author: Author! 
+}
+
+interface MsgPost @auth(
+    query: { rule: "{$ROLE: { eq: \"ADMIN\" } }" }
+){
+    sender: Author!
+    receiver: Author!
 }
 
 type Question implements Post  @auth(
@@ -614,4 +623,13 @@ type Question implements Post  @auth(
             }""" }
 ){
     answered:  Boolean @search
+}
+
+
+type FbPost implements Post & MsgPost {
+    postCount: Int!
+}
+
+type Answer implements Post {
+    markedUseful:  Boolean @search
 }
