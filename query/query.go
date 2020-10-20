@@ -927,7 +927,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 
 // calculateFirstN returns the count of result we need to proceed query further down.
 func calculateFirstN(sg *SubGraph) int32 {
-	// by default count is zero. (zero will retrive all the results)
+	// by default count is zero. (zero will retrieve all the results)
 	count := math.MaxInt32
 	// In order to limit we have to make sure that the this level met the following conditions
 	// - No Filter (We can't filter until we have all the uids)
