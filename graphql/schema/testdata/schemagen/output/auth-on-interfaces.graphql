@@ -2,16 +2,34 @@
 # Input Schema
 #######################
 
-type Post {
-	id: ID!
-	title: String!
-	text: String
-	author(filter: AuthorFilter): Author!
-}
-
 type Author {
 	id: ID!
-	name: String!
+	name: String! @search(by: [hash])
+	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post] @hasInverse(field: author)
+}
+
+interface Post @auth(query: {rule:"query($TEXT: String!) { \n  queryPost(filter: { text : {eq: $TEXT } } ) { \n    id \n  } \n}"}) {
+	id: ID!
+	text: String @search(by: [exact])
+	datePublished: DateTime @search
+	author(filter: AuthorFilter): Author! @hasInverse(field: posts)
+}
+
+type Question implements Post @auth(query: {rule:"query($ANS: Boolean!) { \n  queryQuestion(filter: { answered: $ANS } ) { \n    id \n  } \n}"}) {
+	id: ID!
+	text: String @search(by: [exact])
+	datePublished: DateTime @search
+	author(filter: AuthorFilter): Author! @hasInverse(field: posts)
+	answered: Boolean @search
+}
+
+interface A {
+	a: String
+}
+
+type B implements A {
+	a: String
+	b: String
 }
 
 #######################
@@ -184,8 +202,13 @@ type AddAuthorPayload {
 	numUids: Int
 }
 
-type AddPostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+type AddBPayload {
+	b(order: BOrder, first: Int, offset: Int): [B]
+	numUids: Int
+}
+
+type AddQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
 	numUids: Int
 }
 
@@ -201,6 +224,12 @@ type DeletePostPayload {
 	numUids: Int
 }
 
+type DeleteQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	msg: String
+	numUids: Int
+}
+
 type UpdateAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	numUids: Int
@@ -211,45 +240,102 @@ type UpdatePostPayload {
 	numUids: Int
 }
 
+type UpdateQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	numUids: Int
+}
+
 #######################
 # Generated Enums
 #######################
 
+enum AHasFilter {
+	a
+}
+
+enum AOrderable {
+	a
+}
+
 enum AuthorHasFilter {
 	name
+	posts
 }
 
 enum AuthorOrderable {
 	name
 }
 
+enum BHasFilter {
+	a
+	b
+}
+
+enum BOrderable {
+	a
+	b
+}
+
 enum PostHasFilter {
-	title
 	text
+	datePublished
 	author
 }
 
 enum PostOrderable {
-	title
 	text
+	datePublished
+}
+
+enum QuestionHasFilter {
+	text
+	datePublished
+	author
+	answered
+}
+
+enum QuestionOrderable {
+	text
+	datePublished
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddAuthorInput {
-	name: String!
+input AFilter {
+	has: AHasFilter
+	and: AFilter
+	or: AFilter
+	not: AFilter
 }
 
-input AddPostInput {
-	title: String!
+input AOrder {
+	asc: AOrderable
+	desc: AOrderable
+	then: AOrder
+}
+
+input AddAuthorInput {
+	name: String!
+	posts: [PostRef]
+}
+
+input AddBInput {
+	a: String
+	b: String
+}
+
+input AddQuestionInput {
 	text: String
+	datePublished: DateTime
 	author: AuthorRef!
+	answered: Boolean
 }
 
 input AuthorFilter {
 	id: [ID!]
+	name: StringHashFilter
 	has: AuthorHasFilter
 	and: AuthorFilter
 	or: AuthorFilter
@@ -264,15 +350,37 @@ input AuthorOrder {
 
 input AuthorPatch {
 	name: String
+	posts: [PostRef]
 }
 
 input AuthorRef {
 	id: ID
 	name: String
+	posts: [PostRef]
+}
+
+input BFilter {
+	has: BHasFilter
+	and: BFilter
+	or: BFilter
+	not: BFilter
+}
+
+input BOrder {
+	asc: BOrderable
+	desc: BOrderable
+	then: BOrder
+}
+
+input BRef {
+	a: String
+	b: String
 }
 
 input PostFilter {
 	id: [ID!]
+	text: StringExactFilter
+	datePublished: DateTimeFilter
 	has: PostHasFilter
 	and: PostFilter
 	or: PostFilter
@@ -286,16 +394,45 @@ input PostOrder {
 }
 
 input PostPatch {
-	title: String
 	text: String
+	datePublished: DateTime
 	author: AuthorRef
 }
 
 input PostRef {
-	id: ID
-	title: String
+	id: ID!
+}
+
+input QuestionFilter {
+	id: [ID!]
+	text: StringExactFilter
+	datePublished: DateTimeFilter
+	answered: Boolean
+	has: QuestionHasFilter
+	and: QuestionFilter
+	or: QuestionFilter
+	not: QuestionFilter
+}
+
+input QuestionOrder {
+	asc: QuestionOrderable
+	desc: QuestionOrderable
+	then: QuestionOrder
+}
+
+input QuestionPatch {
 	text: String
+	datePublished: DateTime
 	author: AuthorRef
+	answered: Boolean
+}
+
+input QuestionRef {
+	id: ID
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	answered: Boolean
 }
 
 input UpdateAuthorInput {
@@ -310,15 +447,25 @@ input UpdatePostInput {
 	remove: PostPatch
 }
 
+input UpdateQuestionInput {
+	filter: QuestionFilter!
+	set: QuestionPatch
+	remove: QuestionPatch
+}
+
 #######################
 # Generated Query
 #######################
 
 type Query {
-	getPost(id: ID!): Post
-	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	getQuestion(id: ID!): Question
+	queryQuestion(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	queryA(order: AOrder, first: Int, offset: Int): [A]
+	queryB(order: BOrder, first: Int, offset: Int): [B]
 }
 
 #######################
@@ -326,11 +473,14 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: [AddPostInput!]!): AddPostPayload
-	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(filter: PostFilter!): DeletePostPayload
 	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
+	addQuestion(input: [AddQuestionInput!]!): AddQuestionPayload
+	updateQuestion(input: UpdateQuestionInput!): UpdateQuestionPayload
+	deleteQuestion(filter: QuestionFilter!): DeleteQuestionPayload
+	addB(input: [AddBInput!]!): AddBPayload
 }
 
