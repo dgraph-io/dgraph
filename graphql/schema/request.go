@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"github.com/golang/glog"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"net/http"
 	"reflect"
@@ -101,6 +102,10 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	return operation, nil
 }
 
+// This function validates the value of variables for fields of type Int and Int64.
+// Ideally this should happen in the gqlparser library.
+// There is an issue created with this vektah/gqlparser#134.
+// The code here is inspired by https://github.com/vektah/gqlparser/blob/master/validator/vars.go#L76.
 func variableValidateInt(schema *ast.Schema, op *ast.OperationDefinition, variables map[string]interface{}) *gqlerror.Error {
 	path := ast.Path{ast.PathName("variable")}
 	for _, v := range op.VariableDefinitions {
@@ -117,7 +122,7 @@ func variableValidateInt(schema *ast.Schema, op *ast.OperationDefinition, variab
 			if rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface {
 				rv = rv.Elem()
 			}
-			err := variableValidateInt64Recursive(schema, v.Type, rv, path)
+			err := variableValidateIntRecursive(schema, v.Type, rv, path)
 			if err != nil {
 				return err
 			}
@@ -127,7 +132,7 @@ func variableValidateInt(schema *ast.Schema, op *ast.OperationDefinition, variab
 	return nil
 }
 
-func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val reflect.Value, path ast.Path) *gqlerror.Error {
+func variableValidateIntRecursive(schema *ast.Schema, typ *ast.Type, val reflect.Value, path ast.Path) *gqlerror.Error {
 	currentPath := path
 	resetPath := func() {
 		path = currentPath
@@ -141,7 +146,7 @@ func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val refle
 			if field.Kind() == reflect.Ptr || field.Kind() == reflect.Interface {
 				field = field.Elem()
 			}
-			err := variableValidateInt64Recursive(schema, typ.Elem, field, path)
+			err := variableValidateIntRecursive(schema, typ.Elem, field, path)
 			if err != nil {
 				return err
 			}
@@ -153,7 +158,7 @@ func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val refle
 		// If the type is not null and we got a invalid value namely null/nil, then it's valid
 		return nil
 	}
-
+	glog.Infof("%v", val)
 	switch def.Kind {
 	case ast.Scalar:
 		switch typ.NamedType {
@@ -169,7 +174,7 @@ func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val refle
 					return gqlerror.ErrorPathf(path, "Out of range value '%s', for type `%s`", val.String(), typ.NamedType)
 
 				} else {
-					return gqlerror.WrapPath(path, errIntCoerce)
+					return gqlerror.ErrorPathf(path, "Type mismatched for Value `%s`, expected:`%s`", val.String(), typ.NamedType)
 				}
 			}
 		}
@@ -191,7 +196,7 @@ func variableValidateInt64Recursive(schema *ast.Schema, typ *ast.Type, val refle
 				}
 				field = field.Elem()
 			}
-			err := variableValidateInt64Recursive(schema, fieldDef.Type, field, path)
+			err := variableValidateIntRecursive(schema, fieldDef.Type, field, path)
 			if err != nil {
 				return err
 			}

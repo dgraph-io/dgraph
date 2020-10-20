@@ -262,5 +262,5 @@
       } ]
     }
   errors:
-    [ { "message": "strconv.ParseInt: parsing \"180143985094.0\": invalid syntax",
+    [ { "message": "Type mismatched for Value `180143985094.0`, expected:`Int64`",
         "path": [ "variable", "Post",0.0,"numViews" ] } ]
