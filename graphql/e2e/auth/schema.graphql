@@ -588,7 +588,7 @@ type TaskOccurrence @auth(
 type Author {
   id: ID!
   name: String! @search(by: [exact])
-  posts: [Post] @hasInverse(field: author)
+  posts: [Question] @hasInverse(field: author)
 }
 
 interface Post @auth(

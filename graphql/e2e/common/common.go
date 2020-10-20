@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -909,7 +908,6 @@ func GetJWTForInterfaceAuth(t *testing.T, user, role string, ans bool, metaInfo 
 	require.NotNil(t, metaInfo.PrivateKeyPath)
 	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
 	require.NoError(t, err)
-	fmt.Println(jwtToken)
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h

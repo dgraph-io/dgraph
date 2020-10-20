@@ -197,7 +197,12 @@ func mergeAuthRules(authRules map[string]*TypeAuth, objectName string, interface
 	objectAuthRules := authRules[objectName].Rules
 	interfaceAuthRules := authRules[interfaceName].Rules
 	if objectAuthRules == nil {
-		return interfaceAuthRules
+		return &AuthContainer{
+			Query:  interfaceAuthRules.Query,
+			Add:    interfaceAuthRules.Add,
+			Delete: interfaceAuthRules.Delete,
+			Update: interfaceAuthRules.Update,
+		}
 	}
 
 	objectAuthRules.Query = mergeAuthNode(objectAuthRules.Query, interfaceAuthRules.Query)

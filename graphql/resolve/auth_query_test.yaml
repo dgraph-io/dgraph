@@ -1060,7 +1060,7 @@
       }
     }
 
-- name: "Auth on interfaces"
+- name: "Type should apply Interface's query rules and along with its own auth rules"
   gqlquery: |
     query {
       queryQuestion {
@@ -1069,8 +1069,6 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    TEXT: "post1"
     ANS: "true"
     USER: "Random"
   dgquery: |-
@@ -1094,7 +1092,7 @@
       }
     }
 
-- name: "Auth on interfaces with Auth rule only on interface"
+- name: "Type should apply only Interface's query auth rules"
   gqlquery: |
     query {
       queryAnswer {
@@ -1103,9 +1101,6 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    TEXT: "post1"
-    ANS: "true"
     USER: "Random"
   dgquery: |-
     query {
@@ -1135,8 +1130,6 @@
     }
   jwtvar:
     ROLE: "ADMIN"
-    TEXT: "post1"
-    ANS: "true"
     USER: "Random"
   dgquery: |-
     query {
@@ -1154,4 +1147,20 @@
         }
         dgraph.uid : uid
       }
+    }
+
+- name: "Auth on interfaces with different Auth rules"
+  gqlquery: |
+    query {
+      queryFbPost {
+        id
+        postCount
+      }
+    }
+  jwtvar:
+    ROLE: "REGULAR"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryFbPost()
     }
