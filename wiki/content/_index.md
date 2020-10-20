@@ -32,7 +32,7 @@ aliases = ["/contribute"]
   </div>
   <div class="item">
     <div class="icon"><i class="fa fa-code-fork" aria-hidden="true"></i></div>
-    <a href="{{< relref "query-language/_index.md">}}">
+    <a href="{{< relref "dql/_index.md">}}">
       <h2>DQL</h2>
       <p>
         A reference guide for Dgraph Query Language (DQL)
@@ -59,11 +59,12 @@ aliases = ["/contribute"]
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-question-circle-o" aria-hidden="true"></i></div>
-    <a href="/faq">
-      <h2>FAQ</h2>
+    <div class="icon"><i class="lni lni-cloud" aria-hidden="true"></i></div>
+    <a href="{{< relref "slash-graphql/_index.md">}}">
+      <h2>Slash GraphQL</h2>
       <p>
-        Frequently asked questions
+        Run Dgraph in the Cloud. 
+        Work with your data in a fully-managed cloud service.
       </p>
     </a>
   </div>
@@ -76,6 +77,17 @@ aliases = ["/contribute"]
       </p>
     </a>
   </div>
+
+  <div class="item">
+    <div class="icon"><i class="fa fa-question-circle-o" aria-hidden="true"></i></div>
+    <a href="{{< relref "faq/_index.md">}}">
+      <h2>FAQ</h2>
+      <p>
+        Frequently asked questions
+      </p>
+    </a>
+  </div>
+
 </div>
 
 ## Contribute
