@@ -158,11 +158,12 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 		switch def.Kind {
 		case ast.Object, ast.Interface:
 			typName := typeName(def)
-			if def.Kind == ast.Object {
+			if def.Kind == ast.Interface {
+				interfacePreds[def.Name] = make(map[string]bool)
+			} else {
 				checkConflictingFieldsInImplementedInterfacesError(def)
 			}
 
-			interfacePreds[def.Name] = make(map[string]bool)
 			for _, f := range def.Fields {
 				if f.Type.Name() == "ID" {
 					continue
