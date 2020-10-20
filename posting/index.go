@@ -513,7 +513,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// All the temp indexes go into the following directory. We delete the whole
 	// directory after the indexing step is complete. This deletes any other temp
 	// indexes that may have been left around in case defer wasn't executed.
-	// TODO(Aman): If users are not happy, we could add a flag to choose this dir.
+	// TODO(Aman): If users are not happy, we could add flag to choose this dir.
 	tmpParentDir := filepath.Join(os.TempDir(), "dgraph_index")
 
 	// We write the index in a temporary badger first and then,
