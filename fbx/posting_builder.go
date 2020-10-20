@@ -1,9 +1,12 @@
 package fbx
 
 import (
+	"math"
+
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/fb"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	flatbuffers "github.com/google/flatbuffers/go"
 )
 
@@ -93,24 +96,31 @@ func (p *Posting) SetCommitTs(commitTs uint64) *Posting {
 	return p
 }
 
-func (p *Posting) buildOffset() flatbuffers.UOffsetT {
+func (p *Posting) Build() *fb.Posting {
 	fb.PostingStart(p.builder)
-	fb.PostingAddUid(p.builder, p.uid)
+	fb.PostingAddUid(p.builder, math.MaxUint64)
 	fb.PostingAddValue(p.builder, p.value)
 	fb.PostingAddValueType(p.builder, int32(p.valueType))
 	fb.PostingAddPostingType(p.builder, p.postingType)
 	fb.PostingAddLangTag(p.builder, p.langTag)
 	fb.PostingAddLabel(p.builder, p.label)
 	fb.PostingAddFacets(p.builder, p.facets)
-	fb.PostingAddOp(p.builder, p.op)
-	fb.PostingAddStartTs(p.builder, p.startTs)
-	fb.PostingAddCommitTs(p.builder, p.commitTs)
-	return fb.PostingEnd(p.builder)
-}
+	fb.PostingAddOp(p.builder, math.MaxUint32)
+	fb.PostingAddStartTs(p.builder, math.MaxUint32)
+	fb.PostingAddCommitTs(p.builder, math.MaxUint32)
+	offset := fb.PostingEnd(p.builder)
 
-func (p *Posting) Build() *fb.Posting {
-	posting := p.buildOffset()
-	p.builder.Finish(posting)
+	p.builder.Finish(offset)
 	buf := p.builder.FinishedBytes()
-	return fb.GetRootAsPosting(buf, 0)
+	posting := fb.GetRootAsPosting(buf, 0)
+
+	// Flatbuffers do not store fields if they are set to their default values,
+	// which means they cannot be mutated later. To prevent this, we set dummy
+	// values in the builder and mutate them later.
+	x.AssertTrue(posting.MutateUid(p.uid))
+	x.AssertTrue(posting.MutateOp(p.op))
+	x.AssertTrue(posting.MutateStartTs(p.startTs))
+	x.AssertTrue(posting.MutateCommitTs(p.startTs))
+
+	return posting
 }

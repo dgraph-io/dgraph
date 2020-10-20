@@ -123,7 +123,7 @@ func TestAddMutation(t *testing.T) {
 
 	p := getFirst(l, 1)
 	require.NotNil(t, p, "Unable to retrieve posting")
-	require.EqualValues(t, p.Label, "testing")
+	require.EqualValues(t, "testing", p.Label())
 
 	// Add another edge now.
 	edge.ValueId = 81
@@ -154,7 +154,7 @@ func TestAddMutation(t *testing.T) {
 
 	p = getFirst(l, 3)
 	require.NotNil(t, p, "Unable to retrieve posting")
-	require.EqualValues(t, "anti-testing", p.Label)
+	require.EqualValues(t, "anti-testing", p.Label())
 }
 
 func getFirst(l *List, readTs uint64) (res *fb.Posting) {
@@ -167,8 +167,8 @@ func getFirst(l *List, readTs uint64) (res *fb.Posting) {
 
 func checkValue(t *testing.T, ol *List, val string, readTs uint64) {
 	p := getFirst(ol, readTs)
-	require.Equal(t, uint64(math.MaxUint64), p.Uid) // Cast to prevent overflow.
-	require.EqualValues(t, val, p.Value)
+	require.Equal(t, uint64(math.MaxUint64), p.Uid()) // Cast to prevent overflow.
+	require.EqualValues(t, val, p.ValueBytes())
 }
 
 // TODO(txn): Add tests after lru eviction
