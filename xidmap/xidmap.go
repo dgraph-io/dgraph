@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/skl"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -50,7 +51,7 @@ type shard struct {
 	sync.RWMutex
 	block
 
-	trie *Trie
+	skiplist *skl.Skiplist
 }
 
 type block struct {
@@ -79,8 +80,10 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		shards:    make([]*shard, numShards),
 	}
 	for i := range xm.shards {
+		buf, err := z.NewBufferWith(20<<30, 20<<30, z.UseMmap)
+		x.Check(err)
 		xm.shards[i] = &shard{
-			trie: NewTrie(),
+			skiplist: skl.NewSkiplistWithBuffer(buf),
 		}
 	}
 	if db != nil {
@@ -104,7 +107,7 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 				err := item.Value(func(val []byte) error {
 					uid := binary.BigEndian.Uint64(val)
 					// No need to acquire a lock. This is all serial access.
-					sh.trie.Put(key, uid)
+					sh.skiplist.PutUint64([]byte(key), uid)
 					return nil
 				})
 				if err != nil {
@@ -155,7 +158,7 @@ func (m *XidMap) CheckUid(xid string) bool {
 	sh := m.shardFor(xid)
 	sh.RLock()
 	defer sh.RUnlock()
-	uid := sh.trie.Get(xid)
+	uid, _ := sh.skiplist.GetUint64([]byte(xid))
 	return uid != 0
 }
 
@@ -163,7 +166,7 @@ func (m *XidMap) SetUid(xid string, uid uint64) {
 	sh := m.shardFor(xid)
 	sh.Lock()
 	defer sh.Unlock()
-	sh.trie.Put(xid, uid)
+	sh.skiplist.PutUint64([]byte(xid), uid)
 }
 
 // AssignUid creates new or looks up existing XID to UID mappings. It also returns if
@@ -171,7 +174,7 @@ func (m *XidMap) SetUid(xid string, uid uint64) {
 func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh := m.shardFor(xid)
 	sh.RLock()
-	uid := sh.trie.Get(xid)
+	uid, _ := sh.skiplist.GetUint64([]byte(xid))
 	sh.RUnlock()
 	if uid > 0 {
 		return uid, false
@@ -180,13 +183,13 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid = sh.trie.Get(xid)
+	uid, _ = sh.skiplist.GetUint64([]byte(xid))
 	if uid > 0 {
 		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
-	sh.trie.Put(xid, newUid)
+	sh.skiplist.PutUint64([]byte(xid), newUid)
 
 	// TODO: Iterate over Trie in sequence and use stream write to write it out to Badger at the
 	// end. No need to write here.
@@ -252,7 +255,7 @@ func (m *XidMap) AllocateUid() uint64 {
 // Flush must be called if DB is provided to XidMap.
 func (m *XidMap) Flush() error {
 	for _, shard := range m.shards {
-		shard.trie.Release()
+		shard.skiplist.DecrRef()
 	}
 	if m.writer == nil {
 		return nil

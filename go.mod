@@ -3,7 +3,7 @@ module github.com/dgraph-io/dgraph
 go 1.12
 
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
-// replace github.com/dgraph-io/badger/v2 => /home/mrjn/go/src/github.com/dgraph-io/badger
+replace github.com/dgraph-io/badger/v2 => /home/ash/go/src/github.com/dgraph-io/badger
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
@@ -62,12 +62,12 @@ require (
 	github.com/vektah/gqlparser/v2 v2.1.0
 	github.com/willf/bitset v0.0.0-20181014161241-71fa2377963f // indirect
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
-	go.opencensus.io v0.21.0
+	go.opencensus.io v0.22.5
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/sys v0.0.0-20200918174421-af09f7315aff
-	golang.org/x/text v0.3.2
+	golang.org/x/text v0.3.3
 	google.golang.org/grpc v1.23.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/ini.v1 v1.48.0 // indirect
