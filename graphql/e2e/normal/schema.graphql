@@ -256,3 +256,19 @@ type Query {
 type Mutation {
         newAuthor(name: String!): ID! @lambda
 }
+
+# generate directive testing
+type University @generate(
+        query: {
+                query: false
+        },
+        mutation: {
+                add: true,
+                update: true,
+                delete: false
+        }
+){
+        id: ID!
+        name: String!
+        numStudents: Int
+}
