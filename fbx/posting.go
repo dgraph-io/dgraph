@@ -3,6 +3,7 @@ package fbx
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/fb"
@@ -42,18 +43,34 @@ func PostingEq(p1, p2 *fb.Posting) bool {
 }
 
 func PostingDump(p *fb.Posting) string {
-	return fmt.Sprintf(
-		"{uid:%d value:%s value_type:%d posting_type:%s lang_tag:%s label:%s op:%d start_ts:%d commit_ts:%d}",
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf(
+		"{uid:%d value:%s value_type:%d posting_type:%s lang_tag:%s label:%s facets:[",
 		p.Uid(),
 		p.ValueBytes(),
 		p.ValueType(),
 		p.PostingType().String(),
 		p.LangTagBytes(),
 		p.Label(),
+	))
+
+	facets := make([]string, p.FacetsLength())
+	for i := 0; i < p.FacetsLength(); i++ {
+		var f *fb.Facet
+		p.Facets(f, i)
+		facets[i] = FacetDump(f)
+	}
+
+	sb.WriteString(fmt.Sprintf(
+		"%s] op:%d start_ts:%d commit_ts:%d}",
+		strings.Join(facets, " "),
 		p.Op(),
 		p.StartTs(),
 		p.CommitTs(),
-	)
+	))
+
+	return sb.String()
 }
 
 func postingFacetsEq(p1, p2 *fb.Posting) bool {

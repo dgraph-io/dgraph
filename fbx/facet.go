@@ -2,6 +2,7 @@ package fbx
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/dgraph-io/dgraph/fb"
 )
@@ -21,6 +22,17 @@ func FacetEq(f1, f2 *fb.Facet) bool {
 		f1.TokensLength() == f2.TokensLength() &&
 		facetTokensEq(f1, f2) &&
 		bytes.Equal(f1.Alias(), f2.Alias())
+}
+
+func FacetDump(f *fb.Facet) string {
+	return fmt.Sprintf(
+		"{key:%s value:%s value_type:%d tokens:%+v alias:%s}",
+		f.Key(),
+		f.ValueBytes(),
+		f.ValueType(),
+		FacetTokens(f),
+		f.Alias(),
+	)
 }
 
 func facetTokensEq(f1, f2 *fb.Facet) bool {
