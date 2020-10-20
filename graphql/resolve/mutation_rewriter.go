@@ -1373,10 +1373,14 @@ func rewritePoint(point map[string]interface{}) []interface{} {
 //		"coordinates": [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
 //	}
 func rewritePolygon(val map[string]interface{}) []interface{} {
-	var resPoly []interface{}
-	for _, pointList := range val[schema.Coordinates].([]interface{}) {
-		var resPointList []interface{}
-		for _, point := range pointList.(map[string]interface{})[schema.Points].([]interface{}) {
+	// type casting this is safe, because of strict GraphQL schema
+	coordinates := val[schema.Coordinates].([]interface{})
+	resPoly := make([]interface{}, 0, len(coordinates))
+	for _, pointList := range coordinates {
+		// type casting this is safe, because of strict GraphQL schema
+		points := pointList.(map[string]interface{})[schema.Points].([]interface{})
+		resPointList := make([]interface{}, 0, len(points))
+		for _, point := range points {
 			resPointList = append(resPointList, rewritePoint(point.(map[string]interface{})))
 		}
 		resPoly = append(resPoly, resPointList)
@@ -1391,11 +1395,13 @@ func rewritePolygon(val map[string]interface{}) []interface{} {
 //		"coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
 //	}
 func rewriteMultiPolygon(val map[string]interface{}) []interface{} {
-	var coordinates []interface{}
-	for _, polygon := range val[schema.Polygons].([]interface{}) {
-		coordinates = append(coordinates, rewritePolygon(polygon.(map[string]interface{})))
+	// type casting this is safe, because of strict GraphQL schema
+	polygons := val[schema.Polygons].([]interface{})
+	res := make([]interface{}, 0, len(polygons))
+	for _, polygon := range polygons {
+		res = append(res, rewritePolygon(polygon.(map[string]interface{})))
 	}
-	return coordinates
+	return res
 }
 
 func invalidObjectFragment(

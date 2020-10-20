@@ -6,8 +6,11 @@ type Hotel {
 	id: ID!
 	name: String!
 	location: Point @search
+	secretLocation: Point
 	area: Polygon @search
+	secretArea: Polygon
 	branches: MultiPolygon @search
+	secretBranches: MultiPolygon
 }
 
 #######################
@@ -274,8 +277,11 @@ type UpdateHotelPayload {
 enum HotelHasFilter {
 	name
 	location
+	secretLocation
 	area
+	secretArea
 	branches
+	secretBranches
 }
 
 enum HotelOrderable {
@@ -289,8 +295,11 @@ enum HotelOrderable {
 input AddHotelInput {
 	name: String!
 	location: PointRef
+	secretLocation: PointRef
 	area: PolygonRef
+	secretArea: PolygonRef
 	branches: MultiPolygonRef
+	secretBranches: MultiPolygonRef
 }
 
 input HotelFilter {
@@ -313,16 +322,22 @@ input HotelOrder {
 input HotelPatch {
 	name: String
 	location: PointRef
+	secretLocation: PointRef
 	area: PolygonRef
+	secretArea: PolygonRef
 	branches: MultiPolygonRef
+	secretBranches: MultiPolygonRef
 }
 
 input HotelRef {
 	id: ID
 	name: String
 	location: PointRef
+	secretLocation: PointRef
 	area: PolygonRef
+	secretArea: PolygonRef
 	branches: MultiPolygonRef
+	secretBranches: MultiPolygonRef
 }
 
 input UpdateHotelInput {

@@ -1135,6 +1135,12 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 						buildPoint(point, &buf)
 					}
 					args = append(args, gql.Arg{Value: buf.String()})
+					// TODO: for both contains and intersects, we should use @oneOf in the inbuilt
+					// schema. Once we have variable validation hook available in gqlparser, we can
+					// do this. So, if either both the children are given or none of them is given,
+					// we should get an error at parser level itself. Right now, if both "polygon"
+					// and "point" are given, we only use polygon. If none of them are given,
+					// an incorrect DQL query will be formed and will error out from Dgraph.
 				case "intersects":
 					// For Geo type we have `intersects` filter which is either multi-polygon or polygon and is written as follows:
 					// For polygon: { intersect: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
