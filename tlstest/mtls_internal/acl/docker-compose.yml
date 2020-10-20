@@ -19,7 +19,7 @@ services:
       target: /dgraph-acl/hmac-secret
       read_only: true
     - type: bind
-      source: ../tls
+      source: ../tls/alpha1
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180
