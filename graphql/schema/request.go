@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"github.com/golang/glog"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"net/http"
 	"reflect"
@@ -158,7 +157,6 @@ func variableValidateIntRecursive(schema *ast.Schema, typ *ast.Type, val reflect
 		// If the type is not null and we got a invalid value namely null/nil, then it's valid
 		return nil
 	}
-	glog.Infof("%v", val)
 	switch def.Kind {
 	case ast.Scalar:
 		switch typ.NamedType {
