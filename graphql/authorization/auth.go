@@ -23,6 +23,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"github.com/golang/glog"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -62,6 +63,7 @@ type AuthMeta struct {
 	Namespace       string
 	Algo            string
 	Audience        []string
+	ClosedByDefault bool
 	sync.RWMutex
 }
 
@@ -106,8 +108,9 @@ func Parse(schema string) (*AuthMeta, error) {
 		return nil, nil
 	}
 	authInfo := schema[authInfoIdx:]
-
+	glog.Infof("%s", authInfo)
 	err := json.Unmarshal([]byte(authInfo[len(AuthMetaHeader):]), &meta)
+	glog.Infof("%s", err)
 	if err == nil {
 		return &meta, meta.validate()
 	}
@@ -132,6 +135,7 @@ func Parse(schema string) (*AuthMeta, error) {
 	}
 
 	idx := authMetaRegex.FindAllStringSubmatchIndex(authInfo, -1)
+	glog.Infof("%s", idx)
 	if len(idx) != 1 || len(idx[0]) != 12 ||
 		!strings.HasPrefix(authInfo, authInfo[idx[0][0]:idx[0][1]]) {
 		return nil, gqlerror.Errorf("Invalid `Dgraph.Authorization` format: %s", authInfo)
@@ -233,6 +237,7 @@ func SetAuthMeta(m *AuthMeta) {
 	authMeta.Namespace = m.Namespace
 	authMeta.Algo = m.Algo
 	authMeta.Audience = m.Audience
+	authMeta.ClosedByDefault = m.ClosedByDefault
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -311,9 +316,12 @@ func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
 	// return CustomClaims containing jwt and authvariables.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return &CustomClaims{}, nil
+		if authMeta.ClosedByDefault {
+			return &CustomClaims{}, fmt.Errorf("Jwt is required")
+		} else {
+			return &CustomClaims{}, nil
+		}
 	}
-
 	jwtToken := md.Get(string(AuthJwtCtxKey))
 	if len(jwtToken) == 0 {
 		return &CustomClaims{}, nil
