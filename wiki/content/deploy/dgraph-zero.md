@@ -24,6 +24,8 @@ different group. If the replication factor is set to `2` and you launch four
 machines would serve group 2. Zero monitors the space occupied by predicates in
 each group and moves them around to rebalance the cluster.
 
+## Endpoints
+
 Like Alpha, Zero also exposes HTTP on port 6080 (plus any ports specified by
 `--port_offset`). You can query this port using a **GET** request to access the
 following endpoints:
@@ -58,7 +60,7 @@ You can also use the following **POST** endpoint on HTTP port 6080:
 * `/enterpriseLicense` applies an enterprise license to the
 cluster by supplying it as part of the body.
 
-## More about the /state endpoint
+### More About the /state Endpoint
 
 The `/state` endpoint of Dgraph Zero returns a JSON document of the current
 group membership info, which includes the following:
