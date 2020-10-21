@@ -169,7 +169,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 		fmt.Fprint(bp, mapStart)
 		if p.PostingType() == fb.PostingTypeREF {
 			fmt.Fprintf(bp, `,"%s":[`, e.attr)
-			fmt.Fprintf(bp, "{\"uid\":"+uidFmtStrJson+"}", p.Uid)
+			fmt.Fprintf(bp, "{\"uid\":"+uidFmtStrJson+"}", p.Uid())
 			fmt.Fprint(bp, "]")
 		} else {
 			if p.PostingType() == fb.PostingTypeVALUE_LANG {
@@ -178,7 +178,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 				fmt.Fprintf(bp, `,"%s":`, e.attr)
 			}
 
-			val := types.Val{Tid: types.TypeID(p.ValueType()), Value: p.Value}
+			val := types.Val{Tid: types.TypeID(p.ValueType()), Value: p.ValueBytes()}
 			str, err := valToStr(val)
 			if err != nil {
 				// Copying this behavior from RDF exporter.
@@ -238,9 +238,9 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	err := e.pl.Iterate(e.readTs, 0, func(p *fb.Posting) error {
 		fmt.Fprint(bp, prefix)
 		if p.PostingType() == fb.PostingTypeREF {
-			fmt.Fprint(bp, fmt.Sprintf(uidFmtStrRdf, p.Uid))
+			fmt.Fprint(bp, fmt.Sprintf(uidFmtStrRdf, p.Uid()))
 		} else {
-			val := types.Val{Tid: types.TypeID(p.ValueType()), Value: p.Value}
+			val := types.Val{Tid: types.TypeID(p.ValueType()), Value: p.ValueBytes()}
 			str, err := valToStr(val)
 			if err != nil {
 				glog.Errorf("Ignoring error: %+v\n", err)

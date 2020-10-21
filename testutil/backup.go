@@ -91,7 +91,7 @@ func GetPredicateValues(pdir, attr string, readTs uint64) (map[string]string, er
 		err = pl.Iterate(readTs, 0, func(p *fb.Posting) error {
 			vID := types.TypeID(p.ValueType())
 			src := types.ValueForType(vID)
-			src.Value = p.Value
+			src.Value = p.ValueBytes()
 			str, err := types.Convert(src, types.StringID)
 			if err != nil {
 				return err

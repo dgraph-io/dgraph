@@ -613,7 +613,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 	err := facetsFilterValuePostingList(args, pl, facetsTree, listType, func(p *fb.Posting) {
 		vals = append(vals, types.Val{
 			Tid:   types.TypeID(p.ValueType()),
-			Value: p.Value,
+			Value: p.ValueBytes(),
 		})
 		if q.FacetParam != nil {
 			fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(fbx.PostingFacets(p), q.FacetParam)})

@@ -1190,7 +1190,7 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 		if p.LangTagLength() == 0 {
 			vals = append(vals, types.Val{
 				Tid:   types.TypeID(p.ValueType()),
-				Value: p.Value,
+				Value: p.ValueBytes(),
 			})
 		}
 		return nil
@@ -1224,7 +1224,7 @@ func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
 	err := l.iterate(readTs, 0, func(p *fb.Posting) error {
 		vals = append(vals, types.Val{
 			Tid:   types.TypeID(p.ValueType()),
-			Value: p.Value,
+			Value: p.ValueBytes(),
 		})
 		return nil
 	})
@@ -1307,7 +1307,7 @@ func (l *List) ValueForTag(readTs uint64, tag string) (rval types.Val, rerr erro
 func valueToTypesVal(p *fb.Posting) (rval types.Val) {
 	// This is ok because we dont modify the value of a posting. We create a newPosting
 	// and add it to the PostingList to do a set.
-	rval.Value = p.Value
+	rval.Value = p.ValueBytes()
 	rval.Tid = types.TypeID(p.ValueType())
 	return
 }

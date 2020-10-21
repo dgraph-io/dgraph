@@ -104,7 +104,7 @@ func init() {
 func toInt(o *fb.Posting) int {
 	from := types.Val{
 		Tid:   types.TypeID(o.ValueType()),
-		Value: o.Value,
+		Value: o.ValueBytes(),
 	}
 	out, err := types.Convert(from, types.StringID)
 	x.Check(err)
@@ -147,7 +147,7 @@ func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
 		err = pl.Iterate(math.MaxUint64, 0, func(o *fb.Posting) error {
 			from := types.Val{
 				Tid:   types.TypeID(o.ValueType()),
-				Value: o.Value,
+				Value: o.ValueBytes(),
 			}
 			out, err := types.Convert(from, types.StringID)
 			x.Check(err)
@@ -420,17 +420,17 @@ func history(lookup []byte, itr *badger.Iterator) {
 }
 
 func appendPosting(w io.Writer, o *fb.Posting) {
-	fmt.Fprintf(w, " Uid: %d Op: %d ", o.Uid, o.Op)
+	fmt.Fprintf(w, " Uid: %d Op: %d ", o.Uid(), o.Op())
 
 	if o.ValueLength() > 0 {
 		fmt.Fprintf(w, " Type: %v. ", o.ValueType())
 		from := types.Val{
 			Tid:   types.TypeID(o.ValueType()),
-			Value: o.Value,
+			Value: o.ValueBytes(),
 		}
 		out, err := types.Convert(from, types.StringID)
 		if err != nil {
-			fmt.Fprintf(w, " Value: %q Error: %v", o.Value, err)
+			fmt.Fprintf(w, " Value: %q Error: %v", o.ValueBytes(), err)
 		} else {
 			fmt.Fprintf(w, " String Value: %q", out.Value)
 		}

@@ -214,7 +214,7 @@ func ValFor(f *api.Facet) (types.Val, error) {
 
 // ValFor converts Facet into types.Val.
 func ValForFb(f *fb.Facet) (types.Val, error) {
-	val := types.Val{Tid: types.BinaryID, Value: f.Value}
+	val := types.Val{Tid: types.BinaryID, Value: f.ValueBytes()}
 	facetTid, err := TypeIDForFb(f)
 	if err != nil {
 		return types.Val{}, err
