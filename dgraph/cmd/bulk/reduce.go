@@ -341,7 +341,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		}
 
 		// req.countBuf is already sorted.
-		sz := req.countBuf.Len()
+		sz := req.countBuf.LenNoPadding()
 		ci.countBuf.Grow(sz)
 
 		slice, next := []byte{}, 1
@@ -415,7 +415,7 @@ func (r *reducer) throttle() {
 }
 
 func bufferStats(cbuf *z.Buffer) {
-	fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.Len())))
+	fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.LenNoPadding())))
 
 	// Just check how many keys do we have in this giant buffer.
 	keys := make(map[uint64]int64)
@@ -488,12 +488,12 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 				pkey := partitionKeys[i]
 				itr.Next(cbuf, pkey)
 			}
-			if cbuf.Len() < 256<<20 {
+			if cbuf.LenNoPadding() < 256<<20 {
 				// Pick up more data.
 				continue
 			}
 
-			hd.Update(int64(cbuf.Len()))
+			hd.Update(int64(cbuf.LenNoPadding()))
 			select {
 			case <-ticker.C:
 				fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
@@ -504,7 +504,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			cbuf = getBuf()
 		}
 		if !cbuf.IsEmpty() {
-			hd.Update(int64(cbuf.Len()))
+			hd.Update(int64(cbuf.LenNoPadding()))
 			buffers <- cbuf
 		} else {
 			cbuf.Release()
@@ -514,12 +514,12 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	}()
 
 	for cbuf := range buffers {
-		if cbuf.Len() > limit/2 {
+		if cbuf.LenNoPadding() > limit/2 {
 			bufferStats(cbuf)
 		}
 		r.throttle()
 
-		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
+		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.LenNoPadding()))
 		sendReq(cbuf)
 	}
 
@@ -535,7 +535,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 func (r *reducer) toList(req *encodeRequest) {
 	cbuf := req.cbuf
 	defer func() {
-		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.Len()))
+		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.LenNoPadding()))
 		cbuf.Release()
 	}()
 

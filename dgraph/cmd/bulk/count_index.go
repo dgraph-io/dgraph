@@ -94,7 +94,7 @@ func (c *countIndexer) addCountEntry(ce countEntry) {
 	}
 
 	if !sameIndexKey {
-		if c.countBuf.Len() > 0 {
+		if c.countBuf.LenNoPadding() > 0 {
 			c.wg.Add(1)
 			go c.writeIndex(c.countBuf)
 			c.countBuf = getBuf()
@@ -179,7 +179,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 }
 
 func (c *countIndexer) wait() {
-	if c.countBuf.Len() > 0 {
+	if c.countBuf.LenNoPadding() > 0 {
 		c.wg.Add(1)
 		go c.writeIndex(c.countBuf)
 	} else {

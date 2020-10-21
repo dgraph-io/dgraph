@@ -248,7 +248,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 
 		for i := range m.shards {
 			sh := &m.shards[i]
-			if uint64(sh.cbuf.Len()) >= m.opt.MapBufSize {
+			if uint64(sh.cbuf.LenNoPadding()) >= m.opt.MapBufSize {
 				sh.mu.Lock() // One write at a time.
 				go m.writeMapEntriesToFile(sh.cbuf, i)
 				// Clear the entries and encodedSize for the next batch.
@@ -260,7 +260,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 
 	for i := range m.shards {
 		sh := &m.shards[i]
-		if sh.cbuf.Len() > 0 {
+		if sh.cbuf.LenNoPadding() > 0 {
 			sh.mu.Lock() // One write at a time.
 			m.writeMapEntriesToFile(sh.cbuf, i)
 		} else {

@@ -3,6 +3,7 @@ package xidmap
 import (
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"runtime"
 	"strconv"
@@ -144,6 +145,26 @@ func BenchmarkXidmapWrites(b *testing.B) {
 	})
 }
 
+func BenchmarkXidmapWritesRandom(b *testing.B) {
+	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
+	if err != nil {
+		b.Fatalf("Error setting up connection: %s", err.Error())
+	}
+
+	xidmap := New(conn, nil)
+	b.ResetTimer()
+	buf := make([]byte, 10)
+
+	b.RunParallel(func(pb *testing.PB) {
+		source := rand.NewSource(time.Now().UnixNano())
+		r := rand.New(source)
+		for pb.Next() {
+			r.Read(buf)
+			xidmap.AssignUid(string(buf))
+		}
+	})
+}
+
 func BenchmarkXidmapReads(b *testing.B) {
 	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
 	if err != nil {
@@ -161,6 +182,30 @@ func BenchmarkXidmapReads(b *testing.B) {
 		for pb.Next() {
 			xid := int(z.FastRand()) % N
 			xidmap.AssignUid("xid-" + strconv.Itoa(xid))
+		}
+	})
+}
+
+func BenchmarkXidmapReadsRandom(b *testing.B) {
+	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
+	if err != nil {
+		b.Fatalf("Error setting up connection: %s", err.Error())
+	}
+
+	var N = 1000000
+	buf := make([]byte, 10)
+	var list [][]byte
+	xidmap := New(conn, nil)
+	for i := 0; i < N; i++ {
+		rand.Read(buf)
+		list = append(list, buf)
+		xidmap.AssignUid(string(buf))
+	}
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			xidmap.AssignUid(string(list[rand.Intn(len(list))]))
 		}
 	})
 }
