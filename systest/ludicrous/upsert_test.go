@@ -74,6 +74,7 @@ func InitData(t *testing.T) {
 }
 
 func TestConcurrentUpdate(t *testing.T) {
+	// wait for server to be ready
 	time.Sleep(2 * time.Second)
 	InitData(t)
 	ctx := context.Background()
@@ -103,7 +104,9 @@ func TestConcurrentUpdate(t *testing.T) {
 		go mutation(i)
 	}
 	wg.Wait()
-	time.Sleep(time.Second * 1)
+	// eventual consistency
+	time.Sleep(1 * time.Second)
+
 	q := `query all($a: string) {
 			all(func: eq(name, $a)) {
 			  name
@@ -122,6 +125,7 @@ func TestConcurrentUpdate(t *testing.T) {
 }
 
 func TestSequentialUpdate(t *testing.T) {
+	// wait for server to be ready
 	time.Sleep(2 * time.Second)
 	InitData(t)
 	ctx := context.Background()
@@ -148,6 +152,9 @@ func TestSequentialUpdate(t *testing.T) {
 	for i := 0; i < count; i++ {
 		mutation(i)
 	}
+
+	// eventual consistency
+	time.Sleep(1 * time.Second)
 
 	q := `query all($a: string) {
 			all(func: eq(name, $a)) {
