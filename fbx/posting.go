@@ -22,6 +22,10 @@ func DumpPosting(f *fb.Posting) {
 }
 
 func PostingEq(p1, p2 *fb.Posting) bool {
+	if p1 == nil || p2 == nil {
+		return p1 == p2
+	}
+
 	return p1.Uid() == p2.Uid() &&
 		bytes.Equal(p1.ValueBytes(), p2.ValueBytes()) &&
 		p1.ValueType() == p2.ValueType() &&
@@ -67,6 +71,10 @@ func postingFacetsEq(p1, p2 *fb.Posting) bool {
 }
 
 func postingString(p *fb.Posting) string {
+	if p == nil {
+		return "nil"
+	}
+
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf(
