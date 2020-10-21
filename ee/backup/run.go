@@ -122,7 +122,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 		"update the timestamp and max uid when you start the cluster. The correct values are "+
 		"printed near the end of this command's output.")
 	enc.RegisterFlags(flag)
-	x.RegisterClusterTLSFlags(flag)
+	x.RegisterNodeTLSFlags(flag)
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
@@ -198,7 +198,7 @@ func runRestoreCmd() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		helperConfig, err := x.LoadClusterTLSClientHelperConfig(Restore.Conf)
+		helperConfig, err := x.LoadNodeTLSClientHelperConfig(Restore.Conf)
 		x.Checkf(err, "Unable to generate helper TLS config")
 		tlsConfig, err := x.GenerateClientTLSConfig(helperConfig)
 		x.Checkf(err, "Unable to generate TLS Cert Pool")

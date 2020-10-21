@@ -197,7 +197,7 @@ they form a Raft group and provide synchronous replication.
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
 
-	x.RegisterClusterTLSFlags(flag)
+	x.RegisterNodeTLSFlags(flag)
 }
 
 func setupCustomTokenizers() {
@@ -653,7 +653,7 @@ func run() {
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
-	tlsConf, err := x.LoadClusterTLSClientHelperConfig(Alpha.Conf)
+	tlsConf, err := x.LoadNodeTLSClientHelperConfig(Alpha.Conf)
 	if err != nil {
 		glog.Error("unable to read tls config for internal communication ", err)
 		return
@@ -674,7 +674,7 @@ func run() {
 		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
 		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
 		TLSClientConfig:      tlsConf,
-		TLSDir:               Alpha.Conf.GetString("cluster_tls_dir"),
+		TLSDir:               Alpha.Conf.GetString("node_tls_dir"),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 

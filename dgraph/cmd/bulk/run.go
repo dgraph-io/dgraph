@@ -117,7 +117,7 @@ func init() {
 		"Cache percentages summing up to 100 for various caches"+
 			" (FORMAT: BlockCacheSize, IndexCacheSize).")
 
-	x.RegisterClusterTLSFlags(flag)
+	x.RegisterNodeTLSFlags(flag)
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)

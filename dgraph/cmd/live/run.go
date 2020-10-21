@@ -166,7 +166,7 @@ func init() {
 	enc.RegisterFlags(flag)
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
-	x.RegisterClusterTLSFlags(flag)
+	x.RegisterNodeTLSFlags(flag)
 }
 
 func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
@@ -544,7 +544,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
 		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
 	} else {
-		helperConfig, err := x.LoadClusterTLSClientHelperConfig(conf)
+		helperConfig, err := x.LoadNodeTLSClientHelperConfig(conf)
 		x.Checkf(err, "Unable to generate helper TLS config")
 		tlsConfig, err = x.GenerateClientTLSConfig(helperConfig)
 		x.Checkf(err, "Unable to generate TLS Cert Pool")
