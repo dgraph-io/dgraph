@@ -71,7 +71,7 @@ mkdir $GOPATH
 PATH="$GOPATH/bin:$PATH"
 
 # The Go version used for release builds must match this version.
-export GOVERSION=${GOVERSION:-"1.14.4"}
+GOVERSION=${GOVERSION:-"1.14.4"}
 
 TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
@@ -99,6 +99,11 @@ set -e
 set -o xtrace
 
 ratel_release="github.com/dgraph-io/ratel/server.ratelVersion"
+release="github.com/dgraph-io/dgraph/x.dgraphVersion"
+codenameKey="github.com/dgraph-io/dgraph/x.dgraphCodename"
+branch="github.com/dgraph-io/dgraph/x.gitBranch"
+commitSHA1="github.com/dgraph-io/dgraph/x.lastCommitSHA"
+commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
 
 go install src.techknowlogick.com/xgo
 
@@ -112,7 +117,12 @@ popd
 
 pushd $basedir/dgraph
   git checkout $TAG
-  make version
+  # HEAD here points to whatever is checked out.
+  lastCommitSHA1=$(git rev-parse --short HEAD)
+  codename="shuri-1"
+  gitBranch=$(git rev-parse --abbrev-ref HEAD)
+  lastCommitTime=$(git log -1 --format=%ci)
+  release_version=$(git describe --always --tags)
 popd
 
 # Regenerate protos. Should not be different from what's checked in.
@@ -146,12 +156,13 @@ popd
 pushd $basedir/ratel
   nvm install --lts
   (export GO111MODULE=off; ./scripts/build.prod.sh)
-  # ./scripts/test.sh
+  ./scripts/test.sh
 popd
 
 # Build Windows.
 pushd $basedir/dgraph/dgraph
-  make XGO=y GOOS=windows-4.0 GOARCH=amd64 dgraph
+  xgo -go="go-$GOVERSION" --targets=windows/amd64 -ldflags \
+      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/windows
   mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
 popd
@@ -168,7 +179,8 @@ popd
 
 # Build Darwin.
 pushd $basedir/dgraph/dgraph
-  make XGO=y GOOS=darwin-10.9 GOARCH=amd64 dgraph
+  xgo -go="go-$GOVERSION" --targets=darwin-10.9/amd64 -ldflags \
+  "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/darwin
   mv dgraph-darwin-10.9-amd64 $TMP/darwin/dgraph
 popd
@@ -185,7 +197,8 @@ popd
 
 # Build Linux.
 pushd $basedir/dgraph/dgraph
-  make XGO=y GOOS=linux GOARCH=amd64 dgraph
+  xgo -go="go-$GOVERSION" --targets=linux/amd64 -ldflags \
+      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
   strip -x dgraph-linux-amd64
   mkdir $TMP/linux
   mv dgraph-linux-amd64 $TMP/linux/dgraph
