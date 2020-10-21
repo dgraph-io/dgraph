@@ -4,20 +4,24 @@ This backup script that supports many of the features in Dgraph, such as ACLs, M
 
 ## Requirements
 
-This script requires GNU getopt for command line parameters. This was tested on macOS with Homebrew [gnu-getopt](https://formulae.brew.sh/formula/gnu-getopt) bottle, [Ubuntu 20.04](https://releases.ubuntu.com/20.04/), and Windows with [MSYS2](https://www.msys2.org/).
+* The scripts (`dgraph-backup.sh` and `compose-setup.sh`) require GNU getopt.  This was tested on:
+  * macOS with Homebrew [gnu-getopt](https://formulae.brew.sh/formula/gnu-getopt) bottle,
+  * [Ubuntu 20.04](https://releases.ubuntu.com/20.04/), and
+  * Windows with [MSYS2](https://www.msys2.org/).
+* For the test demo environment, both [docker](https://docs.docker.com/engine/) and [docker-compose](https://docs.docker.com/compose/) are required.
 
 ## Important Notes
 
 If you are using this script another system other than alpha, we'll call this *backup worksation*, you should be aware of the following:
 
-* General
+* **General**
   * *backup workstation* will need to have access to the alpha server
-* TLS
+* **TLS**
   * when accessing alpha server secured by TLS, *backup workstation* will need access to `ca.crt` created with `dgraph cert`
   * if Mutual TLS is used, *backup worksation* will also need access to the client cert and key as well.
-* subpath option
+* **`subpath` option**
   * when specifying subpath that uses a datestamp, the *backup workstation* needs to have the same timestamp as the server.
-  * when backing up to a filepath, such as NFS, the backup workstation will need access to the samefile path.
+  * when backing up to a file path, such as NFS, the *backup workstation* will need access to the same file path at the same mount point, e.g. if `/dgraph/backups` is used on alpha, the same path has to be on the *backup workstation*
 
 ## Testing (Demo)
 
@@ -29,7 +33,7 @@ As an example:
 ## configure docker-compose environment
 ./compose-setup.sh --acl --enc --tls --make_tls_cert
 ## run demo
-docker-compose up -d
+docker-compose up --detach
 ## login into Ratel to use for backups
 docker exec --tty --interactive ratel bash
 ```

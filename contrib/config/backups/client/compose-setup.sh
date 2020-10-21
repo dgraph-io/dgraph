@@ -139,7 +139,7 @@ TLS_CONFIG
 
   ## configure dgraph version
   echo "DGRAPH_VERSION=$DGRAPH_VERSION" > .env
-  cp backup*.sh data
+  cp *backup*.sh data
 }
 
 main $@
