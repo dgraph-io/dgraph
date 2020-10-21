@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math"
+	"reflect"
 	"strconv"
 	"time"
 	"unsafe"
@@ -40,7 +41,9 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	// sanity: we expect a value
 	data, ok := from.Value.([]byte)
 	if !ok {
-		return to, errors.Errorf("Invalid data to convert to %s", toID.Name())
+		t := reflect.TypeOf(from.Value)
+		return to, errors.Errorf("Invalid data to convert to %s. want: []byte got: %s",
+			toID.Name(), t)
 	}
 
 	fromID := from.Tid

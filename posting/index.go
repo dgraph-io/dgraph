@@ -291,7 +291,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 			// Delete index edge of each posting.
 			val := types.Val{
 				Tid:   types.TypeID(p.ValueType()),
-				Value: p.Value,
+				Value: p.ValueBytes(),
 			}
 			return txn.addIndexMutations(ctx, &indexMutationInfo{
 				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
@@ -980,7 +980,7 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 		return pl.Iterate(txn.StartTs, 0, func(p *fb.Posting) error {
 			// Add index entries based on p.
 			val := types.Val{
-				Value: p.Value,
+				Value: p.ValueBytes(),
 				Tid:   types.TypeID(p.ValueType()),
 			}
 			edge.Lang = string(p.LangTagBytes())
