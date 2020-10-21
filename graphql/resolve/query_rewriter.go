@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -26,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -748,7 +750,7 @@ func addSelectionSetFrom(
 		}
 
 		var selectionAuth []*gql.GraphQuery
-		if !f.Type().IsPoint() {
+		if !f.Type().IsGeo() {
 			selectionAuth = addSelectionSetFrom(child, f, auth)
 		}
 
@@ -1071,9 +1073,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					Child: []*gql.FilterTree{not},
 				})
 		default:
-			// It's a base case like:
-			// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
-
+			//// It's a base case like:
+			//// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
+			//// numLikes: { between : { min : 10,  max:100 }}
 			switch dgFunc := filter[field].(type) {
 			case map[string]interface{}:
 				// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title, "GraphQL")
@@ -1081,12 +1083,13 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// numLikes: { le: 10 } -> le(Post.numLikes, 10)
 
 				fn, val := first(dgFunc)
-				args := []gql.Arg{
-					{Value: typ.DgraphPredicate(field)},
+				if val == nil {
+					continue
 				}
+				args := []gql.Arg{{Value: typ.DgraphPredicate(field)}}
 				switch fn {
 				// in takes List of Scalars as argument, for eg:
-				// code : { in: {"abc", "def", "ghi"} } -> eq(State.code,"abc","def","ghi")
+				// code : { in: ["abc", "def", "ghi"] } -> eq(State.code,"abc","def","ghi")
 				case "in":
 					// No need to check for List types as this would pass GraphQL validation
 					// if val was not list
@@ -1096,18 +1099,60 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					for _, v := range vals {
 						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
 					}
+				case "between":
+					// numLikes: { between : { min : 10,  max:100 }} should be rewritten into
+					// 	between(numLikes,10,20). Order of arguments (min,max) is neccessary or
+					// it will return empty
+					vals := val.(map[string]interface{})
+					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["min"])},
+						gql.Arg{Value: maybeQuoteArg(fn, vals["max"])})
 				case "near":
-					//  For Geo type we have `near` filter which is written as follows:
+					// For Geo type we have `near` filter which is written as follows:
 					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
-					geoParams := val.(map[string]interface{})
-					distance := geoParams["distance"]
-
-					coordinate, _ := geoParams["coordinate"].(map[string]interface{})
-					lat := coordinate["latitude"]
-					long := coordinate["longitude"]
-					args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)},
-						gql.Arg{Value: fmt.Sprintf("%v", distance)})
-
+					near := val.(map[string]interface{})
+					coordinate := near["coordinate"].(map[string]interface{})
+					var buf bytes.Buffer
+					buildPoint(coordinate, &buf)
+					args = append(args, gql.Arg{Value: buf.String()},
+						gql.Arg{Value: fmt.Sprintf("%v", near["distance"])})
+				case "within":
+					// For Geo type we have `within` filter which is written as follows:
+					// { within: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					within := val.(map[string]interface{})
+					polygon := within["polygon"].(map[string]interface{})
+					var buf bytes.Buffer
+					buildPolygon(polygon, &buf)
+					args = append(args, gql.Arg{Value: buf.String()})
+				case "contains":
+					// For Geo type we have `contains` filter which is either point or polygon and is written as follows:
+					// For point: { contains: { point: { latitude: 11.11, longitude: 22.22 }}}
+					// For polygon: { contains: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					contains := val.(map[string]interface{})
+					var buf bytes.Buffer
+					if polygon, ok := contains["polygon"].(map[string]interface{}); ok {
+						buildPolygon(polygon, &buf)
+					} else if point, ok := contains["point"].(map[string]interface{}); ok {
+						buildPoint(point, &buf)
+					}
+					args = append(args, gql.Arg{Value: buf.String()})
+					// TODO: for both contains and intersects, we should use @oneOf in the inbuilt
+					// schema. Once we have variable validation hook available in gqlparser, we can
+					// do this. So, if either both the children are given or none of them is given,
+					// we should get an error at parser level itself. Right now, if both "polygon"
+					// and "point" are given, we only use polygon. If none of them are given,
+					// an incorrect DQL query will be formed and will error out from Dgraph.
+				case "intersects":
+					// For Geo type we have `intersects` filter which is either multi-polygon or polygon and is written as follows:
+					// For polygon: { intersect: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					// For multi-polygon : { intersect: { multiPolygon: { polygons: [{ coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] }] } } }
+					intersects := val.(map[string]interface{})
+					var buf bytes.Buffer
+					if polygon, ok := intersects["polygon"].(map[string]interface{}); ok {
+						buildPolygon(polygon, &buf)
+					} else if multiPolygon, ok := intersects["multiPolygon"].(map[string]interface{}); ok {
+						buildMultiPolygon(multiPolygon, &buf)
+					}
+					args = append(args, gql.Arg{Value: buf.String()})
 				default:
 					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, val)})
 				}
@@ -1180,6 +1225,49 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	}
 }
 
+func buildPoint(point map[string]interface{}, buf *bytes.Buffer) {
+	x.Check2(buf.WriteString(fmt.Sprintf("[%v,%v]", point[schema.Longitude],
+		point[schema.Latitude])))
+}
+
+func buildPolygon(polygon map[string]interface{}, buf *bytes.Buffer) {
+	coordinates, _ := polygon[schema.Coordinates].([]interface{})
+	comma1 := ""
+
+	x.Check2(buf.WriteString("["))
+	for _, r := range coordinates {
+		ring, _ := r.(map[string]interface{})
+		points, _ := ring[schema.Points].([]interface{})
+		comma2 := ""
+
+		x.Check2(buf.WriteString(comma1))
+		x.Check2(buf.WriteString("["))
+		for _, p := range points {
+			x.Check2(buf.WriteString(comma2))
+			point, _ := p.(map[string]interface{})
+			buildPoint(point, buf)
+			comma2 = ","
+		}
+		x.Check2(buf.WriteString("]"))
+		comma1 = ","
+	}
+	x.Check2(buf.WriteString("]"))
+}
+
+func buildMultiPolygon(multipolygon map[string]interface{}, buf *bytes.Buffer) {
+	polygons, _ := multipolygon[schema.Polygons].([]interface{})
+	comma := ""
+
+	x.Check2(buf.WriteString("["))
+	for _, p := range polygons {
+		polygon, _ := p.(map[string]interface{})
+		x.Check2(buf.WriteString(comma))
+		buildPolygon(polygon, buf)
+		comma = ","
+	}
+	x.Check2(buf.WriteString("]"))
+}
+
 func buildUnionFilter(typ schema.Type, filter map[string]interface{}) (*gql.FilterTree, bool) {
 	memberTypesList, ok := filter["memberTypes"].([]interface{})
 	// if memberTypes was specified to be an empty list like: { memberTypes: [], ...},
@@ -1230,7 +1318,7 @@ func maybeQuoteArg(fn string, arg interface{}) string {
 	}
 }
 
-// fst returns the first element it finds in a map - we bump into lots of one-element
+// first returns the first element it finds in a map - we bump into lots of one-element
 // maps like { "anyofterms": "GraphQL" }.  fst helps extract that single mapping.
 func first(aMap map[string]interface{}) (string, interface{}) {
 	for key, val := range aMap {
