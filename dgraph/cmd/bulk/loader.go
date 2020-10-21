@@ -115,7 +115,7 @@ func newLoader(opt *options) *loader {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	config, err := x.LoadClusterTLSClientHelperConfig(Bulk.Conf)
+	config, err := x.LoadNodeTLSClientHelperConfig(Bulk.Conf)
 	x.Check(err)
 	tlsConf, err := x.GenerateClientTLSConfig(config)
 	x.Check(err)

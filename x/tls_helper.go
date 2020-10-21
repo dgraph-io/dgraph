@@ -55,14 +55,14 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 		"provided by the client to the server.")
 }
 
-func RegisterClusterTLSFlags(flag *pflag.FlagSet) {
-	flag.String("cluster_tls_dir", "",
+func RegisterNodeTLSFlags(flag *pflag.FlagSet) {
+	flag.String("node_tls_dir", "",
 		"Path to directory that has mTLS certificates and keys for dgraph internal communication")
-	flag.String("cluster_tls_server_name", "",
+	flag.String("node_tls_server_name", "",
 		"server name to be used for mTLS for dgraph internal communication")
 }
 
-func LoadClusterTLSServerHelperConfig(certDir string) *TLSHelperConfig {
+func LoadNodeTLSServerHelperConfig(certDir string) *TLSHelperConfig {
 	if certDir == "" {
 		return nil
 	}
@@ -78,22 +78,21 @@ func LoadClusterTLSServerHelperConfig(certDir string) *TLSHelperConfig {
 	return conf
 }
 
-func LoadClusterTLSClientHelperConfig(v *viper.Viper) (*TLSHelperConfig, error) {
+func LoadNodeTLSClientHelperConfig(v *viper.Viper) (*TLSHelperConfig, error) {
 	conf := &TLSHelperConfig{}
 	conf.UseSystemCACerts = true
-	conf.CertDir = v.GetString("cluster_tls_dir")
+	conf.CertDir = v.GetString("node_tls_dir")
 	if conf.CertDir != "" {
 		conf.CertRequired = true
 		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
-		conf.Cert = path.Join(conf.CertDir, "client." + v.GetString("cluster_tls_server_name") + ".crt")
-		conf.Key = path.Join(conf.CertDir, "client." + v.GetString("cluster_tls_server_name") + ".key")
-		conf.ClientAuth = "REQUIREANDVERIFY"
-		conf.ServerName= v.GetString("cluster_tls_server_name")
+		conf.Cert = path.Join(conf.CertDir, "client." + v.GetString("node_tls_server_name") + ".crt")
+		conf.Key = path.Join(conf.CertDir, "client." + v.GetString("node_tls_server_name") + ".key")
+		conf.ServerName= v.GetString("node_tls_server_name")
 		return conf, nil
 	}
 
-	if v.GetString("cluster_tls_server_name") != "" {
-		return nil, errors.Errorf("--cluster_tls_dir is required for enabling TLS")
+	if v.GetString("node_tls_server_name") != "" {
+		return nil, errors.Errorf("--node_tls_dir is required for enabling TLS")
 	}
 
 	return nil, nil
