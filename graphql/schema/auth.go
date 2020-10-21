@@ -169,7 +169,7 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		name := typeName(typ)
 		if typ.Kind == ast.Object {
 			for _, interfaceName := range typ.Interfaces {
-				if authRules[interfaceName].Rules != nil {
+				if authRules[interfaceName] != nil && authRules[interfaceName].Rules != nil {
 					authRules[name].Rules = mergeAuthRules(authRules, name, interfaceName)
 				}
 			}
