@@ -25,6 +25,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -244,6 +245,10 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 }
 
 func (st *state) startListenHttpAndHttps(l net.Listener) {
+	if Zero.Conf.GetString("tls_dir") == "" && Zero.Conf.GetString("tls_disabled_route") != "" {
+		glog.Fatal("--tls_disabled_route is provided as an option but tls_dir is empty. Please provide --tls_dir")
+	}
+
 	m := cmux.New(l)
 	startServers(m)
 
@@ -257,20 +262,30 @@ func (st *state) startListenHttpAndHttps(l net.Listener) {
 }
 
 func startServers(m cmux.CMux) {
-	// if tls enabled http rule will check that the requested route should not be part of tls_enabled_routes
-	// though with tls enabled, all routes irrespective of config are encrypted using tls.
 	httpRule := m.Match(func(r io.Reader) bool {
+		//no tls config is provided. http is being used.
+		if opts.tlsDir == "" {
+			return true
+		}
+		//tls config is provided but none of the routes are disabled.
+		if len(opts.tlsDisabledRoutes) == 0 {
+			return false
+		}
 		path, ok := parseRequestPath(r)
+		// not able to parse the request. Let it be resolved via TLS
 		if !ok {
 			return false
 		}
-		enabled, ok := opts.tlsEnabledRoute[path]
-		return ok && !enabled
+		for _, r := range opts.tlsDisabledRoutes {
+			if strings.HasPrefix(path, r) {
+				return true
+			}
+		}
+		return false
 	})
 	go startListen(httpRule)
 
-	// if enabled, tls has to be default behaviour because there is no clean way to decrypt request params using cmux.
-	// So when it says tlsEnabledRoute, these route will not be available without TLS.
+	// if tls is enabled, make tls encryption based connections as default
 	if Zero.Conf.GetString("tls_dir") != "" {
 		tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
 		x.Check(err)

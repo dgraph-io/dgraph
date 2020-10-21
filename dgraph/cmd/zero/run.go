@@ -52,7 +52,8 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
-	tlsEnabledRoute   map[string]bool
+	tlsDir            string
+	tlsDisabledRoutes []string
 	totalCache        int64
 }
 
@@ -93,8 +94,8 @@ instances to achieve high-availability.
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	flag.String("tls_enabled_route", "", "comma separated zero endpoint which will configured with TLS."+
-		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense")
+	flag.String("tls_disabled_route", "", "comma separated zero endpoint which will disabled from TLS encryption."+
+		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -167,37 +168,6 @@ func run() {
 	}
 
 	x.PrintVersion()
-	tlsRoutes := map[string]bool{
-		"/health":            false,
-		"/state":             false,
-		"/removeNode":        false,
-		"/moveTablet":        false,
-		"/assign":            false,
-		"/enterpriseLicense": false,
-	}
-
-	if Zero.Conf.GetString("tls_enabled_route") != "" {
-		routes := strings.Split(Zero.Conf.GetString("tls_enabled_route"), ",")
-		for _, r := range routes {
-			if _, ok := tlsRoutes[r]; !ok {
-				glog.Fatalf("tls_enabled_route has wrong entry. " +
-					"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense")
-			}
-
-			tlsRoutes[r] = true
-		}
-
-		if Zero.Conf.GetString("tls_dir") == "" {
-			glog.Fatalf("tls_enabled_route is set but tls config is not provided. " +
-				"Please define variable --tls_dir")
-		}
-	} else { // checking when tls_enabled is not defined but tls is defined
-		if Zero.Conf.GetString("tls_dir") != "" {
-			glog.Fatalf("tls_dir is defined but tls enabled route is not provided. " +
-				"Please define variable --tls_enabled_route")
-		}
-	}
-
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
@@ -207,7 +177,8 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
-		tlsEnabledRoute:   tlsRoutes,
+		tlsDir:            Zero.Conf.GetString("tls_dir"),
+		tlsDisabledRoutes: strings.Split(Zero.Conf.GetString("tls_disabled_route"), ","),
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 
