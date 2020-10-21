@@ -52,7 +52,7 @@ parse_command() {
   PARSED_ARGUMENTS=$(
     getopt -o jtdhekmc:v: \
     --long acl,auth_token,enc,tls,make_tls_cert,tls_client_auth:,dgraph_version:,debug,help \
-    -n 'setup.sh' -- "$@"
+    -n 'compose-setup.sh' -- "$@"
   )
   if [ $? != 0 ] ; then usage; exit 1 ; fi
   eval set -- "$PARSED_ARGUMENTS"

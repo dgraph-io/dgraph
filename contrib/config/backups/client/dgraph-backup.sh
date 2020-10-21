@@ -55,7 +55,7 @@ parse_command() {
   PARSED_ARGUMENTS=$(
     getopt -o a:i:t:dfhl:p:u: \
     --long alpha:,api_type:,auth_token:,debug,force_full,help,location:,password:,subpath:,tls_cacert:,tls_cert:,tls_key:,user: \
-    -n 'backup.sh' -- "$@"
+    -n 'dgraph-backup.sh' -- "$@"
   )
   if [ $? != 0 ] ; then usage; exit 1 ; fi
   eval set -- "$PARSED_ARGUMENTS"
