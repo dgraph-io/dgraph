@@ -204,9 +204,14 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 	return metadata.NewIncomingContext(ctx, md), nil
 }
 
-func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
+func AppendAuthInfo(schema []byte, algo, publicKeyFile string, ClosedByDefault bool) ([]byte, error) {
 	if algo == "HS256" {
-		authInfo := `# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}`
+		var authInfo string
+		if ClosedByDefault {
+			authInfo = `# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"],"ClosedByDefault":true}`
+		} else {
+			authInfo = `# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}`
+		}
 		return append(schema, []byte(authInfo)...), nil
 	}
 

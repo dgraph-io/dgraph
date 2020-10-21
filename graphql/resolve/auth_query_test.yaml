@@ -1059,3 +1059,21 @@
         dgraph.uid : uid
       }
     }
+
+- name: "Invalid JWT - type without auth directive"
+  gqlquery: |
+    query {
+      queryTodo {
+        id
+        owner
+        text
+      }
+    }
+  dgquery: |-
+    query {
+      queryRTodo(func: type(Todo)) {
+        owner : Todo.comment
+        text :  Todo.text
+        dgraph.uid : uid
+      }
+    }

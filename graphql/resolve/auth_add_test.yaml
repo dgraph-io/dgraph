@@ -1021,3 +1021,66 @@
   uids: |
     { "ComplexLog1": "0x123" }
   skipauth: true
+
+- name: "Query with missing jwt token - Add with top level not RBAC false."
+  gqlquery: |
+    mutation addComplexLog($log: AddComplexLogInput!) {
+      addComplexLog(input: [$log]) {
+        complexLog {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  variables: |
+    { "log":
+      { "logs": "log123",
+        "visible": true
+      }
+    }
+  uids: |
+    { "ComplexLog1": "0x123" }
+  error:
+    { "message": "mutation failed because authorization failed because Jwt is required when ClosedByDefault flag is true"}
+
+- name: "Query with missing jwt token - Type without Auth"
+  gqlquery: |
+    mutation addTodo($todo: AddTodoInput!) {
+      addTodo(input: [$todo]) {
+        todo {
+          id
+          owner
+          text
+        }
+      }
+    }
+  variables: |
+    { "todo":
+      { "owner": "Alice",
+        "text":  "Hi Graphql"
+      }
+    }
+  error:
+    { "message": "mutation failed because authorization failed because Jwt is required when ClosedByDefault flag is true"}
+
+- name: "Invalid JWT - Type without Auth"
+  gqlquery: |
+    mutation addTodo($todo: AddTodoInput!) {
+      addTodo(input: [$todo]) {
+        todo {
+          id
+          owner
+          text
+        }
+      }
+    }
+  variables: |
+    { "todo":
+      { "owner": "Alice",
+        "text":  "Hi Graphql"
+      }
+    }
+  error:
+    { "message": "mutation failed because authorization failed because unable to parse jwt token:token signature is invalid"}

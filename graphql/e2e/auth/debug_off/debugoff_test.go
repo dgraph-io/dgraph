@@ -137,7 +137,7 @@ func TestMain(m *testing.M) {
 
 	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
 	for _, algo := range jwtAlgo {
-		authSchema, err := testutil.AppendAuthInfo(schema, algo, "../sample_public_key.pem")
+		authSchema, err := testutil.AppendAuthInfo(schema, algo, "../sample_public_key.pem", false)
 		if err != nil {
 			panic(err)
 		}
