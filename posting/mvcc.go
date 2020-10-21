@@ -369,7 +369,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 					mpost := fbx.AsPosting(bs)
 					// commitTs, startTs are meant to be only in memory, not
 					// stored on disk.
-					mpost.MutateCommitTs(item.Version())
+					x.AssertTrue(mpost.MutateCommitTs(item.Version()))
 				}
 				if l.mutationMap == nil {
 					l.mutationMap = make(map[uint64]*pb.PostingList)

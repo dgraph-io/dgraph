@@ -276,7 +276,7 @@ func (it *pIterator) posting() *fb.Posting {
 		}
 		it.pidx++
 	}
-	it.uidPosting.MutateUid(uid)
+	x.AssertTrue(it.uidPosting.MutateUid(uid))
 	return it.uidPosting
 }
 
@@ -394,7 +394,7 @@ func (l *List) updateMutationLayer(mpost *fb.Posting, singleUidUpdate bool) erro
 			copy(objCopyBs, objBs)
 
 			objCopy := fbx.AsPosting(objCopyBs)
-			objCopy.MutateOp(Del)
+			x.AssertTrue(objCopy.MutateOp(Del))
 
 			newPlist.Postings = append(newPlist.Postings, objCopy.Table().Bytes)
 			return nil
@@ -519,10 +519,10 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	}
 
 	mpost := NewPosting(t).Build()
-	mpost.MutateStartTs(txn.StartTs)
+	x.AssertTrue(mpost.MutateStartTs(txn.StartTs))
 	if mpost.PostingType() != fb.PostingTypeREF {
 		t.ValueId = fingerprintEdge(t)
-		mpost.MutateUid(t.ValueId)
+		x.AssertTrue(mpost.MutateUid(t.ValueId))
 	}
 
 	// Check whether this mutation is an update for a predicate of type uid.
@@ -559,7 +559,7 @@ func (l *List) getMutation(startTs uint64) []byte {
 	if pl, ok := l.mutationMap[startTs]; ok {
 		for _, bs := range pl.GetPostings() {
 			posting := fbx.AsPosting(bs)
-			posting.MutateStartTs(0)
+			x.AssertTrue(posting.MutateStartTs(0))
 		}
 		data, err := pl.Marshal()
 		x.Check(err)
@@ -629,7 +629,7 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*fb.Posting) {
 					deleteBelowTs = effectiveTs
 					continue
 				}
-				mpost.MutateStartTs(startTs)
+				x.AssertTrue(mpost.MutateStartTs(startTs))
 				posts = append(posts, mpost)
 			}
 		}

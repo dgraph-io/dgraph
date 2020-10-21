@@ -94,7 +94,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	plist.CommitTs = commitTs
 	for _, bs := range plist.Postings {
 		mpost := fbx.AsPosting(bs)
-		mpost.MutateCommitTs(commitTs)
+		x.AssertTrue(mpost.MutateCommitTs(commitTs))
 	}
 
 	// In general, a posting list shouldn't try to mix up it's job of keeping
