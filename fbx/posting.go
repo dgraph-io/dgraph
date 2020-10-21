@@ -13,6 +13,8 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 )
 
+const bufSize = 2 << 10
+
 func AsPosting(bs []byte) *fb.Posting {
 	return fb.GetRootAsPosting(bs, 0)
 }
@@ -41,7 +43,7 @@ func PostingEq(p1, p2 *fb.Posting) bool {
 func PostingFacets(p *fb.Posting) []*api.Facet {
 	facets := make([]*api.Facet, p.FacetsLength())
 	for i := 0; i < p.FacetsLength(); i++ {
-		var facet *fb.Facet
+		facet := new(fb.Facet)
 		p.Facets(facet, i)
 		facets[i] = &api.Facet{
 			Key:     string(facet.Key()),
@@ -59,9 +61,11 @@ func postingFacetsEq(p1, p2 *fb.Posting) bool {
 	if n != p2.FacetsLength() {
 		return false
 	}
+
 	for i := 0; i < n; i++ {
-		var f1, f2 *fb.Facet
+		f1 := new(fb.Facet)
 		p1.Facets(f1, i)
+		f2 := new(fb.Facet)
 		p2.Facets(f2, i)
 		if !FacetEq(f1, f2) {
 			return false
@@ -76,7 +80,6 @@ func postingString(p *fb.Posting) string {
 	}
 
 	var sb strings.Builder
-
 	sb.WriteString(fmt.Sprintf(
 		"{uid:%d value:%s value_type:%d posting_type:%s lang_tag:%s label:%s facets:[",
 		p.Uid(),
@@ -86,14 +89,12 @@ func postingString(p *fb.Posting) string {
 		p.LangTagBytes(),
 		p.Label(),
 	))
-
 	facets := make([]string, p.FacetsLength())
 	for i := 0; i < p.FacetsLength(); i++ {
-		var f *fb.Facet
+		f := new(fb.Facet)
 		p.Facets(f, i)
 		facets[i] = facetString(f)
 	}
-
 	sb.WriteString(fmt.Sprintf(
 		"%s] op:%d start_ts:%d commit_ts:%d}",
 		strings.Join(facets, " "),
@@ -101,7 +102,6 @@ func postingString(p *fb.Posting) string {
 		p.StartTs(),
 		p.CommitTs(),
 	))
-
 	return sb.String()
 }
 
@@ -121,7 +121,6 @@ type Posting struct {
 }
 
 func NewPosting() *Posting {
-	const bufSize = 2 << 10
 	return &Posting{
 		builder: flatbuffers.NewBuilder(bufSize),
 	}
@@ -159,21 +158,17 @@ func (p *Posting) SetLabel(label string) *Posting {
 
 func (p *Posting) SetFacets(facets []*api.Facet) *Posting {
 	offsets := make([]flatbuffers.UOffsetT, len(facets))
-
-	for _, facet := range facets {
+	for i, facet := range facets {
 		f := &Facet{
 			builder: p.builder,
 		}
-		offset := f.CopyFrom(facet).buildOffset()
-		offsets = append(offsets, offset)
+		offsets[i] = f.CopyFrom(facet).buildOffset()
 	}
-
 	fb.PostingStartFacetsVector(p.builder, len(offsets))
 	for i := len(offsets) - 1; i >= 0; i-- {
 		p.builder.PrependUOffsetT(offsets[i])
 	}
 	p.facets = p.builder.EndVector(len(offsets))
-
 	return p
 }
 
@@ -216,7 +211,7 @@ func (p *Posting) Build() *fb.Posting {
 	x.AssertTrue(posting.MutateUid(p.uid))
 	x.AssertTrue(posting.MutateOp(p.op))
 	x.AssertTrue(posting.MutateStartTs(p.startTs))
-	x.AssertTrue(posting.MutateCommitTs(p.startTs))
+	x.AssertTrue(posting.MutateCommitTs(p.commitTs))
 
 	return posting
 }

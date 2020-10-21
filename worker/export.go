@@ -196,7 +196,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 		}
 
 		for i := 0; i < p.FacetsLength(); i++ {
-			var fct *fb.Facet
+			fct := new(fb.Facet)
 			p.Facets(fct, i)
 
 			fmt.Fprintf(bp, `,"%s|%s":`, e.attr, string(fct.Key()))
@@ -263,7 +263,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 		if p.FacetsLength() > 0 {
 			fmt.Fprint(bp, " (")
 			for i := 0; i < p.FacetsLength(); i++ {
-				var fct *fb.Facet
+				fct := new(fb.Facet)
 				p.Facets(fct, i)
 
 				if i != 0 {

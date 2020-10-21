@@ -60,6 +60,12 @@ type Facet struct {
 	alias     flatbuffers.UOffsetT
 }
 
+func NewFacet() *Facet {
+	return &Facet{
+		builder: flatbuffers.NewBuilder(bufSize),
+	}
+}
+
 func (f *Facet) CopyFrom(facet *api.Facet) *Facet {
 	return f.
 		SetKey(facet.Key).
@@ -86,8 +92,8 @@ func (f *Facet) SetValueType(valueType api.Facet_ValType) *Facet {
 
 func (f *Facet) SetTokens(tokens []string) *Facet {
 	offsets := make([]flatbuffers.UOffsetT, len(tokens))
-	for _, token := range tokens {
-		offsets = append(offsets, f.builder.CreateString(token))
+	for i, token := range tokens {
+		offsets[i] = f.builder.CreateString(token)
 	}
 
 	fb.FacetStartTokensVector(f.builder, len(offsets))
