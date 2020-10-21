@@ -13,7 +13,8 @@ size of the data served by each Alpha instance.
 Before you can run `dgraph alpha`, you must run at least one `dgraph zero` node.
 You can see the options available for `dgraph zero` using the following command:
 
-`dgraph zero --help`
+```bash
+dgraph zero --help
 
 `--replicas` is the option that controls the replication factor, the number
  of replicas per data shard, including the original shard. When a new Alpha
