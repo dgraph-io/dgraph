@@ -364,28 +364,58 @@ func TestAuthWithDgraphDirective(t *testing.T) {
 }
 
 func TestAuthOnInterfaces(t *testing.T) {
-	testCase := TestCase{
-		name: "Types inherit Interface's auth rules and its own rules",
-		query: `
+	TestCases := []TestCase{
+		{
+			name: "Types inherit Interface's auth rules and its own rules",
+			query: `
 		query{
 			queryQuestion{
 				text
 			}
 		}
 		`,
-		user:   "minhaj@dgraph.io",
-		ans:    true,
-		result: `{"queryQuestion":[{"text": "A Post"}]}`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			result: `{"queryQuestion":[{"text": "A Question"}]}`,
+		},
+		{
+			name: "Types inherit Only Interface's auth rules if it doesn't have its own auth rules",
+			query: `
+			query{
+				queryAnswer{
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			result: `{"queryAnswer": [{"text": "A Answer"}]}`,
+		},
+		{
+			name: "Types inherit auth rules from all the different Interfaces",
+			query: `
+			query{
+				queryFbPost{
+					text
+				}
+			}
+			`,
+			user:   "user2@dgraph.io",
+			role:   "ADMIN",
+			result: `{"queryFbPost": [{"text": "B FbPost"}]}`,
+		},
 	}
 
-	queryParams := &common.GraphQLParams{
-		Query:   testCase.query,
-		Headers: common.GetJWTForInterfaceAuth(t, testCase.user, "", testCase.ans, metaInfo),
+	for _, tcase := range TestCases {
+		t.Run(tcase.name, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
+				Query:   tcase.query,
+			}
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
-	common.RequireNoGQLErrors(t, gqlResponse)
-	require.JSONEq(t, testCase.result, string(gqlResponse.Data))
-
 }
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
