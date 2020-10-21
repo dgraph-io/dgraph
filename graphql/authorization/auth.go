@@ -317,7 +317,7 @@ func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		if authMeta.ClosedByDefault {
-			return &CustomClaims{}, fmt.Errorf("Jwt is required")
+			return &CustomClaims{}, fmt.Errorf("Jwt is required when ClosedByDefault flag is true")
 		} else {
 			return &CustomClaims{}, nil
 		}
