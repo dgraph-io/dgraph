@@ -16,6 +16,7 @@ import (
 	"context"
 	"net/url"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/posting"
@@ -50,6 +51,11 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Status,
 		return nil, err
 	}
 
+	closer, err := g.Node.startTask(opBackup)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot start backup operation")
+	}
+	defer closer.Done()
 	bp := NewBackupProcessor(pstore, req)
 	return bp.WriteBackup(ctx)
 }
@@ -75,6 +81,11 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.Status, error) 
 	return res, nil
 }
 
+// backupLock is used to synchronize backups to avoid more than one backup request
+// to be processed at the same time. Multiple requests could lead to multiple
+// backups with the same backupNum in their manifest.
+var backupLock sync.Mutex
+
 func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
 	if !EnterpriseEnabled() {
 		return errors.New("you must enable enterprise features first. " +
@@ -89,6 +100,10 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
 		return err
 	}
+
+	// Grab the lock here to avoid more than one request to be processed at the same time.
+	backupLock.Lock()
+	defer backupLock.Unlock()
 
 	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {

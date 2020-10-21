@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -41,15 +40,18 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	config := viper.New()
 	flags := &pflag.FlagSet{}
 	enc.RegisterFlags(flags)
-	config.BindPFlags(flags)
+	if err := config.BindPFlags(flags); err != nil {
+		return nil, err
+	}
 	config.Set("encryption_key_file", KeyFile)
 	k, err := enc.ReadKey(config)
 	if err != nil {
 		return nil, err
 	}
 
-	opt := badger.DefaultOptions(pdir).WithTableLoadingMode(options.MemoryMap).
-		WithReadOnly(true).
+	opt := badger.DefaultOptions(pdir).
+		WithBlockCacheSize(10 * (1 << 20)).
+		WithIndexCacheSize(10 * (1 << 20)).
 		WithEncryptionKey(k)
 	return badger.OpenManaged(opt)
 }

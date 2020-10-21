@@ -78,7 +78,7 @@ func graphQLCompletionOn(t *testing.T) {
 			}
 
 			// Check that the error is valid
-			gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := queryCountry.ExecuteAsPost(t, GraphqlURL)
 			require.NotNil(t, gqlResponse.Errors)
 			require.Equal(t, 1, len(gqlResponse.Errors))
 			require.Contains(t, gqlResponse.Errors[0].Error(),
@@ -166,7 +166,7 @@ func deepMutationErrors(t *testing.T) {
 				},
 			}
 
-			gqlResponse := executeRequest(t, graphqlURL, updateCountryParams)
+			gqlResponse := executeRequest(t, GraphqlURL, updateCountryParams)
 			require.NotNil(t, gqlResponse.Errors)
 			require.Equal(t, 1, len(gqlResponse.Errors))
 			require.EqualError(t, gqlResponse.Errors[0], tcase.exp)
@@ -192,7 +192,7 @@ func requestValidationErrors(t *testing.T) {
 				Query:     tcase.GQLRequest,
 				Variables: tcase.variables,
 			}
-			gqlResponse := test.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := test.ExecuteAsPost(t, GraphqlURL)
 
 			require.Nil(t, gqlResponse.Data)
 			if diff := cmp.Diff(tcase.Errors, gqlResponse.Errors); diff != "" {
@@ -241,7 +241,7 @@ func panicCatcher(t *testing.T) {
 		WithConventionResolvers(gqlSchema, fns)
 	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(&schemaEpoch, resolvers)
+	server := web.NewServer(&schemaEpoch, resolvers, true)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
@@ -253,7 +253,7 @@ func panicCatcher(t *testing.T) {
 			require.Equal(t, x.GqlErrorList{
 				{Message: fmt.Sprintf("Internal Server Error - a panic was trapped.  " +
 					"This indicates a bug in the GraphQL server.  A stack trace was logged.  " +
-					"Please let us know : https://github.com/dgraph-io/dgraph/issues.")}},
+					"Please let us know by filing an issue with the stack trace.")}},
 				gqlResponse.Errors)
 
 			require.Nil(t, gqlResponse.Data, string(gqlResponse.Data))
@@ -300,7 +300,7 @@ func clientInfoLogin(t *testing.T) {
 		WithConventionResolvers(gqlSchema, fns)
 	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(&schemaEpoch, resolvers)
+	server := web.NewServer(&schemaEpoch, resolvers, true)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()

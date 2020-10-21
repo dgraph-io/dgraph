@@ -23,6 +23,21 @@ type User @auth(
   tickets: [Ticket] @hasInverse(field: assignedTo)
   secrets: [UserSecret]
   issues: [Issue]
+  tweets: [Tweets] @hasInverse(field: user)
+}
+
+type Tweets @auth (
+    query: { rule: "{$ROLE: { eq: \"admin\" } }"},
+    add: { rule: "{$USER: { eq: \"foo\" } }"},
+    delete: { rule: "{$USER: { eq: \"foo\" } }"},
+    update: { rule: "{$USER: { eq: \"foo\" } }"}
+){
+    id: String! @id
+    text: String! @search(by: [fulltext])
+    user: User
+    timestamp: DateTime! @search
+    score: Int @search
+    streams: String @search
 }
 
 type UserSecret @auth(
@@ -68,7 +83,7 @@ type Region @auth(
     """}
 ){
   id: ID!
-  name: String
+  name: String @search(by: [hash])
   global: Boolean @search
   users: [User]
 }
@@ -192,7 +207,7 @@ type Movie @auth(
     ]}
 ) {
   id: ID!
-  content: String
+  content: String @search(by: [hash])
   hidden: Boolean @search
   regionsAvailable: [Region]
   reviews: [Review]
@@ -509,5 +524,64 @@ type Ticket @auth(
 type Review @auth() {
     id: ID!
     comment: String!
+}
+
+type Student @dgraph(type: "is7sowSm")
+@auth(query:  { and : [ {rule: """
+query($USER: String!) {
+    queryStudent(filter: {email: { eq: $USER}}) {
+        __typename
+    }
+}
+"""},{ rule: "{$ROLE: { eq: \"ADMIN\" }}"}]}) {
+    id: ID!
+    email: String! @dgraph(pred: "IOw80vnV") @search(by: [hash])
+}
+
+type Contact @auth(
+    query: { rule: "{$ContactRole: { eq: \"ADMINISTRATOR\"}}" }
+) {
+    id: ID!
+    nickName: String @search(by: [exact, term, fulltext, regexp])
+    adminTasks: [AdminTask] @hasInverse(field: forContact)
+    tasks: [Task] @hasInverse(field: forContact)
+}
+
+type AdminTask @auth(
+    query: { rule: "{$TaskRole: { eq: \"ADMINISTRATOR\"}}" }
+) {
+    id: ID!
+    name: String @search(by: [exact, term, fulltext, regexp])
+    occurrences: [TaskOccurrence] @hasInverse(field: adminTask)
+    forContact: Contact @hasInverse(field: adminTasks)
+}
+
+type Task {
+    id: ID!
+    name: String @search(by: [exact, term, fulltext, regexp])
+    occurrences: [TaskOccurrence] @hasInverse(field: task)
+    forContact: Contact @hasInverse(field: tasks)
+}
+
+type TaskOccurrence @auth(
+    query: { or : [ { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
+        {and : [
+            {rule: "{$TaskOccuranceRole: { eq: \"ADMINISTRATOR\"}}"},
+            {rule: """
+            query($TaskOccuranceRole: String!) {
+                queryTaskOccurrence(filter: {role: { eq: $TaskOccuranceRole}}) {
+                    __typename
+                }
+            }
+            """}
+] } ] }
+) {
+    id: ID!
+    due: DateTime @search
+    comp: DateTime @search
+    task: Task @hasInverse(field: occurrences)
+    adminTask: AdminTask @hasInverse(field: occurrences)
+    isPublic: Boolean @search
+    role: String @search(by: [exact, term, fulltext, regexp])
 }
 

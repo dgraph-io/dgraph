@@ -247,7 +247,7 @@ func TestDeletePredicate(t *testing.T) {
 	testutil.CompareJSON(t, `{"data":{"schema":[`+
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
-		x.AclPredicates+","+x.GraphqlPredicates+","+
+		x.AclPredicates+","+x.GraphqlPredicates+","+x.CorsPredicate+","+
 		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
 			"list":true}],`+x.InitialTypes+`}}`, output)
 
@@ -1077,7 +1077,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"data":{"schema":[`+
-		x.AclPredicates+","+x.GraphqlPredicates+","+
+		x.AclPredicates+","+x.GraphqlPredicates+","+x.CorsPredicate+","+
 		`{"predicate":"occupations","type":"string"},`+
 		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"],
 			"list":true}],`+x.InitialTypes+`}}`, res)
@@ -1325,7 +1325,7 @@ func TestDropAll(t *testing.T) {
 	require.NoError(t, err)
 	testutil.CompareJSON(t,
 		`{"data":{"schema":[`+
-			x.AclPredicates+","+x.GraphqlPredicates+","+
+			x.AclPredicates+","+x.GraphqlPredicates+","+x.CorsPredicate+","+
 			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"],
 				"list":true}],`+x.InitialTypes+`}}`, output)
 

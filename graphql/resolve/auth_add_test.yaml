@@ -7,6 +7,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "secret":
       { "aSecret": "it is",
@@ -17,11 +19,11 @@
     { "UserSecret1": "0x123" }
   authquery: |-
     query {
-      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
         uid
       }
       UserSecret1 as var(func: uid(0x123))
-      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
     { "UserSecret": [ { "uid": "0x123" }] }  
@@ -35,6 +37,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "secrets": 
       [
@@ -46,11 +50,11 @@
     { "UserSecret1": "0x123", "UserSecret2": "0x456" }
   authquery: |-
     query {
-      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
         uid
       }
       UserSecret1 as var(func: uid(0x123, 0x456))
-      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
     { "UserSecret": [ { "uid": "0x123" }, { "uid": "0x456" } ] } 
@@ -64,6 +68,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "secret":
       { "aSecret": "it is",
@@ -74,11 +80,11 @@
     { "UserSecret1": "0x123" }
   authquery: |-
     query {
-      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
         uid
       }
       UserSecret1 as var(func: uid(0x123))
-      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
     { "UserSecret": [ ] }  
@@ -94,6 +100,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "secrets": 
       [
@@ -105,11 +113,11 @@
     { "UserSecret1": "0x123", "UserSecret2": "0x456" }
   authquery: |-
     query {
-      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
         uid
       }
       UserSecret1 as var(func: uid(0x123, 0x456))
-      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
     { "UserSecret": [ { "uid": "0x123" }] } 
@@ -125,6 +133,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col":
       { "inProject": { "projID": "0x123" },
@@ -144,11 +154,11 @@
     { "Column1": "0x456", "Ticket3": "0x789" }
   authquery: |-
     query {
-      Column(func: uid(Column1)) @filter(uid(Column2)) {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
         uid
       }
       Column1 as var(func: uid(0x456))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -158,11 +168,11 @@
         }
         dgraph.uid : uid
       }
-      Ticket(func: uid(Ticket3)) @filter(uid(Ticket4)) {
+      Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
         uid
       }
       Ticket3 as var(func: uid(0x789))
-      Ticket4 as var(func: uid(Ticket3)) @cascade {
+      TicketAuth4 as var(func: uid(Ticket3)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
@@ -191,9 +201,12 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col":
-      { "inProject": { "projID": "0x123" },
+      {
+        "inProject": { "projID": "0x123" },
         "name": "a column",
         "tickets": [ { "title": "a ticket" } ]
       }
@@ -210,11 +223,11 @@
     { "Column1": "0x456", "Ticket3": "0x789" }
   authquery: |-
     query {
-      Column(func: uid(Column1)) @filter(uid(Column2)) {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
         uid
       }
       Column1 as var(func: uid(0x456))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -224,11 +237,11 @@
         }
         dgraph.uid : uid
       }
-      Ticket(func: uid(Ticket3)) @filter(uid(Ticket4)) {
+      Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
         uid
       }
       Ticket3 as var(func: uid(0x789))
-      Ticket4 as var(func: uid(Ticket3)) @cascade {
+      TicketAuth4 as var(func: uid(Ticket3)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
@@ -243,9 +256,7 @@
       }
     }
   authjson: |
-    { 
-      "Ticket": [ { "uid": "0x789" } ] 
-    }  
+    { "Ticket": [ { "uid": "0x789" } ]}
   error:
     { "message": "mutation failed because authorization failed" }
 
@@ -258,6 +269,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col1":
       { "inProject": { "projID": "0x123" },
@@ -288,11 +301,11 @@
     { "Column1": "0x456", "Ticket3": "0x789", "Column4": "0x459", "Ticket6": "0x799" }
   authquery: |-
     query {
-      Column(func: uid(Column1)) @filter(uid(Column2)) {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
         uid
       }
       Column1 as var(func: uid(0x456, 0x459))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -302,11 +315,11 @@
         }
         dgraph.uid : uid
       }
-      Ticket(func: uid(Ticket3)) @filter(uid(Ticket4)) {
+      Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
         uid
       }
       Ticket3 as var(func: uid(0x789, 0x799))
-      Ticket4 as var(func: uid(Ticket3)) @cascade {
+      TicketAuth4 as var(func: uid(Ticket3)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
@@ -335,6 +348,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col1":
       { "inProject": { "projID": "0x123" },
@@ -365,11 +380,11 @@
     { "Column1": "0x456", "Ticket3": "0x789", "Column4": "0x459", "Ticket6": "0x799" }
   authquery: |-
     query {
-      Column(func: uid(Column1)) @filter(uid(Column2)) {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
         uid
       }
       Column1 as var(func: uid(0x456, 0x459))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -379,11 +394,11 @@
         }
         dgraph.uid : uid
       }
-      Ticket(func: uid(Ticket3)) @filter(uid(Ticket4)) {
+      Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
         uid
       }
       Ticket3 as var(func: uid(0x789, 0x799))
-      Ticket4 as var(func: uid(Ticket3)) @cascade {
+      TicketAuth4 as var(func: uid(Ticket3)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
@@ -419,6 +434,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col":
       { "inProject": { "projID": "0x123" },
@@ -440,10 +457,10 @@
       Column4(func: uid(Column4)) {
         uid
       }
-      Column4.auth(func: uid(Column4)) @filter(uid(Column5)) {
+      Column4.auth(func: uid(Column4)) @filter(uid(ColumnAuth5)) {
         uid
       }
-      Column5 as var(func: uid(Column4)) @cascade {
+      ColumnAuth5 as var(func: uid(Column4)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -465,11 +482,11 @@
     { "Column1": "0x456" }
   authquery: |-
     query {
-      Column(func: uid(Column1)) @filter(uid(Column2)) {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
         uid
       }
       Column1 as var(func: uid(0x456))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -494,6 +511,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "col":
       { "inProject": { "projID": "0x123" },
@@ -515,10 +534,10 @@
       Column4(func: uid(Column4)) {
         uid
       }
-      Column4.auth(func: uid(Column4)) @filter(uid(Column5)) {
+      Column4.auth(func: uid(Column4)) @filter(uid(ColumnAuth5)) {
         uid
       }
-      Column5 as var(func: uid(Column4)) @cascade {
+      ColumnAuth5 as var(func: uid(Column4)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -539,11 +558,11 @@
     { "Column1": "0x456" }
   authquery: |-
     query {
-      Column(func: uid(Column1)) @filter(uid(Column2)) {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
         uid
       }
       Column1 as var(func: uid(0x456))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -570,6 +589,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { 
       "proj": {
@@ -591,10 +612,10 @@
       Column4(func: uid(Column4)) {
         uid
       }
-      Column4.auth(func: uid(Column4)) @filter(uid(Column5)) {
+      Column4.auth(func: uid(Column4)) @filter(uid(ColumnAuth5)) {
         uid
       }
-      Column5 as var(func: uid(Column4)) @cascade {
+      ColumnAuth5 as var(func: uid(Column4)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -618,11 +639,11 @@
     }
   authquery: |-
     query {
-      Column(func: uid(Column1)) @filter(uid(Column2)) {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
         uid
       }
       Column1 as var(func: uid(0x456))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -632,11 +653,11 @@
         }
         dgraph.uid : uid
       }
-      Project(func: uid(Project3)) @filter(uid(Project4)) {
+      Project(func: uid(Project3)) @filter(uid(ProjectAuth4)) {
         uid
       }
       Project3 as var(func: uid(0x123))
-      Project4 as var(func: uid(Project3)) @cascade {
+      ProjectAuth4 as var(func: uid(Project3)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           dgraph.uid : uid
@@ -659,6 +680,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { 
       "proj": {
@@ -680,10 +703,10 @@
       Column4(func: uid(Column4)) {
         uid
       }
-      Column4.auth(func: uid(Column4)) @filter(uid(Column5)) {
+      Column4.auth(func: uid(Column4)) @filter(uid(ColumnAuth5)) {
         uid
       }
-      Column5 as var(func: uid(Column4)) @cascade {
+      ColumnAuth5 as var(func: uid(Column4)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -706,11 +729,11 @@
     }
   authquery: |-
     query {
-      Column(func: uid(Column1)) @filter(uid(Column2)) {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
         uid
       }
       Column1 as var(func: uid(0x456))
-      Column2 as var(func: uid(Column1)) @cascade {
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -720,11 +743,11 @@
         }
         dgraph.uid : uid
       }
-      Project(func: uid(Project3)) @filter(uid(Project4)) {
+      Project(func: uid(Project3)) @filter(uid(ProjectAuth4)) {
         uid
       }
       Project3 as var(func: uid(0x123))
-      Project4 as var(func: uid(Project3)) @cascade {
+      ProjectAuth4 as var(func: uid(Project3)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           dgraph.uid : uid
@@ -749,6 +772,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "log":
       { "logs": "log123",
@@ -770,7 +795,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "log":
       { "logs": "log123",
@@ -790,7 +817,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     {
       "proj": {
@@ -812,7 +841,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     {
       "proj": {
@@ -825,11 +856,11 @@
     }
   authquery: |-
     query {
-      Project(func: uid(Project1)) @filter(uid(Project2)) {
+      Project(func: uid(Project1)) @filter(uid(ProjectAuth2)) {
         uid
       }
       Project1 as var(func: uid(0x123))
-      Project2 as var(func: uid(Project1)) @cascade {
+      ProjectAuth2 as var(func: uid(Project1)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           dgraph.uid : uid
@@ -851,7 +882,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "issue":
       { "msg": "log123",
@@ -880,11 +913,11 @@
     { "Issue1": "0x789" }
   authquery: |-
     query {
-      Issue(func: uid(Issue1)) @filter(uid(Issue2)) {
+      Issue(func: uid(Issue1)) @filter(uid(IssueAuth2)) {
         uid
       }
       Issue1 as var(func: uid(0x789))
-      Issue2 as var(func: uid(Issue1)) @cascade {
+      IssueAuth2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
         dgraph.uid : uid
       }
@@ -901,7 +934,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "issue":
       { "msg": "log123",
@@ -951,7 +986,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   variables: |
     { "log":
       { "logs": "log123",
@@ -972,7 +1009,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   variables: |
     { "log":
       { "logs": "log123",

@@ -69,8 +69,14 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 		x.Check2(b.WriteRune(')'))
 	}
 
-	if query.Cascade {
-		x.Check2(b.WriteString(" @cascade"))
+	if len(query.Cascade) != 0 {
+		if query.Cascade[0] == "__all__" {
+			x.Check2(b.WriteString(" @cascade"))
+		} else {
+			x.Check2(b.WriteString(" @cascade("))
+			x.Check2(b.WriteString(strings.Join(query.Cascade, ", ")))
+			x.Check2(b.WriteRune(')'))
+		}
 	}
 
 	switch {
@@ -137,6 +143,15 @@ func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	x.Check2(b.WriteRune(')'))
 }
 
+func writeFilterArguments(b *strings.Builder, args []gql.Arg) {
+	for i, arg := range args {
+		if i != 0 {
+			x.Check2(b.WriteString(", "))
+		}
+		x.Check2(b.WriteString(arg.Value))
+	}
+}
+
 func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 	if f == nil {
 		return
@@ -145,10 +160,10 @@ func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 	switch {
 	case f.Name == "uid":
 		writeUIDFunc(b, f.UID, f.Args)
-	case len(f.Args) == 1:
-		x.Check2(b.WriteString(fmt.Sprintf("%s(%s)", f.Name, f.Args[0].Value)))
-	case len(f.Args) == 2:
-		x.Check2(b.WriteString(fmt.Sprintf("%s(%s, %s)", f.Name, f.Args[0].Value, f.Args[1].Value)))
+	default:
+		x.Check2(b.WriteString(fmt.Sprintf("%s(", f.Name)))
+		writeFilterArguments(b, f.Args)
+		x.Check2(b.WriteRune(')'))
 	}
 }
 

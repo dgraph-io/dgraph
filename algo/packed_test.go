@@ -41,13 +41,26 @@ func TestMergeSorted1Packed(t *testing.T) {
 	require.Equal(t, []uint64{55}, codec.Decode(MergeSortedPacked(input), 0))
 }
 
+func printPack(t *testing.T, pack *pb.UidPack) {
+	for _, block := range pack.Blocks {
+		t.Logf("[%x]Block base: %d. Num uids: %d. Deltas: %x\n",
+			pack.AllocRef, block.Base, block.NumUids, block.Deltas)
+	}
+}
+
 func TestMergeSorted2Packed(t *testing.T) {
 	input := []*pb.UidPack{
 		newUidPack([]uint64{1, 3, 6, 8, 10}),
 		newUidPack([]uint64{2, 4, 5, 7, 15}),
 	}
+	require.Equal(t, []uint64{1, 3, 6, 8, 10}, codec.Decode(input[0], 0))
+	require.Equal(t, []uint64{2, 4, 5, 7, 15}, codec.Decode(input[1], 0))
+
+	// printPack(t, input[1])
+	merged := MergeSortedPacked(input)
+	// printPack(t, merged)
 	require.Equal(t, []uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 15},
-		codec.Decode(MergeSortedPacked(input), 0))
+		codec.Decode(merged, 0))
 }
 
 func TestMergeSorted3Packed(t *testing.T) {

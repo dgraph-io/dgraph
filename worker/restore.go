@@ -24,10 +24,10 @@ import (
 	"path/filepath"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -43,7 +43,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice) LoadR
 
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	return LoadBackup(location, backupId,
+	return LoadBackup(location, backupId, 0, nil,
 		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
@@ -64,8 +64,9 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice) LoadR
 			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 				WithSyncWrites(false).
-				WithTableLoadingMode(options.MemoryMap).
 				WithValueThreshold(1 << 10).
+				WithBlockCacheSize(100 * (1 << 20)).
+				WithIndexCacheSize(100 * (1 << 20)).
 				WithNumVersionsToKeep(math.MaxInt32).
 				WithEncryptionKey(key))
 			if err != nil {
@@ -175,20 +176,18 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 					// part without rolling the key first. This part is here for backwards
 					// compatibility. New backups are not affected because there was a change
 					// to roll up lists into a single one.
-					restoreVal, err := pl.Marshal()
-					if err != nil {
-						return 0, errors.Wrapf(err, "while converting backup posting list")
-					}
+					kv := posting.MarshalPostingList(pl, nil)
+					codec.FreePack(pl.Pack)
 					kv.Key = restoreKey
-					kv.Value = restoreVal
 					if err := loader.Set(kv); err != nil {
 						return 0, err
 					}
 				} else {
 					// This is a complete list. It should be rolled up to avoid writing
 					// a list that is too big to be read back from disk.
+					// Rollup will take ownership of the Pack and will free the memory.
 					l := posting.NewList(restoreKey, pl, kv.Version)
-					kvs, err := l.Rollup()
+					kvs, err := l.Rollup(nil)
 					if err != nil {
 						// TODO: wrap errors in this file for easier debugging.
 						return 0, err

@@ -40,7 +40,9 @@ const (
             }
 		],
 		"enumValues":[]
-	} }`
+	},
+	  "__typename" : "Query"
+	}`
 
 	expectedForType = `
 	{ "__type": {
@@ -72,10 +74,18 @@ const (
             {
                 "name": "posts",
 				"description": ""
+            },
+            {
+                "name": "bio",
+				"description": ""
+            },
+            {
+                "name": "rank",
+				"description": ""
             }
 		],
 		"enumValues":[]
-	} }`
+	}, "__typename" : "Query" }`
 
 	expectedForEnum = `
 	{ "__type": {
@@ -98,7 +108,7 @@ const (
             }
 		],
 		"fields":[]
-    } }`
+    }, "__typename" : "Query" }`
 )
 
 func SchemaTest(t *testing.T, expectedDgraphSchema string) {
@@ -138,6 +148,7 @@ func graphQLDescriptions(t *testing.T) {
 				description
 			}
 		}
+		__typename
 	}`
 
 	for testName, tCase := range testCases {
@@ -149,7 +160,7 @@ func graphQLDescriptions(t *testing.T) {
 				},
 			}
 
-			introspectionResult := introspect.ExecuteAsPost(t, graphqlURL)
+			introspectionResult := introspect.ExecuteAsPost(t, GraphqlURL)
 			require.Nil(t, introspectionResult.Errors)
 
 			require.JSONEq(t, tCase.expected, string(introspectionResult.Data))

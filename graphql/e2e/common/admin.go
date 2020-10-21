@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
@@ -42,9 +44,27 @@ const (
 	initSchema = `{
     "schema": [
         {
+            "predicate": "dgraph.cors",
+            "type": "string",
+            "list": true,
+            "index": true,
+            "tokenizer": [
+             "exact"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
+        {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
+            "type": "string"
+		},
         {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
@@ -74,6 +94,16 @@ const (
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         }
     ]
 }`
@@ -89,9 +119,27 @@ const (
             "type": "string"
         },
         {
+            "predicate": "dgraph.cors",
+            "type": "string",
+            "list": true,
+            "index": true,
+            "tokenizer": [
+             "exact"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
+        {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
+            "type": "string"
+		},
         {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
@@ -129,6 +177,16 @@ const (
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         }
     ]
 }`
@@ -159,9 +217,27 @@ const (
             "type": "int"
         },
         {
+            "predicate": "dgraph.cors",
+            "type": "string",
+            "list": true,
+            "index": true,
+            "tokenizer": [
+             "exact"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
+        {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
+            "type": "string"
+		},
         {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
@@ -202,6 +278,16 @@ const (
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         }
     ]
 }`
@@ -240,9 +326,27 @@ const (
             "type": "float"
         },
         {
+            "predicate": "dgraph.cors",
+            "type": "string",
+            "list": true,
+            "index": true,
+            "tokenizer": [
+             "exact"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
+        {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+		},
+        {
+            "predicate": "dgraph.graphql.schema_history",
+            "type": "string"
+		},
         {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
@@ -286,6 +390,16 @@ const (
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },{
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
         }
     ]
 }`
@@ -327,7 +441,6 @@ func admin(t *testing.T) {
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
 	require.NoError(t, err)
-
 	require.JSONEq(t, initSchema, string(resp.GetJson()))
 }
 
@@ -639,4 +752,106 @@ func adminState(t *testing.T) {
 	require.Equal(t, state.License.User, result.State.License.User)
 	require.Equal(t, state.License.ExpiryTs, result.State.License.ExpiryTs)
 	require.Equal(t, state.License.Enabled, result.State.License.Enabled)
+}
+
+func testCors(t *testing.T) {
+	t.Run("testing normal retrival", func(t *testing.T) {
+		queryParams := &GraphQLParams{
+			Query: `query{
+                getAllowedCORSOrigins{
+                  acceptedOrigins
+                }
+              }`,
+		}
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.JSONEq(t, ` {
+            "getAllowedCORSOrigins": {
+              "acceptedOrigins": [
+                "*"
+              ]
+            }
+          }`, string(gqlResponse.Data))
+	})
+
+	t.Run("mutating cors", func(t *testing.T) {
+		queryParams := &GraphQLParams{
+			Query: `mutation{
+                replaceAllowedCORSOrigins(origins:["google.com"]){
+                  acceptedOrigins
+                }
+              }`,
+		}
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.JSONEq(t, ` {
+            "replaceAllowedCORSOrigins": {
+              "acceptedOrigins": [
+                "google.com"
+              ]
+            }
+          }`, string(gqlResponse.Data))
+	})
+
+	t.Run("retrive mutated cors", func(t *testing.T) {
+		queryParams := &GraphQLParams{
+			Query: `query{
+                getAllowedCORSOrigins{
+                  acceptedOrigins
+                }
+              }`,
+		}
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.JSONEq(t, ` {
+            "getAllowedCORSOrigins": {
+              "acceptedOrigins": [
+                "google.com"
+              ]
+            }
+          }`, string(gqlResponse.Data))
+
+		// Wait for the subscription to hit.
+		time.Sleep(2 * time.Second)
+
+		client := &http.Client{}
+		req, err := http.NewRequest("GET", GraphqlURL, nil)
+		require.NoError(t, err)
+		req.Header.Add("Origin", "google.com")
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Origin"), "google.com")
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "POST, OPTIONS")
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Headers"), x.AccessControlAllowedHeaders)
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "true")
+
+		client = &http.Client{}
+		req, err = http.NewRequest("GET", GraphqlURL, nil)
+		require.NoError(t, err)
+		req.Header.Add("Origin", "googl.com")
+		resp, err = client.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Origin"), "")
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "")
+		require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "")
+	})
+
+	t.Run("mutating empty cors", func(t *testing.T) {
+		queryParams := &GraphQLParams{
+			Query: `mutation{
+                replaceAllowedCORSOrigins(origins:[]){
+                  acceptedOrigins
+                }
+              }`,
+		}
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.JSONEq(t, ` {
+            "replaceAllowedCORSOrigins": {
+              "acceptedOrigins": [
+                "*"
+              ]
+            }
+          }`, string(gqlResponse.Data))
+	})
 }

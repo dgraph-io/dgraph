@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -32,8 +31,9 @@ import (
 	ostats "go.opencensus.io/stats"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -90,7 +90,7 @@ func getMemUsage() int {
 	return rss * os.Getpagesize()
 }
 
-func updateMemoryMetrics(lc *y.Closer) {
+func updateMemoryMetrics(lc *z.Closer) {
 	defer lc.Done()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -130,14 +130,48 @@ func updateMemoryMetrics(lc *y.Closer) {
 
 var (
 	pstore *badger.DB
-	closer *y.Closer
+	closer *z.Closer
+	lCache *ristretto.Cache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *badger.DB) {
+func Init(ps *badger.DB, cacheSize int64) {
 	pstore = ps
-	closer = y.NewCloser(1)
+	closer = z.NewCloser(1)
 	go updateMemoryMetrics(closer)
+	// Initialize cache.
+	if cacheSize == 0 {
+		return
+	}
+	var err error
+	lCache, err = ristretto.NewCache(&ristretto.Config{
+		// Use 5% of cache memory for storing counters.
+		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
+		MaxCost:     int64(float64(cacheSize) * 0.95),
+		BufferItems: 64,
+		Metrics:     true,
+		Cost: func(val interface{}) int64 {
+			l, ok := val.(*List)
+			if !ok {
+				return int64(0)
+			}
+			return int64(l.DeepSize())
+		},
+	})
+	x.Check(err)
+	go func() {
+		m := lCache.Metrics
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			// Record the posting list cache hit ratio
+			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
+		}
+	}()
+}
+
+func UpdateMaxCost(maxCost int64) {
+	lCache.UpdateMaxCost(maxCost)
 }
 
 // Cleanup waits until the closer has finished processing.
@@ -181,6 +215,12 @@ func NewLocalCache(startTs uint64) *LocalCache {
 	}
 }
 
+// NoCache returns a new LocalCache instance, which won't cache anything. Useful to pass startTs
+// around.
+func NoCache(startTs uint64) *LocalCache {
+	return &LocalCache{startTs: startTs}
+}
+
 func (lc *LocalCache) getNoStore(key string) *List {
 	lc.RLock()
 	defer lc.RUnlock()
@@ -205,8 +245,8 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
-	if lc == nil {
-		return getNew(key, pstore, math.MaxUint64)
+	if lc.plists == nil {
+		return getNew(key, pstore, lc.startTs)
 	}
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {
