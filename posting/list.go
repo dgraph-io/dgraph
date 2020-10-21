@@ -694,7 +694,7 @@ loop:
 		if midx < mlen {
 			mp = mposts[midx]
 		} else {
-			mp = fbx.NewPosting().Build()
+			mp = fbx.EmptyPosting
 		}
 
 		valid, err := pitr.valid()
@@ -704,7 +704,7 @@ loop:
 		case valid:
 			pp = pitr.posting()
 		default:
-			pp = fbx.NewPosting().Build()
+			pp = fbx.EmptyPosting
 		}
 
 		switch {

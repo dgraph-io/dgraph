@@ -15,6 +15,17 @@ import (
 
 const bufSize = 2 << 10
 
+var EmptyPosting = (*fb.Posting)(nil)
+
+func init() {
+	builder := flatbuffers.NewBuilder(bufSize)
+	fb.PostingStart(builder)
+	offset := fb.PostingEnd(builder)
+	builder.Finish(offset)
+	buf := builder.FinishedBytes()
+	EmptyPosting = fb.GetRootAsPosting(buf, 0)
+}
+
 func AsPosting(bs []byte) *fb.Posting {
 	return fb.GetRootAsPosting(bs, 0)
 }
