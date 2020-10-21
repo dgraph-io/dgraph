@@ -119,7 +119,7 @@ pushd $basedir/dgraph
   git checkout $TAG
   # HEAD here points to whatever is checked out.
   lastCommitSHA1=$(git rev-parse --short HEAD)
-  codename="shuri-1"
+  codename="$(awk '/^BUILD_CODENAME/ { print $NF }' ./dgraph/Makefile)"
   gitBranch=$(git rev-parse --abbrev-ref HEAD)
   lastCommitTime=$(git log -1 --format=%ci)
   release_version=$(git describe --always --tags)
