@@ -113,25 +113,10 @@ run_backup() {
   [[ -f ./backup_helper.sh ]] || { echo "ERROR: Backup Script library (./backup_helper.sh) missing" 1>&2; exit 1; }
   source ./backup_helper.sh
 
-  echo "ALPHA_HOST=$ALPH_HOST"
-  echo "BACKUP_DESTINATION=$BACKUP_DESTINATION"
-  echo "SUBPATH=$SUBPATH"
-  echo "API_TYPE=$API_TYPE"
-  echo "MINIO_SECURE=$MINIO_SECURE"
-  echo "AUTH_TOKEN=$AUTH_TOKEN"
-
-  echo "CACERT_PATH=$CACERT_PATH"
-  echo "CLIENT_CERT_PATH=$CLIENT_CERT_PATH"
-  echo "CLIENT_KEY_PATH=$CLIENT_KEY_PATH"
-  echo "USER=$USER"
-
   ## login if user was specified
   if ! [[ -z $USER ]]; then
     ACCESS_TOKEN=$(get_token $USER $PASSWORD $AUTH_TOKEN)
   fi
-
-  echo "FORCE_FULL=$FORCE_FULL"
-  echo "ACCESS_TOKEN=$ACCESS_TOKEN"
 
   ## perform backup with valid options set
   backup "$ACCESS_TOKEN" "$AUTH_TOKEN"
