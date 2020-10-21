@@ -653,7 +653,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		if shouldSplit {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
-			kvs, err := l.Rollup()
+			kvs, err := l.Rollup(nil)
 			x.Check(err)
 
 			for _, kv := range kvs {
@@ -664,15 +664,11 @@ func (r *reducer) toList(req *encodeRequest) {
 				req.splitCh <- &bpb.KVList{Kv: splits}
 			}
 		} else {
-			data, byt := posting.MarshalPostingList(pl)
+			kv := posting.MarshalPostingList(pl, nil)
 			codec.FreePack(pl.Pack)
 
-			kv := &bpb.KV{
-				Key:      y.Copy(currentKey),
-				Value:    data,
-				UserMeta: []byte{byt},
-				Version:  writeVersionTs,
-			}
+			kv.Key = y.Copy(currentKey)
+			kv.Version = writeVersionTs
 			kv.StreamId = r.streamIdFor(pk.Attr)
 			kvList.Kv = append(kvList.Kv, kv)
 		}

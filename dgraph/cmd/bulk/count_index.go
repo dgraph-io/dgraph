@@ -144,17 +144,14 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		if codec.ExactLen(pl.Pack) == 0 {
 			return
 		}
-		data, byt := posting.MarshalPostingList(&pl)
-		codec.FreePack(pl.Pack)
 
-		kv := &bpb.KV{
-			Key:      append([]byte{}, lastCe.Key()...),
-			Value:    data,
-			UserMeta: []byte{byt},
-			Version:  c.state.writeTs,
-			StreamId: streamId,
-		}
+		kv := posting.MarshalPostingList(&pl, nil)
+		codec.FreePack(pl.Pack)
+		kv.Key = append([]byte{}, lastCe.Key()...)
+		kv.Version = c.state.writeTs
+		kv.StreamId = streamId
 		list.Kv = append(list.Kv, kv)
+
 		listSz += kv.Size()
 		encoder = codec.Encoder{BlockSize: 256}
 		pl.Reset()

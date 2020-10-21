@@ -17,8 +17,10 @@
 package raftwal
 
 import (
+	"bytes"
 	"sort"
 
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
@@ -166,8 +168,18 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 			}
 			l.nextEntryIdx, offset = 0, logFileOffset
 		}
+		// If encryption is enabled then encrypt the data.
+		if l.current.dataKey != nil {
+			var ebuf bytes.Buffer
+			curr := l.current
+			if err := y.XORBlockStream(
+				&ebuf, re.Data, curr.dataKey.Data, curr.generateIV(uint64(offset))); err != nil {
+				return err
+			}
+			re.Data = ebuf.Bytes()
+		}
 
-		// Write re.Data to a new slice at the end of the file.
+		// Allocate slice for the data and copy bytes.
 		destBuf, next := l.current.AllocateSlice(len(re.Data), offset)
 		x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 

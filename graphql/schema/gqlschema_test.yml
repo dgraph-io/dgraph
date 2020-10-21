@@ -122,9 +122,124 @@ invalid_schemas:
         x: X!
       }
     errlist: [
-    {"message":"You can't add scalar definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]},
-    {"message":"You can't add union definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":5, "column":7}]},
-      #      {"message":"You can't add input_object definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":6, "column":7}]},
+    {"message":"You can't add scalar definitions. Only type, interface, union, input and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]}
+    ]
+
+  -
+    name: "union members can't be non-object types - Interface"
+    input: |
+      interface I {
+        f: String
+      }
+      union U = I
+    errlist: [
+      {"message":"UNION type \"I\" must be OBJECT.", "locations":[{"line":4, "column":7}]}
+    ]
+
+  -
+    name: "union members can't be non-object types - Scalar"
+    input: |
+      union U = String
+    errlist: [
+      {"message":"UNION type \"String\" must be OBJECT.", "locations":[{"line":1, "column":7}]}
+    ]
+
+  -
+    name: "union members can't be non-object types - Enum"
+    input: |
+      enum E {
+        E1
+        E2
+      }
+      union U = E
+    errlist: [
+      {"message":"UNION type \"E\" must be OBJECT.", "locations":[{"line":5, "column":7}]}
+    ]
+
+  -
+    name: "union members can't be non-object types - Input Object"
+    input: |
+      input I {
+        f: String
+      }
+      union U = I
+    errlist: [
+      {"message":"UNION type \"I\" must be OBJECT.", "locations":[{"line":4, "column":7}]}
+    ]
+
+  -
+    name: "union can't be used with @dgraph(type: ...)"
+    input: |
+      type X {
+        f1: String
+      }
+      type Y {
+        f2: Int
+      }
+      union U @dgraph(type: "U") = X | Y
+    errlist: [
+      {"message":"Type U; has the @dgraph directive, but it is not applicable on types of UNION kind.", "locations":[{"line":7, "column":10}]}
+    ]
+
+  -
+    name: "union can't be used with @withSubscription"
+    input: |
+      type X {
+        f1: String
+      }
+      type Y {
+        f2: Int
+      }
+      union U @withSubscription = X | Y
+    errlist: [
+      { "message": "Type U; has the @withSubscription directive, but it is not applicable on types of UNION kind.", "locations":[{"line":7, "column":10}]}
+    ]
+
+  -
+    name: "union can't be used with @secret"
+    input: |
+      type X {
+        f1: String
+      }
+      type Y {
+        f2: Int
+      }
+      union U @secret(field: "f2") = X | Y
+    errlist: [
+      { "message": "Type U; has the @secret directive, but it is not applicable on types of UNION kind.", "locations":[{"line":7, "column":10}]}
+    ]
+
+  -
+    name: "union can't be used with @auth"
+    input: |
+      type X {
+        f1: String
+      }
+      type Y {
+        f2: Int
+      }
+      union U @auth(query: {}) = X | Y
+    errlist: [
+      { "message": "Type U; has the @auth directive, but it is not applicable on types of UNION kind.", "locations":[{"line":7, "column":10}]}
+    ]
+
+  -
+    name: "union can't be used with @hasInverse, @search, @id"
+    input: |
+      type X {
+        f1: String
+      }
+      type Y {
+        f2: Int
+      }
+      union U = X | Y
+      type Z {
+        f: U @hasInverse(field: "f1") @search @id
+      }
+    errlist: [
+      { "message": "Type Z; Field f: Field f is of type U, but @hasInverse directive only applies to fields with object types.", "locations": [{"line":9, "column":3}]},
+      { "message": "Type Z; Field f: has the @search directive but fields of type U can't have the @search directive.", "locations": [{"line":9, "column":34}]},
+      { "message": "Type Z; Field f: with @id directive must be of type String!, not U", "locations": [{"line":9, "column":42}]}
     ]
 
   -
@@ -133,8 +248,26 @@ invalid_schemas:
       type String {
         id: ID!
       }
+      type X {
+        f: Int
+      }
+      union Query = X
+      interface Mutation {
+        f: ID!
+      }
+      input Subscription {
+       name: String
+      }
+      enum uid {
+        E1
+        E2
+      }
     errlist: [
       {"message":"String is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":1, "column":6}]},
+      {"message":"Query is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":7, "column":7}]},
+      {"message":"Mutation is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":8, "column":11}]},
+      {"message":"Subscription is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":11, "column":7}]},
+      {"message":"uid is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":14, "column":6}]},
     ]
 
   - name: "Point is reserved word"
@@ -159,14 +292,6 @@ invalid_schemas:
     errlist: [
       {"message":"Fields i1, i2, i3 and l2 are listed as IDs for type X, but a type can have only one ID field. Pick a single field as the ID for type X.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}, {"line":6, "column": 3}]},
       {"message": "Type X; Field l2: ID lists are invalid.", "locations": [{"line": 6, "column": 3}]}
-    ]
-
-  -
-    name: "Union type in schema"
-    input: |
-      union U = R | S | T
-    errlist: [
-    {"message":"You can't add union definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
     ]
 
   -
@@ -571,8 +696,7 @@ invalid_schemas:
         f1: String! @dgraph(pred: 2)
       }
     errlist: [
-      {"message": "Type X; Field f1: pred argument for @dgraph directive should
-      of type String.",
+      {"message": "Type X; Field f1: pred argument for @dgraph directive should be of type String.",
       "locations":[{"line":2, "column":16}]}
       ]
 
@@ -831,7 +955,7 @@ invalid_schemas:
     {"message": "Type Y; Field f10: has the @dgraph predicate, but that conflicts with type W @secret directive on the same predicate. @secret predicates are stored encrypted and so the same predicate can't be used as a String.",
      "locations":[{"line":22, "column":3}]}]
 
-  - name: "input type can't have same name as the type generated for other types"
+  - name: "user-defined types can't have same name as the types generated for other user-defined types or any inbuilt types"
     input: |
       type Author {
         id: ID!
@@ -841,9 +965,17 @@ invalid_schemas:
         id: ID!
         name: String
       }
+      union U = Author
+      input URef {
+        id: ID!
+      }
+      type IntFilter {
+        name: String
+      }
     errlist: [
-    {"message": "UpdateAuthorInput is a reserved word, so you can't declare an input type with this name. Pick a different name for the input type.",
-     "locations":[{"line":5, "column":7}]},
+    {"message": "UpdateAuthorInput is a reserved word, so you can't declare a INPUT_OBJECT with this name. Pick a different name for the INPUT_OBJECT.", "locations":[{"line":5, "column":7}]},
+    {"message": "URef is a reserved word, so you can't declare a INPUT_OBJECT with this name. Pick a different name for the INPUT_OBJECT.", "locations":[{"line":10, "column":7}]},
+    {"message": "IntFilter is a reserved word, so you can't declare a OBJECT with this name. Pick a different name for the OBJECT.", "locations":[{"line":13, "column":6}]},
     ]
 
   - name: "@custom query can't have same name as the query generated for other types"
@@ -2490,17 +2622,6 @@ invalid_schemas:
     ]
 
   -
-    name: "Subscription typename should return error"
-    input: |
-      type Subscription {
-              name: String
-      }
-
-    errlist: [
-    {"message": "Subscription is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations": [{"line":1, "column":6}]},
-    ]
-
-  -
     name: "as is reserved keyword - type Name"
     input: |
       type As {
@@ -2543,6 +2664,27 @@ invalid_schemas:
 
 
 valid_schemas:
+  - name: "schema with union"
+    input: |
+      interface W {
+        f1: ID!
+      }
+      type X implements W {
+        f2: String
+      }
+      type Y implements W {
+        f3: Int
+      }
+      type Z {
+        f4: Float
+      }
+      union P @remote = X | Y
+      union U = X | Y | Z
+      type V {
+        id: ID!
+        data: [U!]! @dgraph(pred: "data")
+      }
+
   - name: "@auth on interface implementation"
     input: |
       interface X {

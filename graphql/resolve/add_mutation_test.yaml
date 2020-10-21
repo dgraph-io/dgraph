@@ -2563,3 +2563,100 @@
           "uid": "_:Person1"
         }
 
+-
+  name: "Add mutation with union"
+  gqlmutation: |
+    mutation($input: [AddHomeInput!]!) {
+      addHome(input: $input) {
+        home {
+          address
+          members {
+            ... on Dog {
+              breed
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "address": "United Street",
+          "members": [
+            { "dogRef": { "category": "Mammal", "breed": "German Shephard"} },
+            { "parrotRef": { "category": "Bird", "repeatsWords": ["squawk"]} },
+            { "humanRef": { "name": "Han Solo", "ename": "Han_emp"} }
+          ],
+          "favouriteMember": { "parrotRef": { "id": "0x123"} }
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Parrot2 as Parrot2(func: uid(0x123)) @filter(type(Parrot)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Home.address": "United Street",
+          "Home.favouriteMember": {
+            "uid": "0x123"
+          },
+          "Home.members": [{
+            "Animal.category": "Mammal",
+            "Dog.breed": "German Shephard",
+            "dgraph.type": ["Dog", "Animal"],
+            "uid": "_:Dog3"
+          }, {
+            "Animal.category": "Bird",
+            "Parrot.repeatsWords": ["squawk"],
+            "dgraph.type": ["Parrot", "Animal"],
+            "uid": "_:Parrot4"
+          }, {
+            "Character.name": "Han Solo",
+            "Employee.ename": "Han_emp",
+            "dgraph.type": ["Human", "Character", "Employee"],
+            "uid": "_:Human5"
+          }],
+          "dgraph.type": ["Home"],
+          "uid": "_:Home1"
+        }
+      cond: "@if(eq(len(Parrot2), 1))"
+
+-
+  name: "Add mutation with union - invalid input"
+  gqlmutation: |
+    mutation($input: [AddHomeInput!]!) {
+      addHome(input: $input) {
+        home {
+          address
+          members {
+            ... on Dog {
+              breed
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "address": "United Street",
+          "members": [
+            { "dogRef": { "category": "Mammal"}, "parrotRef": { "category": "Bird"} },
+            { "parrotRef": { "category": "Bird", "repeatsWords": ["squawk"]} },
+            { "humanRef": { "name": "Han Solo", "ename": "Han_emp"} }
+          ],
+          "favouriteMember": { }
+        }
+      ]
+    }
+  explanation: "The add mutation should not be allowed since the union input is invalid"
+  error:
+    message: |-
+      failed to rewrite mutation payload because value for field `favouriteMember` in type `Home` must have exactly one child, found 0 children
+      failed to rewrite mutation payload because value for field `members` in type `Home` index `0` must have exactly one child, found 2 children

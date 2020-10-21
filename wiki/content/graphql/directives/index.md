@@ -2,7 +2,6 @@
 title = "Index of Directives"
 weight = 11
 [menu.main]
-  url = "/graphql/directives/"
   name = "Directives"
   identifier = "directives"
   parent = "graphql"

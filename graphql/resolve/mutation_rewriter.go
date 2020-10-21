@@ -663,7 +663,7 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 		addTypeFunc(dgQuery, m.MutatedType().DgraphName())
 	}
 
-	addFilter(dgQuery, m.MutatedType(), filter)
+	_ = addFilter(dgQuery, m.MutatedType(), filter)
 
 	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery, rbac)
 
@@ -1204,14 +1204,10 @@ func rewriteObject(
 
 			switch val := val.(type) {
 			case map[string]interface{}:
-				// This field is another GraphQL object, which could either be linking to an
-				// existing node by it's ID
-				// { "title": "...", "author": { "id": "0x123" }
-				//          like here ^^
-				// or giving the data to create the object as part of a deep mutation
-				// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
-				//          like here ^^
-				if fieldDef.Type().IsPoint() {
+				if fieldDef.Type().IsUnion() {
+					frags = rewriteUnionField(ctx, typ, fieldDef, myUID, varGen,
+						withAdditionalDeletes, val, deepXID, xidMetadata, -1)
+				} else if fieldDef.Type().IsPoint() {
 					// For Point type, the mutation json in Dgraph is as follows:
 					// { "type": "Point", "coordinates": [11.11, 22.22]}
 					lat := val["latitude"]
@@ -1227,6 +1223,13 @@ func rewriteObject(
 						},
 					}
 				} else {
+					// This field is another GraphQL object, which could either be linking to an
+					// existing node by it's ID
+					// { "title": "...", "author": { "id": "0x123" }
+					//          like here ^^
+					// or giving the data to create the object as part of a deep mutation
+					// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
+					//          like here ^^
 					frags =
 						rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
 							withAdditionalDeletes, val, deepXID, xidMetadata)
@@ -1302,6 +1305,48 @@ func rewriteObject(
 	}
 
 	return results
+}
+
+// if this is a union field, then obj should have only one key which will be a ref
+// to one of the member types. Eg:
+// { "dogRef" : { ... } }
+// So, just rewrite it as an object with correct underlying type.
+func rewriteUnionField(ctx context.Context,
+	parentTyp schema.Type,
+	srcField schema.FieldDefinition,
+	srcUID string,
+	varGen *VariableGenerator,
+	withAdditionalDeletes bool,
+	obj map[string]interface{},
+	deepXID int,
+	xidMetadata *xidMetadata,
+	listIndex int) *mutationRes {
+	if len(obj) != 1 {
+		errFrag := newFragment(nil)
+		// if this was called from rewriteList,
+		// the listIndex will tell which particular item in the list has an error.
+		if listIndex >= 0 {
+			errFrag.err = fmt.Errorf(
+				"value for field `%s` in type `%s` index `%d` must have exactly one child, "+
+					"found %d children", srcField.Name(), parentTyp.Name(), listIndex, len(obj))
+		} else {
+			errFrag.err = fmt.Errorf(
+				"value for field `%s` in type `%s` must have exactly one child, found %d children",
+				srcField.Name(), parentTyp.Name(), len(obj))
+		}
+		return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+	}
+
+	var typ schema.Type
+	for memberRef, memberRefVal := range obj {
+		memberTypeName := strings.ToUpper(memberRef[:1]) + memberRef[1:len(
+			memberRef)-3]
+		srcField = srcField.WithMemberType(memberTypeName)
+		typ = srcField.Type()
+		obj = memberRefVal.(map[string]interface{})
+	}
+	return rewriteObject(ctx, parentTyp, typ, srcField, srcUID, varGen,
+		withAdditionalDeletes, obj, deepXID, xidMetadata)
 }
 
 func invalidObjectFragment(
@@ -1750,11 +1795,17 @@ func rewriteList(
 	result.secondPass = []*mutationFragment{newFragment(make([]interface{}, 0))}
 	foundSecondPass := false
 
-	for _, obj := range objects {
+	for i, obj := range objects {
 		switch obj := obj.(type) {
 		case map[string]interface{}:
-			frag := rewriteObject(ctx, parentTyp, typ, srcField, srcUID, varGen,
-				withAdditionalDeletes, obj, deepXID, xidMetadata)
+			var frag *mutationRes
+			if typ.IsUnion() {
+				frag = rewriteUnionField(ctx, parentTyp, srcField, srcUID, varGen,
+					withAdditionalDeletes, obj, deepXID, xidMetadata, i)
+			} else {
+				frag = rewriteObject(ctx, parentTyp, typ, srcField, srcUID, varGen,
+					withAdditionalDeletes, obj, deepXID, xidMetadata)
+			}
 			if len(frag.secondPass) != 0 {
 				foundSecondPass = true
 			}
