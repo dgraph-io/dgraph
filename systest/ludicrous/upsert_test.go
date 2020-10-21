@@ -118,7 +118,7 @@ func TestConcurrentUpdate(t *testing.T) {
 	err = json.Unmarshal(res.Json, &dat)
 	require.NoError(t, err)
 
-	require.Equal(t, len(dat.All[0].Counts), 10)
+	require.Equal(t, 10, len(dat.All[0].Counts))
 }
 
 func TestSequentialUpdate(t *testing.T) {
@@ -163,5 +163,5 @@ func TestSequentialUpdate(t *testing.T) {
 	err = json.Unmarshal(res.Json, &dat)
 	require.NoError(t, err)
 
-	require.Equal(t, len(dat.All[0].Counts), 10)
+	require.Equal(t, 10, len(dat.All[0].Counts))
 }
