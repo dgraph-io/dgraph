@@ -20,12 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 type Person struct {
@@ -73,6 +74,8 @@ func InitData(t *testing.T) {
 }
 
 func TestConcurrentUpdate(t *testing.T) {
+	// wait for server to be ready
+	time.Sleep(2 * time.Second)
 	InitData(t)
 	ctx := context.Background()
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
@@ -101,7 +104,9 @@ func TestConcurrentUpdate(t *testing.T) {
 		go mutation(i)
 	}
 	wg.Wait()
-	time.Sleep(time.Second * 1)
+	// eventual consistency
+	time.Sleep(1 * time.Second)
+
 	q := `query all($a: string) {
 			all(func: eq(name, $a)) {
 			  name
@@ -116,10 +121,12 @@ func TestConcurrentUpdate(t *testing.T) {
 	err = json.Unmarshal(res.Json, &dat)
 	require.NoError(t, err)
 
-	require.Equal(t, len(dat.All[0].Counts), 10)
+	require.Equal(t, 10, len(dat.All[0].Counts))
 }
 
 func TestSequentialUpdate(t *testing.T) {
+	// wait for server to be ready
+	time.Sleep(2 * time.Second)
 	InitData(t)
 	ctx := context.Background()
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
@@ -146,6 +153,9 @@ func TestSequentialUpdate(t *testing.T) {
 		mutation(i)
 	}
 
+	// eventual consistency
+	time.Sleep(1 * time.Second)
+
 	q := `query all($a: string) {
 			all(func: eq(name, $a)) {
 			  name
@@ -160,5 +170,5 @@ func TestSequentialUpdate(t *testing.T) {
 	err = json.Unmarshal(res.Json, &dat)
 	require.NoError(t, err)
 
-	require.Equal(t, len(dat.All[0].Counts), 10)
+	require.Equal(t, 10, len(dat.All[0].Counts))
 }
