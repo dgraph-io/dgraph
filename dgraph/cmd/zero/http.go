@@ -290,7 +290,7 @@ func startServers(m cmux.CMux) {
 		tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
 		x.Check(err)
 		if tlsCfg == nil {
-			glog.Fatalf("tls_enabled_route is set but tls config provided is not correct. Please define correct variable --tls_dir")
+			glog.Fatalf("tls_dir is set but tls config provided is not correct. Please define correct variable --tls_dir")
 		}
 
 		httpsRule := m.Match(cmux.Any())

@@ -168,6 +168,11 @@ func run() {
 	}
 
 	x.PrintVersion()
+	var tlsDisRoutes []string
+	if Zero.Conf.GetString("tls_disabled_route") != "" {
+		tlsDisRoutes = strings.Split(Zero.Conf.GetString("tls_disabled_route"), ",")
+	}
+
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
@@ -178,7 +183,7 @@ func run() {
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
 		tlsDir:            Zero.Conf.GetString("tls_dir"),
-		tlsDisabledRoutes: strings.Split(Zero.Conf.GetString("tls_disabled_route"), ","),
+		tlsDisabledRoutes: tlsDisRoutes,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 
