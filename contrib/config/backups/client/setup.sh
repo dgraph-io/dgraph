@@ -98,7 +98,11 @@ create_certs() {
 
   if [[ "$TLS_MAKE_CERTS" == "true" ]]; then
     [[ -z $DGRAPH_VERSION ]] && { echo "[ERROR]: 'DGRAPH_VERSION' not set. Aborting." 1>&2; exit 1; }
-    docker run --tty --volume $PWD/data/tls:/tls dgraph/dgraph:$DGRAPH_VERSION dgraph cert --dir /tls --client backupuser -n localhost --duration 365
+    rm --force $PWD/data/tls/*.{crt,key}
+    docker run \
+      --tty \
+      --volume $PWD/data/tls:/tls dgraph/dgraph:$DGRAPH_VERSION \
+      dgraph cert --dir /tls --client backupuser --nodes "localhost,alpha1,zero1,ratel" --duration 365
   fi
 }
 
@@ -116,7 +120,7 @@ config_compose() {
   [[ -f $CFGPATH/config.toml ]] && rm $CFGPATH/config.toml
   touch $CFGPATH/config.toml
 
-  ## defaults
+  ## configuredefaults
   echo "whitelist = '10.0.0.0/8,172.16.0.0/12,192.168.0.0/16'" >> "$CFGPATH/config.toml"
   echo "lru_mb = 1024" >> "$CFGPATH/config.toml"
 
@@ -135,6 +139,7 @@ TLS_CONFIG
 
   ## configure dgraph version
   echo "DGRAPH_VERSION=$DGRAPH_VERSION" > .env
+  cp backup*.sh data
 }
 
 main $@

@@ -19,7 +19,7 @@ Usage:
   $0 [FLAGS] --location [LOCATION]
 
 Flags:
- -a, --alpha string        Dgraph alpha HTTP/S server (default "127.0.0.1:8080")
+ -a, --alpha string        Dgraph alpha HTTP/S server (default "127.0.0.1")
  -i, --api_type            API Type of REST or GraphQL (default "GraphQL")
  -t, --auth_token string   The auth token passed to the server
  -d, --debug               Enable debug in output
@@ -62,7 +62,7 @@ parse_command() {
 
   ## Defaults
   DEBUG="false"
-  ALPHA_HOST="http://localhost:8080"
+  ALPHA_HOST="localhost"
   BACKUP_DESTINATION=""
   SUBPATH=dgraph_$(date +%Y%m%d)
   API_TYPE="graphql"
@@ -123,13 +123,16 @@ run_backup() {
   echo "CACERT_PATH=$CACERT_PATH"
   echo "CLIENT_CERT_PATH=$CLIENT_CERT_PATH"
   echo "CLIENT_KEY_PATH=$CLIENT_KEY_PATH"
+  echo "USER=$USER"
 
   ## login if user was specified
   if ! [[ -z $USER ]]; then
-    ACCESS_TOKEN=$(get_token $USER $PASSWORD $AUTH_TOKEN )
+    ACCESS_TOKEN=$(get_token $USER $PASSWORD $AUTH_TOKEN)
   fi
 
   echo "FORCE_FULL=$FORCE_FULL"
+  echo "ACCESS_TOKEN=$ACCESS_TOKEN"
+
   ## perform backup with valid options set
   backup "$ACCESS_TOKEN" "$AUTH_TOKEN"
 }

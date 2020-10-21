@@ -34,6 +34,11 @@ services:
   ratel:
     ## DGRAPH_VERSION set by ./setup.sh
     image: dgraph/dgraph:$DGRAPH_VERSION
+    volumes:
+      - type: bind
+        source: ./data
+        target: /dgraph
+        read_only: false
     ports:
       - 8000:8000
     command: dgraph-ratel
