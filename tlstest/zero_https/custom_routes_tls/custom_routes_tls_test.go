@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -37,13 +38,9 @@ func TestZeroWithCustomTLSWithHTTPClient(t *testing.T) {
 	defer client.CloseIdleConnections()
 	for _, test := range testCasesHttp {
 		request, err := http.NewRequest("GET", test.url, nil)
-		if err != nil {
-			t.Fatalf("%+v", err)
-		}
+		require.NoError(t, err)
 		do, err := client.Do(request)
-		if err != nil {
-			t.Fatalf("%+v", err)
-		}
+		require.NoError(t, err)
 		if do != nil && do.StatusCode != test.statusCode {
 			t.Fatalf("status code is not same. Got: %d Expected: %d", do.StatusCode, test.statusCode)
 		}
@@ -70,9 +67,7 @@ var testCasesHttps = []testCase{
 
 func TestZeroWithCustomTLSWithTLSClient(t *testing.T) {
 	pool, err := generateCertPool("../../tls/ca.crt", true)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	require.NoError(t, err)
 
 	tlsCfg := &tls.Config{RootCAs: pool, ServerName: "localhost", InsecureSkipVerify: true}
 	tr := &http.Transport{
@@ -87,14 +82,9 @@ func TestZeroWithCustomTLSWithTLSClient(t *testing.T) {
 	defer client.CloseIdleConnections()
 	for _, test := range testCasesHttps {
 		request, err := http.NewRequest("GET", test.url, nil)
-		if err != nil {
-			t.Fatalf("%+v", err)
-		}
-
+		require.NoError(t, err)
 		do, err := client.Do(request)
-		if err != nil {
-			t.Fatalf("%+v", err)
-		}
+		require.NoError(t, err)
 		if do != nil && do.StatusCode != test.statusCode {
 			t.Fatalf("status code is not same. Got: %d Expected: %d", do.StatusCode, test.statusCode)
 		}
@@ -108,9 +98,7 @@ func TestZeroWithCustomTLSWithTLSClient(t *testing.T) {
 func readResponseBody(t *testing.T, do *http.Response) []byte {
 	defer func() { _ = do.Body.Close() }()
 	body, err := ioutil.ReadAll(do.Body)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	require.NoError(t, err)
 	return body
 }
 
