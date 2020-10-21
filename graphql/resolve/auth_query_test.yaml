@@ -1120,7 +1120,7 @@
       }
     }
 
-- name: "Auth on interfaces with different Auth rules interfaces"
+- name: "Type should apply query auth rules from all the interfaces that it implements."
   gqlquery: |
     query {
       queryFbPost {
@@ -1149,7 +1149,7 @@
       }
     }
 
-- name: "Auth on interfaces with different Auth rules"
+- name: "Type which inherits auth rules from interfaces returns no results when auth rules fail"
   gqlquery: |
     query {
       queryFbPost {

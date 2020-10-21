@@ -23,15 +23,6 @@ type Question implements Post @auth(query: {rule:"query($ANS: Boolean!) { \n  qu
 	answered: Boolean @search
 }
 
-interface A {
-	a: String
-}
-
-type B implements A {
-	a: String
-	b: String
-}
-
 #######################
 # Extended Definitions
 #######################
@@ -202,11 +193,6 @@ type AddAuthorPayload {
 	numUids: Int
 }
 
-type AddBPayload {
-	b(order: BOrder, first: Int, offset: Int): [B]
-	numUids: Int
-}
-
 type AddQuestionPayload {
 	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
 	numUids: Int
@@ -249,14 +235,6 @@ type UpdateQuestionPayload {
 # Generated Enums
 #######################
 
-enum AHasFilter {
-	a
-}
-
-enum AOrderable {
-	a
-}
-
 enum AuthorHasFilter {
 	name
 	posts
@@ -264,16 +242,6 @@ enum AuthorHasFilter {
 
 enum AuthorOrderable {
 	name
-}
-
-enum BHasFilter {
-	a
-	b
-}
-
-enum BOrderable {
-	a
-	b
 }
 
 enum PostHasFilter {
@@ -303,27 +271,9 @@ enum QuestionOrderable {
 # Generated Inputs
 #######################
 
-input AFilter {
-	has: AHasFilter
-	and: AFilter
-	or: AFilter
-	not: AFilter
-}
-
-input AOrder {
-	asc: AOrderable
-	desc: AOrderable
-	then: AOrder
-}
-
 input AddAuthorInput {
 	name: String!
 	posts: [PostRef]
-}
-
-input AddBInput {
-	a: String
-	b: String
 }
 
 input AddQuestionInput {
@@ -357,24 +307,6 @@ input AuthorRef {
 	id: ID
 	name: String
 	posts: [PostRef]
-}
-
-input BFilter {
-	has: BHasFilter
-	and: BFilter
-	or: BFilter
-	not: BFilter
-}
-
-input BOrder {
-	asc: BOrderable
-	desc: BOrderable
-	then: BOrder
-}
-
-input BRef {
-	a: String
-	b: String
 }
 
 input PostFilter {
@@ -464,8 +396,6 @@ type Query {
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	getQuestion(id: ID!): Question
 	queryQuestion(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
-	queryA(order: AOrder, first: Int, offset: Int): [A]
-	queryB(order: BOrder, first: Int, offset: Int): [B]
 }
 
 #######################
@@ -481,6 +411,5 @@ type Mutation {
 	addQuestion(input: [AddQuestionInput!]!): AddQuestionPayload
 	updateQuestion(input: UpdateQuestionInput!): UpdateQuestionPayload
 	deleteQuestion(filter: QuestionFilter!): DeleteQuestionPayload
-	addB(input: [AddBInput!]!): AddBPayload
 }
 

@@ -28,11 +28,3 @@ type Question implements Post  @auth(
 ){
     answered:  Boolean @search
 }
-
-interface A {
-  a: String
-}
-
-type B implements A{
-  b: String
-}

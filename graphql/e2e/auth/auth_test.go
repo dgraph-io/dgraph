@@ -379,6 +379,19 @@ func TestAuthOnInterfaces(t *testing.T) {
 			result: `{"queryQuestion":[{"text": "A Question"}]}`,
 		},
 		{
+			name: "Query Should return empty for non-existent user",
+			query: `
+		query{
+			queryQuestion{
+				text
+			}
+		}
+		`,
+			user:   "user3@dgraph.io",
+			ans:    true,
+			result: `{"queryQuestion":[]}`,
+		},
+		{
 			name: "Types inherit Only Interface's auth rules if it doesn't have its own auth rules",
 			query: `
 			query{

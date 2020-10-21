@@ -165,6 +165,7 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		}
 	}
 
+	// Merge the Auth rules on interfaces into the implementing types
 	for _, typ := range s.Types {
 		name := typeName(typ)
 		if typ.Kind == ast.Object {
@@ -196,6 +197,9 @@ func mergeAuthNode(objectAuth, interfaceAuth *RuleNode) *RuleNode {
 func mergeAuthRules(authRules map[string]*TypeAuth, objectName string, interfaceName string) *AuthContainer {
 	objectAuthRules := authRules[objectName].Rules
 	interfaceAuthRules := authRules[interfaceName].Rules
+
+	// return copy of interfaceAuthRules since it is a pointer and otherwise it will lead
+	// to unnecessary errors
 	if objectAuthRules == nil {
 		return &AuthContainer{
 			Query:  interfaceAuthRules.Query,
