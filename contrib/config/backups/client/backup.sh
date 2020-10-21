@@ -81,12 +81,12 @@ parse_command() {
       -h | --help) usage; exit;;
       -m | --minio_secure) MINIO_SECURE=true; shift ;;
       -l | --location) BACKUP_DESTINATION="$2"; shift 2 ;;
-      -p | --password) PASSWORD=$PASSWORD; shift 2;;
+      -p | --password) PASSWORD="$2"; shift 2;;
       --subpath) SUBPATH="$2"; shift 2 ;;
       --tls_cacert) CACERT_PATH="$2"; shift 2 ;;
       --tls_cert) CLIENT_CERT_PATH="$2"; shift 2;;
       --tls_key) CLIENT_KEY_PATH="$2"; shift 2;;
-      -u | --user) USER=$USER; shift 2;;
+      -u | --user) USER="$2"; shift 2;;
       --) shift; break ;;
       *) break ;;
     esac
@@ -110,8 +110,8 @@ run_backup() {
     set -e
   fi
 
-  [[ -f ./backup_lib.sh ]] || { echo "ERROR: Backup Script library (./backup_lib.sh) missing" 1>&2; exit 1; }
-  source ./backup_lib.sh
+  [[ -f ./backup_helper.sh ]] || { echo "ERROR: Backup Script library (./backup_helper.sh) missing" 1>&2; exit 1; }
+  source ./backup_helper.sh
 
   echo "ALPHA_HOST=$ALPH_HOST"
   echo "BACKUP_DESTINATION=$BACKUP_DESTINATION"
