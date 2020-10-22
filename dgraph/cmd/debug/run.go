@@ -483,6 +483,9 @@ func lookup(db *badger.DB) {
 	fmt.Println(buf.String())
 }
 
+// Current format is like:
+// {i} attr: name term: [8] woods  ts: 535 item: [28, b0100] sz: 81 dcnt: 3 key: 00000...6f6f6473
+// Fix the TestBulkLoadMultiShard accordingly, if the format changes.
 func printKeys(db *badger.DB) {
 	txn := db.NewTransactionAt(opt.readTs, false)
 	defer txn.Discard()
