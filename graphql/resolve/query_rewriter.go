@@ -87,10 +87,6 @@ func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
-	if gqlQuery.Type().InterfaceImplHasAuthRules() {
-		return &gql.GraphQuery{Attr: gqlQuery.ResponseName() + "()"}, nil
-	}
-
 	authVariables, _ := ctx.Value(authorization.AuthVariables).(map[string]interface{})
 
 	if authVariables == nil {
