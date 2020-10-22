@@ -6,6 +6,13 @@ weight = 26
     parent = "query-language"
 +++
 
+Syntax Examples (using default values):
+
+* `query title($name: string = "Bauman") { ... }`
+* `query title($age: int = "95") { ... }`
+* `query title($uids: string = "0x1") { ... }`
+* `query title($uids: string = "[0x1, 0x2, 0x3]") { ... }`. The value of the variable is a quoted array.
+
 `Variables` can be defined and used in queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a `$` symbol.
 For **HTTP requests** with GraphQL Variables, we must use `Content-Type: application/json` header and pass data with a JSON object containing `query` and `variables`.
 
@@ -62,11 +69,15 @@ query test($a: int = 2, $b: int!, $aName: string, $bName: string) {
 }
 {{< /runnable >}}
 
-We also support variable substituion in facets now.
-{{< runnable vars="{\"$name\": \"Alice\"}" >}}
-query test($name: string = "Alice") {
+We also support variable substitution in facets.
+
+{{< runnable vars="{\"$name\": \"Alice\", \"$IsClose\": \"true\"}" >}}
+query test($name: string = "Alice", $IsClose: string = "true") {
   data(func: eq(name, $name)) {
-    friend @facets(eq(close, true)) {
+    friend @facets(eq(close, $IsClose)) {
+      name
+    }
+      colleague : friend @facets(eq(close, false)) {
       name
     }
   }
