@@ -4,6 +4,93 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+## [20.07.2] - 2020-10-22
+[20.07.2]: https://github.com/dgraph-io/dgraph/compare/v20.07.1...v20.07.2
+
+### Changed
+
+- Update badger to 5e3d4b9. ([#6669][])
+- Makefile to build Dgraph inside docker container. ([#6601][])
+- Return content length header for queries. ([#6480][])
+- Use raft storage in managedmode. ([#6547][])
+- Update index.md. ([#6567][])
+- Changes github.com/dgraph-io/graphql-transport-ws version. ([#6529][])
+
+### Added
+
+- Add utility to export backup data. ([#6590][])
+- Add separate compression flag for z and wal dirs. ([#6421][])
+
+### Fixed
+
+- GraphQL
+  - Disallowing field names with as. ([#6645][])
+  - Remove extra fields when querying interfaces. ([#6647][])
+  - fix object Linking with `hasInverse`. ([#6648][])
+  - Update gqlgen in go.mod. ([#6646][])
+  - Hide info when performing mutation on id field with auth rule. ([#6534][])
+  - Fix cascade with auth query when RBAC is false. ([#6535][])
+  - Fix squashIntoObject so that results are correctly merged. ([#6530][])
+  - Fix errors from authorization examples given in docs. ([#6522][])
+  - Fix  restoreStatus query with query variables. ([#6424][])
+  - Fix for deletion on interfaces with no non Id field. ([#6417][])
+  - Fix internal error when doing GraphQL schema introspection after drop all. ([#6525][])
+  - Link xids properly if there are duplicate xids within type. ([#6521][])
+  - Fix query rewriting for auth delete when deleting types with inverse field. ([#6524][])
+  - Fix order and offset in auth queries. ([#6366][])
+  - Generate correct schema when no orderable field in a type. ([#6460][])
+  - Don't generate orderable enum value for list fields. ([#6413][])
+  - Dix introspection completion bug. ([#6389][])
+- Fix Poor-man's auth for admin operations. ([#6686][])
+- Break out if g.Ctx is done. ([#6675][])
+- Fix wrong path response for k-shortest paths. ([#6654][])
+- Update nextRaftId when starting a node with a raftId > 0. ([#6597][])
+- Pagination param "after" does not work when using func: uid(v). ([#6634][])
+- CID never created if Zero stops early after first init. ([#6637][])
+- Pause rollups during snapshot streaming. ([#6611][])
+- Use flags for cache. ([#6467][])
+- Remove auth error from mutation. ([#6532][])
+- Fix readTs less than minTs. ([#6517][])
+- Fix bug when deleting and adding to a single UID predicate in the same transaction. ([#6449][])
+
+[#6669]: https://github.com/dgraph-io/dgraph/issues/6669
+[#6601]: https://github.com/dgraph-io/dgraph/issues/6601
+[#6480]: https://github.com/dgraph-io/dgraph/issues/6480
+[#6547]: https://github.com/dgraph-io/dgraph/issues/6547
+[#6567]: https://github.com/dgraph-io/dgraph/issues/6567
+[#6529]: https://github.com/dgraph-io/dgraph/issues/6529
+[#6590]: https://github.com/dgraph-io/dgraph/issues/6590
+[#6421]: https://github.com/dgraph-io/dgraph/issues/6421
+[#6645]: https://github.com/dgraph-io/dgraph/issues/6645
+[#6647]: https://github.com/dgraph-io/dgraph/issues/6647
+[#6648]: https://github.com/dgraph-io/dgraph/issues/6648
+[#6646]: https://github.com/dgraph-io/dgraph/issues/6646
+[#6534]: https://github.com/dgraph-io/dgraph/issues/6534
+[#6535]: https://github.com/dgraph-io/dgraph/issues/6535
+[#6530]: https://github.com/dgraph-io/dgraph/issues/6530
+[#6522]: https://github.com/dgraph-io/dgraph/issues/6522
+[#6424]: https://github.com/dgraph-io/dgraph/issues/6424
+[#6417]: https://github.com/dgraph-io/dgraph/issues/6417
+[#6525]: https://github.com/dgraph-io/dgraph/issues/6525
+[#6521]: https://github.com/dgraph-io/dgraph/issues/6521
+[#6524]: https://github.com/dgraph-io/dgraph/issues/6524
+[#6366]: https://github.com/dgraph-io/dgraph/issues/6366
+[#6460]: https://github.com/dgraph-io/dgraph/issues/6460
+[#6413]: https://github.com/dgraph-io/dgraph/issues/6413
+[#6389]: https://github.com/dgraph-io/dgraph/issues/6389
+[#6686]: https://github.com/dgraph-io/dgraph/issues/6686
+[#6675]: https://github.com/dgraph-io/dgraph/issues/6675
+[#6654]: https://github.com/dgraph-io/dgraph/issues/6654
+[#6597]: https://github.com/dgraph-io/dgraph/issues/6597
+[#6634]: https://github.com/dgraph-io/dgraph/issues/6634
+[#6637]: https://github.com/dgraph-io/dgraph/issues/6637
+[#6611]: https://github.com/dgraph-io/dgraph/issues/6611
+[#6467]: https://github.com/dgraph-io/dgraph/issues/6467
+[#6532]: https://github.com/dgraph-io/dgraph/issues/6532
+[#6517]: https://github.com/dgraph-io/dgraph/issues/6517
+[#6449]: https://github.com/dgraph-io/dgraph/issues/6449
+
+
 ## [20.07.1] - 2020-09-17
 [20.07.1]: https://github.com/dgraph-io/dgraph/compare/v20.07.0...v20.07.1
 
