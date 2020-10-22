@@ -141,7 +141,7 @@ func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 		return nil
 	}
 
-	it.uidPosting = fbx.NewPosting().Build()
+	it.uidPosting = fbx.MutEmptyPosting()
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
 	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
 	it.uidx = 0
@@ -187,7 +187,7 @@ func (it *pIterator) moveToNextPart() error {
 	}
 	it.plist = plist
 
-	it.uidPosting = fbx.NewPosting().Build()
+	it.uidPosting = fbx.MutEmptyPosting()
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
 	// codec.SeekCurrent makes sure we skip returning afterUid during seek.
 	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)

@@ -85,7 +85,7 @@ type MapEntry []byte
 // }
 
 func mapEntrySize(key []byte, p *fb.Posting) int {
-	return 8 + 4 + 4 + len(key) + len(p.Table().Bytes)
+	return 8 + 4 + 4 + len(key) + fbx.PostingSize(p)
 }
 
 func marshalMapEntry(dst []byte, uid uint64, key []byte, p *fb.Posting) {
@@ -95,16 +95,13 @@ func marshalMapEntry(dst []byte, uid uint64, key []byte, p *fb.Posting) {
 	binary.BigEndian.PutUint64(dst[0:8], uid)
 	binary.BigEndian.PutUint32(dst[8:12], uint32(len(key)))
 
-	psz := len(p.Table().Bytes)
+	psz := fbx.PostingSize(p)
 	binary.BigEndian.PutUint32(dst[12:16], uint32(psz))
 
 	n := copy(dst[16:], key)
 
 	if psz > 0 {
-		// TODO(ajeet) what's happening here?
-		// pbuf := dst[16+n:]
-		// _, err := p.MarshalToSizedBuffer(pbuf[:psz])
-		// x.Check(err)
+		copy(dst[16+n:], p.Table().Bytes)
 	}
 
 	x.AssertTrue(len(dst) == 16+n+psz)

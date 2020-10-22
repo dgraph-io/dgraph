@@ -15,7 +15,9 @@ import (
 
 const bufSize = 2 << 10
 
-var EmptyPosting = (*fb.Posting)(nil)
+var (
+	EmptyPosting, mutEmptyPosting *fb.Posting
+)
 
 func init() {
 	builder := flatbuffers.NewBuilder(bufSize)
@@ -24,6 +26,14 @@ func init() {
 	builder.Finish(offset)
 	buf := builder.FinishedBytes()
 	EmptyPosting = fb.GetRootAsPosting(buf, 0)
+
+	mutEmptyPosting = NewPosting().Build()
+}
+
+func MutEmptyPosting() *fb.Posting {
+	buf := make([]byte, len(mutEmptyPosting.Table().Bytes))
+	copy(buf, mutEmptyPosting.Table().Bytes)
+	return AsPosting(buf)
 }
 
 func AsPosting(bs []byte) *fb.Posting {
@@ -49,6 +59,13 @@ func PostingEq(p1, p2 *fb.Posting) bool {
 		p1.Op() == p2.Op() &&
 		p1.StartTs() == p2.StartTs() &&
 		p1.CommitTs() == p2.CommitTs()
+}
+
+func PostingSize(p *fb.Posting) int {
+	if p == nil {
+		return 0
+	}
+	return len(p.Table().Bytes)
 }
 
 func PostingFacets(p *fb.Posting) []*api.Facet {
