@@ -131,7 +131,7 @@ EOF
 fi
 
 Info "bringing up alpha container"
-DockerCompose up -d --force-recreate alpha1 alpha2 alpha3
+DockerCompose up -d --force-recreate --remove-orphans alpha1 alpha2 alpha3
 
 Info "waiting for alpha to be ready"
 DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"
