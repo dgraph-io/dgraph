@@ -283,6 +283,10 @@ type DeleteProductPayload {
 	numUids: Int
 }
 
+type ProductAggregateResult {
+	count: Int
+}
+
 type UpdateProductPayload {
 	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	numUids: Int
@@ -357,6 +361,7 @@ input UpdateProductInput {
 type Query {
 	getProduct(id: ID!): Product
 	queryProduct(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+	aggregateProduct(filter: ProductFilter): ProductAggregateResult
 }
 
 #######################

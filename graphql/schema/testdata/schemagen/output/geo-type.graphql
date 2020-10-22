@@ -282,6 +282,10 @@ type DeleteHotelPayload {
 	numUids: Int
 }
 
+type HotelAggregateResult {
+	count: Int
+}
+
 type UpdateHotelPayload {
 	hotel(filter: HotelFilter, order: HotelOrder, first: Int, offset: Int): [Hotel]
 	numUids: Int
@@ -370,6 +374,7 @@ input UpdateHotelInput {
 type Query {
 	getHotel(id: ID!): Hotel
 	queryHotel(filter: HotelFilter, order: HotelOrder, first: Int, offset: Int): [Hotel]
+	aggregateHotel(filter: HotelFilter): HotelAggregateResult
 }
 
 #######################

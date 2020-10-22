@@ -330,6 +330,10 @@ type AddStarshipPayload {
 	numUids: Int
 }
 
+type CharacterAggregateResult {
+	count: Int
+}
+
 type DeleteCharacterPayload {
 	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	msg: String
@@ -358,6 +362,22 @@ type DeleteStarshipPayload {
 	starship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	msg: String
 	numUids: Int
+}
+
+type DroidAggregateResult {
+	count: Int
+}
+
+type HumanAggregateResult {
+	count: Int
+}
+
+type PlanetAggregateResult {
+	count: Int
+}
+
+type StarshipAggregateResult {
+	count: Int
 }
 
 type UpdateCharacterPayload {
@@ -684,14 +704,19 @@ input UpdateStarshipInput {
 type Query {
 	getCharacter(id: ID!): Character
 	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
 	getHuman(id: ID!): Human
 	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	aggregateHuman(filter: HumanFilter): HumanAggregateResult
 	getDroid(id: ID!): Droid
 	queryDroid(filter: DroidFilter, order: DroidOrder, first: Int, offset: Int): [Droid]
+	aggregateDroid(filter: DroidFilter): DroidAggregateResult
 	getStarship(id: ID!): Starship
 	queryStarship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
+	aggregateStarship(filter: StarshipFilter): StarshipAggregateResult
 	getPlanet(id: ID!): Planet
 	queryPlanet(filter: PlanetFilter, order: PlanetOrder, first: Int, offset: Int): [Planet]
+	aggregatePlanet(filter: PlanetFilter): PlanetAggregateResult
 }
 
 #######################

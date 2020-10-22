@@ -285,6 +285,10 @@ type AddHumanPayload {
 	numUids: Int
 }
 
+type CharacterAggregateResult {
+	count: Int
+}
+
 type DeleteCharacterPayload {
 	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	msg: String
@@ -295,6 +299,14 @@ type DeleteHumanPayload {
 	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	msg: String
 	numUids: Int
+}
+
+type EmployeeAggregateResult {
+	count: Int
+}
+
+type HumanAggregateResult {
+	count: Int
 }
 
 type UpdateCharacterPayload {
@@ -445,9 +457,12 @@ input UpdateHumanInput {
 type Query {
 	getCharacter(id: ID!): Character
 	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
 	queryEmployee(order: EmployeeOrder, first: Int, offset: Int): [Employee]
+	aggregateEmployee: EmployeeAggregateResult
 	getHuman(id: ID!): Human
 	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	aggregateHuman(filter: HumanFilter): HumanAggregateResult
 }
 
 #######################

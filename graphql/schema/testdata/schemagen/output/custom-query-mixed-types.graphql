@@ -275,6 +275,10 @@ type AddCarPayload {
 	numUids: Int
 }
 
+type CarAggregateResult {
+	count: Int
+}
+
 type DeleteCarPayload {
 	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
 	msg: String
@@ -343,6 +347,7 @@ type Query {
 	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
 	getCar(id: ID!): Car
 	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	aggregateCar(filter: CarFilter): CarAggregateResult
 }
 
 #######################

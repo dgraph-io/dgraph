@@ -282,6 +282,10 @@ type AddUserPayload {
 	numUids: Int
 }
 
+type CarAggregateResult {
+	count: Int
+}
+
 type DeleteCarPayload {
 	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
 	msg: String
@@ -302,6 +306,10 @@ type UpdateCarPayload {
 type UpdateUserPayload {
 	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
+}
+
+type UserAggregateResult {
+	count: Int
 }
 
 #######################
@@ -402,8 +410,10 @@ input UserRef {
 type Query {
 	getCar(id: ID!): Car
 	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	aggregateCar(filter: CarFilter): CarAggregateResult
 	getUser(id: ID!): User
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################

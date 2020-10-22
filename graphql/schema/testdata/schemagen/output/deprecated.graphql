@@ -270,6 +270,10 @@ type AddAtypePayload {
 	numUids: Int
 }
 
+type AtypeAggregateResult {
+	count: Int
+}
+
 #######################
 # Generated Enums
 #######################
@@ -317,6 +321,7 @@ input AtypeRef {
 
 type Query {
 	queryAtype(order: AtypeOrder, first: Int, offset: Int): [Atype]
+	aggregateAtype: AtypeAggregateResult
 }
 
 #######################

@@ -291,6 +291,18 @@ type UpdateXPayload {
 	numUids: Int
 }
 
+type XAggregateResult {
+	count: Int
+}
+
+type YAggregateResult {
+	count: Int
+}
+
+type ZAggregateResult {
+	count: Int
+}
+
 #######################
 # Generated Enums
 #######################
@@ -368,8 +380,11 @@ input ZFilter {
 type Query {
 	getX(id: ID!): X
 	queryX(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
+	aggregateX(filter: XFilter): XAggregateResult
 	queryY(first: Int, offset: Int): [Y]
+	aggregateY: YAggregateResult
 	queryZ(first: Int, offset: Int): [Z]
+	aggregateZ: ZAggregateResult
 }
 
 #######################

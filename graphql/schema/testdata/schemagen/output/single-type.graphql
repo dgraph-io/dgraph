@@ -279,6 +279,10 @@ type DeleteMessagePayload {
 	numUids: Int
 }
 
+type MessageAggregateResult {
+	count: Int
+}
+
 type UpdateMessagePayload {
 	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
 	numUids: Int
@@ -355,6 +359,7 @@ input UpdateMessageInput {
 type Query {
 	getMessage(id: ID!): Message
 	queryMessage(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	aggregateMessage(filter: MessageFilter): MessageAggregateResult
 }
 
 #######################
