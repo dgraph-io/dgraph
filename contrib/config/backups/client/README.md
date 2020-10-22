@@ -30,36 +30,35 @@ You can try out these features using [Docker Compose](https://docs.docker.com/co
 As an example of performing backups with a local mounted file path using ACLs, Encryption, and TLS, you can follow these steps:
 
 1. Setup Environment and loging into *backup workstation* (ratel container):
-    ```bash
-    ## configure docker-compose environment
-    ./compose-setup.sh --acl --enc --tls --make_tls_cert
-    ## run demo
-    docker-compose up --detach
-    ## login into Ratel to use for backups
-    docker exec --tty --interactive ratel bash
-    ```
+   ```bash
+   ## configure docker-compose environment
+   ./compose-setup.sh --acl --enc --tls --make_tls_cert
+   ## run demo
+   docker-compose up --detach
+   ## login into Ratel to use for backups
+   docker exec --tty --interactive ratel bash
+   ```
 2. Trigger a full backup:
-
-    ```bash
-    ## trigger a backup on alpha1
-    ./dgraph-backup.sh \
-      --alpha alpha1 \
-      --tls_cacert /dgraph/tls/ca.crt \
-      --force_full \
-      --location /dgraph/backups \
-      --user groot \
-      --password password
-    ```
+   ```bash
+   ## trigger a backup on alpha1
+   ./dgraph-backup.sh \
+     --alpha alpha1 \
+     --tls_cacert /dgraph/tls/ca.crt \
+     --force_full \
+     --location /dgraph/backups \
+     --user groot \
+     --password password
+   ```
 3. Verify Results
-    ```bash
-    ## check for backup files
-    ls /dgraph/backups
-    ```
+   ```bash
+   ## check for backup files
+   ls /dgraph/backups
+   ```
 4. Cleanup when finished
-  ```bash
-  logout
-  docker-compose stop && docker-compose rm
-  ```
+   ```bash
+   logout
+   docker-compose stop && docker-compose rm
+   ```
 
 ### Demo (Test) with S3 Buckets
 
@@ -72,7 +71,7 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [AWS 
    cat <<-TFVARS > terraform.tfvars
    name   = "<your-bucket-name-goes-here>"
    region = "us-west-2"
-TFVARS
+   TFVARS
    terraform init && terraform apply
    cd ..
    ## start Dgraph cluster with S3 bucket support
@@ -120,7 +119,7 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [Goog
    region     = "us-central1"
    project_id = "<your-project-name-goes-here>"
    name       = "<your-bucket-name-goes-here>"
-TFVARS
+   TFVARS
    terraform init && terraform apply
    cd ..
    ## set $PROJECT_ID and $BACKUP_BUCKET_NAME env vars
@@ -171,7 +170,7 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [Azur
    resource_group_name  = "<your-resource-group-name-goes-here>"
    storage_account_name = "$STORAGE_ACCOUNT_NAME"
    storage_container_name = "$CONTAINER_NAME"
-TFVARS
+   TFVARS
    terraform init && terraform apply
    cd ..
    ## start Dgraph cluster with MinioGateway support
