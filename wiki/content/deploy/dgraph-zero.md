@@ -15,11 +15,9 @@ You can see the options available for `dgraph zero` by using the following comma
 
 ```bash
 dgraph zero --help
-
 ```
 
-
-`--replicas` is the option that controls the replication factor: the number
+The `--replicas` option controls the replication factor: the number
 of replicas per data shard, including the original shard. For consensus, the
 replication factor must be set to an odd number, and the following error will
 occur if it is set to an even number (for example, `2`):
