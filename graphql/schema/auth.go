@@ -165,7 +165,55 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		}
 	}
 
+	// Merge the Auth rules on interfaces into the implementing types
+	for _, typ := range s.Types {
+		name := typeName(typ)
+		if typ.Kind == ast.Object {
+			for _, interfaceName := range typ.Interfaces {
+				if authRules[interfaceName] != nil && authRules[interfaceName].Rules != nil {
+					authRules[name].Rules = mergeAuthRules(authRules, name, interfaceName)
+				}
+			}
+		}
+	}
+
 	return authRules, errResult
+}
+
+func mergeAuthNode(objectAuth, interfaceAuth *RuleNode) *RuleNode {
+	if objectAuth == nil {
+		return interfaceAuth
+	}
+
+	if interfaceAuth == nil {
+		return objectAuth
+	}
+
+	ruleNode := &RuleNode{}
+	ruleNode.And = append(ruleNode.And, objectAuth, interfaceAuth)
+	return ruleNode
+}
+
+func mergeAuthRules(authRules map[string]*TypeAuth, objectName string, interfaceName string) *AuthContainer {
+	objectAuthRules := authRules[objectName].Rules
+	interfaceAuthRules := authRules[interfaceName].Rules
+
+	// return copy of interfaceAuthRules since it is a pointer and otherwise it will lead
+	// to unnecessary errors
+	if objectAuthRules == nil {
+		return &AuthContainer{
+			Query:  interfaceAuthRules.Query,
+			Add:    interfaceAuthRules.Add,
+			Delete: interfaceAuthRules.Delete,
+			Update: interfaceAuthRules.Update,
+		}
+	}
+
+	objectAuthRules.Query = mergeAuthNode(objectAuthRules.Query, interfaceAuthRules.Query)
+	objectAuthRules.Add = mergeAuthNode(objectAuthRules.Add, interfaceAuthRules.Add)
+	objectAuthRules.Delete = mergeAuthNode(objectAuthRules.Delete, interfaceAuthRules.Delete)
+	objectAuthRules.Update = mergeAuthNode(objectAuthRules.Update, interfaceAuthRules.Update)
+	return objectAuthRules
 }
 
 func parseAuthDirective(

@@ -61,6 +61,18 @@ type Issue struct {
 	Owner *common.User `json:"owner,omitempty"`
 }
 
+type Author struct {
+	Id    string      `json:"id,omitempty"`
+	Name  string      `json:"name,omitempty"`
+	Posts []*Question `json:"posts,omitempty"`
+}
+
+type Question struct {
+	Id     string  `json:"id,omitempty"`
+	Text   string  `json:"text,omitempty"`
+	Author *Author `json:"author,omitempty"`
+}
+
 type Log struct {
 	Id     string `json:"id,omitempty"`
 	Logs   string `json:"logs,omitempty"`
@@ -120,6 +132,7 @@ type TaskOccurrence struct {
 type TestCase struct {
 	user      string
 	role      string
+	ans       bool
 	result    string
 	name      string
 	filter    map[string]interface{}
@@ -350,6 +363,73 @@ func TestAuthWithDgraphDirective(t *testing.T) {
 	}
 }
 
+func TestAuthOnInterfaces(t *testing.T) {
+	TestCases := []TestCase{
+		{
+			name: "Types inherit Interface's auth rules and its own rules",
+			query: `
+		query{
+			queryQuestion{
+				text
+			}
+		}
+		`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			result: `{"queryQuestion":[{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Should return empty for non-existent user",
+			query: `
+		query{
+			queryQuestion{
+				text
+			}
+		}
+		`,
+			user:   "user3@dgraph.io",
+			ans:    true,
+			result: `{"queryQuestion":[]}`,
+		},
+		{
+			name: "Types inherit Only Interface's auth rules if it doesn't have its own auth rules",
+			query: `
+			query{
+				queryAnswer{
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			result: `{"queryAnswer": [{"text": "A Answer"}]}`,
+		},
+		{
+			name: "Types inherit auth rules from all the different Interfaces",
+			query: `
+			query{
+				queryFbPost{
+					text
+				}
+			}
+			`,
+			user:   "user2@dgraph.io",
+			role:   "ADMIN",
+			result: `{"queryFbPost": [{"text": "B FbPost"}]}`,
+		},
+	}
+
+	for _, tcase := range TestCases {
+		t.Run(tcase.name, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
+				Query:   tcase.query,
+			}
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
+	}
+}
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Query non auth field without JWT Token",
@@ -1313,7 +1393,6 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
-
 	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem")
