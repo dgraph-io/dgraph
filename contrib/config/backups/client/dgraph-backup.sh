@@ -19,7 +19,7 @@ Usage:
   $0 [FLAGS] --location [LOCATION]
 
 Flags:
- -a, --alpha string        Dgraph alpha HTTP/S server (default "127.0.0.1")
+ -a, --alpha string        Dgraph alpha HTTP/S server (default "localhost")
  -i, --api_type            API Type of REST or GraphQL (default "GraphQL")
  -t, --auth_token string   The auth token passed to the server
  -d, --debug               Enable debug in output
