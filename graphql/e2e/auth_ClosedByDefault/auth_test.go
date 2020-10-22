@@ -17,7 +17,6 @@
 package auth
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -39,82 +38,6 @@ var (
 	metaInfo *testutil.AuthMeta
 )
 
-type Region struct {
-	Id     string         `json:"id,omitempty"`
-	Name   string         `json:"name,omitempty"`
-	Users  []*common.User `json:"users,omitempty"`
-	Global bool           `json:"global,omitempty"`
-}
-
-type Movie struct {
-	Id               string    `json:"id,omitempty"`
-	Content          string    `json:"content,omitempty"`
-	Hidden           bool      `json:"hidden,omitempty"`
-	RegionsAvailable []*Region `json:"regionsAvailable,omitempty"`
-}
-
-type Issue struct {
-	Id    string       `json:"id,omitempty"`
-	Msg   string       `json:"msg,omitempty"`
-	Owner *common.User `json:"owner,omitempty"`
-}
-
-type Log struct {
-	Id     string `json:"id,omitempty"`
-	Logs   string `json:"logs,omitempty"`
-	Random string `json:"random,omitempty"`
-}
-
-type ComplexLog struct {
-	Id      string `json:"id,omitempty"`
-	Logs    string `json:"logs,omitempty"`
-	Visible bool   `json:"visible,omitempty"`
-}
-
-type Role struct {
-	Id         string         `json:"id,omitempty"`
-	Permission string         `json:"permission,omitempty"`
-	AssignedTo []*common.User `json:"assignedTo,omitempty"`
-}
-
-type Ticket struct {
-	Id         string         `json:"id,omitempty"`
-	OnColumn   *Column        `json:"onColumn,omitempty"`
-	Title      string         `json:"title,omitempty"`
-	AssignedTo []*common.User `json:"assignedTo,omitempty"`
-}
-
-type Column struct {
-	ColID     string    `json:"colID,omitempty"`
-	InProject *Project  `json:"inProject,omitempty"`
-	Name      string    `json:"name,omitempty"`
-	Tickets   []*Ticket `json:"tickets,omitempty"`
-}
-
-type Project struct {
-	ProjID  string    `json:"projID,omitempty"`
-	Name    string    `json:"name,omitempty"`
-	Roles   []*Role   `json:"roles,omitempty"`
-	Columns []*Column `json:"columns,omitempty"`
-}
-
-type Student struct {
-	Id    string `json:"id,omitempty"`
-	Email string `json:"email,omitempty"`
-}
-
-type Task struct {
-	Id          string            `json:"id,omitempty"`
-	Name        string            `json:"name,omitempty"`
-	Occurrences []*TaskOccurrence `json:"occurrences,omitempty"`
-}
-
-type TaskOccurrence struct {
-	Id   string `json:"id,omitempty"`
-	Due  string `json:"due,omitempty"`
-	Comp string `json:"comp,omitempty"`
-}
-
 type TestCase struct {
 	user            string
 	role            string
@@ -126,146 +49,7 @@ type TestCase struct {
 	closedByDefault bool
 }
 
-type uidResult struct {
-	Query []struct {
-		UID string
-	}
-}
-
-type Tasks []Task
-
-func (tasks Tasks) add(t *testing.T) {
-	getParams := &common.GraphQLParams{
-		Query: `
-		mutation AddTask($tasks : [AddTaskInput!]!) {
-		  addTask(input: $tasks) {
-			numUids
-		  }
-		}
-		`,
-		Variables: map[string]interface{}{"tasks": tasks},
-	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-}
-
-func (r *Region) add(t *testing.T, user, role string) {
-	getParams := &common.GraphQLParams{
-		Headers: common.GetJWT(t, user, role, metaInfo),
-		Query: `
-		mutation addRegion($region: AddRegionInput!) {
-		  addRegion(input: [$region]) {
-			numUids
-		  }
-		}
-		`,
-		Variables: map[string]interface{}{"region": r},
-	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-}
-
-func (r *Region) delete(t *testing.T, user, role string) {
-	getParams := &common.GraphQLParams{
-		Headers: common.GetJWT(t, user, role, metaInfo),
-		Query: `
-		mutation deleteRegion($name: String) {
-		  deleteRegion(filter:{name: { eq: $name}}) {
-			msg
-		  }
-		}
-		`,
-		Variables: map[string]interface{}{"name": r.Name},
-	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-}
-
-func TestOptimizedNestedAuthQuery(t *testing.T) {
-	query := `
-	query {
-	  queryMovie {
-		content
-		 regionsAvailable {
-		  name
-		  global
-		}
-	  }
-	}
-	`
-	user := "user1"
-	role := "ADMIN"
-
-	getUserParams := &common.GraphQLParams{
-		Headers: common.GetJWT(t, user, role, metaInfo),
-		Query:   query,
-	}
-
-	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-	beforeTouchUids := gqlResponse.Extensions["touched_uids"]
-	beforeResult := gqlResponse.Data
-
-	// Previously, Auth queries would have touched all the new `Regions`. But after the optimization
-	// we should only touch necessary `Regions` which are assigned to some `Movie`. Hence, adding
-	// these extra `Regions` would not increase the `touched_uids`.
-	var regions []Region
-	for i := 0; i < 100; i++ {
-		r := Region{
-			Name:   fmt.Sprintf("Test_Region_%d", i),
-			Global: true,
-		}
-		r.add(t, user, role)
-		regions = append(regions, r)
-	}
-
-	gqlResponse = getUserParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-
-	afterTouchUids := gqlResponse.Extensions["touched_uids"]
-	require.Equal(t, beforeTouchUids, afterTouchUids)
-	require.Equal(t, beforeResult, gqlResponse.Data)
-
-	// Clean up
-	for _, region := range regions {
-		region.delete(t, user, role)
-	}
-}
-
-func (s Student) deleteByEmail(t *testing.T) {
-	getParams := &common.GraphQLParams{
-		Query: `
-			mutation delStudent ($filter : StudentFilter!){
-			  	deleteStudent (filter: $filter) {
-					numUids
-			  	}
-			}
-		`,
-		Variables: map[string]interface{}{"filter": map[string]interface{}{
-			"email": map[string]interface{}{"eq": s.Email},
-		}},
-	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-}
-
-func (s Student) add(t *testing.T) {
-	mutation := &common.GraphQLParams{
-		Query: `
-		mutation addStudent($student : AddStudentInput!) {
-			addStudent(input: [$student]) {
-				numUids
-			}
-		}`,
-		Variables: map[string]interface{}{"student": s},
-	}
-	result := `{"addStudent":{"numUids": 1}}`
-	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
-	common.RequireNoGQLErrors(t, gqlResponse)
-	require.JSONEq(t, result, string(gqlResponse.Data))
-}
-
-func TestAuthRulesMutationWithClosed(t *testing.T) {
+func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 	testCases := []TestCase{{
 		name: "Missing JWT - type with auth directive",
 		query: `
@@ -367,7 +151,7 @@ func TestAuthRulesMutationWithClosed(t *testing.T) {
 	}
 }
 
-func TestAuthRulesQueryWithClosed(t *testing.T) {
+func TestAuthRulesQueryWithClosedByDefaultAFlag(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Missing JWT - Query auth field without JWT Token",
 			query: `

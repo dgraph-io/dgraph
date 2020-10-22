@@ -23,7 +23,6 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/glog"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -133,7 +132,6 @@ func Parse(schema string) (*AuthMeta, error) {
 	}
 
 	idx := authMetaRegex.FindAllStringSubmatchIndex(authInfo, -1)
-	glog.Infof("%s", idx)
 	if len(idx) != 1 || len(idx[0]) != 12 ||
 		!strings.HasPrefix(authInfo, authInfo[idx[0][0]:idx[0][1]]) {
 		return nil, gqlerror.Errorf("Invalid `Dgraph.Authorization` format: %s", authInfo)

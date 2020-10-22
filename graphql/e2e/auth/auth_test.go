@@ -118,14 +118,13 @@ type TaskOccurrence struct {
 }
 
 type TestCase struct {
-	user            string
-	role            string
-	result          string
-	name            string
-	filter          map[string]interface{}
-	variables       map[string]interface{}
-	query           string
-	closedByDefault bool
+	user      string
+	role      string
+	result    string
+	name      string
+	filter    map[string]interface{}
+	variables map[string]interface{}
+	query     string
 }
 
 type uidResult struct {

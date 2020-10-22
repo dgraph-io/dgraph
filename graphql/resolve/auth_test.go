@@ -343,7 +343,14 @@ func TestJWTExpiry(t *testing.T) {
 // Tests showing that the query rewriter produces the expected Dgraph queries
 // when it also needs to write in auth.
 func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, ClosedByDefault bool) {
-	b, err := ioutil.ReadFile("auth_query_test.yaml")
+	var b []byte
+	var err error
+
+	if ClosedByDefault {
+		b, err = ioutil.ReadFile("auth_ClosedByDefault_query_test.yaml")
+	} else {
+		b, err = ioutil.ReadFile("auth_query_test.yaml")
+	}
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []AuthQueryRewritingCase
@@ -658,9 +665,15 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta)
 // as in add_mutation_test.yaml.  What we need to test is the processing around if
 // new nodes are checked properly - the query generated to check them, and the post-processing.
 func mutationAdd(t *testing.T, sch string, authMeta *testutil.AuthMeta, ClosedByDefault bool) {
-	b, err := ioutil.ReadFile("auth_add_test.yaml")
-	require.NoError(t, err, "Unable to read test file")
+	var b []byte
+	var err error
 
+	if ClosedByDefault {
+		b, err = ioutil.ReadFile("auth_ClosedByDefault_add_test.yaml")
+	} else {
+		b, err = ioutil.ReadFile("auth_add_test.yaml")
+	}
+	require.NoError(t, err, "Unable to read test file")
 	var tests []AuthQueryRewritingCase
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
