@@ -22,7 +22,7 @@ of replicas per data shard, including the original shard. For consensus, the
 replication factor must be set to an odd number, and the following error will
 occur if it is set to an even number (for example, `2`):
 
-```bash
+```nix
 ERROR: Number of replicas must be odd for consensus. Found: 2
 ```
 
