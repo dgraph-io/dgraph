@@ -153,7 +153,7 @@ func BenchmarkXidmapWritesRandom(b *testing.B) {
 
 	xidmap := New(conn, nil)
 	b.ResetTimer()
-	buf := make([]byte, 10)
+	buf := make([]byte, 32)
 
 	b.RunParallel(func(pb *testing.PB) {
 		source := rand.NewSource(time.Now().UnixNano())
@@ -193,7 +193,7 @@ func BenchmarkXidmapReadsRandom(b *testing.B) {
 	}
 
 	var N = 1000000
-	buf := make([]byte, 10)
+	buf := make([]byte, 32)
 	var list [][]byte
 	xidmap := New(conn, nil)
 	for i := 0; i < N; i++ {

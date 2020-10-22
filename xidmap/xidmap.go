@@ -83,7 +83,7 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		buf, err := z.NewBufferWith(20<<30, 20<<30, z.UseMmap)
 		x.Check(err)
 		xm.shards[i] = &shard{
-			skiplist: skl.NewSkiplistWithBuffer(buf),
+			skiplist: skl.NewSkiplistWithBuffer(buf, false),
 		}
 	}
 	if db != nil {

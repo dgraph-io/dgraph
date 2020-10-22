@@ -96,6 +96,8 @@ github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b/go.
 github.com/dgraph-io/ristretto v0.0.2/go.mod h1:KPxhHT9ZxKefz+PCeOGsrHpl1qZ7i70dGTu2u+Ahh6E=
 github.com/dgraph-io/ristretto v0.0.4-0.20201021100537-9017b9040c17 h1:LhVFR7jOxCxh8e8VJY9pj/o+fSx127+LiD53HxT2Pek=
 github.com/dgraph-io/ristretto v0.0.4-0.20201021100537-9017b9040c17/go.mod h1:LOf4QaKKMqCkf0TJzNNYiwYP24TxbEzIbd9Iq6MrRPE=
+github.com/dgraph-io/ristretto v0.0.4-0.20201022105248-f32a01612740 h1:TzbxnxH3PoFUWx5024RX1+uqLnUVbfdHANjrHMb5Xnc=
+github.com/dgraph-io/ristretto v0.0.4-0.20201022105248-f32a01612740/go.mod h1:bDI4cDaalvYSji3vBVDKrn9ouDZrwN974u8ZO/AhYXs=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1 h1:CaO/zOnF8VvUfEbhRatPcwKVWamvbYd8tQGRWacE9kU=
