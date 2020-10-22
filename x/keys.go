@@ -556,11 +556,12 @@ var internalPredicateMap = map[string]struct{}{
 }
 
 var preDefinedTypeMap = map[string]struct{}{
-	"dgraph.graphql":         {},
-	"dgraph.type.User":       {},
-	"dgraph.type.Group":      {},
-	"dgraph.type.Rule":       {},
-	"dgraph.graphql.history": {},
+	"dgraph.graphql":                 {},
+	"dgraph.type.User":               {},
+	"dgraph.type.Group":              {},
+	"dgraph.type.Rule":               {},
+	"dgraph.graphql.history":         {},
+	"dgraph.graphql.persisted_query": {},
 }
 
 // IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.

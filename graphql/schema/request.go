@@ -32,8 +32,16 @@ type Request struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
+	Extensions    struct {
+		PersistedQuery PersistedQuery
+	}
 
 	Header http.Header
+}
+
+// PersistedQuery represents the query struct received from clients like Apollo
+type PersistedQuery struct {
+	Sha256Hash string
 }
 
 // Operation finds the operation in req, if it is a valid request for GraphQL
