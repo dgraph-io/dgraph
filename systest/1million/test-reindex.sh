@@ -37,7 +37,7 @@ Info "waiting for zero to become leader"
 DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
 
 Info "bulk loading data set"
-DockerCompose run -v $BENCHMARKS_REPO:$BENCHMARKS_REPO --name bulk_load zero1 \
+DockerCompose run --rm -v $BENCHMARKS_REPO:$BENCHMARKS_REPO --name bulk_load zero1 \
     bash -s <<EOF
         mkdir -p /data/alpha1
         mkdir -p /data/alpha2

@@ -116,7 +116,7 @@ DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
 
 if [[ $LOADER == bulk ]]; then
     Info "bulk loading data set"
-    DockerCompose run -v $BENCHMARKS_REPO:$BENCHMARKS_REPO --name bulk_load zero1 \
+    DockerCompose run --rm -v $BENCHMARKS_REPO:$BENCHMARKS_REPO --name bulk_load zero1 \
         bash -s <<EOF
             mkdir -p /data/alpha1
             mkdir -p /data/alpha2
@@ -131,7 +131,7 @@ EOF
 fi
 
 Info "bringing up alpha container"
-DockerCompose up -d --force-recreate alpha1 alpha2 alpha3
+DockerCompose up -d --force-recreate --remove-orphans alpha1 alpha2 alpha3
 
 Info "waiting for alpha to be ready"
 DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"
