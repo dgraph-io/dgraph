@@ -196,8 +196,8 @@ EOF
 
   INFO "checking that each predicate appears in only one shard"
 
-  dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4  > all_dbs.out
-  dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4 >> all_dbs.out
+  dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f3  > all_dbs.out
+  dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f3 >> all_dbs.out
   diff <(LC_ALL=C sort all_dbs.out | uniq -c) - <<EOF
       1 dgraph.acl.rule
       1 dgraph.cors
