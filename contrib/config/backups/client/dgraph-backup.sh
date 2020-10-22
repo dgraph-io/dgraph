@@ -26,6 +26,7 @@ Flags:
  -f, --force_full          Force a full backup instead of an incremental backup.
  -h, --help                Help for $0
  -l, --location            Sets the source location URI (required).
+     --minio_secure        Backups to MinIO will use https instead of http
  -p, --password            Password of the user if login is required.
      --subpath             Directory Path To Use to store backups, (default "dgraph_\$(date +%Y%m%d)")
      --tls_cacert filepath The CA Cert file used to verify server certificates. Required for enabling TLS.
@@ -54,7 +55,7 @@ parse_command() {
   ## Parse Arguments with GNU getopt
   PARSED_ARGUMENTS=$(
     getopt -o a:i:t:dfhl:p:u: \
-    --long alpha:,api_type:,auth_token:,debug,force_full,help,location:,password:,subpath:,tls_cacert:,tls_cert:,tls_key:,user: \
+    --long alpha:,api_type:,auth_token:,debug,force_full,help,location:,minio_secure,password:,subpath:,tls_cacert:,tls_cert:,tls_key:,user: \
     -n 'dgraph-backup.sh' -- "$@"
   )
   if [ $? != 0 ] ; then usage; exit 1 ; fi
@@ -81,12 +82,12 @@ parse_command() {
       -h | --help) usage; exit;;
       -m | --minio_secure) MINIO_SECURE=true; shift ;;
       -l | --location) BACKUP_DESTINATION="$2"; shift 2 ;;
-      -p | --password) PASSWORD="$2"; shift 2;;
+      -p | --password) ACL_PASSWORD="$2"; shift 2;;
       --subpath) SUBPATH="$2"; shift 2 ;;
       --tls_cacert) CACERT_PATH="$2"; shift 2 ;;
       --tls_cert) CLIENT_CERT_PATH="$2"; shift 2;;
       --tls_key) CLIENT_KEY_PATH="$2"; shift 2;;
-      -u | --user) USER="$2"; shift 2;;
+      -u | --user) ACL_USER="$2"; shift 2;;
       --) shift; break ;;
       *) break ;;
     esac
@@ -114,8 +115,8 @@ run_backup() {
   source ./backup_helper.sh
 
   ## login if user was specified
-  if ! [[ -z $USER ]]; then
-    ACCESS_TOKEN=$(get_token $USER $PASSWORD $AUTH_TOKEN)
+  if ! [[ -z $ACL_USER ]]; then
+    ACCESS_TOKEN=$(get_token $ACL_USER $ACL_PASSWORD $AUTH_TOKEN)
   fi
 
   ## perform backup with valid options set
