@@ -15,6 +15,7 @@ You can see the options available for `dgraph zero` by using the following comma
 
 ```bash
 dgraph zero --help
+
 ```
 
 
