@@ -429,7 +429,7 @@ Syntax Examples:
 * `predicate @filter(uid(<uid1>, ..., <uidn>))`
 * `predicate @filter(uid(a))` for variable `a`
 * `q(func: uid(a,b))` for variables `a` and `b`
-
+* `q(func: uid($uids))` for multiple uids in DQL Variables. You have to set the value of this variable as a string (e.g`"[0x1, 0x2, 0x3]"`) in queryWithVars.
 
 Filters nodes at the current query level to only nodes in the given set of UIDs.
 
@@ -501,11 +501,12 @@ Query Example: Taraji Henson films ordered by number of genres, with genres list
 
 ## uid_in
 
-
 Syntax Examples:
 
 * `q(func: ...) @filter(uid_in(predicate, <uid>))`
 * `predicate1 @filter(uid_in(predicate2, <uid>))`
+* `predicate1 @filter(uid_in(predicate2, [<uid1>, ..., <uidn>]))`
+* `predicate1 @filter(uid_in(predicate2, uid(myVariable) ))`
 
 Schema Types: UID
 
@@ -513,15 +514,30 @@ Index Required: none
 
 While the `uid` function filters nodes at the current level based on UID, function `uid_in` allows looking ahead along an edge to check that it leads to a particular UID.  This can often save an extra query block and avoids returning the edge.
 
-`uid_in` cannot be used at root, it accepts one UID constant as its argument (not a variable).
-
+`uid_in` cannot be used at root. It accepts multiple UIDs as its argument, and it accepts a UID variable (which can contain a map of UIDs).
 
 Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x99706).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+
 {{< runnable >}}
 {
   caro(func: eq(name@en, "Marc Caro")) {
     name@en
     director.film @filter(uid_in(~director.film, 0x99706)) {
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+You can also query for Jean-Pierre Jeunet if you don't know his UID and use it in a UID variable.
+
+{{< runnable >}}
+{
+  getJeunet as q(func: eq(name@fr, "Jean-Pierre Jeunet"))
+
+  caro(func: eq(name@en, "Marc Caro")) {
+    name@en
+    director.film @filter(uid_in(~director.film, uid(getJeunet) )) {
       name@en
     }
   }

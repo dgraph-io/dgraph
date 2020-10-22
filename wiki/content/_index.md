@@ -30,7 +30,8 @@ aliases = ["/contribute"]
   </div>
   <div class="item">
     <div class="icon"><i class="lni lni-cloud"></i></div>
-    <a href="{{< relref "slash-graphql/introduction.md">}}">
+    <!--Slash docs are in seperate repo-->
+       <a href="https://dgraph.io/docs/slash-graphql/introduction">
       <h2>Run Dgraph in the Cloud</h2>
       <p>
         Work with your data in a fully-managed cloud service.

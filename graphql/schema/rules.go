@@ -976,8 +976,11 @@ func validateSearchArg(searchArg string,
 	return nil
 }
 
-func isPointType(typ *ast.Type) bool {
-	return typ.Name() == "Point"
+func isGeoType(typ *ast.Type) bool {
+	if typ.Name() == "Point" || typ.Name() == "Polygon" || typ.Name() == "MultiPolygon" {
+		return true
+	}
+	return false
 }
 
 func searchValidation(
@@ -993,7 +996,7 @@ func searchValidation(
 		// If there's no arg, then it can be an enum or Geo type or has to be a scalar that's
 		// not ID. The schema generation will add the default search
 		// for that type.
-		if sch.Types[field.Type.Name()].Kind == ast.Enum || isPointType(field.Type) ||
+		if sch.Types[field.Type.Name()].Kind == ast.Enum || isGeoType(field.Type) ||
 			(sch.Types[field.Type.Name()].Kind == ast.Scalar && !isIDField(typ, field)) {
 			return nil
 		}
@@ -1910,7 +1913,7 @@ func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 }
 
 func isScalar(s string) bool {
-	_, ok := scalarToDgraph[s]
+	_, ok := inbuiltTypeToDgraph[s]
 	return ok
 }
 

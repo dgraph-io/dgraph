@@ -6,6 +6,11 @@ type Hotel {
 	id: ID!
 	name: String!
 	location: Point @search
+	secretLocation: Point
+	area: Polygon @search
+	secretArea: Polygon
+	branches: MultiPolygon @search
+	secretBranches: MultiPolygon
 }
 
 #######################
@@ -115,7 +120,53 @@ input NearFilter {
 }
 
 input PointGeoFilter {
-	near: NearFilter!
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -226,6 +277,11 @@ type UpdateHotelPayload {
 enum HotelHasFilter {
 	name
 	location
+	secretLocation
+	area
+	secretArea
+	branches
+	secretBranches
 }
 
 enum HotelOrderable {
@@ -239,11 +295,18 @@ enum HotelOrderable {
 input AddHotelInput {
 	name: String!
 	location: PointRef
+	secretLocation: PointRef
+	area: PolygonRef
+	secretArea: PolygonRef
+	branches: MultiPolygonRef
+	secretBranches: MultiPolygonRef
 }
 
 input HotelFilter {
 	id: [ID!]
 	location: PointGeoFilter
+	area: PolygonGeoFilter
+	branches: PolygonGeoFilter
 	has: HotelHasFilter
 	and: HotelFilter
 	or: HotelFilter
@@ -259,12 +322,22 @@ input HotelOrder {
 input HotelPatch {
 	name: String
 	location: PointRef
+	secretLocation: PointRef
+	area: PolygonRef
+	secretArea: PolygonRef
+	branches: MultiPolygonRef
+	secretBranches: MultiPolygonRef
 }
 
 input HotelRef {
 	id: ID
 	name: String
 	location: PointRef
+	secretLocation: PointRef
+	area: PolygonRef
+	secretArea: PolygonRef
+	branches: MultiPolygonRef
+	secretBranches: MultiPolygonRef
 }
 
 input UpdateHotelInput {
