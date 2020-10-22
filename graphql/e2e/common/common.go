@@ -194,6 +194,12 @@ type UserSecret struct {
 	OwnedBy string `json:"ownedBy,omitempty"`
 }
 
+type Todo struct {
+	Id    string `json:"id,omitempty"`
+	Text  string `json:"text,omitempty"`
+	Owner string `json:"owner,omitempty"`
+}
+
 func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.AuthMeta) {
 	getParams := &GraphQLParams{
 		Headers: GetJWT(t, user, "", metaInfo),

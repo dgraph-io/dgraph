@@ -118,13 +118,14 @@ type TaskOccurrence struct {
 }
 
 type TestCase struct {
-	user      string
-	role      string
-	result    string
-	name      string
-	filter    map[string]interface{}
-	variables map[string]interface{}
-	query     string
+	user            string
+	role            string
+	result          string
+	name            string
+	filter          map[string]interface{}
+	variables       map[string]interface{}
+	query           string
+	closedByDefault bool
 }
 
 type uidResult struct {
@@ -359,7 +360,8 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 				permission
 			  }
 			}`,
-			result: `{"queryRole":[{"permission":"EDIT"}]}`,
+			result:          `{"queryRole":[{"permission":"EDIT"}]}`,
+			closedByDefault: false,
 		},
 		{name: "Query auth field without JWT Token",
 			query: `
@@ -368,7 +370,8 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 					content
 				}
 			}`,
-			result: `{"queryMovie":[{"content":"Movie4"}]}`,
+			result:          `{"queryMovie":[{"content":"Movie4"}]}`,
+			closedByDefault: false,
 		},
 		{name: "Query empty auth field without JWT Token",
 			query: `
@@ -377,7 +380,8 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 					comment
 				}
 			}`,
-			result: `{"queryReview":[{"comment":"Nice movie"}]}`,
+			result:          `{"queryReview":[{"comment":"Nice movie"}]}`,
+			closedByDefault: false,
 		},
 		{name: "Query auth field with partial JWT Token",
 			query: `
@@ -386,8 +390,9 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 					name
 				}
 			}`,
-			user:   "user1",
-			result: `{"queryProject":[{"name":"Project1"}]}`,
+			user:            "user1",
+			result:          `{"queryProject":[{"name":"Project1"}]}`,
+			closedByDefault: false,
 		},
 		{name: "Query auth field with invalid JWT Token",
 			query: `
@@ -396,9 +401,34 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 					name
 				}
 			}`,
-			user:   "user1",
-			role:   "ADMIN",
-			result: `{"queryProject":[]}`,
+			user:            "user1",
+			role:            "ADMIN",
+			result:          `{"queryProject":[]}`,
+			closedByDefault: true,
+		},
+		{name: "Missing JWT - type with auth field",
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			user:            "user1",
+			role:            "ADMIN",
+			result:          `{"queryProject":[]}`,
+			closedByDefault: true,
+		},
+		{name: "Missing JWT - type without auth field",
+			query: `
+			query {
+				queryTodo {
+					owner
+				}
+			}`,
+			user:            "user1",
+			role:            "ADMIN",
+			result:          `{"queryTodo":[]}`,
+			closedByDefault: true,
 		},
 	}
 
@@ -406,7 +436,7 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 		queryParams := &common.GraphQLParams{
 			Query: tcase.query,
 		}
-
+		testMissingJWT := strings.HasPrefix(tcase.name, "Missing JWT")
 		testInvalidKey := strings.HasSuffix(tcase.name, "invalid JWT Token")
 		if testInvalidKey {
 			queryParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
@@ -415,14 +445,28 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 			// Create a invalid JWT signature.
 			jwtVar = jwtVar + "A"
 			queryParams.Headers.Set(metaInfo.Header, jwtVar)
-		} else if tcase.user != "" || tcase.role != "" {
+		} else if (tcase.user != "" || tcase.role != "") && (!testMissingJWT) {
 			queryParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
 		}
-
+		if tcase.closedByDefault {
+			metaInfo.AuthVars = map[string]interface{}{
+				"ClosedByDefault": true,
+			}
+		}
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+		metaInfo.AuthVars = map[string]interface{}{
+			"ClosedByDefault": false,
+		}
+		if testMissingJWT {
+			if tcase.closedByDefault {
+				require.Contains(t, gqlResponse.Errors.Error(),
+					"Jwt is required when ClosedByDefault flag is true")
+			}
+		}
 		if testInvalidKey {
 			require.Contains(t, gqlResponse.Errors[0].Error(),
-				"couldn't rewrite query queryProject because unable to parse jwt token")
+				"couldn't rewrite query queryProject because unable to parse jwt token:token signature is invalid")
+
 		} else {
 			require.Nil(t, gqlResponse.Errors)
 		}
