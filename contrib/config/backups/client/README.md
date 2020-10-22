@@ -6,30 +6,30 @@ This backup script that supports many of the features in Dgraph, such as ACLs, M
 
 * The scripts (`dgraph-backup.sh` and `compose-setup.sh`) require GNU getopt.  This was tested on:
   * macOS with Homebrew [gnu-getopt](https://formulae.brew.sh/formula/gnu-getopt) bottle,
-  * [Ubuntu 20.04](https://releases.ubuntu.com/20.04/), and
+  * [Ubuntu 20.04.1 (Focal Fossa)](https://releases.ubuntu.com/20.04/) (any modern Linux distro should work), and
   * Windows with [MSYS2](https://www.msys2.org/).
 * For the test demo environment, both [docker](https://docs.docker.com/engine/) and [docker-compose](https://docs.docker.com/compose/) are required.
 
 ## Important Notes
 
-If you are using this script another system other than alpha, we'll call this *backup worksation*, you should be aware of the following:
+If you are using this script another system other than alpha, we'll call this *backup workstation*, you should be aware of the following:
 
 * **General**
   * *backup workstation* will need to have access to the alpha server
 * **TLS**
   * when accessing alpha server secured by TLS, *backup workstation* will need access to `ca.crt` created with `dgraph cert`
-  * if Mutual TLS is used, *backup worksation* will also need access to the client cert and key as well.
+  * if Mutual TLS is used, *backup workstation* will also need access to the client cert and key as well.
 * **`subpath` option**
-  * when specifying subpath that uses a datestamp, the *backup workstation* needs to have the same timestamp as the server.
+  * when specifying sub-path that uses a datestamp, the *backup workstation* needs to have the same timestamp as the server.
   * when backing up to a file path, such as NFS, the *backup workstation* will need access to the same file path at the same mount point, e.g. if `/dgraph/backups` is used on alpha, the same path has to be on the *backup workstation*
 
 ## Testing (Demo)
 
-You can try out these features using [Docker Compose](https://docs.docker.com/compose/).  There's a `./compose-setup.sh` script that can configure the environment with the desired features.  As you need to have a common shared directory for filepaths, you can use `ratel` container as the *backup workstation* to run the backup script.
+You can try out these features using [Docker Compose](https://docs.docker.com/compose/).  There's a `./compose-setup.sh` script that can configure the environment with the desired features.  As you need to have a common shared directory for file paths, you can use `ratel` container as the *backup workstation* to run the backup script.
 
 As an example of performing backups with a local mounted file path using ACLs, Encryption, and TLS, you can follow these steps:
 
-1. Setup Environment and loging into *backup workstation* (ratel container):
+1. Setup Environment and log into *backup workstation* (ratel container):
    ```bash
    ## configure docker-compose environment
    ./compose-setup.sh --acl --enc --tls --make_tls_cert
@@ -54,9 +54,12 @@ As an example of performing backups with a local mounted file path using ACLs, E
    ## check for backup files
    ls /dgraph/backups
    ```
-4. Cleanup when finished
+4. Logout of the Ratel container
    ```bash
    logout
+   ```
+4. Cleanup when finished
+   ```bash
    docker-compose stop && docker-compose rm
    ```
 
@@ -64,9 +67,9 @@ As an example of performing backups with a local mounted file path using ACLs, E
 
 This will have requirements for [Terraform](https://www.terraform.io/) and [AWS CLI](https://aws.amazon.com/cli/).  See [s3/README.md](../s3/README.md) for further information.  Because we do not need to share the same file path, we can use the host as the *backup workstation*:
 
-1. Setup S3 Bucket environment. Replace `<your-bucket-name-goes-here>` to another name.
+1. Setup the S3 Bucket environment. Make sure to replace `<your-bucket-name-goes-here>` to an appropriate name.
    ```bash
-   ## create S3 Bucket + Credentials
+   ## create the S3 Bucket + Credentials
    pushd ../s3/terraform
    cat <<-TFVARS > terraform.tfvars
    name   = "<your-bucket-name-goes-here>"
@@ -87,20 +90,20 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [AWS 
      --force_full \
      --location $BACKUP_PATH
    ```
-3. Verify backups were created
+3. Verify backups were finished
    ```bash
    aws s3 ls s3://${BACKUP_PATH##*/}
    ```
 4. Clean up when completed:
    ```bash
-   ## remove local Dgraph cluster
+   ## remove the local Dgraph cluster
    pushd ../s3
    docker-compose stop && docker-compose rm
 
    ## empty the bucket of contents
    aws s3 rm s3://${BACKUP_PATH##*/}/ --recursive
 
-   ## destroy s3 bucket and IAM user w/ access to s3 bucket
+   ## destroy the s3 bucket and IAM user
    cd terraform
    terraform destroy
 
@@ -111,7 +114,7 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [AWS 
 
 This will have requirements for [Terraform](https://www.terraform.io/) and [Google Cloud SDK](https://cloud.google.com/sdk).  See [gcp/README.md](../gcp/README.md) for further information.  Because we do not need to share the same file path, we can use the host as the *backup workstation*:
 
-1. Setup GCS Bucket environment. Replace `<your-bucket-name-goes-here>` and `<your-project-name-goes-here` to something appropriate.
+1. Setup the GCS Bucket environment. Make sure to replace `<your-bucket-name-goes-here>` and `<your-project-name-goes-here` to something appropriate.
    ```bash
    ## create GCS Bucket + Credentials
    pushd ../gcp/terraform
@@ -124,12 +127,12 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [Goog
    cd ..
    ## set $PROJECT_ID and $BACKUP_BUCKET_NAME env vars
    source env.sh
-   ## start Dgraph cluster with MinioGateway support
+   ## start the Dgraph cluster with MinIO Gateway support
    docker-compose up --detach
 
    popd
    ```
-2. Trigger a backup
+2. Trigger a full backup
    ```bash
    ./dgraph-backup.sh \
      --alpha localhost \
@@ -140,27 +143,27 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [Goog
    ```bash
    gsutil ls gs://${BACKUP_BUCKET_NAME}/
    ```
-4. Clean up when completed:
+4. Clean up when finished:
    ```bash
-   ## remove local Dgraph cluster
+   ## remove the local Dgraph cluster
    pushd ../gcp
    docker-compose stop && docker-compose rm
 
-   ## empty the bucket of contents
+   ## empty the bucket contents
    gsutil rm -r gs://${BACKUP_BUCKET_NAME}/*
 
-   ## destroy gcs bucket and google service account
+   ## destroy the gcs bucket and google service account
    cd terraform
    terraform destroy
 
    popd
    ```
 
-### Demo (Test) with Azure BLog via Minio Gateway
+### Demo (Test) with Azure Blob via Minio Gateway
 
 This will have requirements for [Terraform](https://www.terraform.io/) and [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli).  See [azure/README.md](../azure/README.md) for further information.  Because we do not need to share the same file path, we can use the host as the *backup workstation*:
 
-1. Setup Azure Storage Blob environment. Replace `<your-storage-account-name-goes-here>`, `<your-container-name-goes-here>`, `<your-resource-group-name-goes-here>` to something appropriate.
+1. Setup Azure Storage Blob environment. Replace `<your-storage-account-name-goes-here>`, `<your-container-name-goes-here>`, and `<your-resource-group-name-goes-here>` to something appropriate.
    ```bash
    ## create Resource Group, Storage Account, authorize Storage Account, Create Storage Container
    pushd ../azure/terraform
@@ -173,7 +176,7 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [Azur
    TFVARS
    terraform init && terraform apply
    cd ..
-   ## start Dgraph cluster with MinioGateway support
+   ## start the Dgraph cluster with MinIO Gateway support
    docker-compose up --detach
 
    popd
@@ -192,13 +195,13 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [Azur
      --container-name ${CONTAINER_NAME} \
      --output table
    ```
-4. Clean up when completed:
+4. Clean up when finished:
    ```bash
-   ## remove local Dgraph cluster
+   ## remove the local Dgraph cluster
    pushd ../azure
    docker-compose stop && docker-compose rm
 
-   ## destroy azure storage account, storage container, and resource group
+   ## destroy the storage account, the storage container, and the resource group
    cd terraform
    terraform destroy
 
