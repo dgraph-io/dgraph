@@ -85,14 +85,6 @@ func (a *AuthMeta) validate() error {
 		}
 	}
 
-	if a.Header == "" {
-		fields += " `Header`"
-	}
-
-	if a.Namespace == "" {
-		fields += " `Namespace`"
-	}
-
 	if len(fields) > 0 {
 		return fmt.Errorf("required field missing in Dgraph.Authorization:%s", fields)
 	}

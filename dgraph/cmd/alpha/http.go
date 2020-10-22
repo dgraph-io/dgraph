@@ -17,13 +17,9 @@
 package alpha
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"mime"
 	"net/http"
 	"sort"
@@ -68,34 +64,6 @@ func commonHandler(w http.ResponseWriter, r *http.Request) bool {
 	}
 
 	return false
-}
-
-// Read request body, transparently decompressing if necessary. Return nil on error.
-func readRequest(w http.ResponseWriter, r *http.Request) []byte {
-	var in io.Reader = r.Body
-
-	if enc := r.Header.Get("Content-Encoding"); enc != "" && enc != "identity" {
-		if enc == "gzip" {
-			gz, err := gzip.NewReader(r.Body)
-			if err != nil {
-				x.SetStatus(w, x.Error, "Unable to create decompressor")
-				return nil
-			}
-			defer gz.Close()
-			in = gz
-		} else {
-			x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported content encoding")
-			return nil
-		}
-	}
-
-	body, err := ioutil.ReadAll(in)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return nil
-	}
-
-	return body
 }
 
 // parseUint64 reads the value for given URL parameter from request and
@@ -144,145 +112,6 @@ func parseDuration(r *http.Request, name string) (time.Duration, error) {
 	}
 
 	return durationValue, nil
-}
-
-// This method should just build the request and proxy it to the Query method of dgraph.Server.
-// It can then encode the response as appropriate before sending it back to the user.
-func queryHandler(w http.ResponseWriter, r *http.Request) {
-	if commonHandler(w, r) {
-		return
-	}
-
-	isDebugMode, err := parseBool(r, "debug")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-	queryTimeout, err := parseDuration(r, "timeout")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-	startTs, err := parseUint64(r, "startTs")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
-	body := readRequest(w, r)
-	if body == nil {
-		return
-	}
-
-	var params struct {
-		Query     string            `json:"query"`
-		Variables map[string]string `json:"variables"`
-	}
-
-	contentType := r.Header.Get("Content-Type")
-	mediaType, contentTypeParams, err := mime.ParseMediaType(contentType)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid Content-Type")
-	}
-	if charset, ok := contentTypeParams["charset"]; ok && strings.ToLower(charset) != "utf-8" {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported charset. "+
-			"Supported charset is UTF-8")
-		return
-	}
-
-	switch mediaType {
-	case "application/json":
-		if err := json.Unmarshal(body, &params); err != nil {
-			jsonErr := convertJSONError(string(body), err)
-			x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
-			return
-		}
-	case "application/graphql+-":
-		params.Query = string(body)
-	default:
-		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
-			"Supported content types are application/json, application/graphql+-")
-		return
-	}
-
-	ctx := context.WithValue(r.Context(), query.DebugKey, isDebugMode)
-	ctx = x.AttachAccessJwt(ctx, r)
-	ctx = x.AttachRemoteIP(ctx, r)
-
-	if queryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, queryTimeout)
-		defer cancel()
-	}
-
-	req := api.Request{
-		Vars:    params.Variables,
-		Query:   params.Query,
-		StartTs: startTs,
-	}
-
-	if req.StartTs == 0 {
-		// If be is set, run this as a best-effort query.
-		isBestEffort, err := parseBool(r, "be")
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
-		if isBestEffort {
-			req.BestEffort = true
-			req.ReadOnly = true
-		}
-
-		// If ro is set, run this as a readonly query.
-		isReadOnly, err := parseBool(r, "ro")
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
-		if isReadOnly {
-			req.ReadOnly = true
-		}
-	}
-
-	// Core processing happens here.
-	resp, err := (&edgraph.Server{}).Query(ctx, &req)
-	if err != nil {
-		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-	// Add cost to the header.
-	w.Header().Set(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
-
-	e := query.Extensions{
-		Txn:     resp.Txn,
-		Latency: resp.Latency,
-		Metrics: resp.Metrics,
-	}
-	js, err := json.Marshal(e)
-	if err != nil {
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
-	}
-
-	var out bytes.Buffer
-	writeEntry := func(key string, js []byte) {
-		x.Check2(out.WriteRune('"'))
-		x.Check2(out.WriteString(key))
-		x.Check2(out.WriteRune('"'))
-		x.Check2(out.WriteRune(':'))
-		x.Check2(out.Write(js))
-	}
-	x.Check2(out.WriteRune('{'))
-	writeEntry("data", resp.Json)
-	x.Check2(out.WriteRune(','))
-	writeEntry("extensions", js)
-	x.Check2(out.WriteRune('}'))
-
-	if _, err := x.WriteResponse(w, r, out.Bytes()); err != nil {
-		// If client crashes before server could write response, writeResponse will error out,
-		// Check2 will fatal and shut the server down in such scenario. We don't want that.
-		glog.Errorln("Unable to write response: ", err)
-	}
 }
 
 func mutationHandler(w http.ResponseWriter, r *http.Request) {
@@ -438,54 +267,6 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp["uids"] = resp.Uids
 	mp["queries"] = json.RawMessage(resp.Json)
 	response["data"] = mp
-
-	js, err := json.Marshal(response)
-	if err != nil {
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
-	}
-
-	_, _ = x.WriteResponse(w, r, js)
-}
-
-func commitHandler(w http.ResponseWriter, r *http.Request) {
-	if commonHandler(w, r) {
-		return
-	}
-
-	startTs, err := parseUint64(r, "startTs")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-	if startTs == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"startTs parameter is mandatory while trying to commit")
-		return
-	}
-
-	abort, err := parseBool(r, "abort")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
-	var response map[string]interface{}
-	if abort {
-		response, err = handleAbort(startTs)
-	} else {
-		// Keys are sent as an array in the body.
-		reqText := readRequest(w, r)
-		if reqText == nil {
-			return
-		}
-
-		response, err = handleCommit(startTs, reqText)
-	}
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
 
 	js, err := json.Marshal(response)
 	if err != nil {

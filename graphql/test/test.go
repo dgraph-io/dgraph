@@ -40,9 +40,6 @@ func LoadSchema(t *testing.T, gqlSchema string) schema.Schema {
 	gql, gqlErr := validator.ValidateSchemaDocument(doc)
 	requireNoGQLErrors(t, gqlErr)
 
-	schema, err := schema.AsSchema(gql)
-	requireNoGQLErrors(t, err)
-	return schema
 }
 
 // LoadSchemaFromFile reads a graphql schema file as would be the initial schema

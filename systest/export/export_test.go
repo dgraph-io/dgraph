@@ -33,13 +33,6 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-var (
-	mc             *minio.Client
-	bucketName     = "dgraph-backup"
-	destination    = "minio://minio1:9001/dgraph-backup?secure=false"
-	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
-)
-
 // TestExportSchemaToMinio. This test does an export, then verifies that the
 // schema file has been exported to minio. The unit tests test the actual data
 // exported, so it's not tested here again

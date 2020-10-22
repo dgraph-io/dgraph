@@ -30,13 +30,6 @@ var (
 	FalseVal = FromBool(false)
 )
 
-// FromInt converts the given int value into a pb.TaskValue object.
-func FromInt(val int) *pb.TaskValue {
-	bs := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bs, uint64(val))
-	return &pb.TaskValue{Val: []byte(bs), ValType: pb.Posting_INT}
-}
-
 // ToInt converts the given pb.TaskValue object into an integer.
 // Note, this panics if there are not enough bytes in val.Val
 func ToInt(val *pb.TaskValue) int64 {

@@ -42,16 +42,6 @@ func (dg *DgraphEx) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.R
 		return nil, nil
 	}
 
-	if glog.V(3) {
-		muts := make([]string, len(req.Mutations))
-		for i, m := range req.Mutations {
-			muts[i] = m.String()
-		}
-
-		glog.Infof("Executing Dgraph request; with\nQuery: \n%s\nMutations:%s",
-			req.Query, strings.Join(muts, "\n"))
-	}
-
 	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
 
