@@ -385,7 +385,7 @@ var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
 	idDirective:           nil,
 	subscriptionDirective: {ast.Object: true, ast.Interface: true},
 	secretDirective:       {ast.Object: true, ast.Interface: true},
-	authDirective:         {ast.Object: true},
+	authDirective:         {ast.Object: true, ast.Interface: true},
 	customDirective:       nil,
 	remoteDirective: {ast.Object: true, ast.Interface: true, ast.Union: true,
 		ast.InputObject: true, ast.Enum: true},
