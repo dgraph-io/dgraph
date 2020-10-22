@@ -2,7 +2,6 @@
 title = "GraphQL Subscriptions"
 weight = 8
 [menu.main]
-  url = "/graphql/subscriptions/"
   name = "Subscriptions"
   identifier = "subscriptions"
   parent = "graphql"
