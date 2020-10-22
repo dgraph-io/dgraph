@@ -621,6 +621,13 @@ func (authRw *authRewriter) rewriteRuleNode(
 				Args: []gql.Arg{{Value: varName}},
 			},
 		}
+	case rn.DQLRule != nil:
+		return []*gql.GraphQuery{rn.DQLRule}, &gql.FilterTree{
+			Func: &gql.Function{
+				Name: "uid",
+				Args: []gql.Arg{{Value: rn.DQLRule.Var}},
+			},
+		}
 	}
 	return nil, nil
 }

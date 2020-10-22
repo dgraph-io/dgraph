@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
@@ -41,6 +42,7 @@ type RuleNode struct {
 	And       []*RuleNode
 	Not       *RuleNode
 	Rule      Query
+	DQLRule   *gql.GraphQuery
 	RBACRule  *RBACQuery
 	Variables ast.VariableDefinitionList
 }
@@ -142,10 +144,23 @@ type TypeAuth struct {
 	Fields map[string]*AuthContainer
 }
 
+func createEmptyDQLRule(typeName string) *RuleNode {
+	return &RuleNode{DQLRule: &gql.GraphQuery{
+		Attr: typeName + "Root",
+		Var:  typeName + "Root",
+		Func: &gql.Function{
+			Name: "type",
+			Args: []gql.Arg{{Value: typeName}},
+		},
+	},
+	}
+}
+
 func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 	//TODO: Add position in error.
 	var errResult, err error
 	authRules := make(map[string]*TypeAuth)
+	interfaceAuthRules := make(map[string]*TypeAuth)
 
 	for _, typ := range s.Types {
 		name := typeName(typ)
@@ -165,22 +180,94 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		}
 	}
 
+	// Maintain a separate Mapping for Interface's Auth rules,
+	// Add all the rules from implementing types to this mapping
+	// and later update main mapping in the last.
+	for _, typ := range s.Types {
+		name := typeName(typ)
+		if typ.Kind == ast.Interface {
+			if authRules[name] != nil && authRules[name].Rules != nil {
+				interfaceAuthRules[name] = &TypeAuth{Rules: &AuthContainer{
+					Query:  authRules[name].Rules.Query,
+					Add:    authRules[name].Rules.Add,
+					Delete: authRules[name].Rules.Delete,
+					Update: authRules[name].Rules.Update,
+				}}
+			} else {
+				interfaceAuthRules[name] = &TypeAuth{}
+			}
+		}
+	}
+
+	//Merge Auth Rules of Implementing Types to obtain new auth rules
+	//on interfaces
+	for _, typ := range s.Types {
+		name := typeName(typ)
+		if typ.Kind == ast.Object {
+			if authRules[name] != nil && authRules[name].Rules != nil {
+				for _, interfaceName := range typ.Interfaces {
+					interfaceAuthRules[interfaceName].Rules = mergeAuthRulesWithOr(authRules[name].Rules, interfaceAuthRules[interfaceName].Rules)
+				}
+			} else {
+				emptyRule := createEmptyDQLRule(name)
+				for _, interfaceName := range typ.Interfaces {
+					interfaceAuthRules[interfaceName].Rules = mergeAuthRulesWithOr(&AuthContainer{Query: emptyRule}, interfaceAuthRules[interfaceName].Rules)
+				}
+			}
+		}
+	}
+
 	// Merge the Auth rules on interfaces into the implementing types
 	for _, typ := range s.Types {
 		name := typeName(typ)
 		if typ.Kind == ast.Object {
 			for _, interfaceName := range typ.Interfaces {
 				if authRules[interfaceName] != nil && authRules[interfaceName].Rules != nil {
-					authRules[name].Rules = mergeAuthRules(authRules, name, interfaceName)
+					authRules[name].Rules = mergeAuthRulesWithAnd(authRules[name].Rules, authRules[interfaceName].Rules)
 				}
 			}
 		}
 	}
 
+	for k, v := range interfaceAuthRules {
+		authRules[k] = v
+	}
+
 	return authRules, errResult
 }
 
-func mergeAuthNode(objectAuth, interfaceAuth *RuleNode) *RuleNode {
+func mergeAuthNodeWithOr(objectAuth, interfaceAuth *RuleNode) *RuleNode {
+	if objectAuth == nil {
+		return interfaceAuth
+	}
+
+	if interfaceAuth == nil {
+		return objectAuth
+	}
+
+	ruleNode := &RuleNode{}
+	ruleNode.Or = append(ruleNode.Or, objectAuth, interfaceAuth)
+	return ruleNode
+}
+
+func mergeAuthRulesWithOr(objectRules, interfaceRules *AuthContainer) *AuthContainer {
+	if interfaceRules == nil {
+		return &AuthContainer{
+			Query:  objectRules.Query,
+			Add:    objectRules.Add,
+			Delete: objectRules.Delete,
+			Update: objectRules.Update,
+		}
+	}
+
+	interfaceRules.Query = mergeAuthNodeWithOr(objectRules.Query, interfaceRules.Query)
+	interfaceRules.Add = mergeAuthNodeWithOr(objectRules.Add, interfaceRules.Add)
+	interfaceRules.Delete = mergeAuthNodeWithOr(objectRules.Delete, interfaceRules.Delete)
+	interfaceRules.Update = mergeAuthNodeWithOr(objectRules.Update, interfaceRules.Update)
+	return interfaceRules
+}
+
+func mergeAuthNodeWithAnd(objectAuth, interfaceAuth *RuleNode) *RuleNode {
 	if objectAuth == nil {
 		return interfaceAuth
 	}
@@ -194,10 +281,7 @@ func mergeAuthNode(objectAuth, interfaceAuth *RuleNode) *RuleNode {
 	return ruleNode
 }
 
-func mergeAuthRules(authRules map[string]*TypeAuth, objectName string, interfaceName string) *AuthContainer {
-	objectAuthRules := authRules[objectName].Rules
-	interfaceAuthRules := authRules[interfaceName].Rules
-
+func mergeAuthRulesWithAnd(objectAuthRules, interfaceAuthRules *AuthContainer) *AuthContainer {
 	// return copy of interfaceAuthRules since it is a pointer and otherwise it will lead
 	// to unnecessary errors
 	if objectAuthRules == nil {
@@ -209,10 +293,10 @@ func mergeAuthRules(authRules map[string]*TypeAuth, objectName string, interface
 		}
 	}
 
-	objectAuthRules.Query = mergeAuthNode(objectAuthRules.Query, interfaceAuthRules.Query)
-	objectAuthRules.Add = mergeAuthNode(objectAuthRules.Add, interfaceAuthRules.Add)
-	objectAuthRules.Delete = mergeAuthNode(objectAuthRules.Delete, interfaceAuthRules.Delete)
-	objectAuthRules.Update = mergeAuthNode(objectAuthRules.Update, interfaceAuthRules.Update)
+	objectAuthRules.Query = mergeAuthNodeWithAnd(objectAuthRules.Query, interfaceAuthRules.Query)
+	objectAuthRules.Add = mergeAuthNodeWithAnd(objectAuthRules.Add, interfaceAuthRules.Add)
+	objectAuthRules.Delete = mergeAuthNodeWithAnd(objectAuthRules.Delete, interfaceAuthRules.Delete)
+	objectAuthRules.Update = mergeAuthNodeWithAnd(objectAuthRules.Update, interfaceAuthRules.Update)
 	return objectAuthRules
 }
 

@@ -1164,3 +1164,38 @@
     query {
       queryFbPost()
     }
+
+    - name: "Auth rules of All the implementing types should Apply to the interface also"
+  gqlquery: |
+    query {
+      queryPost {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS:  "true"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryPost(func: uid(PostRoot)) {
+        dgraph.type
+        text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post1)) @filter((uid(PostAuth2) OR (uid(FbPostRoot) OR (uid(AnswerRoot) OR uid(PostAuth3)))))
+      Post1 as var(func: type(Post))
+      PostAuth2 as var(func: uid(Post1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      FbPostRoot as FbPostRoot(func: type(FbPost))
+      AnswerRoot as AnswerRoot(func: type(Answer))
+      PostAuth3 as var(func: uid(Post1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
