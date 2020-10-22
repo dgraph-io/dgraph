@@ -763,9 +763,7 @@ func checkAddUpdateCase(
 	// -- Assert --
 	// most cases are built into the authExecutor
 	if ClosedByDefault {
-		if strings.HasPrefix(tcase.Name, "Query with missing jwt token") {
-			require.Equal(t, resolved.Err.Error(), tcase.Error.Error())
-		} else if strings.HasPrefix(tcase.Name, "Invalid JWT") {
+		if strings.HasPrefix(tcase.Name, "Query with missing jwt token") || strings.HasPrefix(tcase.Name, "Invalid JWT") {
 			require.Equal(t, resolved.Err.Error(), tcase.Error.Error())
 		}
 	} else if tcase.Error != nil {

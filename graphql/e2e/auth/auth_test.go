@@ -360,8 +360,7 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 				permission
 			  }
 			}`,
-			result:          `{"queryRole":[{"permission":"EDIT"}]}`,
-			closedByDefault: false,
+			result: `{"queryRole":[{"permission":"EDIT"}]}`,
 		},
 		{name: "Query auth field without JWT Token",
 			query: `
@@ -370,8 +369,7 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 					content
 				}
 			}`,
-			result:          `{"queryMovie":[{"content":"Movie4"}]}`,
-			closedByDefault: false,
+			result: `{"queryMovie":[{"content":"Movie4"}]}`,
 		},
 		{name: "Query empty auth field without JWT Token",
 			query: `
@@ -380,8 +378,7 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 					comment
 				}
 			}`,
-			result:          `{"queryReview":[{"comment":"Nice movie"}]}`,
-			closedByDefault: false,
+			result: `{"queryReview":[{"comment":"Nice movie"}]}`,
 		},
 		{name: "Query auth field with partial JWT Token",
 			query: `
@@ -390,9 +387,8 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 					name
 				}
 			}`,
-			user:            "user1",
-			result:          `{"queryProject":[{"name":"Project1"}]}`,
-			closedByDefault: false,
+			user:   "user1",
+			result: `{"queryProject":[{"name":"Project1"}]}`,
 		},
 		{name: "Query auth field with invalid JWT Token",
 			query: `
@@ -401,34 +397,9 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 					name
 				}
 			}`,
-			user:            "user1",
-			role:            "ADMIN",
-			result:          `{"queryProject":[]}`,
-			closedByDefault: true,
-		},
-		{name: "Missing JWT - type with auth field",
-			query: `
-			query {
-				queryProject {
-					name
-				}
-			}`,
-			user:            "user1",
-			role:            "ADMIN",
-			result:          `{"queryProject":[]}`,
-			closedByDefault: true,
-		},
-		{name: "Missing JWT - type without auth field",
-			query: `
-			query {
-				queryTodo {
-					owner
-				}
-			}`,
-			user:            "user1",
-			role:            "ADMIN",
-			result:          `{"queryTodo":[]}`,
-			closedByDefault: true,
+			user:   "user1",
+			role:   "ADMIN",
+			result: `{"queryProject":[]}`,
 		},
 	}
 
@@ -436,7 +407,7 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 		queryParams := &common.GraphQLParams{
 			Query: tcase.query,
 		}
-		testMissingJWT := strings.HasPrefix(tcase.name, "Missing JWT")
+
 		testInvalidKey := strings.HasSuffix(tcase.name, "invalid JWT Token")
 		if testInvalidKey {
 			queryParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
@@ -445,28 +416,14 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 			// Create a invalid JWT signature.
 			jwtVar = jwtVar + "A"
 			queryParams.Headers.Set(metaInfo.Header, jwtVar)
-		} else if (tcase.user != "" || tcase.role != "") && (!testMissingJWT) {
+		} else if tcase.user != "" || tcase.role != "" {
 			queryParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
 		}
-		if tcase.closedByDefault {
-			metaInfo.AuthVars = map[string]interface{}{
-				"ClosedByDefault": true,
-			}
-		}
+
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
-		metaInfo.AuthVars = map[string]interface{}{
-			"ClosedByDefault": false,
-		}
-		if testMissingJWT {
-			if tcase.closedByDefault {
-				require.Contains(t, gqlResponse.Errors.Error(),
-					"Jwt is required when ClosedByDefault flag is true")
-			}
-		}
 		if testInvalidKey {
 			require.Contains(t, gqlResponse.Errors[0].Error(),
-				"couldn't rewrite query queryProject because unable to parse jwt token:token signature is invalid")
-
+				"couldn't rewrite query queryProject because unable to parse jwt token")
 		} else {
 			require.Nil(t, gqlResponse.Errors)
 		}

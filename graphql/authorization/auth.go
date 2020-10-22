@@ -108,9 +108,7 @@ func Parse(schema string) (*AuthMeta, error) {
 		return nil, nil
 	}
 	authInfo := schema[authInfoIdx:]
-	glog.Infof("%s", authInfo)
 	err := json.Unmarshal([]byte(authInfo[len(AuthMetaHeader):]), &meta)
-	glog.Infof("%s", err)
 	if err == nil {
 		return &meta, meta.validate()
 	}

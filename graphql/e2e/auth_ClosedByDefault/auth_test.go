@@ -387,7 +387,7 @@ func TestAuthRulesQueryWithClosed(t *testing.T) {
 			}`,
 			result: `{"queryReview":[]}`,
 		},
-		{name: "Query auth field with invalid JWT Token",
+		{name: "Invalid JWT - Query auth field with invalid JWT Token",
 			query: `
 			query {
 				queryProject {
@@ -420,7 +420,7 @@ func TestAuthRulesQueryWithClosed(t *testing.T) {
 			role:   "ADMIN",
 			result: `{"queryTodo":[]}`,
 		},
-		{name: "non auth type with invalid JWT Token",
+		{name: "Invalid JWT - non auth type with invalid JWT Token",
 			query: `
 			query {
 				queryTodo {
@@ -438,7 +438,7 @@ func TestAuthRulesQueryWithClosed(t *testing.T) {
 			Query: tcase.query,
 		}
 		testMissingJWT := strings.HasPrefix(tcase.name, "Missing JWT")
-		testInvalidKey := strings.HasSuffix(tcase.name, "invalid JWT Token")
+		testInvalidKey := strings.HasPrefix(tcase.name, "Invalid JWT")
 		if testInvalidKey {
 			queryParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
 			jwtVar := queryParams.Headers.Get(metaInfo.Header)
@@ -471,7 +471,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	jsonFile := "test_data.json"
+	jsonFile := "../auth/test_data.json"
 	data, err := ioutil.ReadFile(jsonFile)
 	if err != nil {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
