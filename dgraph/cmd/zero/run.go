@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -56,8 +57,10 @@ type options struct {
 	rebalanceInterval time.Duration
 	LudicrousMode     bool
 
-	totalCache      int64
-	cachePercentage string
+	totalCache        int64
+	cachePercentage   string
+	tlsDir            string
+	tlsDisabledRoutes []string
 }
 
 var opts options
@@ -104,6 +107,12 @@ instances to achieve high-availability.
 		" exporter does not support annotation logs and would discard them.")
 	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+	// TLS configurations
+	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
+	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
+	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
+	flag.String("tls_disabled_route", "", "comma separated zero endpoint which will be disabled from TLS encryption."+
+		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
 
 	// Cache flags
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
@@ -192,6 +201,11 @@ func run() {
 	}
 
 	x.PrintVersion()
+	var tlsDisRoutes []string
+	if Zero.Conf.GetString("tls_disabled_route") != "" {
+		tlsDisRoutes = strings.Split(Zero.Conf.GetString("tls_disabled_route"), ",")
+	}
+
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		myAddr:            Zero.Conf.GetString("my"),
@@ -204,6 +218,8 @@ func run() {
 		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
 		cachePercentage:   Zero.Conf.GetString("cache_percentage"),
+		tlsDir:            Zero.Conf.GetString("tls_dir"),
+		tlsDisabledRoutes: tlsDisRoutes,
 	}
 
 	if opts.nodeId == 0 {
@@ -310,7 +326,7 @@ func run() {
 	// Initialize the servers.
 	var st state
 	st.serveGRPC(grpcListener, store)
-	st.serveHTTP(httpListener)
+	st.startListenHttpAndHttps(httpListener)
 
 	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)
