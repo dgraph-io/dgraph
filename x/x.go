@@ -36,9 +36,9 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -820,7 +820,7 @@ func IsGuardian(groups []string) bool {
 
 // RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
 // Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
-func RunVlogGC(store *badger.DB, closer *y.Closer) {
+func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 	// Get initial size on start.
 	_, lastVlogSize := store.Size()
@@ -887,4 +887,39 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 	}
 
 	return cachePercent, nil
+}
+
+// ParseCompressionLevel returns compression level(int) given the compression level(string)
+func ParseCompressionLevel(compressionLevel string) (int, error) {
+	x, err := strconv.Atoi(compressionLevel)
+	if err != nil {
+		return 0, errors.Errorf("ERROR: unable to parse compression level(%s)", compressionLevel)
+	}
+	if x < 0 {
+		return 0, errors.Errorf("ERROR: compression level(%s) cannot be negative", compressionLevel)
+	}
+	return x, nil
+}
+
+// GetCompressionLevels returns the slice of compression levels given the "," (comma) separated
+// compression levels(integers) string.
+func GetCompressionLevels(compressionLevelsString string) ([]int, error) {
+	compressionLevels := strings.Split(compressionLevelsString, ",")
+	// Validity checks
+	if len(compressionLevels) != 1 && len(compressionLevels) != 2 {
+		return nil, errors.Errorf("ERROR: expected single integer or two comma separated integers")
+	}
+	var compressionLevelsInt []int
+	for _, cLevel := range compressionLevels {
+		x, err := ParseCompressionLevel(cLevel)
+		if err != nil {
+			return nil, err
+		}
+		compressionLevelsInt = append(compressionLevelsInt, x)
+	}
+	// Append the same compression level in case only one level was passed.
+	if len(compressionLevelsInt) == 1 {
+		compressionLevelsInt = append(compressionLevelsInt, compressionLevelsInt[0])
+	}
+	return compressionLevelsInt, nil
 }

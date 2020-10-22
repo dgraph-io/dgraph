@@ -34,7 +34,7 @@ function run_index_test {
     timeout=$(( timeout * 2 ))
   done
 
-  NUM=$(echo $N | python -m json.tool | grep $GREPFOR | wc -l)
+  NUM=$(echo $N | python3 -m json.tool | grep $GREPFOR | wc -l)
   if [[ ! "$NUM" -eq "$ANS" ]]; then
     echo "Index test failed: ${X}  Expected: $ANS  Got: $NUM"
     exit 1

@@ -21,14 +21,14 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/v2/y"
-
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
+
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -296,15 +296,15 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 }
 
 // RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
-func RefreshAcls(closer *y.Closer) {
-	defer closer.Done()
+func RefreshAcls(closer *z.Closer) {
+	defer func() {
+		glog.Infoln("RefreshAcls closed")
+		closer.Done()
+	}()
 	if len(worker.Config.HmacSecret) == 0 {
 		// the acl feature is not turned on
 		return
 	}
-
-	ticker := time.NewTicker(worker.Config.AclRefreshInterval)
-	defer ticker.Stop()
 
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
 	// aclCachePtr
@@ -315,9 +315,7 @@ func RefreshAcls(closer *y.Closer) {
 			ReadOnly: true,
 		}
 
-		ctx := context.Background()
-		var err error
-		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
+		queryResp, err := (&Server{}).doQuery(closer.Ctx(), &queryRequest, NoAuthorize)
 		if err != nil {
 			return errors.Errorf("unable to retrieve acls: %v", err)
 		}
@@ -331,14 +329,16 @@ func RefreshAcls(closer *y.Closer) {
 		return nil
 	}
 
+	ticker := time.NewTicker(worker.Config.AclRefreshInterval)
+	defer ticker.Stop()
 	for {
 		select {
-		case <-closer.HasBeenClosed():
-			return
 		case <-ticker.C:
 			if err := retrieveAcls(); err != nil {
-				glog.Errorf("Error while retrieving acls:%v", err)
+				glog.Errorf("Error while retrieving acls: %v", err)
 			}
+		case <-closer.HasBeenClosed():
+			return
 		}
 	}
 }
@@ -353,7 +353,12 @@ const queryAcls = `
 `
 
 // ResetAcl clears the aclCachePtr and upserts the Groot account.
-func ResetAcl() {
+func ResetAcl(closer *z.Closer) {
+	defer func() {
+		glog.Infof("ResetAcl closed")
+		closer.Done()
+	}()
+
 	if len(worker.Config.HmacSecret) == 0 {
 		// The acl feature is not turned on.
 		return
@@ -420,8 +425,8 @@ func ResetAcl() {
 		return nil
 	}
 
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		if err := upsertGuardians(ctx); err != nil {
 			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
@@ -431,8 +436,8 @@ func ResetAcl() {
 		break
 	}
 
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		if err := upsertGroot(ctx); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)

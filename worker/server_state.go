@@ -23,10 +23,10 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
@@ -38,7 +38,7 @@ type ServerState struct {
 
 	Pstore   *badger.DB
 	WALstore *badger.DB
-	gcCloser *y.Closer // closer for valueLogGC
+	gcCloser *z.Closer // closer for valueLogGC
 
 	needTs chan tsReq
 }
@@ -80,25 +80,32 @@ func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
 	// saved by disabling it.
 	opt.DetectConflicts = false
 
-	glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
-	// Default value of badgerCompressionLevel is 3 so compression will always
-	// be enabled, unless it is explicitly disabled by setting the value to 0.
-	if Config.BadgerCompressionLevel != 0 {
-		// By default, compression is disabled in badger.
-		opt.Compression = options.ZSTD
-		opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
-	}
-
 	var badgerTables string
 	var badgerVlog string
 	if wal {
 		// Settings for the write-ahead log.
 		badgerTables = Config.BadgerWalTables
 		badgerVlog = Config.BadgerWalVlog
+		glog.Infof("Setting WAL Dir Compression Level: %d", Config.WALDirCompressionLevel)
+		// Default value of WALDirCompressionLevel is 0 so compression will always
+		// be disabled, unless it is explicitly enabled by setting the value to greater than 0.
+		if Config.WALDirCompressionLevel != 0 {
+			// By default, compression is disabled in badger.
+			opt.Compression = options.ZSTD
+			opt.ZSTDCompressionLevel = Config.WALDirCompressionLevel
+		}
 	} else {
 		// Settings for the data directory.
 		badgerTables = Config.BadgerTables
 		badgerVlog = Config.BadgerVlog
+		glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
+		// Default value of postingDirCompressionLevel is 3 so compression will always
+		// be enabled, unless it is explicitly disabled by setting the value to 0.
+		if Config.PostingDirCompressionLevel != 0 {
+			// By default, compression is disabled in badger.
+			opt.Compression = options.ZSTD
+			opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
+		}
 	}
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
@@ -155,7 +162,7 @@ func (s *ServerState) initStorage() {
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
 		opt.EncryptionKey = key
 
-		s.WALstore, err = badger.Open(opt)
+		s.WALstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV WAL store")
 	}
 	{
@@ -184,7 +191,7 @@ func (s *ServerState) initStorage() {
 		opt.EncryptionKey = nil
 	}
 
-	s.gcCloser = y.NewCloser(2)
+	s.gcCloser = z.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
 	go x.RunVlogGC(s.WALstore, s.gcCloser)
 }
@@ -212,20 +219,28 @@ func (s *ServerState) fillTimestampRequests() {
 		maxDelay  = time.Second
 	)
 
+	defer func() {
+		glog.Infoln("Exiting fillTimestampRequests")
+	}()
+
 	var reqs []tsReq
 	for {
 		// Reset variables.
 		reqs = reqs[:0]
 		delay := initDelay
 
-		req := <-s.needTs
-	slurpLoop:
-		for {
-			reqs = append(reqs, req)
-			select {
-			case req = <-s.needTs:
-			default:
-				break slurpLoop
+		select {
+		case <-s.gcCloser.HasBeenClosed():
+			return
+		case req := <-s.needTs:
+		slurpLoop:
+			for {
+				reqs = append(reqs, req)
+				select {
+				case req = <-s.needTs:
+				default:
+					break slurpLoop
+				}
 			}
 		}
 
@@ -241,7 +256,10 @@ func (s *ServerState) fillTimestampRequests() {
 
 		// Execute the request with infinite retries.
 	retry:
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if s.gcCloser.Ctx().Err() != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(s.gcCloser.Ctx(), 10*time.Second)
 		ts, err := Timestamps(ctx, num)
 		cancel()
 		if err != nil {

@@ -154,7 +154,12 @@ func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error
 		out = gzw
 	}
 
-	return out.Write(b)
+	bytesWritten, err := out.Write(b)
+	if err != nil {
+		return 0, err
+	}
+	w.Header().Set("Content-Length", strconv.FormatInt(int64(bytesWritten), 10))
+	return bytesWritten, nil
 }
 
 // This method should just build the request and proxy it to the Query method of dgraph.Server.

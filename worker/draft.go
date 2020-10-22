@@ -35,7 +35,6 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/posting"
@@ -44,6 +43,8 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
+
 	"github.com/pkg/errors"
 
 	"github.com/golang/glog"
@@ -59,7 +60,7 @@ type node struct {
 	rollupCh chan uint64 // Channel to run posting list rollups.
 	ctx      context.Context
 	gid      uint32
-	closer   *y.Closer
+	closer   *z.Closer
 
 	streaming int32 // Used to avoid calculating snapshot
 
@@ -92,7 +93,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		applyCh:  make(chan []*pb.Proposal, 1000),
 		rollupCh: make(chan uint64, 3),
 		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:   y.NewCloser(3), // Matches CLOSER:1
+		closer:   z.NewCloser(3), // Matches CLOSER:1
 	}
 	return n
 }

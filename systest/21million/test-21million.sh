@@ -160,12 +160,12 @@ fi
 
 if [[ $CLEANUP == all ]]; then
     Info "bringing down zero and alpha and data volumes"
-    DockerCompose down -v
+    DockerCompose down -v --remove-orphans
 elif [[ $CLEANUP == none ]]; then
     Info "leaving up zero and alpha"
 else
     Info "bringing down zero and alpha only"
-    DockerCompose down
+    DockerCompose down --remove-orphans
 fi
 
 exit $FOUND_DIFFS

@@ -4,13 +4,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
-## [1.2.7] - Unreleased
+## [1.2.7] - 2020-09-21
 [1.2.7]: https://github.com/dgraph-io/dgraph/compare/v1.2.6...v1.2.7
+
+### Added
+
+- Add --cache_mb and --cache_percentage flags. ([#6288][])
+- Add flag to set up compression in zero. ([#6357][])
+- Add flags to set table and vlog loading mode for zero. ([#6344][])
 
 ### Fixed
 
 - Don't allow idx flag to be set to 0 on dgraph zero. ([#6193][])
+- Stop forcing RAM mode for the write-ahead log. ([#6261][])
+- Return error on closed DB. ([#6319][]) 
+- Don't store start_ts in postings. ([#6212][]) 
+- Optimize splits by doing binary search.  Clear the pack from the main list. ([#6334][]) 
+- Add a lock to backups to process one request at a time. ([#6341][])
+- Use z.Closer instead of y.Closer' ([#6396][])
+- Force exit if CTRL-C is caught before initialization. ([#6408][])
+- Fix(Alpha): MASA: Make Alpha Shutdown Again. ([#6406][])
+- Enterprise features
+  - Sort manifests by backup number. ([#6281][]) 
+  - Skip backing up nil lists. ([#6314][]) 
 
+[#6408]: https://github.com/dgraph-io/dgraph/issues/6408
+[#6406]: https://github.com/dgraph-io/dgraph/issues/6406
+[#6396]: https://github.com/dgraph-io/dgraph/issues/6396
+[#6261]: https://github.com/dgraph-io/dgraph/issues/6261
+[#6319]: https://github.com/dgraph-io/dgraph/issues/6319
+[#6212]: https://github.com/dgraph-io/dgraph/issues/6212
+[#6334]: https://github.com/dgraph-io/dgraph/issues/6334
+[#6341]: https://github.com/dgraph-io/dgraph/issues/6341
+[#6281]: https://github.com/dgraph-io/dgraph/issues/6281
+[#6314]: https://github.com/dgraph-io/dgraph/issues/6314
+[#6288]: https://github.com/dgraph-io/dgraph/issues/6288
+[#6357]: https://github.com/dgraph-io/dgraph/issues/6357
+[#6344]: https://github.com/dgraph-io/dgraph/issues/6344
 [#5987]: https://github.com/dgraph-io/dgraph/issues/5987
 [#6193]: https://github.com/dgraph-io/dgraph/issues/6193
 

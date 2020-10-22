@@ -30,10 +30,10 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/backup"
@@ -43,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -74,7 +75,8 @@ var (
 	startTime = time.Now()
 
 	// Alpha is the sub-command invoked when running "dgraph alpha".
-	Alpha x.SubCommand
+	Alpha    x.SubCommand
+	initDone uint32
 )
 
 func init() {
@@ -111,12 +113,17 @@ they form a Raft group and provide synchronous replication.
 			"log directory. mmap consumes more RAM, but provides better performance. If you pass "+
 			"two values separated by a comma the first value will be used for the postings "+
 			"directory and the second for the w directory.")
-	flag.Int("badger.compression_level", 3,
-		"The compression level for Badger. A higher value uses more resources.")
 	flag.String("encryption_key_file", "",
 		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
 			"The key size determines the corresponding block size for AES encryption "+
 			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+	flag.String("badger.compression_level", "3,0",
+		"Specifies the compression level for the postings and write-ahead log "+
+			"directory. A higher value uses more resources. The value of 0 disables "+
+			"compression. If you pass two values separated by a comma the first "+
+			"value will be used for the postings directory (p) and the second for "+
+			"the wal directory (w). If a single value is passed the value is used "+
+			"as compression level for both directories.")
 
 	// Snapshot and Transactions.
 	flag.Int("snapshot_after", 10000,
@@ -516,6 +523,7 @@ func setupServer() {
 
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
+	atomic.AddUint32(&initDone, 1)
 	wg.Wait()
 }
 
@@ -538,15 +546,22 @@ func run() {
 	wstoreBlockCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
 	wstoreIndexCacheSize := (cachePercent[4] * (totalCache << 20)) / 100
 
+	compressionLevelString := Alpha.Conf.GetString("badger.compression_level")
+	compressionLevels, err := x.GetCompressionLevels(compressionLevelString)
+	x.Check(err)
+	postingDirCompressionLevel := compressionLevels[0]
+	walDirCompressionLevel := compressionLevels[1]
+
 	opts := worker.Options{
-		BadgerKeyFile:          Alpha.Conf.GetString("encryption_key_file"),
-		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-		PostingDir:             Alpha.Conf.GetString("postings"),
-		WALDir:                 Alpha.Conf.GetString("wal"),
-		PBlockCacheSize:        pstoreBlockCacheSize,
-		PIndexCacheSize:        pstoreIndexCacheSize,
-		WBlockCacheSize:        wstoreBlockCacheSize,
-		WIndexCacheSize:        wstoreIndexCacheSize,
+		BadgerKeyFile:              Alpha.Conf.GetString("encryption_key_file"),
+		PostingDir:                 Alpha.Conf.GetString("postings"),
+		WALDir:                     Alpha.Conf.GetString("wal"),
+		PostingDirCompressionLevel: postingDirCompressionLevel,
+		WALDirCompressionLevel:     walDirCompressionLevel,
+		PBlockCacheSize:            pstoreBlockCacheSize,
+		PIndexCacheSize:            pstoreIndexCacheSize,
+		WBlockCacheSize:            wstoreBlockCacheSize,
+		WIndexCacheSize:            wstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
@@ -691,28 +706,45 @@ func run() {
 			}
 			numShutDownSig++
 			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
-			if numShutDownSig == 3 {
+
+			switch {
+			case atomic.LoadUint32(&initDone) < 2:
+				// Forcefully kill alpha if we haven't finish server initialization.
+				glog.Infoln("Stopped before initialization completed")
+				os.Exit(1)
+			case numShutDownSig == 3:
 				glog.Infoln("Signaled thrice. Aborting!")
 				os.Exit(1)
 			}
 		}
 	}()
 
-	// Setup external communication.
-	aclCloser := y.NewCloser(1)
+	updaters := z.NewCloser(2)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
+		atomic.AddUint32(&initDone, 1)
+
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
-		edgraph.ResetAcl()
-		edgraph.RefreshAcls(aclCloser)
+		edgraph.ResetAcl(updaters)
+		edgraph.RefreshAcls(updaters)
 	}()
 
 	setupServer()
 	glog.Infoln("GRPC and HTTP stopped.")
-	aclCloser.SignalAndWait()
+
+	// This might not close until group is given the signal to close. So, only signal here,
+	// wait for it after group is closed.
+	updaters.Signal()
+
 	worker.BlockingStop()
-	glog.Info("Disposing server state.")
+	glog.Infoln("worker stopped.")
+
 	worker.State.Dispose()
+	glog.Info("worker.State disposed.")
+
+	updaters.Wait()
+	glog.Infoln("updaters closed.")
+
 	glog.Infoln("Server shutdown. Bye!")
 }
