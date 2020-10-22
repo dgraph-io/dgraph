@@ -726,6 +726,7 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addFilterType(sch, defn)
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
+		addAggregationResultType(sch, defn)
 		addQueries(sch, defn)
 		addTypeHasFilter(sch, defn)
 	}
@@ -995,7 +996,10 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
-	fldTypeName := fld.Type.Name()
+	addFilterArgumentForField(schema, fld, fld.Type.Name())
+}
+
+func addFilterArgumentForField(schema *ast.Schema, fld *ast.FieldDefinition, fldTypeName string) {
 	fldType := schema.Types[fldTypeName]
 	if fldType.Kind == ast.Union || hasFilterable(fldType) {
 		fld.Arguments = append(fld.Arguments,
@@ -1402,6 +1406,21 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
+func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
+	aggregationResultTypeName := defn.Name + "AggregateResult"
+
+	countField := &ast.FieldDefinition{
+		Name: "count",
+		Type: &ast.Type{NamedType: "Int"},
+	}
+
+	schema.Types[aggregationResultTypeName] = &ast.Definition{
+		Kind:   ast.Object,
+		Name:   aggregationResultTypeName,
+		Fields: []*ast.FieldDefinition{countField},
+	}
+}
+
 func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
@@ -1466,6 +1485,23 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 
 }
 
+func addAggregationQuery(schema *ast.Schema, defn *ast.Definition) {
+	qry := &ast.FieldDefinition{
+		Name: "aggregate" + defn.Name,
+		Type: &ast.Type{
+			NamedType: defn.Name + "AggregateResult",
+		},
+	}
+	addFilterArgumentForField(schema, qry, defn.Name)
+
+	schema.Query.Fields = append(schema.Query.Fields, qry)
+	subs := defn.Directives.ForName(subscriptionDirective)
+	if subs != nil {
+		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	}
+
+}
+
 func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
@@ -1508,6 +1544,7 @@ func addQueries(schema *ast.Schema, defn *ast.Definition) {
 	addGetQuery(schema, defn)
 	addPasswordQuery(schema, defn)
 	addFilterQuery(schema, defn)
+	addAggregationQuery(schema, defn)
 }
 
 func addAddMutation(schema *ast.Schema, defn *ast.Definition) {

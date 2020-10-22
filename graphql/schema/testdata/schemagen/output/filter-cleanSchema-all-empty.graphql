@@ -253,6 +253,22 @@ input StringHashFilter {
 }
 
 #######################
+# Generated Types
+#######################
+
+type XAggregateResult {
+	count: Int
+}
+
+type YAggregateResult {
+	count: Int
+}
+
+type ZAggregateResult {
+	count: Int
+}
+
+#######################
 # Generated Enums
 #######################
 
@@ -297,7 +313,10 @@ input ZFilter {
 
 type Query {
 	queryX(first: Int, offset: Int): [X]
+	aggregateX: XAggregateResult
 	queryY(first: Int, offset: Int): [Y]
+	aggregateY: YAggregateResult
 	queryZ(first: Int, offset: Int): [Z]
+	aggregateZ: ZAggregateResult
 }
 

@@ -290,6 +290,18 @@ type DeleteOscarMoviePayload {
 	numUids: Int
 }
 
+type DirectorAggregateResult {
+	count: Int
+}
+
+type MovieAggregateResult {
+	count: Int
+}
+
+type OscarMovieAggregateResult {
+	count: Int
+}
+
 type UpdateDirectorPayload {
 	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
 	numUids: Int
@@ -449,10 +461,13 @@ input UpdateOscarMovieInput {
 type Query {
 	getMovie(id: ID!): Movie
 	queryMovie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
+	aggregateMovie(filter: MovieFilter): MovieAggregateResult
 	getOscarMovie(id: ID!): OscarMovie
 	queryOscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
+	aggregateOscarMovie(filter: OscarMovieFilter): OscarMovieAggregateResult
 	getDirector(id: ID!): Director
 	queryDirector(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
+	aggregateDirector(filter: DirectorFilter): DirectorAggregateResult
 }
 
 #######################

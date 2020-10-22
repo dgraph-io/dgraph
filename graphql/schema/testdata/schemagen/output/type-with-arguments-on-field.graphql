@@ -256,6 +256,10 @@ input StringHashFilter {
 # Generated Types
 #######################
 
+type AbstractAggregateResult {
+	count: Int
+}
+
 type AddMessagePayload {
 	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
 	numUids: Int
@@ -271,6 +275,10 @@ type DeleteMessagePayload {
 	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
 	msg: String
 	numUids: Int
+}
+
+type MessageAggregateResult {
+	count: Int
 }
 
 type UpdateAbstractPayload {
@@ -390,8 +398,10 @@ input UpdateMessageInput {
 type Query {
 	getAbstract(id: ID!): Abstract
 	queryAbstract(filter: AbstractFilter, order: AbstractOrder, first: Int, offset: Int): [Abstract]
+	aggregateAbstract(filter: AbstractFilter): AbstractAggregateResult
 	getMessage(id: ID!): Message
 	queryMessage(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	aggregateMessage(filter: MessageFilter): MessageAggregateResult
 }
 
 #######################

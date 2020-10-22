@@ -253,6 +253,10 @@ type AddAuthorPayload {
 	numUids: Int
 }
 
+type AuthorAggregateResult {
+	count: Int
+}
+
 type DeleteAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	msg: String
@@ -320,6 +324,7 @@ input UpdateAuthorInput {
 type Query {
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	aggregateAuthor(filter: AuthorFilter): AuthorAggregateResult
 }
 
 #######################

@@ -268,6 +268,10 @@ type UpdateUserPayload {
 	numUids: Int
 }
 
+type UserAggregateResult {
+	count: Int
+}
+
 #######################
 # Generated Enums
 #######################
@@ -324,6 +328,7 @@ input UserRef {
 type Query {
 	getUser(id: ID!): User
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################

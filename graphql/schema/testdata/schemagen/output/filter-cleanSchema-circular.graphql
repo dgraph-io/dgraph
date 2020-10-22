@@ -273,6 +273,18 @@ type AddZPayload {
 	numUids: Int
 }
 
+type XAggregateResult {
+	count: Int
+}
+
+type YAggregateResult {
+	count: Int
+}
+
+type ZAggregateResult {
+	count: Int
+}
+
 #######################
 # Generated Enums
 #######################
@@ -347,8 +359,11 @@ input ZRef {
 
 type Query {
 	queryX(first: Int, offset: Int): [X]
+	aggregateX: XAggregateResult
 	queryY(first: Int, offset: Int): [Y]
+	aggregateY: YAggregateResult
 	queryZ(first: Int, offset: Int): [Z]
+	aggregateZ: ZAggregateResult
 }
 
 #######################

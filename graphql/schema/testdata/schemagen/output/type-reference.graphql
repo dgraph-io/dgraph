@@ -265,6 +265,10 @@ type AddPostPayload {
 	numUids: Int
 }
 
+type AuthorAggregateResult {
+	count: Int
+}
+
 type DeleteAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	msg: String
@@ -275,6 +279,10 @@ type DeletePostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	msg: String
 	numUids: Int
+}
+
+type PostAggregateResult {
+	count: Int
 }
 
 type UpdateAuthorPayload {
@@ -393,8 +401,10 @@ input UpdatePostInput {
 type Query {
 	getPost(id: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	aggregatePost(filter: PostFilter): PostAggregateResult
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	aggregateAuthor(filter: AuthorFilter): AuthorAggregateResult
 }
 
 #######################

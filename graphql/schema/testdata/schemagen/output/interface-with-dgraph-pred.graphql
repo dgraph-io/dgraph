@@ -272,6 +272,10 @@ type AddObjectPayload {
 	numUids: Int
 }
 
+type BusinessManAggregateResult {
+	count: Int
+}
+
 type DeleteBusinessManPayload {
 	businessMan(filter: BusinessManFilter, order: BusinessManOrder, first: Int, offset: Int): [BusinessMan]
 	msg: String
@@ -288,6 +292,14 @@ type DeletePersonPayload {
 	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 	msg: String
 	numUids: Int
+}
+
+type ObjectAggregateResult {
+	count: Int
+}
+
+type PersonAggregateResult {
+	count: Int
 }
 
 type UpdateBusinessManPayload {
@@ -449,10 +461,13 @@ input UpdatePersonInput {
 type Query {
 	getObject(id: ID!): Object
 	queryObject(filter: ObjectFilter, order: ObjectOrder, first: Int, offset: Int): [Object]
+	aggregateObject(filter: ObjectFilter): ObjectAggregateResult
 	getBusinessMan(id: ID!): BusinessMan
 	queryBusinessMan(filter: BusinessManFilter, order: BusinessManOrder, first: Int, offset: Int): [BusinessMan]
+	aggregateBusinessMan(filter: BusinessManFilter): BusinessManAggregateResult
 	getPerson(id: ID!): Person
 	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+	aggregatePerson(filter: PersonFilter): PersonAggregateResult
 }
 
 #######################

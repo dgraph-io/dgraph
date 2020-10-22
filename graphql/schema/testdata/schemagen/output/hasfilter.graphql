@@ -266,6 +266,10 @@ type AddTPayload {
 	numUids: Int
 }
 
+type BAggregateResult {
+	count: Int
+}
+
 type DeleteIPayload {
 	i(filter: IFilter, first: Int, offset: Int): [I]
 	msg: String
@@ -276,6 +280,14 @@ type DeleteTPayload {
 	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 	msg: String
 	numUids: Int
+}
+
+type IAggregateResult {
+	count: Int
+}
+
+type TAggregateResult {
+	count: Int
 }
 
 type UpdateTPayload {
@@ -377,9 +389,12 @@ input UpdateTInput {
 type Query {
 	getI(id: ID!): I
 	queryI(filter: IFilter, first: Int, offset: Int): [I]
+	aggregateI(filter: IFilter): IAggregateResult
 	getT(id: ID!): T
 	queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+	aggregateT(filter: TFilter): TAggregateResult
 	queryB(order: BOrder, first: Int, offset: Int): [B]
+	aggregateB: BAggregateResult
 }
 
 #######################
