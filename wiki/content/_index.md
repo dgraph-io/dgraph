@@ -33,7 +33,7 @@ Designed from the ground up to be run in production, Dgraph is the native GraphQ
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "slash-graphql/introduction.md">}}">
+            <a href="https://dgraph.io/docs/slash-graphql/introduction">
               Slash GraphQL
             </a>
           </div>
