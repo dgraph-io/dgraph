@@ -13,7 +13,7 @@ In this article you'll learn how to use Geolocation queries in GraphQL when runn
 In Dgraph, a predicate which has geo-type can store data for a `Point`, a `Polygon` or a `MultiPolygon`. 
 
 {{% notice "note" %}}
-since GraphQL is strongly typed, a field inside a `type` can only store one type of data.
+Because GraphQL is strongly typed, a field inside a `type` can only store one type of data.
 {{% /notice %}}
 
 ### Point
@@ -140,14 +140,6 @@ input HotelFilter {
 The `near` function matches all entities where the location given by `predicate` is within a distance `meters` from a geojson coordinate `[long, lat]`.
 
 ```graphql
-{
-  tourist(func: near(loc, [-122.469829, 37.771935], 1000) ) {
-    name
-  }
-}
-```
-
-```graphql
 queryHotel(filter: {
     location: { 
         near: {
@@ -168,17 +160,8 @@ queryHotel(filter: {
 The `within` function matches all entities where the location given by `predicate` lies within a polygon specified by the geojson `coordinates` array.
 
 {{% notice "tip" %}}
-the `within` query allows searching for all geo entities (`point`, `polygon`) within a polygon; hence they are generated for all types.
+The `within` query lets you search for all geo entities (`point`, `polygon`) within a polygon, so they are generated for all types.
 {{% /notice %}}
-
-
-```graphql
-{
-  tourist(func: within(loc, [[[....]]] )) {
-    name
-  }
-}
-```
 
 ```graphql
 queryHotel(filter: {
@@ -199,18 +182,8 @@ queryHotel(filter: {
 The `contains` function matches all entities where the polygon describing a location given by `predicate` contains a geojson coordinate `[long, lat]` or a given geojson `polygon`.
 
 {{% notice "tip" %}}
-the `ContainsFilter` is only generated for `Polygon` and `MultiPolygon`.
+The `ContainsFilter` is only generated for `Polygon` and `MultiPolygon`.
 {{% /notice %}}
-
-
-```graphql
-{
-  tourist(func: contains(loc, [ -122.50326097011566, 37.73353615592843 ] )) {
-    name
-  }
-}
-```
-
 
 ```graphql
 queryHotel(filter: {
@@ -232,16 +205,8 @@ queryHotel(filter: {
 The `intersects ` function matches all entities where the polygon describing a location given by `predicate` intersects a given geojson `polygon`.
 
 {{% notice "tip" %}}
-the `IntersectsFilter` is only generated for `Polygon` and `MultiPolygon`.
+The `IntersectsFilter` is only generated for `Polygon` and `MultiPolygon`.
 {{% /notice %}}
-
-```graphql
-{
-  tourist(func: intersects(loc, [[[...]]] )) {
-    name
-  }
-}
-```
 
 ```graphql
 queryHotel(filter: {
