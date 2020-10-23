@@ -129,6 +129,18 @@ func TestXidmapMemory(t *testing.T) {
 // Benchmarks using Trie
 // BenchmarkXidmapWrites-32    	16202346	       375 ns/op
 // BenchmarkXidmapReads-32     	139261450	        44.8 ns/op
+//
+// go test -v -run=XXX -bench=BenchmarkXidmapWritesRandom -count=10
+// go test -v -run=XXX -bench=BenchmarkXidmapReadsRandom -count=10
+//
+// Benchmarks using Skiplist				time/op
+// BenchmarkXidmapWritesRandom-16		775ns ± 2%
+// BenchmarkXidmapReadsRandom-16		416ns ± 1%
+//
+// Benchmarks using Trie						time/op
+// BenchmarkXidmapWritesRandom-16		902ns ± 2%
+// BenchmarkXidmapReadsRandom-16		428ns ± 2%
+
 func BenchmarkXidmapWrites(b *testing.B) {
 	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
 	if err != nil {
