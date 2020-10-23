@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -199,14 +200,20 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		}
 	}
 
-	//Merge Auth Rules of Implementing Types to obtain new auth rules
-	//on interfaces
+	// Store A Mapping To indicate if any of the implementing type for
+	// and interface have Auth Rules
+	implementedTypeHasAuth := make(map[string]bool)
+
+	// Merge Auth Rules of Implementing Types to obtain new auth rules
+	// on interfaces
 	for _, typ := range s.Types {
 		name := typeName(typ)
+		fmt.Println(name)
 		if typ.Kind == ast.Object {
 			if authRules[name] != nil && authRules[name].Rules != nil {
 				for _, interfaceName := range typ.Interfaces {
 					interfaceAuthRules[interfaceName].Rules = mergeAuthRulesWithOr(authRules[name].Rules, interfaceAuthRules[interfaceName].Rules)
+					implementedTypeHasAuth[interfaceName] = true
 				}
 			} else {
 				emptyRule := createEmptyDQLRule(name)
@@ -229,8 +236,13 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		}
 	}
 
+	// Replace Interface's auth rules with newly formed auth Rules which includes
+	// Auth rules from implementing Types too. Don't replace if no implementing
+	// have auth rules as there will unncesessary Empty Auth rules added to the interface
 	for k, v := range interfaceAuthRules {
-		authRules[k] = v
+		if implementedTypeHasAuth[k] == true {
+			authRules[k] = v
+		}
 	}
 
 	return authRules, errResult

@@ -1165,7 +1165,7 @@
       queryFbPost()
     }
 
-    - name: "Auth rules of All the implementing types should Apply to the interface also"
+- name: "Auth rules of All the implementing types should Apply to the interface also"
   gqlquery: |
     query {
       queryPost {
