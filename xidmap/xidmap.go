@@ -88,10 +88,6 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	}
 	if db != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
-		//
-		// TODO: We don't need to write to Badger upfront like this. With Trie, we can iterate over
-		// the trie and write to Badger at the end. In fact, we might even be able to use
-		// streamwriter for it.
 		xm.writer = db.NewWriteBatch()
 
 		err := db.View(func(txn *badger.Txn) error {
@@ -254,9 +250,15 @@ func (m *XidMap) AllocateUid() uint64 {
 
 // Flush must be called if DB is provided to XidMap.
 func (m *XidMap) Flush() error {
+	glog.Infof("Writing xid map to DB")
+	defer func() {
+		glog.Infof("Finished writing xid map to DB")
+	}()
+
 	for _, shard := range m.shards {
 		shard.skiplist.DecrRef()
 	}
+
 	if m.writer == nil {
 		return nil
 	}

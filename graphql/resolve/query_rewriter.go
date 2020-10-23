@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -26,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -276,17 +278,17 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 }
 
 // addArgumentsToField adds various different arguments to a field, such as
-// filter, order, pagination and selection set.
+// filter, order and pagination.
 func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	filter, _ := field.ArgValue("filter").(map[string]interface{})
-	addFilter(dgQuery, field.Type(), filter)
+	_ = addFilter(dgQuery, field.Type(), filter)
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
 }
 
 func addFilterToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	filter, _ := field.ArgValue("filter").(map[string]interface{})
-	addFilter(dgQuery, field.Type(), filter)
+	_ = addFilter(dgQuery, field.Type(), filter)
 }
 
 func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
@@ -627,10 +629,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 
 func addTypeFilter(q *gql.GraphQuery, typ schema.Type) {
 	thisFilter := &gql.FilterTree{
-		Func: &gql.Function{
-			Name: "type",
-			Args: []gql.Arg{{Value: typ.DgraphName()}},
-		},
+		Func: buildTypeFunc(typ.DgraphName()),
 	}
 	addToFilterTree(q, thisFilter)
 }
@@ -654,7 +653,11 @@ func addUIDFunc(q *gql.GraphQuery, uids []uint64) {
 }
 
 func addTypeFunc(q *gql.GraphQuery, typ string) {
-	q.Func = &gql.Function{
+	q.Func = buildTypeFunc(typ)
+}
+
+func buildTypeFunc(typ string) *gql.Function {
+	return &gql.Function{
 		Name: "type",
 		Args: []gql.Arg{{Value: typ}},
 	}
@@ -669,12 +672,12 @@ func addSelectionSetFrom(
 
 	var authQueries []*gql.GraphQuery
 
-	// Only add dgraph.type as a child if this field is an interface type and has some children.
-	// dgraph.type would later be used in completeObject as different objects in the resulting
-	// JSON would return different fields based on their concrete type.
 	selSet := field.SelectionSet()
 	if len(selSet) > 0 {
-		if field.InterfaceType() {
+		// Only add dgraph.type as a child if this field is an abstract type and has some children.
+		// dgraph.type would later be used in completeObject as different objects in the resulting
+		// JSON would return different fields based on their concrete type.
+		if field.AbstractType() {
 			q.Children = append(q.Children, &gql.GraphQuery{
 				Attr: "dgraph.type",
 			})
@@ -716,14 +719,6 @@ func addSelectionSetFrom(
 			continue
 		}
 
-		// skip if we have already added a query for this field in DQL. It helps make sure that if
-		// a field is being asked twice or more, each time with a new alias, then we only add it
-		// once in DQL query.
-		if _, ok := fieldAdded[f.DgraphAlias()]; ok {
-			continue
-		}
-		fieldAdded[f.DgraphAlias()] = true
-
 		child := &gql.GraphQuery{
 			Alias: f.DgraphAlias(),
 		}
@@ -735,7 +730,10 @@ func addSelectionSetFrom(
 		}
 
 		filter, _ := f.ArgValue("filter").(map[string]interface{})
-		addFilter(child, f.Type(), filter)
+		// if this field has been filtered out by the filter, then don't add it in DQL query
+		if includeField := addFilter(child, f.Type(), filter); !includeField {
+			continue
+		}
 		addOrder(child, f)
 		addPagination(child, f)
 		addCascadeDirective(child, f)
@@ -752,16 +750,24 @@ func addSelectionSetFrom(
 		}
 
 		var selectionAuth []*gql.GraphQuery
-		if !f.Type().IsPoint() {
+		if !f.Type().IsGeo() {
 			selectionAuth = addSelectionSetFrom(child, f, auth)
 		}
-		addedFields[f.Name()] = true
 
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
 			// Restore the state after processing is done.
 			auth.parentVarName = parentVarName
 			auth.varName = parentQryName
 		}
+
+		// skip if we have already added a query for this field in DQL. It helps make sure that if
+		// a field is being asked twice or more, each time with a new alias, then we only add it
+		// once in DQL query.
+		if _, ok := fieldAdded[f.DgraphAlias()]; ok {
+			continue
+		}
+		fieldAdded[f.DgraphAlias()] = true
+		addedFields[f.Name()] = true
 
 		if rbac == schema.Positive || rbac == schema.Uncertain {
 			q.Children = append(q.Children, child)
@@ -952,9 +958,12 @@ func idFilter(filter map[string]interface{}, idField schema.FieldDefinition) []u
 	return convertIDs(idsSlice)
 }
 
-func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}) {
+// addFilter adds a filter to the input DQL query. It returns false if the field for which the
+// filter was specified should not be included in the DQL query.
+// Currently, it would only be false for a union field when no memberTypes are queried.
+func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}) bool {
 	if len(filter) == 0 {
-		return
+		return true
 	}
 
 	// There are two cases here.
@@ -974,10 +983,20 @@ func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}
 		// If id was present as a filter,
 		delete(filter, idName)
 	}
-	q.Filter = buildFilter(typ, filter)
+
+	if typ.IsUnion() {
+		if filter, includeField := buildUnionFilter(typ, filter); includeField {
+			q.Filter = filter
+		} else {
+			return false
+		}
+	} else {
+		q.Filter = buildFilter(typ, filter)
+	}
 	if filterAtRoot {
 		addTypeFilter(q, typ)
 	}
+	return true
 }
 
 // buildFilter builds a Dgraph gql.FilterTree from a GraphQL 'filter' arg.
@@ -1054,9 +1073,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					Child: []*gql.FilterTree{not},
 				})
 		default:
-			// It's a base case like:
-			// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
-
+			//// It's a base case like:
+			//// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
+			//// numLikes: { between : { min : 10,  max:100 }}
 			switch dgFunc := filter[field].(type) {
 			case map[string]interface{}:
 				// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title, "GraphQL")
@@ -1064,12 +1083,13 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				// numLikes: { le: 10 } -> le(Post.numLikes, 10)
 
 				fn, val := first(dgFunc)
-				args := []gql.Arg{
-					{Value: typ.DgraphPredicate(field)},
+				if val == nil {
+					continue
 				}
+				args := []gql.Arg{{Value: typ.DgraphPredicate(field)}}
 				switch fn {
 				// in takes List of Scalars as argument, for eg:
-				// code : { in: {"abc", "def", "ghi"} } -> eq(State.code,"abc","def","ghi")
+				// code : { in: ["abc", "def", "ghi"] } -> eq(State.code,"abc","def","ghi")
 				case "in":
 					// No need to check for List types as this would pass GraphQL validation
 					// if val was not list
@@ -1079,18 +1099,60 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					for _, v := range vals {
 						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
 					}
+				case "between":
+					// numLikes: { between : { min : 10,  max:100 }} should be rewritten into
+					// 	between(numLikes,10,20). Order of arguments (min,max) is neccessary or
+					// it will return empty
+					vals := val.(map[string]interface{})
+					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, vals["min"])},
+						gql.Arg{Value: maybeQuoteArg(fn, vals["max"])})
 				case "near":
-					//  For Geo type we have `near` filter which is written as follows:
+					// For Geo type we have `near` filter which is written as follows:
 					// { near: { distance: 33.33, coordinate: { latitude: 11.11, longitude: 22.22 } } }
-					geoParams := val.(map[string]interface{})
-					distance := geoParams["distance"]
-
-					coordinate, _ := geoParams["coordinate"].(map[string]interface{})
-					lat := coordinate["latitude"]
-					long := coordinate["longitude"]
-					args = append(args, gql.Arg{Value: fmt.Sprintf("[%v,%v]", long, lat)},
-						gql.Arg{Value: fmt.Sprintf("%v", distance)})
-
+					near := val.(map[string]interface{})
+					coordinate := near["coordinate"].(map[string]interface{})
+					var buf bytes.Buffer
+					buildPoint(coordinate, &buf)
+					args = append(args, gql.Arg{Value: buf.String()},
+						gql.Arg{Value: fmt.Sprintf("%v", near["distance"])})
+				case "within":
+					// For Geo type we have `within` filter which is written as follows:
+					// { within: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					within := val.(map[string]interface{})
+					polygon := within["polygon"].(map[string]interface{})
+					var buf bytes.Buffer
+					buildPolygon(polygon, &buf)
+					args = append(args, gql.Arg{Value: buf.String()})
+				case "contains":
+					// For Geo type we have `contains` filter which is either point or polygon and is written as follows:
+					// For point: { contains: { point: { latitude: 11.11, longitude: 22.22 }}}
+					// For polygon: { contains: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					contains := val.(map[string]interface{})
+					var buf bytes.Buffer
+					if polygon, ok := contains["polygon"].(map[string]interface{}); ok {
+						buildPolygon(polygon, &buf)
+					} else if point, ok := contains["point"].(map[string]interface{}); ok {
+						buildPoint(point, &buf)
+					}
+					args = append(args, gql.Arg{Value: buf.String()})
+					// TODO: for both contains and intersects, we should use @oneOf in the inbuilt
+					// schema. Once we have variable validation hook available in gqlparser, we can
+					// do this. So, if either both the children are given or none of them is given,
+					// we should get an error at parser level itself. Right now, if both "polygon"
+					// and "point" are given, we only use polygon. If none of them are given,
+					// an incorrect DQL query will be formed and will error out from Dgraph.
+				case "intersects":
+					// For Geo type we have `intersects` filter which is either multi-polygon or polygon and is written as follows:
+					// For polygon: { intersect: { polygon: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] } } }
+					// For multi-polygon : { intersect: { multiPolygon: { polygons: [{ coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}] }] } } }
+					intersects := val.(map[string]interface{})
+					var buf bytes.Buffer
+					if polygon, ok := intersects["polygon"].(map[string]interface{}); ok {
+						buildPolygon(polygon, &buf)
+					} else if multiPolygon, ok := intersects["multiPolygon"].(map[string]interface{}); ok {
+						buildMultiPolygon(multiPolygon, &buf)
+					}
+					args = append(args, gql.Arg{Value: buf.String()})
 				default:
 					args = append(args, gql.Arg{Value: maybeQuoteArg(fn, val)})
 				}
@@ -1163,6 +1225,87 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	}
 }
 
+func buildPoint(point map[string]interface{}, buf *bytes.Buffer) {
+	x.Check2(buf.WriteString(fmt.Sprintf("[%v,%v]", point[schema.Longitude],
+		point[schema.Latitude])))
+}
+
+func buildPolygon(polygon map[string]interface{}, buf *bytes.Buffer) {
+	coordinates, _ := polygon[schema.Coordinates].([]interface{})
+	comma1 := ""
+
+	x.Check2(buf.WriteString("["))
+	for _, r := range coordinates {
+		ring, _ := r.(map[string]interface{})
+		points, _ := ring[schema.Points].([]interface{})
+		comma2 := ""
+
+		x.Check2(buf.WriteString(comma1))
+		x.Check2(buf.WriteString("["))
+		for _, p := range points {
+			x.Check2(buf.WriteString(comma2))
+			point, _ := p.(map[string]interface{})
+			buildPoint(point, buf)
+			comma2 = ","
+		}
+		x.Check2(buf.WriteString("]"))
+		comma1 = ","
+	}
+	x.Check2(buf.WriteString("]"))
+}
+
+func buildMultiPolygon(multipolygon map[string]interface{}, buf *bytes.Buffer) {
+	polygons, _ := multipolygon[schema.Polygons].([]interface{})
+	comma := ""
+
+	x.Check2(buf.WriteString("["))
+	for _, p := range polygons {
+		polygon, _ := p.(map[string]interface{})
+		x.Check2(buf.WriteString(comma))
+		buildPolygon(polygon, buf)
+		comma = ","
+	}
+	x.Check2(buf.WriteString("]"))
+}
+
+func buildUnionFilter(typ schema.Type, filter map[string]interface{}) (*gql.FilterTree, bool) {
+	memberTypesList, ok := filter["memberTypes"].([]interface{})
+	// if memberTypes was specified to be an empty list like: { memberTypes: [], ...},
+	// then we don't need to include the field, on which the filter was specified, in the query.
+	if ok && len(memberTypesList) == 0 {
+		return nil, false
+	}
+
+	ft := &gql.FilterTree{
+		Op: "or",
+	}
+
+	// now iterate over the filtered member types for this union and build FilterTree for them
+	for _, memberType := range typ.UnionMembers(memberTypesList) {
+		memberTypeFilter, _ := filter[schema.CamelCase(memberType.Name())+"Filter"].(map[string]interface{})
+		var memberTypeFt *gql.FilterTree
+		if len(memberTypeFilter) == 0 {
+			// if the filter for a member type wasn't specified, was null, or was specified as {};
+			// then we need to query all nodes of that member type for the field on which the filter
+			// was specified.
+			memberTypeFt = &gql.FilterTree{Func: buildTypeFunc(memberType.DgraphName())}
+		} else {
+			// else we need to query only the nodes which match the filter for that member type
+			memberTypeFt = &gql.FilterTree{
+				Op: "and",
+				Child: []*gql.FilterTree{
+					{Func: buildTypeFunc(memberType.DgraphName())},
+					buildFilter(memberType, memberTypeFilter),
+				},
+			}
+		}
+		ft.Child = append(ft.Child, memberTypeFt)
+	}
+
+	// return true because we want to include the field with filter in query
+	return ft, true
+}
+
 func maybeQuoteArg(fn string, arg interface{}) string {
 	switch arg := arg.(type) {
 	case string: // dateTime also parsed as string
@@ -1175,7 +1318,7 @@ func maybeQuoteArg(fn string, arg interface{}) string {
 	}
 }
 
-// fst returns the first element it finds in a map - we bump into lots of one-element
+// first returns the first element it finds in a map - we bump into lots of one-element
 // maps like { "anyofterms": "GraphQL" }.  fst helps extract that single mapping.
 func first(aMap map[string]interface{}) (string, interface{}) {
 	for key, val := range aMap {

@@ -139,6 +139,7 @@ type post struct {
 	Title       string    `json:"title,omitempty"`
 	Text        string    `json:"text,omitempty"`
 	Tags        []string  `json:"tags,omitempty"`
+	Topic       string    `json:"topic,omitempty"`
 	NumLikes    int       `json:"numLikes,omitempty"`
 	NumViews    int64     `json:"numViews,omitempty"`
 	IsPublished bool      `json:"isPublished,omitempty"`
@@ -298,6 +299,8 @@ func RunAll(t *testing.T) {
 	t.Run("multiple search indexes wrong field", multipleSearchIndexesWrongField)
 	t.Run("hash search", hashSearch)
 	t.Run("in filter", inFilter)
+	t.Run("between filter", betweenFilter)
+	t.Run("deep between filter", deepBetweenFilter)
 	t.Run("deep filter", deepFilter)
 	t.Run("deep has filter", deepHasFilter)
 	t.Run("many queries", manyQueries)
@@ -380,7 +383,9 @@ func RunAll(t *testing.T) {
 	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
 	t.Run("Input coercing for int64 type", int64BoundaryTesting)
 	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
-	t.Run("Geo type", mutationGeoType)
+	t.Run("Geo - Point type", mutationPointType)
+	t.Run("Geo - Polygon type", mutationPolygonType)
+	t.Run("Geo - MultiPolygon type", mutationMultiPolygonType)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -392,6 +397,7 @@ func RunAll(t *testing.T) {
 	t.Run("fragment in mutation", fragmentInMutation)
 	t.Run("fragment in query", fragmentInQuery)
 	t.Run("fragment in query on Interface", fragmentInQueryOnInterface)
+	t.Run("fragment in query on union", fragmentInQueryOnUnion)
 	t.Run("fragment in query on Object", fragmentInQueryOnObject)
 
 	// lambda tests

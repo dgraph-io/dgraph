@@ -164,16 +164,15 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		}
 	}
 
-	slice, next := []byte{}, 1
-	for next != 0 {
-		slice, next = buf.Slice(next)
+	buf.SliceIterate(func(slice []byte) error {
 		ce := countEntry(slice)
 		if !bytes.Equal(lastCe.Key(), ce.Key()) {
 			encode()
 		}
 		encoder.Add(ce.Uid())
 		lastCe = ce
-	}
+		return nil
+	})
 	encode()
 	x.Check(c.writer.Write(list))
 }

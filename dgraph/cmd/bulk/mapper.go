@@ -180,22 +180,22 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	}
 
 	var bufSize int64
-	slice, next := []byte{}, 1
-	for next != 0 {
-		slice, next = cbuf.Slice(next)
+	cbuf.SliceIterate(func(slice []byte) error {
 		me := MapEntry(slice)
 		bufSize += int64(4 + len(me))
 		if bufSize < m.opt.PartitionBufSize {
-			continue
+			return nil
 		}
 		sz := len(header.PartitionKeys)
 		if sz > 0 && bytes.Equal(me.Key(), header.PartitionKeys[sz-1]) {
 			// We already have this key.
-			continue
+			return nil
 		}
 		header.PartitionKeys = append(header.PartitionKeys, me.Key())
 		bufSize = 0
-	}
+		return nil
+	})
+
 	// Write the header to the map file.
 	headerBuf, err := header.Marshal()
 	x.Check(err)
@@ -206,16 +206,16 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	x.Check(err)
 
 	sizeBuf := make([]byte, binary.MaxVarintLen64)
-	slice, next = []byte{}, 1
-	for next != 0 {
-		slice, next = cbuf.Slice(next)
+
+	err = cbuf.SliceIterate(func(slice []byte) error {
 		n := binary.PutUvarint(sizeBuf, uint64(len(slice)))
 		_, err := w.Write(sizeBuf[:n])
 		x.Check(err)
 
 		_, err = w.Write(slice)
-		x.Check(err)
-	}
+		return err
+	})
+	x.Check(err)
 }
 
 func (m *mapper) run(inputFormat chunker.InputFormat) {

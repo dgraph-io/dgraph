@@ -162,8 +162,26 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 			addSelectionToInterfaceImplFragFields(typeName, f, additionalTypes, op)
 		}
 	case ast.Union:
-		// expand fragments on types of which it is a union
+		// expand fragments on member types of this union
 		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[typeName])
+		// also, expand fragments on interfaces which are implemented by the member types of this
+		// union
+		var interfaceFragsToExpand []*ast.Definition
+		for memberType := range additionalTypes {
+			interfaceFragsToExpand = append(interfaceFragsToExpand,
+				op.inSchema.schema.Implements[memberType]...)
+		}
+		additionalInterfaces := getTypeNamesAsMap(interfaceFragsToExpand)
+		// for fragments in the selection set of this union field, need to store a mapping from
+		// fields in that fragment to the fragment's type condition, for each of the additional
+		// interfaces, to be used later in completion.
+		for interfaceName := range additionalInterfaces {
+			additionalTypes[interfaceName] = true
+			for _, f := range field.SelectionSet {
+				addSelectionToInterfaceImplFragFields(interfaceName, f,
+					getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[interfaceName]), op)
+			}
+		}
 	case ast.Object:
 		// expand fragments on interfaces which are implemented by this object
 		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.Implements[typeName])
@@ -266,11 +284,16 @@ func addFragFieldsToInterfaceImplFields(interfaceTypeName, typeCond string, selS
 		// otherwise, if the type condition is same as the type of the interface,
 		// then we still need to look if there are any more fragments inside this fragment
 		for _, fragField := range selSet {
-			if _, ok := fragField.(*ast.Field); !ok {
+			if f, ok := fragField.(*ast.Field); !ok {
 				// we got a fragment inside fragment
 				// the type condition for this fragment may be different that its parent fragment
 				addSelectionToInterfaceImplFragFields(interfaceTypeName, fragField,
 					interfaceImplMap, op)
+			} else {
+				// we got a field on an interface, so save the mapping of field
+				// to the interface type name. This will later be used during completion to find
+				// out if the field should be reported back in the response or not.
+				op.interfaceImplFragFields[f] = interfaceTypeName
 			}
 		}
 	}

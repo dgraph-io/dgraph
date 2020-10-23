@@ -87,7 +87,6 @@ github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6 h1:toHzMCdCUg
 github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6/go.mod h1:rHa+h3kI4M8ASOirxyIyNeXBfHFgeskVUum2OrDMN3U=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b h1:PDEhlwHpkEQ5WBfOOKZCNZTXFDGyCEWTYDhxGQbyIpk=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b/go.mod h1:7z3c/5w0sMYYZF5bHsrh8IH4fKwG5O5Y70cPH1ZLLRQ=
-github.com/dgraph-io/ristretto v0.0.4-0.20201022105248-f32a01612740 h1:TzbxnxH3PoFUWx5024RX1+uqLnUVbfdHANjrHMb5Xnc=
 github.com/dgraph-io/ristretto v0.0.4-0.20201022105248-f32a01612740/go.mod h1:bDI4cDaalvYSji3vBVDKrn9ouDZrwN974u8ZO/AhYXs=
 github.com/dgraph-io/ristretto v0.0.4-0.20201022180559-1d4870a95a2b h1:L00rIkBIBOycVh5GWUe3yZJ8qhNygg9wJzoYioVj0qA=
 github.com/dgraph-io/ristretto v0.0.4-0.20201022180559-1d4870a95a2b/go.mod h1:bDI4cDaalvYSji3vBVDKrn9ouDZrwN974u8ZO/AhYXs=
@@ -390,6 +389,7 @@ github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d/go.mod h1
 github.com/smartystreets/goconvey v0.0.0-20190330032615-68dc04aab96a/go.mod h1:syvi0/a8iFYH4r/RixwvyeAJjdLS9QV7WQ/tjFTllLA=
 github.com/smartystreets/goconvey v1.6.4 h1:fv0U8FUIMPNf1L9lnHLvLhgicrIVChEkdzIKYqbNC9s=
 github.com/smartystreets/goconvey v1.6.4/go.mod h1:syvi0/a8iFYH4r/RixwvyeAJjdLS9QV7WQ/tjFTllLA=
+github.com/soheilhy/cmux v0.1.4 h1:0HKaf1o97UwFjHH9o5XsHUOF+tqmdA7KEzXLpiyaw0E=
 github.com/soheilhy/cmux v0.1.4/go.mod h1:IM3LyeVVIOuxMH7sFAkER9+bJ4dT7Ms6E4xg4kGIyLM=
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/spaolacci/murmur3 v1.1.0 h1:7c1g84S4BPRrfL5Xrdp6fOJ206sU9y293DDHaoy0bLI=

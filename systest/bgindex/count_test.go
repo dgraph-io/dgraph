@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -117,10 +118,11 @@ func TestCountIndex(t *testing.T) {
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
 				DelNquads: []byte(fmt.Sprintf(`<%v> <value> "%v" .`, uid, ec-1)),
-			}); err != nil && !errors.Is(err, dgo.ErrAborted) {
-				t.Fatalf("error in deletion :: %v\n", err)
-			} else if errors.Is(err, dgo.ErrAborted) {
+			}); err != nil && (errors.Is(err, dgo.ErrAborted) ||
+				strings.Contains(err.Error(), "Properties of guardians group and groot user cannot be deleted")) {
 				return
+			} else if err != nil {
+				t.Fatalf("error in deletion :: %v\n", err)
 			}
 			ec--
 		case 2:

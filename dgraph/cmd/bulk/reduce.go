@@ -344,12 +344,11 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		sz := req.countBuf.LenNoPadding()
 		ci.countBuf.Grow(sz)
 
-		slice, next := []byte{}, 1
-		for next != 0 {
-			slice, next = req.countBuf.Slice(next)
+		req.countBuf.SliceIterate(func(slice []byte) error {
 			ce := countEntry(slice)
 			ci.addCountEntry(ce)
-		}
+			return nil
+		})
 	}
 
 	var lastStreamId uint32
@@ -420,13 +419,12 @@ func bufferStats(cbuf *z.Buffer) {
 	// Just check how many keys do we have in this giant buffer.
 	keys := make(map[uint64]int64)
 	var numEntries int
-	slice, next := []byte{}, 1
-	for next != 0 {
-		slice, next = cbuf.Slice(next)
+	cbuf.SliceIterate(func(slice []byte) error {
 		me := MapEntry(slice)
 		keys[z.MemHash(me.Key())]++
 		numEntries++
-	}
+		return nil
+	})
 	keyHist := z.NewHistogramData(z.HistogramBounds(10, 32))
 	for _, num := range keys {
 		keyHist.Update(num)
@@ -568,7 +566,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		freePostings = append(freePostings, p)
 	}
 
-	start, end, num := 1, 1, 0
+	start, end, num := cbuf.StartOffset(), 1, 0
 	appendToList := func() {
 		if num == 0 {
 			return
