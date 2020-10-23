@@ -1199,3 +1199,65 @@
         dgraph.uid : uid
       }
     }
+- name: "Auth rules of All the implementing types should Apply to the interface also"
+  gqlquery: |
+    query {
+      queryPost {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS:  "true"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryPost(func: uid(PostRoot)) {
+        dgraph.type
+        text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post1)) @filter(((uid(FbPostRoot) OR (uid(AnswerRoot) OR uid(PostAuth2))) AND uid(PostAuth3)))
+      Post1 as var(func: type(Post))
+      FbPostRoot as FbPostRoot(func: type(FbPost))
+      AnswerRoot as AnswerRoot(func: type(Answer))
+      PostAuth2 as var(func: uid(Post1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      PostAuth3 as var(func: uid(Post1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+- name: "Query interface should return empty if the auth rule of interface is not satisfied"
+  gqlquery: |
+    query {
+      queryPost {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS: "true"
+  dgquery: |-
+    query {
+      queryPost()
+    }
+- name: "Query interface should not return types for whose auth rules are not satisfied"
+  gqlquery: |
+    query {
+      queryPost {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryPost()
+    }
