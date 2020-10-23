@@ -121,6 +121,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 		"a zero in the cluster will be required. Keep in mind this requires you to manually "+
 		"update the timestamp and max uid when you start the cluster. The correct values are "+
 		"printed near the end of this command's output.")
+	x.RegisterClientTLSFlags(flag)
 	enc.RegisterFlags(flag)
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
@@ -197,7 +198,7 @@ func runRestoreCmd() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		tlsConfig, err := x.LoadClientTLSConfig(Restore.Conf)
+		tlsConfig, err := x.LoadClientTLSConfigForInterNode(Restore.Conf)
 		x.Checkf(err, "Unable to generate helper TLS config")
 		callOpts := []grpc.DialOption{grpc.WithBlock()}
 		if tlsConfig != nil {
