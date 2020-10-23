@@ -73,13 +73,62 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 }
 
 func TestHAClusterSetup(t *testing.T) {
+	client := getClientForAlpha(t, "alpha1")
+	runTests(t, client)
+}
+
+func TestHAClusterDiffClients(t *testing.T) {
+	client := getClientForAlpha(t, "alpha1")
+	client2 := getClientForAlpha(t, "alpha2")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	require.NoError(t, client.Alter(ctx, &api.Operation{
+		DropAll: true,
+	}))
+	require.NoError(t, client.Alter(ctx, &api.Operation{
+		Schema: "name: string @index(term) .",
+	}))
+
+	txn := client.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{SetJson: []byte(`[
+			{ "name": "Michael" },
+			{ "name": "Amit" },
+			{ "name": "Luke" },
+			{ "name": "Darth" },
+			{ "name": "Sarah" },
+			{ "name": "Ricky" },
+			{ "name": "Hugo" }
+		]`)})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	txn = client2.NewTxn()
+	reply, err := txn.Query(ctx, `
+				{
+					q(func: eq(name, "Hugo")) {
+						name
+					}
+				}`)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `
+				{
+				"q": [
+				  {
+					"name": "Hugo"
+				  }
+				]
+			  }`, string(reply.GetJson()))
+}
+
+func getClientForAlpha(t *testing.T, name string) *dgo.Dgraph {
 	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
+		CertDir:          "../tls/" + name,
 		CertRequired:     true,
-		Cert:             "../tls/alpha1/client.alpha1.crt",
-		Key:              "../tls/alpha1/client.alpha1.key",
-		ServerName:       "alpha1",
-		RootCACert:       "../tls/alpha1/ca.crt",
+		Cert:             "../tls/" + name + "/client." + name + ".crt",
+		Key:              "../tls/" + name + "/client." + name + ".key",
+		ServerName:       name,
+		RootCACert:       "../tls/" + name + "/ca.crt",
 		UseSystemCACerts: true,
 	}
 	tlsConf, err := x.GenerateClientTLSConfig(c)
@@ -88,5 +137,5 @@ func TestHAClusterSetup(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(time.Second * 6)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
-	runTests(t, client)
+	return client
 }
