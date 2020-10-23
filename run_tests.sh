@@ -3,7 +3,9 @@ times="$1"
 
 rm -rf outputs
 mkdir outputs
-for i in {0..$times}
+
+# fix this for loop
+for i in {0..2}
 do
-    bash test.sh > outputs/$(i).out
+    bash test.sh > outputs/${i}.out
 done
