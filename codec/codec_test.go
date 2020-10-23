@@ -75,7 +75,7 @@ func TestBufferUidPack(t *testing.T) {
 	pack := Encode([]uint64{}, 128)
 	FreePack(pack)
 	buf := DecodeToBuffer(&pb.UidPack{}, 0)
-	require.Equal(t, 1, buf.Len())
+	require.Equal(t, 0, buf.LenNoPadding())
 	require.NoError(t, buf.Release())
 
 	for i := 0; i < 13; i++ {
