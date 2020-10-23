@@ -133,11 +133,11 @@ func TestXidmapMemory(t *testing.T) {
 // go test -v -run=XXX -bench=BenchmarkXidmapWritesRandom -count=10
 // go test -v -run=XXX -bench=BenchmarkXidmapReadsRandom -count=10
 //
-// Benchmarks using Skiplist				time/op
+// Benchmarks using Skiplist
 // BenchmarkXidmapWritesRandom-16		775ns ± 2%
 // BenchmarkXidmapReadsRandom-16		416ns ± 1%
 //
-// Benchmarks using Trie						time/op
+// Benchmarks using Trie
 // BenchmarkXidmapWritesRandom-16		902ns ± 2%
 // BenchmarkXidmapReadsRandom-16		428ns ± 2%
 
