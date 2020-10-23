@@ -71,10 +71,11 @@ type WorkerOptions struct {
 	// Alpha would communicate via only one zero address from the list. All
 	// the other addresses serve as fallback.
 	ZeroAddr []string
-	//TLS client config which will be used to connect with zero and alpha internally
+	// TLS client config which will be used to connect with zero and alpha internally
 	TLSClientConfig *tls.Config
-	//Directory where tls certs are present to connect with zero and alpha internally
+	// Directory where tls certs are present to connect with zero and alpha internally
 	TLSDir string
+	// Set to true if inter node tls is enabled for the cluster
 	TLSInterNodeEnabled bool
 	// RaftId represents the id of this alpha instance for participating in the RAFT
 	// consensus protocol.

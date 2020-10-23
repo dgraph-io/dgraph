@@ -61,7 +61,8 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.Bool("tls_enable_inter_node", false, "enable inter node TLS encryption between cluster nodes.")
 }
 
-func LoadClientTLSConfigForInterNode(v *viper.Viper) (*tls.Config, error) {
+// LoadClientTLSConfigForInternalPort loads tls config for connecting to internal ports of cluster
+func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 	if !v.GetBool("tls_enable_inter_node") {
 		return nil, nil
 	}
@@ -88,8 +89,8 @@ func LoadClientTLSConfigForInterNode(v *viper.Viper) (*tls.Config, error) {
 	return nil, nil
 }
 
-// LoadServerTLSConfigForInterNode loads the TLS config into the server with the given parameters.
-func LoadServerTLSConfigForInterNode(tlsEnabled bool, tlsDir string) (*tls.Config, error) {
+// LoadServerTLSConfigForInternalPort loads the TLS config for the internal ports of the cluster
+func LoadServerTLSConfigForInternalPort(tlsEnabled bool, tlsDir string) (*tls.Config, error) {
 	if !tlsEnabled {
 		return nil, nil
 	}

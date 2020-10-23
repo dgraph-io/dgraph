@@ -650,7 +650,7 @@ func run() {
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
-	tlsConf, err := x.LoadClientTLSConfigForInterNode(Alpha.Conf)
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:           Alpha.Conf.GetString("export"),

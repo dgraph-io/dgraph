@@ -77,7 +77,7 @@ type Node struct {
 	RaftContext     *pb.RaftContext
 	Store           *raftwal.DiskStorage
 	Rand            *rand.Rand
-	TlsClientConfig *tls.Config
+	tlsClientConfig *tls.Config
 
 	Proposals proposals
 
@@ -144,7 +144,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Conf
 		messages:        make(chan sendmsg, 100),
 		peers:           make(map[uint64]string),
 		requestCh:       make(chan linReadReq, 100),
-		TlsClientConfig: tlsConfig,
+		tlsClientConfig: tlsConfig,
 	}
 	n.Applied.Init(nil)
 	// This should match up to the Applied index set above.
@@ -524,7 +524,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 		n.SetPeer(pid, addr)
 		return
 	}
-	GetPools().Connect(addr, n.TlsClientConfig)
+	GetPools().Connect(addr, n.tlsClientConfig)
 	n.SetPeer(pid, addr)
 }
 

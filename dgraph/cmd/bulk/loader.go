@@ -115,7 +115,7 @@ func newLoader(opt *options) *loader {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	tlsConf, err := x.LoadClientTLSConfigForInterNode(Bulk.Conf)
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
 	x.Check(err)
 	dialOpts := []grpc.DialOption{
 		grpc.WithBlock(),

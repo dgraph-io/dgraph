@@ -544,7 +544,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
 	} else {
 		var tlsErr error
-		tlsConfig, tlsErr = x.LoadClientTLSConfigForInterNode(conf)
+		tlsConfig, tlsErr = x.LoadClientTLSConfigForInternalPort(conf)
 		x.Check(tlsErr)
 	}
 

@@ -213,7 +213,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	}
 
 	// Create a connection to this server.
-	go conn.GetPools().Connect(member.Addr, n.TlsClientConfig)
+	go conn.GetPools().Connect(member.Addr, n.server.tlsClientConfig)
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
@@ -296,7 +296,7 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	return nil
 }
 
-func (n *node) applyProposal(e raftpb.Entry, opts options) (string, error) {
+func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	var p pb.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
 	if len(e.Data) == 0 {
@@ -580,7 +580,7 @@ func (n *node) initAndStartNode() error {
 		go n.proposeNewCID()
 	}
 
-	go n.Run(opts)
+	go n.Run()
 	go n.BatchAndSendMessages()
 	go n.ReportRaftComms()
 	return nil
@@ -680,7 +680,7 @@ func (n *node) trySnapshot(skip uint64) {
 
 const tickDur = 100 * time.Millisecond
 
-func (n *node) Run(opts options) {
+func (n *node) Run() {
 	var leader bool
 	licenseApplied := false
 	ticker := time.NewTicker(tickDur)
@@ -767,7 +767,7 @@ func (n *node) Run(opts options) {
 					glog.Infof("Done applying conf change at %#x", n.Id)
 
 				case entry.Type == raftpb.EntryNormal:
-					key, err := n.applyProposal(entry, opts)
+					key, err := n.applyProposal(entry)
 					if err != nil {
 						glog.Errorf("While applying proposal: %v\n", err)
 					}

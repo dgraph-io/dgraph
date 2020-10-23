@@ -198,7 +198,7 @@ func runRestoreCmd() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		tlsConfig, err := x.LoadClientTLSConfigForInterNode(Restore.Conf)
+		tlsConfig, err := x.LoadClientTLSConfigForInternalPort(Restore.Conf)
 		x.Checkf(err, "Unable to generate helper TLS config")
 		callOpts := []grpc.DialOption{grpc.WithBlock()}
 		if tlsConfig != nil {

@@ -70,7 +70,7 @@ type Server struct {
 	closer         *z.Closer  // Used to tell stream to close.
 	connectLock    sync.Mutex // Used to serialize connect requests from servers.
 
-	//tls client config used to connect with zero internally
+	// tls client config used to connect with zero internally
 	tlsClientConfig *tls.Config
 
 	moveOngoing     chan struct{}

@@ -127,7 +127,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
 	}
 
-	tlsConf, err := x.LoadServerTLSConfigForInterNode(Zero.Conf.GetBool("tls_enable_inter_node"), Zero.Conf.GetString("tls_dir"))
+	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf.GetBool("tls_enable_inter_node"), Zero.Conf.GetString("tls_dir"))
 	x.Check(err)
 	if tlsConf != nil {
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))
@@ -188,7 +188,7 @@ func run() {
 		tlsDisRoutes = strings.Split(Zero.Conf.GetString("tls_disabled_route"), ",")
 	}
 
-	tlsConf, err := x.LoadClientTLSConfigForInterNode(Zero.Conf)
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
