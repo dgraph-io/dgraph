@@ -200,13 +200,15 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		name := typeName(typ)
 		if typ.Kind == ast.Object {
 			if authRules[name] != nil && authRules[name].Rules != nil {
-				for _, interfaceName := range typ.Interfaces {
+				for _, intrface := range typ.Interfaces {
+					interfaceName := typeName(s.Types[intrface])
 					interfaceAuthRules[interfaceName].Rules = mergeAuthRulesWithOr(authRules[name].Rules, interfaceAuthRules[interfaceName].Rules)
 					implementedTypeHasAuth[interfaceName] = true
 				}
 			} else {
 				emptyRule := createEmptyDQLRule(name)
-				for _, interfaceName := range typ.Interfaces {
+				for _, intrface := range typ.Interfaces {
+					interfaceName := typeName(s.Types[intrface])
 					interfaceAuthRules[interfaceName].Rules = mergeAuthRulesWithOr(&AuthContainer{Query: emptyRule}, interfaceAuthRules[interfaceName].Rules)
 				}
 			}
@@ -217,7 +219,8 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 	for _, typ := range s.Types {
 		name := typeName(typ)
 		if typ.Kind == ast.Object {
-			for _, interfaceName := range typ.Interfaces {
+			for _, intrface := range typ.Interfaces {
+				interfaceName := typeName(s.Types[intrface])
 				if authRules[interfaceName] != nil && authRules[interfaceName].Rules != nil {
 					authRules[name].Rules = mergeAuthRulesWithAnd(authRules[name].Rules, authRules[interfaceName].Rules)
 				}
