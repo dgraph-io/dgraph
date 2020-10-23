@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -181,22 +180,13 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		}
 	}
 
-	// Maintain a separate Mapping for Interface's Auth rules,
+	// Initialize a separate Mapping for Interface's Auth rules,
 	// Add all the rules from implementing types to this mapping
-	// and later update main mapping in the last.
+	// and later merge it in the main mapping at last.
 	for _, typ := range s.Types {
 		name := typeName(typ)
 		if typ.Kind == ast.Interface {
-			if authRules[name] != nil && authRules[name].Rules != nil {
-				interfaceAuthRules[name] = &TypeAuth{Rules: &AuthContainer{
-					Query:  authRules[name].Rules.Query,
-					Add:    authRules[name].Rules.Add,
-					Delete: authRules[name].Rules.Delete,
-					Update: authRules[name].Rules.Update,
-				}}
-			} else {
-				interfaceAuthRules[name] = &TypeAuth{}
-			}
+			interfaceAuthRules[name] = &TypeAuth{}
 		}
 	}
 
@@ -208,7 +198,6 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 	// on interfaces
 	for _, typ := range s.Types {
 		name := typeName(typ)
-		fmt.Println(name)
 		if typ.Kind == ast.Object {
 			if authRules[name] != nil && authRules[name].Rules != nil {
 				for _, interfaceName := range typ.Interfaces {
@@ -241,7 +230,7 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 	// have auth rules as there will unncesessary Empty Auth rules added to the interface
 	for k, v := range interfaceAuthRules {
 		if implementedTypeHasAuth[k] == true {
-			authRules[k] = v
+			authRules[k].Rules = mergeAuthRulesWithAnd(v.Rules, authRules[k].Rules)
 		}
 	}
 
