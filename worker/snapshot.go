@@ -115,6 +115,8 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
 		return 0, err
 	}
+
+	x.VerifySnapshot(pstore, snap.ReadTs)
 	glog.Infof("Populated snapshot with %d keys.\n", count)
 	return count, nil
 }
@@ -253,6 +255,13 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 }
 
 func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error {
+	// Pause rollups during snapshot streaming.
+	closer, err := groups().Node.startTask(opSnapshot)
+	if err != nil {
+		return err
+	}
+	defer closer.Done()
+
 	n := groups().Node
 	if n == nil || n.Raft() == nil {
 		return conn.ErrNoNode

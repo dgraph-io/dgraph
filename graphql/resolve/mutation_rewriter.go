@@ -73,7 +73,7 @@ type mutationFragment struct {
 // single mutation
 type xidMetadata struct {
 	// variableObjMap stores the mapping of xidVariable -> the input object which contains that xid
-	variableObjMap map[string]interface{}
+	variableObjMap map[string]map[string]interface{}
 	// seenAtTopLevel tells whether the xidVariable has been previously seen at top level or not
 	seenAtTopLevel map[string]bool
 	// queryExists tells whether the query part in upsert has already been created for xidVariable
@@ -151,10 +151,37 @@ func NewDeleteRewriter() MutationRewriter {
 // newXidMetadata returns a new empty *xidMetadata for storing the metadata.
 func newXidMetadata() *xidMetadata {
 	return &xidMetadata{
-		variableObjMap: make(map[string]interface{}),
+		variableObjMap: make(map[string]map[string]interface{}),
 		seenAtTopLevel: make(map[string]bool),
 		queryExists:    make(map[string]bool),
 	}
+}
+
+// isDuplicateXid returns true if:
+// 1. we are at top level and this xid has already been seen at top level, OR
+// 2. we are in a deep mutation and:
+//		a. this newXidObj has a field which is inverse of srcField and that
+//		invField is not of List type, OR
+//		b. newXidObj has some values other than xid and isn't equal to existingXidObject
+// It is used in places where we don't want to allow duplicates.
+func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
+	newXidObj map[string]interface{}, srcField schema.FieldDefinition) bool {
+	if atTopLevel && xidMetadata.seenAtTopLevel[xidVar] {
+		return true
+	}
+
+	if srcField != nil {
+		invField := srcField.Inverse()
+		if invField != nil && invField.Type().ListType() == nil {
+			return true
+		}
+	}
+
+	if len(newXidObj) > 1 && !reflect.DeepEqual(xidMetadata.variableObjMap[xidVar], newXidObj) {
+		return true
+	}
+
+	return false
 }
 
 // Rewrite takes a GraphQL schema.Mutation add and builds a Dgraph upsert mutation.
@@ -663,7 +690,7 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 		addTypeFunc(dgQuery, m.MutatedType().DgraphName())
 	}
 
-	addFilter(dgQuery, m.MutatedType(), filter)
+	_ = addFilter(dgQuery, m.MutatedType(), filter)
 
 	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery, rbac)
 
@@ -957,20 +984,10 @@ func rewriteObject(
 			// to handle duplicate object addition/updation
 			variable = varGen.Next(typ, xid.Name(), xidString, false)
 			// check if an object with same xid has been encountered earlier
-			if xidObj := xidMetadata.variableObjMap[variable]; xidObj != nil {
-				// if we already encountered an object with same xid earlier, then we give error if:
-				// 1. We are at top level and this object has already been seen at top level, as no
-				//    duplicates are allowed for top level
-				// 2. OR, we are in a deep mutation and:
-				//		a. this obj is different from its first encounter
-				//		b. OR, this object has a field which is inverse of srcField and that
-				//		invField is not of List type
-				var invField schema.FieldDefinition
-				if srcField != nil {
-					invField = srcField.Inverse()
-				}
-				if (atTopLevel && xidMetadata.seenAtTopLevel[variable]) || !reflect.DeepEqual(
-					xidObj, obj) || (invField != nil && invField.Type().ListType() == nil) {
+			if xidMetadata.variableObjMap[variable] != nil {
+				// if we already encountered an object with same xid earlier, and this object is
+				// considered a duplicate of the existing object, then return error.
+				if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
 					errFrag := newFragment(nil)
 					errFrag.err = errors.Errorf("duplicate XID found: %s", xidString)
 					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
@@ -996,6 +1013,30 @@ func rewriteObject(
 		if xid != nil && xidString != "" {
 			xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
+
+			// Inverse Link is added as a Part of asXIDReference so we delete any provided
+			// Link to the object.
+			// Example: for this mutation
+			// mutation addCountry($inp: AddCountryInput!) {
+			// 	addCountry(input: [$inp]) {
+			// 	  country {
+			// 		id
+			// 	  }
+			// 	}
+			//  }
+			// with the input:
+			//{
+			// "inp": {
+			// 	"name": "A Country",
+			// 	"states": [
+			// 	  { "code": "abc", "name": "Alphabet" },
+			// 	  { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
+			// 	]
+			//   }
+			// }
+			// we delete the link of Second state to "B Country"
+			deleteInverseObject(obj, srcField)
+
 			if deepXID > 2 {
 				// Here we link the already existing node with an xid to the parent whose id is
 				// passed in srcUID. We do this linking only if there is a hasInverse relationship
@@ -1059,11 +1100,33 @@ func rewriteObject(
 		myUID = fmt.Sprintf("_:%s", variable)
 
 		if xid == nil || deepXID > 2 {
+			// If this object had an overwritten value for the inverse field, then we don't want to
+			// use that value as we will add the link to the inverse field in the below
+			// function call with the parent of this object
+			// for example, for this mutation:
+			// mutation addAuthor($auth: AddAuthorInput!) {
+			// addAuthor(input: [$auth]) {
+			// 	author {
+			// 		id
+			// 	}
+			// 	}
+			// }
+			// with the following input
+			//   {
+			// 	"auth": {
+			// 	  "name": "A.N. Author",
+			// 	  "posts": [ { "postID": "0x456" }, {"title": "New Post", "author": {"name": "Abhimanyu"}} ]
+			// 	}
+			//   }
+			// We delete the link of second input post with Author "name" : "Abhimanyu".
+			deleteInverseObject(obj, srcField)
+
 			// Lets link the new node that we are creating with the parent if a @hasInverse
 			// exists between the two.
 			// So for example if we had the addAuthor mutation which is also adding nested
 			// posts, then we add the link _:Post Post.author AuthorUID(srcUID) here.
 			addInverseLink(newObj, srcField, srcUID)
+
 		}
 	} else {
 		myUID = srcUID
@@ -1158,16 +1221,32 @@ func rewriteObject(
 
 			switch val := val.(type) {
 			case map[string]interface{}:
-				// This field is another GraphQL object, which could either be linking to an
-				// existing node by it's ID
-				// { "title": "...", "author": { "id": "0x123" }
-				//          like here ^^
-				// or giving the data to create the object as part of a deep mutation
-				// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
-				//          like here ^^
-				frags =
-					rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
-						withAdditionalDeletes, val, deepXID, xidMetadata)
+				if fieldDef.Type().IsUnion() {
+					frags = rewriteUnionField(ctx, typ, fieldDef, myUID, varGen,
+						withAdditionalDeletes, val, deepXID, xidMetadata, -1)
+				} else if fieldDef.Type().IsGeo() {
+					frags = &mutationRes{
+						secondPass: []*mutationFragment{
+							newFragment(
+								map[string]interface{}{
+									"type":        fieldDef.Type().Name(),
+									"coordinates": rewriteGeoObject(val, fieldDef.Type()),
+								},
+							),
+						},
+					}
+				} else {
+					// This field is another GraphQL object, which could either be linking to an
+					// existing node by it's ID
+					// { "title": "...", "author": { "id": "0x123" }
+					//          like here ^^
+					// or giving the data to create the object as part of a deep mutation
+					// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
+					//          like here ^^
+					frags =
+						rewriteObject(ctx, typ, fieldDef.Type(), fieldDef, myUID, varGen,
+							withAdditionalDeletes, val, deepXID, xidMetadata)
+				}
 
 			case []interface{}:
 				// This field is either:
@@ -1239,6 +1318,107 @@ func rewriteObject(
 	}
 
 	return results
+}
+
+// if this is a union field, then obj should have only one key which will be a ref
+// to one of the member types. Eg:
+// { "dogRef" : { ... } }
+// So, just rewrite it as an object with correct underlying type.
+func rewriteUnionField(ctx context.Context,
+	parentTyp schema.Type,
+	srcField schema.FieldDefinition,
+	srcUID string,
+	varGen *VariableGenerator,
+	withAdditionalDeletes bool,
+	obj map[string]interface{},
+	deepXID int,
+	xidMetadata *xidMetadata,
+	listIndex int) *mutationRes {
+	if len(obj) != 1 {
+		errFrag := newFragment(nil)
+		// if this was called from rewriteList,
+		// the listIndex will tell which particular item in the list has an error.
+		if listIndex >= 0 {
+			errFrag.err = fmt.Errorf(
+				"value for field `%s` in type `%s` index `%d` must have exactly one child, "+
+					"found %d children", srcField.Name(), parentTyp.Name(), listIndex, len(obj))
+		} else {
+			errFrag.err = fmt.Errorf(
+				"value for field `%s` in type `%s` must have exactly one child, found %d children",
+				srcField.Name(), parentTyp.Name(), len(obj))
+		}
+		return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+	}
+
+	var typ schema.Type
+	for memberRef, memberRefVal := range obj {
+		memberTypeName := strings.ToUpper(memberRef[:1]) + memberRef[1:len(
+			memberRef)-3]
+		srcField = srcField.WithMemberType(memberTypeName)
+		typ = srcField.Type()
+		obj = memberRefVal.(map[string]interface{})
+	}
+	return rewriteObject(ctx, parentTyp, typ, srcField, srcUID, varGen,
+		withAdditionalDeletes, obj, deepXID, xidMetadata)
+}
+
+// rewriteGeoObject rewrites the given value correctly based on the underlying Geo type.
+// Currently, it supports Point, Polygon and MultiPolygon.
+func rewriteGeoObject(val map[string]interface{}, typ schema.Type) []interface{} {
+	switch typ.Name() {
+	case schema.Point:
+		return rewritePoint(val)
+	case schema.Polygon:
+		return rewritePolygon(val)
+	case schema.MultiPolygon:
+		return rewriteMultiPolygon(val)
+	}
+	return nil
+}
+
+// rewritePoint constructs coordinates for Point type.
+// For Point type, the mutation json is as follows:
+// { "type": "Point", "coordinates": [11.11, 22.22] }
+func rewritePoint(point map[string]interface{}) []interface{} {
+	return []interface{}{point[schema.Longitude], point[schema.Latitude]}
+}
+
+// rewritePolygon constructs coordinates for Polygon type.
+// For Polygon type, the mutation json is as follows:
+//	{
+//		"type": "Polygon",
+//		"coordinates": [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
+//	}
+func rewritePolygon(val map[string]interface{}) []interface{} {
+	// type casting this is safe, because of strict GraphQL schema
+	coordinates := val[schema.Coordinates].([]interface{})
+	resPoly := make([]interface{}, 0, len(coordinates))
+	for _, pointList := range coordinates {
+		// type casting this is safe, because of strict GraphQL schema
+		points := pointList.(map[string]interface{})[schema.Points].([]interface{})
+		resPointList := make([]interface{}, 0, len(points))
+		for _, point := range points {
+			resPointList = append(resPointList, rewritePoint(point.(map[string]interface{})))
+		}
+		resPoly = append(resPoly, resPointList)
+	}
+	return resPoly
+}
+
+// rewriteMultiPolygon constructs coordinates for MultiPolygon type.
+// For MultiPolygon type, the mutation json is as follows:
+//	{
+//		"type": "MultiPolygon",
+//		"coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
+//	}
+func rewriteMultiPolygon(val map[string]interface{}) []interface{} {
+	// type casting this is safe, because of strict GraphQL schema
+	polygons := val[schema.Polygons].([]interface{})
+	res := make([]interface{}, 0, len(polygons))
+	for _, polygon := range polygons {
+		res = append(res, rewritePolygon(polygon.(map[string]interface{})))
+	}
+	return res
 }
 
 func invalidObjectFragment(
@@ -1636,6 +1816,15 @@ func attachChild(res map[string]interface{}, parent schema.Type, child schema.Fi
 	}
 }
 
+func deleteInverseObject(obj map[string]interface{}, srcField schema.FieldDefinition) {
+	if srcField != nil {
+		invField := srcField.Inverse()
+		if invField != nil && invField.Type().ListType() == nil {
+			delete(obj, invField.Name())
+		}
+	}
+}
+
 func addInverseLink(obj map[string]interface{}, srcField schema.FieldDefinition, srcUID string) {
 	if srcField != nil {
 		invField := srcField.Inverse()
@@ -1678,11 +1867,17 @@ func rewriteList(
 	result.secondPass = []*mutationFragment{newFragment(make([]interface{}, 0))}
 	foundSecondPass := false
 
-	for _, obj := range objects {
+	for i, obj := range objects {
 		switch obj := obj.(type) {
 		case map[string]interface{}:
-			frag := rewriteObject(ctx, parentTyp, typ, srcField, srcUID, varGen,
-				withAdditionalDeletes, obj, deepXID, xidMetadata)
+			var frag *mutationRes
+			if typ.IsUnion() {
+				frag = rewriteUnionField(ctx, parentTyp, srcField, srcUID, varGen,
+					withAdditionalDeletes, obj, deepXID, xidMetadata, i)
+			} else {
+				frag = rewriteObject(ctx, parentTyp, typ, srcField, srcUID, varGen,
+					withAdditionalDeletes, obj, deepXID, xidMetadata)
+			}
 			if len(frag.secondPass) != 0 {
 				foundSecondPass = true
 			}

@@ -1,7 +1,6 @@
 +++
 title = "Dgraph compared to other databases"
 [menu.main]
-  url = "/dgraph-compared-to-other-databases/"
   identifier = "dgraph-compared-to-other-databases"
   weight = 13
 +++

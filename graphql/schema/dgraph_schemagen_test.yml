@@ -298,6 +298,54 @@ schemas:
       D.link: uid .
       D.correct: bool .
 
+  - name: "Schema with union"
+    input: |
+      interface W {
+        f1: ID!
+        f7: U
+      }
+      type X implements W {
+        f2: String
+      }
+      type Y implements W {
+        f3: Int
+      }
+      type Z {
+        f4: Float
+      }
+      union P @remote = X | Y
+      union U = X | Y | Z
+      type V {
+        id: ID!
+        f5: [U!]! @dgraph(pred: "data")
+        f6: U
+      }
+    output: |
+      type W {
+        W.f7
+      }
+      W.f7: uid .
+      type X {
+        W.f7
+        X.f2
+      }
+      X.f2: string .
+      type Y {
+        W.f7
+        Y.f3
+      }
+      Y.f3: int .
+      type Z {
+        Z.f4
+      }
+      Z.f4: float .
+      type V {
+        data
+        V.f6
+      }
+      data: [uid] .
+      V.f6: uid .
+
   -
     name: "Schema with @dgraph directive."
     input: |
@@ -607,3 +655,60 @@ schemas:
           method: "POST"
         })
       }
+
+  -
+    name: "custom field shouldn't be part of dgraph schema"
+    input: |
+      type User {
+        id: ID!
+        name: String!
+        bio: String! @lambda
+        friends: [User] @custom(http: {
+          url: "http://mock:8888/users",
+          method: "GET"
+        })
+      }
+    output: |
+      type User {
+        User.name
+      }
+      User.name: string .
+
+  - name: "Geo field in schema."
+    input: |
+      type Hotel {
+        id: ID!
+        name: String!
+        location: Point @search
+        landmark: Point
+        office: Point  @search(by: [point])
+        area1: Polygon @search
+        area2: Polygon
+        area3: Polygon @search(by: [polygon])
+        branches1: MultiPolygon @search
+        branches2: MultiPolygon
+        branches3: MultiPolygon @search(by: [multiPolygon])
+      }
+    output: |
+      type Hotel {
+        Hotel.name
+        Hotel.location
+        Hotel.landmark
+        Hotel.office
+        Hotel.area1
+        Hotel.area2
+        Hotel.area3
+        Hotel.branches1
+        Hotel.branches2
+        Hotel.branches3
+      }
+      Hotel.name: string .
+      Hotel.location: geo @index(geo) .
+      Hotel.landmark: geo .
+      Hotel.office: geo @index(geo) .
+      Hotel.area1: geo @index(geo) .
+      Hotel.area2: geo .
+      Hotel.area3: geo @index(geo) .
+      Hotel.branches1: geo @index(geo) .
+      Hotel.branches2: geo .
+      Hotel.branches3: geo @index(geo) .

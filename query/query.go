@@ -397,6 +397,14 @@ func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
 		}
 		return false
 	}
+	// Below check doesn't differentiate between different filters.
+	// It is added to differential between `hasFriend` and `hasFriend @filter()`
+	if sg.Filters != nil {
+		if ssg.Filters != nil && len(sg.Filters) == len(ssg.Filters) {
+			return true
+		}
+		return false
+	}
 	return true
 }
 
@@ -919,7 +927,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 
 // calculateFirstN returns the count of result we need to proceed query further down.
 func calculateFirstN(sg *SubGraph) int32 {
-	// by default count is zero. (zero will retrive all the results)
+	// by default count is zero. (zero will retrieve all the results)
 	count := math.MaxInt32
 	// In order to limit we have to make sure that the this level met the following conditions
 	// - No Filter (We can't filter until we have all the uids)
@@ -2539,7 +2547,7 @@ func isValidFuncName(f string) bool {
 
 func isInequalityFn(f string) bool {
 	switch f {
-	case "eq", "le", "ge", "gt", "lt":
+	case "eq", "le", "ge", "gt", "lt", "between":
 		return true
 	}
 	return false

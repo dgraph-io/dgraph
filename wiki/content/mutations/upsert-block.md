@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Upsert Block"
+weight = 11
 [menu.main]
     parent = "mutations"
-    weight = 11
 +++
 
 The upsert block allows performing queries and mutations in a single request. The upsert

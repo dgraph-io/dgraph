@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Encryption at Rest"
+weight = 3
 [menu.main]
     parent = "enterprise-features"
-    weight = 3
 +++
 
 {{% notice "note" %}}
@@ -21,7 +21,7 @@ encryption at rest as an enterprise feature. If encryption is enabled, Dgraph us
 algorithm to encrypt the data and secure it.
 
 Prior to v20.07.0, the encryption key file must be present on the local file system.
-Starting with [v20.07.0] (https://github.com/dgraph-io/dgraph/releases/tag/v20.07.0), 
+Starting with [v20.07.0] (https://github.com/dgraph-io/dgraph/releases/tag/v20.07.0),
 we have added support for encryption keys sitting on Vault servers. This allows an alternate
 way to configure the encryption keys needed for encrypting the data at rest.
 
@@ -38,7 +38,7 @@ desired key size):
 dd if=/dev/random bs=1 count=32 of=enc_key_file
 ```
 
-Alternatively, you can use the `--vault_*` options to enable encrption as explained below. 
+Alternatively, you can use the `--vault_*` options to enable encrption as explained below.
 
 ## Turn on Encryption
 
@@ -46,7 +46,7 @@ Here is an example that starts one Zero server and one Alpha server with the enc
 
 ```bash
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1
-dgraph alpha --encryption_key_file ./enc_key_file --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
+dgraph alpha --encryption_key_file ./enc_key_file --my=localhost:7080 --zero=localhost:5080
 ```
 
 If multiple Alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option to
@@ -64,7 +64,7 @@ Alternatively, for encryption keys sitting on Vault server, here is an example. 
 Next, here is an example of using Dgraph with a Vault server that holds the encryption key.
 ```bash
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1
-dgraph alpha --vault_addr https://localhost:8200 --vault_roleid_file ./roleid --vault_secretid_file ./secretid --vault_field enc_key_name --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
+dgraph alpha --vault_addr https://localhost:8200 --vault_roleid_file ./roleid --vault_secretid_file ./secretid --vault_field enc_key_name --my=localhost:7080 --zero=localhost:5080
 ```
 
 If multiple Alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option or the `--vault_*` options to
@@ -76,8 +76,11 @@ restart successfully.
 
 ## Turn off Encryption
 
-If you wish to turn off encryption from an existing Alpha, then you can export your data and import it
-into a new Dgraph instance without encryption enabled.
+If you wish to turn off encryption from an existing Alpha, then you can export your data and import it (using [live loader](https://dgraph.io/docs/deploy/fast-data-loading/#live-loader) into a new Dgraph instance without encryption enabled. You will have to use the `--encryption_key_file` flag while importing.
+
+```
+dgraph live -f <path-to-gzipped-RDF-or-JSON-file> -s <path-to-schema> --encryption_key_file <path-to-enc_key_file> -a <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
+```
 
 ## Change Encryption Key
 

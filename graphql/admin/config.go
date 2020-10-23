@@ -22,13 +22,12 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
 )
 
 type configInput struct {
-	LruMB float64
+	CacheMb float64
 	// LogRequest is used to update WorkerOptions.LogRequest. true value of LogRequest enables
 	// logging of all requests coming to alphas. LogRequest type has been kept as *bool instead of
 	// bool to avoid updating WorkerOptions.LogRequest when it has default value of false.
@@ -43,10 +42,8 @@ func resolveUpdateConfig(ctx context.Context, m schema.Mutation) (*resolve.Resol
 		return resolve.EmptyResult(m, err), false
 	}
 
-	if input.LruMB > 0 {
-		if err = worker.UpdateLruMb(input.LruMB); err != nil {
-			return resolve.EmptyResult(m, err), false
-		}
+	if err = worker.UpdateCacheMb(int64(input.CacheMb)); err != nil {
+		return resolve.EmptyResult(m, err), false
 	}
 
 	// input.LogRequest will be nil, when it is not specified explicitly in config request.
@@ -64,9 +61,7 @@ func resolveGetConfig(ctx context.Context, q schema.Query) *resolve.Resolved {
 	glog.Info("Got config query through GraphQL admin API")
 
 	conf := make(map[string]interface{})
-	posting.Config.Lock()
-	conf["lruMb"] = posting.Config.AllottedMemory
-	posting.Config.Unlock()
+	conf["cacheMb"] = float64(worker.Config.CacheMb)
 
 	return &resolve.Resolved{
 		Data:  map[string]interface{}{q.Name(): conf},

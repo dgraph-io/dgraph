@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"sort"
 	"sync"
 	"sync/atomic"
 
@@ -98,7 +97,7 @@ func (c *countIndexer) addCountEntry(ce countEntry) {
 		if c.countBuf.Len() > 0 {
 			c.wg.Add(1)
 			go c.writeIndex(c.countBuf)
-			c.countBuf = z.NewBuffer(1 << 10)
+			c.countBuf = getBuf()
 		}
 		c.cur.pred = pk.Attr
 		c.cur.rev = pk.IsReverse()
@@ -115,7 +114,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		c.wg.Done()
 		buf.Release()
 	}()
-	if buf.Len() == 0 {
+	if buf.IsEmpty() {
 		return
 	}
 
@@ -123,14 +122,14 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	list := &bpb.KVList{}
 	var listSz int
 
-	offsets := buf.SliceOffsets(nil)
-	sort.Slice(offsets, func(i, j int) bool {
-		left := countEntry(buf.Slice(offsets[i]))
-		right := countEntry(buf.Slice(offsets[j]))
+	buf.SortSlice(func(ls, rs []byte) bool {
+		left := countEntry(ls)
+		right := countEntry(rs)
 		return left.less(right)
 	})
 
-	lastCe := countEntry(buf.Slice(offsets[0]))
+	tmp, _ := buf.Slice(1)
+	lastCe := countEntry(tmp)
 	{
 		pk, err := x.Parse(lastCe.Key())
 		x.Check(err)
@@ -145,17 +144,14 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		if codec.ExactLen(pl.Pack) == 0 {
 			return
 		}
-		data, byt := posting.MarshalPostingList(&pl)
-		codec.FreePack(pl.Pack)
 
-		kv := &bpb.KV{
-			Key:      append([]byte{}, lastCe.Key()...),
-			Value:    data,
-			UserMeta: []byte{byt},
-			Version:  c.state.writeTs,
-			StreamId: streamId,
-		}
+		kv := posting.MarshalPostingList(&pl, nil)
+		codec.FreePack(pl.Pack)
+		kv.Key = append([]byte{}, lastCe.Key()...)
+		kv.Version = c.state.writeTs
+		kv.StreamId = streamId
 		list.Kv = append(list.Kv, kv)
+
 		listSz += kv.Size()
 		encoder = codec.Encoder{BlockSize: 256}
 		pl.Reset()
@@ -168,8 +164,10 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		}
 	}
 
-	for _, offset := range offsets {
-		ce := countEntry(buf.Slice(offset))
+	slice, next := []byte{}, 1
+	for next != 0 {
+		slice, next = buf.Slice(next)
+		ce := countEntry(slice)
 		if !bytes.Equal(lastCe.Key(), ce.Key()) {
 			encode()
 		}

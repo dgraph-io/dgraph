@@ -33,15 +33,17 @@
 package raftwal
 
 import (
+	"crypto/rand"
 	"io/ioutil"
 	"math"
 	"os"
 	"reflect"
 	"testing"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft"
+	"go.etcd.io/etcd/raft/raftpb"
 	pb "go.etcd.io/etcd/raft/raftpb"
 )
 
@@ -50,10 +52,7 @@ func TestStorageTerm(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
-	defer ds.Closer.SignalAndWait()
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
@@ -101,10 +100,7 @@ func TestStorageEntries(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
-	defer ds.Closer.SignalAndWait()
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
 	tests := []struct {
@@ -114,7 +110,7 @@ func TestStorageEntries(t *testing.T) {
 		wentries []pb.Entry
 	}{
 		{2, 6, math.MaxUint64, raft.ErrCompacted, nil},
-		{3, 4, math.MaxUint64, raft.ErrCompacted, nil},
+		// {3, 4, math.MaxUint64, raft.ErrCompacted, nil},
 		{4, 5, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}}},
 		{4, 6, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
 		{4, 7, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}},
@@ -131,6 +127,8 @@ func TestStorageEntries(t *testing.T) {
 
 	for i, tt := range tests {
 		require.NoError(t, ds.reset(ents))
+		// fi, _ := ds.FirstIndex()
+		// t.Logf("first index: %d\n", fi)
 
 		entries, err := ds.Entries(tt.lo, tt.hi, tt.maxsize)
 		if err != tt.werr {
@@ -147,10 +145,7 @@ func TestStorageLastIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
-	defer ds.Closer.SignalAndWait()
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -178,85 +173,14 @@ func TestStorageFirstIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
-	defer ds.Closer.SignalAndWait()
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
 
 	first, err := ds.FirstIndex()
-	if err != nil {
-		t.Errorf("err = %v, want nil", err)
-	}
-	if first != 4 {
-		t.Errorf("first = %d, want %d", first, 4)
-	}
-
-	batch := db.NewWriteBatch()
-	require.NoError(t, ds.deleteRange(batch, 0, 4))
-	require.NoError(t, batch.Flush())
-	ds.cache.Store(firstKey, 0)
-	first, err = ds.FirstIndex()
-	if err != nil {
-		t.Errorf("err = %v, want nil", err)
-	}
-	if first != 5 {
-		t.Errorf("first = %d, want %d", first, 5)
-	}
-}
-
-func TestStorageCompact(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
 	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	db, err := badger.Open(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
-	defer ds.Closer.SignalAndWait()
-
-	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-	require.NoError(t, ds.reset(ents))
-
-	tests := []struct {
-		i uint64
-
-		werr   error
-		windex uint64
-		wterm  uint64
-		wlen   int
-	}{
-		{2, raft.ErrCompacted, 3, 3, 3},
-		{3, raft.ErrCompacted, 3, 3, 3},
-		{4, nil, 4, 4, 2},
-		{5, nil, 5, 5, 1},
-	}
-
-	for i, tt := range tests {
-		first, err := ds.FirstIndex()
-		require.NoError(t, err)
-		batch := db.NewWriteBatch()
-		err = ds.deleteRange(batch, first-1, tt.i)
-		require.NoError(t, batch.Flush())
-		if err != tt.werr {
-			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
-		}
-		ds.cache.Store(firstKey, 0)
-		index, err := ds.FirstIndex()
-		require.NoError(t, err)
-		// Do the minus one here to get the index of the snapshot.
-		if index-1 != tt.windex {
-			t.Errorf("#%d: index = %d, want %d", i, index, tt.windex)
-		}
-
-		all, err := ds.allEntries(0, math.MaxUint64, math.MaxUint64)
-		require.NoError(t, err)
-		if len(all) != tt.wlen {
-			t.Errorf("#%d: len = %d, want %d", i, len(all), tt.wlen)
-		}
-	}
+	require.Equal(t, uint64(3), first)
 }
 
 func TestStorageCreateSnapshot(t *testing.T) {
@@ -264,10 +188,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
-	defer ds.Closer.SignalAndWait()
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
@@ -283,6 +204,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 		{5, nil, pb.Snapshot{Data: data, Metadata: pb.SnapshotMetadata{Index: 5, Term: 5, ConfState: *cs}}},
 	}
 
+	// TODO: Add compacted test here.
 	for i, tt := range tests {
 		require.NoError(t, ds.reset(ents))
 		err := ds.CreateSnapshot(tt.i, cs, data)
@@ -302,10 +224,7 @@ func TestStorageAppend(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
-	defer ds.Closer.SignalAndWait()
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
@@ -351,16 +270,241 @@ func TestStorageAppend(t *testing.T) {
 
 	for i, tt := range tests {
 		require.NoError(t, ds.reset(ents))
-		batch := db.NewWriteBatch()
-		err := ds.addEntries(batch, tt.entries)
+		err := ds.addEntries(tt.entries)
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
-		require.NoError(t, batch.Flush())
-		all, err := ds.allEntries(0, math.MaxUint64, math.MaxUint64)
-		require.NoError(t, err)
+		all := ds.wal.allEntries(0, math.MaxUint64, math.MaxUint64)
 		if !reflect.DeepEqual(all, tt.wentries) {
 			t.Errorf("#%d: entries = %v, want %v", i, all, tt.wentries)
 		}
 	}
+}
+
+func TestMetaFile(t *testing.T) {
+	dir, err := ioutil.TempDir("", "badger-test")
+	require.NoError(t, err)
+
+	mf, err := newMetaFile(dir)
+	require.NoError(t, err)
+	id := mf.Uint(RaftId)
+	require.Zero(t, id)
+
+	mf.SetUint(RaftId, 10)
+	id = mf.Uint(RaftId)
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), id)
+
+	hs, err := mf.HardState()
+	require.NoError(t, err)
+	require.Zero(t, hs)
+
+	hs = raftpb.HardState{
+		Term:   10,
+		Vote:   20,
+		Commit: 30,
+	}
+	require.NoError(t, mf.StoreHardState(&hs))
+
+	hs1, err := mf.HardState()
+	require.NoError(t, err)
+	require.Equal(t, hs1, hs)
+
+	sp, err := mf.snapshot()
+	require.NoError(t, err)
+	require.Zero(t, sp)
+
+	sp = raftpb.Snapshot{
+		Data: []byte("foo"),
+		Metadata: raftpb.SnapshotMetadata{
+			Term:  200,
+			Index: 12,
+		},
+	}
+	require.NoError(t, mf.StoreSnapshot(&sp))
+
+	sp1, err := mf.snapshot()
+	require.NoError(t, err)
+	require.Equal(t, sp, sp1)
+}
+
+func TestEntryFile(t *testing.T) {
+	dir, err := ioutil.TempDir("", "raftwal")
+	require.NoError(t, err)
+	el, err := openWal(dir)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), el.firstIndex())
+	require.Zero(t, el.LastIndex())
+
+	e, err := el.seekEntry(2)
+	require.Error(t, err)
+	require.NotNil(t, e)
+
+	require.NoError(t, el.AddEntries([]raftpb.Entry{{Index: 1, Term: 1, Data: []byte("abc")}}))
+	entries := el.allEntries(0, 100, 10000)
+	require.Equal(t, 1, len(entries))
+	require.Equal(t, uint64(1), entries[0].Index)
+	require.Equal(t, uint64(1), entries[0].Term)
+	require.Equal(t, "abc", string(entries[0].Data))
+}
+
+func TestStorageOnlySnap(t *testing.T) {
+	test := func(t *testing.T, key []byte) {
+		x.WorkerConfig.EncryptionKey = key
+		dir, err := ioutil.TempDir("", "raftwal")
+		require.NoError(t, err)
+		ds := Init(dir)
+		t.Logf("Creating dir: %s\n", dir)
+
+		buf := make([]byte, 128)
+		rand.Read(buf)
+		N := uint64(1000)
+
+		snap := &raftpb.Snapshot{}
+		snap.Metadata.Index = N
+		snap.Metadata.ConfState = raftpb.ConfState{}
+		snap.Data = buf
+
+		require.NoError(t, ds.meta.StoreSnapshot(snap))
+
+		out, err := ds.Snapshot()
+		require.NoError(t, err)
+		require.Equal(t, N, out.Metadata.Index)
+
+		fi, err := ds.FirstIndex()
+		require.NoError(t, err)
+		require.Equal(t, N+1, fi)
+
+		li, err := ds.LastIndex()
+		require.NoError(t, err)
+		require.Equal(t, N, li)
+	}
+	t.Run("without encryption", func(t *testing.T) { test(t, nil) })
+	t.Run("with encryption", func(t *testing.T) { test(t, []byte("badger16byteskey")) })
+}
+
+func TestStorageBig(t *testing.T) {
+	test := func(t *testing.T, key []byte) {
+		x.WorkerConfig.EncryptionKey = key
+		dir, err := ioutil.TempDir("", "raftwal")
+		require.NoError(t, err)
+		ds := Init(dir)
+		defer os.RemoveAll(dir)
+
+		ent := raftpb.Entry{
+			Term: 1,
+			Type: raftpb.EntryNormal,
+		}
+
+		addEntries := func(start, end uint64) {
+			t.Logf("adding entries: %d -> %d\n", start, end)
+			for idx := start; idx <= end; idx++ {
+				ent.Index = idx
+				require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
+				li, err := ds.LastIndex()
+				require.NoError(t, err)
+				require.Equal(t, idx, li)
+			}
+		}
+
+		N := uint64(100000)
+		addEntries(1, N)
+		num := ds.NumEntries()
+		require.Equal(t, int(N), num)
+
+		check := func(start, end uint64) {
+			ents, err := ds.Entries(start, end, math.MaxInt64)
+			require.NoError(t, err)
+			require.Equal(t, int(end-start), len(ents))
+			for i, e := range ents {
+				require.Equal(t, start+uint64(i), e.Index)
+			}
+		}
+		_, err = ds.Entries(0, 1, math.MaxInt64)
+		require.Equal(t, raft.ErrCompacted, err)
+
+		check(3, N)
+		check(10000, 20000)
+		check(20000, 33000)
+		check(33000, 45000)
+		check(45000, N)
+
+		// Around file boundaries.
+		check(1, N)
+		check(30000, N)
+		check(30001, N)
+		check(60000, N)
+		check(60001, N)
+		check(60000, 90000)
+		check(N, N+1)
+
+		_, err = ds.Entries(N+1, N+10, math.MaxInt64)
+		require.Error(t, raft.ErrUnavailable, err)
+
+		// Jump back a few files.
+		addEntries(N/3, N)
+		check(3, N)
+		check(10000, 20000)
+		check(20000, 33000)
+		check(33000, 45000)
+		check(45000, N)
+		check(N, N+1)
+
+		buf := make([]byte, 128)
+		rand.Read(buf)
+
+		cs := &raftpb.ConfState{}
+		require.NoError(t, ds.CreateSnapshot(N-100, cs, buf))
+		fi, err := ds.FirstIndex()
+		require.NoError(t, err)
+		require.Equal(t, N-100+1, fi)
+
+		snap, err := ds.Snapshot()
+		require.NoError(t, err)
+		require.Equal(t, N-100, snap.Metadata.Index)
+		require.Equal(t, buf, snap.Data)
+
+		require.Equal(t, 0, len(ds.wal.files))
+
+		files, err := getLogFiles(dir)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(files))
+
+		// Jumping back.
+		ent.Index = N - 50
+		require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
+
+		start := N - 100 + 1
+		ents := ds.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
+		require.Equal(t, 50, len(ents))
+		for idx, ent := range ents {
+			require.Equal(t, int(start)+idx, int(ent.Index))
+		}
+
+		ent.Index = N
+		require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
+		ents = ds.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
+		require.Equal(t, 51, len(ents))
+		for idx, ent := range ents {
+			if idx == 50 {
+				require.Equal(t, N, ent.Index)
+			} else {
+				require.Equal(t, int(start)+idx, int(ent.Index))
+			}
+		}
+		require.NoError(t, ds.Sync())
+
+		ks := Init(dir)
+		ents = ks.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
+		require.Equal(t, 51, len(ents))
+		for idx, ent := range ents {
+			if idx == 50 {
+				require.Equal(t, N, ent.Index)
+			} else {
+				require.Equal(t, int(start)+idx, int(ent.Index))
+			}
+		}
+	}
+	t.Run("without encryption", func(t *testing.T) { test(t, nil) })
+	t.Run("with encryption", func(t *testing.T) { test(t, []byte("badger16byteskey")) })
 }

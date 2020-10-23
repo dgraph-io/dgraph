@@ -23,16 +23,18 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
-
-	"github.com/vektah/gqlparser/v2/gqlerror"
+	"time"
 
 	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/pkg/errors"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 	"google.golang.org/grpc/metadata"
+	"gopkg.in/square/go-jose.v2"
 )
 
 type ctxKey string
@@ -52,6 +54,9 @@ var (
 
 type AuthMeta struct {
 	VerificationKey string
+	JWKUrl          string
+	jwkSet          *jose.JSONWebKeySet
+	expiryTime      time.Time
 	RSAPublicKey    *rsa.PublicKey `json:"-"` // Ignoring this field
 	Header          string
 	Namespace       string
@@ -63,8 +68,21 @@ type AuthMeta struct {
 // Validate required fields.
 func (a *AuthMeta) validate() error {
 	var fields string
-	if a.VerificationKey == "" {
-		fields = " `Verification key`"
+
+	// If JWKUrl is provided, we don't expect (VerificationKey, Algo),
+	// they are needed only if JWKUrl is not present there.
+	if a.JWKUrl != "" {
+		if a.VerificationKey != "" || a.Algo != "" {
+			return fmt.Errorf("expecting either JWKUrl or (VerificationKey, Algo), both were given")
+		}
+	} else {
+		if a.VerificationKey == "" {
+			fields = " `Verification key`/`JWKUrl`"
+		}
+
+		if a.Algo == "" {
+			fields += " `Algo`"
+		}
 	}
 
 	if a.Header == "" {
@@ -73,10 +91,6 @@ func (a *AuthMeta) validate() error {
 
 	if a.Namespace == "" {
 		fields += " `Namespace`"
-	}
-
-	if a.Algo == "" {
-		fields += " `Algo`"
 	}
 
 	if len(fields) > 0 {
@@ -170,11 +184,50 @@ func GetAuthMeta() *AuthMeta {
 	return authMeta
 }
 
+func (a *AuthMeta) jwkURL() string {
+	a.RLock()
+	defer a.RUnlock()
+	return a.JWKUrl
+}
+
+func (a *AuthMeta) algo() string {
+	a.RLock()
+	defer a.RUnlock()
+	return a.Algo
+}
+
+func (a *AuthMeta) namespace() string {
+	a.RLock()
+	defer a.RUnlock()
+	return a.Namespace
+}
+
+func (a *AuthMeta) getJWKSet() *jose.JSONWebKeySet {
+	a.RLock()
+	defer a.RUnlock()
+	return a.jwkSet
+}
+
+func (a *AuthMeta) verificationKey() string {
+	a.RLock()
+	defer a.RUnlock()
+	return a.VerificationKey
+}
+
+func (a *AuthMeta) rsaPublicKey() *rsa.PublicKey {
+	a.RLock()
+	defer a.RUnlock()
+	return a.RSAPublicKey
+}
+
 func SetAuthMeta(m *AuthMeta) {
 	authMeta.Lock()
 	defer authMeta.Unlock()
 
 	authMeta.VerificationKey = m.VerificationKey
+	authMeta.JWKUrl = m.JWKUrl
+	authMeta.jwkSet = m.jwkSet
+	authMeta.expiryTime = m.expiryTime
 	authMeta.RSAPublicKey = m.RSAPublicKey
 	authMeta.Header = m.Header
 	authMeta.Namespace = m.Namespace
@@ -216,7 +269,7 @@ func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 	}
 
 	// Unmarshal the auth variables for a particular namespace.
-	if authValue, ok := result[authMeta.Namespace]; ok {
+	if authValue, ok := result[authMeta.namespace()]; ok {
 		if authJson, ok := authValue.(string); ok {
 			if err := json.Unmarshal([]byte(authJson), &c.AuthVariables); err != nil {
 				return err
@@ -270,36 +323,75 @@ func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
 	return validateJWTCustomClaims(jwtToken[0])
 }
 
-func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
-	authMeta.RLock()
-	defer authMeta.RUnlock()
-
-	if authMeta.Algo == "" {
-		return nil, fmt.Errorf(
-			"jwt token cannot be validated because verification algorithm is not set")
+func GetJwtToken(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
 	}
+	jwtToken := md.Get(string(AuthJwtCtxKey))
+	if len(jwtToken) != 1 {
+		return ""
+	}
+	return jwtToken[0]
+}
 
-	// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we
-	// disable the `aud` claim verification at the library end using `WithoutAudienceValidation` and
-	// use our custom validation function `validateAudience`.
-	token, err :=
-		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-			algo, _ := token.Header["alg"].(string)
-			if algo != authMeta.Algo {
-				return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
-					authMeta.Algo, algo)
+func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
+	jwkURL := authMeta.jwkURL()
+
+	var token *jwt.Token
+	var err error
+	// Verification through JWKUrl
+	if jwkURL != "" {
+		if authMeta.isExpired() {
+			err = authMeta.refreshJWK()
+			if err != nil {
+				return nil, errors.Wrap(err, "while refreshing JWK from the URL")
 			}
-			if algo == HMAC256 {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
-					return []byte(authMeta.VerificationKey), nil
+		}
+
+		token, err =
+			jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+				kid := token.Header["kid"]
+				if kid == nil {
+					return nil, errors.Errorf("kid not present in JWT")
 				}
-			} else if algo == RSA256 {
-				if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
-					return authMeta.RSAPublicKey, nil
+
+				set := authMeta.getJWKSet()
+				signingKeys := set.Key(kid.(string))
+				if len(signingKeys) == 0 {
+					return nil, errors.Errorf("Invalid kid")
 				}
-			}
-			return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
-		}, jwt.WithoutAudienceValidation())
+				return signingKeys[0].Key, nil
+			}, jwt.WithoutAudienceValidation())
+	} else {
+		amAlgo := authMeta.algo()
+		if amAlgo == "" {
+			return nil, fmt.Errorf(
+				"jwt token cannot be validated because verification algorithm is not set")
+		}
+
+		// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we
+		// disable the `aud` claim verification at the library end using `WithoutAudienceValidation` and
+		// use our custom validation function `validateAudience`.
+		token, err =
+			jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+				algo, _ := token.Header["alg"].(string)
+				if algo != amAlgo {
+					return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
+						amAlgo, algo)
+				}
+				if algo == HMAC256 {
+					if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
+						return []byte(authMeta.verificationKey()), nil
+					}
+				} else if algo == RSA256 {
+					if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
+						return authMeta.rsaPublicKey(), nil
+					}
+				}
+				return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
+			}, jwt.WithoutAudienceValidation())
+	}
 
 	if err != nil {
 		return nil, errors.Errorf("unable to parse jwt token:%v", err)
@@ -314,4 +406,90 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 		return nil, err
 	}
 	return claims, nil
+}
+
+// FetchJWKs fetches the JSON Web Key set from a JWKUrl. It acquires a Lock over a as some of the
+// properties of AuthMeta are modified in the process.
+func (a *AuthMeta) FetchJWKs() error {
+	a.Lock()
+	defer a.Unlock()
+
+	if a.JWKUrl == "" {
+		return errors.Errorf("No JWKUrl supplied")
+	}
+
+	req, err := http.NewRequest("GET", a.JWKUrl, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	type JwkArray struct {
+		JWKs []json.RawMessage `json:"keys"`
+	}
+
+	var jwkArray JwkArray
+	err = json.Unmarshal(data, &jwkArray)
+	if err != nil {
+		return err
+	}
+
+	a.jwkSet = &jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
+	for i, jwk := range jwkArray.JWKs {
+		err = a.jwkSet.Keys[i].UnmarshalJSON(jwk)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Try to Parse the Remaining time in the expiry of signing keys
+	// from the `max-age` directive in the `Cache-Control` Header
+	var maxAge int64
+
+	if resp.Header["Cache-Control"] != nil {
+		maxAge, err = ParseMaxAge(resp.Header["Cache-Control"][0])
+	}
+
+	if maxAge == 0 {
+		a.expiryTime = time.Time{}
+	} else {
+		a.expiryTime = time.Now().Add(time.Duration(maxAge) * time.Second)
+	}
+
+	return nil
+}
+
+func (a *AuthMeta) refreshJWK() error {
+	var err error
+	for i := 0; i < 3; i++ {
+		err = a.FetchJWKs()
+		if err == nil {
+			return nil
+		}
+		time.Sleep(10 * time.Second)
+	}
+	return err
+}
+
+// To check whether JWKs are expired or not
+// if expiryTime is equal to 0 which means there
+// is no expiry time of the JWKs, so it always
+// returns false
+func (a *AuthMeta) isExpired() bool {
+	a.RLock()
+	defer a.RUnlock()
+
+	if a.expiryTime.IsZero() {
+		return false
+	}
+	return time.Now().After(a.expiryTime)
 }

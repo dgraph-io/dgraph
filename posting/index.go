@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -612,8 +613,14 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
-		WithLogRotatesToFlush(10).
-		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
+		WithLogRotatesToFlush(10)
+
+	// Set cache if we have encryption.
+	if len(x.WorkerConfig.EncryptionKey) > 0 {
+		dbOpts.EncryptionKey = x.WorkerConfig.EncryptionKey
+		dbOpts.BlockCacheSize = 100 << 20
+		dbOpts.IndexCacheSize = 100 << 20
+	}
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
@@ -713,7 +720,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// No need to write a loop after ReadPostingList to skip unread entries
 		// for a given key because we only wrote BitDeltaPosting to temp badger.
 
-		kvs, err := l.Rollup()
+		alloc := tmpStream.Allocator(itr.ThreadId)
+		kvs, err := l.Rollup(alloc)
 		if err != nil {
 			return nil, err
 		}
@@ -721,8 +729,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	tmpStream.Send = func(kvList *bpb.KVList) error {
-		// TODO (Anurag): Instead of calling SetEntryAt everytime, we can filter KVList and call Write only once.
-		// SetEntryAt requries lock for every entry, whereas Write reduces lock contention.
 		for _, kv := range kvList.Kv {
 			if len(kv.Value) == 0 {
 				continue
@@ -730,7 +736,11 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
 			// which occurred before this schema mutation.
-			e := &badger.Entry{Key: kv.Key, Value: kv.Value, UserMeta: BitCompletePosting}
+			e := &badger.Entry{
+				Key:      y.Copy(kv.Key),
+				Value:    y.Copy(kv.Value),
+				UserMeta: BitCompletePosting,
+			}
 			if err := writer.SetEntryAt(e.WithDiscard(), r.startTs); err != nil {
 				return errors.Wrap(err, "error in writing index to pstore")
 			}

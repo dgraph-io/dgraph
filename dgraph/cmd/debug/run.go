@@ -28,11 +28,11 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -62,6 +62,7 @@ type flagOptions struct {
 	wdir           string
 	wtruncateUntil uint64
 	wsetSnapshot   string
+	oldWalFormat   bool
 }
 
 func init() {
@@ -88,6 +89,8 @@ func init() {
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
+	flag.BoolVar(&opt.oldWalFormat, "old-wal", false,
+		"Denotes that the directory pointed by --wal is a wal directory in old format.")
 	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0,
 		"Remove data from Raft entries until but not including this index.")
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
@@ -480,11 +483,15 @@ func lookup(db *badger.DB) {
 	fmt.Println(buf.String())
 }
 
+// Current format is like:
+// {i} attr: name term: [8] woods  ts: 535 item: [28, b0100] sz: 81 dcnt: 3 key: 00000...6f6f6473
+// Fix the TestBulkLoadMultiShard accordingly, if the format changes.
 func printKeys(db *badger.DB) {
 	txn := db.NewTransactionAt(opt.readTs, false)
 	defer txn.Discard()
 
 	iopts := badger.DefaultIteratorOptions
+	iopts.AllVersions = true
 	iopts.PrefetchValues = false
 	itr := txn.NewIterator(iopts)
 	defer itr.Close()
@@ -496,12 +503,13 @@ func printKeys(db *badger.DB) {
 
 	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
 	var loop int
-	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
+	for itr.Seek(prefix); itr.ValidForPrefix(prefix); {
 		item := itr.Item()
-		pk, err := x.Parse(item.Key())
+		var key []byte
+		key = item.KeyCopy(key)
+		pk, err := x.Parse(key)
 		x.Check(err)
 		var buf bytes.Buffer
-
 		// Don't use a switch case here. Because multiple of these can be true. In particular,
 		// IsSchema can be true alongside IsData.
 		if pk.IsData() {
@@ -519,16 +527,6 @@ func printKeys(db *badger.DB) {
 		if pk.IsReverse() {
 			x.Check2(buf.WriteString("{r}"))
 		}
-
-		switch {
-		case item.DiscardEarlierVersions():
-			x.Check2(buf.WriteString(" {v.las}"))
-		case item.IsDeletedOrExpired():
-			x.Check2(buf.WriteString(" {v.not}"))
-		default:
-			x.Check2(buf.WriteString(" {v.ok}"))
-		}
-
 		x.Check2(buf.WriteString(" attr: " + pk.Attr))
 		if len(pk.Term) > 0 {
 			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])
@@ -539,11 +537,48 @@ func printKeys(db *badger.DB) {
 		if pk.StartUid > 0 {
 			fmt.Fprintf(&buf, " startUid: %d ", pk.StartUid)
 		}
-		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(item.Key()))
+
 		if opt.itemMeta {
-			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
 			fmt.Fprintf(&buf, " ts: %d", item.Version())
+			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
 		}
+
+		var sz, deltaCount int64
+		for ; itr.ValidForPrefix(prefix); itr.Next() {
+			item := itr.Item()
+			if !bytes.Equal(item.Key(), key) {
+				break
+			}
+			if item.IsDeletedOrExpired() {
+				x.Check2(buf.WriteString(" {v.del}"))
+				break
+			}
+			switch item.UserMeta() {
+			// This is rather a default case as one of the 4 bit must be set.
+			case posting.BitCompletePosting, posting.BitEmptyPosting, posting.BitSchemaPosting:
+				sz += item.EstimatedSize()
+				break
+			case posting.BitDeltaPosting:
+				sz += item.EstimatedSize()
+				deltaCount++
+			default:
+				fmt.Printf("No user meta found for key: %s\n", hex.EncodeToString(key))
+			}
+			if item.DiscardEarlierVersions() {
+				x.Check2(buf.WriteString(" {v.las}"))
+				break
+			}
+		}
+		// skip all the versions of key
+		for ; itr.ValidForPrefix(prefix); itr.Next() {
+			item := itr.Item()
+			if !bytes.Equal(item.Key(), key) {
+				break
+			}
+		}
+
+		fmt.Fprintf(&buf, " sz: %d dcnt: %d", sz, deltaCount)
+		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(key))
 		fmt.Println(buf.String())
 		loop++
 	}
@@ -770,19 +805,34 @@ func run() {
 	}
 
 	bopts := badger.DefaultOptions(dir).
-		WithTableLoadingMode(options.MemoryMap).
 		WithReadOnly(opt.readOnly).
 		WithEncryptionKey(opt.key)
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
 
-	var db *badger.DB
-	if isWal {
-		db, err = badger.Open(bopts)
-	} else {
-		db, err = badger.OpenManaged(bopts)
+	// If this is a new format WAL, print and return.
+	if isWal && !opt.oldWalFormat {
+		store := raftwal.Init(dir)
+		fmt.Printf("RaftID: %+v\n", store.Uint(raftwal.RaftId))
+
+		// TODO: Fix the pending logic.
+		pending := make(map[uint64]bool)
+
+		start, last := printBasic(store)
+		for start < last-1 {
+			entries, err := store.Entries(start, last+1, 64<<20)
+			x.Check(err)
+			for _, e := range entries {
+				printEntry(e, pending)
+				start = x.Max(start, e.Index)
+			}
+		}
+		fmt.Println("Done")
+		return
 	}
+
+	db, err := badger.OpenManaged(bopts)
 	x.Check(err)
 	// Not using posting list cache
 	posting.Init(db, 0)

@@ -81,8 +81,18 @@ var (
 	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
-	TxnAborts = stats.Int64("txn_aborts",
+	// TxnAborts records count of aborted transactions.
+	TxnAborts = stats.Int64("txn_aborts_total",
 		"Number of transaction aborts", stats.UnitDimensionless)
+	// PBlockHitRatio records the hit ratio of posting store block cache.
+	PBlockHitRatio = stats.Float64("hit_ratio_postings_block",
+		"Hit ratio of p store block cache", stats.UnitDimensionless)
+	// PIndexHitRatio records the hit ratio of posting store index cache.
+	PIndexHitRatio = stats.Float64("hit_ratio_postings_index",
+		"Hit ratio of p store index cache", stats.UnitDimensionless)
+	// PLCacheHitRatio records the hit ratio of posting list cache.
+	PLCacheHitRatio = stats.Float64("hit_ratio_posting_cache",
+		"Hit ratio of posting list cache", stats.UnitDimensionless)
 
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
@@ -206,6 +216,27 @@ var (
 			Description: AlphaHealth.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     nil,
+		},
+		{
+			Name:        PBlockHitRatio.Name(),
+			Measure:     PBlockHitRatio,
+			Description: PBlockHitRatio.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        PIndexHitRatio.Name(),
+			Measure:     PIndexHitRatio,
+			Description: PIndexHitRatio.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        PLCacheHitRatio.Name(),
+			Measure:     PLCacheHitRatio,
+			Description: PLCacheHitRatio.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
 		},
 	}
 )

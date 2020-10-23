@@ -1,16 +1,6 @@
 {
     "schema": [
         {
-            "index": true,
-            "list": true,
-            "predicate": "dgraph.cors",
-            "tokenizer": [
-              "exact"
-            ],
-            "type": "string",
-            "upsert": true
-        },
-        {
             "predicate": "Category.name",
             "type": "string"
         },
@@ -69,13 +59,13 @@
             "upsert": true
         },
         {
-            "predicate": "Person1.name",
-            "type": "string"
-        },
-        {
             "predicate": "Person1.friends",
             "type": "uid",
             "list": true
+        },
+        {
+            "predicate": "Person1.name",
+            "type": "string"
         },
         {
             "predicate": "Post1.comments",
@@ -90,17 +80,6 @@
                 "hash"
             ],
             "upsert": true
-        },
-        {
-            "predicate": "post1.title",
-            "type": "string",
-            "index": true,
-            "tokenizer": ["trigram", "hash"],
-            "upsert": true
-        },
-        {
-            "predicate": "post1.numLikes",
-            "type": "int"
         },
         {
             "predicate": "State.capital",
@@ -175,6 +154,16 @@
         {
             "predicate": "credits",
             "type": "float"
+        },
+        {
+            "predicate": "dgraph.cors",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "list": true,
+            "upsert": true
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -293,6 +282,20 @@
             "type": "uid"
         },
         {
+            "predicate": "post1.numLikes",
+            "type": "int"
+        },
+        {
+            "predicate": "post1.title",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "pwd",
             "type": "password"
         },
@@ -369,6 +372,87 @@
         {
             "predicate": "职业",
             "type": "string"
+        },
+        {
+            "predicate": "Animal.category",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "hash"
+            ]
+        },
+        {
+            "predicate": "Dog.breed",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "term"
+            ]
+        },
+        {
+            "predicate": "Parrot.repeatsWords",
+            "type": "string",
+            "list": true
+        },
+        {
+            "predicate": "Cheetah.speed",
+            "type": "float"
+        },
+        {
+            "predicate": "Plant.breed",
+            "type": "string"
+        },
+        {
+            "predicate": "Zoo.animals",
+            "type": "uid",
+            "list": true
+        },
+        {
+            "predicate": "Zoo.city",
+            "type": "string"
+        },
+        {
+            "predicate": "Home.address",
+            "type": "string"
+        },
+        {
+            "predicate": "Home.members",
+            "type": "uid",
+            "list": true
+        },
+        {
+            "predicate": "Home.favouriteMember",
+            "type": "uid"
+        },
+        {
+            "predicate": "Hotel.name",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ]
+        },
+        {
+            "predicate": "Hotel.location",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.area",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.branches",
+            "type": "geo",
+            "index": true,
+            "tokenizer": ["geo"]
         }
     ],
     "types": [
@@ -491,17 +575,6 @@
         {
             "fields": [
                 {
-                    "name": "post1.title"
-                },
-                {
-                    "name": "post1.numLikes"
-                }
-            ],
-            "name": "post1"
-        },
-        {
-            "fields": [
-                {
                     "name": "State.xcode"
                 },
                 {
@@ -609,7 +682,8 @@
             "fields": [
                 {
                     "name": "dgraph.graphql.schema_history"
-                },{
+                },
+                {
                     "name": "dgraph.graphql.schema_created_at"
                 }
             ],
@@ -664,6 +738,17 @@
         {
             "fields": [
                 {
+                    "name": "post1.title"
+                },
+                {
+                    "name": "post1.numLikes"
+                }
+            ],
+            "name": "post1"
+        },
+        {
+            "fields": [
+                {
                     "name": "performance.character.name"
                 },
                 {
@@ -713,6 +798,89 @@
                 }
             ],
             "name": "test.dgraph.employee.en"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Animal.category"
+                }
+            ],
+            "name": "Animal"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Dog.breed"
+                }
+            ],
+            "name": "Dog"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Parrot.repeatsWords"
+                }
+            ],
+            "name": "Parrot"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Cheetah.speed"
+                }
+            ],
+            "name": "Cheetah"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Plant.breed"
+                }
+            ],
+            "name": "Plant"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Zoo.animals"
+                },
+                {
+                    "name": "Zoo.city"
+                }
+            ],
+            "name": "Zoo"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Home.address"
+                },
+                {
+                    "name": "Home.members"
+                },
+                {
+                    "name": "Home.favouriteMember"
+                }
+            ],
+            "name": "Home"
+        },
+        {
+            "fields": [
+                { "name": "Hotel.name"},
+                { "name": "Hotel.location"},
+                { "name": "Hotel.area"},
+                { "name": "Hotel.branches"}
+            ],
+            "name": "Hotel"
         }
     ]
 }

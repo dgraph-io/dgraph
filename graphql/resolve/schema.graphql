@@ -1,6 +1,14 @@
 # Test schema that contains an example of everything that's useful to
 # test for query rewriting.
 
+type Hotel {
+    id: ID!
+    name: String!
+    location: Point @search
+    area: Polygon @search
+    branches: MultiPolygon @search
+}
+
 type Country {
         id: ID!
         name: String! @search(by: [trigram, exact])
@@ -292,3 +300,55 @@ type Person {
 interface A {
     name: String! @id
 }
+
+# union testing - start
+enum AnimalCategory {
+    Fish
+    Amphibian
+    Reptile
+    Bird
+    Mammal
+    InVertebrate
+}
+
+interface Animal {
+    id: ID!
+    category: AnimalCategory @search
+}
+
+type Dog implements Animal {
+    breed: String @search
+}
+
+type Parrot implements Animal {
+    repeatsWords: [String]
+}
+
+type Cheetah implements Animal {
+    speed: Float
+}
+
+"""
+This type specifically doesn't implement any interface.
+We need this to test out all cases with union.
+"""
+type Plant {
+    id: ID!
+    breed: String # field with same name as a field in type Dog
+}
+
+union HomeMember = Dog | Parrot | Human | Plant
+
+type Zoo {
+    id: ID!
+    animals: [Animal]
+    city: String
+}
+
+type Home {
+    id: ID!
+    address: String
+    members: [HomeMember]
+    favouriteMember: HomeMember
+}
+# union testing - end

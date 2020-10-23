@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Debug"
+weight = 19
 [menu.main]
     parent = "query-language"
-    weight = 19
 +++
 
 For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `uid` attribute for all the entities along with the `server_latency` and `start_ts` information under the `extensions` key of the response.

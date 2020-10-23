@@ -1,8 +1,8 @@
 +++
 title = "Using Auth0"
+weight = 5
 [menu.main]
     parent = "todo-app-tutorial"
-    weight = 5   
 +++
 
 Let's start by going to our Auth0 dashboard where we can see the application which we have already created and used in our frontend-application.

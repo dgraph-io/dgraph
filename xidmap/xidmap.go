@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
@@ -50,7 +50,7 @@ type shard struct {
 	sync.RWMutex
 	block
 
-	uidMap map[string]uint64
+	trie *Trie
 }
 
 type block struct {
@@ -80,7 +80,7 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
-			uidMap: make(map[string]uint64),
+			trie: NewTrie(),
 		}
 	}
 	if db != nil {
@@ -100,7 +100,7 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 				err := item.Value(func(val []byte) error {
 					uid := binary.BigEndian.Uint64(val)
 					// No need to acquire a lock. This is all serial access.
-					sh.uidMap[key] = uid
+					sh.trie.Put(key, uid)
 					return nil
 				})
 				if err != nil {
@@ -121,8 +121,8 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		backoff := initBackoff
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 1e4})
-			glog.V(1).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
+			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 1e5})
+			glog.V(2).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
 			cancel()
 			if err == nil {
 				backoff = initBackoff
@@ -142,8 +142,8 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 }
 
 func (m *XidMap) shardFor(xid string) *shard {
-	fp := farm.Fingerprint32([]byte(xid))
-	idx := fp % uint32(len(m.shards))
+	fp := z.MemHashString(xid)
+	idx := fp % uint64(len(m.shards))
 	return m.shards[idx]
 }
 
@@ -151,15 +151,15 @@ func (m *XidMap) CheckUid(xid string) bool {
 	sh := m.shardFor(xid)
 	sh.RLock()
 	defer sh.RUnlock()
-	_, ok := sh.uidMap[xid]
-	return ok
+	uid := sh.trie.Get(xid)
+	return uid != 0
 }
 
 func (m *XidMap) SetUid(xid string, uid uint64) {
 	sh := m.shardFor(xid)
 	sh.Lock()
 	defer sh.Unlock()
-	sh.uidMap[xid] = uid
+	sh.trie.Put(xid, uid)
 }
 
 // AssignUid creates new or looks up existing XID to UID mappings. It also returns if
@@ -167,7 +167,7 @@ func (m *XidMap) SetUid(xid string, uid uint64) {
 func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh := m.shardFor(xid)
 	sh.RLock()
-	uid := sh.uidMap[xid]
+	uid := sh.trie.Get(xid)
 	sh.RUnlock()
 	if uid > 0 {
 		return uid, false
@@ -176,21 +176,13 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid = sh.uidMap[xid]
+	uid = sh.trie.Get(xid)
 	if uid > 0 {
 		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
-	sh.uidMap[xid] = newUid
-
-	if m.writer != nil {
-		var uidBuf [8]byte
-		binary.BigEndian.PutUint64(uidBuf[:], newUid)
-		if err := m.writer.Set([]byte(xid), uidBuf[:]); err != nil {
-			x.Panic(err)
-		}
-	}
+	sh.trie.Put(xid, newUid)
 	return newUid, true
 }
 
@@ -245,12 +237,28 @@ func (m *XidMap) AllocateUid() uint64 {
 
 // Flush must be called if DB is provided to XidMap.
 func (m *XidMap) Flush() error {
-	// While running bulk loader, this method is called at the completion of map phase. After this
-	// method returns xidmap of bulk loader is made nil. But xidmap still show up in memory profiles
-	// even during reduce phase. If bulk loader is running on large dataset, this occupies lot of
-	// memory and causing OOM sometimes. Making shards explicitly nil in this method fixes this.
-	// TODO: find why xidmap is not getting GCed without below line.
-	m.shards = nil
+	glog.Infof("Writing xid map to DB")
+	defer func() {
+		glog.Infof("Finished writing xid map to DB")
+	}()
+
+	for _, shard := range m.shards {
+		var err error
+		if m.writer != nil {
+			shard.Lock()
+			err = shard.trie.Iterate(func(key string, uid uint64) error {
+				var uidBuf [8]byte
+				binary.BigEndian.PutUint64(uidBuf[:], uid)
+				return m.writer.Set([]byte(key), uidBuf[:])
+			})
+			shard.Unlock()
+		}
+
+		shard.trie.Release()
+		if err != nil {
+			return err
+		}
+	}
 
 	if m.writer == nil {
 		return nil
