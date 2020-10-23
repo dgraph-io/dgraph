@@ -126,8 +126,8 @@ Background indexing task may fail if an unexpected error occurs while computing
 the indexes. You should retry the Alter operation in order to update the schema,
 or sync the schema across all the alphas.
 
-We also plan to add a simpler API soon to check the status of background indexing.
-See this [PR](https://github.com/dgraph-io/dgraph/pull/4961) for more details.
+To learn about how to check background indexing status, see 
+[Querying Health](https://dgraph.io/docs/master/deploy/dgraph-alpha/#querying-health).
 
 ### HTTP API
 

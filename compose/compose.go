@@ -202,10 +202,6 @@ func initService(basename string, idx, grpcPort int) service {
 	if opts.Jaeger {
 		svc.Command += " --jaeger.collector=http://jaeger:14268"
 	}
-	if opts.LudicrousMode {
-		svc.Command += " --ludicrous_mode=true"
-	}
-
 	return svc
 }
 
@@ -281,6 +277,9 @@ func getAlpha(idx int) service {
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
+	if opts.LudicrousMode {
+		svc.Command += " --ludicrous_mode=true"
+	}
 
 	// Don't assign idx, let it auto-assign.
 	// svc.Command += fmt.Sprintf(" --idx=%d", idx)

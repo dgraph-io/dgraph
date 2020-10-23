@@ -483,11 +483,15 @@ func lookup(db *badger.DB) {
 	fmt.Println(buf.String())
 }
 
+// Current format is like:
+// {i} attr: name term: [8] woods  ts: 535 item: [28, b0100] sz: 81 dcnt: 3 key: 00000...6f6f6473
+// Fix the TestBulkLoadMultiShard accordingly, if the format changes.
 func printKeys(db *badger.DB) {
 	txn := db.NewTransactionAt(opt.readTs, false)
 	defer txn.Discard()
 
 	iopts := badger.DefaultIteratorOptions
+	iopts.AllVersions = true
 	iopts.PrefetchValues = false
 	itr := txn.NewIterator(iopts)
 	defer itr.Close()
@@ -499,12 +503,13 @@ func printKeys(db *badger.DB) {
 
 	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
 	var loop int
-	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
+	for itr.Seek(prefix); itr.ValidForPrefix(prefix); {
 		item := itr.Item()
-		pk, err := x.Parse(item.Key())
+		var key []byte
+		key = item.KeyCopy(key)
+		pk, err := x.Parse(key)
 		x.Check(err)
 		var buf bytes.Buffer
-
 		// Don't use a switch case here. Because multiple of these can be true. In particular,
 		// IsSchema can be true alongside IsData.
 		if pk.IsData() {
@@ -522,16 +527,6 @@ func printKeys(db *badger.DB) {
 		if pk.IsReverse() {
 			x.Check2(buf.WriteString("{r}"))
 		}
-
-		switch {
-		case item.DiscardEarlierVersions():
-			x.Check2(buf.WriteString(" {v.las}"))
-		case item.IsDeletedOrExpired():
-			x.Check2(buf.WriteString(" {v.not}"))
-		default:
-			x.Check2(buf.WriteString(" {v.ok}"))
-		}
-
 		x.Check2(buf.WriteString(" attr: " + pk.Attr))
 		if len(pk.Term) > 0 {
 			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])
@@ -542,11 +537,48 @@ func printKeys(db *badger.DB) {
 		if pk.StartUid > 0 {
 			fmt.Fprintf(&buf, " startUid: %d ", pk.StartUid)
 		}
-		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(item.Key()))
+
 		if opt.itemMeta {
-			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
 			fmt.Fprintf(&buf, " ts: %d", item.Version())
+			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
 		}
+
+		var sz, deltaCount int64
+		for ; itr.ValidForPrefix(prefix); itr.Next() {
+			item := itr.Item()
+			if !bytes.Equal(item.Key(), key) {
+				break
+			}
+			if item.IsDeletedOrExpired() {
+				x.Check2(buf.WriteString(" {v.del}"))
+				break
+			}
+			switch item.UserMeta() {
+			// This is rather a default case as one of the 4 bit must be set.
+			case posting.BitCompletePosting, posting.BitEmptyPosting, posting.BitSchemaPosting:
+				sz += item.EstimatedSize()
+				break
+			case posting.BitDeltaPosting:
+				sz += item.EstimatedSize()
+				deltaCount++
+			default:
+				fmt.Printf("No user meta found for key: %s\n", hex.EncodeToString(key))
+			}
+			if item.DiscardEarlierVersions() {
+				x.Check2(buf.WriteString(" {v.las}"))
+				break
+			}
+		}
+		// skip all the versions of key
+		for ; itr.ValidForPrefix(prefix); itr.Next() {
+			item := itr.Item()
+			if !bytes.Equal(item.Key(), key) {
+				break
+			}
+		}
+
+		fmt.Fprintf(&buf, " sz: %d dcnt: %d", sz, deltaCount)
+		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(key))
 		fmt.Println(buf.String())
 		loop++
 	}
