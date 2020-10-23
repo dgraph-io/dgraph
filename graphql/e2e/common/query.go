@@ -388,7 +388,7 @@ func inFilter(t *testing.T) {
 
 	getStateParams := &GraphQLParams{
 		Query: `query{
-			queryState(filter: {xcode: {in: ["abc", "def"]}}){
+			queryState(filter: {xcode: {in: ["abc", "def"]}}, order: { asc: name }){
 				xcode
 				name
 				capital
@@ -430,6 +430,74 @@ func inFilter(t *testing.T) {
 
 	deleteFilter := map[string]interface{}{"xcode": map[string]interface{}{"in": []string{"abc", "def"}}}
 	deleteGqlType(t, "State", deleteFilter, 2, nil)
+}
+
+func betweenFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			queryPost(filter: {numLikes: {between: {min:90, max:100}}}) {
+				title
+				numLikes
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryPost []*post
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.QueryPost))
+
+	expected := &post{
+		Title:    "Introducing GraphQL in Dgraph",
+		NumLikes: 100,
+	}
+
+	if diff := cmp.Diff(expected, result.QueryPost[0]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func deepBetweenFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query{
+			queryAuthor(filter: {reputation: {between: {min:6.0, max: 7.2}}}){
+			  name
+			  reputation
+			  posts(filter: {topic: {between: {min: "GraphQL", max: "GraphQL+-"}}}){
+				title
+				topic
+			  }
+			}
+		  }`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.QueryAuthor))
+
+	expected := &author{
+		Name:       "Ann Author",
+		Reputation: 6.6,
+		Posts:      []*post{{Title: "Introducing GraphQL in Dgraph", Topic: "GraphQL"}},
+	}
+
+	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
 }
 
 func deepFilter(t *testing.T) {

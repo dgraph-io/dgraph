@@ -185,7 +185,7 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 			continue
 		}
 		defns = append(defns, defn.Name)
-		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
+		if defn.Kind == ast.Object || defn.Kind == ast.Interface || defn.Kind == ast.Union {
 			remoteDir := defn.Directives.ForName(remoteDirective)
 			if remoteDir != nil {
 				continue
@@ -446,12 +446,13 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
-				case ast.Object, ast.Interface:
-					if isPointType(f.Type) {
-						typStr = "geo"
+				case ast.Object, ast.Interface, ast.Union:
+					if isGeoType(f.Type) {
+						typStr = inbuiltTypeToDgraph[f.Type.Name()]
 						var indexes []string
 						if f.Directives.ForName(searchDirective) != nil {
-							indexes = append(indexes, "geo")
+							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
+								Name()]].dgIndex)
 						}
 						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
 					} else {
@@ -475,7 +476,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				case ast.Scalar:
 					typStr = fmt.Sprintf(
 						"%s%s%s",
-						prefix, scalarToDgraph[f.Type.Name()], suffix,
+						prefix, inbuiltTypeToDgraph[f.Type.Name()], suffix,
 					)
 
 					var indexes []string
