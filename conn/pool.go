@@ -140,13 +140,13 @@ func (p *Pools) getPool(addr string) (*Pool, bool) {
 }
 
 // Connect creates a Pool instance for the node with the given address or returns the existing one.
-func (p *Pools) Connect(addr string, conf *tls.Config) *Pool {
+func (p *Pools) Connect(addr string, tlsClientConf *tls.Config) *Pool {
 	existingPool, has := p.getPool(addr)
 	if has {
 		return existingPool
 	}
 
-	pool, err := newPool(addr, conf)
+	pool, err := newPool(addr, tlsClientConf)
 	if err != nil {
 		glog.Errorf("Unable to connect to host: %s", addr)
 		return nil
@@ -166,7 +166,7 @@ func (p *Pools) Connect(addr string, conf *tls.Config) *Pool {
 }
 
 // newPool creates a new "pool" with one gRPC connection, refcount 0.
-func newPool(addr string, tlsCfg *tls.Config) (*Pool, error) {
+func newPool(addr string, tlsClientConf *tls.Config) (*Pool, error) {
 	conOpts := []grpc.DialOption {
 		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(
@@ -176,8 +176,8 @@ func newPool(addr string, tlsCfg *tls.Config) (*Pool, error) {
 		grpc.WithBackoffMaxDelay(time.Second),
 	}
 
-	if tlsCfg != nil {
-		conOpts = append(conOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+	if tlsClientConf != nil {
+		conOpts = append(conOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsClientConf)))
 	} else {
 		conOpts = append(conOpts, grpc.WithInsecure())
 	}

@@ -27,7 +27,7 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180
-      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_client_name alpha1
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_cert client.alpha1.crt --tls_key client.alpha1.key
       --idx=1 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha2:
@@ -59,7 +59,7 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 102 --my=alpha2:7182 --zero=zero1:5180
-      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_client_name alpha2
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_cert client.alpha2.crt --tls_key client.alpha2.key
       --idx=2 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha3:
@@ -91,7 +91,7 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 103 --my=alpha3:7183 --zero=zero1:5180
-      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_client_name alpha3
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_cert client.alpha3.crt --tls_key client.alpha3.key
       --idx=3 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha4:
@@ -123,7 +123,7 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 104 --my=alpha4:7184 --zero=zero1:5180
-      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_client_name alpha4
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_cert client.alpha4.crt --tls_key client.alpha4.key
       --idx=4 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha5:
@@ -155,7 +155,7 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 105 --my=alpha5:7185 --zero=zero1:5180
-      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_client_name alpha5
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_cert client.alpha5.crt --tls_key client.alpha5.key
       --idx=5 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha6:
@@ -187,7 +187,7 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 106 --my=alpha6:7186 --zero=zero1:5180
-      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_client_name alpha6
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_cert client.alpha6.crt --tls_key client.alpha6.key
       --idx=6 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   zero1:
@@ -208,6 +208,7 @@ services:
       source: ../tls/zero1
       target: /dgraph-tls
       read_only: true
-    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_client_name zero1 --logtostderr
+    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --tls_dir /dgraph-tls --tls_enable_inter_node=true
+      --tls_cert client.zero1.crt --tls_key client.zero1.key --logtostderr
       -v=2 --bindall
 volumes: {}

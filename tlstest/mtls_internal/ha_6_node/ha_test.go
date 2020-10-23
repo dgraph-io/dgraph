@@ -73,13 +73,13 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 }
 
 func TestHAClusterSetup(t *testing.T) {
-	client := getClientForAlpha(t, "alpha1")
+	client := getClientForAlpha(t, "alpha1", "9180")
 	runTests(t, client)
 }
 
 func TestHAClusterDiffClients(t *testing.T) {
-	client := getClientForAlpha(t, "alpha1")
-	client2 := getClientForAlpha(t, "alpha2")
+	client := getClientForAlpha(t, "alpha1", "9180")
+	client2 := getClientForAlpha(t, "alpha2", "9280")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -121,7 +121,7 @@ func TestHAClusterDiffClients(t *testing.T) {
 			  }`, string(reply.GetJson()))
 }
 
-func getClientForAlpha(t *testing.T, name string) *dgo.Dgraph {
+func getClientForAlpha(t *testing.T, name string, port string) *dgo.Dgraph {
 	c := &x.TLSHelperConfig{
 		CertDir:          "../tls/" + name,
 		CertRequired:     true,
@@ -133,7 +133,7 @@ func getClientForAlpha(t *testing.T, name string) *dgo.Dgraph {
 	}
 	tlsConf, err := x.GenerateClientTLSConfig(c)
 	require.NoError(t, err)
-	dgConn, err := grpc.Dial(":9180", grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	dgConn, err := grpc.Dial(":" + port, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	time.Sleep(time.Second * 6)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(dgConn))

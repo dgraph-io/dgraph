@@ -543,11 +543,9 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
 		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
 	} else {
-		if conf.GetBool("tls_enable_inter_node") {
-			var tlsErr error
-			tlsConfig, tlsErr = x.LoadClientTLSConfig(conf)
-			x.Check(tlsErr)
-		}
+		var tlsErr error
+		tlsConfig, tlsErr = x.LoadClientTLSConfigForInterNode(conf)
+		x.Check(tlsErr)
 	}
 
 	// compression with zero server actually makes things worse

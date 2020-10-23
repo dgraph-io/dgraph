@@ -71,8 +71,13 @@ func LoadClientTLSConfigForInterNode(v *viper.Viper) (*tls.Config, error) {
 	if conf.CertDir != "" {
 		conf.CertRequired = true
 		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
-		conf.Cert = path.Join(conf.CertDir, "client."+v.GetString("tls_client_name")+".crt")
-		conf.Key = path.Join(conf.CertDir, "client."+v.GetString("tls_client_name")+".key")
+		if v.GetString("tls_cert") == "" || v.GetString("tls_key") == "" {
+			return nil, errors.Errorf("inter node tls is enabled but client certs are not provided. " +
+				"Intern Node is TLS is always client authenticated. Please provide --tls_cert and --tls_key")
+		}
+
+		conf.Cert = path.Join(conf.CertDir, v.GetString("tls_cert"))
+		conf.Key = path.Join(conf.CertDir, v.GetString("tls_key"))
 		return GenerateClientTLSConfig(conf)
 	}
 
