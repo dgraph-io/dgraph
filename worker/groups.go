@@ -1052,11 +1052,11 @@ func EnterpriseEnabled() bool {
 		return false
 	}
 	g := groups()
+	g.RLock()
+	defer g.RUnlock()
 	if g.state == nil {
 		return g.askZeroForEE()
 	}
-	g.RLock()
-	defer g.RUnlock()
 	return g.state.GetLicense().GetEnabled()
 }
 
