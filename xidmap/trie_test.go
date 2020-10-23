@@ -29,6 +29,7 @@ func TestTrie(t *testing.T) {
 		"Size of Trie node should be 24. Got: %d\n", nodeSz)
 
 	trie := NewTrie()
+	defer trie.Release()
 
 	trie.Put("trie", 1)
 	trie.Put("tree", 2)

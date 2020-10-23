@@ -69,6 +69,7 @@ func TestXidmap(t *testing.T) {
 		uidb2, isNew := xidmap2.AssignUid("b")
 		require.Equal(t, uidb, uidb2)
 		require.False(t, isNew)
+		require.NoError(t, xidmap2.Flush())
 	})
 }
 
@@ -100,6 +101,7 @@ func TestXidmapMemory(t *testing.T) {
 	require.NotNil(t, conn)
 
 	xidmap := New(conn, nil)
+	defer xidmap.Flush()
 
 	start := time.Now()
 	var wg sync.WaitGroup
@@ -135,6 +137,7 @@ func BenchmarkXidmapWrites(b *testing.B) {
 
 	var counter int64
 	xidmap := New(conn, nil)
+	defer xidmap.Flush()
 	b.ResetTimer()
 
 	b.RunParallel(func(pb *testing.PB) {
@@ -152,6 +155,7 @@ func BenchmarkXidmapWritesRandom(b *testing.B) {
 	}
 
 	xidmap := New(conn, nil)
+	defer xidmap.Flush()
 	b.ResetTimer()
 	buf := make([]byte, 32)
 
@@ -173,6 +177,7 @@ func BenchmarkXidmapReads(b *testing.B) {
 
 	var N = 1000000
 	xidmap := New(conn, nil)
+	defer xidmap.Flush()
 	for i := 0; i < N; i++ {
 		xidmap.AssignUid("xid-" + strconv.Itoa(i))
 	}
@@ -196,6 +201,7 @@ func BenchmarkXidmapReadsRandom(b *testing.B) {
 	buf := make([]byte, 32)
 	var list [][]byte
 	xidmap := New(conn, nil)
+	defer xidmap.Flush()
 	for i := 0; i < N; i++ {
 		rand.Read(buf)
 		list = append(list, buf)
