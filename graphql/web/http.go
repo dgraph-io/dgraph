@@ -98,6 +98,10 @@ func write(w http.ResponseWriter, rr *schema.Response, acceptGzip bool) {
 	// set TouchedUids header
 	w.Header().Set(touchedUidsHeader, strconv.FormatUint(rr.GetExtensions().GetTouchedUids(), 10))
 
+	for key, val := range rr.Header {
+		w.Header()[key] = val
+	}
+
 	// If the receiver accepts gzip, then we would update the writer
 	// and send gzipped content instead.
 	if acceptGzip {
