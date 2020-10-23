@@ -128,7 +128,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		return left.less(right)
 	})
 
-	tmp, _ := buf.Slice(1)
+	tmp, _ := buf.Slice(buf.StartOffset())
 	lastCe := countEntry(tmp)
 	{
 		pk, err := x.Parse(lastCe.Key())

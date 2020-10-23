@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/skl"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -187,15 +188,6 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	newUid := sh.assign(m.newRanges)
 	sh.skiplist.PutUint64([]byte(xid), newUid)
 
-	// TODO: Iterate over Trie in sequence and use stream write to write it out to Badger at the
-	// end. No need to write here.
-	if m.writer != nil {
-		var uidBuf [8]byte
-		binary.BigEndian.PutUint64(uidBuf[:], newUid)
-		if err := m.writer.Set([]byte(xid), uidBuf[:]); err != nil {
-			x.Panic(err)
-		}
-	}
 	return newUid, true
 }
 
@@ -256,7 +248,26 @@ func (m *XidMap) Flush() error {
 	}()
 
 	for _, shard := range m.shards {
+		var err error
+		if m.writer != nil {
+			shard.Lock()
+			it := shard.skiplist.NewIterator()
+			var uidBuf [8]byte
+			for it.SeekToFirst(); it.Valid(); it.Next() {
+				curKey := it.Key()
+				key := make([]byte, len(curKey))
+				copy(key, curKey)
+				binary.BigEndian.PutUint64(uidBuf[:], it.ValueUint64())
+				err = m.writer.Set(key, uidBuf[:])
+				y.Check(err)
+			}
+			it.Close()
+			shard.Unlock()
+		}
 		shard.skiplist.DecrRef()
+		if err != nil {
+			return err
+		}
 	}
 
 	if m.writer == nil {
