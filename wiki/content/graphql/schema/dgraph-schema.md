@@ -60,6 +60,39 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+input NearFilter {
+    Distance: Float!
+    Coordinate: Point!
+}
+
+input WithinFilter {
+    polygon: Polygon!
+}
+
+input ContainsFilter {
+    # The user should be giving one of these.
+    point: Point
+    polygon: Polygon
+}
+
+input IntersectsFilter {
+    # The user should be giving one of these.
+    polygon: Polygon
+    mulitPolygon: MultiPolygon
+}
+
+input PointGeoFilter {
+    near: NearFilter
+    within: WithinFilter
+}
+
+input PolygonGeoFilter {
+    near: NearFilter
+    within: WithinFilter
+    contains: ContainsFilter
+    intersects: IntersectsFilter
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
