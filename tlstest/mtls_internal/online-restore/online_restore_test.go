@@ -18,6 +18,7 @@ package online_restore
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/dgraph-io/dgraph/x"
@@ -48,17 +49,7 @@ func sendRestoreRequest(t *testing.T, backupId string, backupNum int) int {
 			restoreId
 		}
 	}`, backupId, backupNum)
-	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
-		CertRequired:     true,
-		Cert:             "../tls/alpha1/client.alpha1.crt",
-		Key:              "../tls/alpha1/client.alpha1.key",
-		ServerName:       "alpha1",
-		RootCACert:       "../tls/alpha1/ca.crt",
-		UseSystemCACerts: true,
-	}
-	tlsConf, err := x.GenerateClientTLSConfig(c)
-	require.NoError(t, err)
+	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
 		Transport: &http.Transport {
@@ -93,17 +84,7 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 			errors
 		}
 	}`, restoreId)
-	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
-		CertRequired:     true,
-		Cert:             "../tls/alpha1/client.alpha1.crt",
-		Key:              "../tls/alpha1/client.alpha1.key",
-		ServerName:       "alpha1",
-		RootCACert:       "../tls/alpha1/ca.crt",
-		UseSystemCACerts: true,
-	}
-	tlsConf, err := x.GenerateClientTLSConfig(c)
-	require.NoError(t, err)
+	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
 		Transport: &http.Transport {
@@ -172,17 +153,7 @@ func disableDraining(t *testing.T) {
   		}
 	}`
 
-	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
-		CertRequired:     true,
-		Cert:             "../tls/alpha1/client.alpha1.crt",
-		Key:              "../tls/alpha1/client.alpha1.key",
-		ServerName:       "alpha1",
-		RootCACert:       "../tls/alpha1/ca.crt",
-		UseSystemCACerts: true,
-	}
-	tlsConf, err := x.GenerateClientTLSConfig(c)
-	require.NoError(t, err)
+	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
 		Transport: &http.Transport {
@@ -275,17 +246,7 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 
 func TestBasicRestore(t *testing.T) {
 	disableDraining(t)
-	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
-		CertRequired:     true,
-		Cert:             "../tls/alpha1/client.alpha1.crt",
-		Key:              "../tls/alpha1/client.alpha1.key",
-		ServerName:       "alpha1",
-		RootCACert:       "../tls/alpha1/ca.crt",
-		UseSystemCACerts: true,
-	}
-	tlsConf, err := x.GenerateClientTLSConfig(c)
-	require.NoError(t, err)
+	tlsConf := getAlphaClient(t)
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -301,17 +262,7 @@ func TestBasicRestore(t *testing.T) {
 
 func TestRestoreBackupNum(t *testing.T) {
 	disableDraining(t)
-	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
-		CertRequired:     true,
-		Cert:             "../tls/alpha1/client.alpha1.crt",
-		Key:              "../tls/alpha1/client.alpha1.key",
-		ServerName:       "alpha1",
-		RootCACert:       "../tls/alpha1/ca.crt",
-		UseSystemCACerts: true,
-	}
-	tlsConf, err := x.GenerateClientTLSConfig(c)
-	require.NoError(t, err)
+	tlsConf := getAlphaClient(t)
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -328,17 +279,7 @@ func TestRestoreBackupNum(t *testing.T) {
 
 func TestRestoreBackupNumInvalid(t *testing.T) {
 	disableDraining(t)
-	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
-		CertRequired:     true,
-		Cert:             "../tls/alpha1/client.alpha1.crt",
-		Key:              "../tls/alpha1/client.alpha1.key",
-		ServerName:       "alpha1",
-		RootCACert:       "../tls/alpha1/ca.crt",
-		UseSystemCACerts: true,
-	}
-	tlsConf, err := x.GenerateClientTLSConfig(c)
-	require.NoError(t, err)
+	tlsConf := getAlphaClient(t)
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -402,17 +343,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 func TestMoveTablets(t *testing.T) {
 	disableDraining(t)
-	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
-		CertRequired:     true,
-		Cert:             "../tls/alpha1/client.alpha1.crt",
-		Key:              "../tls/alpha1/client.alpha1.key",
-		ServerName:       "alpha1",
-		RootCACert:       "../tls/alpha1/ca.crt",
-		UseSystemCACerts: true,
-	}
-	tlsConf, err := x.GenerateClientTLSConfig(c)
-	require.NoError(t, err)
+	tlsConf := getAlphaClient(t)
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -460,17 +391,8 @@ func TestInvalidBackupId(t *testing.T) {
 		}
 	}`
 
-	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
-		CertRequired:     true,
-		Cert:             "../tls/alpha1/client.alpha1.crt",
-		Key:              "../tls/alpha1/client.alpha1.key",
-		ServerName:       "alpha1",
-		RootCACert:       "../tls/alpha1/ca.crt",
-		UseSystemCACerts: true,
-	}
-	tlsConf, err := x.GenerateClientTLSConfig(c)
-	require.NoError(t, err)
+
+	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
 		Transport: &http.Transport{
@@ -507,21 +429,11 @@ func TestListBackups(t *testing.T) {
 		}
 	}`
 
-	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
-		CertRequired:     true,
-		Cert:             "../tls/alpha1/client.alpha1.crt",
-		Key:              "../tls/alpha1/client.alpha1.key",
-		ServerName:       "alpha1",
-		RootCACert:       "../tls/alpha1/ca.crt",
-		UseSystemCACerts: true,
-	}
-	tlsConf, err := x.GenerateClientTLSConfig(c)
-	require.NoError(t, err)
+	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
 		Transport: &http.Transport{
-			TLSClientConfig:        tlsConf,
+			TLSClientConfig: tlsConf,
 		},
 	}
 	adminUrl := "https://localhost:8180/admin"
@@ -540,4 +452,19 @@ func TestListBackups(t *testing.T) {
 	require.Contains(t, sbuf, `"backupNum":1`)
 	require.Contains(t, sbuf, `"backupNum":2`)
 	require.Contains(t, sbuf, "initial_release_date")
+}
+
+func getAlphaClient(t *testing.T) *tls.Config {
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	return tlsConf
 }
