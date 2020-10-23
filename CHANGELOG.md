@@ -4,6 +4,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+## [20.03.6] - 2020-10-22
+[20.03.6]: https://github.com/dgraph-io/dgraph/compare/v20.03.5...v20.03.6
+
+### Changed
+
+- Update badger to 5e3d4b9 ([#6670][])
+- Return content length header for queries ([#6479][])
+- Use raft storage in managedmode ([#6545][])
+
+### Added
+
+- Add utility to export backup data. ([#6591][])
+- Makefile to build Dgraph inside docker container. ([#6602][])
+- Add separate compression flag for z and wal dirs ([#6420][])
+
+### Fixed
+
+- Break out if g.Ctx is done. ([#6676][])
+- Fix wrong path response for k-shortest paths. ([#6655][])
+- Update nextRaftId when starting a node with a raftId > 0. ([#6598][])
+- Pagination param "after" does not work when using func: uid(v). ([#6631][])
+- CID never created if Zero stops early after first init. ([#6636][])
+- Pause rollups during snapshot streaming. ([#6610][])
+- Use flags for cache. ([#6466][])
+- Fix negative waitgroup error. ([#6551][])
+- Report Raft heartbeat metrics for Zero v=3 logs and log read index. ([#6553][])
+- Fix readTs less than minTs. ([#6518][])
+- Fix bug when deleting and adding to a single UID predicate in the same transaction. ([#6450][])
+
+[#6670]: https://github.com/dgraph-io/dgraph/issues/6670
+[#6479]: https://github.com/dgraph-io/dgraph/issues/6479
+[#6545]: https://github.com/dgraph-io/dgraph/issues/6545
+[#6591]: https://github.com/dgraph-io/dgraph/issues/6591
+[#6602]: https://github.com/dgraph-io/dgraph/issues/6602
+[#6420]: https://github.com/dgraph-io/dgraph/issues/6420
+[#6676]: https://github.com/dgraph-io/dgraph/issues/6676
+[#6655]: https://github.com/dgraph-io/dgraph/issues/6655
+[#6598]: https://github.com/dgraph-io/dgraph/issues/6598
+[#6631]: https://github.com/dgraph-io/dgraph/issues/6631
+[#6636]: https://github.com/dgraph-io/dgraph/issues/6636
+[#6610]: https://github.com/dgraph-io/dgraph/issues/6610
+[#6466]: https://github.com/dgraph-io/dgraph/issues/6466
+[#6551]: https://github.com/dgraph-io/dgraph/issues/6551
+[#6553]: https://github.com/dgraph-io/dgraph/issues/6553
+[#6518]: https://github.com/dgraph-io/dgraph/issues/6518
+[#6450]: https://github.com/dgraph-io/dgraph/issues/6450
+
+
 ## [20.03.5] - 2020-09-17
 [20.03.5]: https://github.com/dgraph-io/dgraph/compare/v20.03.4...v20.03.5
 
