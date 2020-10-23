@@ -71,7 +71,7 @@ func Init(ps *badger.DB) {
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
 	}
 
-	tlsConf, err := x.LoadServerTLSConfigForInterNode(x.WorkerConfig.TLSDir, x.TLSNodeCert, x.TLSNodeKey)
+	tlsConf, err := x.LoadServerTLSConfigForInterNode(x.WorkerConfig.TLSInterNodeEnabled, x.WorkerConfig.TLSDir)
 	x.Check(err)
 	if tlsConf != nil {
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))

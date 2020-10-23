@@ -168,7 +168,7 @@ they form a Raft group and provide synchronous replication.
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
 	flag.Bool("tls_enable_inter_node", false, "enable inter node TLS encryption between cluster nodes.")
-	flag.String("tls_client_name", "alpha", "client name to be used for internal tls")
+	flag.String("tls_client_name", "", "client name to be used for internal tls")
 
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
@@ -665,7 +665,8 @@ func run() {
 		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
 		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
 		TLSClientConfig:      tlsConf,
-		TLSDir:               Alpha.Conf.GetString("node_tls_dir"),
+		TLSDir:               Alpha.Conf.GetString("tls_dir"),
+		TLSInterNodeEnabled: Alpha.Conf.GetBool("tls_enable_inter_node"),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 

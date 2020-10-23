@@ -75,6 +75,7 @@ type WorkerOptions struct {
 	TLSClientConfig *tls.Config
 	//Directory where tls certs are present to connect with zero and alpha internally
 	TLSDir string
+	TLSInterNodeEnabled bool
 	// RaftId represents the id of this alpha instance for participating in the RAFT
 	// consensus protocol.
 	RaftId uint64

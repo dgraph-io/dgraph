@@ -13,12 +13,6 @@ import (
 	"time"
 )
 
-func check(t *testing.T, err error) {
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
-}
-
 func runTests(t *testing.T, client *dgo.Dgraph) {
 	type testCase struct {
 		query      string
@@ -28,22 +22,22 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		check(t, client.Alter(ctx, &api.Operation{
+		require.NoError(t, client.Alter(ctx, &api.Operation{
 			DropAll: true,
 		}))
-		check(t, client.Alter(ctx, &api.Operation{
+		require.NoError(t, client.Alter(ctx, &api.Operation{
 			Schema: initialSchema,
 		}))
 
 		txn := client.NewTxn()
 		_, err := txn.Mutate(ctx, &api.Mutation{SetJson: []byte(setJSON)})
-		check(t, err)
-		check(t, txn.Commit(ctx))
+		require.NoError(t, err)
+		require.NoError(t, txn.Commit(ctx))
 
 		for _, test := range cases {
 			txn := client.NewTxn()
 			reply, err := txn.Query(ctx, test.query)
-			check(t, err)
+			require.NoError(t, err)
 			testutil.CompareJSON(t, test.wantResult, string(reply.GetJson()))
 		}
 	}

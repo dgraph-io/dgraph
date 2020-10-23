@@ -48,15 +48,32 @@ func sendRestoreRequest(t *testing.T, backupId string, backupNum int) int {
 			restoreId
 		}
 	}`, backupId, backupNum)
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	client := http.Client{
+		Timeout: time.Second * 3,
+		Transport: &http.Transport {
+			TLSClientConfig: tlsConf,
+		},
+	}
 
-	adminUrl := "http://localhost:8180/admin"
+	adminUrl := "https://localhost:8180/admin"
 	params := testutil.GraphQLParams{
 		Query: restoreRequest,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	bufString := string(buf)
@@ -76,7 +93,25 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 			errors
 		}
 	}`, restoreId)
-	adminUrl := "http://localhost:8180/admin"
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	client := http.Client{
+		Timeout: time.Second * 3,
+		Transport: &http.Transport {
+			TLSClientConfig: tlsConf,
+		},
+	}
+
+	adminUrl := "https://localhost:8180/admin"
 	params := testutil.GraphQLParams{
 		Query: query,
 	}
@@ -85,7 +120,7 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 
 	restoreDone := false
 	for i := 0; i < 15; i++ {
-		resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+		resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)
@@ -137,13 +172,30 @@ func disableDraining(t *testing.T) {
   		}
 	}`
 
-	adminUrl := "http://localhost:8180/admin"
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	client := http.Client{
+		Timeout: time.Second * 3,
+		Transport: &http.Transport {
+			TLSClientConfig: tlsConf,
+		},
+	}
+	adminUrl := "https://localhost:8180/admin"
 	params := testutil.GraphQLParams{
 		Query: drainRequest,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -276,15 +328,6 @@ func TestRestoreBackupNum(t *testing.T) {
 
 func TestRestoreBackupNumInvalid(t *testing.T) {
 	disableDraining(t)
-
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
-	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-
-	ctx := context.Background()
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
-	runQueries(t, dg, true)
-
 	c := &x.TLSHelperConfig{
 		CertDir:          "../tls/alpha1",
 		CertRequired:     true,
@@ -296,6 +339,13 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	}
 	tlsConf, err := x.GenerateClientTLSConfig(c)
 	require.NoError(t, err)
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	runQueries(t, dg, true)
 	client := http.Client{
 		Timeout: time.Second * 3,
 		Transport: &http.Transport{

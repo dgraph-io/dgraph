@@ -101,7 +101,7 @@ instances to achieve high-availability.
 		"comma separated zero endpoint which will be disabled from TLS encryption."+
 		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
 	flag.Bool("tls_enable_inter_node", false, "enable inter node TLS encryption between cluster nodes.")
-	flag.String("tls_client_name", "zero", "client name to be used for internal tls")
+	flag.String("tls_client_name", "", "client name to be used for internal tls")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -125,13 +125,8 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
 	}
 
-	var tlsConf *tls.Config
-	var err error
-	if Zero.Conf.GetBool("tls_enable_inter_node") && Zero.Conf.GetString("tls_dir") != "" {
-		tlsConf, err = x.LoadServerTLSConfigForInterNode(Zero.Conf.GetString("tls_dir"), x.TLSNodeCert, x.TLSNodeKey)
-		x.Check(err)
-	}
-
+	tlsConf, err := x.LoadServerTLSConfigForInterNode(Zero.Conf.GetBool("tls_enable_inter_node"), Zero.Conf.GetString("tls_dir"))
+	x.Check(err)
 	if tlsConf != nil {
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))
 	}

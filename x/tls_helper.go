@@ -62,6 +62,9 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 }
 
 func LoadClientTLSConfigForInterNode(v *viper.Viper) (*tls.Config, error) {
+	if !v.GetBool("tls_enable_inter_node") {
+		return nil, nil
+	}
 	conf := &TLSHelperConfig{}
 	conf.UseSystemCACerts = true
 	conf.CertDir = v.GetString("tls_dir")
@@ -81,15 +84,18 @@ func LoadClientTLSConfigForInterNode(v *viper.Viper) (*tls.Config, error) {
 }
 
 // LoadServerTLSConfigForInterNode loads the TLS config into the server with the given parameters.
-func LoadServerTLSConfigForInterNode(tlsDir string, tlsCertFile string, tlsKeyFile string) (*tls.Config, error) {
+func LoadServerTLSConfigForInterNode(tlsEnabled bool, tlsDir string) (*tls.Config, error) {
+	if !tlsEnabled {
+		return nil, nil
+	}
 	conf := TLSHelperConfig{}
 	conf.CertDir = tlsDir
 	conf.UseSystemCACerts = true
 	if conf.CertDir != "" {
 		conf.CertRequired = true
 		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
-		conf.Cert = path.Join(conf.CertDir, tlsCertFile)
-		conf.Key = path.Join(conf.CertDir, tlsKeyFile)
+		conf.Cert = path.Join(conf.CertDir, TLSNodeCert)
+		conf.Key = path.Join(conf.CertDir, TLSNodeKey)
 		conf.ClientAuth = "REQUIREANDVERIFY"
 	}
 	return GenerateServerTLSConfig(&conf)
