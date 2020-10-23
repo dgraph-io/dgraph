@@ -23,7 +23,8 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180
-      --logtostderr -v=2 --node_tls_dir /dgraph-tls --node_tls_server_name alpha1 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --tls_dir /dgraph-tls
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node true --tls_client_name alpha1
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --tls_dir /dgraph-tls
       --tls_client_auth VERIFYIFGIVEN --acl_secret_file /dgraph-acl/hmac-secret
   zero1:
     image: dgraph/dgraph:latest
@@ -43,6 +44,7 @@ services:
       source: ../tls/zero1
       target: /dgraph-tls
       read_only: true
-    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --logtostderr --node_tls_dir /dgraph-tls --node_tls_server_name zero1
+    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --logtostderr
+    --tls_dir /dgraph-tls --tls_enable_inter_node true --tls_client_name zero1
       -v=2 --bindall
 volumes: {}

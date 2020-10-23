@@ -5,16 +5,13 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"testing"
 	"time"
 )
-
-func check(t *testing.T, err error) {
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
-}
 
 func runTests(t *testing.T, client *dgo.Dgraph) {
 	type testCase struct {
@@ -25,22 +22,22 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		check(t, client.Alter(ctx, &api.Operation{
+		require.NoError(t, client.Alter(ctx, &api.Operation{
 			DropAll: true,
 		}))
-		check(t, client.Alter(ctx, &api.Operation{
+		require.NoError(t, client.Alter(ctx, &api.Operation{
 			Schema: initialSchema,
 		}))
 
 		txn := client.NewTxn()
 		_, err := txn.Mutate(ctx, &api.Mutation{SetJson: []byte(setJSON)})
-		check(t, err)
-		check(t, txn.Commit(ctx))
+		require.NoError(t, err)
+		require.NoError(t, txn.Commit(ctx))
 
 		for _, test := range cases {
 			txn := client.NewTxn()
 			reply, err := txn.Query(ctx, test.query)
-			check(t, err)
+			require.NoError(t, err)
 			testutil.CompareJSON(t, test.wantResult, string(reply.GetJson()))
 		}
 	}
@@ -76,11 +73,19 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 }
 
 func TestHAClusterSetup(t *testing.T) {
-	dgConn, err := grpc.Dial(":9180", grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("%+v", err)
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
 	}
-
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	dgConn, err := grpc.Dial(":9180", grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	require.NoError(t, err)
 	time.Sleep(time.Second * 6)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
 	runTests(t, client)

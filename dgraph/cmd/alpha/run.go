@@ -65,11 +65,6 @@ import (
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 )
 
-const (
-	tlsNodeCert = "node.crt"
-	tlsNodeKey  = "node.key"
-)
-
 var (
 	bindall bool
 
@@ -172,6 +167,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
+	flag.Bool("tls_enable_inter_node", false, "enable inter node TLS encryption between cluster nodes.")
+	flag.String("tls_client_name", "alpha", "client name to be used for internal tls")
 
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
@@ -196,8 +193,6 @@ they form a Raft group and provide synchronous replication.
 	flag.String("cache_percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
-
-	x.RegisterNodeTLSFlags(flag)
 }
 
 func setupCustomTokenizers() {
@@ -428,7 +423,7 @@ func setupServer(closer *z.Closer) {
 		laddr = "0.0.0.0"
 	}
 
-	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, tlsNodeCert, tlsNodeKey)
+	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, x.TLSNodeCert, x.TLSNodeKey)
 	if err != nil {
 		log.Fatalf("Failed to setup TLS: %v\n", err)
 	}
@@ -653,12 +648,8 @@ func run() {
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
-	tlsConf, err := x.LoadNodeTLSClientHelperConfig(Alpha.Conf)
-	if err != nil {
-		glog.Error("unable to read tls config for internal communication ", err)
-		return
-	}
-
+	tlsConf, err := x.LoadClientTLSConfigForInterNode(Alpha.Conf)
+	x.Check(err)
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),

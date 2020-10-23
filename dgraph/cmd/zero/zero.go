@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"math"
 	"strings"
@@ -70,7 +71,8 @@ type Server struct {
 	connectLock    sync.Mutex // Used to serialize connect requests from servers.
 
 	//tls client config used to connect with zero internally
-	tlsClientConfig *x.TLSHelperConfig
+	tlsClientConfig *tls.Config
+
 	moveOngoing     chan struct{}
 	blockCommitsOn  *sync.Map
 }

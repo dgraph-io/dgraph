@@ -172,7 +172,7 @@ func newGroup() *pb.Group {
 	}
 }
 
-func (n *node) handleMemberProposal(member *pb.Member, opts options) error {
+func (n *node) handleMemberProposal(member *pb.Member) error {
 	n.server.AssertLock()
 	state := n.server.state
 
@@ -213,7 +213,7 @@ func (n *node) handleMemberProposal(member *pb.Member, opts options) error {
 	}
 
 	// Create a connection to this server.
-	go conn.GetPools().Connect(member.Addr, opts.tlsClientConfig)
+	go conn.GetPools().Connect(member.Addr, n.TlsClientConfig)
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
@@ -343,7 +343,7 @@ func (n *node) applyProposal(e raftpb.Entry, opts options) (string, error) {
 		}
 	}
 	if p.Member != nil {
-		if err := n.handleMemberProposal(p.Member, opts); err != nil {
+		if err := n.handleMemberProposal(p.Member); err != nil {
 			span.Annotatef(nil, "While applying membership proposal: %+v", err)
 			glog.Errorf("While applying membership proposal: %+v", err)
 			return p.Key, err

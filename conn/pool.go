@@ -140,15 +140,13 @@ func (p *Pools) getPool(addr string) (*Pool, bool) {
 }
 
 // Connect creates a Pool instance for the node with the given address or returns the existing one.
-func (p *Pools) Connect(addr string, conf *x.TLSHelperConfig) *Pool {
+func (p *Pools) Connect(addr string, conf *tls.Config) *Pool {
 	existingPool, has := p.getPool(addr)
 	if has {
 		return existingPool
 	}
 
-	tlsConfig, err := x.GenerateClientTLSConfig(conf)
-	x.Check(err)
-	pool, err := newPool(addr, tlsConfig)
+	pool, err := newPool(addr, conf)
 	if err != nil {
 		glog.Errorf("Unable to connect to host: %s", addr)
 		return nil

@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/grpc/credentials"
 	"io/ioutil"
 	"net/http"
 	"path"
@@ -221,8 +223,18 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 
 func TestBasicRestore(t *testing.T) {
 	disableDraining(t)
-
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -237,8 +249,18 @@ func TestBasicRestore(t *testing.T) {
 
 func TestRestoreBackupNum(t *testing.T) {
 	disableDraining(t)
-
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -263,8 +285,25 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	runQueries(t, dg, true)
 
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	client := http.Client{
+		Timeout: time.Second * 3,
+		Transport: &http.Transport{
+			TLSClientConfig:        tlsConf,
+		},
+	}
 	// Send a request with a backupNum greater than the number of manifests.
-	adminUrl := "http://localhost:8180/admin"
+	adminUrl := "https://localhost:8180/admin"
 	restoreRequest := fmt.Sprintf(`mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
@@ -280,7 +319,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	bufString := string(buf)
@@ -303,7 +342,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	b, err = json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err = client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err = ioutil.ReadAll(resp.Body)
 	bufString = string(buf)
@@ -313,8 +352,18 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 func TestMoveTablets(t *testing.T) {
 	disableDraining(t)
-
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -361,14 +410,31 @@ func TestInvalidBackupId(t *testing.T) {
 		}
 	}`
 
-	adminUrl := "http://localhost:8180/admin"
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	client := http.Client{
+		Timeout: time.Second * 3,
+		Transport: &http.Transport{
+			TLSClientConfig:        tlsConf,
+		},
+	}
+	adminUrl := "https://localhost:8180/admin"
 	params := testutil.GraphQLParams{
 		Query: restoreRequest,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -391,14 +457,31 @@ func TestListBackups(t *testing.T) {
 		}
 	}`
 
-	adminUrl := "http://localhost:8180/admin"
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	client := http.Client{
+		Timeout: time.Second * 3,
+		Transport: &http.Transport{
+			TLSClientConfig:        tlsConf,
+		},
+	}
+	adminUrl := "https://localhost:8180/admin"
 	params := testutil.GraphQLParams{
 		Query: query,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -102,9 +103,7 @@ func TestLoginOverTLS(t *testing.T) {
 	conf.Set("tls_server_name", "alpha1")
 
 	dg, err := dgraphClientWithCerts(testutil.SockAddr, conf)
-	if err != nil {
-		t.Fatalf("Unable to get dgraph client: %s", err.Error())
-	}
+	require.NoError(t, err)
 	for {
 		err := dg.Login(context.Background(), "groot", "password")
 		if err == nil {
@@ -115,6 +114,4 @@ func TestLoginOverTLS(t *testing.T) {
 
 		time.Sleep(time.Second)
 	}
-
-	// Output:
 }

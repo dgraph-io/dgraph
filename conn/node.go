@@ -19,6 +19,7 @@ package conn
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -76,7 +77,7 @@ type Node struct {
 	RaftContext     *pb.RaftContext
 	Store           *raftwal.DiskStorage
 	Rand            *rand.Rand
-	tlsClientConfig *x.TLSHelperConfig
+	TlsClientConfig *tls.Config
 
 	Proposals proposals
 
@@ -85,7 +86,7 @@ type Node struct {
 }
 
 // NewNode returns a new Node instance.
-func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *x.TLSHelperConfig) *Node {
+func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Config) *Node {
 	snap, err := store.Snapshot()
 	x.Check(err)
 
@@ -143,7 +144,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *x.TLSHel
 		messages:        make(chan sendmsg, 100),
 		peers:           make(map[uint64]string),
 		requestCh:       make(chan linReadReq, 100),
-		tlsClientConfig: tlsConfig,
+		TlsClientConfig: tlsConfig,
 	}
 	n.Applied.Init(nil)
 	// This should match up to the Applied index set above.
@@ -523,7 +524,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 		n.SetPeer(pid, addr)
 		return
 	}
-	GetPools().Connect(addr, n.tlsClientConfig)
+	GetPools().Connect(addr, n.TlsClientConfig)
 	n.SetPeer(pid, addr)
 }
 

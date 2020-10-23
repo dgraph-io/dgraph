@@ -29,6 +29,11 @@ import (
 )
 
 const (
+	TLSNodeCert = "node.crt"
+	TLSNodeKey  = "node.key"
+)
+
+const (
 	tlsRootCert = "ca.crt"
 )
 
@@ -53,49 +58,41 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls_cert", "", "(optional) The Cert file provided by the client to the server.")
 	flag.String("tls_key", "", "(optional) The private key file "+
 		"provided by the client to the server.")
+	flag.Bool("tls_enable_inter_node", false, "enable inter node TLS encryption between cluster nodes.")
 }
 
-func RegisterNodeTLSFlags(flag *pflag.FlagSet) {
-	flag.String("node_tls_dir", "",
-		"Path to directory that has mTLS certificates and keys for dgraph internal communication")
-	flag.String("node_tls_server_name", "",
-		"server name to be used for mTLS for dgraph internal communication")
-}
-
-func LoadNodeTLSServerHelperConfig(certDir string) *TLSHelperConfig {
-	if certDir == "" {
-		return nil
-	}
-
+func LoadClientTLSConfigForInterNode(v *viper.Viper) (*tls.Config, error) {
 	conf := &TLSHelperConfig{}
 	conf.UseSystemCACerts = true
-	conf.CertDir = certDir
-	conf.CertRequired = true
-	conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
-	conf.Cert = path.Join(conf.CertDir, "node.crt")
-	conf.Key = path.Join(conf.CertDir, "node.key")
-	conf.ClientAuth = "REQUIREANDVERIFY"
-	return conf
-}
-
-func LoadNodeTLSClientHelperConfig(v *viper.Viper) (*TLSHelperConfig, error) {
-	conf := &TLSHelperConfig{}
-	conf.UseSystemCACerts = true
-	conf.CertDir = v.GetString("node_tls_dir")
+	conf.CertDir = v.GetString("tls_dir")
 	if conf.CertDir != "" {
 		conf.CertRequired = true
 		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
-		conf.Cert = path.Join(conf.CertDir, "client." + v.GetString("node_tls_server_name") + ".crt")
-		conf.Key = path.Join(conf.CertDir, "client." + v.GetString("node_tls_server_name") + ".key")
-		conf.ServerName= v.GetString("node_tls_server_name")
-		return conf, nil
+		conf.Cert = path.Join(conf.CertDir, "client."+v.GetString("tls_client_name")+".crt")
+		conf.Key = path.Join(conf.CertDir, "client."+v.GetString("tls_client_name")+".key")
+		return GenerateClientTLSConfig(conf)
 	}
 
-	if v.GetString("node_tls_server_name") != "" {
-		return nil, errors.Errorf("--node_tls_dir is required for enabling TLS")
+	if v.GetString("tls_client_name") != "" {
+		return nil, errors.Errorf("--tls_dir is required for enabling TLS")
 	}
 
 	return nil, nil
+}
+
+// LoadServerTLSConfigForInterNode loads the TLS config into the server with the given parameters.
+func LoadServerTLSConfigForInterNode(tlsDir string, tlsCertFile string, tlsKeyFile string) (*tls.Config, error) {
+	conf := TLSHelperConfig{}
+	conf.CertDir = tlsDir
+	conf.UseSystemCACerts = true
+	if conf.CertDir != "" {
+		conf.CertRequired = true
+		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
+		conf.Cert = path.Join(conf.CertDir, tlsCertFile)
+		conf.Key = path.Join(conf.CertDir, tlsKeyFile)
+		conf.ClientAuth = "REQUIREANDVERIFY"
+	}
+	return GenerateServerTLSConfig(&conf)
 }
 
 // LoadServerTLSConfig loads the TLS config into the server with the given parameters.
@@ -154,6 +151,10 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 		// 3. optionally load the client cert files
 		certFile := v.GetString("tls_cert")
 		keyFile := v.GetString("tls_key")
+		if v.GetBool("tls_enable_inter_node") && (certFile == "" || keyFile == "") {
+			return nil, errors.Errorf("inter node tls is enabled but client certs are not provided. " +
+				"Intern Node is TLS is always client authenticated. Please provide --tls_cert and --tls_key")
+		}
 		if certFile != "" && keyFile != "" {
 			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 			if err != nil {

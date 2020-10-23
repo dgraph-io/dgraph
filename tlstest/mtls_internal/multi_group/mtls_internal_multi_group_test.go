@@ -5,7 +5,10 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"testing"
 	"time"
 )
@@ -76,11 +79,19 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 }
 
 func TestClusterSetupWithMultiGroup(t *testing.T) {
-	dgConn, err := grpc.Dial(":9180", grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("%+v", err)
+	c := &x.TLSHelperConfig{
+		CertDir:          "../tls/alpha1",
+		CertRequired:     true,
+		Cert:             "../tls/alpha1/client.alpha1.crt",
+		Key:              "../tls/alpha1/client.alpha1.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tls/alpha1/ca.crt",
+		UseSystemCACerts: true,
 	}
-
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	dgConn, err := grpc.Dial(":9180", grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	require.NoError(t, err)
 	time.Sleep(time.Second * 6)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
 	runTests(t, client)

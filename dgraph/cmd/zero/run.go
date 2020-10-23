@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -55,10 +56,8 @@ type options struct {
 	rebalanceInterval time.Duration
 	tlsDir            string
 	tlsDisabledRoutes []string
-
-	//tls client config which will be used by zeros to connect internally
-	tlsClientConfig *x.TLSHelperConfig
-	totalCache      int64
+	tlsClientConfig   *tls.Config
+	totalCache        int64
 }
 
 var opts options
@@ -98,9 +97,11 @@ instances to achieve high-availability.
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	flag.String("tls_disabled_route", "", "comma separated zero endpoint which will be disabled from TLS encryption."+
+	flag.String("tls_disabled_route", "",
+		"comma separated zero endpoint which will be disabled from TLS encryption."+
 		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
-	x.RegisterNodeTLSFlags(flag)
+	flag.Bool("tls_enable_inter_node", false, "enable inter node TLS encryption between cluster nodes.")
+	flag.String("tls_client_name", "zero", "client name to be used for internal tls")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -124,9 +125,12 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
 	}
 
-	cnf := x.LoadNodeTLSServerHelperConfig(Zero.Conf.GetString("node_tls_dir"))
-	tlsConf, err := x.GenerateServerTLSConfig(cnf)
-	x.Check(err)
+	var tlsConf *tls.Config
+	var err error
+	if Zero.Conf.GetBool("tls_enable_inter_node") && Zero.Conf.GetString("tls_dir") != "" {
+		tlsConf, err = x.LoadServerTLSConfigForInterNode(Zero.Conf.GetString("tls_dir"), x.TLSNodeCert, x.TLSNodeKey)
+		x.Check(err)
+	}
 
 	if tlsConf != nil {
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))
@@ -187,12 +191,8 @@ func run() {
 		tlsDisRoutes = strings.Split(Zero.Conf.GetString("tls_disabled_route"), ",")
 	}
 
-	tlsConf, err := x.LoadNodeTLSClientHelperConfig(Zero.Conf)
-	if err != nil {
-		glog.Error("unable to load tls config for internal communication ", err)
-		return
-	}
-
+	tlsConf, err := x.LoadClientTLSConfigForInterNode(Zero.Conf)
+	x.Check(err)
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),

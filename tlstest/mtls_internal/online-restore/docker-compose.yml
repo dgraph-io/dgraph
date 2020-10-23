@@ -27,7 +27,8 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180
-      --logtostderr -v=2 --node_tls_dir /dgraph-tls --node_tls_server_name alpha1 --idx=1 --encryption_key_file /data/keys/enc_key
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node true --tls_client_name alpha1
+      --idx=1 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha2:
     image: dgraph/dgraph:latest
@@ -58,7 +59,8 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 102 --my=alpha2:7182 --zero=zero1:5180
-      --logtostderr -v=2 --node_tls_dir /dgraph-tls --node_tls_server_name alpha2 --idx=2 --encryption_key_file /data/keys/enc_key
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node true --tls_client_name alpha2
+      --idx=2 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha3:
     image: dgraph/dgraph:latest
@@ -89,7 +91,8 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 103 --my=alpha3:7183 --zero=zero1:5180
-      --logtostderr -v=2 --node_tls_dir /dgraph-tls --node_tls_server_name alpha3 --idx=3 --encryption_key_file /data/keys/enc_key
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node true --tls_client_name alpha3
+      --idx=3 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha4:
     image: dgraph/dgraph:latest
@@ -120,7 +123,8 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 104 --my=alpha4:7184 --zero=zero1:5180
-      --logtostderr -v=2 --node_tls_dir /dgraph-tls --node_tls_server_name alpha4 --idx=4 --encryption_key_file /data/keys/enc_key
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node true --tls_client_name alpha4
+      --idx=4 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha5:
     image: dgraph/dgraph:latest
@@ -151,7 +155,8 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 105 --my=alpha5:7185 --zero=zero1:5180
-      --logtostderr -v=2 --node_tls_dir /dgraph-tls --node_tls_server_name alpha5 --idx=5 --encryption_key_file /data/keys/enc_key
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node true --tls_client_name alpha5
+      --idx=5 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha6:
     image: dgraph/dgraph:latest
@@ -182,14 +187,9 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha -o 106 --my=alpha6:7186 --zero=zero1:5180
-      --logtostderr -v=2 --node_tls_dir /dgraph-tls --node_tls_server_name alpha6 --idx=6 --encryption_key_file /data/keys/enc_key
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node true --tls_client_name alpha6
+      --idx=6 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-  ratel:
-    image: dgraph/dgraph:latest
-    container_name: ratel
-    ports:
-    - 8000:8000
-    command: dgraph-ratel
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
@@ -208,6 +208,6 @@ services:
       source: ../tls/zero1
       target: /dgraph-tls
       read_only: true
-    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --node_tls_dir /dgraph-tls --node_tls_server_name zero1 --logtostderr
+    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --tls_dir /dgraph-tls --tls_enable_inter_node true --tls_client_name zero1 --logtostderr
       -v=2 --bindall
 volumes: {}
