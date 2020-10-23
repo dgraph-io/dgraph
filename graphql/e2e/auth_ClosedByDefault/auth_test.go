@@ -19,13 +19,11 @@ package auth
 import (
 	"io/ioutil"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -49,6 +47,18 @@ type TestCase struct {
 	closedByDefault bool
 }
 
+type UserSecret struct {
+	Id      string `json:"id,omitempty"`
+	ASecret string `json:"aSecret,omitempty"`
+	OwnedBy string `json:"ownedBy,omitempty"`
+}
+
+type Todo struct {
+	Id    string `json:"id,omitempty"`
+	Text  string `json:"text,omitempty"`
+	Owner string `json:"owner,omitempty"`
+}
+
 func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 	testCases := []TestCase{{
 		name: "Missing JWT - type with auth directive",
@@ -62,29 +72,11 @@ func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 	        	}`,
 		user:   "user1",
 		result: `{"addUserSecret":{"usersecret":[{"aSecret":"secret1"}]}}`,
-		variables: map[string]interface{}{"user": &common.UserSecret{
+		variables: map[string]interface{}{"user": &UserSecret{
 			ASecret: "secret1",
 			OwnedBy: "user1",
 		}},
 	},
-		{
-			name: "Invalid JWT - type with auth directive",
-			query: `
-	          	mutation addUser($user: AddUserSecretInput!) {
-		        	addUserSecret(input: [$user]) {
-				      userSecret {
-					    aSecret
-				      }
-			       }
-	        	}`,
-			user:   "user1",
-			result: `{"addUserSecret":{"usersecret":[{"aSecret":"secret1"}]}}`,
-			variables: map[string]interface{}{"user": &common.UserSecret{
-				ASecret: "secret1",
-				OwnedBy: "user1",
-			}},
-		},
-
 		{
 			result: `{"addTodo":{"Todo":[]}}`,
 			name:   "Missing JWT - type without auth directive",
@@ -97,91 +89,27 @@ func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 				     }
 			      }
 		       } `,
-			variables: map[string]interface{}{"Todo": &common.Todo{
+			variables: map[string]interface{}{"Todo": &Todo{
 				Text:  "Hi Dgrap team!!",
 				Owner: "Alice",
 			}},
 		},
-		{
-			result: `{"addTodo":{"Todo":[]}}`,
-			name:   "Invalid JWT - type without auth directive",
-			query: `
-		       mutation addTodo($Todo: AddTodoInput!) {
-			      addTodo(input: [$Todo]) {
-				     todo {
-					   text
-                       owner
-				     }
-			      }
-		       } `,
-			variables: map[string]interface{}{"Todo": &common.Todo{
-				Text:  "Hi Dgrap team!!",
-				Owner: "Alice",
-			}},
-		}}
+	}
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
 			Query:     tcase.query,
 			Variables: tcase.variables,
 		}
-		testMissingJWT := strings.HasPrefix(tcase.name, "Missing JWT")
-		testInvalidKey := strings.HasPrefix(tcase.name, "Invalid JWT")
-		if testInvalidKey {
-			getUserParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
-			jwtVar := getUserParams.Headers.Get(metaInfo.Header)
-
-			// Create a invalid JWT signature.
-			jwtVar = jwtVar + "A"
-			getUserParams.Headers.Set(metaInfo.Header, jwtVar)
-		} else if !testMissingJWT {
-			getUserParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
-		}
-
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Equal(t, len(gqlResponse.Errors), 1)
-		if testMissingJWT {
-			require.Contains(t, gqlResponse.Errors[0].Error(),
-				"Jwt is required when ClosedByDefault flag is true")
-		} else if testInvalidKey {
-			require.Contains(t, gqlResponse.Errors[0].Error(),
-				"unable to parse jwt token:token signature is invalid")
-
-		}
+		require.Contains(t, gqlResponse.Errors[0].Error(),
+			"Jwt is required when ClosedByDefault flag is true")
 	}
 }
 
 func TestAuthRulesQueryWithClosedByDefaultAFlag(t *testing.T) {
 	testCases := []TestCase{
-		{name: "Missing JWT - Query auth field without JWT Token",
-			query: `
-			query {
-				queryMovie {
-					content
-				}
-			}`,
-			result: `{"queryMovie":[]}`,
-		},
-		{name: "Missing JWT - Query empty auth field without JWT Token",
-			query: `
-			query {
-				queryReview {
-					comment
-				}
-			}`,
-			result: `{"queryReview":[]}`,
-		},
-		{name: "Invalid JWT - Query auth field with invalid JWT Token",
-			query: `
-			query {
-				queryProject {
-					name
-				}
-			}`,
-			user:   "user1",
-			role:   "ADMIN",
-			result: `{"queryProject":[]}`,
-		},
 		{name: "Missing JWT - type with auth field",
 			query: `
 			query {
@@ -204,47 +132,15 @@ func TestAuthRulesQueryWithClosedByDefaultAFlag(t *testing.T) {
 			role:   "ADMIN",
 			result: `{"queryTodo":[]}`,
 		},
-		{name: "Invalid JWT - non auth type with invalid JWT Token",
-			query: `
-			query {
-				queryTodo {
-					owner
-				}
-			}`,
-			user:   "user1",
-			role:   "ADMIN",
-			result: `{"queryTodo":[]}`,
-		},
 	}
 
 	for _, tcase := range testCases {
 		queryParams := &common.GraphQLParams{
 			Query: tcase.query,
 		}
-		testMissingJWT := strings.HasPrefix(tcase.name, "Missing JWT")
-		testInvalidKey := strings.HasPrefix(tcase.name, "Invalid JWT")
-		if testInvalidKey {
-			queryParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
-			jwtVar := queryParams.Headers.Get(metaInfo.Header)
-
-			// Create a invalid JWT signature.
-			jwtVar = jwtVar + "A"
-			queryParams.Headers.Set(metaInfo.Header, jwtVar)
-		} else if (tcase.user != "" || tcase.role != "") && (!testMissingJWT) {
-			queryParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
-		}
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
-		if testMissingJWT {
-			require.Contains(t, gqlResponse.Errors[0].Error(),
-				"Jwt is required when ClosedByDefault flag is true")
-		} else if testInvalidKey {
-			require.Contains(t, gqlResponse.Errors[0].Error(),
-				"unable to parse jwt token:token signature is invalid")
-
-		}
-		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
-			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
-		}
+		require.Contains(t, gqlResponse.Errors[0].Error(),
+			"Jwt is required when ClosedByDefault flag is true")
 	}
 }
 
