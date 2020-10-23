@@ -342,11 +342,11 @@ func TestJWTExpiry(t *testing.T) {
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
 // when it also needs to write in auth.
-func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, ClosedByDefault bool) {
+func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, closedByDefault bool) {
 	var b []byte
 	var err error
 
-	if ClosedByDefault {
+	if closedByDefault {
 		b, err = ioutil.ReadFile("auth_ClosedByDefault_query_test.yaml")
 	} else {
 		b, err = ioutil.ReadFile("auth_query_test.yaml")
@@ -649,11 +649,11 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta)
 // We don't need to test the json mutations that are created, because those are the same
 // as in add_mutation_test.yaml.  What we need to test is the processing around if
 // new nodes are checked properly - the query generated to check them, and the post-processing.
-func mutationAdd(t *testing.T, sch string, authMeta *testutil.AuthMeta, ClosedByDefault bool) {
+func mutationAdd(t *testing.T, sch string, authMeta *testutil.AuthMeta, closedByDefault bool) {
 	var b []byte
 	var err error
 
-	if ClosedByDefault {
+	if closedByDefault {
 		b, err = ioutil.ReadFile("auth_ClosedByDefault_add_test.yaml")
 	} else {
 		b, err = ioutil.ReadFile("auth_add_test.yaml")
@@ -667,7 +667,7 @@ func mutationAdd(t *testing.T, sch string, authMeta *testutil.AuthMeta, ClosedBy
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			checkAddUpdateCase(t, gqlSchema, tcase, NewAddRewriter, authMeta, ClosedByDefault)
+			checkAddUpdateCase(t, gqlSchema, tcase, NewAddRewriter, authMeta)
 		})
 	}
 }
@@ -690,7 +690,7 @@ func mutationUpdate(t *testing.T, sch string, authMeta *testutil.AuthMeta, close
 	gqlSchema := test.LoadSchemaFromString(t, sch)
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			checkAddUpdateCase(t, gqlSchema, tcase, NewUpdateRewriter, authMeta, closedyDefault)
+			checkAddUpdateCase(t, gqlSchema, tcase, NewUpdateRewriter, authMeta)
 		})
 	}
 }
@@ -700,7 +700,7 @@ func checkAddUpdateCase(
 	gqlSchema schema.Schema,
 	tcase AuthQueryRewritingCase,
 	rewriter func() MutationRewriter,
-	authMeta *testutil.AuthMeta, ClosedByDefault bool) {
+	authMeta *testutil.AuthMeta) {
 	// -- Arrange --
 	var vars map[string]interface{}
 	if tcase.Variables != "" {

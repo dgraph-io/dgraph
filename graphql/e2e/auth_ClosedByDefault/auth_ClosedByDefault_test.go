@@ -14,49 +14,28 @@
  * limitations under the License.
  */
 
-package auth
+package auth_ClosedByDefault
 
 import (
-	"io/ioutil"
-	"os"
-	"testing"
-
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	"io/ioutil"
+	"os"
+	"testing"
 )
 
 const (
 	graphqlURL = "http://localhost:8180/graphql"
 )
 
-var (
-	metaInfo *testutil.AuthMeta
-)
-
 type TestCase struct {
-	user            string
-	role            string
-	result          string
-	name            string
-	filter          map[string]interface{}
-	variables       map[string]interface{}
-	query           string
-	closedByDefault bool
-}
-
-type UserSecret struct {
-	Id      string `json:"id,omitempty"`
-	ASecret string `json:"aSecret,omitempty"`
-	OwnedBy string `json:"ownedBy,omitempty"`
-}
-
-type Todo struct {
-	Id    string `json:"id,omitempty"`
-	Text  string `json:"text,omitempty"`
-	Owner string `json:"owner,omitempty"`
+	name      string
+	query     string
+	variables map[string]interface{}
+	result    string
 }
 
 func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
@@ -70,16 +49,14 @@ func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 				      }
 			       }
 	        	}`,
-		user:   "user1",
-		result: `{"addUserSecret":{"usersecret":[{"aSecret":"secret1"}]}}`,
-		variables: map[string]interface{}{"user": &UserSecret{
+		variables: map[string]interface{}{"user": &common.UserSecret{
 			ASecret: "secret1",
 			OwnedBy: "user1",
 		}},
+		result: `{"addUserSecret":null}`,
 	},
 		{
-			result: `{"addTodo":{"Todo":[]}}`,
-			name:   "Missing JWT - type without auth directive",
+			name: "Missing JWT - type without auth directive",
 			query: `
 		       mutation addTodo($Todo: AddTodoInput!) {
 			      addTodo(input: [$Todo]) {
@@ -89,10 +66,11 @@ func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 				     }
 			      }
 		       } `,
-			variables: map[string]interface{}{"Todo": &Todo{
+			variables: map[string]interface{}{"Todo": &common.Todo{
 				Text:  "Hi Dgrap team!!",
 				Owner: "Alice",
 			}},
+			result: `{"addTodo":null}`,
 		},
 	}
 
@@ -105,6 +83,7 @@ func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
 			"Jwt is required when ClosedByDefault flag is true")
+		require.Equal(t, tcase.result, string(gqlResponse.Data))
 	}
 }
 
@@ -117,8 +96,6 @@ func TestAuthRulesQueryWithClosedByDefaultAFlag(t *testing.T) {
 					name
 				}
 			}`,
-			user:   "user1",
-			role:   "ADMIN",
 			result: `{"queryProject":[]}`,
 		},
 		{name: "Missing JWT - type without auth field",
@@ -128,8 +105,6 @@ func TestAuthRulesQueryWithClosedByDefaultAFlag(t *testing.T) {
 					owner
 				}
 			}`,
-			user:   "user1",
-			role:   "ADMIN",
 			result: `{"queryTodo":[]}`,
 		},
 	}
@@ -139,8 +114,10 @@ func TestAuthRulesQueryWithClosedByDefaultAFlag(t *testing.T) {
 			Query: tcase.query,
 		}
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
 			"Jwt is required when ClosedByDefault flag is true")
+		require.Equal(t, tcase.result, string(gqlResponse.Data))
 	}
 }
 
@@ -161,15 +138,6 @@ func TestMain(m *testing.M) {
 	authSchema, err := testutil.AppendAuthInfo(schema, algo, "../auth/sample_public_key.pem", true)
 	if err != nil {
 		panic(err)
-	}
-
-	authMeta := testutil.SetAuthMeta(string(authSchema))
-	metaInfo = &testutil.AuthMeta{
-		PublicKey:      authMeta.VerificationKey,
-		Namespace:      authMeta.Namespace,
-		Algo:           authMeta.Algo,
-		Header:         authMeta.Header,
-		PrivateKeyPath: "../auth/sample_private_key.pem",
 	}
 
 	common.BootstrapServer(authSchema, data)
