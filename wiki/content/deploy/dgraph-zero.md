@@ -229,52 +229,51 @@ nodes returned from the `/state` endpoint:
 }
 ```
 
-This JSON provides information that includes the following:
+This JSON provides information that includes the following, with node members
+shown with their node name and HTTP port number:
 
-- Group 1
-  - Members (HTTP port number is shown after each node name):
+- Group 1 members:
     - alpha2:7082, id: 1, leader
     - alpha1:7080, id: 2
     - alpha3:7083, id: 3
+- Group 0 members (Dgraph Zero nodes)
     - zero1:5080, id: 1, leader
     - zero2:5082, id: 2
     - zero3:5083, id: 3
+- maxLeaseId
+    - The current maximum lease of UIDs used for blank node UID assignment.
+    - This increments in batches of 10,000 IDs. Once the maximum lease is
+      reached, another 10,000 IDs are leased. In the event that the Zero
+      leader is lost, the new leader starts a new lease from
+      `maxLeaseId`+1. Any UIDs lost between these leases will never be used
+      for blank-node UID assignment.
+    - An admin can use the Zero endpoint HTTP GET `/assign?what=uids&num=1000` to
+      reserve a range of UIDs (in this case, 1000) to use externally. Zero will
+      **never** use these UIDs for blank node UID assignment, so the user can
+      use the range to assign UIDs manually to their own data sets.
+- maxTxnTs
+    - The current maximum lease of transaction timestamps used to hand out
+      start timestamps and commit timestamps. This increments in batches of
+      10,000 IDs. After the max lease is reached, another 10,000 IDs are
+      leased. If the Zero leader is lost, then the new leader starts a new
+      lease from `maxTxnTs`+1 . Any lost transaction IDs between these
+      leases will never be used.
+    - An admin can use the Zero endpoint HTTP GET
+      `/assign?what=timestamps&num=1000` to increase the current transaction
+      timestamp (in this case, by 1000). This is mainly useful in
+      special-case scenarios; for example, using an existing `-p directory` to
+      create a fresh cluster to be able to query the latest data in the DB.
+- maxRaftId
+    - The number of Zeros available to serve as a leader node. Used by the
+      [RAFT](/design-concepts/raft/) consensus algorithm.
+- CID
+    - This is a unique UUID representing the *cluster-ID* for this cluster. It
+      is generated during the initial DB startup and is retained across
+      restarts.
 - Enterprise license
     - Enabled
     - maxNodes: unlimited
     - License expiration, shown in seconds since the Unix epoch.
-- Other data:
-    - maxTxnTs
-        - The current maximum lease of transaction timestamps used to hand out
-          start timestamps and commit timestamps. This increments in batches of
-          10,000 IDs. After the max lease is reached, another 10,000 IDs are
-          leased. If the Zero leader is lost, then the new leader starts a new
-          lease from `maxTxnTs`+1 . Any lost transaction IDs between these
-          leases will never be used.
-        - An admin can use the Zero endpoint HTTP GET
-          `/assign?what=timestamps&num=1000` to increase the current transaction
-          timestamp (in this case, by 1000). This is mainly useful in
-          special-case scenarios; for example, using an existing `-p directory`
-          to create a fresh cluster to be able to query the latest data in the
-          DB.
-    - maxRaftId
-        - The number of Zeros available to serve as a leader node. Used by the
-          [RAFT](/design-concepts/raft/) consensus algorithm.
-    - maxLeaseId
-        - The current maximum lease of UIDs used for blank node UID assignment.
-        - This increments in batches of 10,000 IDs. Once the maximum lease is
-          reached, another 10,000 IDs are leased. In the event that the Zero
-          leader is lost, the new leader starts a new lease from
-          `maxLeaseId`+1. Any UIDs lost between these leases will never be used
-          for blank-node UID assignment.
-        - An admin can use the Zero endpoint HTTP GET `/assign?what=uids&num=1000` to
-          reserve a range of UIDs (in this case, 1000) to use externally. Zero will NEVER
-          use these UIDs for blank node UID assignment, so the user can use the range
-          to assign UIDs manually to their own data sets.
-    - CID
-        - This is a unique UUID representing the *cluster-ID* for this cluster. It is generated
-          during the initial DB startup and is retained across restarts.
-
 
 {{% notice "note" %}}
 The terms "tablet", "predicate", and "edge" are currently synonymous. In future,
