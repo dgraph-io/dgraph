@@ -358,7 +358,6 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, Close
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 	testRewriter := NewQueryRewriter()
 	gqlSchema := test.LoadSchemaFromString(t, sch)
-	publicKeyTemp := authMeta.PublicKey
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -378,29 +377,15 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, Close
 
 			ctx := context.Background()
 			if !strings.HasPrefix(tcase.Name, "Query with missing jwt token") {
-				if strings.HasPrefix(tcase.Name, "Invalid JWT") {
-					authMeta.PublicKey = "invalidkey"
-				}
 				ctx, err = authMeta.AddClaimsToContext(ctx)
 				require.NoError(t, err)
-				authMeta.PublicKey = publicKeyTemp
-
 			}
 
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 
-			if ClosedByDefault {
-				if strings.HasPrefix(tcase.Name, "Query with missing jwt token") {
-					require.Equal(t, err.Error(), "Jwt is required when ClosedByDefault flag is true")
-					require.Nil(t, dgQuery)
-				} else if strings.HasPrefix(tcase.Name, "Invalid JWT") {
-					require.Equal(t, err.Error(), "unable to parse jwt token:token signature is invalid")
-					require.Nil(t, dgQuery)
-				} else {
-					require.Nil(t, err)
-					require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
-				}
-
+			if tcase.Error != nil {
+				require.Equal(t, err.Error(), tcase.Error.Error())
+				require.Nil(t, dgQuery)
 			} else {
 				require.Nil(t, err)
 				require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
@@ -723,7 +708,6 @@ func checkAddUpdateCase(
 		require.NoError(t, err)
 	}
 
-	publicKeyTemp := authMeta.PublicKey
 	op, err := gqlSchema.Operation(
 		&schema.Request{
 			Query:     tcase.GQLQuery,
@@ -740,13 +724,8 @@ func checkAddUpdateCase(
 
 	ctx := context.Background()
 	if !strings.HasPrefix(tcase.Name, "Query with missing jwt token") {
-		if strings.HasPrefix(tcase.Name, "Invalid JWT") {
-			authMeta.PublicKey = "invalidkey"
-		}
 		ctx, err = authMeta.AddClaimsToContext(ctx)
 		require.NoError(t, err)
-		authMeta.PublicKey = publicKeyTemp
-
 	}
 	length := 1
 	upsertQuery := []string{tcase.DGQuery}
@@ -775,11 +754,7 @@ func checkAddUpdateCase(
 	resolved, _ := resolver.Resolve(ctx, mut)
 	// -- Assert --
 	// most cases are built into the authExecutor
-	if ClosedByDefault {
-		if strings.HasPrefix(tcase.Name, "Query with missing jwt token") || strings.HasPrefix(tcase.Name, "Invalid JWT") {
-			require.Equal(t, resolved.Err.Error(), tcase.Error.Error())
-		}
-	} else if tcase.Error != nil {
+	if tcase.Error != nil {
 		require.Equal(t, tcase.Error.Error(), resolved.Err.Error())
 	}
 }

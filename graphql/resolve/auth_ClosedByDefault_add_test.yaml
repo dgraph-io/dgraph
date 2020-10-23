@@ -1,4 +1,4 @@
-- name: "Query with missing jwt token - Add with top level not RBAC false."
+- name: "Query with missing jwt token - Type with Auth"
   gqlquery: |
     mutation addComplexLog($log: AddComplexLogInput!) {
       addComplexLog(input: [$log]) {
@@ -41,23 +41,3 @@
     }
   error:
     { "message": "mutation failed because authorization failed because Jwt is required when ClosedByDefault flag is true"}
-
-- name: "Invalid JWT - Type without Auth"
-  gqlquery: |
-    mutation addTodo($todo: AddTodoInput!) {
-      addTodo(input: [$todo]) {
-        todo {
-          id
-          owner
-          text
-        }
-      }
-    }
-  variables: |
-    { "todo":
-      { "owner": "Alice",
-        "text":  "Hi Graphql"
-      }
-    }
-  error:
-    { "message": "mutation failed because authorization failed because unable to parse jwt token:token signature is invalid"}

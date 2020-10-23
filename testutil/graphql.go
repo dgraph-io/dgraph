@@ -147,13 +147,12 @@ func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
 }
 
 type AuthMeta struct {
-	PublicKey       string
-	Namespace       string
-	Algo            string
-	Header          string
-	AuthVars        map[string]interface{}
-	PrivateKeyPath  string
-	closedByDefault bool
+	PublicKey      string
+	Namespace      string
+	Algo           string
+	Header         string
+	AuthVars       map[string]interface{}
+	PrivateKeyPath string
 }
 
 func (a *AuthMeta) GetSignedToken(privateKeyFile string,
@@ -205,10 +204,10 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 	return metadata.NewIncomingContext(ctx, md), nil
 }
 
-func AppendAuthInfo(schema []byte, algo, publicKeyFile string, ClosedByDefault bool) ([]byte, error) {
+func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault bool) ([]byte, error) {
 	if algo == "HS256" {
 		var authInfo string
-		if ClosedByDefault {
+		if closedByDefault {
 			authInfo = `# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"],"ClosedByDefault":true}`
 		} else {
 			authInfo = `# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}`
