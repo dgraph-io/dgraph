@@ -24,5 +24,11 @@ startLevel = 2
 # set by build script: title, baseurl
 title = "Dgraph Documentation"
 
+[[menu.main]]
+    url = "/docs/slash-graphql/introduction"
+    name = "Slash GraphQL"
+    identifier = "slash-graphql"
+    weight = 1
+
 [params]
 discourse = "https://discuss.dgraph.io/"
