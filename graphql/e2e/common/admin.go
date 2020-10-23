@@ -755,7 +755,7 @@ func adminState(t *testing.T) {
 }
 
 func testCors(t *testing.T) {
-	t.Run("testing normal retrival", func(t *testing.T) {
+	t.Run("testing normal retrieval", func(t *testing.T) {
 		queryParams := &GraphQLParams{
 			Query: `query{
                 getAllowedCORSOrigins{
@@ -793,7 +793,7 @@ func testCors(t *testing.T) {
           }`, string(gqlResponse.Data))
 	})
 
-	t.Run("retrive mutated cors", func(t *testing.T) {
+	t.Run("retrieve mutated cors", func(t *testing.T) {
 		queryParams := &GraphQLParams{
 			Query: `query{
                 getAllowedCORSOrigins{
