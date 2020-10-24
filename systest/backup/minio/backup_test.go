@@ -117,7 +117,7 @@ func TestBackupMinio(t *testing.T) {
 	preds := []string{"dgraph.graphql.schema", "dgraph.cors", "dgraph.graphql.xid", "dgraph.type", "movie",
 		"dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at", "dgraph.graphql.p_query",
 		"dgraph.graphql.p_sha256hash"}
-	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.history"}
+	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.history", "dgraph.graphql.persisted_query"}
 	testutil.CheckSchema(t, preds, types)
 
 	checks := []struct {
