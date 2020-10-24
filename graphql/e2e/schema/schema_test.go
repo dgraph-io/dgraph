@@ -231,6 +231,16 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
             "predicate": "dgraph.graphql.schema_history",
             "type": "string"
 		},
+		{
+			"predicate":"dgraph.graphql.p_query",
+			"type":"string"
+		},
+		{
+			"predicate":"dgraph.graphql.p_sha256hash",
+			"type":"string",
+			"index":true,
+			"tokenizer":["exact"]
+		},
         {
             "predicate": "dgraph.graphql.xid",
             "type": "string",
@@ -278,7 +288,18 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
                 }
             ],
             "name": "dgraph.graphql.history"
-        }
+		},
+		{
+			"fields": [
+				{
+					"name": "dgraph.graphql.p_query"
+				},
+				{
+					"name": "dgraph.graphql.p_sha256hash"
+				}
+			],
+			"name": "dgraph.graphql.persisted_query"
+		},
     ]
 }`, tcases[lastSuccessTcaseIdx].dgraphSchema)
 	finalGraphQLSchema := tcases[lastSuccessTcaseIdx].graphQLSchema
