@@ -692,8 +692,6 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.p_query",
 			ValueType: pb.Posting_STRING,
-			Directive: pb.SchemaUpdate_INDEX,
-			Tokenizer: []string{"exact"},
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.p_sha256hash",
 			ValueType: pb.Posting_STRING,

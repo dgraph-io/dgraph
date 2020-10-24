@@ -288,7 +288,6 @@ const (
 		config: Config
 		getAllowedCORSOrigins: Cors
 		querySchemaHistory(first: Int, offset: Int): [SchemaHistory]
-		queryPersistedQuery: PersistedQuery
 		` + adminQueries + `
 	}
 

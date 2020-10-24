@@ -222,8 +222,8 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res = gh.resolver.Resolve(ctx, gqlReq)
-
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
+	return
 }
 
 func (gh *graphqlHandler) isValid() bool {
@@ -260,10 +260,12 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 		gqlReq.Query = query.Get("query")
 		gqlReq.OperationName = query.Get("operationName")
 		if extensions, ok := query["extensions"]; ok {
-			d := json.NewDecoder(strings.NewReader(extensions[0]))
-			d.UseNumber()
-			if err := d.Decode(&gqlReq.Extensions); err != nil {
-				return nil, errors.Wrap(err, "Not a valid GraphQL request body")
+			if len(extensions) > 0 {
+				d := json.NewDecoder(strings.NewReader(extensions[0]))
+				d.UseNumber()
+				if err := d.Decode(&gqlReq.Extensions); err != nil {
+					return nil, errors.Wrap(err, "Not a valid GraphQL request body")
+				}
 			}
 		}
 		variables, ok := query["variables"]

@@ -32,11 +32,13 @@ type Request struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
-	Extensions    struct {
-		PersistedQuery PersistedQuery
-	}
+	Extensions    RequestExtensions
+	Header        http.Header
+}
 
-	Header http.Header
+// RequestExtensions represents extensions recieved in requests
+type RequestExtensions struct {
+	PersistedQuery PersistedQuery
 }
 
 // PersistedQuery represents the query struct received from clients like Apollo
