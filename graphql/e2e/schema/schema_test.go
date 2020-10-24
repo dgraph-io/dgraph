@@ -220,6 +220,16 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
       		"upsert": true
 		},
 		{
+			"predicate":"dgraph.graphql.p_query",
+			"type":"string"
+		},
+		{
+			"predicate":"dgraph.graphql.p_sha256hash",
+			"type":"string",
+			"index":true,
+			"tokenizer":["exact"]
+		},
+		{
             "predicate": "dgraph.graphql.schema",
             "type": "string"
 		},
@@ -230,16 +240,6 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
         {
             "predicate": "dgraph.graphql.schema_history",
             "type": "string"
-		},
-		{
-			"predicate":"dgraph.graphql.p_query",
-			"type":"string"
-		},
-		{
-			"predicate":"dgraph.graphql.p_sha256hash",
-			"type":"string",
-			"index":true,
-			"tokenizer":["exact"]
 		},
         {
             "predicate": "dgraph.graphql.xid",
