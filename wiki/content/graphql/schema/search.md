@@ -301,3 +301,139 @@ query {
 ```
 
 which is helpful for example if the enums are something like product codes where regular expressions can match a number of values. 
+
+### Geolocation
+
+Geolocation supports four filter options: `near`, `within`, `contains` and `intersects`.
+
+Take for example a `Hotel` type that has a `location` and an `area`:
+
+```graphql
+type Hotel {
+  id: ID!
+  name: String!
+  location: Point
+  area: Polygon
+}
+```
+
+#### near
+
+The `near` function matches all entities where the location given by `predicate` is within a distance `meters` from a geojson coordinate `[lat, long]`.
+
+```graphql
+queryHotel(filter: {
+    location: { 
+        near: {
+            coordinate: {
+                latitute: 37.771935, 
+                longitude: -122.469829
+            }, 
+            distance: 1000
+        }
+    }
+}) {
+  name
+}
+```
+
+#### within
+
+The `within` function matches all entities where the location given by `predicate` lies within a polygon specified by the geojson `coordinates` array.
+
+{{% notice "tip" %}}
+The `within` query lets you search for all geo entities (`point`, `polygon`) within a polygon, so they are generated for all types.
+{{% /notice %}}
+
+```graphql
+queryHotel(filter: {
+    location: { 
+        within: {
+            polygon: {
+                coordinates: [{
+								points: [{
+									latitude: 11.11,
+									longitude: 22.22
+								}, {
+									latitude: 15.15,
+									longitude: 16.16
+								}, {
+									latitude: 20.20,
+									longitude: 21.21
+								},
+ 								{
+									latitude: 11.11,
+									longitude: 22.22
+								}]
+							}],
+            }
+        }
+    }
+}) {
+  name
+}
+```
+
+#### contains
+
+The `contains` function matches all entities where the polygon describing a location given by `predicate` contains a geojson coordinate `[long, lat]` or a given geojson `polygon`.
+
+{{% notice "tip" %}}
+The `ContainsFilter` is only generated for `Polygon` and `MultiPolygon`.
+{{% /notice %}}
+
+```graphql
+queryHotel(filter: {
+    area: { 
+        contains: {
+            point: {
+                coordinates: [{
+                    latitute: 37.771935, 
+                    longitude: -122.469829
+                }],
+            }
+        }
+    }
+}) {
+  name
+}
+
+```
+
+#### intersects 
+
+The `intersects ` function matches all entities where the polygon describing a location given by `predicate` intersects a given geojson `polygon`.
+
+{{% notice "tip" %}}
+The `IntersectsFilter` is only generated for `Polygon` and `MultiPolygon`.
+{{% /notice %}}
+
+```graphql
+queryHotel(filter: {
+    area: { 
+        intersects: {
+            polygon: {
+                coordinates: [{
+								points: [{
+									latitude: 11.11,
+									longitude: 22.22
+								}, {
+									latitude: 15.15,
+									longitude: 16.16
+								}, {
+									latitude: 20.20,
+									longitude: 21.21
+								},
+ 								{
+									latitude: 11.11,
+									longitude: 22.22
+								}]
+							}],
+            }
+        }
+    }
+}) {
+  name
+}
+
+```

@@ -8,46 +8,10 @@ weight = 4
 
 In this article you'll learn how to use Geolocation queries in GraphQL when running a Dgraph database.
 
-## Custom scalars
-
-In Dgraph, a predicate which has geo-type can store data for a `Point`, a `Polygon` or a `MultiPolygon`. 
-
 {{% notice "note" %}}
-Because GraphQL is strongly typed, a field inside a `type` can only store one type of data.
+A predicate which has a geolocation type can store data for a `Point`, a `Polygon` or a `MultiPolygon`.
+See the <a href="{{< relref "graphql/schema/types.md#custom-scalars">}}">Types section</a> for more information.
 {{% /notice %}}
-
-### Point
-
-```graphql
-type Point {
-  Latitude: Float!
-  Longitude: Float!
-}
-```
-
-### PointList
-
-```graphql
-type PointList {
-  Points: [Point!]!
-}
-```
-
-### Polygon
-
-```graphql
-type Polygon {
-  Coordinates: [PointList!]!
-}
-```
-
-### MultiPolygon
-
-```graphql
-type MultiPolygon {
-  Coordinates: [Polygon!]!
-}
-```
 
 ## Geolocation example
 
@@ -134,91 +98,12 @@ input HotelFilter {
 }
 ```
 
+## Filters
 
-### near
+Geolocation supports four filter options:
+- `near`
+- `within`
+- `contains`
+- `intersects`
 
-The `near` function matches all entities where the location given by `predicate` is within a distance `meters` from a geojson coordinate `[long, lat]`.
-
-```graphql
-queryHotel(filter: {
-    location: { 
-        near: {
-            coordinate: {
-                latitute: 37.771935, 
-                longitude: -122.469829
-            }, 
-            distance: 1000
-        }
-    }
-}) {
-  name
-}
-```
-
-### within
-
-The `within` function matches all entities where the location given by `predicate` lies within a polygon specified by the geojson `coordinates` array.
-
-{{% notice "tip" %}}
-The `within` query lets you search for all geo entities (`point`, `polygon`) within a polygon, so they are generated for all types.
-{{% /notice %}}
-
-```graphql
-queryHotel(filter: {
-    location: { 
-        within: {
-            polygon: {
-                coordinates: [[[....]]],
-            }
-        }
-    }
-}) {
-  name
-}
-```
-
-### contains
-
-The `contains` function matches all entities where the polygon describing a location given by `predicate` contains a geojson coordinate `[long, lat]` or a given geojson `polygon`.
-
-{{% notice "tip" %}}
-The `ContainsFilter` is only generated for `Polygon` and `MultiPolygon`.
-{{% /notice %}}
-
-```graphql
-queryHotel(filter: {
-    area: { 
-        contains: {
-            point: {
-                coordinates: [],
-            }
-        }
-    }
-}) {
-  name
-}
-
-```
-
-### intersects 
-
-The `intersects ` function matches all entities where the polygon describing a location given by `predicate` intersects a given geojson `polygon`.
-
-{{% notice "tip" %}}
-The `IntersectsFilter` is only generated for `Polygon` and `MultiPolygon`.
-{{% /notice %}}
-
-```graphql
-queryHotel(filter: {
-    area: { 
-        intersects: {
-            polygon: {
-                coordinates: [[[...]]],
-            }
-        }
-    }
-}) {
-  name
-}
-
-```
+Check the <a href="{{< relref "graphql/schema/search.md#geolocation">}}">Search and Filtering</a> section for details and examples on how to use the Geolocation filters.
