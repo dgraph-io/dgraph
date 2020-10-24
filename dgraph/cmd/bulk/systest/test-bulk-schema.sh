@@ -204,6 +204,8 @@ EOF
       1 dgraph.graphql.schema
       1 dgraph.graphql.schema_created_at
       1 dgraph.graphql.schema_history
+      1 dgraph.graphql.p_query
+      1 dgraph.graphql.p_sha256hash
       1 dgraph.graphql.xid
       1 dgraph.password
       1 dgraph.rule.permission

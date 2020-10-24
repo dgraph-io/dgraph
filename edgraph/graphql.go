@@ -175,16 +175,26 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		return nil
 	}
 
-	queryForSHA := fmt.Sprintf(`query{
-			me(func: eq(dgraph.graphql.p_sha256hash, %s)){
-				dgraph.graphql.p_query
-			}
-		}`, sha256Hash)
+	queryForSHA := `query Me($sha: string){
+						me(func: eq(dgraph.graphql.p_sha256hash, $sha)){
+							dgraph.graphql.p_query
+						}
+					}`
+	variables := map[string]string{
+		"$sha": sha256Hash,
+	}
 	req := &api.Request{
 		Query:    queryForSHA,
+		Vars:     variables,
 		ReadOnly: true,
 	}
-	storedQuery, _ := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
+
+	storedQuery, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+
+	if err != nil {
+		glog.Errorf("Error while querying sha %s", sha256Hash)
+		return err
+	}
 
 	type shaQueryResponse struct {
 		Me []struct {
@@ -193,8 +203,10 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 	}
 
 	shaQueryRes := &shaQueryResponse{}
-	if err := json.Unmarshal(storedQuery.Json, shaQueryRes); err != nil {
-		return err
+	if len(storedQuery.Json) > 0 {
+		if err := json.Unmarshal(storedQuery.Json, shaQueryRes); err != nil {
+			return err
+		}
 	}
 
 	if len(shaQueryRes.Me) == 0 {
