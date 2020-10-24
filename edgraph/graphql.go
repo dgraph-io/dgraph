@@ -171,7 +171,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 	query := gqlReq.Query
 	sha256Hash := gqlReq.Extensions.PersistedQuery.Sha256Hash
 
-	if len(sha256Hash) == 0 {
+	if sha256Hash == "" {
 		return nil
 	}
 
@@ -210,10 +210,12 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 	}
 
 	if len(shaQueryRes.Me) == 0 {
-		if len(query) == 0 {
+		if query == "" {
 			return errors.New("PersistedQueryNotFound")
 		}
-		if !hashMatches(query, sha256Hash) {
+		if match, err := hashMatches(query, sha256Hash); err != nil {
+			return err
+		} else if !match {
 			return errors.New("provided sha does not match query")
 		}
 
@@ -261,9 +263,12 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 
 }
 
-func hashMatches(query, sha256Hash string) bool {
+func hashMatches(query, sha256Hash string) (bool, error) {
 	hasher := sha256.New()
-	hasher.Write([]byte(query))
+	_, err := hasher.Write([]byte(query))
+	if err != nil {
+		return false, err
+	}
 	hashGenerated := hex.EncodeToString(hasher.Sum(nil))
-	return hashGenerated == sha256Hash
+	return hashGenerated == sha256Hash, nil
 }

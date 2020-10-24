@@ -223,7 +223,6 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	res = gh.resolver.Resolve(ctx, gqlReq)
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
-	return
 }
 
 func (gh *graphqlHandler) isValid() bool {

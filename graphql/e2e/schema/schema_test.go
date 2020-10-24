@@ -299,7 +299,7 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 				}
 			],
 			"name": "dgraph.graphql.persisted_query"
-		},
+		}
     ]
 }`, tcases[lastSuccessTcaseIdx].dgraphSchema)
 	finalGraphQLSchema := tcases[lastSuccessTcaseIdx].graphQLSchema
