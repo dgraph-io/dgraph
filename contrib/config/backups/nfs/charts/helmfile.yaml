@@ -1,3 +1,7 @@
+repositories:
+  - name: dgraph
+    url: https://charts.dgraph.io
+
 releases:
   {{- if eq (env "NFS_STRATEGY") "rook" }}
   - name: rook-nfs-operator
@@ -35,6 +39,9 @@ releases:
           - "{{`{{if eq .Event.Name \"prepare\"}}build{{else}}clean{{end}}`}}"
           - "{{`{{.Release.Chart}}`}}"
           - default
+    needs:
+      - rook-nfs-system/rook-nfs-operator
+    disableValidation: true
 
   - name: rook-nfs-storageclass
     ## NOTE: namespace must also be specified in
@@ -48,6 +55,7 @@ releases:
           path: {{ env "NFS_PATH" | default "share1" }}
           namespace: rook-nfs-system
           size: {{ env "NFS_SIZE" | default "32Gi" }}
+          claim: {{ env "NFS_CLAIM" | default "rook-nfs-pv-claim" }}
     hooks:
       - events:
           - prepare
@@ -58,3 +66,21 @@ releases:
           - "{{`{{.Release.Chart}}`}}"
           - default
   {{- end }}
+
+  - name: my-release
+    namespace: default
+    chart: dgraph/dgraph
+    values:
+      - ./dgraph_{{ env "NFS_TYPE" | default "static" }}_nfs.yaml
+      - backups:
+          ## NFS using statically assigned values with NFS_SERVER and NFS_PATH env vars
+          {{- if eq (env "NFS_TYPE") "static" }}
+          nfs:
+            server: {{ env "NFS_SERVER" }}
+            path: {{ env "NFS_PATH" }}
+            storage: {{ env "NFS_SIZE" | default "32Gi" }}
+          {{- else if eq (env "NFS_TYPE") "dynamic" }}
+          ## NFS dynamically allocated using NFS volume claim
+          volume:
+            claim: {{ env "NFS_CLAIM" }}
+          {{- end }}

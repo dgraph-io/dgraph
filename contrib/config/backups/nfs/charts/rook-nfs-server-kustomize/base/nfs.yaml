@@ -5,7 +5,7 @@ metadata:
   name: nfs-default-claim
 spec:
   accessModes:
-  - ReadWriteMany
+  - ReadWriteOnce
   resources:
     requests:
       storage: "{{ .Values.nfs.size }}"
