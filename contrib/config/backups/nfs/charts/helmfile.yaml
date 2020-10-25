@@ -1,11 +1,30 @@
 releases:
   {{- if eq (env "NFS_STRATEGY") "rook" }}
   - name: rook-nfs-operator
-    ## NOTE: namespace specified in rook-nfs-operator-kustomize/overlays/default
-    ##  value below is ignored and used for documentation purposes only
+    ## NOTE: namespace must also be specified in
+    ##  ./rook-nfs-operator-kustomize/overlays/default/kustomization.yaml
     namespace: rook-nfs-system
     ## temporary helm chart rendered by helmify
     chart: ./rook-nfs-operator
+    hooks:
+      - events:
+          - prepare
+          - cleanup
+        command: ./helmify.sh
+        args:
+          - "{{`{{if eq .Event.Name \"prepare\"}}build{{else}}clean{{end}}`}}"
+          - "{{`{{.Release.Chart}}`}}"
+          - default
+  - name: rook-nfs-server
+    ## NOTE: namespace must also be specified in
+    ##  ./rook-nfs-server-kustomize/overlays/default/kustomization.yaml
+    namespace: rook-nfs-system
+    ## temporary helm chart rendered by helmify
+    chart: ./rook-nfs-server
+    values:
+      - nfs:
+          size: {{ env "NFS_SIZE" | default "32Gi" }}
+          path: {{ env "NFS_PATH" | default "share1" }}
     hooks:
       - events:
           - prepare
