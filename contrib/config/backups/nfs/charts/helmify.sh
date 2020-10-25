@@ -39,7 +39,7 @@ EOF
 
 clean() {
   rm $chart/Chart.yaml
-  rm $chart/templates/*.yaml
+  rm $chart/templates/*.{yaml,txt}
 }
 
 case "$cmd" in

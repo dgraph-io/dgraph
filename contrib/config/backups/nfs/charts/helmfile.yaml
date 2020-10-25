@@ -15,6 +15,7 @@ releases:
           - "{{`{{if eq .Event.Name \"prepare\"}}build{{else}}clean{{end}}`}}"
           - "{{`{{.Release.Chart}}`}}"
           - default
+
   - name: rook-nfs-server
     ## NOTE: namespace must also be specified in
     ##  ./rook-nfs-server-kustomize/overlays/default/kustomization.yaml
@@ -25,6 +26,28 @@ releases:
       - nfs:
           size: {{ env "NFS_SIZE" | default "32Gi" }}
           path: {{ env "NFS_PATH" | default "share1" }}
+    hooks:
+      - events:
+          - prepare
+          - cleanup
+        command: ./helmify.sh
+        args:
+          - "{{`{{if eq .Event.Name \"prepare\"}}build{{else}}clean{{end}}`}}"
+          - "{{`{{.Release.Chart}}`}}"
+          - default
+
+  - name: rook-nfs-storageclass
+    ## NOTE: namespace must also be specified in
+    ##  ./rook-nfs-storageclass-kustomize/overlays/default/kustomization.yaml
+    namespace: rook-nfs-system
+    ## temporary helm chart rendered by helmify
+    chart: ./rook-nfs-storageclass
+    values:
+      - nfs:
+          server: {{ env "NFS_SERVER" | default "rook-nfs" }}
+          path: {{ env "NFS_PATH" | default "share1" }}
+          namespace: rook-nfs-system
+          size: {{ env "NFS_SIZE" | default "32Gi" }}
     hooks:
       - events:
           - prepare
