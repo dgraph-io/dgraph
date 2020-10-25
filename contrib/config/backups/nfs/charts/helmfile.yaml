@@ -1,0 +1,48 @@
+repositories:
+  - name: dgraph
+    url: https://charts.dgraph.io
+  {{ if or (eq (env "NFS_STRATEGY") "ganesha") (and (eq (env "NFS_STRATEGY") "external") (eq (end "NFS_TYPE") "dynamic")) }}
+  - name: stable
+    url: https://kubernetes-charts.storage.googleapis.com
+  {{- end }}
+
+releases:
+  {{- if and (eq (env "NFS_STRATEGY") "external") (eq (end "NFS_TYPE") "dynamic") }}
+  - name: nfs-client
+    namespace: default
+    chart: stable/nfs-client-provisioner
+    values:
+      - nfs:
+          path: {{ env "NFS_PATH" }}
+          server: {{ env "NFS_SERVER" }}
+    ## TODO: Create PVC
+  {{- end }}
+
+  {{- if and (eq (env "NFS_STRATEGY") "ganesha") }}
+  - name: nfs-server
+    namespace: default
+    chart: stable/nfs-server-provisioner
+    values:
+      - persistence:
+          enabled: true
+          size: {{ env "NFS_ALLOCATION" | default "32Gi" }}
+    ## TODO: Create PVC
+  {{- end }}
+
+  - name: my-release
+    namespace: default
+    chart: dgraph/dgraph
+    values:
+      - ./dgraph_{{ env "NFS_TYPE" | default "static" }}.yaml
+      - backups:
+          ## NFS using statically assigned values with NFS_SERVER and NFS_PATH env vars
+          {{- if eq (env "NFS_TYPE") "static" }}
+          nfs:
+            server: {{ env "NFS_SERVER" }}
+            path: {{ env "NFS_PATH" }}
+            storage: {{ env "NFS_ALLOCATION" | default "32Gi" }}
+          {{- if eq (env "NFS_TYPE") "dynamic" }}
+          ## NFS dynamically allocated using NFS volume claim
+          volume:
+            claim: {{ env "NFS_CLAIM" }}
+          {{- end }}
