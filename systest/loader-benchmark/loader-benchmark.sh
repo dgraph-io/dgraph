@@ -37,10 +37,10 @@ Info "entering directory $SRCDIR"
 cd $SRCDIR
 
 Info "removing old data"
-DockerCompose down -v
+DockerCompose down -v --remove-orphans
 
 Info "bringing up zero container"
-DockerCompose up -d zero1
+DockerCompose up -d --remove-orphans zero1
 
 Info "waiting for zero to become leader"
 DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
@@ -56,7 +56,7 @@ EOF
 fi
 
 Info "bringing up alpha container"
-DockerCompose up -d dg1
+DockerCompose up -d --remove-orphans dg1
 
 Info "waiting for alpha to be ready"
 DockerCompose logs -f dg1 | grep -q -m1 "Server is ready"

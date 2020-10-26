@@ -6,51 +6,72 @@ weight = 8
     parent = "deploy"
 +++
 
-Dgraph Zero controls the Dgraph cluster. It automatically moves data between
-different Dgraph Alpha instances based on the size of the data served by each Alpha instance.
+Dgraph Zero controls the Dgraph cluster, and stores information about it. It
+automatically moves data between different Dgraph Alpha instances based on the
+size of the data served by each Alpha instance.
 
-It is mandatory to run at least one `dgraph zero` node before running any `dgraph alpha`.
-Options present for `dgraph zero` can be seen by running `dgraph zero --help`.
+Before you can run `dgraph alpha`, you must run at least one `dgraph zero` node.
+You can see the options available for `dgraph zero` by using the following command:
 
-* Zero stores information about the cluster.
-* `--replicas` is the option that controls the replication factor. (i.e. number of replicas per data shard, including the original shard)
-* When a new Alpha joins the cluster, it is assigned a group based on the replication factor. If the replication factor is 1 then each Alpha node will serve different group. If replication factor is 2 and you launch 4 Alphas, then first two Alphas would serve group 1 and next two machines would serve group 2.
-* Zero also monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
+```bash
+dgraph zero --help
+```
 
-Like Alpha, Zero also exposes HTTP on 6080 (+ any `--port_offset`). You can query (**GET** request) it
-to see useful information, like the following:
+The `--replicas` option controls the replication factor: the number
+of replicas per data shard, including the original shard. For consensus, the
+replication factor must be set to an odd number, and the following error will
+occur if it is set to an even number (for example, `2`):
 
-* `/state` Information about the nodes that are part of the cluster. Also contains information about
-size of predicates and groups they belong to.
-* `/assign?what=uids&num=100` This would allocate `num` uids and return a JSON map
-containing `startId` and `endId`, both inclusive. This id range can be safely assigned
-externally to new nodes during data ingestion.
-* `/assign?what=timestamps&num=100` This would request timestamps from Zero.
-This is useful to fast forward Zero state when starting from a postings
-directory, which already has commits higher than Zero's leased timestamp.
-* `/removeNode?id=3&group=2` If a replica goes down and can't be recovered, you
-can remove it and add a new node to the quorum. This endpoint can be used to
-remove a dead Zero or Dgraph Alpha node. To remove dead Zero nodes, pass
-`group=0` and the id of the Zero node.
+```nix
+ERROR: Number of replicas must be odd for consensus. Found: 2
+```
+
+When a new Alpha joins the cluster, it is assigned to a group based on the replication factor. If the replication factor is set to `1`, then each Alpha
+node will serve a different group. If the replication factor is set to `3` and
+you then launch six Alpha nodes, the first three Alpha nodes will serve group 1
+and next three nodes will serve group 2. Zero monitors the space occupied by predicates in each group and moves predicates between groups as-needed to
+rebalance the cluster.
+
+## Endpoints
+
+Like Alpha, Zero also exposes HTTP on port 6080 (plus any ports specified by
+`--port_offset`). You can query this port using a **GET** request to access the
+following endpoints:
+
+* `/state` returns information about the nodes that are part of the cluster. This
+includes information about the size of predicates and which groups they belong
+to.
+* `/assign?what=uids&num=100` allocates a range of UIDs specified
+by the `num` argument, and returns a JSON map containing the `startId` and
+ `endId` that defines the range of UIDs (inclusive). This UID range can be
+safely assigned externally to new nodes during data ingestion.
+* `/assign?what=timestamps&num=100` requests timestamps from Zero. This is
+useful to "fast forward" the state of the Zero node when starting from a
+postings directory that already has commits higher than Zero's leased timestamp.
+* `/removeNode?id=3&group=2` removes a dead Zero or Alpha node. When a replica
+node goes offline and can't be recovered, you can remove it and add a new node to th
+quorum. To remove dead Zero nodes, pass `group=0` and the id of the Zero node to
+this endpoint.
 
 {{% notice "note" %}}
-Before using the API ensure that the node is down and ensure that it doesn't come back up ever again.
-
-You should not use the same `idx` of a node that was removed earlier.
+Before using the API ensure that the node is down and ensure that it doesn't
+come back up ever again. Do not use the same `idx` of a node that was removed
+earlier.
 {{% /notice %}}
 
-* `/moveTablet?tablet=name&group=2` This endpoint can be used to move a tablet to a group. Zero
-already does shard rebalancing every 8 mins, this endpoint can be used to force move a tablet.
+* `/moveTablet?tablet=name&group=2` Moves a tablet to a group. Zero already
+rebalances shards every 8 mins, but this endpoint can be used to force move a
+tablet.
 
+You can also use the following **POST** endpoint on HTTP port 6080:
 
-These are the **POST** endpoints available:
+* `/enterpriseLicense` applies an enterprise license to the
+cluster by supplying it as part of the body.
 
-* `/enterpriseLicense` Use endpoint to apply an enterprise license to the cluster by supplying it
-as part of the body.
+### More About the /state Endpoint
 
-## More about /state endpoint
-
-The `/state` endpoint of Dgraph Zero returns a JSON document of the current group membership info:
+The `/state` endpoint of Dgraph Zero returns a JSON document of the current
+group membership info, which includes the following:
 
 - Instances which are part of the cluster.
 - Number of instances in Zero group and each Alpha groups.
@@ -62,121 +83,200 @@ The `/state` endpoint of Dgraph Zero returns a JSON document of the current grou
 - Max Leased UID.
 - CID (Cluster ID).
 
-Here’s an example of JSON returned from `/state` endpoint for a 6-node Dgraph cluster with three replicas:
+Here’s an example of JSON for a cluster with three Alpha nodes and three Zero
+nodes returned from the `/state` endpoint:
 
 ```json
 {
-  "counter": "15",
+  "counter": "22",
   "groups": {
     "1": {
       "members": {
         "1": {
           "id": "1",
           "groupId": 1,
-          "addr": "alpha1:7080",
+          "addr": "alpha2:7082",
           "leader": true,
-          "lastUpdate": "1576112366"
+          "amDead": false,
+          "lastUpdate": "1603350485",
+          "clusterInfoOnly": false,
+          "forceGroupId": false
         },
         "2": {
           "id": "2",
           "groupId": 1,
-          "addr": "alpha2:7080"
+          "addr": "alpha1:7080",
+          "leader": false,
+          "amDead": false,
+          "lastUpdate": "0",
+          "clusterInfoOnly": false,
+          "forceGroupId": false
         },
         "3": {
           "id": "3",
           "groupId": 1,
-          "addr": "alpha3:7080"
+          "addr": "alpha3:7083",
+          "leader": false,
+          "amDead": false,
+          "lastUpdate": "0",
+          "clusterInfoOnly": false,
+          "forceGroupId": false
         }
       },
       "tablets": {
-        "counter.val": {
+        "dgraph.cors": {
           "groupId": 1,
-          "predicate": "counter.val"
+          "predicate": "dgraph.cors",
+          "force": false,
+          "space": "0",
+          "remove": false,
+          "readOnly": false,
+          "moveTs": "0"
+        },
+        "dgraph.graphql.schema": {
+          "groupId": 1,
+          "predicate": "dgraph.graphql.schema",
+          "force": false,
+          "space": "0",
+          "remove": false,
+          "readOnly": false,
+          "moveTs": "0"
+        },
+        "dgraph.graphql.schema_created_at": {
+          "groupId": 1,
+          "predicate": "dgraph.graphql.schema_created_at",
+          "force": false,
+          "space": "0",
+          "remove": false,
+          "readOnly": false,
+          "moveTs": "0"
+        },
+        "dgraph.graphql.schema_history": {
+          "groupId": 1,
+          "predicate": "dgraph.graphql.schema_history",
+          "force": false,
+          "space": "0",
+          "remove": false,
+          "readOnly": false,
+          "moveTs": "0"
+        },
+        "dgraph.graphql.xid": {
+          "groupId": 1,
+          "predicate": "dgraph.graphql.xid",
+          "force": false,
+          "space": "0",
+          "remove": false,
+          "readOnly": false,
+          "moveTs": "0"
         },
         "dgraph.type": {
           "groupId": 1,
-          "predicate": "dgraph.type"
+          "predicate": "dgraph.type",
+          "force": false,
+          "space": "0",
+          "remove": false,
+          "readOnly": false,
+          "moveTs": "0"
         }
       },
-      "checksum": "1021598189643258447"
+      "snapshotTs": "22",
+      "checksum": "18099480229465877561"
     }
   },
   "zeros": {
     "1": {
       "id": "1",
+      "groupId": 0,
       "addr": "zero1:5080",
-      "leader": true
+      "leader": true,
+      "amDead": false,
+      "lastUpdate": "0",
+      "clusterInfoOnly": false,
+      "forceGroupId": false
     },
     "2": {
       "id": "2",
-      "addr": "zero2:5080"
+      "groupId": 0,
+      "addr": "zero2:5082",
+      "leader": false,
+      "amDead": false,
+      "lastUpdate": "0",
+      "clusterInfoOnly": false,
+      "forceGroupId": false
     },
     "3": {
       "id": "3",
-      "addr": "zero3:5080"
+      "groupId": 0,
+      "addr": "zero3:5083",
+      "leader": false,
+      "amDead": false,
+      "lastUpdate": "0",
+      "clusterInfoOnly": false,
+      "forceGroupId": false
     }
   },
   "maxLeaseId": "10000",
   "maxTxnTs": "10000",
-  "cid": "3602537a-ee49-43cb-9792-c766eea683dc",
+  "maxRaftId": "3",
+  "removed": [],
+  "cid": "2571d268-b574-41fa-ae5e-a6f8da175d6d",
   "license": {
+    "user": "",
     "maxNodes": "18446744073709551615",
-    "expiryTs": "1578704367",
+    "expiryTs": "1605942487",
     "enabled": true
   }
 }
 ```
 
-Here’s the information the above JSON document provides:
+This JSON provides information that includes the following, with node members
+shown with their node name and HTTP port number:
 
-- Group 0
-  - members
+- Group 1 members:
+    - alpha2:7082, id: 1, leader
+    - alpha1:7080, id: 2
+    - alpha3:7083, id: 3
+- Group 0 members (Dgraph Zero nodes)
     - zero1:5080, id: 1, leader
-    - zero2:5080, id: 2
-    - zero3:5080, id: 3
-- Group 1
-    - members
-        - alpha1:7080, id: 1, leader
-        - alpha2:7080, id: 2
-        - alpha3:7080, id: 3
-    - predicates
-        - dgraph.type
-        - counter.val
+    - zero2:5082, id: 2
+    - zero3:5083, id: 3
+- maxLeaseId
+    - The current maximum lease of UIDs used for blank node UID assignment.
+    - This increments in batches of 10,000 IDs. Once the maximum lease is
+      reached, another 10,000 IDs are leased. In the event that the Zero
+      leader is lost, the new leader starts a new lease from
+      `maxLeaseId`+1. Any UIDs lost between these leases will never be used
+      for blank-node UID assignment.
+    - An admin can use the Zero endpoint HTTP GET `/assign?what=uids&num=1000` to
+      reserve a range of UIDs (in this case, 1000) to use externally. Zero will
+      **never** use these UIDs for blank node UID assignment, so the user can
+      use the range to assign UIDs manually to their own data sets.
+- maxTxnTs
+    - The current maximum lease of transaction timestamps used to hand out
+      start timestamps and commit timestamps. This increments in batches of
+      10,000 IDs. After the max lease is reached, another 10,000 IDs are
+      leased. If the Zero leader is lost, then the new leader starts a new
+      lease from `maxTxnTs`+1 . Any lost transaction IDs between these
+      leases will never be used.
+    - An admin can use the Zero endpoint HTTP GET
+      `/assign?what=timestamps&num=1000` to increase the current transaction
+      timestamp (in this case, by 1000). This is mainly useful in
+      special-case scenarios; for example, using an existing `-p directory` to
+      create a fresh cluster to be able to query the latest data in the DB.
+- maxRaftId
+    - The number of Zeros available to serve as a leader node. Used by the
+      [RAFT](/design-concepts/raft/) consensus algorithm.
+- CID
+    - This is a unique UUID representing the *cluster-ID* for this cluster. It
+      is generated during the initial DB startup and is retained across
+      restarts.
 - Enterprise license
     - Enabled
     - maxNodes: unlimited
-    - License expires on Friday, January 10, 2020 4:59:27 PM GMT-08:00 (converted from epoch timestamp)
-- Other data:
-    - maxTxnTs
-        - The current max lease of transaction timestamps used to hand out start timestamps
-          and commit timestamps.
-        - This increments in batches of 10,000 IDs. Once the max lease is reached, another
-          10,000 IDs are leased. In the event that the Zero leader is lost, then the new
-          leader starts a brand new lease from maxTxnTs+1 . Any lost transaction IDs
-          in-between will never be used.
-        - An admin can use the Zero endpoint HTTP GET `/assign?what=timestamps&num=1000` to
-          increase the current transaction timestamp (in this case, by 1000). This is mainly
-          useful in special-case scenarios, e.g., using an existing p directory to a fresh
-          cluster in order to be able to query the latest data in the DB.
-    - maxLeaseId
-        - The current max lease of UIDs used for blank node UID assignment.
-        - This increments in batches of 10,000 IDs. Once the max lease is reached, another
-          10,000 IDs are leased. In the event that the Zero leader is lost, the new leader
-          starts a brand new lease from maxLeaseId+1. Any UIDs lost in-between will never
-          be used for blank-node UID assignment.
-        - An admin can use the Zero endpoint HTTP GET `/assign?what=uids&num=1000` to
-          reserve a range of UIDs (in this case, 1000) to use externally (Zero will NEVER
-          use these UIDs for blank node UID assignment, so the user can use the range
-          to assign UIDs manually to their own data sets.
-    - CID
-        - This is a unique UUID representing the *cluster-ID* for this cluster. It is generated
-          during the initial DB startup and is retained across restarts.
-    - Group checksum
-        - This is the checksum verification of the data per Alpha group. This is used internally
-          to verify group memberships in the event of a tablet move.
+    - License expiration, shown in seconds since the Unix epoch.
 
 {{% notice "note" %}}
-"tablet", "predicate", and "edge" are synonymous terms today. The future plan to
-improve data scalability is to shard a predicate into separate tablets that could
-be assigned to different groups.
+The terms "tablet", "predicate", and "edge" are currently synonymous. In future,
+Dgraph might improve data scalability to shard a predicate into separate tablets
+that can be assigned to different groups.
 {{% /notice %}}

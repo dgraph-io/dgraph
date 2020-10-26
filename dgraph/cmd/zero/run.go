@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -51,8 +52,9 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
-
-	totalCache int64
+	tlsDir            string
+	tlsDisabledRoutes []string
+	totalCache        int64
 }
 
 var opts options
@@ -88,6 +90,12 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+	// TLS configurations
+	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
+	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
+	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
+	flag.String("tls_disabled_route", "", "comma separated zero endpoint which will be disabled from TLS encryption."+
+		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -160,6 +168,10 @@ func run() {
 	}
 
 	x.PrintVersion()
+	var tlsDisRoutes []string
+	if Zero.Conf.GetString("tls_disabled_route") != "" {
+		tlsDisRoutes = strings.Split(Zero.Conf.GetString("tls_disabled_route"), ",")
+	}
 
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
@@ -170,6 +182,8 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
+		tlsDir:            Zero.Conf.GetString("tls_dir"),
+		tlsDisabledRoutes: tlsDisRoutes,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 
@@ -227,7 +241,7 @@ func run() {
 	// Initialize the servers.
 	var st state
 	st.serveGRPC(grpcListener, store)
-	st.serveHTTP(httpListener)
+	st.startListenHttpAndHttps(httpListener)
 
 	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)
@@ -285,6 +299,9 @@ func run() {
 
 		x.RemoveCidFile()
 	}()
+
+	st.zero.closer.AddRunning(1)
+	go x.MonitorMemoryMetrics(st.zero.closer)
 
 	glog.Infoln("Running Dgraph Zero...")
 	st.zero.closer.Wait()

@@ -341,15 +341,14 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		}
 
 		// req.countBuf is already sorted.
-		sz := req.countBuf.Len()
+		sz := req.countBuf.LenNoPadding()
 		ci.countBuf.Grow(sz)
 
-		slice, next := []byte{}, 1
-		for next != 0 {
-			slice, next = req.countBuf.Slice(next)
+		req.countBuf.SliceIterate(func(slice []byte) error {
 			ce := countEntry(slice)
 			ci.addCountEntry(ce)
-		}
+			return nil
+		})
 	}
 
 	var lastStreamId uint32
@@ -415,18 +414,17 @@ func (r *reducer) throttle() {
 }
 
 func bufferStats(cbuf *z.Buffer) {
-	fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.Len())))
+	fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.LenNoPadding())))
 
 	// Just check how many keys do we have in this giant buffer.
 	keys := make(map[uint64]int64)
 	var numEntries int
-	slice, next := []byte{}, 1
-	for next != 0 {
-		slice, next = cbuf.Slice(next)
+	cbuf.SliceIterate(func(slice []byte) error {
 		me := MapEntry(slice)
 		keys[z.MemHash(me.Key())]++
 		numEntries++
-	}
+		return nil
+	})
 	keyHist := z.NewHistogramData(z.HistogramBounds(10, 32))
 	for _, num := range keys {
 		keyHist.Update(num)
@@ -488,12 +486,12 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 				pkey := partitionKeys[i]
 				itr.Next(cbuf, pkey)
 			}
-			if cbuf.Len() < 256<<20 {
+			if cbuf.LenNoPadding() < 256<<20 {
 				// Pick up more data.
 				continue
 			}
 
-			hd.Update(int64(cbuf.Len()))
+			hd.Update(int64(cbuf.LenNoPadding()))
 			select {
 			case <-ticker.C:
 				fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
@@ -504,7 +502,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			cbuf = getBuf()
 		}
 		if !cbuf.IsEmpty() {
-			hd.Update(int64(cbuf.Len()))
+			hd.Update(int64(cbuf.LenNoPadding()))
 			buffers <- cbuf
 		} else {
 			cbuf.Release()
@@ -514,12 +512,12 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	}()
 
 	for cbuf := range buffers {
-		if cbuf.Len() > limit/2 {
+		if cbuf.LenNoPadding() > limit/2 {
 			bufferStats(cbuf)
 		}
 		r.throttle()
 
-		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
+		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.LenNoPadding()))
 		sendReq(cbuf)
 	}
 
@@ -535,7 +533,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 func (r *reducer) toList(req *encodeRequest) {
 	cbuf := req.cbuf
 	defer func() {
-		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.Len()))
+		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.LenNoPadding()))
 		cbuf.Release()
 	}()
 
@@ -568,7 +566,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		freePostings = append(freePostings, p)
 	}
 
-	start, end, num := 1, 1, 0
+	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
 	appendToList := func() {
 		if num == 0 {
 			return

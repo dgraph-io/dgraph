@@ -51,7 +51,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.opencensus.io/plugin/ocgrpc"
-	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/trace"
 	"golang.org/x/crypto/ssh/terminal"
 	"google.golang.org/grpc"
@@ -176,10 +175,16 @@ var (
 	Nilbyte []byte
 	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
+	// GuardiansGroupUid is Uid of guardians group node.
+	GuardiansGroupUid uint64
+	// GrootUser Uid is Uid of groot user node.
+	GrootUserUid uint64
 )
 
 func init() {
 	AcceptedOrigins.Store(map[string]struct{}{})
+	atomic.StoreUint64(&GuardiansGroupUid, 0)
+	atomic.StoreUint64(&GrootUserUid, 0)
 }
 
 // UpdateCorsOrigins updates the cors allowlist with the given origins.
@@ -1042,38 +1047,6 @@ func IsGuardian(groups []string) bool {
 	}
 
 	return false
-}
-
-// MonitorCacheHealth periodically monitors the cache metrics and reports if
-// there is high contention in the cache.
-func MonitorCacheHealth(db *badger.DB, closer *z.Closer) {
-	defer closer.Done()
-
-	record := func(ct string) {
-		switch ct {
-		case "pstore-block":
-			metrics := db.BlockCacheMetrics()
-			ostats.Record(context.Background(), PBlockHitRatio.M(metrics.Ratio()))
-		case "pstore-index":
-			metrics := db.IndexCacheMetrics()
-			ostats.Record(context.Background(), PIndexHitRatio.M(metrics.Ratio()))
-		default:
-			panic("invalid cache type")
-		}
-	}
-
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			record("pstore-block")
-			record("pstore-index")
-		case <-closer.HasBeenClosed():
-			return
-		}
-	}
 }
 
 // RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
