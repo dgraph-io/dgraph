@@ -25,6 +25,7 @@ The following names are reserved and can't be used to define any other identifie
 
 
 For each type, Dgraph generates a number of GraphQL types needed to operate the GraphQL API, these generated type names also can't be present in the input schema.  For example, for a type `Author`, Dgraph generates:
+
 - `AuthorFilter`
 - `AuthorOrderable`
 - `AuthorOrder`
