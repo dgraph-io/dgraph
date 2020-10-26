@@ -1,27 +1,27 @@
 # Binary Backups to Network File System
 
-When using a file system for binary backups, NFS is recommended so that  work seamlessly across multiple machines and/or containers.
+When using a file system for binary backups, NFS is recommended so that *backups work seamlessly across multiple machines and/or containers*.
 
 ## Provisioning NFS Overview
 
-### External NFS
+You can use external NFS outside of the [Docker](https://www.docker.com/) or [Kubernetes](https://kubernetes.io/), or deploy a container offering NFS services.  For production environments, using an NFS server external to the cluster can increase availability in an event where [Kubernetes](https://kubernetes.io/) services get interrupted. In more advanced scenarios, deploying a container offering NFS services, where the storage is backed by high-speed storage such as [Ceph](https://ceph.io/) is beneficial for large datasets.  In this latter scenario, secondary storage such as an object store by the cloud provider could be used for greater availability in event of where Kubernetes services or the [Kubernetes](https://kubernetes.io/) cluster itself has a failure event.
 
-For NFS, you can provision an NFS outside of either Docker or Kubernetes, and use this as a mountable volume for Dgrpah alpha containers or pods.  For testing locally, a Vagrant solution is provided as an example of configuring Linux with kernel based NFS. For using a cloud based solution, you can use [GCFS](https://cloud.google.com/filestore) ([Google Cloud Filestore](https://cloud.google.com/filestore)) or use AWS [EFS](https://aws.amazon.com/efs/) ([Elastic File System](https://aws.amazon.com/efs/)).
+This guide is not meant to be complete, but rather to get you started on your backup journey with Dgraph and NFS.  For this scope, automation here covers the following:
 
-When using external NFS, you can use two disctinct paths and specify the configuration [Dgraph Helm Chart](https://github.com/dgraph-io/charts/):
+* External NFS
+  * Cloud Providers
+    * [GCFS](https://cloud.google.com/filestore) ([Google Cloud Filestore](https://cloud.google.com/filestore))
+    * AWS [EFS](https://aws.amazon.com/efs/) ([Elastic File System](https://aws.amazon.com/efs/))
+  * Local NFS Server
+    * [Vagrant](https://www.vagrantup.com/) managed virtual server that implements Linux kernel-based NFS Server
+* Internal NFS (deployed as a container) 
+    * [Rook](https://rook.io/) NFS operator to deploy container offering NFS Server with [Genesha NFS Server](https://github.com/nfs-ganesha/nfs-ganesha/wiki)
 
-1. Create *PersistentVolume* (PV) and corresponding *PersistentVolumeClaim* (PVC) (ref. [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/))
-2. Using [NFS-Client Provisioner](https://github.com/kubernetes-sigs/nfs-subdir-external-provisioner) that can creates this PV automatically when you create an PVC.
-
-### Internal NFS
-
-You can provision NFS within the Kubernetes cluster any number of solutions.  There two demonstrated here use [Rook](https://rook.io/) or [NFS Ganesha server and external provisioner](https://github.com/kubernetes-sigs/nfs-ganesha-server-and-external-provisioner).
-
-## Create External NFS
+## Instructions
 
 ### Using Remote Cloud Solutions
 
-You can provision external NFS with the scripts for use with Dgraph cluster running on Kubernetes.  Running these will populate Helm chart configuration values. If you want use this with Docker, the Docker containers must be running within the cloud services, as unlike Object Storage, these services would not be available on the Public Internet.
+You can provision external NFS with the scripts for use with the Dgraph cluster running on Kubernetes.  Unlike object storage, such as S3 or GCS, this storage will not be accessible from the public Internet, and so can only be accessed from within a private subnet.
 
 * Shell Scripts
   * [Google Cloud Filestore](gcfs-cli/README.md) - provision FileStore using `gcloud`
@@ -31,7 +31,7 @@ You can provision external NFS with the scripts for use with Dgraph cluster runn
 
 ### Using Local Vagrant Solution
 
-As configuring NFS for your local operating system or distro can vary greatly, a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux.  As [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses, these should be accessible with from [Docker](https://docs.docker.com/engine/) or [MiniKube](https://github.com/kubernetes/minikube) environments.
+As configuring NFS for your local operating system or distro can vary greatly, a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, the NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [MiniKube](https://github.com/kubernetes/minikube) environments.
 
 #### Vagrant Server
 
@@ -56,7 +56,7 @@ vagrant ssh
 cd /vagrant
 ```
 
-After this you can follow use [Docker Compose Usage](#docker-compose-usage) to access NFS.
+After this, you can follow [Docker Compose Usage](#docker-compose-usage) to access NFS.
 
 #### Vagrant Cleanup
 
