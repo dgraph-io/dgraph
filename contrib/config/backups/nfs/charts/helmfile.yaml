@@ -58,8 +58,8 @@ releases:
           path: {{ env "NFS_PATH" | default "share1" }}
           namespace: rook-nfs-system
           claim:
-            size: {{ env "NFS_ALLOC_SIZE" | default "32Gi" }}
-            name: {{ env "NFS_CLAIM" | default "rook-nfs-pv-claim" }}
+            size: {{ env "NFS_CLAIM_SIZE" | default "32Gi" }}
+            name: {{ env "NFS_CLAIM_NAME" | default "rook-nfs-pv-claim" }}
             namespace: default
     hooks:
       - events:
@@ -85,11 +85,11 @@ releases:
           {{- if eq (env "VOL_TYPE") "volume" }}
           ## backup drive allocated through volume claim
           volume:
-            claim: {{ env "NFS_CLAIM" }}
+            claim: {{ env "NFS_CLAIM_NAME" }}
           ## backup drive allocated through specifying NFS server and path
           {{- else }}
           nfs:
             server: {{ env "NFS_SERVER" }}
             path: {{ env "NFS_PATH" }}
-            storage: {{ env "NFS_SIZE" | default "32Gi" }}
+            storage: {{ env "NFS_CLAIM_SIZE" | default "32Gi" }}
           {{- end }}
