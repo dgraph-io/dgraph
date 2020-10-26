@@ -304,7 +304,17 @@ which is helpful for example if the enums are something like product codes where
 
 ### Geolocation
 
-Geolocation supports four filter options: `near`, `within`, `contains` and `intersects`.
+There are 3 Geolocation types: `Point`, `Polygon` and `MultiPolygon`. All of them are searchable. 
+
+The following table lists the generated filters for each type when you include `@search` on the corresponding field:
+
+| type | constructed searches |
+|----------|----------------------|
+| `Point` | `near`, `within` |
+| `Polygon` | `near`, `within`, `contains`, `intersects` |
+| `MultiPolygon` | `near`, `within`, `contains`, `intersects` |
+
+#### Example
 
 Take for example a `Hotel` type that has a `location` and an `area`:
 
@@ -312,8 +322,8 @@ Take for example a `Hotel` type that has a `location` and an `area`:
 type Hotel {
   id: ID!
   name: String!
-  location: Point
-  area: Polygon
+  location: Point @search
+  area: Polygon @search
 }
 ```
 
