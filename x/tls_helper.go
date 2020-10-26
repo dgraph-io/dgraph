@@ -163,10 +163,6 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 		// 3. optionally load the client cert files
 		certFile := v.GetString("tls_cert")
 		keyFile := v.GetString("tls_key")
-		if v.GetBool("tls_enable_inter_node") && (certFile == "" || keyFile == "") {
-			return nil, errors.Errorf("inter node tls is enabled but client certs are not provided. " +
-				"Intern Node is TLS is always client authenticated. Please provide --tls_cert and --tls_key")
-		}
 		if certFile != "" && keyFile != "" {
 			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 			if err != nil {
