@@ -484,7 +484,10 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	// we can just execute it.
 	switch {
 	case op.IsQuery():
-		resp.Header.Set(schema.CacheControlHeader, op.CacheControl())
+		resp.Header = make(map[string][]string)
+		if len(op.CacheControl()) != 0 {
+			resp.Header.Set(schema.CacheControlHeader, op.CacheControl())
+		}
 		resolveQueries()
 	case op.IsMutation():
 		// A mutation operation can contain any number of mutation fields.  Those should be executed

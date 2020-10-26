@@ -345,7 +345,10 @@ func (o *operation) Mutations() (ms []Mutation) {
 }
 
 func (o *operation) CacheControl() string {
-	return "max-age=" + o.op.Directives.ForName(cacheControlDirective).Arguments[0].Value.Raw
+	if o.op.Directives.ForName(cacheControlDirective) == nil {
+		return ""
+	}
+	return "public,max-age=" + o.op.Directives.ForName(cacheControlDirective).Arguments[0].Value.Raw
 }
 
 // parentInterface returns the name of an interface that a field belonging to a type definition
