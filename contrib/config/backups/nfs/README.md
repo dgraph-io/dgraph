@@ -9,13 +9,13 @@ You can use external NFS outside of the [Docker](https://www.docker.com/) or [Ku
 This guide is not meant to be complete, but rather to get you started on your backup journey with Dgraph and NFS.  For this scope, automation here covers the following:
 
 * External NFS
-  * Cloud Providers
-    * [GCFS](https://cloud.google.com/filestore) ([Google Cloud Filestore](https://cloud.google.com/filestore))
-    * AWS [EFS](https://aws.amazon.com/efs/) ([Elastic File System](https://aws.amazon.com/efs/))
-  * Local NFS Server
-    * [Vagrant](https://www.vagrantup.com/) managed virtual server that implements Linux kernel-based NFS Server
+  * Cloud Providers
+    * [GCFS](https://cloud.google.com/filestore) ([Google Cloud Filestore](https://cloud.google.com/filestore))
+    * AWS [EFS](https://aws.amazon.com/efs/) ([Elastic File System](https://aws.amazon.com/efs/))
+  * Local NFS Server
+    * [Vagrant](https://www.vagrantup.com/) managed virtual server that implements Linux kernel-based NFS Server
 * Internal NFS (deployed as a container) 
-    * [Rook](https://rook.io/) NFS operator to deploy container offering NFS Server with [Genesha NFS Server](https://github.com/nfs-ganesha/nfs-ganesha/wiki)
+  * [Rook](https://rook.io/) NFS operator to deploy container offering NFS Server with [Genesha NFS Server](https://github.com/nfs-ganesha/nfs-ganesha/wiki)
 
 ## Instructions
 
