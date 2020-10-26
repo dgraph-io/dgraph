@@ -8,6 +8,7 @@ spec:
   - ReadWriteOnce
   resources:
     requests:
+      ## Size to allocate from default storage class
       storage: "{{ .Values.nfs.size }}"
 ---
 apiVersion: nfs.rook.io/v1alpha1

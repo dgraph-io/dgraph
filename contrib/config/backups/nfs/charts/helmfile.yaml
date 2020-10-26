@@ -3,6 +3,9 @@ repositories:
     url: https://charts.dgraph.io
 
 releases:
+  #########
+  # Rook NFS configuration - uses helm charts created from kustomize
+  #################################################
   {{- if eq (env "NFS_STRATEGY") "rook" }}
   - name: rook-nfs-operator
     ## NOTE: namespace must also be specified in
@@ -28,7 +31,7 @@ releases:
     chart: ./rook-nfs-server
     values:
       - nfs:
-          size: {{ env "NFS_SIZE" | default "32Gi" }}
+          size: {{ env "NFS_DISK_SIZE" | default "32Gi" }}
           path: {{ env "NFS_PATH" | default "share1" }}
     hooks:
       - events:
@@ -54,8 +57,10 @@ releases:
           server: {{ env "NFS_SERVER" | default "rook-nfs" }}
           path: {{ env "NFS_PATH" | default "share1" }}
           namespace: rook-nfs-system
-          size: {{ env "NFS_SIZE" | default "32Gi" }}
-          claim: {{ env "NFS_CLAIM" | default "rook-nfs-pv-claim" }}
+          claim:
+            size: {{ env "NFS_ALLOC_SIZE" | default "32Gi" }}
+            name: {{ env "NFS_CLAIM" | default "rook-nfs-pv-claim" }}
+            namespace: default
     hooks:
       - events:
           - prepare
@@ -67,20 +72,24 @@ releases:
           - default
   {{- end }}
 
+
+  #########
+  # Dgraph helm chart configuration
+  #################################################
   - name: my-release
     namespace: default
     chart: dgraph/dgraph
     values:
-      - ./dgraph_{{ env "NFS_TYPE" | default "static" }}_nfs.yaml
+      - ./dgraph_{{ env "VOL_TYPE" | default "nfs" }}_nfs.yaml
       - backups:
-          ## NFS using statically assigned values with NFS_SERVER and NFS_PATH env vars
-          {{- if eq (env "NFS_TYPE") "static" }}
+          {{- if eq (env "VOL_TYPE") "volume" }}
+          ## backup drive allocated through volume claim
+          volume:
+            claim: {{ env "NFS_CLAIM" }}
+          ## backup drive allocated through specifying NFS server and path
+          {{- else }}
           nfs:
             server: {{ env "NFS_SERVER" }}
             path: {{ env "NFS_PATH" }}
             storage: {{ env "NFS_SIZE" | default "32Gi" }}
-          {{- else if eq (env "NFS_TYPE") "dynamic" }}
-          ## NFS dynamically allocated using NFS volume claim
-          volume:
-            claim: {{ env "NFS_CLAIM" }}
           {{- end }}
