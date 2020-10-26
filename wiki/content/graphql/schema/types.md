@@ -41,47 +41,6 @@ type User {
 
 Scalar lists in Dgraph act more like sets, so `tags: [String]` would always contain unique tags.  Similarly, `recentScores: [Float]` could never contain duplicate scores.
 
-### Custom scalars
-
-In Dgraph, a predicate which has geolocation type can store data for a `Point`, a `Polygon` or a `MultiPolygon`. 
-
-{{% notice "note" %}}
-Because GraphQL is strongly typed, a field inside a `type` can only store one type of data.
-{{% /notice %}}
-
-#### Point
-
-```graphql
-type Point {
-  Latitude: Float!
-  Longitude: Float!
-}
-```
-
-#### PointList
-
-```graphql
-type PointList {
-  Points: [Point!]!
-}
-```
-
-#### Polygon
-
-```graphql
-type Polygon {
-  Coordinates: [PointList!]!
-}
-```
-
-#### MultiPolygon
-
-```graphql
-type MultiPolygon {
-  Coordinates: [Polygon!]!
-}
-```
-
 ### Enums
 
 You can define enums in your input schema.  For example:
@@ -248,5 +207,53 @@ If the password is wrong you will get the following response:
   "data": {
     "checkAuthorPassword": null
   }
+}
+```
+
+### Geolocation types
+
+Dgraph GraphQL comes with built-in types to store Geolocation data. Currently, it supports `Point`, `Polygon` and `MultiPolygon`. These types are useful in scenarios like storing a location's GPS coordinates, representing a city on the map, etc.
+
+For example:
+
+```graphql
+type Hotel {
+  id: ID!
+  name: String!
+  location: Point
+  area: Polygon
+}
+```
+    
+#### Point
+
+```graphql
+type Point {
+  Latitude: Float!
+  Longitude: Float!
+}
+```
+
+#### PointList
+
+```graphql
+type PointList {
+  Points: [Point!]!
+}
+```
+
+#### Polygon
+
+```graphql
+type Polygon {
+  Coordinates: [PointList!]!
+}
+```
+
+#### MultiPolygon
+
+```graphql
+type MultiPolygon {
+  Coordinates: [Polygon!]!
 }
 ```

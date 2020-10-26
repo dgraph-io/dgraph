@@ -329,7 +329,7 @@ type Hotel {
 
 #### near
 
-The `near` function matches all entities where the location given by `predicate` is within a distance `meters` from a geojson coordinate `[lat, long]`.
+The `near` filter matches all entities where the location given by a field is within a distance `meters` from a coordinate.
 
 ```graphql
 queryHotel(filter: {
@@ -349,11 +349,7 @@ queryHotel(filter: {
 
 #### within
 
-The `within` function matches all entities where the location given by `predicate` lies within a polygon specified by the geojson `coordinates` array.
-
-{{% notice "tip" %}}
-The `within` query lets you search for all geo entities (`point`, `polygon`) within a polygon, so they are generated for all types.
-{{% /notice %}}
+The `within` filter matches all entities where the location given by a field is within a defined `polygon`.
 
 ```graphql
 queryHotel(filter: {
@@ -361,21 +357,20 @@ queryHotel(filter: {
         within: {
             polygon: {
                 coordinates: [{
-								points: [{
-									latitude: 11.11,
-									longitude: 22.22
-								}, {
-									latitude: 15.15,
-									longitude: 16.16
-								}, {
-									latitude: 20.20,
-									longitude: 21.21
-								},
- 								{
-									latitude: 11.11,
-									longitude: 22.22
-								}]
-							}],
+                    points: [{
+                        latitude: 11.11,
+                        longitude: 22.22
+                    }, {
+                        latitude: 15.15,
+                        longitude: 16.16
+                    }, {
+                        latitude: 20.20,
+                        longitude: 21.21
+                    }, {
+                        latitude: 11.11,
+                        longitude: 22.22
+                    }]
+                }],
             }
         }
     }
@@ -386,10 +381,10 @@ queryHotel(filter: {
 
 #### contains
 
-The `contains` function matches all entities where the polygon describing a location given by `predicate` contains a geojson coordinate `[long, lat]` or a given geojson `polygon`.
+The `contains` filter matches all entities where the `Polygon` or `MultiPolygon` field contains another given `point` or `polygon`.
 
 {{% notice "tip" %}}
-The `ContainsFilter` is only generated for `Polygon` and `MultiPolygon`.
+Only one `point` or `polygon` can be taken inside the `ContainsFilter` at a time.
 {{% /notice %}}
 
 ```graphql
@@ -412,38 +407,82 @@ queryHotel(filter: {
 
 #### intersects 
 
-The `intersects ` function matches all entities where the polygon describing a location given by `predicate` intersects a given geojson `polygon`.
+The `intersects` filter matches all entities where the `Polygon` or `MultiPolygon` field intersects another given `polygon` or `multiPolygon`.
 
 {{% notice "tip" %}}
-The `IntersectsFilter` is only generated for `Polygon` and `MultiPolygon`.
+Only one `polygon` or `multiPolygon` can be given inside the `IntersectsFilter` at a time.
 {{% /notice %}}
 
 ```graphql
-queryHotel(filter: {
-    area: { 
-        intersects: {
-            polygon: {
-                coordinates: [{
-								points: [{
-									latitude: 11.11,
-									longitude: 22.22
-								}, {
-									latitude: 15.15,
-									longitude: 16.16
-								}, {
-									latitude: 20.20,
-									longitude: 21.21
-								},
- 								{
-									latitude: 11.11,
-									longitude: 22.22
-								}]
-							}],
-            }
+  queryHotel(filter: {
+    area: {
+      intersects: {
+        multiPolygon: {
+          polygons: [{
+            coordinates: [{
+              points: [{
+                latitude: 11.11,
+                longitude: 22.22
+              }, {
+                latitude: 15.15,
+                longitude: 16.16
+              }, {
+                latitude: 20.20,
+                longitude: 21.21
+              }, {
+                latitude: 11.11,
+                longitude: 22.22
+              }]
+            }, {
+              points: [{
+                latitude: 11.18,
+                longitude: 22.28
+              }, {
+                latitude: 15.18,
+                longitude: 16.18
+              }, {
+                latitude: 20.28,
+                longitude: 21.28
+              }, {
+                latitude: 11.18,
+                longitude: 22.28
+              }]
+            }]
+          }, {
+            coordinates: [{
+              points: [{
+                latitude: 91.11,
+                longitude: 92.22
+              }, {
+                latitude: 15.15,
+                longitude: 16.16
+              }, {
+                latitude: 20.20,
+                longitude: 21.21
+              }, {
+                latitude: 91.11,
+                longitude: 92.22
+              }]
+            }, {
+              points: [{
+                latitude: 11.18,
+                longitude: 22.28
+              }, {
+                latitude: 15.18,
+                longitude: 16.18
+              }, {
+                latitude: 20.28,
+                longitude: 21.28
+              }, {
+                latitude: 11.18,
+                longitude: 22.28
+              }]
+            }]
+          }]
         }
+      }
     }
-}) {
-  name
-}
-
+  }) {
+    name
+  }
 ```
