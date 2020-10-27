@@ -57,7 +57,7 @@ No. Dgraph stores and handles data natively to ensure it has complete control ov
 ## Languages and Features
 
 ### Does Dgraph support GraphQL?
-Dgraph started with the aim to fully support GraphQL. However, as our experience with the language grew, we started hitting the seams. It couldn't support many of the features required from a language meant to interact with Graph data, and we felt some of the features were unnecessary and complicated. So, we've created a simplified and feature rich version of GraphQL. For lack of better name, we're calling GraphQL+-. You can [read more about it here]({{< relref "query-language/_index.md" >}}).
+Dgraph started with the aim to fully support GraphQL. However, as our experience with the language grew, we started hitting the seams. It couldn't support many of the features required from a language meant to interact with Graph data, and we felt some of the features were unnecessary and complicated. So, we've created a simplified and feature rich version of GraphQL. For lack of better name, we're calling DQL. You can [read more about it here]({{< relref "query-language/_index.md" >}}).
 
 ### When is Dgraph going to support Gremlin?
 Dgraph will aim to support [Gremlin](https://github.com/tinkerpop/gremlin/wiki) after v1.0. However, this is not set in stone. If our community wants Gremlin support to interact with other frameworks, like Tinkerpop, we can look into supporting it earlier.

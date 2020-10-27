@@ -83,9 +83,9 @@ aliases = ["/contribute"]
   <div class="item">
     <div class="icon"><i class="lni lni-graduation"></i></div>
     <a href="{{< relref "tips/index.md">}}">
-      <h2>GraphQL+- Tips and Tricks</h2>
+      <h2>DQL Tips and Tricks</h2>
       <p>
-        A list of commonly used GraphQL+- query snippets
+        A list of commonly used DQL query snippets
       </p>
     </a>
   </div>
