@@ -18,10 +18,13 @@ package zero
 
 import (
 	"context"
+	"io/ioutil"
 	"math/rand"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -42,8 +45,8 @@ type Oracle struct {
 	x.SafeMutex
 	commits map[uint64]uint64 // startTs -> commitTs
 	// TODO: Check if we need LRU.
-	keyCommit   map[uint64]uint64 // fp(key) -> commitTs. Used to detect conflict.
-	maxAssigned uint64            // max transaction assigned by us.
+	keyCommit   *z.Tree // fp(key) -> commitTs. Used to detect conflict.
+	maxAssigned uint64  // max transaction assigned by us.
 
 	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
 	tmax uint64
@@ -55,10 +58,21 @@ type Oracle struct {
 	syncMarks   []syncMark
 }
 
+func initKeyCommit() *z.Tree {
+	f, err := ioutil.TempFile("", "tree")
+	x.Check(err)
+	mf, err := z.OpenMmapFileUsing(f, 2<<30, true)
+	if err != z.NewFile {
+		x.Check(err)
+	}
+	return z.NewTree(mf)
+}
+
 // Init initializes the oracle.
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
-	o.keyCommit = make(map[uint64]uint64)
+	// TODO: Cleanup
+	o.keyCommit = initKeyCommit()
 	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init(nil)
@@ -69,7 +83,8 @@ func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
 	defer o.Unlock()
 	o.startTxnTs = ts
-	o.keyCommit = make(map[uint64]uint64)
+	// TODO: Cleanup
+	o.keyCommit = initKeyCommit()
 }
 
 // TODO: This should be done during proposal application for Txn status.
@@ -84,7 +99,7 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 			glog.Errorf("Got error while parsing conflict key %q: %v\n", k, err)
 			continue
 		}
-		if last := o.keyCommit[ki]; last > src.StartTs {
+		if last := o.keyCommit.Get(ki); last > src.StartTs {
 			return true
 		}
 	}
@@ -94,7 +109,10 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 func (o *Oracle) purgeBelow(minTs uint64) {
 	o.Lock()
 	defer o.Unlock()
-
+	lr, ir := o.keyCommit.OccupancyRatio()
+	glog.Infof("Purged below ts:%d, len(o.commits):%d"+
+		", pages:%d, occupancy: [leaf:%f internal:%f]\n",
+		minTs, len(o.commits), o.keyCommit.NumPages(), lr, ir)
 	// Dropping would be cheaper if abort/commits map is sharded
 	for ts := range o.commits {
 		if ts < minTs {
@@ -103,15 +121,12 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	}
 	// There is no transaction running with startTs less than minTs
 	// So we can delete everything from rowCommit whose commitTs < minTs
-	for key, ts := range o.keyCommit {
-		if ts < minTs {
-			delete(o.keyCommit, key)
-		}
-	}
+	o.keyCommit.DeleteBelow(minTs - 1)
 	o.tmax = minTs
+	lr, ir = o.keyCommit.OccupancyRatio()
 	glog.Infof("Purged below ts:%d, len(o.commits):%d"+
-		", len(o.rowCommit):%d\n",
-		minTs, len(o.commits), len(o.keyCommit))
+		", pages:%d, occupancy: [leaf:%f internal:%f]\n",
+		minTs, len(o.commits), o.keyCommit.NumPages(), lr, ir)
 }
 
 func (o *Oracle) commit(src *api.TxnContext) error {
@@ -130,7 +145,7 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 			glog.Errorf("Got error while parsing conflict key %q: %v\n", k, err)
 			continue
 		}
-		o.keyCommit[ki] = src.CommitTs // CommitTs is handed out before calling this func.
+		o.keyCommit.Set(ki, src.CommitTs) // CommitTs is handed out before calling this func.
 	}
 	return nil
 }
