@@ -229,8 +229,8 @@ type Hotel {
 
 ```graphql
 type Point {
-  Latitude: Float!
-  Longitude: Float!
+	longitude: Float!
+	latitude: Float!
 }
 ```
 
@@ -238,7 +238,7 @@ type Point {
 
 ```graphql
 type PointList {
-  Points: [Point!]!
+	points: [Point!]!
 }
 ```
 
@@ -246,7 +246,7 @@ type PointList {
 
 ```graphql
 type Polygon {
-  Coordinates: [PointList!]!
+	coordinates: [PointList!]!
 }
 ```
 
@@ -254,6 +254,6 @@ type Polygon {
 
 ```graphql
 type MultiPolygon {
-  Coordinates: [Polygon!]!
+	polygons: [Polygon!]!
 }
 ```
