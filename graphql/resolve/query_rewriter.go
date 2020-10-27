@@ -89,7 +89,7 @@ func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
-	if gqlQuery.Type().InterfaceImplHasAuthRules() {
+	if gqlQuery.ConstructedFor().InterfaceImplHasAuthRules() {
 		return &gql.GraphQuery{Attr: gqlQuery.ResponseName() + "()"}, nil
 	}
 
@@ -107,7 +107,7 @@ func (qr *queryRewriter) Rewrite(
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
-		parentVarName: gqlQuery.Type().Name() + "Root",
+		parentVarName: gqlQuery.ConstructedFor().Name() + "Root",
 	}
 	authRw.hasAuthRules = hasAuthRules(gqlQuery, authRw)
 	authRw.hasCascade = hasCascadeDirective(gqlQuery)
@@ -136,9 +136,66 @@ func (qr *queryRewriter) Rewrite(
 		return rewriteAsQuery(gqlQuery, authRw), nil
 	case schema.PasswordQuery:
 		return passwordQuery(gqlQuery, authRw)
+	case schema.AggregateQuery:
+		return aggregateQuery(gqlQuery, authRw), nil
 	default:
 		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
+}
+
+func aggregateQuery(query schema.Query, authRw *authRewriter) *gql.GraphQuery {
+
+	// Get the type which the count query is written for
+	mainType := query.ConstructedFor()
+
+	rbac := authRw.evaluateStaticRules(mainType)
+	dgQuery := &gql.GraphQuery{
+		Attr: query.Name(),
+	}
+
+	if rbac == schema.Negative {
+		dgQuery.Attr = dgQuery.Attr + "()"
+		return dgQuery
+	}
+
+	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) && (authRw.varName != "" || authRw.parentVarName != "") {
+		// When rewriting auth rules, they always start like
+		//   Todo2 as var(func: uid(Todo1)) @cascade {
+		// Where Todo1 is the variable generated from the filter of the field
+		// we are adding auth to.
+
+		authRw.addVariableUIDFunc(dgQuery)
+		// This is executed when querying while performing delete mutation request since
+		// in case of delete mutation we already have variable `MutationQueryVar` at root level.
+		if authRw.filterByUid {
+			// Since the variable is only added at the top level we reset the `authRW` variables.
+			authRw.varName = ""
+			authRw.filterByUid = false
+		}
+	} else if ids := idFilter(extractQueryFilter(query), mainType.IDField()); ids != nil {
+		addUIDFunc(dgQuery, ids)
+	} else {
+		addTypeFunc(dgQuery, mainType.Name())
+	}
+
+	// Add filter
+	filter, _ := query.ArgValue("filter").(map[string]interface{})
+	_ = addFilter(dgQuery, mainType, filter)
+
+	// Add selection set. Currently, it will only be count
+	for _, f := range query.SelectionSet() {
+		if f.Name() == "count" {
+			child := &gql.GraphQuery{
+				Alias: f.DgraphAlias(),
+				Attr:  "count(uid)",
+			}
+			dgQuery.Children = append(dgQuery.Children, child)
+		}
+	}
+
+	dgQuery = authRw.addAuthQueries(mainType, dgQuery, rbac)
+
+	return dgQuery
 }
 
 func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error) {

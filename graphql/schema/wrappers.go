@@ -75,6 +75,7 @@ type FieldHTTPConfig struct {
 const (
 	GetQuery             QueryType    = "get"
 	FilterQuery          QueryType    = "query"
+	AggregateQuery       QueryType    = "aggregate"
 	SchemaQuery          QueryType    = "schema"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
@@ -154,6 +155,7 @@ type Mutation interface {
 // A Query is a field (from the schema's Query type) from an Operation
 type Query interface {
 	Field
+	ConstructedFor() Type
 	QueryType() QueryType
 	DQLQuery() string
 	Rename(newName string)
@@ -1401,6 +1403,23 @@ func (q *query) EnumValues() []string {
 	return nil
 }
 
+func (q *query) ConstructedFor() Type {
+	if q.QueryType() != AggregateQuery {
+		return q.Type()
+	}
+
+	// Its of type AggregateQuery
+	queryName := q.Type().Name()
+	typeName := queryName[:len(queryName)-15]
+	return &astType{
+		typ: &ast.Type{
+			NamedType: typeName,
+		},
+		inSchema:        q.op.inSchema,
+		dgraphPredicate: q.op.inSchema.dgraphPredicate,
+	}
+}
+
 func (q *query) QueryType() QueryType {
 	return queryType(q.Name(), q.op.inSchema.customDirectives["Query"][q.Name()])
 }
@@ -1429,6 +1448,8 @@ func queryType(name string, custom *ast.Directive) QueryType {
 		return FilterQuery
 	case strings.HasPrefix(name, "check"):
 		return PasswordQuery
+	case strings.HasPrefix(name, "aggregate"):
+		return AggregateQuery
 	default:
 		return NotSupportedQuery
 	}
