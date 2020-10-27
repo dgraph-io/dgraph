@@ -288,8 +288,6 @@ Here is the table containing data types and the set of indexes that can be appli
 
 Only `string` and `dateTime` data types have an option for more than one index type.
 
-Please note that when specifying at the same time both `trigram` and `term` indexes, in the schema, you will need to specify them in the following **exact** order: `<predicate>: string @index(term, trigram) .` no vice-versa.
-
 Let's create an index on the rating predicate. Ratel UI makes it super simple to add an index.
 
 Here's the sequence of steps:
