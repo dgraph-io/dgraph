@@ -1040,7 +1040,7 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 		}
 
 		enc.Add(p.Uid())
-		if p.PostingType() != fb.PostingTypeREF || len(p.Label()) != 0 {
+		if p.FacetsLength() > 0 || p.PostingType() != fb.PostingTypeREF || len(p.Label()) != 0 {
 			plist.Postings = append(plist.Postings, p.Table().Bytes)
 		}
 		return nil
