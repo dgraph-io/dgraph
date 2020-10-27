@@ -11,7 +11,11 @@ This page describes how you use GraphQL types to set the Dgraph GraphQL schema.
 
 Dgraph GraphQL comes with the standard GraphQL scalars: `Int`, `Float`, `String`, `Boolean` and `ID`.  There's also a `DateTime` scalar - represented as a string in RFC3339 format.
 
-Scalars `Int`, `Float`, `String` and `DateTime` can be used in lists. Note that lists behave like an unordered set in Dgraph. For example: `["e1", "e1", "e2"]` may get stored as `["e2", "e1"]`, i.e., duplicate values will not be stored and order may not be preserved.
+Scalars `Int`, `Float`, `String` and `DateTime` can be used in lists. 
+
+{{% notice "note" %}}
+Lists behave like an unordered set in Dgraph. For example: `["e1", "e1", "e2"]` may get stored as `["e2", "e1"]`, i.e., duplicate values will not be stored and order may not be preserved.
+{{% /notice %}}
 
 All scalars may be nullable or non-nullable.
 
@@ -133,6 +137,7 @@ type Comment implements Post {
 ```
 
 ### Password type
+
 A password for an entity is set with setting the schema for the node type with `@secret` directive. Passwords cannot be queried directly, only checked for a match using the `checkTypePassword` function where `Type` is the node type.
 The passwords are encrypted using [bcrypt](https://en.wikipedia.org/wiki/Bcrypt).
 
@@ -202,5 +207,53 @@ If the password is wrong you will get the following response:
   "data": {
     "checkAuthorPassword": null
   }
+}
+```
+
+### Geolocation types
+
+Dgraph GraphQL comes with built-in types to store Geolocation data. Currently, it supports `Point`, `Polygon` and `MultiPolygon`. These types are useful in scenarios like storing a location's GPS coordinates, representing a city on the map, etc.
+
+For example:
+
+```graphql
+type Hotel {
+  id: ID!
+  name: String!
+  location: Point
+  area: Polygon
+}
+```
+    
+#### Point
+
+```graphql
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+```
+
+#### PointList
+
+```graphql
+type PointList {
+	points: [Point!]!
+}
+```
+
+#### Polygon
+
+```graphql
+type Polygon {
+	coordinates: [PointList!]!
+}
+```
+
+#### MultiPolygon
+
+```graphql
+type MultiPolygon {
+	polygons: [Polygon!]!
 }
 ```
