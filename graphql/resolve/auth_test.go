@@ -178,6 +178,8 @@ func TestStringCustomClaim(t *testing.T) {
 		"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
 	}
 	require.Equal(t, authVar, result)
+	//reset auth meta, so that it won't effect other tests
+	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
 func TestAudienceClaim(t *testing.T) {
@@ -241,6 +243,8 @@ func TestAudienceClaim(t *testing.T) {
 			require.Equal(t, authVar, result)
 		})
 	}
+	//reset auth meta, so that it won't effect other tests
+	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
 func TestInvalidAuthInfo(t *testing.T) {
@@ -338,6 +342,9 @@ func TestJWTExpiry(t *testing.T) {
 			require.Equal(t, authVar, result)
 		})
 	}
+
+	//reset auth meta, so that it won't effect other tests
+	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
@@ -801,6 +808,8 @@ func TestAuthQueryRewriting(t *testing.T) {
 			deleteQueryRewriting(t, strSchema, metaInfo)
 		})
 	}
+	//reset auth meta, so that it won't effect other tests
+	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
 func TestAuthQueryRewritingWithDefaultClosedByFlag(t *testing.T) {
@@ -829,4 +838,7 @@ func TestAuthQueryRewritingWithDefaultClosedByFlag(t *testing.T) {
 	t.Run("Add Mutation "+algo, func(t *testing.T) {
 		mutationAdd(t, strSchema, metaInfo, true)
 	})
+
+	//reset auth meta, so that it won't effect other tests
+	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
