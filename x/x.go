@@ -127,8 +127,13 @@ const (
 {"predicate":"dgraph.rule.permission","type":"int"}
 `
 	// CorsPredicate is the json representation of the predicate reserved by dgraph for the use
-	//of cors
+	// of cors
 	CorsPredicate = `{"predicate":"dgraph.cors","type":"string","list":true,"type":"string","index":true,"tokenizer":["exact"],"upsert":true}`
+
+	// PersistedQueryPredicate is the json representation of the predicate reserved by dgraph for the use of persisted queries
+	PersistedQueryPredicate = `
+	{"predicate":"dgraph.graphql.p_query","type":"string"},
+	{"predicate":"dgraph.graphql.p_sha256hash","type":"string","index":true,"tokenizer":["exact"]}`
 
 	InitialTypes = `
 "types": [{
@@ -146,6 +151,9 @@ const (
 }, {
 	"fields": [{"name": "dgraph.graphql.schema_history"},{"name": "dgraph.graphql.schema_created_at"}],
 	"name": "dgraph.graphql.history"
+}, {
+	"fields": [{"name": "dgraph.graphql.p_query"},{"name": "dgraph.graphql.p_sha256hash"}],
+	"name": "dgraph.graphql.persisted_query"
 }]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
