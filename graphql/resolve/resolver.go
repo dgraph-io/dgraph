@@ -484,9 +484,10 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	// we can just execute it.
 	switch {
 	case op.IsQuery():
-		resp.Header = make(map[string][]string)
-		if len(op.CacheControl()) != 0 {
+		if op.CacheControl() != "" {
+			resp.Header = make(map[string][]string)
 			resp.Header.Set(schema.CacheControlHeader, op.CacheControl())
+			resp.Header.Set("Vary", "Accept-Encoding")
 		}
 		resolveQueries()
 	case op.IsMutation():
