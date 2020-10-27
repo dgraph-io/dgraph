@@ -268,10 +268,11 @@ func (it *pIterator) posting() *fb.Posting {
 	for it.pidx < it.plen {
 		bs := it.plist.Postings[it.pidx]
 		posting := fbx.AsPosting(bs)
-		if posting.Uid() > uid {
+		postingUid := posting.Uid()
+		if postingUid > uid {
 			break
 		}
-		if posting.Uid() == uid {
+		if postingUid == uid {
 			return posting
 		}
 		it.pidx++
@@ -325,7 +326,9 @@ func NewPosting(t *pb.DirectedEdge) *fbx.Posting {
 }
 
 func hasDeleteAll(mpost *fb.Posting) bool {
-	return mpost.Op() == Del && bytes.Equal(mpost.ValueBytes(), []byte(x.Star)) && mpost.LangTagLength() == 0
+	return mpost.Op() == Del &&
+		bytes.Equal(mpost.ValueBytes(), []byte(x.Star)) &&
+		mpost.LangTagLength() == 0
 }
 
 // Ensure that you either abort the uncommitted postings or commit them before calling me.
@@ -361,6 +364,8 @@ func (l *List) updateMutationLayer(mpost *fb.Posting, singleUidUpdate bool) erro
 		l.mutationMap[mpost.StartTs()] = plist
 	}
 
+	mpostUid := mpost.Uid()
+
 	if singleUidUpdate {
 		// This handles the special case when adding a value to predicates of type uid.
 		// The current value should be deleted in favor of this value. This needs to
@@ -374,7 +379,7 @@ func (l *List) updateMutationLayer(mpost *fb.Posting, singleUidUpdate bool) erro
 		// applied when the transaction is committed.
 		for _, bs := range plist.Postings {
 			posting := fbx.AsPosting(bs)
-			if posting.Op() == Del && posting.Uid() != mpost.Uid() {
+			if posting.Op() == Del && posting.Uid() != mpostUid {
 				newPlist.Postings = append(newPlist.Postings, posting.Table().Bytes)
 			}
 		}
@@ -382,7 +387,7 @@ func (l *List) updateMutationLayer(mpost *fb.Posting, singleUidUpdate bool) erro
 		err := l.iterate(mpost.StartTs(), 0, func(obj *fb.Posting) error {
 			// Ignore values which have the same uid as they will get replaced
 			// by the current value.
-			if obj.Uid() == mpost.Uid() {
+			if obj.Uid() == mpostUid {
 				return nil
 			}
 
@@ -412,7 +417,7 @@ func (l *List) updateMutationLayer(mpost *fb.Posting, singleUidUpdate bool) erro
 	// Even if we have a delete all in this transaction, we should still pick up any updates since.
 	for i, prevBs := range plist.Postings {
 		prevPosting := fbx.AsPosting(prevBs)
-		if prevPosting.Uid() == mpost.Uid() {
+		if prevPosting.Uid() == mpostUid {
 			plist.Postings[i] = mpost.Table().Bytes
 			return nil
 		}
@@ -652,12 +657,14 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*fb.Posting) {
 	sort.Slice(posts, func(i, j int) bool {
 		pi := posts[i]
 		pj := posts[j]
-		if pi.Uid() == pj.Uid() {
+		piUid := pi.Uid()
+		pjUid := pj.Uid()
+		if piUid == pjUid {
 			ei := effective(pi.StartTs(), pi.CommitTs())
 			ej := effective(pj.StartTs(), pj.CommitTs())
 			return ei > ej // Pick the higher, so we can discard older commits for the same UID.
 		}
-		return pi.Uid() < pj.Uid()
+		return piUid < pjUid
 	})
 	return deleteBelowTs, posts
 }
@@ -707,15 +714,17 @@ loop:
 			pp = fbx.EmptyPosting
 		}
 
+		mpUid := mp.Uid()
+		ppUid := pp.Uid()
 		switch {
-		case mp.Uid() > 0 && mp.Uid() == prevUid:
+		case mpUid > 0 && mpUid == prevUid:
 			// Only pick the latest version of this posting.
 			// mp.Uid can be zero if it's an empty posting.
 			midx++
-		case pp.Uid() == 0 && mp.Uid() == 0:
+		case ppUid == 0 && mpUid == 0:
 			// Reached empty posting for both iterators.
 			return nil
-		case mp.Uid() == 0 || (pp.Uid() > 0 && pp.Uid() < mp.Uid()):
+		case mpUid == 0 || (ppUid > 0 && ppUid < mpUid):
 			// Either mp is empty, or pp is lower than mp.
 			err = f(pp)
 			if err != nil {
@@ -725,7 +734,7 @@ loop:
 			if err = pitr.next(); err != nil {
 				break loop
 			}
-		case pp.Uid() == 0 || (mp.Uid() > 0 && mp.Uid() < pp.Uid()):
+		case ppUid == 0 || (mpUid > 0 && mpUid < ppUid):
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op() != Del {
 				err = f(mp)
@@ -733,16 +742,16 @@ loop:
 					break loop
 				}
 			}
-			prevUid = mp.Uid()
+			prevUid = mpUid
 			midx++
-		case pp.Uid() == mp.Uid():
+		case ppUid == mpUid:
 			if mp.Op() != Del {
 				err = f(mp)
 				if err != nil {
 					break loop
 				}
 			}
-			prevUid = mp.Uid()
+			prevUid = mpUid
 			if err = pitr.next(); err != nil {
 				break loop
 			}
@@ -1031,15 +1040,15 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 	}
 
 	err := l.iterate(readTs, 0, func(p *fb.Posting) error {
-		if p.Uid() > endUid && split {
+		pUid := p.Uid()
+		if pUid > endUid && split {
 			plist.Pack = enc.Done()
 			out.parts[startUid] = plist
 
 			splitIdx++
 			initializeSplit()
 		}
-
-		enc.Add(p.Uid())
+		enc.Add(pUid)
 		if p.FacetsLength() > 0 || p.PostingType() != fb.PostingTypeREF || len(p.Label()) != 0 {
 			plist.Postings = append(plist.Postings, p.Table().Bytes)
 		}
