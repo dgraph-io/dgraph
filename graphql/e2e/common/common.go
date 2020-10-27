@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/schema"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -82,9 +84,10 @@ const (
 // header to the same.
 
 type GraphQLParams struct {
-	Query         string                 `json:"query"`
-	OperationName string                 `json:"operationName"`
-	Variables     map[string]interface{} `json:"variables"`
+	Query         string                    `json:"query"`
+	OperationName string                    `json:"operationName"`
+	Variables     map[string]interface{}    `json:"variables"`
+	Extensions    *schema.RequestExtensions `json:"extensions,omitempty"`
 	acceptGzip    bool
 	gzipEncoding  bool
 	Headers       http.Header
@@ -341,6 +344,7 @@ func RunAll(t *testing.T) {
 	t.Run("alias works for queries", queryWithAlias)
 	t.Run("cascade directive", queryWithCascade)
 	t.Run("query geo near filter", queryGeoNearFilter)
+	t.Run("persisted query", persistedQuery)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
