@@ -160,7 +160,6 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 	//TODO: Add position in error.
 	var errResult, err error
 	authRules := make(map[string]*TypeAuth)
-	interfaceAuthRules := make(map[string]*TypeAuth)
 
 	for _, typ := range s.Types {
 		name := typeName(typ)
@@ -180,41 +179,6 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		}
 	}
 
-	// Initialize a separate Mapping for Interface's Auth rules,
-	// Add all the rules from implementing types to this mapping
-	// and later merge it in the main mapping at last.
-	for _, typ := range s.Types {
-		name := typeName(typ)
-		if typ.Kind == ast.Interface {
-			interfaceAuthRules[name] = &TypeAuth{}
-		}
-	}
-
-	// Store A Mapping To indicate if any of the implementing type for
-	// and interface have Auth Rules
-	implementedTypeHasAuth := make(map[string]bool)
-
-	// Merge Auth Rules of Implementing Types to obtain new auth rules
-	// on interfaces
-	for _, typ := range s.Types {
-		name := typeName(typ)
-		if typ.Kind == ast.Object {
-			if authRules[name] != nil && authRules[name].Rules != nil {
-				for _, intrface := range typ.Interfaces {
-					interfaceName := typeName(s.Types[intrface])
-					interfaceAuthRules[interfaceName].Rules = mergeAuthRulesWithOr(authRules[name].Rules, interfaceAuthRules[interfaceName].Rules)
-					implementedTypeHasAuth[interfaceName] = true
-				}
-			} else {
-				emptyRule := createEmptyDQLRule(name)
-				for _, intrface := range typ.Interfaces {
-					interfaceName := typeName(s.Types[intrface])
-					interfaceAuthRules[interfaceName].Rules = mergeAuthRulesWithOr(&AuthContainer{Query: emptyRule}, interfaceAuthRules[interfaceName].Rules)
-				}
-			}
-		}
-	}
-
 	// Merge the Auth rules on interfaces into the implementing types
 	for _, typ := range s.Types {
 		name := typeName(typ)
@@ -228,12 +192,13 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		}
 	}
 
-	// Replace Interface's auth rules with newly formed auth Rules which includes
-	// Auth rules from implementing Types too. Don't replace if no implementing
-	// have auth rules as there will unncesessary Empty Auth rules added to the interface
-	for k, v := range interfaceAuthRules {
-		if implementedTypeHasAuth[k] == true {
-			authRules[k].Rules = mergeAuthRulesWithAnd(v.Rules, authRules[k].Rules)
+	// Reinitialize the Interface's auth to be empty as Any operation on interface
+	// will be broken into an operation on subsequent implementing types and auth rules
+	// will be verified against the types only.
+	for _, typ := range s.Types {
+		name := typeName(typ)
+		if typ.Kind == ast.Interface {
+			authRules[name] = &TypeAuth{}
 		}
 	}
 
