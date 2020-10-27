@@ -312,8 +312,8 @@ input AddUserInput {
 
 input MessageFilter {
 	has: MessageHasFilter
-	and: MessageFilter
-	or: MessageFilter
+	and: [MessageFilter]
+	or: [MessageFilter]
 	not: MessageFilter
 }
 
@@ -325,8 +325,8 @@ input MessageOrder {
 
 input QuestionFilter {
 	has: QuestionHasFilter
-	and: QuestionFilter
-	or: QuestionFilter
+	and: [QuestionFilter]
+	or: [QuestionFilter]
 	not: QuestionFilter
 }
 
@@ -343,8 +343,8 @@ input QuestionRef {
 
 input UserFilter {
 	has: UserHasFilter
-	and: UserFilter
-	or: UserFilter
+	and: [UserFilter]
+	or: [UserFilter]
 	not: UserFilter
 }
 
