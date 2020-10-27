@@ -82,6 +82,21 @@ func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 		return GenerateClientTLSConfig(conf)
 	}
 
+	// this is for clients which are defined via --tls_cacert
+	conf.RootCACert = v.GetString("tls_cacert")
+	if conf.RootCACert != "" {
+		conf.CertRequired = true
+
+		if v.GetString("tls_cert") == "" || v.GetString("tls_key") == "" {
+			return nil, errors.Errorf("inter node tls is enabled but client certs are not provided. " +
+				"Intern Node is TLS is always client authenticated. Please provide --tls_cert and --tls_key")
+		}
+
+		conf.Cert = v.GetString("tls_cert")
+		conf.Key = v.GetString("tls_key")
+		return GenerateClientTLSConfig(conf)
+	}
+
 	if v.GetString("tls_client_name") != "" {
 		return nil, errors.Errorf("--tls_dir is required for enabling TLS")
 	}
