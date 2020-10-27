@@ -309,5 +309,6 @@ func run() {
 
 	err = store.Close()
 	glog.Infof("Raft WAL closed with err: %v\n", err)
+	st.zero.orc.close()
 	glog.Infoln("All done. Goodbye!")
 }

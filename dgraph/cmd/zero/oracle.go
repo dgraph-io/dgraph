@@ -59,9 +59,9 @@ type Oracle struct {
 }
 
 func initKeyCommit() *z.Tree {
-	f, err := ioutil.TempFile("", "tree")
+	f, err := ioutil.TempFile("", "dgraph-keycommit")
 	x.Check(err)
-	mf, err := z.OpenMmapFileUsing(f, 2<<30, true)
+	mf, err := z.OpenMmapFileUsing(f, 1<<30, true)
 	if err != z.NewFile {
 		x.Check(err)
 	}
@@ -71,7 +71,6 @@ func initKeyCommit() *z.Tree {
 // Init initializes the oracle.
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
-	// TODO: Cleanup
 	o.keyCommit = initKeyCommit()
 	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
@@ -79,11 +78,16 @@ func (o *Oracle) Init() {
 	go o.sendDeltasToSubscribers()
 }
 
+// oracle close releases the memory associated with btree used for keycommit.
+func (o *Oracle) close() {
+	o.keyCommit.Release()
+}
+
 func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
 	defer o.Unlock()
 	o.startTxnTs = ts
-	// TODO: Cleanup
+	o.keyCommit.Release()
 	o.keyCommit = initKeyCommit()
 }
 
@@ -109,10 +113,6 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 func (o *Oracle) purgeBelow(minTs uint64) {
 	o.Lock()
 	defer o.Unlock()
-	lr, ir := o.keyCommit.OccupancyRatio()
-	glog.Infof("Purged below ts:%d, len(o.commits):%d"+
-		", pages:%d, occupancy: [leaf:%f internal:%f]\n",
-		minTs, len(o.commits), o.keyCommit.NumPages(), lr, ir)
 	// Dropping would be cheaper if abort/commits map is sharded
 	for ts := range o.commits {
 		if ts < minTs {
@@ -123,10 +123,8 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	// So we can delete everything from rowCommit whose commitTs < minTs
 	o.keyCommit.DeleteBelow(minTs - 1)
 	o.tmax = minTs
-	lr, ir = o.keyCommit.OccupancyRatio()
 	glog.Infof("Purged below ts:%d, len(o.commits):%d"+
-		", pages:%d, occupancy: [leaf:%f internal:%f]\n",
-		minTs, len(o.commits), o.keyCommit.NumPages(), lr, ir)
+		", pages:%d\n", minTs, len(o.commits), o.keyCommit.NumPages())
 }
 
 func (o *Oracle) commit(src *api.TxnContext) error {
