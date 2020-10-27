@@ -23,9 +23,9 @@ You need the following installed to use this automation:
 
 * **Required**
  * `vpc_name` or `vpc_id` - specify either explicit `vpc_id` or a name of Tag `Name` used
- * `subnets` or use discovery - specify Subnet IDs for subnets that will have access to EFS, or have this discovered automatically
+ * `subnets` or use [discovery](#discovery) - specify Subnet IDs for subnets that will have access to EFS, or have this discovered automatically
 * **Optional**
- * `security_groups` or use discovery - specify SG IDs of security groups to add that will allow access to EFS server, or have this discovered automatically.
+ * `security_groups` or use [discovery](#discovery) - specify SG IDs of security groups to add that will allow access to EFS server, or have this discovered automatically.
  * `dns_name` with `dns_domain` or `zone_id` - this is used to create a friendly alternative name such as `myfileserver.devest.mycompany.com`
  * `encrypted` (default: false) - whether EFS storage is encrypted or not
 
@@ -37,8 +37,8 @@ These are values affected by discovery:
 
   * **VPC Name** - you can supply either explicit `vpc_id` or `vpc_name` if VPC has the tag `Name`.
   * **EKS Cluster Name** - if `eks_cluster_name` is not specified, then the VPC tag `Name` will be used as the EKS Cluster Name.  This is default configuration if both VPC and EKS cluster was provisioned by `eksctl`.
-  * **Private Subnets** - if `subnets` is not specified, private subnets used by an EKS cluster can be discovered provided the tags are set up appropriately (see [Requirements for Discovery](#Requirements for Discovery))
-  * **Security Group** (optional for access)- if `security_groups` is not specified this security group can be discovered provided the tags are set up appropriately (see [Requirements for Discovery](#Requirements for Discovery))
+  * **Private Subnets** - if `subnets` is not specified, private subnets used by an EKS cluster can be discovered provided the tags are set up appropriately (see [Requirements for Discovery](#requirements-for-discovery))
+  * **Security Group** (optional for access)- if `security_groups` is not specified this security group can be discovered provided the tags are set up appropriately (see [Requirements for Discovery](#requirements-for-discovery))
   * **DNS Domain** (optional for DNS name)- a domain name, e.g. `devtest.mycompany.com`, managed by Route53 can be specified to fetch a Zone ID, otherwise a `zone_id` must be specified to use this feature.  When using this, you need to supply the name you want to use, e.g. `myfileserver` with `dns_name`
 
 ### Requirements for Discovery
@@ -67,7 +67,7 @@ A security group used to allow access to EKS Nodes needs to have the following t
 
 ### Define Variables
 
-If discovery is setup (see [Requirements for Discovery](#Requirements for Discovery)), you can specify this for `terraform.tfvars` files:
+If discovery is setup (see [Requirements for Discovery](#requirements-for-discovery)), you can specify this for `terraform.tfvars` files:
 
 ```hcl
 vpc_name         = "dgraph-eks-test-cluster"
