@@ -49,6 +49,9 @@ const (
 	cascadeDirective = "cascade"
 	cascadeArg       = "fields"
 
+	cacheControlDirective = "cacheControl"
+	CacheControlHeader    = "Cache-Control"
+
 	// custom directive args and fields
 	dqlArg      = "dql"
 	httpArg     = "http"
@@ -247,6 +250,7 @@ directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
 
 input IntFilter {
 	eq: Int

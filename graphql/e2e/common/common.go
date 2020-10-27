@@ -283,6 +283,7 @@ func RunAll(t *testing.T) {
 
 	// header tests
 	t.Run("touched uids header", touchedUidsHeader)
+	t.Run("cache-control header", cacheControlHeader)
 
 	// encoding
 	t.Run("gzip compression", gzipCompression)
