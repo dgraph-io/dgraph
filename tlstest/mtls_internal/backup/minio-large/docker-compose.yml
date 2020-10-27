@@ -101,7 +101,7 @@ services:
     image: minio/minio:latest
     container_name: minio1
     env_file:
-      - ../../../backup.env
+      - ../../backup.env
     ports:
       - 9001:9001
     labels:
