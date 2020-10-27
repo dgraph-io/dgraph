@@ -101,9 +101,9 @@ instances to achieve high-availability.
 		"comma separated zero endpoint which will be disabled from TLS encryption."+
 		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
 	flag.Bool("tls_enable_inter_node", false, "enable inter node TLS encryption between cluster nodes.")
-	flag.String("tls_cert", "", "(optional) The Cert file provided by the client to the server.")
+	flag.String("tls_cert", "", "(optional) The Cert file provided for the nodes to connect with the cluster.")
 	flag.String("tls_key", "", "(optional) The private key file "+
-		"provided by the client to the server.")
+		"provided for the nodes to connect with the cluster.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {

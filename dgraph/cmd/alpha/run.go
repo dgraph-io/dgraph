@@ -168,9 +168,9 @@ they form a Raft group and provide synchronous replication.
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
 	flag.Bool("tls_enable_inter_node", false, "(optional) enable inter node TLS encryption between cluster nodes.")
-	flag.String("tls_cert", "", "(optional) The Cert file provided by the client to the server.")
+	flag.String("tls_cert", "", "(optional) The Cert file provided for the nodes to connect with the cluster.")
 	flag.String("tls_key", "", "(optional) The private key file "+
-		"provided by the client to the server.")
+		"provided for the nodes to connect with the cluster.")
 
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
