@@ -107,7 +107,7 @@ func cacheControlHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// confirm that the header value is a non-negative integer
-	require.Equal(t, "5", resp.Header.Get("Cache-Control"))
+	require.Equal(t, "public,max-age=5", resp.Header.Get("Cache-Control"))
 	require.Equal(t, "Accept-Encoding", resp.Header.Get("Vary"))
 }
 
