@@ -91,6 +91,26 @@ func touchedUidsHeader(t *testing.T) {
 	require.Equal(t, touchedUidsInHeader, uint64(gqlResp.Extensions["touched_uids"].(float64)))
 }
 
+func cacheControlHeader(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query @cacheControl(maxAge: 5) {
+			queryCountry {
+				name
+			}
+		}`,
+	}
+	req, err := query.CreateGQLPost(GraphqlURL)
+	require.NoError(t, err)
+
+	client := http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	// confirm that the header value is a non-negative integer
+	require.Equal(t, "5", resp.Header.Get("Cache-Control"))
+	require.Equal(t, "Accept-Encoding", resp.Header.Get("Vary"))
+}
+
 // This test checks that all the different combinations of
 // request sending compressed / uncompressed query and receiving
 // compressed / uncompressed result.
