@@ -175,23 +175,6 @@ minikube config set driver virtualbox
 minikube start --host-only-cidr='192.168.123.1/24'
 ```
 
-Afterward you can test that the file-share works:
-
-```bash
-## Log into an Alpha pod
-RELEASE="my-release"
-kubectl -ti exec $RELEASE-dgraph-alpha-0 -- bash
-## Create a file on NFS volume
-date > /dgraph/backups/hello_world.txt
-exit
-
-## Log into Vagrant NFS Server
-vagrant ssh nfs-server
-## Check Results
-cat /srv/share/hello_world.txt
-logout
-```
-
 #### Minikube with KVM
 
 When using vagrant with libvirt (see [vagrant-libvirt](https://github.com/vagrant-libvirt/vagrant-libvirt)), you can have [minikube](https://github.com/kubernetes/minikube) target the same network
