@@ -8,62 +8,100 @@ weight = 3
 
 In this article you'll learn how to use GraphQL queries to aggregate data from a Dgraph database.
 
-## Count at root
+Dgraph automatically generates count queries for a given GraphQL schema, enabling you to `count` on predicates, edges, and other aggregation fields.
 
-For every `type` defined in GraphQL, Dgraph has an aggregate query `aggregate<type name>`. This query includes a `count` field.
+### Count at root
+
+For every `type` defined in GraphQL, Dgraph generates an aggregate query `aggregate<type name>`. This query includes a `count` field.
 
 For example, taking this GraphQL schema:
 
 ```graphql
+type Post {
+    id: ID!
+    title: String!
+    body: String
+    score: Int
+}
+
 type Author {
     id: ID!
     name: String!
     reputation: [Int]
-    posts: [String]
-    metaData: [Metadata]
+    posts: [Post]
 }
 ```
 
-The aggregate schema looks like:
+#### Examples
+
+1. Root count query without a filter:
+
+   Fetch the number of `posts`.
+
 
 ```graphql
-input AuthorAggregateResult {
-  count: Int
-}
+   query {
+     aggregatePost {
+       count
+     }
+   }
 ```
 
-Finally, the aggregate query will be:
+2. With a filter:
 
+   Fetch the number of `posts` whose titles contain `GraphQL`.
 
 ```graphql
-query {
-    aggregateAuthor(filter: AuthorFilter): AuthorAggregateResult
-}
+   query {
+     aggregatePost(filter: {
+       title: {
+         anyofterms: "GraphQL"
+         }
+       }) {
+       count
+     }
+   }
 ```
 
-## Count for a child
 
-Besides the `aggregate<type name>` query, to do a `count` of predicate edges and other aggregation fields, you need to define a `<predicate_name>_aggregate` field inside a `query<type name>` query.
+### Count for a child
 
-Taking the following GraphQL schema
+Besides the `aggregate<type name>` query, Dgraph defines `aggregate_<predicate_name>` fields inside `query<type name>` queries, allowing you to do a `count` of predicate edges and other aggregation fields.
+
+For example, following with the GraphQL schema from the [Count at root](#count-at-root) section,
+
+#### Examples
+
+1. Count query at a child level without a filter:
+
+   Fetch the number of `posts` for all authors along with their `name`.
 
 ```graphql
-type Author {
-    name: String!
-    posts: [String]
-    metaData: [Metadata]
-}
+   query {
+     queryAuthor {
+       name
+       aggregate_posts {
+        count
+       }
+     }
+   }
 ```
 
-this is a `count` example for the `posts` field:
+2. With a filter:
 
+   Fetch the number of `posts` with a `score` greater than `10` for all authors along with their `name`
+   
 ```graphql
-query {
-    queryAuthor {
-        name
-        posts_aggregate {
-            count
-        }
+   query {
+     queryAuthor {
+       name
+       aggregate_posts(filter: {
+         score: {
+           gt: 10
+         }
+       }) {
+        count
+      }
     }
-}
+  }
 ```
