@@ -117,6 +117,7 @@ config_compose() {
   fi
 
   CFGPATH="./data/config"
+  mkdir -p ./data/config
   [[ -f $CFGPATH/config.toml ]] && rm $CFGPATH/config.toml
   touch $CFGPATH/config.toml
 
