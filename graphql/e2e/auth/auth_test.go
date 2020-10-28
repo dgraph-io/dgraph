@@ -20,12 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dgrijalva/jwt-go/v4"
 	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/google/go-cmp/cmp"
@@ -1314,7 +1314,7 @@ func TestMain(m *testing.M) {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
 
-	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
+	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem")
 		if err != nil {
