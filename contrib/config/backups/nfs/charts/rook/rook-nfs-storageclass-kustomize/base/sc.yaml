@@ -10,5 +10,5 @@ parameters:
   nfsServerName: "{{ .Values.nfs.server }}"
   nfsServerNamespace: "{{ .Values.nfs.namespace }}"
 provisioner: rook.io/nfs-provisioner
-reclaimPolicy: Delete
+reclaimPolicy: Retain
 volumeBindingMode: Immediate

@@ -7,7 +7,7 @@
 terraform.tfvars
 
 ## Configurations auto-generated
-env.sh
+/env.sh
 
 ## Rook temporary helm charts
 rook-nfs-operator

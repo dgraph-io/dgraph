@@ -1,0 +1,69 @@
+releases:
+  #########
+  # Rook NFS configuration - uses helm charts created from kustomize
+  #################################################
+  {{- if eq (env "NFS_STRATEGY") "rook" }}
+  - name: rook-nfs-operator
+    ## NOTE: namespace must also be specified in
+    ##  ./rook-nfs-operator-kustomize/overlays/default/kustomization.yaml
+    namespace: rook-nfs-system
+    ## temporary helm chart rendered by helmify
+    chart: ./rook-nfs-operator
+    hooks:
+      - events:
+          - prepare
+          - cleanup
+        command: ./helmify.sh
+        args:
+          - "{{`{{if eq .Event.Name \"prepare\"}}build{{else}}clean{{end}}`}}"
+          - "{{`{{.Release.Chart}}`}}"
+          - default
+
+  - name: rook-nfs-server
+    ## NOTE: namespace must also be specified in
+    ##  ./rook-nfs-server-kustomize/overlays/default/kustomization.yaml
+    namespace: rook-nfs-system
+    ## temporary helm chart rendered by helmify
+    chart: ./rook-nfs-server
+    values:
+      - nfs:
+          size: {{ env "NFS_DISK_SIZE" | default "32Gi" }}
+          path: {{ env "NFS_PATH" | default "share1" }}
+    hooks:
+      - events:
+          - prepare
+          - cleanup
+        command: ./helmify.sh
+        args:
+          - "{{`{{if eq .Event.Name \"prepare\"}}build{{else}}clean{{end}}`}}"
+          - "{{`{{.Release.Chart}}`}}"
+          - default
+    needs:
+      - rook-nfs-system/rook-nfs-operator
+    disableValidation: true
+
+  - name: rook-nfs-storageclass
+    ## NOTE: namespace must also be specified in
+    ##  ./rook-nfs-storageclass-kustomize/overlays/default/kustomization.yaml
+    namespace: rook-nfs-system
+    ## temporary helm chart rendered by helmify
+    chart: ./rook-nfs-storageclass
+    values:
+      - nfs:
+          server: {{ env "NFS_SERVER" | default "rook-nfs" }}
+          path: {{ env "NFS_PATH" | default "share1" }}
+          namespace: rook-nfs-system
+          claim:
+            size: {{ env "NFS_CLAIM_SIZE" | default "32Gi" }}
+            name: {{ env "NFS_CLAIM_NAME" | default "rook-nfs-pv-claim" }}
+            namespace: default
+    hooks:
+      - events:
+          - prepare
+          - cleanup
+        command: ./helmify.sh
+        args:
+          - "{{`{{if eq .Event.Name \"prepare\"}}build{{else}}clean{{end}}`}}"
+          - "{{`{{.Release.Chart}}`}}"
+          - default
+  {{- end }}

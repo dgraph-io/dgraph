@@ -29,9 +29,18 @@ You can provision external NFS with the scripts for use with the Dgraph cluster 
   * [Google Cloud Filestore](gcfs-terraform/README.md) - use Filestore as NFS share on GKE.
   * [Amazon Elastic File System](efs-terraform/README.md) - use EFS as NFS share on EKS.
 
+### Using Rook Solution
+
+You can use a NFS server running as a pod using [Rook](https://rook.io/) NFS Operator.  To enabled this run the following before running [Kubernetes Environment](#testing-nfs-with-kubernetes).
+
+```bash
+cp charts/rook/env.sh env.sh
+```
+
+
 ### Using Local Vagrant Solution
 
-As configuring NFS for your local operating system or distro can vary greatly, a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, the NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [MiniKube](https://github.com/kubernetes/minikube) environments.
+As configuring NFS for your local operating system or distro can vary greatly, a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, this NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [MiniKube](https://github.com/kubernetes/minikube) environments.
 
 #### Vagrant Server
 
@@ -86,12 +95,7 @@ export NFS_SERVER="<server-ip-address>"
 docker-compose up --detach
 ```
 
-### Access Ratel UI
-
-* Ratel UI: http://localhost:8000
-  * configuration for Alpha is http://localhost:8080
-
-### Cleanup
+### Docker Cleanup
 
 When finished, you can remove containers and volume resource with:
 
@@ -104,7 +108,7 @@ docker volume ls | grep -q nfs_mount || docker volume rm nfs_nfsmount > /dev/nul
 
 ### Setup Env Vars
 
-If you used automation from local [Vagrant Solution](#using-local-vagrant-solution), cloud solution with [EFS](./efs-terraform/README.md) or [Google Cloud Filestore](./gcfs-terraform/README.md), you can skip this step.  
+If you used automation from local [Vagrant Solution](#using-local-vagrant-solution), [Rook Solution](#using-rook-solution) cloud solution with [EFS](./efs-terraform/README.md) or [Google Cloud Filestore](./gcfs-terraform/README.md), you can skip this step.  
 
 Otherwise, you will need to create a file named `env.sh` and configure the IP address (or DNS name) and exported NFS shared file path:
 
@@ -129,21 +133,21 @@ helmfile delete
 
 ### MiniKube Notes
 
-If you are using NFS with [Vagrant Solution](#using-local-vagrant-solution), you will need to park MiniKube nodes on the same private network.
+If you are using NFS with [Vagrant Solution](#using-local-vagrant-solution), you will need to park MiniKube on the same private network as Vagrant.
 
-For VirtualBox environments, where both Vagrant and MiniKube will use Virtualbox, you can do this:
+For VirtualBox environments, where both Vagrant and MiniKube will use Virtualbox, you can do the following:
 
 ```bash
 ## Set Driver to Virtualbox (same as Vagrant provider)
 minikube config set driver virtualbox
-## Start a 3 node miniKube cluster
-minikube start --host-only-cidr='192.168.123.1/24' --nodes 3 --profile 'my-dev-cluster'
+## Start a miniKube cluster
+minikube start --host-only-cidr='192.168.123.1/24'
 ```
 
-Afterward you can that the file share works:
+Afterward you can test that the fileshare works:
 
 ```bash
-## Log Into an Alpha pod
+## Log into an Alpha pod
 RELEASE="my-release"
 kubectl -ti exec $RELEASE-dgraph-alpha-0 -- bash
 ## Create a file on NFS volume
@@ -154,6 +158,7 @@ exit
 vagrant ssh nfs-server
 ## Check Results
 cat /srv/share/hello_world.txt
+logout
 ```
 
 ## Accessing Dgraph Services
@@ -165,10 +170,11 @@ In a [Kubernetes Environment](#testing-nfs-with-kubernetes), you will need to us
 For Dgraph Alpha, you can use this to access it at http://localhost:8080:
 
 ```bash
+RELEASE="my-release"
 export ALPHA_POD_NAME=$(
  kubectl get pods \
   --namespace default \
-  --selector "statefulset.kubernetes.io/pod-name=my-release-dgraph-alpha-0,release=my-release" \
+  --selector "statefulset.kubernetes.io/pod-name=$RELEASE-dgraph-alpha-0,release=$RELEASE" \
   --output jsonpath="{.items[0].metadata.name}"
 )
 
@@ -178,12 +184,14 @@ kubectl --namespace default port-forward $ALPHA_POD_NAME 8080:8080
 For Dgraph Ratel UI, you can use this to access it at http://localhost:8000:
 
 ```bash
+RELEASE="my-release"
 export RATEL_POD_NAME=$(
  kubectl get pods \
   --namespace default \
-  --selector "component=ratel,release=my-release" \
+  --selector "component=ratel,release=$RELEASE" \
   --output jsonpath="{.items[0].metadata.name}"
 )
+
 kubectl --namespace default port-forward $RATEL_POD_NAME 8000:8000
 ```
 
