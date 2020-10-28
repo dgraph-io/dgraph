@@ -3,7 +3,7 @@
 When using a file system for binary backups, NFS is recommended so that *backups work seamlessly across multiple machines and/or containers*.
 
 * [Provisioning NFS Overview](#provisioning-nfs-overview)
-* [Instructions](#instructions)
+* [Provision NFS Server](#provision-nfs-server)
   * [Using Remote Cloud Solutions](#using-remote-cloud-solutions)
   * [Using Rook Solution](#using-rook-solution)
   * [Using Local Vagrant Solution](#using-local-vagrant-solution)
@@ -11,11 +11,11 @@ When using a file system for binary backups, NFS is recommended so that *backups
     * [Vagrant Client (Optional)](#vagrant-client-optional)
     * [Vagrant Cleanup](#vagrant-cleanup)
 * [Testing NFS with Docker Compose](#testing-nfs-with-docker-compose)
-  * [Setup Env Vars](#setup-env-vars)
+  * [Setup Env Vars for Docker Compose](#setup-env-vars-for-docker-compose)
   * [Start Docker Compose with NFS Volume](#start-docker-compose-with-nfs-volume)
   * [Docker Cleanup](#docker-cleanup)
 * [Testing NFS with Kubernetes](#testing-nfs-with-kubernetes)
-  * [Setup Env Vars](#setup-env-vars)
+  * [Setup Env Vars for Kbuernetes](#setup-env-vars-for-kubernets)
   * [Deploy Using Helmfile](#deploy-using-helmfile)
   * [Cleanup Using Helmfile](#cleanup-using-helmfile)
   * [Minikube Notes](#minikube-notes)
@@ -40,7 +40,7 @@ This guide is not meant to be complete, but rather to get you started on your ba
 * Internal NFS (deployed as a container)
   * [Rook](https://rook.io/) NFS operator to deploy container offering NFS Server with [Genesha NFS Server](https://github.com/nfs-ganesha/nfs-ganesha/wiki)
 
-## Instructions
+## Provision NFS Server
 
 ### Using Remote Cloud Solutions
 
@@ -97,7 +97,7 @@ vagrant destroy
 
 ## Testing NFS with Docker Compose
 
-### Setup Env Vars
+### Setup Env Vars for Docker Compose
 
 If you used automation from [Vagrant Solution](#using-local-vagrant-solution), you can skip this step.  
 
@@ -128,7 +128,7 @@ docker volume ls | grep -q nfs_mount || docker volume rm nfs_nfsmount > /dev/nul
 
 ## Testing NFS with Kubernetes
 
-### Setup Env Vars
+### Setup Env Vars for Kubernetes
 
 If you used automation from local [Vagrant Solution](#using-local-vagrant-solution), [Rook Solution](#using-rook-solution) cloud solution with [EFS](./efs-terraform/README.md) or [Google Cloud Filestore](./gcfs-terraform/README.md), you can skip this step.  
 
