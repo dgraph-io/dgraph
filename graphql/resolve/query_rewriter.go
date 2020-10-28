@@ -148,34 +148,9 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) *gql.GraphQuery {
 	// Get the type which the count query is written for
 	mainType := query.ConstructedFor()
 
-	rbac := authRw.evaluateStaticRules(mainType)
-	dgQuery := &gql.GraphQuery{
-		Attr: query.Name(),
-	}
-
+	dgQuery, rbac := addCommonRules(query, mainType, authRw)
 	if rbac == schema.Negative {
-		dgQuery.Attr = dgQuery.Attr + "()"
 		return dgQuery
-	}
-
-	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) && (authRw.varName != "" || authRw.parentVarName != "") {
-		// When rewriting auth rules, they always start like
-		//   Todo2 as var(func: uid(Todo1)) @cascade {
-		// Where Todo1 is the variable generated from the filter of the field
-		// we are adding auth to.
-
-		authRw.addVariableUIDFunc(dgQuery)
-		// This is executed when querying while performing delete mutation request since
-		// in case of delete mutation we already have variable `MutationQueryVar` at root level.
-		if authRw.filterByUid {
-			// Since the variable is only added at the top level we reset the `authRW` variables.
-			authRw.varName = ""
-			authRw.filterByUid = false
-		}
-	} else if ids := idFilter(extractQueryFilter(query), mainType.IDField()); ids != nil {
-		addUIDFunc(dgQuery, ids)
-	} else {
-		addTypeFunc(dgQuery, mainType.Name())
 	}
 
 	// Add filter
@@ -435,15 +410,17 @@ func rewriteAsGet(
 	return dgQuery
 }
 
-func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
-	rbac := authRw.evaluateStaticRules(field.Type())
+// Adds common RBAC and UID, Type rules to DQL query.
+// This function is used by rewriteAsQuery and aggregateQuery functions
+func addCommonRules(field schema.Field, fieldType schema.Type, authRw *authRewriter) (*gql.GraphQuery, schema.RuleResult) {
+	rbac := authRw.evaluateStaticRules(fieldType)
 	dgQuery := &gql.GraphQuery{
 		Attr: field.Name(),
 	}
 
 	if rbac == schema.Negative {
 		dgQuery.Attr = dgQuery.Attr + "()"
-		return dgQuery
+		return dgQuery, rbac
 	}
 
 	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) && (authRw.varName != "" || authRw.parentVarName != "") {
@@ -460,10 +437,18 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 			authRw.varName = ""
 			authRw.filterByUid = false
 		}
-	} else if ids := idFilter(extractQueryFilter(field), field.Type().IDField()); ids != nil {
+	} else if ids := idFilter(extractQueryFilter(field), fieldType.IDField()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
-		addTypeFunc(dgQuery, field.Type().DgraphName())
+		addTypeFunc(dgQuery, fieldType.DgraphName())
+	}
+	return dgQuery, rbac
+}
+
+func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
+	dgQuery, rbac := addCommonRules(field, field.Type(), authRw)
+	if rbac == schema.Negative {
+		return dgQuery
 	}
 
 	addArgumentsToField(dgQuery, field)

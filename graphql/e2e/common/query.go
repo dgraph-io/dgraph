@@ -2310,3 +2310,65 @@ func queryGeoNearFilter(t *testing.T) {
 	// Cleanup
 	deleteGqlType(t, "Hotel", map[string]interface{}{}, 3, nil)
 }
+
+func queryCountWithFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost (filter: {title : { anyofterms : "Introducing" }} ) {
+				count
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{"aggregatePost":{"count":1}}`,
+		string(gqlResponse.Data))
+
+	queryPostParams = &GraphQLParams{
+		Query: `query {
+			aggregatePost (filter: {title : { anyofterms : "Nothing" }} ) {
+				count
+			}
+		}`,
+	}
+
+	gqlResponse = queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{"aggregatePost":{"count":0}}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountWithoutFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost {
+				count
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{"aggregatePost":{"count":4}}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountWithAlias(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost {
+				cnt: count
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{"aggregatePost":{"cnt":4}}`,
+		string(gqlResponse.Data))
+}
