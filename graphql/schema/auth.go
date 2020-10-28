@@ -186,7 +186,7 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 			for _, intrface := range typ.Interfaces {
 				interfaceName := typeName(s.Types[intrface])
 				if authRules[interfaceName] != nil && authRules[interfaceName].Rules != nil {
-					authRules[name].Rules = mergeAuthRulesWithAnd(authRules[name].Rules, authRules[interfaceName].Rules)
+					authRules[name].Rules = mergeAuthRules(authRules[name].Rules, authRules[interfaceName].Rules, mergeAuthNodeWithAnd)
 				}
 			}
 		}
@@ -219,23 +219,6 @@ func mergeAuthNodeWithOr(objectAuth, interfaceAuth *RuleNode) *RuleNode {
 	return ruleNode
 }
 
-func mergeAuthRulesWithOr(objectRules, interfaceRules *AuthContainer) *AuthContainer {
-	if interfaceRules == nil {
-		return &AuthContainer{
-			Query:  objectRules.Query,
-			Add:    objectRules.Add,
-			Delete: objectRules.Delete,
-			Update: objectRules.Update,
-		}
-	}
-
-	interfaceRules.Query = mergeAuthNodeWithOr(objectRules.Query, interfaceRules.Query)
-	interfaceRules.Add = mergeAuthNodeWithOr(objectRules.Add, interfaceRules.Add)
-	interfaceRules.Delete = mergeAuthNodeWithOr(objectRules.Delete, interfaceRules.Delete)
-	interfaceRules.Update = mergeAuthNodeWithOr(objectRules.Update, interfaceRules.Update)
-	return interfaceRules
-}
-
 func mergeAuthNodeWithAnd(objectAuth, interfaceAuth *RuleNode) *RuleNode {
 	if objectAuth == nil {
 		return interfaceAuth
@@ -250,7 +233,7 @@ func mergeAuthNodeWithAnd(objectAuth, interfaceAuth *RuleNode) *RuleNode {
 	return ruleNode
 }
 
-func mergeAuthRulesWithAnd(objectAuthRules, interfaceAuthRules *AuthContainer) *AuthContainer {
+func mergeAuthRules(objectAuthRules, interfaceAuthRules *AuthContainer, mergeAuthNode func(*RuleNode, *RuleNode) *RuleNode) *AuthContainer {
 	// return copy of interfaceAuthRules since it is a pointer and otherwise it will lead
 	// to unnecessary errors
 	if objectAuthRules == nil {
@@ -262,10 +245,10 @@ func mergeAuthRulesWithAnd(objectAuthRules, interfaceAuthRules *AuthContainer) *
 		}
 	}
 
-	objectAuthRules.Query = mergeAuthNodeWithAnd(objectAuthRules.Query, interfaceAuthRules.Query)
-	objectAuthRules.Add = mergeAuthNodeWithAnd(objectAuthRules.Add, interfaceAuthRules.Add)
-	objectAuthRules.Delete = mergeAuthNodeWithAnd(objectAuthRules.Delete, interfaceAuthRules.Delete)
-	objectAuthRules.Update = mergeAuthNodeWithAnd(objectAuthRules.Update, interfaceAuthRules.Update)
+	objectAuthRules.Query = mergeAuthNode(objectAuthRules.Query, interfaceAuthRules.Query)
+	objectAuthRules.Add = mergeAuthNode(objectAuthRules.Add, interfaceAuthRules.Add)
+	objectAuthRules.Delete = mergeAuthNode(objectAuthRules.Delete, interfaceAuthRules.Delete)
+	objectAuthRules.Update = mergeAuthNode(objectAuthRules.Update, interfaceAuthRules.Update)
 	return objectAuthRules
 }
 
