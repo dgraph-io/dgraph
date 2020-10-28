@@ -166,7 +166,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		}
 	}
 
-	glog.Infof("Created backup request: %s. Groups=%v\n", req, groups)
+	glog.Infof("Created backup request: read_ts:%d since_ts:%d unix_ts:\"%s\" destination:\"%s\" . Groups=%v\n", req.ReadTs, req.SinceTs, req.UnixTs, req.Destination, groups)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

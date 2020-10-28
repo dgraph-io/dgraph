@@ -38,7 +38,7 @@ This is a quick-start guide to running Dgraph.
 For an interactive walkthrough, take the [tour](https://dgraph.io/tour/).
 
 {{% notice "tip" %}}
-This guide is for the powerful query language of Dgraph, [GraphQL+-](https://dgraph.io/docs/master/query-language/#graphql)
+This guide is for the powerful query language of Dgraph, [DQL](https://dgraph.io/docs/master/query-language/#graphql)
 which is a variation of a query language created by Facebook, [GraphQL](https://graphql.org/).
 
 You can find the instructions to get started with GraphQL from
@@ -199,7 +199,7 @@ curl -H "Content-Type: application/graphql+-" "localhost:8080/query" -XPOST -d $
 ```
 
 {{% notice "tip" %}}
-You can also run the GraphQL+- query from the Ratel UI's query tab.
+You can also run the DQL query from the Ratel UI's query tab.
 {{% /notice %}}
 
 #### Get all movies released after "1980"

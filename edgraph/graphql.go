@@ -19,13 +19,17 @@ package edgraph
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 // ResetCors make the dgraph to accept all the origins if no origins were given
@@ -94,7 +98,7 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 	return err
 }
 
-// GetCorsOrigins retrive all the cors origin from the database.
+// GetCorsOrigins retrieve all the cors origin from the database.
 func GetCorsOrigins(ctx context.Context) ([]string, error) {
 	req := &api.Request{
 		Query: `query{
@@ -150,4 +154,121 @@ func UpdateSchemaHistory(ctx context.Context, schema string) error {
 	}
 	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
 	return err
+}
+
+// ProcessPersistedQuery stores and retrieves persisted queries by following waterfall logic:
+// 1. If sha256Hash is not provided process queries without persisting
+// 2. If sha256Hash is provided try retrieving persisted queries
+//		2a. Persisted Query not found
+//		    i) If query is not provided then throw "PersistedQueryNotFound"
+//			ii) If query is provided then store query in dgraph only if sha256 of the query is correct
+//				otherwise throw "provided sha does not match query"
+//      2b. Persisted Query found
+//		    i)  If query is not provided then update gqlRes with the found query and proceed
+//			ii) If query is provided then match query retrieved, if identical do nothing else
+//				throw "query does not match persisted query"
+func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
+	query := gqlReq.Query
+	sha256Hash := gqlReq.Extensions.PersistedQuery.Sha256Hash
+
+	if sha256Hash == "" {
+		return nil
+	}
+
+	queryForSHA := `query Me($sha: string){
+						me(func: eq(dgraph.graphql.p_sha256hash, $sha)){
+							dgraph.graphql.p_query
+						}
+					}`
+	variables := map[string]string{
+		"$sha": sha256Hash,
+	}
+	req := &api.Request{
+		Query:    queryForSHA,
+		Vars:     variables,
+		ReadOnly: true,
+	}
+
+	storedQuery, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+
+	if err != nil {
+		glog.Errorf("Error while querying sha %s", sha256Hash)
+		return err
+	}
+
+	type shaQueryResponse struct {
+		Me []struct {
+			PersistedQuery string `json:"dgraph.graphql.p_query"`
+		} `json:"me"`
+	}
+
+	shaQueryRes := &shaQueryResponse{}
+	if len(storedQuery.Json) > 0 {
+		if err := json.Unmarshal(storedQuery.Json, shaQueryRes); err != nil {
+			return err
+		}
+	}
+
+	if len(shaQueryRes.Me) == 0 {
+		if query == "" {
+			return errors.New("PersistedQueryNotFound")
+		}
+		if match, err := hashMatches(query, sha256Hash); err != nil {
+			return err
+		} else if !match {
+			return errors.New("provided sha does not match query")
+		}
+
+		req := &api.Request{
+			Mutations: []*api.Mutation{
+				{
+					Set: []*api.NQuad{
+						{
+							Subject:     "_:a",
+							Predicate:   "dgraph.graphql.p_query",
+							ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: query}},
+						},
+						{
+							Subject:     "_:a",
+							Predicate:   "dgraph.graphql.p_sha256hash",
+							ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: sha256Hash}},
+						},
+						{
+							Subject:   "_:a",
+							Predicate: "dgraph.type",
+							ObjectValue: &api.Value{Val: &api.Value_StrVal{
+								StrVal: "dgraph.graphql.persisted_query"}},
+						},
+					},
+				},
+			},
+			CommitNow: true,
+		}
+
+		_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
+		return err
+
+	}
+
+	if len(shaQueryRes.Me) != 1 {
+		return fmt.Errorf("same sha returned %d queries", len(shaQueryRes.Me))
+	}
+
+	if len(query) > 0 && shaQueryRes.Me[0].PersistedQuery != query {
+		return errors.New("query does not match persisted query")
+	}
+
+	gqlReq.Query = shaQueryRes.Me[0].PersistedQuery
+	return nil
+
+}
+
+func hashMatches(query, sha256Hash string) (bool, error) {
+	hasher := sha256.New()
+	_, err := hasher.Write([]byte(query))
+	if err != nil {
+		return false, err
+	}
+	hashGenerated := hex.EncodeToString(hasher.Sum(nil))
+	return hashGenerated == sha256Hash, nil
 }

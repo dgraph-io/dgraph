@@ -301,3 +301,188 @@ query {
 ```
 
 which is helpful for example if the enums are something like product codes where regular expressions can match a number of values. 
+
+### Geolocation
+
+There are 3 Geolocation types: `Point`, `Polygon` and `MultiPolygon`. All of them are searchable. 
+
+The following table lists the generated filters for each type when you include `@search` on the corresponding field:
+
+| type | constructed searches |
+|----------|----------------------|
+| `Point` | `near`, `within` |
+| `Polygon` | `near`, `within`, `contains`, `intersects` |
+| `MultiPolygon` | `near`, `within`, `contains`, `intersects` |
+
+#### Example
+
+Take for example a `Hotel` type that has a `location` and an `area`:
+
+```graphql
+type Hotel {
+  id: ID!
+  name: String!
+  location: Point @search
+  area: Polygon @search
+}
+```
+
+#### near
+
+The `near` filter matches all entities where the location given by a field is within a distance `meters` from a coordinate.
+
+```graphql
+queryHotel(filter: {
+    location: { 
+        near: {
+            coordinate: {
+                latitute: 37.771935, 
+                longitude: -122.469829
+            }, 
+            distance: 1000
+        }
+    }
+}) {
+  name
+}
+```
+
+#### within
+
+The `within` filter matches all entities where the location given by a field is within a defined `polygon`.
+
+```graphql
+queryHotel(filter: {
+    location: { 
+        within: {
+            polygon: {
+                coordinates: [{
+                    points: [{
+                        latitude: 11.11,
+                        longitude: 22.22
+                    }, {
+                        latitude: 15.15,
+                        longitude: 16.16
+                    }, {
+                        latitude: 20.20,
+                        longitude: 21.21
+                    }, {
+                        latitude: 11.11,
+                        longitude: 22.22
+                    }]
+                }],
+            }
+        }
+    }
+}) {
+  name
+}
+```
+
+#### contains
+
+The `contains` filter matches all entities where the `Polygon` or `MultiPolygon` field contains another given `point` or `polygon`.
+
+{{% notice "tip" %}}
+Only one `point` or `polygon` can be taken inside the `ContainsFilter` at a time.
+{{% /notice %}}
+
+```graphql
+queryHotel(filter: {
+    area: { 
+        contains: {
+            point: {
+                coordinates: [{
+                    latitute: 37.771935, 
+                    longitude: -122.469829
+                }],
+            }
+        }
+    }
+}) {
+  name
+}
+
+```
+
+#### intersects 
+
+The `intersects` filter matches all entities where the `Polygon` or `MultiPolygon` field intersects another given `polygon` or `multiPolygon`.
+
+{{% notice "tip" %}}
+Only one `polygon` or `multiPolygon` can be given inside the `IntersectsFilter` at a time.
+{{% /notice %}}
+
+```graphql
+  queryHotel(filter: {
+    area: {
+      intersects: {
+        multiPolygon: {
+          polygons: [{
+            coordinates: [{
+              points: [{
+                latitude: 11.11,
+                longitude: 22.22
+              }, {
+                latitude: 15.15,
+                longitude: 16.16
+              }, {
+                latitude: 20.20,
+                longitude: 21.21
+              }, {
+                latitude: 11.11,
+                longitude: 22.22
+              }]
+            }, {
+              points: [{
+                latitude: 11.18,
+                longitude: 22.28
+              }, {
+                latitude: 15.18,
+                longitude: 16.18
+              }, {
+                latitude: 20.28,
+                longitude: 21.28
+              }, {
+                latitude: 11.18,
+                longitude: 22.28
+              }]
+            }]
+          }, {
+            coordinates: [{
+              points: [{
+                latitude: 91.11,
+                longitude: 92.22
+              }, {
+                latitude: 15.15,
+                longitude: 16.16
+              }, {
+                latitude: 20.20,
+                longitude: 21.21
+              }, {
+                latitude: 91.11,
+                longitude: 92.22
+              }]
+            }, {
+              points: [{
+                latitude: 11.18,
+                longitude: 22.28
+              }, {
+                latitude: 15.18,
+                longitude: 16.18
+              }, {
+                latitude: 20.28,
+                longitude: 21.28
+              }, {
+                latitude: 11.18,
+                longitude: 22.28
+              }]
+            }]
+          }]
+        }
+      }
+    }
+  }) {
+    name
+  }
+```

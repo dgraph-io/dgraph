@@ -79,7 +79,7 @@ Info "waiting for zero to become leader"
 DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
 
 Info "bringing up alpha container"
-DockerCompose up -d --force-recreate alpha1 alpha2 alpha3
+DockerCompose up -d --remove-orphans --force-recreate alpha1 alpha2 alpha3
 
 Info "waiting for alpha to be ready"
 DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"
@@ -131,12 +131,12 @@ fi
 
 if [[ $CLEANUP == all ]]; then
     Info "bringing down zero and alpha and data volumes"
-    DockerCompose down -v
+    DockerCompose down -v --remove-orphans
 elif [[ $CLEANUP == none ]]; then
     Info "leaving up zero and alpha"
 else
     Info "bringing down zero and alpha only"
-    DockerCompose down
+    DockerCompose down --remove-orphans
 fi
 
 exit $FOUND_DIFFS
