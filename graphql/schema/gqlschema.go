@@ -51,6 +51,7 @@ const (
 	generateGetField        = "get"
 	generateQueryField      = "query"
 	generatePasswordField   = "password"
+	generateAggregateField  = "aggregate"
 	generateMutationArg     = "mutation"
 	generateAddField        = "add"
 	generateUpdateField     = "update"
@@ -250,6 +251,7 @@ input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
 	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
@@ -525,6 +527,7 @@ type GenerateDirectiveParams struct {
 	generateGetQuery       bool
 	generateFilterQuery    bool
 	generatePasswordQuery  bool
+	generateAggregateQuery bool
 	generateAddMutation    bool
 	generateUpdateMutation bool
 	generateDeleteMutation bool
@@ -536,6 +539,7 @@ func parseGenerateDirectiveParams(defn *ast.Definition) *GenerateDirectiveParams
 		generateGetQuery:       true,
 		generateFilterQuery:    true,
 		generatePasswordQuery:  true,
+		generateAggregateQuery: true,
 		generateAddMutation:    true,
 		generateUpdateMutation: true,
 		generateDeleteMutation: true,
@@ -558,6 +562,11 @@ func parseGenerateDirectiveParams(defn *ast.Definition) *GenerateDirectiveParams
 			if passwordField := queryArg.Value.Children.ForName(generatePasswordField); passwordField != nil {
 				if passwordFieldVal, err := passwordField.Value(nil); err == nil {
 					ret.generatePasswordQuery = passwordFieldVal.(bool)
+				}
+			}
+			if aggregateField := queryArg.Value.Children.ForName(generateAggregateField); aggregateField != nil {
+				if aggregateFieldVal, err := aggregateField.Value(nil); err == nil {
+					ret.generateAggregateQuery = aggregateFieldVal.(bool)
 				}
 			}
 		}
@@ -843,7 +852,9 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addFilterType(sch, defn)
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
-		addAggregationResultType(sch, defn)
+		if params.generateAggregateQuery {
+			addAggregationResultType(sch, defn)
+		}
 		addQueries(sch, defn, params)
 		addTypeHasFilter(sch, defn)
 	}
@@ -1602,7 +1613,7 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition, generateSubscripti
 
 }
 
-func addAggregationQuery(schema *ast.Schema, defn *ast.Definition) {
+func addAggregationQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	qry := &ast.FieldDefinition{
 		Name: "aggregate" + defn.Name,
 		Type: &ast.Type{
@@ -1613,7 +1624,7 @@ func addAggregationQuery(schema *ast.Schema, defn *ast.Definition) {
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 	subs := defn.Directives.ForName(subscriptionDirective)
-	if subs != nil {
+	if subs != nil || generateSubscription {
 		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 	}
 
@@ -1670,7 +1681,9 @@ func addQueries(schema *ast.Schema, defn *ast.Definition, params *GenerateDirect
 		addFilterQuery(schema, defn, params.generateSubscription)
 	}
 
-	addAggregationQuery(schema, defn)
+	if params.generateAggregateQuery {
+		addAggregationQuery(schema, defn, params.generateSubscription)
+	}
 }
 
 func addAddMutation(schema *ast.Schema, defn *ast.Definition) {

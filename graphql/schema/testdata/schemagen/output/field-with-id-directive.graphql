@@ -180,6 +180,7 @@ input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
 	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {

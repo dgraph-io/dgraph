@@ -20,11 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go/v4"
 	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/dgrijalva/jwt-go/v4"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -892,12 +893,12 @@ func TestRootCountQuery(t *testing.T) {
 
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
-			getUserParams := &common.GraphQLParams{
+			params := &common.GraphQLParams{
 				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
@@ -982,12 +983,12 @@ func TestRBACFilterWithCountQuery(t *testing.T) {
 
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
-			getUserParams := &common.GraphQLParams{
+			params := &common.GraphQLParams{
 				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
