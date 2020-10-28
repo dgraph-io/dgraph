@@ -2,8 +2,8 @@
 
 When using a file system for binary backups, NFS is recommended so that *backups work seamlessly across multiple machines and/or containers*.
 
-* [Provisioning NFS Overview](#provisioning-nfs-overview)
-* [Provision NFS Server](#provision-nfs-server)
+* [Overview of NFS Servers](#overview-of-nfs-servers)
+* [Provision NFS Server Instructions](#provision-nfs-server-instructions)
   * [Using Remote Cloud Solutions](#using-remote-cloud-solutions)
   * [Using Rook Solution](#using-rook-solution)
   * [Using Local Vagrant Solution](#using-local-vagrant-solution)
@@ -25,7 +25,7 @@ When using a file system for binary backups, NFS is recommended so that *backups
 * [Accessing Dgraph Services](#accessing-dgraph-services)
 * [Trigger a Backup](#trigger-a-backup)
 
-## Provisioning NFS Overview
+## Overview of NFS Servers
 
 You can use external NFS outside of the [Docker](https://www.docker.com/) or [Kubernetes](https://kubernetes.io/), or deploy a container offering NFS services.  For production environments, using an NFS server external to the cluster can increase availability in an event where [Kubernetes](https://kubernetes.io/) services get interrupted. In more advanced scenarios, deploying a container offering NFS services, where the storage is backed by high-speed storage such as [Ceph](https://ceph.io/) is beneficial for large datasets.  In this latter scenario, secondary storage such as an object store by the cloud provider could be used for greater availability in event of where Kubernetes services or the [Kubernetes](https://kubernetes.io/) cluster itself has a failure event.
 
@@ -40,7 +40,7 @@ This guide is not meant to be complete, but rather to get you started on your ba
 * Internal NFS (deployed as a container)
   * [Rook](https://rook.io/) NFS operator to deploy container offering NFS Server with [Genesha NFS Server](https://github.com/nfs-ganesha/nfs-ganesha/wiki)
 
-## Provision NFS Server
+## Provision NFS Server Instructions
 
 ### Using Remote Cloud Solutions
 
