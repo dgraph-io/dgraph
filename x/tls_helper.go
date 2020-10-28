@@ -86,7 +86,6 @@ func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 	conf.RootCACert = v.GetString("tls_cacert")
 	if conf.RootCACert != "" {
 		conf.CertRequired = true
-
 		if v.GetString("tls_cert") == "" || v.GetString("tls_key") == "" {
 			return nil, errors.Errorf("inter node tls is enabled but client certs are not provided. " +
 				"Intern Node is TLS is always client authenticated. Please provide --tls_cert and --tls_key")
@@ -96,11 +95,6 @@ func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 		conf.Key = v.GetString("tls_key")
 		return GenerateClientTLSConfig(conf)
 	}
-
-	if v.GetString("tls_client_name") != "" {
-		return nil, errors.Errorf("--tls_dir is required for enabling TLS")
-	}
-
 	return nil, nil
 }
 
@@ -118,8 +112,10 @@ func LoadServerTLSConfigForInternalPort(tlsEnabled bool, tlsDir string) (*tls.Co
 		conf.Cert = path.Join(conf.CertDir, TLSNodeCert)
 		conf.Key = path.Join(conf.CertDir, TLSNodeKey)
 		conf.ClientAuth = "REQUIREANDVERIFY"
+		return GenerateServerTLSConfig(&conf)
 	}
-	return GenerateServerTLSConfig(&conf)
+
+	return nil, nil
 }
 
 // LoadServerTLSConfig loads the TLS config into the server with the given parameters.
@@ -245,7 +241,7 @@ func setupClientAuth(authType string) (tls.ClientAuthType, error) {
 // GenerateServerTLSConfig creates and returns a new *tls.Config with the
 // configuration provided.
 func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err error) {
-	if config != nil && config.CertRequired {
+	if config.CertRequired {
 		tlsCfg = new(tls.Config)
 		cert, err := tls.LoadX509KeyPair(config.Cert, config.Key)
 		if err != nil {
@@ -276,10 +272,6 @@ func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err e
 // GenerateClientTLSConfig creates and returns a new client side *tls.Config with the
 // configuration provided.
 func GenerateClientTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err error) {
-	if config == nil {
-		return nil, nil
-	}
-
 	caCert := config.RootCACert
 	if caCert != "" {
 		tlsCfg := tls.Config{}
