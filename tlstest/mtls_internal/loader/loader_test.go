@@ -36,7 +36,7 @@ import (
 func TestLoaderXidmap(t *testing.T) {
 	conf := viper.GetViper()
 	conf.Set("tls_cacert", "../tls/live/ca.crt")
-	conf.Set("tls_enable_inter_node", true)
+	conf.Set("tls_internal_port_enabled", true)
 	conf.Set("tls_server_name", "alpha1")
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
@@ -56,7 +56,7 @@ func TestLoaderXidmap(t *testing.T) {
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
 		"--tls_cacert", tlsDir + "/ca.crt",
-		"--tls_enable_inter_node=true",
+		"--tls_internal_port_enabled=true",
 		"--tls_cert", tlsDir + "/client.liveclient.crt",
 		"--tls_key", tlsDir + "/client.liveclient.key",
 		"--tls_server_name", "alpha1",
@@ -71,7 +71,7 @@ func TestLoaderXidmap(t *testing.T) {
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
 		"--tls_cacert", tlsDir + "/ca.crt",
-		"--tls_enable_inter_node=true",
+		"--tls_internal_port_enabled=true",
 		"--tls_cert", tlsDir + "/client.liveclient.crt",
 		"--tls_key", tlsDir + "/client.liveclient.key",
 		"--tls_server_name", "alpha1",

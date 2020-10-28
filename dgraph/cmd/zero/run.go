@@ -100,11 +100,11 @@ instances to achieve high-availability.
 	flag.String("tls_disabled_route", "",
 		"comma separated zero endpoint which will be disabled from TLS encryption."+
 		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
-	flag.Bool("tls_enable_inter_node", false, "enable inter node TLS encryption between cluster nodes.")
+	flag.Bool("tls_internal_port_enabled", false, "enable inter node TLS encryption between cluster nodes.")
 	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to " +
-		"connect with the other cluster nodes.")
+		"connect as a client with the other nodes in the cluster.")
 	flag.String("tls_key", "", "(optional) The private key file name "+
-		"in tls_dir which is needed to connect with the other cluster nodes.")
+		"in tls_dir which is needed to connect as a client with the other nodes in the cluster.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -128,7 +128,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
 	}
 
-	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf.GetBool("tls_enable_inter_node"), Zero.Conf.GetString("tls_dir"))
+	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf.GetBool("tls_internal_port_enabled"), Zero.Conf.GetString("tls_dir"))
 	x.Check(err)
 	if tlsConf != nil {
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))

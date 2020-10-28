@@ -135,7 +135,6 @@ func getClientForAlpha(t *testing.T, name string, port string) *dgo.Dgraph {
 	require.NoError(t, err)
 	dgConn, err := grpc.Dial(":" + port, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
-	time.Sleep(time.Second * 6)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
 	return client
 }

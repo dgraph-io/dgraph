@@ -58,12 +58,12 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls_cert", "", "(optional) The Cert file provided by the client to the server.")
 	flag.String("tls_key", "", "(optional) The private key file "+
 		"provided by the client to the server.")
-	flag.Bool("tls_enable_inter_node", false, "enable inter node TLS encryption between cluster nodes.")
+	flag.Bool("tls_internal_port_enabled", false, "enable inter node TLS encryption between cluster nodes.")
 }
 
 // LoadClientTLSConfigForInternalPort loads tls config for connecting to internal ports of cluster
 func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
-	if !v.GetBool("tls_enable_inter_node") {
+	if !v.GetBool("tls_internal_port_enabled") {
 		return nil, nil
 	}
 	conf := &TLSHelperConfig{}
