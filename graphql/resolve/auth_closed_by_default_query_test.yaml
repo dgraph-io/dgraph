@@ -16,7 +16,7 @@
       }
     }
   error:
-    { "message": "A valid JWT is required but was not provided."}
+    { "message": "a valid JWT is required but was not provided"}
 
 - name: "Query with missing jwt token - type without auth directive"
   gqlquery: |
@@ -36,4 +36,4 @@
       }
     }
   error:
-    { "message": "A valid JWT is required but was not provided." }
+    { "message": "a valid JWT is required but was not provided" }

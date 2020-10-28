@@ -21,7 +21,7 @@
       x as updateIssue()
     }
   error:
-    { "message": "couldn't rewrite mutation updateIssue because A valid JWT is required but was not provided." }
+    { "message": "couldn't rewrite mutation updateIssue because a valid JWT is required but was not provided" }
 
 - name: "Update with top level And RBAC false - type without auth"
   gqlquery: |
@@ -46,4 +46,4 @@
       x as updateTodo()
     }
   error:
-    { "message": "couldn't rewrite mutation updateTodo because A valid JWT is required but was not provided." }
+    { "message": "couldn't rewrite mutation updateTodo because a valid JWT is required but was not provided" }

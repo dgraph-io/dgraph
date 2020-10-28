@@ -17,9 +17,9 @@
 package auth_closed_by_default
 
 import (
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
@@ -80,7 +80,7 @@ func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
-			"A valid JWT is required but was not provided")
+			"a valid JWT is required but was not provided")
 		require.Equal(t, tcase.result, string(gqlResponse.Data))
 	}
 }
@@ -114,7 +114,7 @@ func TestAuthRulesQueryWithClosedByDefaultFlag(t *testing.T) {
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
 		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
-			"A valid JWT is required but was not provided")
+			"a valid JWT is required but was not provided")
 		require.Equal(t, tcase.result, string(gqlResponse.Data))
 	}
 }
@@ -156,7 +156,7 @@ func TestAuthRulesUpdateWithClosedByDefaultFlag(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
-			"A valid JWT is required but was not provided")
+			"a valid JWT is required but was not provided")
 		require.Equal(t, tcase.result, string(gqlResponse.Data))
 	}
 }
@@ -192,13 +192,13 @@ func TestDeleteOrRBACFilter(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
-			"A valid JWT is required but was not provided")
+			"a valid JWT is required but was not provided")
 		require.Equal(t, tcase.result, string(gqlResponse.Data))
 	}
 }
 
 func TestMain(m *testing.M) {
-	algo := authorization.HMAC256
+	algo := jwt.SigningMethodHS256.Name
 	schema, data := common.BootstrapAuthData()
 	authSchema, err := testutil.AppendAuthInfo(schema, algo, "../auth/sample_public_key.pem", true)
 	if err != nil {

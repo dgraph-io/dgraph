@@ -20,7 +20,7 @@
   uids: |
     { "ComplexLog1": "0x123" }
   error:
-    { "message": "mutation failed because authorization failed because A valid JWT is required but was not provided."}
+    { "message": "mutation failed because authorization failed because a valid JWT is required but was not provided"}
 
 - name: "Query with missing jwt token - Type without Auth"
   gqlquery: |
@@ -40,4 +40,4 @@
       }
     }
   error:
-    { "message": "mutation failed because authorization failed because A valid JWT is required but was not provided."}
+    { "message": "mutation failed because authorization failed because a valid JWT is required but was not provided"}
