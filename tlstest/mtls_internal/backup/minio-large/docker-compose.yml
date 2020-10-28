@@ -10,7 +10,7 @@ services:
       - 5180:5180
       - 6180:6180
     command: /gobin/dgraph zero --cwd=/data/zero1 --my=zero1:5180 -o 100
-      --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_cert client.zero1.crt --tls_key client.zero1.key
+      --tls_dir /dgraph-tls --tls_internal_port_enabled=true --tls_cert client.zero1.crt --tls_key client.zero1.key
       --bindall --logtostderr -v=0
     volumes:
       - type: bind
@@ -42,7 +42,7 @@ services:
       - 8180:8180
       - 9180:9180
     command: /gobin/dgraph alpha --cwd=/data/alpha1 --my=alpha1:7180 --zero=zero1:5180 -o 100
-      --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_cert client.alpha1.crt --tls_key client.alpha1.key
+      --tls_dir /dgraph-tls --tls_internal_port_enabled=true --tls_cert client.alpha1.crt --tls_key client.alpha1.key
       -v=0 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
   alpha2:
@@ -68,7 +68,7 @@ services:
       - 8182:8182
       - 9182:9182
     command: /gobin/dgraph alpha --cwd=/data/alpha2 --my=alpha2:7182 --zero=zero1:5180 -o 102
-      --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_cert client.alpha2.crt --tls_key client.alpha2.key
+      --tls_dir /dgraph-tls --tls_internal_port_enabled=true --tls_cert client.alpha2.crt --tls_key client.alpha2.key
       -v=0 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
   alpha3:
@@ -94,7 +94,7 @@ services:
       - 8183:8183
       - 9183:9183
     command: /gobin/dgraph alpha --cwd=/data/alpha3 --my=alpha3:7183 --zero=zero1:5180 -o 103
-      --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_cert client.alpha3.crt --tls_key client.alpha3.key
+      --tls_dir /dgraph-tls --tls_internal_port_enabled=true --tls_cert client.alpha3.crt --tls_key client.alpha3.key
       -v=0 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
   minio1:
