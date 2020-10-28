@@ -287,7 +287,7 @@ func startServers(m cmux.CMux) {
 
 	// if tls is enabled, make tls encryption based connections as default
 	if Zero.Conf.GetString("tls_dir") != "" {
-		tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
+		tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, x.TLSNodeCert, x.TLSNodeKey)
 		x.Check(err)
 		if tlsCfg == nil {
 			glog.Fatalf("tls_dir is set but tls config provided is not correct. Please define correct variable --tls_dir")
