@@ -6,7 +6,7 @@ This script will create the following resources:
 
 * EFS Server
 * SG to allow EKS worker nodes to access EFS Server (if discovery used)
-* Conifguration file (`../env.sh`) that specifies NFS Server and Path
+* Configuration file (`../env.sh`) that specifies NFS Server and Path
 
 ## Prerequisites
 
@@ -17,9 +17,7 @@ You need the following installed to use this automation:
 
 ## Configuration
 
-* Either VPC ID or tag `Name` of VPC is required
-* Details on eks_cluster_name if differs from VPC name (eksctl style)
-
+These are the following input variables you can set:
 
 * **Required**
  * `vpc_name` or `vpc_id` - specify either explicit `vpc_id` or a name of Tag `Name` used
@@ -31,19 +29,19 @@ You need the following installed to use this automation:
 
 ## Discovery
 
-The following are configured to discover resources used to configure EFS.  These can be overriden by specifying values as input variables.
+The following are configured to discover resources used to configure EFS.  These can be overridden by specifying explicit values as input variables.
 
 These are values affected by discovery:
 
-  * **VPC Name** - you can supply either explicit `vpc_id` or `vpc_name` if VPC has the tag `Name`.
-  * **EKS Cluster Name** - if `eks_cluster_name` is not specified, then the VPC tag `Name` will be used as the EKS Cluster Name.  This is default configuration if both VPC and EKS cluster was provisioned by `eksctl`.
-  * **Private Subnets** - if `subnets` is not specified, private subnets used by an EKS cluster can be discovered provided the tags are set up appropriately (see [Requirements for Discovery](#requirements-for-discovery))
-  * **Security Group** (optional for access)- if `security_groups` is not specified this security group can be discovered provided the tags are set up appropriately (see [Requirements for Discovery](#requirements-for-discovery))
-  * **DNS Domain** (optional for DNS name)- a domain name, e.g. `devtest.mycompany.com`, managed by Route53 can be specified to fetch a Zone ID, otherwise a `zone_id` must be specified to use this feature.  When using this, you need to supply the name you want to use, e.g. `myfileserver` with `dns_name`
+  * **VPC Name** - you can supply either explicit `vpc_id` or `vpc_name` if VPC has a tag key of `Name`.
+  * **EKS Cluster Name** - if `eks_cluster_name` is not specified, then the VPC tag `Name` will be used as the EKS Cluster Name.  This is default configuration if both VPC and EKS cluster that was provisioned by `eksctl`.
+  * **Private Subnets** - if `subnets` is not specified, private subnets used by an EKS cluster can be discovered provided that the tags are set up appropriately (see [Requirements for Discovery](#requirements-for-discovery))
+  * **Security Group** (optional for access)- if `security_groups` is not specified this security group can be discovered provided that the tags are set up appropriately (see [Requirements for Discovery](#requirements-for-discovery))
+  * **DNS Domain** (optional for DNS name)- a domain name, e.g. `devtest.mycompany.com.`, managed by Route53 can be specified to fetch a Zone ID, otherwise a `zone_id` must be specified to use this feature.  When using this, you need to supply the CNAME you want to use, e.g. `myfileserver` with `dns_name`
 
 ### Requirements for Discovery
 
-For the discovery feature where this Terraform script will find resources needed that will allow EFS configured alongside and acessed by Amazon EKS cluster, you will need to have the appropriate tags per resources.  If you used `eksctl` to provision your cluster, these tags and keys will be setup automatically.
+For the discovery feature where this [Terraform](https://www.terraform.io/) script will find the required resources needed that will allow EFS configured alongside by Amazon EKS cluster and required SG configuration to allow EKS worker nodes to access EFS.  You will need to have the appropriate tags schema per subnets and security groups.  If you used `eksctl` to provision your cluster, these tags and keys will be setup automatically.
 
 #### Subnets
 
@@ -67,7 +65,7 @@ A security group used to allow access to EKS Nodes needs to have the following t
 
 ### Define Variables
 
-If discovery is setup (see [Requirements for Discovery](#requirements-for-discovery)), you can specify this for `terraform.tfvars` files:
+If discovery was configured (see [Requirements for Discovery](#requirements-for-discovery)), you can specify this for `terraform.tfvars` files:
 
 ```hcl
 vpc_name         = "dgraph-eks-test-cluster"
@@ -118,7 +116,7 @@ terraform apply
 
 ## Cleanup
 
-When finished you can destroy resources created with Terraform using this:
+When finished you can destroy resources created with [Terraform](https://www.terraform.io/) using this:
 
 ```bash
 terraform destroy

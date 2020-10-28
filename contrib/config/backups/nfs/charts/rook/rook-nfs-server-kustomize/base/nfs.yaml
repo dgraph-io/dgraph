@@ -22,9 +22,9 @@ spec:
     server:
       accessMode: ReadWrite
       squash: "none"
-    # A Persistent Volume Claim must be created before creating NFS CRD instance.
+    ## A Persistent Volume Claim must be created before creating NFS CRD instance.
     persistentVolumeClaim:
       claimName: nfs-default-claim
-  # A key/value list of annotations
+  ## A key/value list of annotations
   annotations:
     rook: nfs

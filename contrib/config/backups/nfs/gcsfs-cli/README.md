@@ -18,9 +18,9 @@ You will need to define these environment variables:
 * Required Variables:
   * `MY_FS_NAME` (required) - Name of Filestore instance.
 * Optional Variables:
-  * `MY_PROJECT` (default to current confiured project) - Project with billing enabled to create Filestore instance.
+  * `MY_PROJECT` (default to current configured project) - Project with billing enabled to create Filestore instance.
   * `MY_ZONE` (default `us-central1-b`) - zone where Filestore instance will be created
-  * `MY_FS_CAPACITY` (default `1TB`) - size of the storage used ofr Filestore
+  * `MY_FS_CAPACITY` (default `1TB`) - size of the storage used for Filestore
   * `MY_FS_SHARE_NAME` (default `volumes`) - NFS path
 
 ## Create Filestore
@@ -39,7 +39,7 @@ export MY_ZONE="us-central1-b"
 EOF
 ```
 
-These values can be use to create and destoroy filestore.
+These values can be use to create and destroy filestore.
 
 ### Run the Script
 
@@ -58,7 +58,7 @@ You can run these commands to delete the resources (with prompts) on GCP.
 ## get env vars used to create filestore
 . env.sh
 
-## conditionally delete filestore if it exists (indempotent)
+## conditionally delete filestore if it exists (idempotent)
 if gcloud filestore instances list | grep -q ${MY_FS_NAME}; then
   gcloud filestore instances delete ${MY_FS_NAME} \
     --project=${MY_PROJECT} \

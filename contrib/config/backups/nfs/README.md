@@ -2,6 +2,29 @@
 
 When using a file system for binary backups, NFS is recommended so that *backups work seamlessly across multiple machines and/or containers*.
 
+* [Provisioning NFS Overview](#provisioning-nfs-overview)
+* [Instructions](#instructions)
+  * [Using Remote Cloud Solutions](#using-remote-cloud-solutions)
+  * [Using Rook Solution](#using-rook-solution)
+  * [Using Local Vagrant Solution](#using-local-vagrant-solution)
+    * [Vagrant Server](#vagrant-server)
+    * [Vagrant Client (Optional)](#vagrant-client-optional)
+    * [Vagrant Cleanup](#vagrant-cleanup)
+* [Testing NFS with Docker Compose](#testing-nfs-with-docker-compose)
+  * [Setup Env Vars](#setup-env-vars)
+  * [Start Docker Compose with NFS Volume](#start-docker-compose-with-nfs-volume)
+  * [Docker Cleanup](#docker-cleanup)
+* [Testing NFS with Kubernetes](#testing-nfs-with-kubernetes)
+  * [Setup Env Vars](#setup-env-vars)
+  * [Deploy Using Helmfile](#deploy-using-helmfile)
+  * [Cleanup Using Helmfile](#cleanup-using-helmfile)
+  * [Minikube Notes](#minikube-notes)
+    * [Minikube with Virtualbox](#minikube-with-virtualbox)
+    * [Minikube with KVM](#minikube-with-kvm)
+    * [Verify NFS between Minikube and Vagrant](#verify-nfs-between-minikube-and-vagrant)
+* [Accessing Dgraph Services](#accessing-dgraph-services)
+* [Trigger a Backup](#trigger-a-backup)
+
 ## Provisioning NFS Overview
 
 You can use external NFS outside of the [Docker](https://www.docker.com/) or [Kubernetes](https://kubernetes.io/), or deploy a container offering NFS services.  For production environments, using an NFS server external to the cluster can increase availability in an event where [Kubernetes](https://kubernetes.io/) services get interrupted. In more advanced scenarios, deploying a container offering NFS services, where the storage is backed by high-speed storage such as [Ceph](https://ceph.io/) is beneficial for large datasets.  In this latter scenario, secondary storage such as an object store by the cloud provider could be used for greater availability in event of where Kubernetes services or the [Kubernetes](https://kubernetes.io/) cluster itself has a failure event.
@@ -37,10 +60,9 @@ You can use a NFS server running as a pod using [Rook](https://rook.io/) NFS Ope
 cp charts/rook/env.sh env.sh
 ```
 
-
 ### Using Local Vagrant Solution
 
-As configuring NFS for your local operating system or distro can vary greatly, a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, this NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [MiniKube](https://github.com/kubernetes/minikube) environments.
+As configuring NFS for your local operating system or distro can vary greatly, a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, this NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [Minikube](https://github.com/kubernetes/minikube) environments.
 
 #### Vagrant Server
 
@@ -50,7 +72,7 @@ You can bring up the NFS server with:
 vagrant up
 ```
 
-This will confiure `env.sh` to point to NFS server on the guest system.
+This will configure `env.sh` to point to NFS server on the guest system.
 
 #### Vagrant Client (Optional)
 
@@ -61,7 +83,7 @@ Optionally, if you would like to use Dgraph in a virtual machine, you can bring 
 vagrant up nfs-client
 ## Log into nfs client system
 vagrant ssh
-## Change direcotry to configuration
+## Change directory to configuration
 cd /vagrant
 ```
 
@@ -89,7 +111,7 @@ export NFS_SERVER="<server-ip-address>"
 ### Start Docker Compose with NFS Volume
 
 ```bash
-## Source required enviroments variables
+## Source required environments variables
 . env.sh
 ## Start Docker Compose
 docker-compose up --detach
@@ -131,20 +153,26 @@ helmfile apply
 helmfile delete
 ```
 
-### MiniKube Notes
+### Minikube Notes
 
-If you are using NFS with [Vagrant Solution](#using-local-vagrant-solution), you will need to park MiniKube on the same private network as Vagrant.
+If you are using NFS with [Vagrant Solution](#using-local-vagrant-solution), you will need to park [minikube](https://github.com/kubernetes/minikube) on the same private network as Vagrant.
 
-For VirtualBox environments, where both Vagrant and MiniKube will use Virtualbox, you can do the following:
+#### Minikube with Virtualbox
+
+For [VirtualBox](https://www.virtualbox.org) environments, where both [Vagrant](https://www.vagrantup.com/) and [minikube](https://github.com/kubernetes/minikube) will use [Virtualbox](https://www.virtualbox.org), you can do the following:
 
 ```bash
+## Vagrant should have been started with Virtualbox by default
+export VAGRANT_DEFAULT_PROVIDER="virtualbox"
+vagrant up
+
 ## Set Driver to Virtualbox (same as Vagrant provider)
 minikube config set driver virtualbox
 ## Start a miniKube cluster
 minikube start --host-only-cidr='192.168.123.1/24'
 ```
 
-Afterward you can test that the fileshare works:
+Afterward you can test that the file-share works:
 
 ```bash
 ## Log into an Alpha pod
@@ -154,6 +182,48 @@ kubectl -ti exec $RELEASE-dgraph-alpha-0 -- bash
 date > /dgraph/backups/hello_world.txt
 exit
 
+## Log into Vagrant NFS Server
+vagrant ssh nfs-server
+## Check Results
+cat /srv/share/hello_world.txt
+logout
+```
+
+#### Minikube with KVM
+
+When using vagrant with libvirt (see [vagrant-libvirt](https://github.com/vagrant-libvirt/vagrant-libvirt)), you can have [minikube](https://github.com/kubernetes/minikube) target the same network
+
+```bash
+## Vagrant should have been started with KVM
+export VAGRANT_DEFAULT_PROVIDER="libvirt"
+vagrant up
+
+## Check that Virtual Network Exists based on directory name, e.g. `nfs0`
+virsh net-list
+
+## Start minikube using the same virtual network as Vagrant, e.g. `nfs0`
+minikube config set driver kvm2
+minikube start --kvm-network nfs0
+```
+
+#### Verify NFS between Minikube and Vagrant
+
+You can verify that NFS share works between the Vagrant NFS server and client Dgraph Alpha pod running in [minikube](https://github.com/kubernetes/minikube).
+
+Create a file from the client:
+
+```bash
+## Log into an Alpha pod
+RELEASE="my-release"
+kubectl -ti exec $RELEASE-dgraph-alpha-0 -- bash
+## Create a file on NFS volume
+date > /dgraph/backups/hello_world.txt
+exit
+```
+
+Verify that file was copied to the server:
+
+```bash
 ## Log into Vagrant NFS Server
 vagrant ssh nfs-server
 ## Check Results
@@ -197,7 +267,7 @@ kubectl --namespace default port-forward $RATEL_POD_NAME 8000:8000
 
 ## Trigger a Backup
 
-In the [Kubernetes Environment](#testing-nfs-with-kubernetes), backups will be scheduled automatically using Kubernetes CronJob.  As long as the services are available locally (see [Accessing Dgraph Services](#accessing-dgraph-services)), we can trigger a backup using curl.
+In the [Kubernetes Environment](#testing-nfs-with-kubernetes), backups will be scheduled automatically using [Kubernetes CronJob](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/).  As long as the services are available locally (see [Accessing Dgraph Services](#accessing-dgraph-services)), we can trigger a backup using curl.
 
 For the [Docker Compose Environment](#testing-nfs-with-docker-compose) you can do the following:
 

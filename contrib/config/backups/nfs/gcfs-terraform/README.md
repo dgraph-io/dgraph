@@ -21,7 +21,7 @@ You will need to define the following variables:
   * `name` (required) - name of GCFS server instance
 * Optional Variables:
   * `zone` (default = `us-central1-b`) - specify zone where instances will be located
-  * `tier` (default = `STANDARD`) - serive tier of the instance, e.g. `TIER_UNSPECIFIED`, `STANDARD`, `PREMIUM`, `BASIC_HDD`, `BASIC_SSD`, and `HIGH_SCALE_SSD`.
+  * `tier` (default = `STANDARD`) - service tier of the instance, e.g. `TIER_UNSPECIFIED`, `STANDARD`, `PREMIUM`, `BASIC_HDD`, `BASIC_SSD`, and `HIGH_SCALE_SSD`.
   * `network` (default = `default`) - specify a GCE VPC network to which the instance is connected.
   * `capacity_gb` (default = `1024`) - specify file share capacity in GiB (minimum of `1024`)
   * `share_name` (default = `volumes`)- specify a name of the file share
@@ -55,7 +55,7 @@ terraform apply
 
 ## Cleanup
 
-When finished you can destroy resources created with Terraform using this:
+When finished you can destroy resources created with [Terraform](https://www.terraform.io/) using this:
 
 ```bash
 terraform destroy
