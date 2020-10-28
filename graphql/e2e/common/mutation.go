@@ -4282,3 +4282,71 @@ func addMutationWithHasInverseOverridesCorrectly(t *testing.T) {
 	filter = map[string]interface{}{"xcode": map[string]interface{}{"eq": "def"}}
 	deleteState(t, filter, 1, nil)
 }
+
+func addUniversity(t *testing.T) string {
+	addUniversityParams := &GraphQLParams{
+		Query: `mutation addUniversity($university: AddUniversityInput!) {
+			addUniversity(input: [$university]) {
+				university {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"university": map[string]interface{}{
+			"name": "The Great University",
+		}},
+	}
+
+	gqlResponse := addUniversityParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		AddUniversity struct {
+			University []struct {
+				ID   string
+				name string
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddUniversity.University[0].ID)
+	return result.AddUniversity.University[0].ID
+}
+
+func updateUniversity(t *testing.T, id string) {
+	updateUniversityParams := &GraphQLParams{
+		Query: `mutation updateUniversity($university: UpdateUniversityInput!) {
+			updateUniversity(input: $university) {
+				university {
+					name
+					numStudents
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"university": map[string]interface{}{
+			"filter": map[string]interface{}{
+				"id": []string{id},
+			},
+			"set": map[string]interface{}{
+				"numStudents": 1000,
+			},
+		}},
+	}
+
+	gqlResponse := updateUniversityParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		UpdateUniversity struct {
+			University []struct {
+				name        string
+				numStudents int
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+}

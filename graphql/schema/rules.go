@@ -39,7 +39,7 @@ func init() {
 	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
 		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck,
-		remoteTypeValidation)
+		remoteTypeValidation, generateDirectiveValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList, hasAuthDirective)
 
@@ -1230,6 +1230,99 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	for _, err := range errs {
 		err.Message = "While building @custom for @lambda: " + err.Message
 	}
+	return errs
+}
+
+func generateDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gqlerror.List {
+	dir := typ.Directives.ForName(generateDirective)
+	if dir == nil {
+		return nil
+	}
+
+	var errs []*gqlerror.Error
+
+	queryArg := dir.Arguments.ForName(generateQueryArg)
+	if queryArg != nil {
+		if queryArg.Value.Kind != ast.ObjectValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				queryArg.Position,
+				"Type %s; query argument for @generate directive should be of type Object.",
+				typ.Name))
+		}
+		// Validate children of queryArg
+		getField := queryArg.Value.Children.ForName(generateGetField)
+		if getField != nil && getField.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				getField.Position,
+				"Type %s; get field inside query argument of @generate directive can "+
+					"only be true/false, found: `%s",
+				typ.Name, getField.Raw))
+		}
+
+		queryField := queryArg.Value.Children.ForName(generateQueryField)
+		if queryField != nil && queryField.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				queryField.Position,
+				"Type %s; query field inside query argument of @generate directive can "+
+					"only be true/false, found: `%s",
+				typ.Name, queryField.Raw))
+		}
+
+		passwordField := queryArg.Value.Children.ForName(generatePasswordField)
+		if passwordField != nil && passwordField.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				passwordField.Position,
+				"Type %s; password field inside query argument of @generate directive can "+
+					"only be true/false, found: `%s",
+				typ.Name, passwordField.Raw))
+		}
+	}
+
+	mutationArg := dir.Arguments.ForName(generateMutationArg)
+	if mutationArg != nil {
+		if mutationArg.Value.Kind != ast.ObjectValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				mutationArg.Position,
+				"Type %s; mutation argument for @generate directive should be of type Object.",
+				typ.Name))
+		}
+		// Validate children of mutationArg
+		addField := mutationArg.Value.Children.ForName(generateAddField)
+		if addField != nil && addField.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				addField.Position,
+				"Type %s; add field inside mutation argument of @generate directive can "+
+					"only be true/false, found: `%s",
+				typ.Name, addField.Raw))
+		}
+
+		updateField := mutationArg.Value.Children.ForName(generateUpdateField)
+		if updateField != nil && updateField.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				updateField.Position,
+				"Type %s; update field inside mutation argument of @generate directive can "+
+					"only be true/false, found: `%s",
+				typ.Name, updateField.Raw))
+		}
+
+		deleteField := mutationArg.Value.Children.ForName(generateDeleteField)
+		if deleteField != nil && deleteField.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				deleteField.Position,
+				"Type %s; delete field inside mutation argument of @generate directive can "+
+					"only be true/false, found: `%s",
+				typ.Name, deleteField.Raw))
+		}
+	}
+
+	subscriptionArg := dir.Arguments.ForName(generateSubscriptionArg)
+	if subscriptionArg != nil && subscriptionArg.Value.Kind != ast.BooleanValue {
+		errs = append(errs, gqlerror.ErrorPosf(dir.Position,
+			"Type %s; subscription argument in @generate directive can only be "+
+				"true/false, found: `%s`.",
+			typ.Name, subscriptionArg.Value.Raw))
+	}
+
 	return errs
 }
 
