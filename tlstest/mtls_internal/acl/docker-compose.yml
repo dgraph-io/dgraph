@@ -24,7 +24,7 @@ services:
       read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180
       --logtostderr -v=2 --tls_dir /dgraph-tls --tls_enable_inter_node=true --tls_cert client.alpha1.crt --tls_key client.alpha1.key
-      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --tls_dir /dgraph-tls
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       --tls_client_auth VERIFYIFGIVEN --acl_secret_file /dgraph-acl/hmac-secret
   zero1:
     image: dgraph/dgraph:latest
