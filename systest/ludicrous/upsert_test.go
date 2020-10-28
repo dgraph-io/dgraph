@@ -105,7 +105,7 @@ func TestConcurrentUpdate(t *testing.T) {
 	}
 	wg.Wait()
 	// eventual consistency
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	q := `query all($a: string) {
 			all(func: eq(name, $a)) {
@@ -154,7 +154,7 @@ func TestSequentialUpdate(t *testing.T) {
 	}
 
 	// eventual consistency
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	q := `query all($a: string) {
 			all(func: eq(name, $a)) {
