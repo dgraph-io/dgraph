@@ -444,101 +444,109 @@ func (authRw *authRewriter) addAuthQueries(
 	// If We are adding AuthRules on an Interfaces's operation,
 	// we need to construct auth filters by verifying Auth rules on the
 	// implementing types.
-	// First we fetch the list of Implementing types here
-	implementingTypes := make([]schema.Type, 0)
+
 	if typ.IsInterface() {
+		// First we fetch the list of Implementing types here
+		implementingTypes := make([]schema.Type, 0)
 		implementingTypes = append(implementingTypes, typ.ImplementingTypes()...)
-	}
 
-	var qrys []*gql.GraphQuery
-	var filts []*gql.FilterTree
-	implementingTypesHasAuthRules := false
-	for _, object := range implementingTypes {
+		var qrys []*gql.GraphQuery
+		var filts []*gql.FilterTree
+		implementingTypesHasQueryAuthRules := false
+		for _, object := range implementingTypes {
 
-		// It could be the case that None of implementing Types have Auth Rules, which clearly
-		// indicates that neither the interface, nor any of the implementing type has its own
-		// Auth rules.
-		// ImplementingTypeHasAuthRules is set to true even if one of the implemented type have
-		// query Auth rules or Interface has its own Query auth rule, in the latter case, all the
-		// implemented types must have inherited those auth rules.
-		if object.AuthRules().Rules != nil && object.AuthRules().Rules.Query != nil {
-			implementingTypesHasAuthRules = true
-		}
+			// It could be the case that None of implementing Types have Auth Rules, which clearly
+			// indicates that neither the interface, nor any of the implementing type has its own
+			// Auth rules.
+			// ImplementingTypeHasAuthRules is set to true even if one of the implemented type have
+			// query Auth rules or Interface has its own Query auth rule, in the latter case, all the
+			// implemented types must have inherited those auth rules.
+			if object.AuthRules().Rules != nil && object.AuthRules().Rules.Query != nil {
+				implementingTypesHasQueryAuthRules = true
+			}
 
-		// First Check if the Auth Rules of the given type are satisfied or not.
-		// It might be possible that auth rule inherited from some other interface
-		// is not being satisfied. In that case we have to Drop this type
-		rbac := authRw.evaluateStaticRules(object)
-		if rbac == schema.Negative {
-			continue
-		}
+			// First Check if the Auth Rules of the given type are satisfied or not.
+			// It might be possible that auth rule inherited from some other interface
+			// is not being satisfied. In that case we have to Drop this type
+			rbac := authRw.evaluateStaticRules(object)
+			if rbac == schema.Negative {
+				continue
+			}
 
-		// Form Query Like Todo1 as var(func: type(Todo))
-		varQry := &gql.GraphQuery{
-			Attr: "var",
-			Var:  object.Name() + "1",
-			Func: &gql.Function{
-				Name: "type",
-				Args: []gql.Arg{{Value: object.Name()}},
-			},
-		}
-		qrys = append(qrys, varQry)
-
-		objAuthQueries, objfilter := (&authRewriter{
-			authVariables: authRw.authVariables,
-			varGen:        authRw.varGen,
-			varName:       object.Name() + "1",
-			selector:      authRw.selector,
-			parentVarName: authRw.parentVarName,
-			hasAuthRules:  authRw.hasAuthRules,
-		}).rewriteAuthQueries(object)
-
-		// If there is no Auth Query for the Given type then it means that
-		// neither the interface, nor this type has any query Auth rules.
-		// In this case the query must return all the nodes of this type.
-		// then simply we need to Put uid(Todo1) with OR in the main query filter.
-		if len(objAuthQueries) == 0 {
-			objfilter = &gql.FilterTree{
+			// Form Query Like Todo1 as var(func: type(Todo))
+			queryVar := object.Name() + "1"
+			varQry := &gql.GraphQuery{
+				Attr: "var",
+				Var:  queryVar,
 				Func: &gql.Function{
-					Name: "uid",
-					Args: []gql.Arg{gql.Arg{Value: object.Name() + "1", IsValueVar: false, IsGraphQLVar: false}},
+					Name: "type",
+					Args: []gql.Arg{{Value: object.Name()}},
 				},
 			}
-			filts = append(filts, objfilter)
-		} else {
-			qrys = append(qrys, objAuthQueries...)
-			filts = append(filts, objfilter)
+			qrys = append(qrys, varQry)
+
+			// Form Auth Queries for the given object
+			objAuthQueries, objfilter := (&authRewriter{
+				authVariables: authRw.authVariables,
+				varGen:        authRw.varGen,
+				varName:       queryVar,
+				selector:      authRw.selector,
+				parentVarName: authRw.parentVarName,
+				hasAuthRules:  authRw.hasAuthRules,
+			}).rewriteAuthQueries(object)
+
+			// If there is no Auth Query for the Given type then it means that
+			// neither the inherited interface, nor this type has any query Auth rules.
+			// In this case the query must return all the nodes of this type.
+			// then simply we need to Put uid(Todo1) with OR in the main query filter.
+			if len(objAuthQueries) == 0 {
+				objfilter = &gql.FilterTree{
+					Func: &gql.Function{
+						Name: "uid",
+						Args: []gql.Arg{gql.Arg{Value: queryVar, IsValueVar: false, IsGraphQLVar: false}},
+					},
+				}
+				filts = append(filts, objfilter)
+			} else {
+				qrys = append(qrys, objAuthQueries...)
+				filts = append(filts, objfilter)
+			}
 		}
-	}
 
-	// For an interface having Auth rules in some of the implementing types, len(qrys) = 0
-	// indicates that None of the type satisfied the Auth rules, We must return Empty Query here
-	if typ.IsInterface() && implementingTypesHasAuthRules == true && len(qrys) == 0 {
-		return &gql.GraphQuery{
-			Attr: dgQuery.Attr + "()",
+		// For an interface having Auth rules in some of the implementing types, len(qrys) = 0
+		// indicates that None of the type satisfied the Auth rules, We must return Empty Query here.
+		if implementingTypesHasQueryAuthRules == true && len(qrys) == 0 {
+			return &gql.GraphQuery{
+				Attr: dgQuery.Attr + "()",
+			}
 		}
+
+		// Join all the queries in qrys using OR filter and
+		// append these queries into fldAuthQueries
+		fldAuthQueries = append(fldAuthQueries, qrys...)
+		objOrfilter := &gql.FilterTree{
+			Op:    "or",
+			Child: filts,
+		}
+
+		// if filts is non empty, which means it was a query on interface
+		// having Either any of the types satisfying auth rules or having
+		// some type with no Auth rules, In this case, the query will be different
+		// and will look somewhat like this:
+		// PostRoot as var(func: uid(Post1)) @filter((uid(QuestionAuth2) OR uid(AnswerAuth4)))
+		if len(filts) > 0 {
+			filter = objOrfilter
+		}
+
+		// Adding the case of Query on interface in which None of the implementing type have
+		// Auth Query Rules, in that case, we also return simple query.
+		if typ.IsInterface() == true && implementingTypesHasQueryAuthRules == false {
+			return dgQuery
+		}
+
 	}
 
-	// Join all the queries in qrys using OR filter and
-	// append these queries into fldAuthQueries
-	fldAuthQueries = append(fldAuthQueries, qrys...)
-	objOrfilter := &gql.FilterTree{
-		Op:    "or",
-		Child: filts,
-	}
-
-	// if filts is non empty, which means it was a query on interface
-	// having Either any of the types satisfying auth rules or having
-	// some type with no Auth rules, In this case, the query will be different
-	// and will look somewhat like this:
-	// PostRoot as var(func: uid(Post1)) @filter((uid(QuestionAuth2) OR uid(AnswerAuth4)))
-	if len(filts) > 0 {
-		filter = objOrfilter
-	}
-
-	// Adding the case of Query on interface in which None of the implementing type have
-	// Auth Rules, in that case, we also return simple query.
-	if (len(fldAuthQueries) == 0 && !authRw.hasAuthRules) || (typ.IsInterface() == true && implementingTypesHasAuthRules == false) {
+	if len(fldAuthQueries) == 0 && !authRw.hasAuthRules {
 		return dgQuery
 	}
 

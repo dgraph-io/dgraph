@@ -632,3 +632,23 @@ type FbPost implements Post & MsgPost {
 type Answer implements Post {
     markedUseful:  Boolean @search
 }
+
+interface A {
+    id: ID!
+    fieldA: String @search(by: [exact])
+}
+
+type B implements A {
+    fieldB: Boolean @search
+}
+
+type C implements A @auth(
+    query:{ rule: """
+            query($ANS: Boolean!) { 
+              queryC(filter: { fieldC: $ANS } ) { 
+                id 
+              } 
+            }""" }
+){
+    fieldC: Boolean @search
+}
