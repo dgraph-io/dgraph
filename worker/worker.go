@@ -37,6 +37,7 @@ import (
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 var (
@@ -63,11 +64,19 @@ func Init(ps *badger.DB) {
 	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: x.WorkerConfig.NumPendingProposals}
 	go limiter.bleed()
 
-	workerServer = grpc.NewServer(
+	grpcOpts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(math.MaxInt32),
-		grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+	}
+
+	tlsConf, err := x.LoadServerTLSConfigForInternalPort(x.WorkerConfig.TLSInterNodeEnabled, x.WorkerConfig.TLSDir)
+	x.Check(err)
+	if tlsConf != nil {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))
+	}
+	workerServer = grpc.NewServer(grpcOpts...)
 }
 
 // grpcWorker struct implements the gRPC server interface.

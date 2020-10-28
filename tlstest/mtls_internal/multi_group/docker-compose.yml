@@ -1,0 +1,87 @@
+version: "3.5"
+services:
+  alpha1:
+    image: dgraph/dgraph:latest
+    container_name: alpha1
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    ports:
+      - 8180:8180
+      - 9180:9180
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ../tls/alpha1
+        target: /dgraph-tls
+        read_only: true
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_internal_port_enabled=true --tls_cert client.alpha1.crt --tls_key client.alpha1.key
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha2:
+    image: dgraph/dgraph:latest
+    container_name: alpha2
+    working_dir: /data/alpha2
+    labels:
+      cluster: test
+    ports:
+      - 8280:8280
+      - 9280:9280
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ../tls/alpha2
+        target: /dgraph-tls
+        read_only: true
+    command: /gobin/dgraph alpha -o 200 --my=alpha2:7280 --zero=zero1:5180
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_internal_port_enabled=true --tls_cert client.alpha2.crt --tls_key client.alpha2.key
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha3:
+    image: dgraph/dgraph:latest
+    container_name: alpha3
+    working_dir: /data/alpha3
+    labels:
+      cluster: test
+    ports:
+      - 8380:8380
+      - 9380:9380
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ../tls/alpha3
+        target: /dgraph-tls
+        read_only: true
+    command: /gobin/dgraph alpha -o 300 --my=alpha3:7380 --zero=zero1:5180
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_internal_port_enabled=true --tls_cert client.alpha3.crt --tls_key client.alpha3.key
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: zero1
+    working_dir: /data/zero1
+    labels:
+      cluster: test
+    ports:
+      - 5180:5180
+      - 6180:6180
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ../tls/zero1
+        target: /dgraph-tls
+        read_only: true
+    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --logtostderr
+      --tls_dir /dgraph-tls --tls_internal_port_enabled=true --tls_cert client.zero1.crt --tls_key client.zero1.key
+      -v=2 --bindall
+volumes: {}

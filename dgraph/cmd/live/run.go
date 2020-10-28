@@ -22,6 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 	"io"
 	"io/ioutil"
 	"math"
@@ -363,7 +365,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	return nil
 }
 
-func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
+func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader {
 	var db *badger.DB
 	if len(opt.clientDir) > 0 {
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
@@ -379,8 +381,13 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 
 	}
 
+	dialOpts := []grpc.DialOption{}
+	tlsConfig, tlsErr := x.LoadClientTLSConfigForInternalPort(conf)
+	x.Check(tlsErr)
+
+
 	// compression with zero server actually makes things worse
-	connzero, err := x.SetupConnection(opt.zero, nil, false)
+	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(connzero, db)

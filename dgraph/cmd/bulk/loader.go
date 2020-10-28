@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials"
 	"hash/adler32"
 	"io"
 	"io/ioutil"
@@ -106,13 +107,20 @@ func newLoader(opt *options) *loader {
 	}
 
 	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	zero, err := grpc.DialContext(ctx, opt.ZeroAddr,
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
+	x.Check(err)
+	dialOpts := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithInsecure())
+	}
+	if tlsConf != nil {
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	} else {
+		dialOpts = append(dialOpts, grpc.WithInsecure())
+	}
+	zero, err := grpc.DialContext(ctx, opt.ZeroAddr, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	st := &state{
 		opt:    opt,

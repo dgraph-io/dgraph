@@ -228,7 +228,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		Group: gid,
 		Id:    id,
 	}
-	m := conn.NewNode(rc, store)
+	m := conn.NewNode(rc, store, x.WorkerConfig.TLSClientConfig)
 
 	n := &node{
 		Node: m,
