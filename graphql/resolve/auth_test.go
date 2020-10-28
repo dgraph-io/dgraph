@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dgrijalva/jwt-go/v4"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -158,7 +159,7 @@ func TestStringCustomClaim(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
-	authSchema, err := testutil.AppendAuthInfo(sch, authorization.HMAC256, "", false)
+	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "",false)
 	require.NoError(t, err)
 
 	test.LoadSchemaFromString(t, string(authSchema))
@@ -178,7 +179,7 @@ func TestStringCustomClaim(t *testing.T) {
 		"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
 	}
 	require.Equal(t, authVar, result)
-	//reset auth meta, so that it won't effect other tests
+	// reset auth meta, so that it won't effect other tests
 	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
@@ -186,7 +187,7 @@ func TestAudienceClaim(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
-	authSchema, err := testutil.AppendAuthInfo(sch, authorization.HMAC256, "", false)
+	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "", false)
 	require.NoError(t, err)
 
 	test.LoadSchemaFromString(t, string(authSchema))
@@ -194,7 +195,7 @@ func TestAudienceClaim(t *testing.T) {
 
 	// Verify that authorization information is set correctly.
 	metainfo := authorization.GetAuthMeta()
-	require.Equal(t, metainfo.Algo, authorization.HMAC256)
+	require.Equal(t, metainfo.Algo, jwt.SigningMethodHS256.Name)
 	require.Equal(t, metainfo.Header, "X-Test-Auth")
 	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
 	require.Equal(t, metainfo.VerificationKey, "secretkey")
@@ -294,7 +295,7 @@ func TestJWTExpiry(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
-	authSchema, err := testutil.AppendAuthInfo(sch, authorization.HMAC256, "", false)
+	authSchema, err := testutil.AppendAuthInfo(sch,jwt.SigningMethodHS256.Name, "", false)
 	require.NoError(t, err)
 
 	test.LoadSchemaFromString(t, string(authSchema))
@@ -302,7 +303,7 @@ func TestJWTExpiry(t *testing.T) {
 
 	// Verify that authorization information is set correctly.
 	metainfo := authorization.GetAuthMeta()
-	require.Equal(t, metainfo.Algo, authorization.HMAC256)
+	require.Equal(t, metainfo.Algo, jwt.SigningMethodHS256.Name)
 	require.Equal(t, metainfo.Header, "X-Test-Auth")
 	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
 	require.Equal(t, metainfo.VerificationKey, "secretkey")
@@ -343,7 +344,7 @@ func TestJWTExpiry(t *testing.T) {
 		})
 	}
 
-	//reset auth meta, so that it won't effect other tests
+	// reset auth meta, so that it won't effect other tests
 	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
@@ -353,6 +354,7 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []b
 	var tests []AuthQueryRewritingCase
 	err := yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
 	testRewriter := NewQueryRewriter()
 	gqlSchema := test.LoadSchemaFromString(t, sch)
 
@@ -739,6 +741,7 @@ func checkAddUpdateCase(
 
 	// -- Act --
 	resolved, _ := resolver.Resolve(ctx, mut)
+
 	// -- Assert --
 	// most cases are built into the authExecutor
 	if tcase.Error != nil {
@@ -751,7 +754,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
-	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
+	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 
 	for _, algo := range jwtAlgo {
 		result, err := testutil.AppendAuthInfo(sch, algo, "../e2e/auth/sample_public_key.pem", false)

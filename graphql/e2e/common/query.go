@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/schema"
+
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
@@ -89,6 +91,26 @@ func touchedUidsHeader(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(b, &gqlResp))
 	require.Equal(t, touchedUidsInHeader, uint64(gqlResp.Extensions["touched_uids"].(float64)))
+}
+
+func cacheControlHeader(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query @cacheControl(maxAge: 5) {
+			queryCountry {
+				name
+			}
+		}`,
+	}
+	req, err := query.CreateGQLPost(GraphqlURL)
+	require.NoError(t, err)
+
+	client := http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	// confirm that the header value is a non-negative integer
+	require.Equal(t, "public,max-age=5", resp.Header.Get("Cache-Control"))
+	require.Equal(t, "Accept-Encoding", resp.Header.Get("Vary"))
 }
 
 // This test checks that all the different combinations of
@@ -2309,4 +2331,43 @@ func queryGeoNearFilter(t *testing.T) {
 	testutil.CompareJSON(t, queryHotelExpected, string(gqlResponse.Data))
 	// Cleanup
 	deleteGqlType(t, "Hotel", map[string]interface{}{}, 3, nil)
+}
+
+func persistedQuery(t *testing.T) {
+	queryCountryParams := &GraphQLParams{
+		Extensions: &schema.RequestExtensions{PersistedQuery: schema.PersistedQuery{
+			Sha256Hash: "shaWithoutAnyPersistedQuery",
+		}},
+	}
+	gqlResponse := queryCountryParams.ExecuteAsPost(t, GraphqlURL)
+	require.Len(t, gqlResponse.Errors, 1)
+	require.Contains(t, gqlResponse.Errors[0].Message, "PersistedQueryNotFound")
+
+	queryCountryParams = &GraphQLParams{
+		Query: `query ($countryName: String){
+			queryCountry(filter: {name: {eq: $countryName}}) {
+				name
+			}
+		}`,
+		Variables: map[string]interface{}{"countryName": "Bangladesh"},
+		Extensions: &schema.RequestExtensions{PersistedQuery: schema.PersistedQuery{
+			Sha256Hash: "incorrectSha",
+		}},
+	}
+	gqlResponse = queryCountryParams.ExecuteAsPost(t, GraphqlURL)
+	require.Len(t, gqlResponse.Errors, 1)
+	require.Contains(t, gqlResponse.Errors[0].Message, "provided sha does not match query")
+
+	queryCountryParams.Extensions.PersistedQuery.Sha256Hash = "bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"
+	gqlResponse = queryCountryParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryCountryParams.Query = ""
+	gqlResponse = queryCountryParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	// test get method as well
+	queryCountryParams.Extensions = nil
+	gqlResponse = queryCountryParams.ExecuteAsGet(t, GraphqlURL+`?extensions={"persistedQuery":{"sha256Hash":"bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"}}`)
+	RequireNoGQLErrors(t, gqlResponse)
 }

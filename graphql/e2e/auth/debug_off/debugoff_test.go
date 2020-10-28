@@ -2,6 +2,7 @@ package debugoff
 
 import (
 	"encoding/json"
+	"github.com/dgrijalva/jwt-go/v4"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -135,7 +136,7 @@ func TestMain(m *testing.M) {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
 
-	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
+	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "../sample_public_key.pem", false)
 		if err != nil {
