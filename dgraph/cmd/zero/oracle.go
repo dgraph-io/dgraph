@@ -18,7 +18,6 @@ package zero
 
 import (
 	"context"
-	"io/ioutil"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -58,20 +57,10 @@ type Oracle struct {
 	syncMarks   []syncMark
 }
 
-func initKeyCommit() *z.Tree {
-	f, err := ioutil.TempFile("", "dgraph-keycommit")
-	x.Check(err)
-	mf, err := z.OpenMmapFileUsing(f, 1<<30, true)
-	if err != z.NewFile {
-		x.Check(err)
-	}
-	return z.NewTree(mf)
-}
-
 // Init initializes the oracle.
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
-	o.keyCommit = initKeyCommit()
+	o.keyCommit = z.NewTree(1 << 30)
 	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init(nil)
@@ -88,7 +77,7 @@ func (o *Oracle) updateStartTxnTs(ts uint64) {
 	defer o.Unlock()
 	o.startTxnTs = ts
 	o.keyCommit.Release()
-	o.keyCommit = initKeyCommit()
+	o.keyCommit = z.NewTree(1 << 30)
 }
 
 // TODO: This should be done during proposal application for Txn status.
@@ -121,10 +110,11 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	}
 	// There is no transaction running with startTs less than minTs
 	// So we can delete everything from rowCommit whose commitTs < minTs
-	o.keyCommit.DeleteBelow(minTs - 1)
+	o.keyCommit.DeleteBelow(minTs)
 	o.tmax = minTs
+	stats := o.keyCommit.Stats()
 	glog.Infof("Purged below ts:%d, len(o.commits):%d"+
-		", pages:%d\n", minTs, len(o.commits), o.keyCommit.NumPages())
+		", pages:%d\n", minTs, len(o.commits), stats.NumPages)
 }
 
 func (o *Oracle) commit(src *api.TxnContext) error {
