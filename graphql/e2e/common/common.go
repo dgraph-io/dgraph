@@ -904,3 +904,18 @@ func GetJWT(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) http.H
 	h.Add(metaInfo.Header, jwtToken)
 	return h
 }
+
+func BootstrapAuthData() ([]byte, []byte) {
+	schemaFile := "../auth/schema.graphql"
+	schema, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		panic(err)
+	}
+
+	jsonFile := "../auth/test_data.json"
+	data, err := ioutil.ReadFile(jsonFile)
+	if err != nil {
+		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
+	}
+	return schema, data
+}

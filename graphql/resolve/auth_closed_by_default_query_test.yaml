@@ -16,7 +16,7 @@
       }
     }
   error:
-    { "message": "Jwt is required when ClosedByDefault flag is true"}
+    { "message": "A valid JWT is required but was not provided."}
 
 - name: "Query with missing jwt token - type without auth directive"
   gqlquery: |
@@ -36,4 +36,4 @@
       }
     }
   error:
-    { "message": "Jwt is required when ClosedByDefault flag is true" }
+    { "message": "A valid JWT is required but was not provided." }

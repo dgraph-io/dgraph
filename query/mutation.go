@@ -241,7 +241,6 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 	return edges, nil
 }
 
-
 func checkIfDeletingAclOperation(edges []*pb.DirectedEdge) error {
 
 	// Don't need to make any checks if ACL is not enabled

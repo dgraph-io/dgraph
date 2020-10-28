@@ -349,19 +349,9 @@ func TestJWTExpiry(t *testing.T) {
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
 // when it also needs to write in auth.
-func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, closedByDefault bool) {
-	var b []byte
-	var err error
-
-	if closedByDefault {
-		b, err = ioutil.ReadFile("auth_ClosedByDefault_query_test.yaml")
-	} else {
-		b, err = ioutil.ReadFile("auth_query_test.yaml")
-	}
-	require.NoError(t, err, "Unable to read test file")
-
+func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []byte) {
 	var tests []AuthQueryRewritingCase
-	err = yaml.Unmarshal(b, &tests)
+	err := yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 	testRewriter := NewQueryRewriter()
 	gqlSchema := test.LoadSchemaFromString(t, sch)
@@ -391,6 +381,7 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, close
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 
 			if tcase.Error != nil {
+				require.NotNil(t, err)
 				require.Equal(t, err.Error(), tcase.Error.Error())
 				require.Nil(t, dgQuery)
 			} else {
@@ -565,12 +556,9 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 // for delete when it also needs to write in auth - this doesn't extend to other nodes
 // it only ever applies at the top level because delete only deletes the nodes
 // referenced by the filter, not anything deeper.
-func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
-	b, err := ioutil.ReadFile("auth_delete_test.yaml")
-	require.NoError(t, err, "Unable to read test file")
-
+func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []byte) {
 	var tests []AuthQueryRewritingCase
-	err = yaml.Unmarshal(b, &tests)
+	err := yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	compareMutations := func(t *testing.T, test []*dgraphMutation, generated []*dgoapi.Mutation) {
@@ -612,8 +600,11 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta)
 				authMeta.AuthVars[k] = v
 			}
 
-			ctx, err := authMeta.AddClaimsToContext(context.Background())
-			require.NoError(t, err)
+			ctx := context.Background()
+			if !authMeta.ClosedByDefault {
+				ctx, err = authMeta.AddClaimsToContext(ctx)
+				require.NoError(t, err)
+			}
 
 			// -- Act --
 			upsert, err := rewriterToTest.Rewrite(ctx, mut)
@@ -656,18 +647,9 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta)
 // We don't need to test the json mutations that are created, because those are the same
 // as in add_mutation_test.yaml.  What we need to test is the processing around if
 // new nodes are checked properly - the query generated to check them, and the post-processing.
-func mutationAdd(t *testing.T, sch string, authMeta *testutil.AuthMeta, closedByDefault bool) {
-	var b []byte
-	var err error
-
-	if closedByDefault {
-		b, err = ioutil.ReadFile("auth_ClosedByDefault_add_test.yaml")
-	} else {
-		b, err = ioutil.ReadFile("auth_add_test.yaml")
-	}
-	require.NoError(t, err, "Unable to read test file")
+func mutationAdd(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []byte) {
 	var tests []AuthQueryRewritingCase
-	err = yaml.Unmarshal(b, &tests)
+	err := yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	gqlSchema := test.LoadSchemaFromString(t, sch)
@@ -686,12 +668,9 @@ func mutationAdd(t *testing.T, sch string, authMeta *testutil.AuthMeta, closedBy
 // We don't need to test the json mutations that are created, because those are the same
 // as in update_mutation_test.yaml.  What we need to test is the processing around if
 // new nodes are checked properly - the query generated to check them, and the post-processing.
-func mutationUpdate(t *testing.T, sch string, authMeta *testutil.AuthMeta, closedyDefault bool) {
-	b, err := ioutil.ReadFile("auth_update_test.yaml")
-	require.NoError(t, err, "Unable to read test file")
-
+func mutationUpdate(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []byte) {
 	var tests []AuthQueryRewritingCase
-	err = yaml.Unmarshal(b, &tests)
+	err := yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	gqlSchema := test.LoadSchemaFromString(t, sch)
@@ -730,10 +709,11 @@ func checkAddUpdateCase(
 	}
 
 	ctx := context.Background()
-	if !strings.HasPrefix(tcase.Name, "Query with missing jwt token") {
+	if !authMeta.ClosedByDefault {
 		ctx, err = authMeta.AddClaimsToContext(ctx)
 		require.NoError(t, err)
 	}
+
 	length := 1
 	upsertQuery := []string{tcase.DGQuery}
 
@@ -762,6 +742,7 @@ func checkAddUpdateCase(
 	// -- Assert --
 	// most cases are built into the authExecutor
 	if tcase.Error != nil {
+		require.NotNil(t, resolved.Err)
 		require.Equal(t, tcase.Error.Error(), resolved.Err.Error())
 	}
 }
@@ -781,31 +762,35 @@ func TestAuthQueryRewriting(t *testing.T) {
 		authorization.SetAuthMeta(authMeta)
 
 		metaInfo := &testutil.AuthMeta{
-			PublicKey: authMeta.VerificationKey,
-			Namespace: authMeta.Namespace,
-			Algo:      authMeta.Algo,
+			PublicKey:       authMeta.VerificationKey,
+			Namespace:       authMeta.Namespace,
+			Algo:            authMeta.Algo,
+			ClosedByDefault: authMeta.ClosedByDefault,
 		}
 
 		require.NoError(t, err)
-
+		b := read(t, "auth_query_test.yaml")
 		t.Run("Query Rewriting "+algo, func(t *testing.T) {
-			queryRewriting(t, strSchema, metaInfo, false)
+			queryRewriting(t, strSchema, metaInfo, b)
 		})
 
 		t.Run("Mutation Query Rewriting "+algo, func(t *testing.T) {
 			mutationQueryRewriting(t, strSchema, metaInfo)
 		})
 
+		b = read(t, "auth_add_test.yaml")
 		t.Run("Add Mutation "+algo, func(t *testing.T) {
-			mutationAdd(t, strSchema, metaInfo, false)
+			mutationAdd(t, strSchema, metaInfo, b)
 		})
 
+		b = read(t, "auth_update_test.yaml")
 		t.Run("Update Mutation "+algo, func(t *testing.T) {
-			mutationUpdate(t, strSchema, metaInfo, false)
+			mutationUpdate(t, strSchema, metaInfo, b)
 		})
 
+		b = read(t, "auth_delete_test.yaml")
 		t.Run("Delete Query Rewriting "+algo, func(t *testing.T) {
-			deleteQueryRewriting(t, strSchema, metaInfo)
+			deleteQueryRewriting(t, strSchema, metaInfo, b)
 		})
 	}
 	//reset auth meta, so that it won't effect other tests
@@ -824,21 +809,40 @@ func TestAuthQueryRewritingWithDefaultClosedByFlag(t *testing.T) {
 	authorization.SetAuthMeta(authMeta)
 
 	metaInfo := &testutil.AuthMeta{
-		PublicKey: authMeta.VerificationKey,
-		Namespace: authMeta.Namespace,
-		Algo:      authMeta.Algo,
+		PublicKey:       authMeta.VerificationKey,
+		Namespace:       authMeta.Namespace,
+		Algo:            authMeta.Algo,
+		ClosedByDefault: authMeta.ClosedByDefault,
 	}
-
 	require.NoError(t, err)
 
+	b := read(t, "auth_closed_by_default_query_test.yaml")
 	t.Run("Query Rewriting "+algo, func(t *testing.T) {
-		queryRewriting(t, strSchema, metaInfo, true)
+		queryRewriting(t, strSchema, metaInfo, b)
 	})
 
+	b = read(t, "auth_closed_by_default_add_test.yaml")
 	t.Run("Add Mutation "+algo, func(t *testing.T) {
-		mutationAdd(t, strSchema, metaInfo, true)
+		mutationAdd(t, strSchema, metaInfo, b)
 	})
 
+	b = read(t, "auth_closed_by_default_update_test.yaml")
+	t.Run("Update Mutation "+algo, func(t *testing.T) {
+		mutationUpdate(t, strSchema, metaInfo, b)
+	})
+
+	b = read(t, "auth_closed_by_default_delete_test.yaml")
+	t.Run("Delete Query Rewriting "+algo, func(t *testing.T) {
+		deleteQueryRewriting(t, strSchema, metaInfo, b)
+	})
 	//reset auth meta, so that it won't effect other tests
 	authorization.SetAuthMeta(&authorization.AuthMeta{})
+}
+
+func read(t *testing.T, file string) []byte {
+	var b []byte
+	var err error
+	b, err = ioutil.ReadFile(file)
+	require.NoError(t, err, "Unable to read test file")
+	return b
 }

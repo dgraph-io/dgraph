@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-package auth_ClosedByDefault
+package auth_closed_by_default
 
 import (
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -40,7 +38,7 @@ type TestCase struct {
 
 func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 	testCases := []TestCase{{
-		name: "Missing JWT - type with auth directive",
+		name: "Missing JWT from Mutation - type with auth directive",
 		query: `
 	          	mutation addUser($user: AddUserSecretInput!) {
 		        	addUserSecret(input: [$user]) {
@@ -56,7 +54,7 @@ func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 		result: `{"addUserSecret":null}`,
 	},
 		{
-			name: "Missing JWT - type without auth directive",
+			name: "Missing JWT from Mutation - type without auth directive",
 			query: `
 		       mutation addTodo($Todo: AddTodoInput!) {
 			      addTodo(input: [$Todo]) {
@@ -82,14 +80,14 @@ func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
-			"Jwt is required when ClosedByDefault flag is true")
+			"A valid JWT is required but was not provided")
 		require.Equal(t, tcase.result, string(gqlResponse.Data))
 	}
 }
 
-func TestAuthRulesQueryWithClosedByDefaultAFlag(t *testing.T) {
+func TestAuthRulesQueryWithClosedByDefaultFlag(t *testing.T) {
 	testCases := []TestCase{
-		{name: "Missing JWT - type with auth field",
+		{name: "Missing JWT from Query - type with auth field",
 			query: `
 			query {
 				queryProject {
@@ -98,7 +96,7 @@ func TestAuthRulesQueryWithClosedByDefaultAFlag(t *testing.T) {
 			}`,
 			result: `{"queryProject":[]}`,
 		},
-		{name: "Missing JWT - type without auth field",
+		{name: "Missing JWT from Query - type without auth field",
 			query: `
 			query {
 				queryTodo {
@@ -116,30 +114,96 @@ func TestAuthRulesQueryWithClosedByDefaultAFlag(t *testing.T) {
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
 		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
-			"Jwt is required when ClosedByDefault flag is true")
+			"A valid JWT is required but was not provided")
+		require.Equal(t, tcase.result, string(gqlResponse.Data))
+	}
+}
+
+func TestAuthRulesUpdateWithClosedByDefaultFlag(t *testing.T) {
+	testCases := []TestCase{{
+		name: "Missing JWT from Update Mutation - type with auth field",
+		query: `
+	    mutation ($ids: [ID!]) {
+		    updateIssue(input: {filter: {id: $ids}, set: {random: "test"}}) {
+			issue (order: {asc: msg}) {
+				msg
+			}
+		    }
+	    }
+	`,
+		result: `{"updateIssue":null}`,
+	},
+		{
+			name: "Missing JWT from Update Mutation - type without auth field",
+			query: `
+	    mutation ($ids: [ID!]) {
+		    updateTodo(input: {filter: {id: $ids}, set: {text: "test"}}) {
+			todo {
+				text
+			}
+		    }
+	    }
+	`,
+			result: `{"updateTodo":null}`,
+		}}
+
+	for _, tcase := range testCases {
+		getUserParams := &common.GraphQLParams{
+			Query:     tcase.query,
+			Variables: map[string]interface{}{"ids": []string{"0x1"}},
+		}
+
+		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		require.Equal(t, len(gqlResponse.Errors), 1)
+		require.Contains(t, gqlResponse.Errors[0].Error(),
+			"A valid JWT is required but was not provided")
+		require.Equal(t, tcase.result, string(gqlResponse.Data))
+	}
+}
+
+func TestDeleteOrRBACFilter(t *testing.T) {
+	testCases := []TestCase{{
+		name: "Missing JWT from delete Mutation- type with auth field",
+		query: `
+		mutation($ids: [ID!]) {
+			deleteComplexLog (filter: { id: $ids}) {
+         		numUids
+		    }
+		}
+	`,
+		result: `{"deleteComplexLog":null}`,
+	}, {
+		name: "Missing JWT from delete Mutation - type without auth field",
+		query: `
+		mutation($ids: [ID!]) {
+			deleteTodo (filter: { id: $ids}) {
+         		numUids
+		    }
+		}
+	`,
+		result: `{"deleteTodo":null}`,
+	}}
+
+	for _, tcase := range testCases {
+		getUserParams := &common.GraphQLParams{
+			Query:     tcase.query,
+			Variables: map[string]interface{}{"ids": []string{"0x1"}},
+		}
+		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		require.Equal(t, len(gqlResponse.Errors), 1)
+		require.Contains(t, gqlResponse.Errors[0].Error(),
+			"A valid JWT is required but was not provided")
 		require.Equal(t, tcase.result, string(gqlResponse.Data))
 	}
 }
 
 func TestMain(m *testing.M) {
-	schemaFile := "../auth/schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
-
-	jsonFile := "../auth/test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
-	if err != nil {
-		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
-	}
-
 	algo := authorization.HMAC256
+	schema, data := common.BootstrapAuthData()
 	authSchema, err := testutil.AppendAuthInfo(schema, algo, "../auth/sample_public_key.pem", true)
 	if err != nil {
 		panic(err)
 	}
-
 	common.BootstrapServer(authSchema, data)
 	// Data is added only in the first iteration, but the schema is added every iteration.
 	if data != nil {
