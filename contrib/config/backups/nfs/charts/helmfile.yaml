@@ -80,7 +80,7 @@ releases:
     namespace: default
     chart: dgraph/dgraph
     values:
-      - ./dgraph_{{ env "VOL_TYPE" | default "nfs" }}_nfs.yaml
+      - ./dgraph_{{ env "VOL_TYPE" | default "nfs" }}.yaml
       - backups:
           {{- if eq (env "VOL_TYPE") "volume" }}
           ## backup drive allocated through volume claim
