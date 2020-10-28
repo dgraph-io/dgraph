@@ -346,6 +346,9 @@ func RunAll(t *testing.T) {
 	t.Run("cascade directive", queryWithCascade)
 	t.Run("query geo near filter", queryGeoNearFilter)
 	t.Run("persisted query", persistedQuery)
+	t.Run("query count without filter", queryCountWithoutFilter)
+	t.Run("query count with filter", queryCountWithFilter)
+	t.Run("query count with alias", queryCountWithAlias)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)

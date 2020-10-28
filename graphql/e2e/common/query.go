@@ -2371,3 +2371,65 @@ func persistedQuery(t *testing.T) {
 	gqlResponse = queryCountryParams.ExecuteAsGet(t, GraphqlURL+`?extensions={"persistedQuery":{"sha256Hash":"bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"}}`)
 	RequireNoGQLErrors(t, gqlResponse)
 }
+
+func queryCountWithFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost (filter: {title : { anyofterms : "Introducing" }} ) {
+				count
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{"aggregatePost":{"count":1}}`,
+		string(gqlResponse.Data))
+
+	queryPostParams = &GraphQLParams{
+		Query: `query {
+			aggregatePost (filter: {title : { anyofterms : "Nothing" }} ) {
+				count
+			}
+		}`,
+	}
+
+	gqlResponse = queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{"aggregatePost":{"count":0}}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountWithoutFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost {
+				count
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{"aggregatePost":{"count":4}}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountWithAlias(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost {
+				cnt: count
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{"aggregatePost":{"cnt":4}}`,
+		string(gqlResponse.Data))
+}
