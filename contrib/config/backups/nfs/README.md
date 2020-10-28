@@ -112,7 +112,7 @@ export NFS_SERVER="<server-ip-address>"
 
 ```bash
 ## Source required environments variables
-. env.sh
+source env.sh
 ## Start Docker Compose
 docker-compose up --detach
 ```
@@ -144,6 +144,9 @@ export NFS_SERVER="<server-ip-address>"
 If you have [helmfile](https://github.com/roboll/helmfile#installation) and [helm-diff](https://github.com/databus23/helm-diff) installed, you can deploy Dgraph with NFS support for backups with this:
 
 ```bash
+## Source required environments variables
+source env.sh
+## Deploy Dgraph (and optional Rook)
 helmfile apply
 ```
 
