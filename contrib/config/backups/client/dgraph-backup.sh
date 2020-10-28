@@ -19,7 +19,7 @@ Usage:
   $0 [FLAGS] --location [LOCATION]
 
 Flags:
- -a, --alpha string        Dgraph alpha HTTP/S server (default "localhost")
+ -a, --alpha string        Dgraph alpha HTTP/S server (default "localhost:8080")
  -i, --api_type            API Type of REST or GraphQL (default "GraphQL")
  -t, --auth_token string   The auth token passed to the server
  -d, --debug               Enable debug in output
@@ -63,7 +63,7 @@ parse_command() {
 
   ## Defaults
   DEBUG="false"
-  ALPHA_HOST="localhost"
+  ALPHA_HOST="localhost:8080"
   BACKUP_DESTINATION=""
   SUBPATH=dgraph_$(date +%Y%m%d)
   API_TYPE="graphql"

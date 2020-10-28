@@ -8,7 +8,7 @@ get_token_rest() {
       "${HEADERS[@]}" \
       "${CERTOPTS[@]}" \
       --request POST \
-      ${ALPHA_HOST}:8080/login \
+      ${ALPHA_HOST}/login \
       --data "${JSON}"
   )
 
@@ -32,7 +32,7 @@ get_token_graphql() {
       "${HEADERS[@]}" \
       "${CERTOPTS[@]}" \
       --request POST \
-      ${ALPHA_HOST}:8080/admin \
+      ${ALPHA_HOST}/admin \
       --data "${GQL}"
   )
 
@@ -52,7 +52,7 @@ get_token_graphql() {
 #    1: user (required)
 #    2: password (required)
 #  envvars:
-#    ALPHA_HOST (default: localhost) - dns name of dgraph alpha node
+#    ALPHA_HOST (default: localhost:8080) - dns name of dgraph alpha node
 #    CACERT_PATH - path to dgraph root ca (e.g. ca.crt) if TLS is enabled
 #    CLIENT_CERT_PATH - path to client cert (e.g. client.dgraphuser.crt) for client TLS
 #    CLIENT_KEY_PATH - path to client cert (e.g. client.dgraphuser.key) for client TLS
@@ -82,9 +82,9 @@ get_token() {
         '--key' "$CLIENT_KEY_PATH"
       )
     fi
-    ALPHA_HOST=https://${ALPHA_HOST:-"localhost"}
+    ALPHA_HOST=https://${ALPHA_HOST:-"localhost:8080"}
   else
-    ALPHA_HOST=${ALPHA_HOST:-"localhost"}
+    ALPHA_HOST=${ALPHA_HOST:-"localhost:8080"}
   fi
 
   API_TYPE=${API_TYPE:-"graphql"}
@@ -102,7 +102,7 @@ get_token() {
 #    1: token (optional) - if ACL enabled pass token from get_token()
 #  envvars:
 #    BACKUP_DESTINATION (required) - filepath ("/path/to/backup"), s3://, or minio://
-#    ALPHA_HOST (default: localhost) - dns name of dgraph alpha node
+#    ALPHA_HOST (default: localhost:8080) - dns name of dgraph alpha node
 #    MINIO_SECURE (default: false) - set to true if minio service supports https
 #    FORCE_FULL (default: false) - set to true if forcing a full backup
 #    CACERT_PATH - path to dgraph root ca (e.g. ca.crt) if TLS is enabled
@@ -140,9 +140,9 @@ backup() {
         '--key' "$CLIENT_KEY_PATH"
       )
     fi
-    ALPHA_HOST=https://${ALPHA_HOST:-"localhost"}
+    ALPHA_HOST=https://${ALPHA_HOST:-"localhost:8080"}
   else
-    ALPHA_HOST=${ALPHA_HOST:-"localhost"}
+    ALPHA_HOST=${ALPHA_HOST:-"localhost:8080"}
   fi
 
   ## Configure destination with date stamp folder
@@ -182,7 +182,7 @@ backup_rest() {
     "${HEADERS[@]}" \
     "${CERTOPTS[@]}" \
     --request POST \
-    ${ALPHA_HOST}:8080/$URL_PATH \
+    ${ALPHA_HOST}/$URL_PATH \
     --data "destination=$BACKUP_DESTINATION"
   )
 
@@ -210,7 +210,7 @@ backup_graphql() {
     "${HEADERS[@]}" \
     "${CERTOPTS[@]}" \
     --request POST \
-    $ALPHA_HOST:8080/admin \
+    ${ALPHA_HOST}/admin \
     --data "$GQL"
   )
 

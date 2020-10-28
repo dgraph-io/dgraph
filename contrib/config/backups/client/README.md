@@ -40,9 +40,9 @@ As an example of performing backups with a local mounted file path using ACLs, E
    ```
 2. Trigger a full backup:
    ```bash
-   ## trigger a backup on alpha1
+   ## trigger a backup on alpha1:8080
    ./dgraph-backup.sh \
-     --alpha alpha1 \
+     --alpha alpha1:8080 \
      --tls_cacert /dgraph/tls/ca.crt \
      --force_full \
      --location /dgraph/backups \
@@ -86,7 +86,7 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [AWS 
 2. Trigger a backup
    ```bash
    ./dgraph-backup.sh \
-     --alpha localhost \
+     --alpha localhost:8080 \
      --force_full \
      --location $BACKUP_PATH
    ```
@@ -135,7 +135,7 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [Goog
 2. Trigger a full backup
    ```bash
    ./dgraph-backup.sh \
-     --alpha localhost \
+     --alpha localhost:8080 \
      --force_full \
      --location minio://gateway:9000/${BACKUP_BUCKET_NAME}
    ```
@@ -184,7 +184,7 @@ This will have requirements for [Terraform](https://www.terraform.io/) and [Azur
 2. Trigger a backup
    ```bash
    ./dgraph-backup.sh \
-     --alpha localhost \
+     --alpha localhost:8080 \
      --force_full \
      --location minio://gateway:9000/${CONTAINER_NAME}
    ```
