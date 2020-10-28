@@ -221,14 +221,13 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault b
 		return schema, nil
 	}
 
-	keyData, err := ioutil.ReadFile(publicKeyFile)
+	_, err := ioutil.ReadFile(publicKeyFile)
 	if err != nil {
 		return nil, err
 	}
 
 	// Replacing ASCII newline with "\n" as the authorization information in the schema should be
 	// present in a single line.
-	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
 	if closedByDefault {
 		authInfo = fmt.Sprintf(authInfo, "true")
 	} else {

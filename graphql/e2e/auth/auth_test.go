@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go/v4"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"

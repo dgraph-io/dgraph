@@ -159,7 +159,7 @@ func TestStringCustomClaim(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
-	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "",false)
+	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "", false)
 	require.NoError(t, err)
 
 	test.LoadSchemaFromString(t, string(authSchema))
@@ -244,7 +244,7 @@ func TestAudienceClaim(t *testing.T) {
 			require.Equal(t, authVar, result)
 		})
 	}
-	//reset auth meta, so that it won't effect other tests
+	// reset auth meta, so that it won't effect other tests
 	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
@@ -295,7 +295,7 @@ func TestJWTExpiry(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
-	authSchema, err := testutil.AppendAuthInfo(sch,jwt.SigningMethodHS256.Name, "", false)
+	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "", false)
 	require.NoError(t, err)
 
 	test.LoadSchemaFromString(t, string(authSchema))
@@ -796,14 +796,14 @@ func TestAuthQueryRewriting(t *testing.T) {
 			deleteQueryRewriting(t, strSchema, metaInfo, b)
 		})
 	}
-	//reset auth meta, so that it won't effect other tests
+	// reset auth meta, so that it won't effect other tests
 	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
 func TestAuthQueryRewritingWithDefaultClosedByFlag(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
-	algo := authorization.HMAC256
+	algo := jwt.SigningMethodHS256.Name
 	result, err := testutil.AppendAuthInfo(sch, algo, "../e2e/auth/sample_public_key.pem", true)
 	require.NoError(t, err)
 	strSchema := string(result)
@@ -838,14 +838,12 @@ func TestAuthQueryRewritingWithDefaultClosedByFlag(t *testing.T) {
 	t.Run("Delete Query Rewriting "+algo, func(t *testing.T) {
 		deleteQueryRewriting(t, strSchema, metaInfo, b)
 	})
-	//reset auth meta, so that it won't effect other tests
+	// reset auth meta, so that it won't effect other tests
 	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
 func read(t *testing.T, file string) []byte {
-	var b []byte
-	var err error
-	b, err = ioutil.ReadFile(file)
+	b, err := ioutil.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 	return b
 }

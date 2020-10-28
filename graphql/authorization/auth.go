@@ -472,7 +472,7 @@ func (a *AuthMeta) FetchJWKs() error {
 	var maxAge int64
 
 	if resp.Header["Cache-Control"] != nil {
-		maxAge, err = ParseMaxAge(resp.Header["Cache-Control"][0])
+		maxAge, _ = ParseMaxAge(resp.Header["Cache-Control"][0])
 	}
 
 	if maxAge == 0 {
