@@ -585,3 +585,9 @@ type TaskOccurrence @auth(
     role: String @search(by: [exact, term, fulltext, regexp])
 }
 
+type Todo {
+    id: ID
+    owner: String
+    text: String
+
+}

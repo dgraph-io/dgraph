@@ -20,17 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/dgrijalva/jwt-go/v4"
-
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1368,21 +1365,10 @@ func TestDeepRBACValueCascade(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	schemaFile := "schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
-
-	jsonFile := "test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
-	if err != nil {
-		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
-	}
-
+	schema, data := common.BootstrapAuthData()
 	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
-		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem")
+		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem", false)
 		if err != nil {
 			panic(err)
 		}

@@ -138,7 +138,7 @@ func TestMain(m *testing.M) {
 
 	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
-		authSchema, err := testutil.AppendAuthInfo(schema, algo, "../sample_public_key.pem")
+		authSchema, err := testutil.AppendAuthInfo(schema, algo, "../sample_public_key.pem", false)
 		if err != nil {
 			panic(err)
 		}

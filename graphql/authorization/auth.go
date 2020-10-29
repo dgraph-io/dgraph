@@ -69,6 +69,7 @@ type AuthMeta struct {
 	Algo            string
 	SigningMethod   jwt.SigningMethod `json:"-"` // Ignoring this field
 	Audience        []string
+	ClosedByDefault bool
 	sync.RWMutex
 }
 
@@ -113,7 +114,6 @@ func Parse(schema string) (*AuthMeta, error) {
 		return nil, nil
 	}
 	authInfo := schema[authInfoIdx:]
-
 	err := json.Unmarshal([]byte(authInfo[len(AuthMetaHeader):]), &meta)
 	if err == nil {
 		if err := meta.validate(); err != nil {
@@ -246,6 +246,7 @@ func SetAuthMeta(m *AuthMeta) {
 	authMeta.Algo = m.Algo
 	authMeta.SigningMethod = m.SigningMethod
 	authMeta.Audience = m.Audience
+	authMeta.ClosedByDefault = m.ClosedByDefault
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -324,9 +325,12 @@ func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
 	// return CustomClaims containing jwt and authvariables.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return &CustomClaims{}, nil
+		if authMeta.ClosedByDefault {
+			return &CustomClaims{}, fmt.Errorf("a valid JWT is required but was not provided")
+		} else {
+			return &CustomClaims{}, nil
+		}
 	}
-
 	jwtToken := md.Get(string(AuthJwtCtxKey))
 	if len(jwtToken) == 0 {
 		return &CustomClaims{}, nil
@@ -468,7 +472,7 @@ func (a *AuthMeta) FetchJWKs() error {
 	var maxAge int64
 
 	if resp.Header["Cache-Control"] != nil {
-		maxAge, err = ParseMaxAge(resp.Header["Cache-Control"][0])
+		maxAge, _ = ParseMaxAge(resp.Header["Cache-Control"][0])
 	}
 
 	if maxAge == 0 {
