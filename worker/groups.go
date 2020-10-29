@@ -322,7 +322,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 				atomic.StoreUint32(&g.gid, gid)
 			}
 			if x.WorkerConfig.MyAddr != member.Addr {
-				conn.GetPools().Connect(member.Addr)
+				conn.GetPools().Connect(member.Addr, x.WorkerConfig.TLSClientConfig)
 			}
 		}
 		for _, tablet := range group.Tablets {
@@ -335,7 +335,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	}
 	for _, member := range g.state.Zeros {
 		if x.WorkerConfig.MyAddr != member.Addr {
-			conn.GetPools().Connect(member.Addr)
+			conn.GetPools().Connect(member.Addr, x.WorkerConfig.TLSClientConfig)
 		}
 	}
 	if !foundSelf {
@@ -648,7 +648,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		for _, mz := range connState.State.GetZeros() {
 			if mz.Leader {
-				return conn.GetPools().Connect(mz.GetAddr())
+				return conn.GetPools().Connect(mz.GetAddr(), x.WorkerConfig.TLSClientConfig)
 			}
 		}
 		return nil
@@ -673,7 +673,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 
 		pl := g.AnyServer(0)
 		if pl == nil {
-			pl = conn.GetPools().Connect(addr)
+			pl = conn.GetPools().Connect(addr, x.WorkerConfig.TLSClientConfig)
 		}
 		if pl == nil {
 			glog.V(1).Infof("No healthy Zero server found. Retrying...")
@@ -1116,7 +1116,7 @@ func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList),
 		if len(members) == 0 {
 			return fmt.Errorf("Unable to find any servers for group: %d", group)
 		}
-		pool := conn.GetPools().Connect(members[0])
+		pool := conn.GetPools().Connect(members[0], x.WorkerConfig.TLSClientConfig)
 		client := pb.NewWorkerClient(pool.Get())
 
 		// Get Subscriber stream.

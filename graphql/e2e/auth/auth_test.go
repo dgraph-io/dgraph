@@ -25,7 +25,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/dgrijalva/jwt-go/v4"
+
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/google/go-cmp/cmp"
@@ -988,6 +989,42 @@ func TestRootFilter(t *testing.T) {
 	}
 }
 
+func TestRootCountQuery(t *testing.T) {
+	testCases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"aggregateColumn": {"count": 1}}`,
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"aggregateColumn": {"count": 3}}`,
+	}, {
+		user:   "user4",
+		role:   "USER",
+		result: `{"aggregateColumn": {"count": 2}}`,
+	}}
+	query := `
+	query {
+		aggregateColumn {
+			count
+		}
+	}`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			params := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
 func TestDeepRBACValue(t *testing.T) {
 	testCases := []TestCase{
 		{user: "user1", role: "USER", result: `{"queryUser": [{"username": "user1", "issues":[]}]}`},
@@ -1042,6 +1079,35 @@ func TestRBACFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func TestRBACFilterWithCountQuery(t *testing.T) {
+	testCases := []TestCase{
+		{role: "USER", result: `{"aggregateLog": null}`},
+		{result: `{"aggregateLog": null}`},
+		{role: "ADMIN", result: `{"aggregateLog": {"count": 2}}`}}
+
+	query := `
+		query {
+			aggregateLog {
+		    	count
+		    }
+		}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			params := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
@@ -1432,7 +1498,8 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
-	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
+
+	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem")
 		if err != nil {

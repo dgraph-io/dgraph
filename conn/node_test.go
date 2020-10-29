@@ -67,7 +67,7 @@ func TestProposal(t *testing.T) {
 	store := raftwal.Init(dir)
 
 	rc := &pb.RaftContext{Id: 1}
-	n := NewNode(rc, store)
+	n := NewNode(rc, store, nil)
 
 	peers := []raft.Peer{{ID: n.Id}}
 	n.SetRaft(raft.StartNode(n.Cfg, peers))

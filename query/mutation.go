@@ -69,7 +69,6 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			sg := &SubGraph{}
 			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
 			sg.ReadTs = m.StartTs
-
 			types, err := getNodeTypes(ctx, sg)
 			if err != nil {
 				return nil, err
@@ -241,9 +240,7 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 	return edges, nil
 }
 
-
 func checkIfDeletingAclOperation(edges []*pb.DirectedEdge) error {
-
 	// Don't need to make any checks if ACL is not enabled
 	if !x.WorkerConfig.AclEnabled {
 		return nil

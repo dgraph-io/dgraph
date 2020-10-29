@@ -54,6 +54,16 @@ const (
             "upsert": true
         },
         {
+            "predicate":"dgraph.graphql.p_query",
+            "type":"string"
+        },
+        {
+            "predicate":"dgraph.graphql.p_sha256hash",
+            "type":"string",
+            "index":true,
+            "tokenizer":["exact"]
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
@@ -104,6 +114,17 @@ const (
                 }
             ],
             "name": "dgraph.graphql.history"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.p_query"
+                },
+                {
+                    "name": "dgraph.graphql.p_sha256hash"
+                }
+            ],
+            "name": "dgraph.graphql.persisted_query"
         }
     ]
 }`
@@ -127,6 +148,16 @@ const (
              "exact"
             ],
             "upsert": true
+        },
+        {
+            "predicate":"dgraph.graphql.p_query",
+            "type":"string"
+        },
+        {
+            "predicate":"dgraph.graphql.p_sha256hash",
+            "type":"string",
+            "index":true,
+            "tokenizer":["exact"]
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -187,6 +218,17 @@ const (
                 }
             ],
             "name": "dgraph.graphql.history"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.p_query"
+                },
+                {
+                    "name": "dgraph.graphql.p_sha256hash"
+                }
+            ],
+            "name": "dgraph.graphql.persisted_query"
         }
     ]
 }`
@@ -225,6 +267,16 @@ const (
              "exact"
             ],
             "upsert": true
+        },
+        {
+            "predicate":"dgraph.graphql.p_query",
+            "type":"string"
+        },
+        {
+            "predicate":"dgraph.graphql.p_sha256hash",
+            "type":"string",
+            "index":true,
+            "tokenizer":["exact"]
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -288,6 +340,17 @@ const (
                 }
             ],
             "name": "dgraph.graphql.history"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.p_query"
+                },
+                {
+                    "name": "dgraph.graphql.p_sha256hash"
+                }
+            ],
+            "name": "dgraph.graphql.persisted_query"
         }
     ]
 }`
@@ -334,6 +397,16 @@ const (
              "exact"
             ],
             "upsert": true
+        },
+        {
+            "predicate":"dgraph.graphql.p_query",
+            "type":"string"
+        },
+        {
+            "predicate":"dgraph.graphql.p_sha256hash",
+            "type":"string",
+            "index":true,
+            "tokenizer":["exact"]
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -400,6 +473,17 @@ const (
                 }
             ],
             "name": "dgraph.graphql.history"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.p_query"
+                },
+                {
+                    "name": "dgraph.graphql.p_sha256hash"
+                }
+            ],
+            "name": "dgraph.graphql.persisted_query"
         }
     ]
 }`
@@ -755,7 +839,7 @@ func adminState(t *testing.T) {
 }
 
 func testCors(t *testing.T) {
-	t.Run("testing normal retrival", func(t *testing.T) {
+	t.Run("testing normal retrieval", func(t *testing.T) {
 		queryParams := &GraphQLParams{
 			Query: `query{
                 getAllowedCORSOrigins{
@@ -793,7 +877,7 @@ func testCors(t *testing.T) {
           }`, string(gqlResponse.Data))
 	})
 
-	t.Run("retrive mutated cors", func(t *testing.T) {
+	t.Run("retrieve mutated cors", func(t *testing.T) {
 		queryParams := &GraphQLParams{
 			Query: `query{
                 getAllowedCORSOrigins{

@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/schema"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -82,9 +84,10 @@ const (
 // header to the same.
 
 type GraphQLParams struct {
-	Query         string                 `json:"query"`
-	OperationName string                 `json:"operationName"`
-	Variables     map[string]interface{} `json:"variables"`
+	Query         string                    `json:"query"`
+	OperationName string                    `json:"operationName"`
+	Variables     map[string]interface{}    `json:"variables"`
+	Extensions    *schema.RequestExtensions `json:"extensions,omitempty"`
 	acceptGzip    bool
 	gzipEncoding  bool
 	Headers       http.Header
@@ -139,6 +142,7 @@ type post struct {
 	Title       string    `json:"title,omitempty"`
 	Text        string    `json:"text,omitempty"`
 	Tags        []string  `json:"tags,omitempty"`
+	Topic       string    `json:"topic,omitempty"`
 	NumLikes    int       `json:"numLikes,omitempty"`
 	NumViews    int64     `json:"numViews,omitempty"`
 	IsPublished bool      `json:"isPublished,omitempty"`
@@ -266,7 +270,7 @@ func BootstrapServer(schema, data []byte) {
 
 // RunAll runs all the test functions in this package as sub tests.
 func RunAll(t *testing.T) {
-	// admin tests
+	//admin tests
 	t.Run("admin", admin)
 	t.Run("health", health)
 	t.Run("partial health", partialHealth)
@@ -279,6 +283,7 @@ func RunAll(t *testing.T) {
 
 	// header tests
 	t.Run("touched uids header", touchedUidsHeader)
+	t.Run("cache-control header", cacheControlHeader)
 
 	// encoding
 	t.Run("gzip compression", gzipCompression)
@@ -298,6 +303,8 @@ func RunAll(t *testing.T) {
 	t.Run("multiple search indexes wrong field", multipleSearchIndexesWrongField)
 	t.Run("hash search", hashSearch)
 	t.Run("in filter", inFilter)
+	t.Run("between filter", betweenFilter)
+	t.Run("deep between filter", deepBetweenFilter)
 	t.Run("deep filter", deepFilter)
 	t.Run("deep has filter", deepHasFilter)
 	t.Run("many queries", manyQueries)
@@ -338,6 +345,10 @@ func RunAll(t *testing.T) {
 	t.Run("alias works for queries", queryWithAlias)
 	t.Run("cascade directive", queryWithCascade)
 	t.Run("query geo near filter", queryGeoNearFilter)
+	t.Run("persisted query", persistedQuery)
+	t.Run("query count without filter", queryCountWithoutFilter)
+	t.Run("query count with filter", queryCountWithFilter)
+	t.Run("query count with alias", queryCountWithAlias)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -380,13 +391,16 @@ func RunAll(t *testing.T) {
 	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
 	t.Run("Input coercing for int64 type", int64BoundaryTesting)
 	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
-	t.Run("Geo type", mutationGeoType)
+	t.Run("Geo - Point type", mutationPointType)
+	t.Run("Geo - Polygon type", mutationPolygonType)
+	t.Run("Geo - MultiPolygon type", mutationMultiPolygonType)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
 	t.Run("request validation errors", requestValidationErrors)
 	t.Run("panic catcher", panicCatcher)
 	t.Run("deep mutation errors", deepMutationErrors)
+	t.Run("not generated query, mutation using generate directive", notGeneratedAPIErrors)
 
 	// fragment tests
 	t.Run("fragment in mutation", fragmentInMutation)

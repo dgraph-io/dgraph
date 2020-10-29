@@ -34,6 +34,31 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 """
 scalar DateTime
 
+input IntRange{
+	min: Int
+	max: Int
+}
+
+input FloatRange{
+	min: Float
+	max: Float
+}
+
+input Int64Range{
+	min: Int64
+	max: Int64
+}
+
+input DateTimeRange{
+	min: DateTime
+	max: DateTime
+}
+
+input StringRange{
+	min: String
+	max: String
+}
+
 enum DgraphIndex {
 	int
 	int64
@@ -100,7 +125,66 @@ input NearFilter {
 }
 
 input PointGeoFilter {
-	near: NearFilter!
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
+}
+
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -118,6 +202,11 @@ directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -125,6 +214,7 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
@@ -133,6 +223,7 @@ input Int64Filter {
 	lt: Int64
 	ge: Int64
 	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
@@ -141,6 +232,7 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
@@ -149,6 +241,7 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
@@ -172,6 +265,7 @@ input StringExactFilter {
 	lt: String
 	ge: String
 	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
@@ -205,6 +299,10 @@ type DeleteUserPayload {
 	numUids: Int
 }
 
+type TodoAggregateResult {
+	count: Int
+}
+
 type UpdateTodoPayload {
 	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
 	numUids: Int
@@ -213,6 +311,10 @@ type UpdateTodoPayload {
 type UpdateUserPayload {
 	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
+}
+
+type UserAggregateResult {
+	count: Int
 }
 
 #######################
@@ -343,8 +445,10 @@ input UserRef {
 type Query {
 	getTodo(id: ID!): Todo
 	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	aggregateTodo(filter: TodoFilter): TodoAggregateResult
 	getUser(username: String!): User
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################
