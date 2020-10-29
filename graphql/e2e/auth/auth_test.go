@@ -416,6 +416,45 @@ func TestAuthOnInterfaces(t *testing.T) {
 			role:   "ADMIN",
 			result: `{"queryFbPost": [{"text": "B FbPost"}]}`,
 		},
+		{
+			name: "Query Interface should interhit auth rules from all the interfaces",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			role:   "ADMIN",
+			result: `{"queryPost":[{"text": "A Answer"},{"text": "A FbPost"},{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Interface should return those implementing type whose auth rules are satisfied",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			result: `{"queryPost":[{"text": "A Answer"},{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Interface should return empty if the Auth rules of interface are not satisfied",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			ans:    true,
+			result: `{"queryPost":[]}`,
+		},
 	}
 
 	for _, tcase := range TestCases {

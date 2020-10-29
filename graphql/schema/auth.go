@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
@@ -41,6 +42,7 @@ type RuleNode struct {
 	And       []*RuleNode
 	Not       *RuleNode
 	Rule      Query
+	DQLRule   *gql.GraphQuery
 	RBACRule  *RBACQuery
 	Variables ast.VariableDefinitionList
 }
@@ -142,6 +144,18 @@ type TypeAuth struct {
 	Fields map[string]*AuthContainer
 }
 
+func createEmptyDQLRule(typeName string) *RuleNode {
+	return &RuleNode{DQLRule: &gql.GraphQuery{
+		Attr: typeName + "Root",
+		Var:  typeName + "Root",
+		Func: &gql.Function{
+			Name: "type",
+			Args: []gql.Arg{{Value: typeName}},
+		},
+	},
+	}
+}
+
 func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 	//TODO: Add position in error.
 	var errResult, err error
@@ -169,18 +183,43 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 	for _, typ := range s.Types {
 		name := typeName(typ)
 		if typ.Kind == ast.Object {
-			for _, interfaceName := range typ.Interfaces {
+			for _, intrface := range typ.Interfaces {
+				interfaceName := typeName(s.Types[intrface])
 				if authRules[interfaceName] != nil && authRules[interfaceName].Rules != nil {
-					authRules[name].Rules = mergeAuthRules(authRules, name, interfaceName)
+					authRules[name].Rules = mergeAuthRules(authRules[name].Rules, authRules[interfaceName].Rules, mergeAuthNodeWithAnd)
 				}
 			}
+		}
+	}
+
+	// Reinitialize the Interface's auth to be empty as Any operation on interface
+	// will be broken into an operation on subsequent implementing types and auth rules
+	// will be verified against the types only.
+	for _, typ := range s.Types {
+		name := typeName(typ)
+		if typ.Kind == ast.Interface {
+			authRules[name] = &TypeAuth{}
 		}
 	}
 
 	return authRules, errResult
 }
 
-func mergeAuthNode(objectAuth, interfaceAuth *RuleNode) *RuleNode {
+func mergeAuthNodeWithOr(objectAuth, interfaceAuth *RuleNode) *RuleNode {
+	if objectAuth == nil {
+		return interfaceAuth
+	}
+
+	if interfaceAuth == nil {
+		return objectAuth
+	}
+
+	ruleNode := &RuleNode{}
+	ruleNode.Or = append(ruleNode.Or, objectAuth, interfaceAuth)
+	return ruleNode
+}
+
+func mergeAuthNodeWithAnd(objectAuth, interfaceAuth *RuleNode) *RuleNode {
 	if objectAuth == nil {
 		return interfaceAuth
 	}
@@ -194,10 +233,7 @@ func mergeAuthNode(objectAuth, interfaceAuth *RuleNode) *RuleNode {
 	return ruleNode
 }
 
-func mergeAuthRules(authRules map[string]*TypeAuth, objectName string, interfaceName string) *AuthContainer {
-	objectAuthRules := authRules[objectName].Rules
-	interfaceAuthRules := authRules[interfaceName].Rules
-
+func mergeAuthRules(objectAuthRules, interfaceAuthRules *AuthContainer, mergeAuthNode func(*RuleNode, *RuleNode) *RuleNode) *AuthContainer {
 	// return copy of interfaceAuthRules since it is a pointer and otherwise it will lead
 	// to unnecessary errors
 	if objectAuthRules == nil {
