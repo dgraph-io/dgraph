@@ -68,9 +68,10 @@ type Author struct {
 }
 
 type Question struct {
-	Id     string  `json:"id,omitempty"`
-	Text   string  `json:"text,omitempty"`
-	Author *Author `json:"author,omitempty"`
+	Id       string  `json:"id,omitempty"`
+	Text     string  `json:"text,omitempty"`
+	Answered bool    `json:"answered,omitempty"`
+	Author   *Author `json:"author,omitempty"`
 }
 
 type Log struct {

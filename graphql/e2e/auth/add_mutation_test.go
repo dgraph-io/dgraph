@@ -18,6 +18,7 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -104,6 +105,76 @@ func (m *Movie) delete(t *testing.T, user, role string) {
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
+}
+
+func TestAddOnTypesWithAuthOnInterfaces(t *testing.T) {
+	testCases := []TestCase{{
+		user: "user1",
+		ans:  true,
+		variables: map[string]interface{}{"question": &Question{
+			Text: "A Question",
+			Author: &Author{
+				Name: "user1",
+			},
+			Answered: true,
+		}},
+	},
+	}
+
+	query := `
+		mutation addQuestion($question: AddQuestionInput!) {
+			addQuestion(input: [$question]) {
+				question {
+					id
+					text
+					author {
+						id
+						name
+					}
+				}
+			}
+		}
+	`
+	var expected, result struct {
+		AddQuestion struct {
+			Question []*Question
+		}
+	}
+
+	for _, tcase := range testCases {
+		getUserParams := &common.GraphQLParams{
+			Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
+			Query:     query,
+			Variables: tcase.variables,
+		}
+
+		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		// if tcase.result == "" {
+		// 	require.Equal(t, len(gqlResponse.Errors), 1)
+		// 	require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
+		// 	continue
+		// }
+
+		require.Nil(t, gqlResponse.Errors)
+
+		// err := json.Unmarshal([]byte(tcase.result), &expected)
+		// require.NoError(t, err)
+
+		err := json.Unmarshal(gqlResponse.Data, &result)
+		fmt.Println(string(gqlResponse.Data))
+		require.NoError(t, err)
+		fmt.Println(result)
+		opt := cmpopts.IgnoreFields(Column{}, "ColID")
+		opt1 := cmpopts.IgnoreFields(Project{}, "ProjID")
+		if diff := cmp.Diff(expected, result, opt, opt1); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+
+		// for _, i := range result.AddQuestion.Question {
+		// 	i.InProject.delete(t, tcase.user, tcase.role)
+		// 	i.delete(t, tcase.user, tcase.role)
+		// }
+	}
 }
 
 func TestAddDeepFilter(t *testing.T) {
