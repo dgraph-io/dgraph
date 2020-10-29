@@ -319,11 +319,27 @@ func rewriteAsGet(
 	var dgQuery *gql.GraphQuery
 	rbac := auth.evaluateStaticRules(field.Type())
 
-	// If Get query is for interface and none of the authrules are satisfied, then it is not
-	// caught here as after merging the interface Auth Rules into the types Interface Auth
-	// Rules are made empty.
+	// If Get query is for Type and none of the authrules are satisfied, then it is
+	// caught here but in case of interface, we need to check validity on each
+	// implementing type as Rules for the interface are made empty.
 	if rbac == schema.Negative {
 		return &gql.GraphQuery{Attr: field.ResponseName() + "()"}
+	}
+
+	// For interface, empty query should be returned if Auth rules are
+	// not satisfied even for a single implementing type
+	if field.Type().IsInterface() {
+		implementingTypesHasFailedRules := false
+		implementingTypes := field.Type().ImplementingTypes()
+		for _, typ := range implementingTypes {
+			if auth.evaluateStaticRules(typ) != schema.Negative {
+				implementingTypesHasFailedRules = true
+			}
+		}
+
+		if !implementingTypesHasFailedRules {
+			return &gql.GraphQuery{Attr: field.ResponseName() + "()"}
+		}
 	}
 
 	if xid == nil {
@@ -333,9 +349,6 @@ func rewriteAsGet(
 		// query the top level get query may be present in query's children.
 		addTopLevelTypeFilter(dgQuery, field)
 
-		// For interface Get query, empty query will be like
-		// queryPost() @filter(type(Post)) and it will be also returned here
-		// instead of being caught up in tha above check.
 		return dgQuery
 	}
 

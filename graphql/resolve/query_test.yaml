@@ -1161,7 +1161,7 @@
     }
   dgquery: |-
     query {
-      getX() @filter(type(X))
+      getX()
     }
 
 -

@@ -1373,9 +1373,9 @@
   jwtvar:
   dgquery: |-
     query {
-      getPost() @filter(type(Post))
+      getPost()
     }
-- name: "Query interface having no Auth Rules but some type have Auth rules and those are satified"
+- name: "Query interface having no Auth Rules should apply auth rules on implementing types that are satisfied"
   gqlquery: |
     query {
       queryA {
@@ -1399,7 +1399,7 @@
         id : uid
       }
     }
-- name: "Query interface having no Auth Rules but some type have Auth rules and those are not satified"
+- name: "Query interface having no Auth Rules but some type have Auth rules and those are not satified are excluded (for eg: type C )"
   gqlquery: |
     query {
       queryA {
