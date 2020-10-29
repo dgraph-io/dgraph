@@ -6,8 +6,6 @@ weight = 3
     name = "Count Queries"
 +++
 
-In this article you'll learn how to use GraphQL queries to aggregate data from a Dgraph database.
-
 Dgraph automatically generates count queries for a given GraphQL schema, enabling you to `count` on predicates, edges and to count nodes satisfying certain criteria specified using a filter.
 
 ### Count at root
@@ -43,7 +41,7 @@ Example - Fetch the number of `posts` whose titles contain `GraphQL`.
 
 ### Count for a child
 
-Besides the `aggregate<type name>` query, Dgraph defines `aggregate_<predicate_name>` fields inside `query<type name>` queries, allowing you to do a `count` of predicate edges and other aggregation fields.
+Besides the `aggregate<type name>` query, Dgraph defines `aggregate_<predicate_name>` fields inside `query<type name>` queries, allowing you to do a `count` of predicate edges.
 
 #### Examples
 
