@@ -131,10 +131,31 @@ func undoSchemaUpdate(predicate string) {
 	}
 }
 
-func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs uint64) error {
+func runSchemaMutation(ctx context.Context, proposal *pb.Proposal, startTs uint64) error {
+	updates := proposal.Mutations.Schema
 	if len(updates) == 0 {
 		return nil
 	}
+
+	// For predicates that are being added for the first time, there is no need to do indexing.
+	// So we need to index only when there is a predicate that was not already present
+	needsIndexing := false
+	allPresentPredicates := make(map[string]bool)
+	if proposal.State != nil {
+		for _, group := range proposal.State.Groups {
+			for _, tablet := range group.Tablets {
+				allPresentPredicates[tablet.Predicate] = true
+			}
+		}
+	}
+
+	for _, update := range updates {
+		if allPresentPredicates[update.Predicate] {
+			needsIndexing = true
+			break
+		}
+	}
+
 	// Wait until schema modification for all predicates is complete. There cannot be two
 	// background tasks running as this is a race condition. We typically won't propose an
 	// index update if one is already going on. If that's not the case, then the receiver
@@ -221,7 +242,6 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		if err := checkSchema(su); err != nil {
 			return err
 		}
-
 		old, _ := schema.State().Get(ctx, su.Predicate)
 		rebuild := posting.IndexRebuild{
 			Attr:          su.Predicate,
@@ -242,19 +262,24 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			}
 			return rebuild.BuildData(ctx)
 		}
-		if err := setup(); err != nil {
-			glog.Errorf("error in building indexes, aborting :: %v\n", err)
-			undoSchemaUpdate(su.Predicate)
-			return err
+		if needsIndexing {
+			if err := setup(); err != nil {
+				glog.Errorf("error in building indexes, aborting :: %v\n", err)
+				undoSchemaUpdate(su.Predicate)
+				return err
+			}
 		}
 
 		if rebuild.NeedIndexRebuild() {
 			go buildIndexes(su, rebuild)
-		} else if err := updateSchema(su); err != nil {
-			return err
+		} else {
+			err := updateSchema(su)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
+	}
 	return nil
 }
 

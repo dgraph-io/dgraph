@@ -388,7 +388,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			n.ex.waitForActiveMutations()
 		}
 
-		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
+		if err := runSchemaMutation(ctx, proposal, startTs); err != nil {
 			return err
 		}
 
