@@ -403,6 +403,7 @@ func RunAll(t *testing.T) {
 	t.Run("request validation errors", requestValidationErrors)
 	t.Run("panic catcher", panicCatcher)
 	t.Run("deep mutation errors", deepMutationErrors)
+	t.Run("not generated query, mutation using generate directive", notGeneratedAPIErrors)
 
 	// fragment tests
 	t.Run("fragment in mutation", fragmentInMutation)

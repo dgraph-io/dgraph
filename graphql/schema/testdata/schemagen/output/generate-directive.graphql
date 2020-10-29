@@ -2,7 +2,20 @@
 # Input Schema
 #######################
 
-type Author {
+interface Character @secret(field: "password") @generate(query: {get:false,password:false}, subscription: false) {
+	id: ID!
+	name: String! @search(by: [exact])
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+}
+
+type Human implements Character @generate(subscription: true) @secret(field: "password") {
+	id: ID!
+	name: String! @search(by: [exact])
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	totalCredits: Int
+}
+
+type Person @withSubscription @generate(query: {get:false,query:true,password:true}, mutation: {add:false,delete:false}, subscription: false) {
 	id: ID!
 	name: String!
 }
@@ -265,19 +278,35 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type AddHumanPayload {
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	numUids: Int
 }
 
-type DeleteAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type DeleteCharacterPayload {
+	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	msg: String
 	numUids: Int
 }
 
-type UpdateAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type DeleteHumanPayload {
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	msg: String
+	numUids: Int
+}
+
+type UpdateCharacterPayload {
+	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	numUids: Int
+}
+
+type UpdateHumanPayload {
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	numUids: Int
+}
+
+type UpdatePersonPayload {
+	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 	numUids: Int
 }
 
@@ -285,11 +314,31 @@ type UpdateAuthorPayload {
 # Generated Enums
 #######################
 
-enum AuthorHasFilter {
+enum CharacterHasFilter {
+	name
+	friends
+}
+
+enum CharacterOrderable {
 	name
 }
 
-enum AuthorOrderable {
+enum HumanHasFilter {
+	name
+	friends
+	totalCredits
+}
+
+enum HumanOrderable {
+	name
+	totalCredits
+}
+
+enum PersonHasFilter {
+	name
+}
+
+enum PersonOrderable {
 	name
 }
 
@@ -297,37 +346,107 @@ enum AuthorOrderable {
 # Generated Inputs
 #######################
 
-input AddAuthorInput {
+input AddHumanInput {
 	name: String!
+	friends: [CharacterRef]
+	totalCredits: Int
+	password: String!
 }
 
-input AuthorFilter {
+input CharacterFilter {
 	id: [ID!]
-	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
-	not: AuthorFilter
+	name: StringExactFilter
+	has: CharacterHasFilter
+	and: CharacterFilter
+	or: CharacterFilter
+	not: CharacterFilter
 }
 
-input AuthorOrder {
-	asc: AuthorOrderable
-	desc: AuthorOrderable
-	then: AuthorOrder
+input CharacterOrder {
+	asc: CharacterOrderable
+	desc: CharacterOrderable
+	then: CharacterOrder
 }
 
-input AuthorPatch {
+input CharacterPatch {
+	name: String
+	friends: [CharacterRef]
+	password: String
+}
+
+input CharacterRef {
+	id: ID!
+}
+
+input HumanFilter {
+	id: [ID!]
+	name: StringExactFilter
+	has: HumanHasFilter
+	and: HumanFilter
+	or: HumanFilter
+	not: HumanFilter
+}
+
+input HumanOrder {
+	asc: HumanOrderable
+	desc: HumanOrderable
+	then: HumanOrder
+}
+
+input HumanPatch {
+	name: String
+	friends: [CharacterRef]
+	totalCredits: Int
+	password: String
+}
+
+input HumanRef {
+	id: ID
+	name: String
+	friends: [CharacterRef]
+	totalCredits: Int
+	password: String
+}
+
+input PersonFilter {
+	id: [ID!]
+	has: PersonHasFilter
+	and: PersonFilter
+	or: PersonFilter
+	not: PersonFilter
+}
+
+input PersonOrder {
+	asc: PersonOrderable
+	desc: PersonOrderable
+	then: PersonOrder
+}
+
+input PersonPatch {
 	name: String
 }
 
-input AuthorRef {
+input PersonRef {
 	id: ID
 	name: String
 }
 
-input UpdateAuthorInput {
-	filter: AuthorFilter!
-	set: AuthorPatch
-	remove: AuthorPatch
+input UpdateCharacterInput {
+	filter: CharacterFilter!
+	set: CharacterPatch
+	remove: CharacterPatch
+}
+
+input UpdateHumanInput {
+	filter: HumanFilter!
+	set: HumanPatch
+	remove: HumanPatch
+}
+
+input UpdatePersonInput {
+	filter: PersonFilter!
+	set: PersonPatch
+	remove: PersonPatch
 }
 
 #######################
@@ -335,8 +454,11 @@ input UpdateAuthorInput {
 #######################
 
 type Query {
-	getAuthor(id: ID!): Author
-	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	getHuman(id: ID!): Human
+	checkHumanPassword(id: ID!, password: String!): Human
+	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 }
 
 #######################
@@ -344,8 +466,20 @@ type Query {
 #######################
 
 type Mutation {
-	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
-	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
-	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
+	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
+	addHuman(input: [AddHumanInput!]!): AddHumanPayload
+	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
+	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
+	updatePerson(input: UpdatePersonInput!): UpdatePersonPayload
 }
 
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getHuman(id: ID!): Human
+	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+}
