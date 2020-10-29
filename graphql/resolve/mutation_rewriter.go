@@ -1053,6 +1053,10 @@ func rewriteObject(
 			}
 		} else if !withAdditionalDeletes {
 			// In case of delete, id/xid is required
+			if xid == nil && id == nil {
+				f := newFragment(map[string]interface{}{})
+				return &mutationRes{secondPass: []*mutationFragment{{fragment: f}}}
+			}
 			var name string
 			if xid != nil {
 				name = xid.Name()
