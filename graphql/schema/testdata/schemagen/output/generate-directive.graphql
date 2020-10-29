@@ -8,14 +8,14 @@ interface Character @secret(field: "password") @generate(query: {get:false,passw
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 }
 
-type Human implements Character @generate(subscription: true) @secret(field: "password") {
+type Human implements Character @generate(query: {aggregate:true}, subscription: true) @secret(field: "password") {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	totalCredits: Int
 }
 
-type Person @withSubscription @generate(query: {get:false,query:true,password:true}, mutation: {add:false,delete:false}, subscription: false) {
+type Person @withSubscription @generate(query: {get:false,query:true,password:true,aggregate:false}, mutation: {add:false,delete:false}, subscription: false) {
 	id: ID!
 	name: String!
 }
@@ -180,6 +180,7 @@ input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
 	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
@@ -283,6 +284,10 @@ type AddHumanPayload {
 	numUids: Int
 }
 
+type CharacterAggregateResult {
+	count: Int
+}
+
 type DeleteCharacterPayload {
 	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	msg: String
@@ -293,6 +298,10 @@ type DeleteHumanPayload {
 	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	msg: String
 	numUids: Int
+}
+
+type HumanAggregateResult {
+	count: Int
 }
 
 type UpdateCharacterPayload {
@@ -455,9 +464,11 @@ input UpdatePersonInput {
 
 type Query {
 	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
 	getHuman(id: ID!): Human
 	checkHumanPassword(id: ID!, password: String!): Human
 	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	aggregateHuman(filter: HumanFilter): HumanAggregateResult
 	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 }
 
@@ -481,5 +492,6 @@ type Mutation {
 type Subscription {
 	getHuman(id: ID!): Human
 	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	aggregateHuman(filter: HumanFilter): HumanAggregateResult
 	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 }

@@ -176,6 +176,7 @@ input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
 	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
@@ -284,6 +285,10 @@ type AddLibraryPayload {
 	numUids: Int
 }
 
+type BookAggregateResult {
+	count: Int
+}
+
 type DeleteBookPayload {
 	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
 	msg: String
@@ -294,6 +299,14 @@ type DeleteLibraryItemPayload {
 	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
 	msg: String
 	numUids: Int
+}
+
+type LibraryAggregateResult {
+	count: Int
+}
+
+type LibraryItemAggregateResult {
+	count: Int
 }
 
 type UpdateBookPayload {
@@ -410,9 +423,12 @@ input UpdateBookInput {
 type Query {
 	getLibraryItem(refID: String!): LibraryItem
 	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
 	getBook(refID: String!): Book
 	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	aggregateBook(filter: BookFilter): BookAggregateResult
 	queryLibrary(first: Int, offset: Int): [Library]
+	aggregateLibrary: LibraryAggregateResult
 }
 
 #######################

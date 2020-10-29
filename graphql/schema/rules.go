@@ -1276,6 +1276,15 @@ func generateDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gqlerr
 					"only be true/false, found: `%s",
 				typ.Name, passwordField.Raw))
 		}
+
+		aggregateField := queryArg.Value.Children.ForName(generateAggregateField)
+		if aggregateField != nil && aggregateField.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				aggregateField.Position,
+				"Type %s; aggregate field inside query argument of @generate directive can "+
+					"only be true/false, found: `%s",
+				typ.Name, aggregateField.Raw))
+		}
 	}
 
 	mutationArg := dir.Arguments.ForName(generateMutationArg)

@@ -178,6 +178,7 @@ input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
 	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
@@ -298,6 +299,10 @@ type DeleteUserPayload {
 	numUids: Int
 }
 
+type TodoAggregateResult {
+	count: Int
+}
+
 type UpdateTodoPayload {
 	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
 	numUids: Int
@@ -306,6 +311,10 @@ type UpdateTodoPayload {
 type UpdateUserPayload {
 	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
+}
+
+type UserAggregateResult {
+	count: Int
 }
 
 #######################
@@ -436,8 +445,10 @@ input UserRef {
 type Query {
 	getTodo(id: ID!): Todo
 	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	aggregateTodo(filter: TodoFilter): TodoAggregateResult
 	getUser(username: String!): User
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################

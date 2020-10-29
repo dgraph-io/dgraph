@@ -11,6 +11,9 @@ interface Character @secret(field: "password") @generate(
 }
 
 type Human implements Character @generate(
+    query: {
+        aggregate: true
+    },
     subscription: true
 ) {
     totalCredits: Int
@@ -20,7 +23,8 @@ type Person @withSubscription @generate(
     query: {
         get: false,
         query: true,
-        password: true
+        password: true,
+        aggregate: false
     },
     mutation: {
         add: false,

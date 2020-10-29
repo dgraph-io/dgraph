@@ -51,6 +51,7 @@ const (
 	generateGetField        = "get"
 	generateQueryField      = "query"
 	generatePasswordField   = "password"
+	generateAggregateField  = "aggregate"
 	generateMutationArg     = "mutation"
 	generateAddField        = "add"
 	generateUpdateField     = "update"
@@ -250,6 +251,7 @@ input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
 	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
@@ -525,6 +527,7 @@ type GenerateDirectiveParams struct {
 	generateGetQuery       bool
 	generateFilterQuery    bool
 	generatePasswordQuery  bool
+	generateAggregateQuery bool
 	generateAddMutation    bool
 	generateUpdateMutation bool
 	generateDeleteMutation bool
@@ -536,6 +539,7 @@ func parseGenerateDirectiveParams(defn *ast.Definition) *GenerateDirectiveParams
 		generateGetQuery:       true,
 		generateFilterQuery:    true,
 		generatePasswordQuery:  true,
+		generateAggregateQuery: true,
 		generateAddMutation:    true,
 		generateUpdateMutation: true,
 		generateDeleteMutation: true,
@@ -558,6 +562,11 @@ func parseGenerateDirectiveParams(defn *ast.Definition) *GenerateDirectiveParams
 			if passwordField := queryArg.Value.Children.ForName(generatePasswordField); passwordField != nil {
 				if passwordFieldVal, err := passwordField.Value(nil); err == nil {
 					ret.generatePasswordQuery = passwordFieldVal.(bool)
+				}
+			}
+			if aggregateField := queryArg.Value.Children.ForName(generateAggregateField); aggregateField != nil {
+				if aggregateFieldVal, err := aggregateField.Value(nil); err == nil {
+					ret.generateAggregateQuery = aggregateFieldVal.(bool)
 				}
 			}
 		}
@@ -843,6 +852,9 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addFilterType(sch, defn)
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
+		if params.generateAggregateQuery {
+			addAggregationResultType(sch, defn)
+		}
 		addQueries(sch, defn, params)
 		addTypeHasFilter(sch, defn)
 	}
@@ -1112,7 +1124,10 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
-	fldTypeName := fld.Type.Name()
+	addFilterArgumentForField(schema, fld, fld.Type.Name())
+}
+
+func addFilterArgumentForField(schema *ast.Schema, fld *ast.FieldDefinition, fldTypeName string) {
 	fldType := schema.Types[fldTypeName]
 	if fldType.Kind == ast.Union || hasFilterable(fldType) {
 		fld.Arguments = append(fld.Arguments,
@@ -1519,6 +1534,21 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
+func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
+	aggregationResultTypeName := defn.Name + "AggregateResult"
+
+	countField := &ast.FieldDefinition{
+		Name: "count",
+		Type: &ast.Type{NamedType: "Int"},
+	}
+
+	schema.Types[aggregationResultTypeName] = &ast.Definition{
+		Kind:   ast.Object,
+		Name:   aggregationResultTypeName,
+		Fields: []*ast.FieldDefinition{countField},
+	}
+}
+
 func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
@@ -1583,6 +1613,23 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition, generateSubscripti
 
 }
 
+func addAggregationQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
+	qry := &ast.FieldDefinition{
+		Name: "aggregate" + defn.Name,
+		Type: &ast.Type{
+			NamedType: defn.Name + "AggregateResult",
+		},
+	}
+	addFilterArgumentForField(schema, qry, defn.Name)
+
+	schema.Query.Fields = append(schema.Query.Fields, qry)
+	subs := defn.Directives.ForName(subscriptionDirective)
+	if subs != nil || generateSubscription {
+		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	}
+
+}
+
 func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
@@ -1632,6 +1679,10 @@ func addQueries(schema *ast.Schema, defn *ast.Definition, params *GenerateDirect
 
 	if params.generateFilterQuery {
 		addFilterQuery(schema, defn, params.generateSubscription)
+	}
+
+	if params.generateAggregateQuery {
+		addAggregationQuery(schema, defn, params.generateSubscription)
 	}
 }
 

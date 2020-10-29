@@ -195,6 +195,7 @@ input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
 	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
@@ -302,6 +303,10 @@ type DeletePostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	msg: String
 	numUids: Int
+}
+
+type PostAggregateResult {
+	count: Int
 }
 
 type UpdatePostPayload {
@@ -528,6 +533,7 @@ input UpdatePostInput {
 type Query {
 	getPost(postID: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	aggregatePost(filter: PostFilter): PostAggregateResult
 }
 
 #######################

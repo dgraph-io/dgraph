@@ -169,6 +169,7 @@ input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
 	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
@@ -272,6 +273,10 @@ type AddDataPayload {
 	numUids: Int
 }
 
+type DataAggregateResult {
+	count: Int
+}
+
 type DeleteDataPayload {
 	data(filter: DataFilter, first: Int, offset: Int): [Data]
 	msg: String
@@ -337,6 +342,7 @@ input UpdateDataInput {
 type Query {
 	getData(id: ID!): Data
 	queryData(filter: DataFilter, first: Int, offset: Int): [Data]
+	aggregateData(filter: DataFilter): DataAggregateResult
 }
 
 #######################

@@ -85,5 +85,5 @@ services:
     volumes:
       - type: bind
         source: ./script.js
-        target: /app/script.js
+        target: /app/script/script.js
         read_only: true
