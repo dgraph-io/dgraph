@@ -70,7 +70,7 @@ func (e *Encoder) packBlock() {
 	}
 
 	// Allocate blocks manually.
-	b := e.alloc.Allocate(blockSize)
+	b := e.alloc.AllocateAligned(blockSize)
 	block := (*pb.UidBlock)(unsafe.Pointer(&b[0]))
 
 	block.Base = e.uids[0]
