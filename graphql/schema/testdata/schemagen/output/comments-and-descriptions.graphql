@@ -193,6 +193,7 @@ input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
 	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
@@ -302,6 +303,14 @@ type DeleteTPayload {
 	numUids: Int
 }
 
+type IAggregateResult {
+	count: Int
+}
+
+type TAggregateResult {
+	count: Int
+}
+
 type UpdateTPayload {
 	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 	numUids: Int
@@ -404,8 +413,10 @@ input UpdateTInput {
 
 type Query {
 	queryI(order: IOrder, first: Int, offset: Int): [I]
+	aggregateI: IAggregateResult
 	getT(id: ID!): T
 	queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+	aggregateT(filter: TFilter): TAggregateResult
 }
 
 #######################

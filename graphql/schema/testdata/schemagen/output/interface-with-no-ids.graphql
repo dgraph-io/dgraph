@@ -176,6 +176,7 @@ input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
 	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
@@ -284,6 +285,18 @@ type AddUserPayload {
 	numUids: Int
 }
 
+type MessageAggregateResult {
+	count: Int
+}
+
+type QuestionAggregateResult {
+	count: Int
+}
+
+type UserAggregateResult {
+	count: Int
+}
+
 #######################
 # Generated Enums
 #######################
@@ -381,8 +394,11 @@ input UserRef {
 
 type Query {
 	queryMessage(order: MessageOrder, first: Int, offset: Int): [Message]
+	aggregateMessage: MessageAggregateResult
 	queryQuestion(order: QuestionOrder, first: Int, offset: Int): [Question]
+	aggregateQuestion: QuestionAggregateResult
 	queryUser(order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser: UserAggregateResult
 }
 
 #######################

@@ -192,6 +192,7 @@ input GenerateQueryParams {
 	get: Boolean
 	query: Boolean
 	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
@@ -305,6 +306,14 @@ type AddQuestionPayload {
 	numUids: Int
 }
 
+type AnswerAggregateResult {
+	count: Int
+}
+
+type AuthorAggregateResult {
+	count: Int
+}
+
 type DeleteAnswerPayload {
 	answer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
 	msg: String
@@ -327,6 +336,14 @@ type DeleteQuestionPayload {
 	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
 	msg: String
 	numUids: Int
+}
+
+type PostAggregateResult {
+	count: Int
+}
+
+type QuestionAggregateResult {
+	count: Int
 }
 
 type UpdateAnswerPayload {
@@ -569,12 +586,16 @@ input UpdateQuestionInput {
 type Query {
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	aggregateAuthor(filter: AuthorFilter): AuthorAggregateResult
 	getPost(id: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	aggregatePost(filter: PostFilter): PostAggregateResult
 	getQuestion(id: ID!): Question
 	queryQuestion(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	aggregateQuestion(filter: QuestionFilter): QuestionAggregateResult
 	getAnswer(id: ID!): Answer
 	queryAnswer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
+	aggregateAnswer(filter: AnswerFilter): AnswerAggregateResult
 }
 
 #######################

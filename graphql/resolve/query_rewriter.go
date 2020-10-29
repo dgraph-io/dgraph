@@ -89,7 +89,7 @@ func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
-	if gqlQuery.Type().InterfaceImplHasAuthRules() {
+	if gqlQuery.ConstructedFor().InterfaceImplHasAuthRules() {
 		return &gql.GraphQuery{Attr: gqlQuery.ResponseName() + "()"}, nil
 	}
 
@@ -107,7 +107,7 @@ func (qr *queryRewriter) Rewrite(
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
-		parentVarName: gqlQuery.Type().Name() + "Root",
+		parentVarName: gqlQuery.ConstructedFor().Name() + "Root",
 	}
 	authRw.hasAuthRules = hasAuthRules(gqlQuery, authRw)
 	authRw.hasCascade = hasCascadeDirective(gqlQuery)
@@ -136,9 +136,41 @@ func (qr *queryRewriter) Rewrite(
 		return rewriteAsQuery(gqlQuery, authRw), nil
 	case schema.PasswordQuery:
 		return passwordQuery(gqlQuery, authRw)
+	case schema.AggregateQuery:
+		return aggregateQuery(gqlQuery, authRw), nil
 	default:
 		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
+}
+
+func aggregateQuery(query schema.Query, authRw *authRewriter) *gql.GraphQuery {
+
+	// Get the type which the count query is written for
+	mainType := query.ConstructedFor()
+
+	dgQuery, rbac := addCommonRules(query, mainType, authRw)
+	if rbac == schema.Negative {
+		return dgQuery
+	}
+
+	// Add filter
+	filter, _ := query.ArgValue("filter").(map[string]interface{})
+	_ = addFilter(dgQuery, mainType, filter)
+
+	// Add selection set. Currently, it will only be count
+	for _, f := range query.SelectionSet() {
+		if f.Name() == "count" {
+			child := &gql.GraphQuery{
+				Alias: f.DgraphAlias(),
+				Attr:  "count(uid)",
+			}
+			dgQuery.Children = append(dgQuery.Children, child)
+		}
+	}
+
+	dgQuery = authRw.addAuthQueries(mainType, dgQuery, rbac)
+
+	return dgQuery
 }
 
 func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error) {
@@ -378,15 +410,17 @@ func rewriteAsGet(
 	return dgQuery
 }
 
-func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
-	rbac := authRw.evaluateStaticRules(field.Type())
+// Adds common RBAC and UID, Type rules to DQL query.
+// This function is used by rewriteAsQuery and aggregateQuery functions
+func addCommonRules(field schema.Field, fieldType schema.Type, authRw *authRewriter) (*gql.GraphQuery, schema.RuleResult) {
+	rbac := authRw.evaluateStaticRules(fieldType)
 	dgQuery := &gql.GraphQuery{
 		Attr: field.Name(),
 	}
 
 	if rbac == schema.Negative {
 		dgQuery.Attr = dgQuery.Attr + "()"
-		return dgQuery
+		return dgQuery, rbac
 	}
 
 	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) && (authRw.varName != "" || authRw.parentVarName != "") {
@@ -403,10 +437,18 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 			authRw.varName = ""
 			authRw.filterByUid = false
 		}
-	} else if ids := idFilter(extractQueryFilter(field), field.Type().IDField()); ids != nil {
+	} else if ids := idFilter(extractQueryFilter(field), fieldType.IDField()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
-		addTypeFunc(dgQuery, field.Type().DgraphName())
+		addTypeFunc(dgQuery, fieldType.DgraphName())
+	}
+	return dgQuery, rbac
+}
+
+func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
+	dgQuery, rbac := addCommonRules(field, field.Type(), authRw)
+	if rbac == schema.Negative {
+		return dgQuery
 	}
 
 	addArgumentsToField(dgQuery, field)
