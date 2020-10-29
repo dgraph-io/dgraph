@@ -5,16 +5,22 @@
 type X {
 	f1(first: Int, offset: Int): [Y] @dgraph(pred: "f1")
 	f3(first: Int, offset: Int): [Z] @dgraph(pred: "~f3")
+	aggregate_f1: [YAggregateResult]
+	aggregate_f3: [ZAggregateResult]
 }
 
 type Y {
 	f1(first: Int, offset: Int): [X] @dgraph(pred: "~f1")
 	f2(first: Int, offset: Int): [Z] @dgraph(pred: "f2")
+	aggregate_f1: [XAggregateResult]
+	aggregate_f2: [ZAggregateResult]
 }
 
 type Z {
 	f2(first: Int, offset: Int): [Y] @dgraph(pred: "~f2")
 	f3(first: Int, offset: Int): [X] @dgraph(pred: "f3")
+	aggregate_f2: [YAggregateResult]
+	aggregate_f3: [XAggregateResult]
 }
 
 #######################
