@@ -172,7 +172,9 @@ query {
 
 ### Filter a query for a range of objects with `between`
 
-You can also filter query results within a wide range of indexed and typed scalar values using the `between` keyword. This keyword is also supported for DQL; to learn more, see [DQL Functions: `between`](/query-language/functions/#between).
+You can also filter query results within an inclusive range of indexed and typed
+scalar values using the `between` keyword. This keyword is also supported for
+DQL; to learn more, see [DQL Functions: `between`](/query-language/functions/#between).
 
 For example, you might start with the following example schema used to track students at a school:
 
