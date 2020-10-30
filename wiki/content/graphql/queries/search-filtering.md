@@ -170,11 +170,11 @@ query {
 }
 ```
 
-### Filter
+### Filter a query for a range of objects with `between`
 
-You can also filter within a wide range of scalar values when indexed in a type using the `between` filter.
+You can also filter query results within a wide range of indexed and typed scalar values using the `between` keyword. This keyword is also supported for DQL; to learn more, see [DQL Functions: `between`](/query-language/functions/#between).
 
-For example, you could start with the following example schema used to track students at a school:
+For example, you might start with the following example schema used to track students at a school:
 
 **Schema**:
 
@@ -184,7 +184,8 @@ type Student{
    name: String @search(by: [exact])
 }
 ```
-Using the `between` filter, you could fetch records for students who are between 10 and 20 years of age:
+Using the `between` filter, you could fetch records for students who are between
+10 and 20 years of age:
 
 **Query**:
 
@@ -195,12 +196,13 @@ queryStudent(fitler: {age: between: {min: 10, max: 20}}){
 }
 ```
 
-You could also use this filter to fetch records for students where their names falls alphabetically between `Aa` and `Ba`:
+You could also use this filter to fetch records for students whose names fall
+alphabetically between `ba` and `hz`:
 
 **Query**:
 
 ```graphql
-queryStudent(fitler: {name: between: {min: "abc", max: "def"}}){
+queryStudent(fitler: {name: between: {min: "ba", max: "hz"}}){
     age
     name
 }
