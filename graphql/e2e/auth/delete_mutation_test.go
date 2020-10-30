@@ -105,6 +105,22 @@ func (q *Question) add(t *testing.T, user string, ans bool) {
 	require.Nil(t, gqlResponse.Errors)
 }
 
+func (f *FbPost) add(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, user, role, metaInfo),
+		Query: `
+		mutation addFbPost($text: String!,$id1: ID!,$id2:ID!, $id3: ID!, $postCount: Int! ){
+			addFbPost(input: [{text: $text, author: {id: $id1},sender: {id: $id2}, receiver: {id: $id3}, postCount: $postCount }]){
+			  numUids
+			}
+		  }
+		`,
+		Variables: map[string]interface{}{"text": f.Text, "id1": f.Author.Id, "id2": f.Sender.Id, "id3": f.Receiver.Id, "postCount": f.PostCount},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
 func getComplexLog(t *testing.T, role string) ([]*ComplexLog, []string) {
 	getParams := &common.GraphQLParams{
 		Query: `
@@ -138,7 +154,57 @@ func getComplexLog(t *testing.T, role string) ([]*ComplexLog, []string) {
 	return complexLogs, keys
 }
 
-func TestDeleteTypeWithInterfaceAuth(t *testing.T) {
+func TestDeleteTypeWithRBACFilteronInterface(t *testing.T) {
+	testCases := []TestCase{{
+		user:   "user1@dgraph.io",
+		role:   "ADMIN",
+		result: `{"deleteFbPost": {"numUids":1}}`,
+	}, {
+		user:   "user1@dgraph.io",
+		role:   "USER",
+		result: `{"deleteFbPost": {"numUids":0}}`,
+	}, {
+		user:   "user2@dgraph.io",
+		role:   "ROLE",
+		result: `{"deleteFbPost": {"numUids":0}}`,
+	}, {
+		user:   "user2@dgraph.io",
+		role:   "ADMIN",
+		result: `{"deleteFbPost": {"numUids":1}}`,
+	},
+	}
+
+	query := `
+		mutation ($fbposts: [ID!]) {
+			deleteFbPost(filter: {id: $fbposts}) {
+				numUids
+			}
+		}
+	`
+
+	for _, tcase := range testCases {
+		_, allFbPostsIds := getAllFbPosts(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []string{"ADMIN"})
+		require.True(t, len(allFbPostsIds) == 2)
+		deleteFbPosts, _ := getAllFbPosts(t, []string{tcase.user}, []string{tcase.role})
+
+		getUserParams := &common.GraphQLParams{
+			Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+			Query:     query,
+			Variables: map[string]interface{}{"questions": allFbPostsIds},
+		}
+
+		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		require.Nil(t, gqlResponse.Errors)
+		require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+
+		// Restore the deleted Questions.
+		for _, fbpost := range deleteFbPosts {
+			fbpost.add(t, tcase.user, tcase.role)
+		}
+	}
+}
+
+func TestDeleteTypeWithGraphFilterOnInterface(t *testing.T) {
 	testCases := []TestCase{{
 		user:   "user1@dgraph.io",
 		ans:    true,
@@ -170,9 +236,8 @@ func TestDeleteTypeWithInterfaceAuth(t *testing.T) {
 		t.Run(tcase.user+strconv.FormatBool(tcase.ans), func(t *testing.T) {
 			// Get all Question ids.
 			_, allQuestionsIds := getAllQuestions(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []bool{true, false})
-
-			deleteQuestions, _ := getAllQuestions(t, []string{tcase.user}, []bool{tcase.ans})
 			require.True(t, len(allQuestionsIds) == 3)
+			deleteQuestions, _ := getAllQuestions(t, []string{tcase.user}, []bool{tcase.ans})
 
 			getUserParams := &common.GraphQLParams{
 				Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, "", tcase.ans, metaInfo),

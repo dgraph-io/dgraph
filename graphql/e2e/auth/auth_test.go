@@ -72,6 +72,15 @@ type Question struct {
 	Author   *Author `json:"author,omitempty"`
 }
 
+type FbPost struct {
+	Id        string  `json:"id,omitempty"`
+	Text      string  `json:"text,omitempty"`
+	Author    *Author `json:"author,omitempty"`
+	Sender    *Author `json:"sender,omitempty"`
+	Receiver  *Author `json:"receiver,omitempty"`
+	PostCount int     `json:"postCount,omitempty"`
+}
+
 type Log struct {
 	Id     string `json:"id,omitempty"`
 	Logs   string `json:"logs,omitempty"`

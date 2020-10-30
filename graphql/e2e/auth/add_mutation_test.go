@@ -18,7 +18,6 @@ package auth
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -138,7 +137,127 @@ func (q *Question) delete(t *testing.T, user string) {
 	require.Nil(t, gqlResponse.Errors)
 }
 
-func TestAddOnTypesWithAuthOnInterfaces(t *testing.T) {
+func (f *FbPost) delete(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, user, role, metaInfo),
+		Query: `
+			mutation deleteFbPost($ids: [ID!]) {
+				deleteFbPost(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{f.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func TestAddOnTypeWithRBACFilterOnInterface(t *testing.T) {
+	testCases := []TestCase{{
+		user: "user1@dgraph.io",
+		role: "ADMIN",
+		variables: map[string]interface{}{"fbpost": &FbPost{
+			Text: "New FbPost",
+			Author: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Sender: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Receiver: &Author{
+				Name: "user2@dgraph.io",
+			},
+			PostCount: 5,
+		}},
+		result: `{"addFbPost":{"fbPost":[{"id":"0x15f","text":"New FbPost","author":{"id":"0x15e","name":"user1@dgraph.io"},"sender":{"id":"0x15d","name":"user1@dgraph.io"},"receiver":{"id":"0x160","name":"user2@dgraph.io"}}]}}`,
+	}, {
+		user: "user1@dgraph.io",
+		role: "USER",
+		variables: map[string]interface{}{"fbpost": &FbPost{
+			Text: "New FbPost",
+			Author: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Sender: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Receiver: &Author{
+				Name: "user2@dgraph.io",
+			},
+			PostCount: 5,
+		}},
+		result: ``,
+	},
+	}
+
+	query := `
+		mutation addFbPost($fbpost: AddFbPostInput!) {
+			addFbPost(input: [$fbpost]) {
+				fbPost {
+					id
+					text
+					author {
+						id
+						name
+					}
+					sender {
+						id
+						name
+					}
+					receiver {
+						id
+						name
+					}
+				}
+			}
+		}
+	`
+
+	var expected, result struct {
+		AddFbPost struct {
+			FbPost []*FbPost
+		}
+	}
+
+	for _, tcase := range testCases {
+		getUserParams := &common.GraphQLParams{
+			Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+			Query:     query,
+			Variables: tcase.variables,
+		}
+
+		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		if tcase.result == "" {
+			require.Equal(t, len(gqlResponse.Errors), 1)
+			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
+			continue
+		}
+
+		require.Nil(t, gqlResponse.Errors)
+
+		err := json.Unmarshal([]byte(tcase.result), &expected)
+		require.NoError(t, err)
+
+		err = json.Unmarshal(gqlResponse.Data, &result)
+		require.NoError(t, err)
+
+		opt := cmpopts.IgnoreFields(FbPost{}, "Id")
+		opt1 := cmpopts.IgnoreFields(Author{}, "Id")
+		if diff := cmp.Diff(expected, result, opt, opt1); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+
+		for _, i := range result.AddFbPost.FbPost {
+			i.Author.delete(t)
+			i.Sender.delete(t)
+			i.Receiver.delete(t)
+			i.delete(t, tcase.user, tcase.role)
+		}
+	}
+}
+
+func TestAddOnTypeWithGraphFilterOnInterface(t *testing.T) {
 	testCases := []TestCase{{
 		user: "user1@dgraph.io",
 		ans:  true,
@@ -216,7 +335,6 @@ func TestAddOnTypesWithAuthOnInterfaces(t *testing.T) {
 		require.NoError(t, err)
 
 		err = json.Unmarshal(gqlResponse.Data, &result)
-		fmt.Println(string(gqlResponse.Data))
 		require.NoError(t, err)
 		opt := cmpopts.IgnoreFields(Question{}, "Id")
 		opt1 := cmpopts.IgnoreFields(Author{}, "Id")
