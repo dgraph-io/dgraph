@@ -270,7 +270,7 @@ directive @auth(
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT
+	delete:AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -514,7 +514,7 @@ var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
 	idDirective:           nil,
 	subscriptionDirective: {ast.Object: true, ast.Interface: true},
 	secretDirective:       {ast.Object: true, ast.Interface: true},
-	authDirective:         {ast.Object: true},
+	authDirective:         {ast.Object: true, ast.Interface: true},
 	customDirective:       nil,
 	remoteDirective: {ast.Object: true, ast.Interface: true, ast.Union: true,
 		ast.InputObject: true, ast.Enum: true},

@@ -1,0 +1,30 @@
+type Author {
+  id: ID!
+  name: String! @search(by: [hash])
+  posts: [Post] @hasInverse(field: author)
+}
+
+interface Post @auth(
+    query: { rule: """
+            query($TEXT: String!) { 
+              queryPost(filter: { text : {eq: $TEXT } } ) { 
+                id 
+              } 
+            }""" }
+){
+    id: ID!
+    text: String @search(by: [exact])
+    datePublished: DateTime @search
+    author: Author! 
+}
+
+type Question implements Post  @auth(
+    query: { rule: """
+            query($ANS: Boolean!) { 
+              queryQuestion(filter: { answered: $ANS } ) { 
+                id 
+              } 
+            }""" }
+){
+    answered:  Boolean @search
+}

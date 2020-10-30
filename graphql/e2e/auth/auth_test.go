@@ -59,6 +59,18 @@ type Issue struct {
 	Owner *common.User `json:"owner,omitempty"`
 }
 
+type Author struct {
+	Id    string      `json:"id,omitempty"`
+	Name  string      `json:"name,omitempty"`
+	Posts []*Question `json:"posts,omitempty"`
+}
+
+type Question struct {
+	Id     string  `json:"id,omitempty"`
+	Text   string  `json:"text,omitempty"`
+	Author *Author `json:"author,omitempty"`
+}
+
 type Log struct {
 	Id     string `json:"id,omitempty"`
 	Logs   string `json:"logs,omitempty"`
@@ -118,6 +130,7 @@ type TaskOccurrence struct {
 type TestCase struct {
 	user      string
 	role      string
+	ans       bool
 	result    string
 	name      string
 	filter    map[string]interface{}
@@ -348,6 +361,112 @@ func TestAuthWithDgraphDirective(t *testing.T) {
 	}
 }
 
+func TestAuthOnInterfaces(t *testing.T) {
+	TestCases := []TestCase{
+		{
+			name: "Types inherit Interface's auth rules and its own rules",
+			query: `
+		query{
+			queryQuestion{
+				text
+			}
+		}
+		`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			result: `{"queryQuestion":[{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Should return empty for non-existent user",
+			query: `
+		query{
+			queryQuestion{
+				text
+			}
+		}
+		`,
+			user:   "user3@dgraph.io",
+			ans:    true,
+			result: `{"queryQuestion":[]}`,
+		},
+		{
+			name: "Types inherit Only Interface's auth rules if it doesn't have its own auth rules",
+			query: `
+			query{
+				queryAnswer{
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			result: `{"queryAnswer": [{"text": "A Answer"}]}`,
+		},
+		{
+			name: "Types inherit auth rules from all the different Interfaces",
+			query: `
+			query{
+				queryFbPost{
+					text
+				}
+			}
+			`,
+			user:   "user2@dgraph.io",
+			role:   "ADMIN",
+			result: `{"queryFbPost": [{"text": "B FbPost"}]}`,
+		},
+		{
+			name: "Query Interface should interhit auth rules from all the interfaces",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			role:   "ADMIN",
+			result: `{"queryPost":[{"text": "A Answer"},{"text": "A FbPost"},{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Interface should return those implementing type whose auth rules are satisfied",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			result: `{"queryPost":[{"text": "A Answer"},{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Interface should return empty if the Auth rules of interface are not satisfied",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			ans:    true,
+			result: `{"queryPost":[]}`,
+		},
+	}
+
+	for _, tcase := range TestCases {
+		t.Run(tcase.name, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
+				Query:   tcase.query,
+			}
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
+	}
+}
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Query non auth field without JWT Token",

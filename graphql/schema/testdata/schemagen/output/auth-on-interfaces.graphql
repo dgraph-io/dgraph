@@ -2,24 +2,25 @@
 # Input Schema
 #######################
 
-interface Character {
+type Author {
 	id: ID!
-	name: String! @search(by: [exact])
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	name: String! @search(by: [hash])
+	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post] @hasInverse(field: author)
 }
 
-interface Employee {
-	employeeId: String!
-	title: String!
+interface Post @auth(query: {rule:"query($TEXT: String!) { \n  queryPost(filter: { text : {eq: $TEXT } } ) { \n    id \n  } \n}"}) {
+	id: ID!
+	text: String @search(by: [exact])
+	datePublished: DateTime @search
+	author(filter: AuthorFilter): Author! @hasInverse(field: posts)
 }
 
-type Human implements Character & Employee {
-	employeeId: String!
-	title: String!
+type Question implements Post @auth(query: {rule:"query($ANS: Boolean!) { \n  queryQuestion(filter: { answered: $ANS } ) { \n    id \n  } \n}"}) {
 	id: ID!
-	name: String! @search(by: [exact])
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	totalCredits: Int
+	text: String @search(by: [exact])
+	datePublished: DateTime @search
+	author(filter: AuthorFilter): Author! @hasInverse(field: posts)
+	answered: Boolean @search
 }
 
 #######################
@@ -281,42 +282,58 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+type AddAuthorPayload {
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	numUids: Int
 }
 
-type CharacterAggregateResult {
+type AddQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	numUids: Int
+}
+
+type AuthorAggregateResult {
 	count: Int
 }
 
-type DeleteCharacterPayload {
-	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+type DeleteAuthorPayload {
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	msg: String
 	numUids: Int
 }
 
-type DeleteHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+type DeletePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	msg: String
 	numUids: Int
 }
 
-type EmployeeAggregateResult {
-	count: Int
-}
-
-type HumanAggregateResult {
-	count: Int
-}
-
-type UpdateCharacterPayload {
-	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+type DeleteQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	msg: String
 	numUids: Int
 }
 
-type UpdateHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+type PostAggregateResult {
+	count: Int
+}
+
+type QuestionAggregateResult {
+	count: Int
+}
+
+type UpdateAuthorPayload {
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
+}
+
+type UpdatePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
+}
+
+type UpdateQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
 	numUids: Int
 }
 
@@ -324,131 +341,154 @@ type UpdateHumanPayload {
 # Generated Enums
 #######################
 
-enum CharacterHasFilter {
+enum AuthorHasFilter {
 	name
-	friends
+	posts
 }
 
-enum CharacterOrderable {
+enum AuthorOrderable {
 	name
 }
 
-enum EmployeeHasFilter {
-	employeeId
-	title
+enum PostHasFilter {
+	text
+	datePublished
+	author
 }
 
-enum EmployeeOrderable {
-	employeeId
-	title
+enum PostOrderable {
+	text
+	datePublished
 }
 
-enum HumanHasFilter {
-	employeeId
-	title
-	name
-	friends
-	totalCredits
+enum QuestionHasFilter {
+	text
+	datePublished
+	author
+	answered
 }
 
-enum HumanOrderable {
-	employeeId
-	title
-	name
-	totalCredits
+enum QuestionOrderable {
+	text
+	datePublished
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddHumanInput {
-	employeeId: String!
-	title: String!
+input AddAuthorInput {
 	name: String!
-	friends: [CharacterRef]
-	totalCredits: Int
+	posts: [PostRef]
 }
 
-input CharacterFilter {
+input AddQuestionInput {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef!
+	answered: Boolean
+}
+
+input AuthorFilter {
 	id: [ID!]
-	name: StringExactFilter
-	has: CharacterHasFilter
-	and: CharacterFilter
-	or: CharacterFilter
-	not: CharacterFilter
+	name: StringHashFilter
+	has: AuthorHasFilter
+	and: AuthorFilter
+	or: AuthorFilter
+	not: AuthorFilter
 }
 
-input CharacterOrder {
-	asc: CharacterOrderable
-	desc: CharacterOrderable
-	then: CharacterOrder
+input AuthorOrder {
+	asc: AuthorOrderable
+	desc: AuthorOrderable
+	then: AuthorOrder
 }
 
-input CharacterPatch {
+input AuthorPatch {
 	name: String
-	friends: [CharacterRef]
+	posts: [PostRef]
 }
 
-input CharacterRef {
+input AuthorRef {
+	id: ID
+	name: String
+	posts: [PostRef]
+}
+
+input PostFilter {
+	id: [ID!]
+	text: StringExactFilter
+	datePublished: DateTimeFilter
+	has: PostHasFilter
+	and: PostFilter
+	or: PostFilter
+	not: PostFilter
+}
+
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
+input PostPatch {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+}
+
+input PostRef {
 	id: ID!
 }
 
-input EmployeeFilter {
-	has: EmployeeHasFilter
-	and: EmployeeFilter
-	or: EmployeeFilter
-	not: EmployeeFilter
-}
-
-input EmployeeOrder {
-	asc: EmployeeOrderable
-	desc: EmployeeOrderable
-	then: EmployeeOrder
-}
-
-input HumanFilter {
+input QuestionFilter {
 	id: [ID!]
-	name: StringExactFilter
-	has: HumanHasFilter
-	and: HumanFilter
-	or: HumanFilter
-	not: HumanFilter
+	text: StringExactFilter
+	datePublished: DateTimeFilter
+	answered: Boolean
+	has: QuestionHasFilter
+	and: QuestionFilter
+	or: QuestionFilter
+	not: QuestionFilter
 }
 
-input HumanOrder {
-	asc: HumanOrderable
-	desc: HumanOrderable
-	then: HumanOrder
+input QuestionOrder {
+	asc: QuestionOrderable
+	desc: QuestionOrderable
+	then: QuestionOrder
 }
 
-input HumanPatch {
-	employeeId: String
-	title: String
-	name: String
-	friends: [CharacterRef]
-	totalCredits: Int
+input QuestionPatch {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	answered: Boolean
 }
 
-input HumanRef {
+input QuestionRef {
 	id: ID
-	employeeId: String
-	title: String
-	name: String
-	friends: [CharacterRef]
-	totalCredits: Int
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	answered: Boolean
 }
 
-input UpdateCharacterInput {
-	filter: CharacterFilter!
-	set: CharacterPatch
-	remove: CharacterPatch
+input UpdateAuthorInput {
+	filter: AuthorFilter!
+	set: AuthorPatch
+	remove: AuthorPatch
 }
 
-input UpdateHumanInput {
-	filter: HumanFilter!
-	set: HumanPatch
-	remove: HumanPatch
+input UpdatePostInput {
+	filter: PostFilter!
+	set: PostPatch
+	remove: PostPatch
+}
+
+input UpdateQuestionInput {
+	filter: QuestionFilter!
+	set: QuestionPatch
+	remove: QuestionPatch
 }
 
 #######################
@@ -456,14 +496,15 @@ input UpdateHumanInput {
 #######################
 
 type Query {
-	getCharacter(id: ID!): Character
-	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
-	queryEmployee(order: EmployeeOrder, first: Int, offset: Int): [Employee]
-	aggregateEmployee: EmployeeAggregateResult
-	getHuman(id: ID!): Human
-	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-	aggregateHuman(filter: HumanFilter): HumanAggregateResult
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	aggregateAuthor(filter: AuthorFilter): AuthorAggregateResult
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	aggregatePost(filter: PostFilter): PostAggregateResult
+	getQuestion(id: ID!): Question
+	queryQuestion(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	aggregateQuestion(filter: QuestionFilter): QuestionAggregateResult
 }
 
 #######################
@@ -471,10 +512,13 @@ type Query {
 #######################
 
 type Mutation {
-	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
-	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
-	addHuman(input: [AddHumanInput!]!): AddHumanPayload
-	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
-	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
+	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
+	addQuestion(input: [AddQuestionInput!]!): AddQuestionPayload
+	updateQuestion(input: UpdateQuestionInput!): UpdateQuestionPayload
+	deleteQuestion(filter: QuestionFilter!): DeleteQuestionPayload
 }
 

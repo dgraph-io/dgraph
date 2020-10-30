@@ -585,9 +585,76 @@ type TaskOccurrence @auth(
     role: String @search(by: [exact, term, fulltext, regexp])
 }
 
+type Author {
+  id: ID!
+  name: String! @search(by: [exact])
+  posts: [Post] @hasInverse(field: author)
+}
+
+interface Post @auth(
+    query: { rule: """
+            query($USER: String!) { 
+              queryPost{
+                  author(filter: {name: {eq: $USER}}){
+                      name
+                  }
+              } 
+            }""" }
+){
+    id: ID!
+    text: String! @search(by: [exact])
+    datePublished: DateTime @search
+    author: Author! 
+}
+
+interface MsgPost @auth(
+    query: { rule: "{$ROLE: { eq: \"ADMIN\" } }" }
+){
+    sender: Author!
+    receiver: Author!
+}
+
+type Question implements Post  @auth(
+    query:{ rule: """
+            query($ANS: Boolean!) { 
+              queryQuestion(filter: { answered: $ANS } ) { 
+                id 
+              } 
+            }""" }
+){
+    answered:  Boolean @search
+}
+
+type FbPost implements Post & MsgPost {
+    postCount: Int!
+}
+
+type Answer implements Post {
+    markedUseful:  Boolean @search
+}
+
+interface A {
+    id: ID!
+    fieldA: String @search(by: [exact])
+}
+
+type B implements A {
+    fieldB: Boolean @search
+}
+
+type C implements A @auth(
+    query:{ rule: """
+            query($ANS: Boolean!) { 
+              queryC(filter: { fieldC: $ANS } ) { 
+                id 
+              } 
+            }""" }
+){
+    fieldC: Boolean @search
+}
+
 type Todo {
     id: ID
     owner: String
     text: String
-
 }

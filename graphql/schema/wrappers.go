@@ -178,10 +178,12 @@ type Type interface {
 	Nullable() bool
 	// true if this is a union type
 	IsUnion() bool
+	IsInterface() bool
 	// returns a list of member types for this union
 	UnionMembers([]interface{}) []Type
 	ListType() Type
 	Interfaces() []string
+	ImplementingTypes() []Type
 	EnsureNonNulls(map[string]interface{}, string) error
 	FieldOriginatedFrom(fieldName string) string
 	AuthRules() *TypeAuth
@@ -1832,6 +1834,10 @@ func (t *astType) Nullable() bool {
 	return !t.typ.NonNull
 }
 
+func (t *astType) IsInterface() bool {
+	return t.inSchema.schema.Types[t.typ.Name()].Kind == ast.Interface
+}
+
 func (t *astType) IsUnion() bool {
 	return t.inSchema.schema.Types[t.typ.Name()].Kind == ast.Union
 }
@@ -1999,6 +2005,22 @@ func (t *astType) Interfaces() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+func (t *astType) ImplementingTypes() []Type {
+	objects := t.inSchema.schema.PossibleTypes[t.typ.Name()]
+	if len(objects) == 0 {
+		return nil
+	}
+	types := make([]Type, 0, len(objects))
+	for _, typ := range objects {
+		types = append(types, &astType{
+			typ:             &ast.Type{NamedType: typ.Name},
+			inSchema:        t.inSchema,
+			dgraphPredicate: t.dgraphPredicate,
+		})
+	}
+	return types
 }
 
 // CheckNonNulls checks that any non nullables in t are present in obj.

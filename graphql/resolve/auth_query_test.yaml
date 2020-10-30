@@ -1142,3 +1142,362 @@
         dgraph.uid : uid
       }
     }
+
+- name: "Type should apply Interface's query rules and along with its own auth rules"
+  gqlquery: |
+    query {
+      queryQuestion {
+        id
+        text
+      }
+    }
+  jwtvar:
+    ANS: "true"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryQuestion(func: uid(QuestionRoot)) {
+        id : uid
+        text : Post.text
+      }
+      QuestionRoot as var(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3)))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Type should apply only Interface's query auth rules"
+  gqlquery: |
+    query {
+      queryAnswer {
+        id
+        text
+      }
+    }
+  jwtvar:
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryAnswer(func: uid(AnswerRoot)) {
+        id : uid
+        text : Post.text
+      }
+      AnswerRoot as var(func: uid(Answer1)) @filter(uid(AnswerAuth2))
+      Answer1 as var(func: type(Answer))
+      AnswerAuth2 as var(func: uid(Answer1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Type should apply query auth rules from all the interfaces that it implements."
+  gqlquery: |
+    query {
+      queryFbPost {
+        id
+        postCount
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryFbPost(func: uid(FbPostRoot)) {
+        id : uid
+        postCount : FbPost.postCount
+      }
+      FbPostRoot as var(func: uid(FbPost1)) @filter(uid(FbPostAuth2))
+      FbPost1 as var(func: type(FbPost))
+      FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Type which inherits auth rules from interfaces returns no results when auth rules fail"
+  gqlquery: |
+    query {
+      queryFbPost {
+        id
+        postCount
+      }
+    }
+  jwtvar:
+    ROLE: "REGULAR"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryFbPost()
+    }
+
+- name: "Auth rules of All the implementing types should Apply to the interface also"
+  gqlquery: |
+    query {
+      queryPost {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS:  "true"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryPost(func: uid(PostRoot)) {
+        dgraph.type
+        text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(FbPostAuth4) OR uid(AnswerAuth5)))
+      Post1 as var(func: type(Post))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      FbPost1 as var(func: type(FbPost))
+      FbPostAuth4 as var(func: uid(FbPost1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Answer1 as var(func: type(Answer))
+      AnswerAuth5 as var(func: uid(Answer1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+- name: "Filters on query Interface should work correctly"
+  gqlquery: |
+    query {
+      queryPost(filter: {text: {eq: "A Post"}}, order: { desc: text}, first: 10, offset: 5 ) {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS:  "true"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryPost(func: uid(PostRoot), orderdesc: Post.text, first: 10, offset: 5) {
+        dgraph.type
+        text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(FbPostAuth4) OR uid(AnswerAuth5)))
+      Post1 as var(func: type(Post)) @filter(eq(Post.text, "A Post"))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      FbPost1 as var(func: type(FbPost))
+      FbPostAuth4 as var(func: uid(FbPost1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Answer1 as var(func: type(Answer))
+      AnswerAuth5 as var(func: uid(Answer1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+- name: "Query interface should return empty if the auth rule of interface is not satisfied"
+  gqlquery: |
+    query {
+      queryPost {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS: "true"
+  dgquery: |-
+    query {
+      queryPost()
+    }
+- name: "Query interface should return partial types if the auth rule of interface is not satisfied"
+  gqlquery: |
+    query {
+      queryPost {
+        text
+      }
+    }
+  jwtvar:
+    USER: "Random"
+    ANS: "true"
+  dgquery: |-
+    query {
+      queryPost(func: uid(PostRoot)) {
+        dgraph.type
+        text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(AnswerAuth4)))
+      Post1 as var(func: type(Post))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Answer1 as var(func: type(Answer))
+      AnswerAuth4 as var(func: uid(Answer1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+- name: "Get Query interface having Auth Rules apply Auth filters of types also"
+  gqlquery: |
+    query {
+      getPost(id: "0x1") {
+        text
+      }
+    }
+  jwtvar:
+    USER: "Random"
+    ANS: "true"
+  dgquery: |-
+    query {
+      getPost(func: uid(PostRoot)) @filter(type(Post)) {
+        dgraph.type
+        text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(AnswerAuth4)))
+      Post1 as var(func: uid(0x1))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Answer1 as var(func: type(Answer))
+      AnswerAuth4 as var(func: uid(Answer1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "Random")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+- name: "Get Query interface having Auth Rules should return empty if the Auth rules are not satisfied"
+  gqlquery: |
+    query {
+      getPost(id: "0x1") {
+        text
+      }
+    }
+  jwtvar:
+  dgquery: |-
+    query {
+      getPost()
+    }
+- name: "Query interface having no Auth Rules should apply auth rules on implementing types that are satisfied"
+  gqlquery: |
+    query {
+      queryA {
+        fieldA
+      }
+    }
+  jwtvar:
+    ANS: "true"
+  dgquery: |-
+    query {
+      queryA(func: uid(ARoot)) {
+        dgraph.type
+        fieldA : A.fieldA
+        dgraph.uid : uid
+      }
+      ARoot as var(func: uid(A1)) @filter((uid(B1) OR uid(CAuth2)))
+      A1 as var(func: type(A))
+      B1 as var(func: type(B))
+      C1 as var(func: type(C))
+      CAuth2 as var(func: uid(C1)) @filter(eq(C.fieldC, true)) @cascade {
+        id : uid
+      }
+    }
+- name: "Query interface having no Auth Rules but some type have Auth rules and those are not satified are excluded (for eg: type C )"
+  gqlquery: |
+    query {
+      queryA {
+        fieldA
+      }
+    }
+  jwtvar:
+  dgquery: |-
+    query {
+      queryA(func: uid(ARoot)) {
+        dgraph.type
+        fieldA : A.fieldA
+        dgraph.uid : uid
+      }
+      ARoot as var(func: uid(A1)) @filter((uid(B1)))
+      A1 as var(func: type(A))
+      B1 as var(func: type(B))
+    }
