@@ -654,11 +654,47 @@ func TestIntrospection(t *testing.T) {
 	// introspection response or the JSON comparison. Needs deeper looking.
 }
 
+func TestDeleteSchemaAndExport(t *testing.T) {
+	// first apply a schema
+	schema := `
+	type Person {
+		name: String
+	}`
+	schemaResp := updateGQLSchemaReturnSchema(t, schema, groupOneAdminServer)
+
+	// now delete it with S * * delete mutation
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	txn := dg.NewTxn()
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
+		DelNquads: []byte(fmt.Sprintf("<%s> * * .", schemaResp.Id)),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(context.Background()))
+
+	// running an export shouldn't give any errors
+	exportReq := &common.GraphQLParams{
+		Query: `mutation {
+		  export(input: {format: "rdf"}) {
+			exportedFiles
+		  }
+		}`,
+	}
+	exportGqlResp := exportReq.ExecuteAsPost(t, groupOneAdminServer)
+	common.RequireNoGQLErrors(t, exportGqlResp)
+
+	// applying a new schema should still work
+	newSchemaResp := updateGQLSchemaReturnSchema(t, schema, groupOneAdminServer)
+	// we can assert that the uid allocated to new schema isn't same as the uid for old schema
+	require.NotEqual(t, schemaResp.Id, newSchemaResp.Id)
+}
+
 func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {
 	req := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
 				gqlSchema {
+					id
 					schema
 				}
 			}
@@ -672,6 +708,19 @@ func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {
 
 func updateGQLSchemaRequireNoErrors(t *testing.T, schema, url string) {
 	require.Nil(t, updateGQLSchema(t, schema, url).Errors)
+}
+
+func updateGQLSchemaReturnSchema(t *testing.T, schema, url string) gqlSchema {
+	resp := updateGQLSchema(t, schema, url)
+	require.Nil(t, resp.Errors)
+
+	var updateResp struct {
+		UpdateGQLSchema struct {
+			GqlSchema gqlSchema
+		}
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &updateResp))
+	return updateResp.UpdateGQLSchema.GqlSchema
 }
 
 func updateGQLSchemaConcurrent(t *testing.T, schema, url string) bool {
