@@ -197,7 +197,7 @@ func TestDeleteTypeWithRBACFilteronInterface(t *testing.T) {
 		require.Nil(t, gqlResponse.Errors)
 		require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 
-		// Restore the deleted Questions.
+		// Restore the deleted FbPosts.
 		for _, fbpost := range deleteFbPosts {
 			fbpost.add(t, tcase.user, tcase.role)
 		}
