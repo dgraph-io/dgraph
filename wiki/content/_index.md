@@ -23,11 +23,6 @@ aliases = ["/contribute"]
       <p>
         Dgraph gives you GraphQL, not a translation layer
       </p>
-<!--
-      <p class="cta">
-        Get Started with GraphQL
-      </p>
--->
     </a>
   </div>
   <div class="item">
