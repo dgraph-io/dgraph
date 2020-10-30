@@ -212,6 +212,9 @@ const testSchema = `
 type Person {
 	name
 	pet
+	friend
+	gender
+	alive
 }
 
 type Animal {
@@ -243,6 +246,9 @@ type SchoolInfo {
 type User {
 	name
 	password
+	gender
+	friend
+	alive
 }
 
 type Node {
@@ -318,6 +324,7 @@ noindex_salary                 : float .
 language                       : [string] .
 score                          : [int] @index(int) .
 average                        : [float] @index(float) .
+gender						   : string .
 `
 
 func populateCluster() {
@@ -615,6 +622,10 @@ func populateCluster() {
 		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
 		<6> <dgraph.type> "Pet" .
+		<23> <dgraph.type> "Person" .
+		<24> <dgraph.type> "Person" .
+		<25> <dgraph.type> "Person" .
+		<31> <dgraph.type> "Person" .
 		<32> <dgraph.type> "SchoolInfo" .
 		<33> <dgraph.type> "SchoolInfo" .
 		<34> <dgraph.type> "SchoolInfo" .

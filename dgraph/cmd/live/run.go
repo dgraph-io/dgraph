@@ -542,6 +542,10 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		var tlsErr error
 		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
 		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
+	} else {
+		var tlsErr error
+		tlsConfig, tlsErr = x.LoadClientTLSConfigForInternalPort(conf)
+		x.Check(tlsErr)
 	}
 
 	// compression with zero server actually makes things worse

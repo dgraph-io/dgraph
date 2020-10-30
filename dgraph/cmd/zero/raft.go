@@ -213,7 +213,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	}
 
 	// Create a connection to this server.
-	go conn.GetPools().Connect(member.Addr)
+	go conn.GetPools().Connect(member.Addr, n.server.tlsClientConfig)
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
@@ -539,7 +539,7 @@ func (n *node) initAndStartNode() error {
 		}
 
 	case len(opts.peer) > 0:
-		p := conn.GetPools().Connect(opts.peer)
+		p := conn.GetPools().Connect(opts.peer, opts.tlsClientConfig)
 		if p == nil {
 			return errors.Errorf("Unhealthy connection to %v", opts.peer)
 		}

@@ -18,12 +18,14 @@ package zero
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +34,7 @@ import (
 	"go.opencensus.io/zpages"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -51,8 +54,10 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
-
-	totalCache int64
+	tlsDir            string
+	tlsDisabledRoutes []string
+	tlsClientConfig   *tls.Config
+	totalCache        int64
 }
 
 var opts options
@@ -88,6 +93,18 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+	// TLS configurations
+	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
+	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
+	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
+	flag.String("tls_disabled_route", "",
+		"comma separated zero endpoint which will be disabled from TLS encryption."+
+		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
+	flag.Bool("tls_internal_port_enabled", false, "enable inter node TLS encryption between cluster nodes.")
+	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to " +
+		"connect as a client with the other nodes in the cluster.")
+	flag.String("tls_key", "", "(optional) The private key file name "+
+		"in tls_dir which is needed to connect as a client with the other nodes in the cluster.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -104,15 +121,22 @@ type state struct {
 
 func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	x.RegisterExporters(Zero.Conf, "dgraph.zero")
-
-	s := grpc.NewServer(
+	grpcOpts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
-		grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+	}
+
+	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf.GetBool("tls_internal_port_enabled"), Zero.Conf.GetString("tls_dir"))
+	x.Check(err)
+	if tlsConf != nil {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))
+	}
+	s := grpc.NewServer(grpcOpts...)
 
 	rc := pb.RaftContext{Id: opts.nodeId, Addr: x.WorkerConfig.MyAddr, Group: 0}
-	m := conn.NewNode(&rc, store)
+	m := conn.NewNode(&rc, store, opts.tlsClientConfig)
 
 	// Zero followers should not be forwarding proposals to the leader, to avoid txn commits which
 	// were calculated in a previous Zero leader.
@@ -120,7 +144,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	st.rs = conn.NewRaftServer(m)
 
 	st.node = &node{Node: m, ctx: context.Background(), closer: z.NewCloser(1)}
-	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node}
+	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node, tlsClientConfig: opts.tlsClientConfig}
 	st.zero.Init()
 	st.node.server = st.zero
 
@@ -160,7 +184,13 @@ func run() {
 	}
 
 	x.PrintVersion()
+	var tlsDisRoutes []string
+	if Zero.Conf.GetString("tls_disabled_route") != "" {
+		tlsDisRoutes = strings.Split(Zero.Conf.GetString("tls_disabled_route"), ",")
+	}
 
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
+	x.Check(err)
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
@@ -170,6 +200,9 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
+		tlsDir:            Zero.Conf.GetString("tls_dir"),
+		tlsDisabledRoutes: tlsDisRoutes,
+		tlsClientConfig:   tlsConf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 
@@ -227,7 +260,7 @@ func run() {
 	// Initialize the servers.
 	var st state
 	st.serveGRPC(grpcListener, store)
-	st.serveHTTP(httpListener)
+	st.startListenHttpAndHttps(httpListener)
 
 	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)
@@ -286,11 +319,15 @@ func run() {
 		x.RemoveCidFile()
 	}()
 
+	st.zero.closer.AddRunning(1)
+	go x.MonitorMemoryMetrics(st.zero.closer)
+
 	glog.Infoln("Running Dgraph Zero...")
 	st.zero.closer.Wait()
 	glog.Infoln("Closer closed.")
 
 	err = store.Close()
 	glog.Infof("Raft WAL closed with err: %v\n", err)
+	st.zero.orc.close()
 	glog.Infoln("All done. Goodbye!")
 }

@@ -5,6 +5,8 @@ type Hotel {
     id: ID!
     name: String! @search(by: [exact])
     location: Point @search
+    area: Polygon @search
+    branches: MultiPolygon @search
 }
 
 type Country {
@@ -252,4 +254,20 @@ type Query {
 
 type Mutation {
 	newAuthor(name: String!): ID! @lambda
+}
+
+# generate directive testing
+type University @generate(
+    query: {
+        query: false
+    },
+    mutation: {
+        add: true,
+        update: true,
+        delete: false
+    }
+){
+    id: ID!
+    name: String!
+    numStudents: Int
 }
