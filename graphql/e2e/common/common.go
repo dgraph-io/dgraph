@@ -197,6 +197,12 @@ type UserSecret struct {
 	OwnedBy string `json:"ownedBy,omitempty"`
 }
 
+type Todo struct {
+	Id    string `json:"id,omitempty"`
+	Text  string `json:"text,omitempty"`
+	Owner string `json:"owner,omitempty"`
+}
+
 func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.AuthMeta) {
 	getParams := &GraphQLParams{
 		Headers: GetJWT(t, user, "", metaInfo),
@@ -926,4 +932,19 @@ func GetJWTForInterfaceAuth(t *testing.T, user, role string, ans bool, metaInfo 
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h
+}
+
+func BootstrapAuthData() ([]byte, []byte) {
+	schemaFile := "../auth/schema.graphql"
+	schema, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		panic(err)
+	}
+
+	jsonFile := "../auth/test_data.json"
+	data, err := ioutil.ReadFile(jsonFile)
+	if err != nil {
+		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
+	}
+	return schema, data
 }

@@ -652,3 +652,9 @@ type C implements A @auth(
 ){
     fieldC: Boolean @search
 }
+
+type Todo {
+    id: ID
+    owner: String
+    text: String
+}

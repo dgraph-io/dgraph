@@ -1,0 +1,43 @@
+- name: "Query with missing jwt token - Type with Auth"
+  gqlquery: |
+    mutation addComplexLog($log: AddComplexLogInput!) {
+      addComplexLog(input: [$log]) {
+        complexLog {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  variables: |
+    { "log":
+      { "logs": "log123",
+        "visible": true
+      }
+    }
+
+  uids: |
+    { "ComplexLog1": "0x123" }
+  error:
+    { "message": "mutation failed because authorization failed because a valid JWT is required but was not provided"}
+
+- name: "Query with missing jwt token - Type without Auth"
+  gqlquery: |
+    mutation addTodo($todo: AddTodoInput!) {
+      addTodo(input: [$todo]) {
+        todo {
+          id
+          owner
+          text
+        }
+      }
+    }
+  variables: |
+    { "todo":
+      { "owner": "Alice",
+        "text":  "Hi Graphql"
+      }
+    }
+  error:
+    { "message": "mutation failed because authorization failed because a valid JWT is required but was not provided"}

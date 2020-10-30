@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -147,12 +148,13 @@ func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
 }
 
 type AuthMeta struct {
-	PublicKey      string
-	Namespace      string
-	Algo           string
-	Header         string
-	AuthVars       map[string]interface{}
-	PrivateKeyPath string
+	PublicKey       string
+	Namespace       string
+	Algo            string
+	Header          string
+	AuthVars        map[string]interface{}
+	PrivateKeyPath  string
+	ClosedByDefault bool
 }
 
 func (a *AuthMeta) GetSignedToken(privateKeyFile string,
@@ -204,9 +206,14 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 	return metadata.NewIncomingContext(ctx, md), nil
 }
 
-func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
+func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault bool) ([]byte, error) {
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"],"ClosedByDefault":%s}`
 	if algo == "HS256" {
-		authInfo := `# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}`
+		if closedByDefault {
+			authInfo = fmt.Sprintf(authInfo, "true")
+		} else {
+			authInfo = fmt.Sprintf(authInfo, "false")
+		}
 		return append(schema, []byte(authInfo)...), nil
 	}
 
@@ -214,15 +221,18 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 		return schema, nil
 	}
 
-	keyData, err := ioutil.ReadFile(publicKeyFile)
+	_, err := ioutil.ReadFile(publicKeyFile)
 	if err != nil {
 		return nil, err
 	}
 
 	// Replacing ASCII newline with "\n" as the authorization information in the schema should be
 	// present in a single line.
-	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
-	authInfo := `# Dgraph.Authorization {"VerificationKey":"` + string(keyData) + `","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"RS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}`
+	if closedByDefault {
+		authInfo = fmt.Sprintf(authInfo, "true")
+	} else {
+		authInfo = fmt.Sprintf(authInfo, "false")
+	}
 	return append(schema, []byte(authInfo)...), nil
 }
 
