@@ -1054,8 +1054,9 @@ func rewriteObject(
 		} else if !withAdditionalDeletes {
 			// In case of delete, id/xid is required
 			if xid == nil && id == nil {
-				f := newFragment(map[string]interface{}{})
-				return &mutationRes{secondPass: []*mutationFragment{{fragment: f}}}
+				err := errors.Errorf("object of type: %s doesn't have a field of type ID! "+
+					"or @id and can't be referenced for deletion", typ.Name())
+				return &mutationRes{secondPass: []*mutationFragment{{err: err}}}
 			}
 			var name string
 			if xid != nil {

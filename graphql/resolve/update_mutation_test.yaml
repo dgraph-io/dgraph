@@ -761,24 +761,9 @@
         }
       }
     }
-  dgmutations:
-    - setjson: |
-        {
-          "Workflow.nodes": [{"Node.name":"node","dgraph.type":["Node"],"uid":"_:Node3"}],
-          "uid":"uid(x)"
-        }
-      cond: "@if(gt(len(x), 0))"
-    - deletejson: |
-        { "uid" : "uid(x)",
-          "Workflow.nodes": [{}]
-        }
-      cond: "@if(gt(len(x), 0))"
-  dgquery: |-
-    query {
-      x as updateWorkflow(func: uid(0x123)) @filter(type(Workflow)) {
-        uid
-      }
-    }
+  error:
+    message: |-
+      failed to rewrite mutation payload because object of type: Node doesn't have a field of type ID! or @id and can't be referenced for deletion
 
 -
   name: "Update add and remove together"
