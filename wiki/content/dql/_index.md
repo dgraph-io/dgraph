@@ -20,11 +20,6 @@ title = "DQL"
       <p>
         A single page quickstart guide to get started with Dgraph
       </p>
-<!--
-      <p class="cta">
-        Get Started with GraphQL
-      </p>
--->
     </a>
   </div>
   <div class="item">
@@ -51,7 +46,7 @@ title = "DQL"
     <a href="{{< relref "../tips/_index.md">}}">
       <h2>Tips and Tricks</h2>
       <p>
-        A list of commonly used GraphQL+- query snippets
+        A list of commonly used DQL query snippets
       </p>
     </a>
   </div>
@@ -64,17 +59,16 @@ title = "DQL"
       </p>
     </a>
   </div>
-  <!--
   <div class="item">
     <div class="icon"><i class="fa fa-cog" aria-hidden="true"></i></div>
-    <a href="https://dgraph.io/docs/badger">
-      <h2>Badger</h2>
+    <a href="{{< relref "../mutations/_index.md">}}">
+      <h2>Mutations</h2>
       <p>
-        Embeddable, persistent and fast key-value database that powers Dgraph
+        Adding and removing data in Dgraph
       </p>
     </a>
   </div>
-  -->
+
 </div>
 
 <style>
