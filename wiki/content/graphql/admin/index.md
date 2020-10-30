@@ -342,11 +342,37 @@ On first starting with a blank database:
 * Querying the `/admin` endpoint for `getGQLSchema` returns `"getGQLSchema": null`.
 * Querying the `/admin` endpoint for `health` lets you know that no schema has been added.
 
+## Validating a Schema
+
+You can validate a GraphQL schema before adding it to your database by sending
+your schema defnition to the `/admin/schema/validate` endpoint, as in the
+following HTTP request example:
+
+Request header:
+
+```ssh
+path: /admin/schema/validate
+method: POST
+content-type: application/json
+```
+
+Request body:
+
+```graphql
+type Person {
+	name: String
+}
+```
+
+This endpoint returns a JSON response that indicates if the schema is valid or
+not, and provides and error if isn't valid. In this case, the schema is valid,
+so the JSON response includes the following message: `Schema is valid`.
+
 ## Modifying a Schema
 
 There are two ways you can modify a GraphQL schema:
 - Using `/admin/schema`
-- Using the `updateGQLSchema` mutation on `/admin` 
+- Using the `updateGQLSchema` mutation on `/admin`
 
 ### Using `/admin/schema`
 
@@ -355,8 +381,8 @@ The `/admin/schema` endpoint provides a simplified method to add and update sche
 To create a schema you only need to call the `/admin/schema` endpoint with the required schema definition. For example:
 
 ```graphql
-type Person { 
-	name: String 
+type Person {
+	name: String
 }
 ```
 
@@ -369,7 +395,7 @@ On successful execution, the `/admin/schema` endpoint will give you a JSON respo
 
 ### Using `updateGQLSchema`
 
-Another option to add or modify a GraphQL schema is the `updateGQLSchema` mutation. 
+Another option to add or modify a GraphQL schema is the `updateGQLSchema` mutation.
 
 For example, to create a schema using `updateGQLSchema`, run this mutation on the `/admin` endpoint:
 
@@ -404,7 +430,6 @@ would cause the following:
 * The mutation would return `"schema": "type Person { name: String }"` and the generated GraphQL schema for `generatedSchema` (this is the schema served at `/graphql`).
 * Querying the `/admin` endpoint for `getGQLSchema` would return the new schema.
 
-
 ## Migrating a Schema
 
 Given an instance serving the GraphQL schema from the previous section, updating the schema to the following
@@ -430,8 +455,8 @@ Adding a schema through GraphQL doesn't remove existing data (it only removes in
 For example, starting from the schema in the previous section and modifying it with the initial schema
 
 ```graphql
-type Person { 
-	name: String 
+type Person {
+	name: String
 }
 ```
 
