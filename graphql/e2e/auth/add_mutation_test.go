@@ -107,10 +107,52 @@ func (m *Movie) delete(t *testing.T, user, role string) {
 	require.Nil(t, gqlResponse.Errors)
 }
 
+func (a *Author) delete(t *testing.T) {
+	getParams := &common.GraphQLParams{
+		Query: `
+			mutation deleteAuthor($ids: [ID!]) {
+				deleteAuthor(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{a.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (q *Question) delete(t *testing.T, user string) {
+	getParams := &common.GraphQLParams{
+		Headers: common.GetJWTForInterfaceAuth(t, user, "", q.Answered, metaInfo),
+		Query: `
+			mutation deleteQuestion($ids: [ID!]) {
+				deleteQuestion(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{q.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
 func TestAddOnTypesWithAuthOnInterfaces(t *testing.T) {
 	testCases := []TestCase{{
-		user: "user1",
+		user: "user1@dgraph.io",
 		ans:  true,
+		variables: map[string]interface{}{"question": &Question{
+			Text: "A Question",
+			Author: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Answered: true,
+		}},
+		result: `{"addQuestion": {"question": [{"id": "0x123", "text": "A Question", "author": {"id": "0x124", "name": "user1@dgraph.io"}}]}}`,
+	}, {
+		user: "user1",
+		ans:  false,
 		variables: map[string]interface{}{"question": &Question{
 			Text: "A Question",
 			Author: &Author{
@@ -118,7 +160,20 @@ func TestAddOnTypesWithAuthOnInterfaces(t *testing.T) {
 			},
 			Answered: true,
 		}},
+		result: ``,
 	},
+		{
+			user: "user2",
+			ans:  true,
+			variables: map[string]interface{}{"question": &Question{
+				Text: "A Question",
+				Author: &Author{
+					Name: "user1",
+				},
+				Answered: true,
+			}},
+			result: ``,
+		},
 	}
 
 	query := `
@@ -149,31 +204,30 @@ func TestAddOnTypesWithAuthOnInterfaces(t *testing.T) {
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		// if tcase.result == "" {
-		// 	require.Equal(t, len(gqlResponse.Errors), 1)
-		// 	require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
-		// 	continue
-		// }
+		if tcase.result == "" {
+			require.Equal(t, len(gqlResponse.Errors), 1)
+			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
+			continue
+		}
 
 		require.Nil(t, gqlResponse.Errors)
 
-		// err := json.Unmarshal([]byte(tcase.result), &expected)
-		// require.NoError(t, err)
+		err := json.Unmarshal([]byte(tcase.result), &expected)
+		require.NoError(t, err)
 
-		err := json.Unmarshal(gqlResponse.Data, &result)
+		err = json.Unmarshal(gqlResponse.Data, &result)
 		fmt.Println(string(gqlResponse.Data))
 		require.NoError(t, err)
-		fmt.Println(result)
-		opt := cmpopts.IgnoreFields(Column{}, "ColID")
-		opt1 := cmpopts.IgnoreFields(Project{}, "ProjID")
+		opt := cmpopts.IgnoreFields(Question{}, "Id")
+		opt1 := cmpopts.IgnoreFields(Author{}, "Id")
 		if diff := cmp.Diff(expected, result, opt, opt1); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)
 		}
 
-		// for _, i := range result.AddQuestion.Question {
-		// 	i.InProject.delete(t, tcase.user, tcase.role)
-		// 	i.delete(t, tcase.user, tcase.role)
-		// }
+		for _, i := range result.AddQuestion.Question {
+			i.Author.delete(t)
+			i.delete(t, tcase.user)
+		}
 	}
 }
 

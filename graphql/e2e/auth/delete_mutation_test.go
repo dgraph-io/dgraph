@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"strconv"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -88,6 +89,22 @@ func (cl *ComplexLog) add(t *testing.T, role string) {
 	require.Nil(t, gqlResponse.Errors)
 }
 
+func (q *Question) add(t *testing.T, user string, ans bool) {
+	getParams := &common.GraphQLParams{
+		Headers: common.GetJWTForInterfaceAuth(t, user, "", ans, metaInfo),
+		Query: `
+		mutation addQuestion($text: String!,$id: ID!, $ans: Boolean ){
+			addQuestion(input: [{text: $text, author: {id: $id}, answered: $ans }]){
+			  numUids
+			}
+		  }
+		`,
+		Variables: map[string]interface{}{"text": q.Text, "ans": q.Answered, "id": q.Author.Id},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
 func getComplexLog(t *testing.T, role string) ([]*ComplexLog, []string) {
 	getParams := &common.GraphQLParams{
 		Query: `
@@ -119,6 +136,60 @@ func getComplexLog(t *testing.T, role string) ([]*ComplexLog, []string) {
 		complexLogs = append(complexLogs, i)
 	}
 	return complexLogs, keys
+}
+
+func TestDeleteTypeWithInterfaceAuth(t *testing.T) {
+	testCases := []TestCase{{
+		user:   "user1@dgraph.io",
+		ans:    true,
+		result: `{"deleteQuestion": {"numUids": 1}}`,
+	}, {
+		user:   "user1@dgraph.io",
+		ans:    false,
+		result: `{"deleteQuestion": {"numUids": 1}}`,
+	}, {
+		user:   "user2@dgraph.io",
+		ans:    true,
+		result: `{"deleteQuestion": {"numUids": 1}}`,
+	}, {
+		user:   "user2@dgraph.io",
+		ans:    false,
+		result: `{"deleteQuestion": {"numUids": 0}}`,
+	},
+	}
+
+	query := `
+		mutation ($questions: [ID!]) {
+			deleteQuestion(filter: {id: $questions}) {
+				numUids
+			}
+		}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.user+strconv.FormatBool(tcase.ans), func(t *testing.T) {
+			// Get all Question ids.
+			_, allQuestionsIds := getAllQuestions(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []bool{true, false})
+
+			deleteQuestions, _ := getAllQuestions(t, []string{tcase.user}, []bool{tcase.ans})
+			require.True(t, len(allQuestionsIds) == 3)
+
+			getUserParams := &common.GraphQLParams{
+				Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, "", tcase.ans, metaInfo),
+				Query:     query,
+				Variables: map[string]interface{}{"questions": allQuestionsIds},
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+
+			// Restore the deleted Questions.
+			for _, question := range deleteQuestions {
+				question.add(t, tcase.user, tcase.ans)
+			}
+		})
+	}
 }
 
 func TestDeleteRootFilter(t *testing.T) {
