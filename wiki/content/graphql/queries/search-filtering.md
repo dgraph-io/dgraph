@@ -11,7 +11,7 @@ objects for a type.
 
 ### Get a single object
 
-Fetch the title, text and `datePublished` for a post with id `0x1`.
+Fetch the `title`, `text` and `datePublished` for a post with id `0x1`.
 
 ```graphql
 query {
@@ -44,7 +44,8 @@ query {
 
 While fetching nested linked objects, you can also apply a filter on them.
 
-For example, the following query fetches the author with the `id` 0x1 and their posts about GraphQL.
+For example, the following query fetches the author with the `id` 0x1 and their
+ posts about `GraphQL`.
 
 ```graphql
 query {
@@ -65,7 +66,7 @@ query {
 
 If your type has a field with the `@id` directive applied to it, you can also fetch objects using that.
 
-For example, given the following schema, the query below fetches a user's name and age by `userID` (which has the `@id` directive):
+For example, given the following schema, the query below fetches a user's `name` and `age` by `userID` (which has the `@id` directive):
 
 **Schema**:
 
@@ -90,7 +91,7 @@ query {
 
 ### Query a list of objects
 
-You can query a list of objects using GraphQL. For example, the following query fetches the title, text and and `datePublished` for all posts:
+You can query a list of objects using GraphQL. For example, the following query fetches the `title`, `text` and and `datePublished` for all posts:
 
 ```graphql
 query {
@@ -144,7 +145,7 @@ query {
 
 You can also filter nested objects while querying for a list of objects.
 
-For example, the following query fetches all of the authors whose name contains `Lee` and with their `completed` posts that have a score greater than 10:
+For example, the following query fetches all of the authors whose name contains `Lee` and with their `completed` posts that have a score greater than `10`:
 
 ```graphql
 query {
@@ -173,8 +174,11 @@ query {
 ### Filter a query for a range of objects with `between`
 
 You can also filter query results within an inclusive range of indexed and typed
-scalar values using the `between` keyword. This keyword is also supported for
-DQL; to learn more, see [DQL Functions: `between`](/query-language/functions/#between).
+scalar values using the `between` keyword.
+
+{{% notice "tip" %}}This keyword is also supported for DQL; to learn more, see
+[DQL Functions: `between`](/query-language/functions/#between).{{% /notice %}}
+
 
 For example, you might start with the following example schema used to track students at a school:
 
