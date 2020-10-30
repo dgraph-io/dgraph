@@ -39,8 +39,6 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 """
 scalar DateTime
 
-<<<<<<< HEAD
-=======
 input IntRange{
 	min: Int
 	max: Int
@@ -66,7 +64,6 @@ input StringRange{
 	max: String
 }
 
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 enum DgraphIndex {
 	int
 	int64
@@ -133,9 +130,6 @@ input NearFilter {
 }
 
 input PointGeoFilter {
-<<<<<<< HEAD
-	near: NearFilter!
-=======
 	near: NearFilter
 	within: WithinFilter
 }
@@ -196,7 +190,6 @@ input GenerateMutationParams {
 	add: Boolean
 	update: Boolean
 	delete: Boolean
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -214,14 +207,11 @@ directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
-<<<<<<< HEAD
-=======
 directive @cacheControl(maxAge: Int!) on QUERY
 directive @generate(
 	query: GenerateQueryParams,
 	mutation: GenerateMutationParams,
 	subscription: Boolean) on OBJECT | INTERFACE
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 
 input IntFilter {
 	eq: Int
@@ -229,10 +219,7 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
-<<<<<<< HEAD
-=======
 	between: IntRange
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 }
 
 input Int64Filter {
@@ -241,10 +228,7 @@ input Int64Filter {
 	lt: Int64
 	ge: Int64
 	gt: Int64
-<<<<<<< HEAD
-=======
 	between: Int64Range
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 }
 
 input FloatFilter {
@@ -253,10 +237,7 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
-<<<<<<< HEAD
-=======
 	between: FloatRange
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 }
 
 input DateTimeFilter {
@@ -265,10 +246,7 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
-<<<<<<< HEAD
-=======
 	between: DateTimeRange
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 }
 
 input StringTermFilter {
@@ -292,10 +270,7 @@ input StringExactFilter {
 	lt: String
 	ge: String
 	gt: String
-<<<<<<< HEAD
-=======
 	between: StringRange
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 }
 
 input StringHashFilter {
@@ -317,13 +292,10 @@ type AddQuestionPayload {
 	numUids: Int
 }
 
-<<<<<<< HEAD
-=======
 type AuthorAggregateResult {
 	count: Int
 }
 
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 type DeleteAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	msg: String
@@ -342,8 +314,6 @@ type DeleteQuestionPayload {
 	numUids: Int
 }
 
-<<<<<<< HEAD
-=======
 type PostAggregateResult {
 	count: Int
 }
@@ -352,7 +322,6 @@ type QuestionAggregateResult {
 	count: Int
 }
 
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 type UpdateAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	numUids: Int
@@ -529,12 +498,6 @@ input UpdateQuestionInput {
 type Query {
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
-<<<<<<< HEAD
-	getPost(id: ID!): Post
-	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	getQuestion(id: ID!): Question
-	queryQuestion(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
-=======
 	aggregateAuthor(filter: AuthorFilter): AuthorAggregateResult
 	getPost(id: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
@@ -542,7 +505,6 @@ type Query {
 	getQuestion(id: ID!): Question
 	queryQuestion(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
 	aggregateQuestion(filter: QuestionFilter): QuestionAggregateResult
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 }
 
 #######################

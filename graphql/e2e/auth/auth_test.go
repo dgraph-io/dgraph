@@ -66,16 +66,10 @@ type Author struct {
 }
 
 type Question struct {
-<<<<<<< HEAD
 	Id       string  `json:"id,omitempty"`
 	Text     string  `json:"text,omitempty"`
 	Answered bool    `json:"answered,omitempty"`
 	Author   *Author `json:"author,omitempty"`
-=======
-	Id     string  `json:"id,omitempty"`
-	Text   string  `json:"text,omitempty"`
-	Author *Author `json:"author,omitempty"`
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 }
 
 type Log struct {
@@ -1491,23 +1485,8 @@ func TestDeepRBACValueCascade(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-<<<<<<< HEAD
-	schemaFile := "schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
-
-	jsonFile := "test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
-	if err != nil {
-		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
-	}
-	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
-=======
 	schema, data := common.BootstrapAuthData()
 	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
->>>>>>> 2d993721ada2a90a92c707d516e8247055c81583
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem", false)
 		if err != nil {
