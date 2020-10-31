@@ -27,14 +27,14 @@ type Post {
 }
 ```
 
-### **Example**: Deep Deep mutation using variables
+### **Example**: Adding deep nested post with new author mutation using variables
 ```graphql
-mutation DeepAuthor($author: DeepAuthorInput!) {
-  DeepAuthor(input: [$author]) {
+mutation addAuthorWithPost($author: addAuthorInput!) {
+  addAuthor(input: [$author]) {
     author {
       id
       name
-      post {
+      posts {
         title
         text
       }
@@ -57,13 +57,13 @@ Variables:
 }
 ```
 
-### **Example**: Deep update mutation using variables
+### **Example**: Update mutation on deeply nested post and link to an existing author using variables
 ```graphql
 mutation updateAuthor($patch: UpdateAuthorInput!) {
   updateAuthor(input: $patch) {
     author {
       id
-      post {
+      posts {
         title
         text
       }
