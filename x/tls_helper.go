@@ -49,7 +49,6 @@ type TLSHelperConfig struct {
 	ClientAuth       string
 	UseSystemCACerts bool
 	MinVersion       string
-	MaxVersion       string
 }
 
 // RegisterClientTLSFlags registers the required flags to set up a TLS client.
@@ -132,7 +131,6 @@ func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) 
 		conf.Key = path.Join(conf.CertDir, tlsKeyFile)
 		conf.ClientAuth = v.GetString("tls_client_auth")
 		conf.MinVersion = v.GetString("tls_min_version")
-		conf.MaxVersion = v.GetString("tls_max_version")
 	}
 	conf.UseSystemCACerts = v.GetBool("tls_use_system_ca")
 
@@ -248,7 +246,7 @@ func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err e
 		}
 		tlsCfg.ClientAuth = auth
 
-		err = setupVersion(tlsCfg, config.MinVersion, config.MaxVersion)
+		err = setupVersion(tlsCfg, config.MinVersion)
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +255,7 @@ func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err e
 	return nil, nil
 }
 
-func setupVersion(cfg *tls.Config, minVersion string, maxVersion string) error {
+func setupVersion(cfg *tls.Config, minVersion string) error {
 	tlsVersion := map[string]uint16{
 		"TLS11": tls.VersionTLS11,
 		"TLS12": tls.VersionTLS12,
