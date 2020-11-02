@@ -75,11 +75,15 @@ func InitData(t *testing.T) {
 
 func TestConcurrentUpdate(t *testing.T) {
 	// wait for server to be ready
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 	InitData(t)
+	time.Sleep(2 * time.Second)
 	ctx := context.Background()
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
+
+	res, err := dg.NewTxn().Query(ctx, "schema {}")
+	fmt.Println("Schema ", string(res.GetJson()))
 
 	count := 10
 	var wg sync.WaitGroup
@@ -105,7 +109,7 @@ func TestConcurrentUpdate(t *testing.T) {
 	}
 	wg.Wait()
 	// eventual consistency
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	q := `query all($a: string) {
 			all(func: eq(name, $a)) {
@@ -115,7 +119,7 @@ func TestConcurrentUpdate(t *testing.T) {
 		  }`
 
 	txn := dg.NewTxn()
-	res, err := txn.QueryWithVars(ctx, q, map[string]string{"$a": "Alice"})
+	res, err = txn.QueryWithVars(ctx, q, map[string]string{"$a": "Alice"})
 	require.NoError(t, err)
 	var dat ResponseData
 	err = json.Unmarshal(res.Json, &dat)
@@ -126,11 +130,15 @@ func TestConcurrentUpdate(t *testing.T) {
 
 func TestSequentialUpdate(t *testing.T) {
 	// wait for server to be ready
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 	InitData(t)
+	time.Sleep(2 * time.Second)
 	ctx := context.Background()
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
+
+	res, err := dg.NewTxn().Query(ctx, "schema {}")
+	fmt.Println("Schema ", string(res.GetJson()))
 
 	count := 10
 	mutation := func(i int) {
@@ -154,7 +162,7 @@ func TestSequentialUpdate(t *testing.T) {
 	}
 
 	// eventual consistency
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	q := `query all($a: string) {
 			all(func: eq(name, $a)) {
@@ -164,7 +172,7 @@ func TestSequentialUpdate(t *testing.T) {
 		  }`
 
 	txn := dg.NewTxn()
-	res, err := txn.QueryWithVars(ctx, q, map[string]string{"$a": "Alice"})
+	res, err = txn.QueryWithVars(ctx, q, map[string]string{"$a": "Alice"})
 	require.NoError(t, err)
 	var dat ResponseData
 	err = json.Unmarshal(res.Json, &dat)
