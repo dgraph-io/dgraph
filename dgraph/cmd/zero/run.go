@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -54,8 +53,6 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
-	tlsDir            string
-	tlsDisabledRoutes []string
 	tlsClientConfig   *tls.Config
 	totalCache        int64
 }
@@ -94,17 +91,7 @@ instances to achieve high-availability.
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 	// TLS configurations
-	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
-	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
-	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	flag.String("tls_disabled_route", "",
-		"comma separated zero endpoint which will be disabled from TLS encryption."+
-		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
-	flag.Bool("tls_internal_port_enabled", false, "enable inter node TLS encryption between cluster nodes.")
-	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to " +
-		"connect as a client with the other nodes in the cluster.")
-	flag.String("tls_key", "", "(optional) The private key file name "+
-		"in tls_dir which is needed to connect as a client with the other nodes in the cluster.")
+	x.RegisterServerTLSFlags(flag)
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -128,7 +115,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
 	}
 
-	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf.GetBool("tls_internal_port_enabled"), Zero.Conf.GetString("tls_dir"))
+	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
 	if tlsConf != nil {
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))
@@ -184,11 +171,6 @@ func run() {
 	}
 
 	x.PrintVersion()
-	var tlsDisRoutes []string
-	if Zero.Conf.GetString("tls_disabled_route") != "" {
-		tlsDisRoutes = strings.Split(Zero.Conf.GetString("tls_disabled_route"), ",")
-	}
-
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
 	opts = options{
@@ -200,8 +182,6 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
-		tlsDir:            Zero.Conf.GetString("tls_dir"),
-		tlsDisabledRoutes: tlsDisRoutes,
 		tlsClientConfig:   tlsConf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
@@ -260,7 +240,10 @@ func run() {
 	// Initialize the servers.
 	var st state
 	st.serveGRPC(grpcListener, store)
-	st.startListenHttpAndHttps(httpListener)
+
+	tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf)
+	x.Check(err)
+	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
 
 	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)

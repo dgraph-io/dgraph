@@ -21,8 +21,8 @@ type testCase struct {
 var testCasesHttp = []testCase{
 	{
 		url:        "http://localhost:6180/health",
-		response:   "Client sent an HTTP request to an HTTPS server.\n",
-		statusCode: 400,
+		response:   "OK",
+		statusCode: 200,
 	},
 	{
 		url:        "http://localhost:6180/state",
