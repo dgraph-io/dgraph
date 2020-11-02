@@ -16,7 +16,7 @@ running multiple instances of Dgraph, over multiple servers in a cluster.
     <img class="hero-deco" src="/images/hero-deco.png" />
   </div>
   <div class="item">
-    <div class="icon"><i class="lni lni-play" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-checkbox" aria-hidden="true"></i></div>
     <a  href="{{< relref "production-checklist.md">}}">
       <h2>Production Checklist</h2>
       <p>
@@ -25,7 +25,7 @@ running multiple instances of Dgraph, over multiple servers in a cluster.
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-university" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-docker" aria-hidden="true"></i></div>
     <a href="{{< relref "kubernetes.md">}}">
       <h2>Using Kubernetes</h2>
       <p>
@@ -34,7 +34,7 @@ running multiple instances of Dgraph, over multiple servers in a cluster.
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-code-fork" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-cogs" aria-hidden="true"></i></div>
     <a href="{{< relref "dgraph-administration.md">}}">
       <h2>Dgraph Administration</h2>
       <p>
@@ -44,7 +44,7 @@ running multiple instances of Dgraph, over multiple servers in a cluster.
   </div>
 
   <div class="item">
-    <div class="icon"><i class="lni lni-graduation" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-shield" aria-hidden="true"></i></div>
     <a href="{{< relref "tls-configuration.md">}}">
       <h2>TLS Configuration</h2>
       <p>
@@ -53,7 +53,7 @@ running multiple instances of Dgraph, over multiple servers in a cluster.
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="lni lni-fireworks" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-upload" aria-hidden="true"></i></div>
     <a href="{{< relref "fast-data-loading.md">}}">
       <h2>Fast Data Loading</h2>
       <p>
@@ -62,7 +62,7 @@ running multiple instances of Dgraph, over multiple servers in a cluster.
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-cog" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-keyword-research" aria-hidden="true"></i></div>
     <a href="{{< relref "monitoring.md">}}">
       <h2>Monitoring</h2>
       <p>

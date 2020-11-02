@@ -15,7 +15,7 @@ weight = 9
     <img class="hero-deco" src="/images/hero-deco.png" />
   </div>
   <div class="item">
-    <div class="icon"><i class="lni lni-play" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-download" aria-hidden="true"></i></div>
     <a  href="{{< relref "binary-backups.md">}}">
       <h2>Binary Backups</h2>
       <p>
@@ -24,7 +24,7 @@ weight = 9
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-university" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-control-panel" aria-hidden="true"></i></div>
     <a href="{{< relref "access-control-lists.md">}}">
       <h2>Access Control Lists</h2>
       <p>
@@ -33,7 +33,7 @@ weight = 9
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-code-fork" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-lock-alt" aria-hidden="true"></i></div>
     <a href="{{< relref "encryption-at-rest.md">}}">
       <h2>Encryption at Rest</h2>
       <p>

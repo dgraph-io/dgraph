@@ -24,7 +24,7 @@ weight = 7
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-university" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-dev" aria-hidden="true"></i></div>
     <a href="{{< relref "go.md">}}">
       <h2>Go</h2>
       <p>
@@ -33,7 +33,7 @@ weight = 7
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-code-fork" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-microsoft" aria-hidden="true"></i></div>
     <a href="{{< relref "c-sharp.md">}}">
       <h2>C#</h2>
       <p>
@@ -43,7 +43,7 @@ weight = 7
   </div>
 
   <div class="item">
-    <div class="icon"><i class="lni lni-graduation" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-java" aria-hidden="true"></i></div>
     <a href="{{< relref "java.md">}}">
       <h2>Java</h2>
       <p>
@@ -52,7 +52,7 @@ weight = 7
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="lni lni-fireworks" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-javascript" aria-hidden="true"></i></div>
     <a href="{{< relref "javascript.md">}}">
       <h2>JavaScript</h2>
       <p>
@@ -61,7 +61,7 @@ weight = 7
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-cog" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-python" aria-hidden="true"></i></div>
     <a href="{{< relref "python.md">}}">
       <h2>Python</h2>
       <p>

@@ -23,7 +23,7 @@ title = "GraphQL"
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-university" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-layout" aria-hidden="true"></i></div>
     <a href="{{< relref "schema/schema-overview.md">}}">
       <h2>Schema</h2>
       <p>
@@ -32,7 +32,7 @@ title = "GraphQL"
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-code-fork" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-cloud-network" aria-hidden="true"></i></div>
     <a href="{{< relref "api/api-overview.md">}}">
       <h2>API</h2>
       <p>
@@ -42,7 +42,7 @@ title = "GraphQL"
   </div>
 
   <div class="item">
-    <div class="icon"><i class="lni lni-graduation" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-keyword-research" aria-hidden="true"></i></div>
     <a href="{{< relref "queries/queries-overview.md">}}">
       <h2>Queries</h2>
       <p>
@@ -51,7 +51,7 @@ title = "GraphQL"
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="lni lni-fireworks" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-pencil-alt" aria-hidden="true"></i></div>
     <a href="{{< relref "mutations/mutations-overview.md">}}">
       <h2>Mutations</h2>
       <p>

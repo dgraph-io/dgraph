@@ -23,7 +23,7 @@ title = "DQL"
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-university" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-book" aria-hidden="true"></i></div>
     <a href="{{< relref "../tutorials/_index.md">}}">
       <h2>Tutorials</h2>
       <p>
@@ -51,7 +51,7 @@ title = "DQL"
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="lni lni-fireworks" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-code-alt" aria-hidden="true"></i></div>
     <a href="{{< relref "../clients/_index.md">}}">
       <h2>Clients</h2>
       <p>
@@ -60,7 +60,7 @@ title = "DQL"
     </a>
   </div>
   <div class="item">
-    <div class="icon"><i class="fa fa-cog" aria-hidden="true"></i></div>
+    <div class="icon"><i class="lni lni-cogs" aria-hidden="true"></i></div>
     <a href="{{< relref "../mutations/_index.md">}}">
       <h2>Mutations</h2>
       <p>
