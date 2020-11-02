@@ -2551,3 +2551,75 @@
         dgraph.uid : uid
       }
     }
+
+-
+  name: "Count query at child level"
+  gqlquery: |
+    query {
+      queryCountry {
+        nm : name
+        ag : aggregate_states{
+          cnt : count
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCountry(func: type(Country)) {
+        name : Country.name
+        count_aggregate_states : count(Country.states)
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Count query at child level with filter"
+  gqlquery: |
+    query {
+      queryCountry {
+        nm : name
+        ag : aggregate_states(filter: { code: { eq: "state code" } }) {
+          cnt : count
+        }
+        st : states {
+          capital
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCountry(func: type(Country)) {
+        name : Country.name
+        count_aggregate_states : count(Country.states) @filter(eq(State.code, "state code"))
+        states : Country.states {
+          capital : State.capital
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Deep child level get query with count"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        nm : name
+        country {
+          ag : aggregate_states(filter: { code: { eq: "state code" } }) {
+            count
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: type(Country)) @filter(type(Author)) {
+        name : Author.name
+        country : Author.country {
+          count_aggregate_states : count(Country.states) @filter(eq(State.code, "state code"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }

@@ -141,6 +141,8 @@ type Field interface {
 	IsAuthQuery() bool
 	CustomHTTPConfig() (FieldHTTPConfig, error)
 	EnumValues() []string
+	ConstructedFor() Type
+	ConstructedForDgraphPredicate() string
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -155,7 +157,6 @@ type Mutation interface {
 // A Query is a field (from the schema's Query type) from an Operation
 type Query interface {
 	Field
-	ConstructedFor() Type
 	QueryType() QueryType
 	DQLQuery() string
 	Rename(newName string)
@@ -1403,21 +1404,46 @@ func (q *query) EnumValues() []string {
 	return nil
 }
 
-func (q *query) ConstructedFor() Type {
-	if q.QueryType() != AggregateQuery {
-		return q.Type()
+func (m *mutation) ConstructedFor() Type {
+	return (*field)(m).ConstructedFor()
+}
+
+func (f *field) ConstructedFor() Type {
+	fieldName := f.Type().Name()
+	if !strings.HasSuffix(fieldName, "AggregateResult") {
+		return f.Type()
 	}
 
-	// Its of type AggregateQuery
-	queryName := q.Type().Name()
-	typeName := queryName[:len(queryName)-15]
+	// f has type of the form <SomeTypeName>AggregateResult
+	typeName := fieldName[:len(fieldName)-15]
 	return &astType{
 		typ: &ast.Type{
 			NamedType: typeName,
 		},
-		inSchema:        q.op.inSchema,
-		dgraphPredicate: q.op.inSchema.dgraphPredicate,
+		inSchema:        f.op.inSchema,
+		dgraphPredicate: f.op.inSchema.dgraphPredicate,
 	}
+
+}
+
+func (q *query) ConstructedFor() Type {
+	if q.QueryType() != AggregateQuery {
+		return q.Type()
+	}
+	// Its of type AggregateQuery
+	return (*field)(q).ConstructedFor()
+}
+
+func (m *mutation) ConstructedForDgraphPredicate() string {
+	return (*field)(m).ConstructedForDgraphPredicate()
+}
+
+func (q *query) ConstructedForDgraphPredicate() string {
+	return (*field)(q).ConstructedForDgraphPredicate()
+}
+
+func (f *field) ConstructedForDgraphPredicate() string {
+	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][f.Name()[10:]]
 }
 
 func (q *query) QueryType() QueryType {

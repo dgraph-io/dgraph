@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
@@ -58,7 +59,7 @@ func NewQueryRewriter() QueryRewriter {
 }
 
 func hasAuthRules(field schema.Field, authRw *authRewriter) bool {
-	rn := authRw.selector(field.Type())
+	rn := authRw.selector(field.ConstructedFor())
 	if rn != nil {
 		return true
 	}
@@ -728,7 +729,7 @@ func addSelectionSetFrom(
 			len(selSet) == 1 &&
 			selSet[0].Name() == schema.Typename {
 			q.Children = append(q.Children, &gql.GraphQuery{
-				//we don't need this for auth queries because they are added by us used for internal purposes.
+				// we don't need this for auth queries because they are added by us used for internal purposes.
 				// Querying it for them would just add an overhead which we can avoid.
 				Attr:  "uid",
 				Alias: "dgraph.uid",
@@ -758,6 +759,117 @@ func addSelectionSetFrom(
 		// dgraph.type depending upon if the type is interface or not. For interface type
 		// we always query dgraph.type and can pick up the value from there.
 		if f.Skip() || !f.Include() || f.Name() == schema.Typename {
+			continue
+		}
+
+		// Handle aggregation queries
+		if strings.HasPrefix(f.Name(), "aggregate_") {
+			// Don't add field if it has already been added
+			if _, isAddedField := fieldAdded[f.Name()]; isAddedField {
+				continue
+			}
+			fieldAdded[f.Name()] = true
+			constructedForType := f.ConstructedFor()
+			constructedForDgraphPredicate := f.ConstructedForDgraphPredicate()
+			// Iterate over fields queried inside aggregate. Currently this will only have count
+			var aggregateChildren []*gql.GraphQuery
+			// addedAggregateFields is a map from aggregate field name to boolean
+			addedAggregateField := make(map[string]bool)
+			for _, aggregateField := range f.SelectionSet() {
+				// Don't add the same field twice
+				if _, isAddedAggregateField := addedAggregateField[aggregateField.Name()]; isAddedAggregateField {
+					continue
+				}
+				if aggregateField.Name() == "count" {
+					aggregateChild := &gql.GraphQuery{
+						Alias: "count_" + f.Name(),
+						Attr:  "count(" + constructedForDgraphPredicate + ")",
+					}
+					filter, _ := f.ArgValue("filter").(map[string]interface{})
+					_ = addFilter(aggregateChild, constructedForType, filter)
+					aggregateChildren = append(aggregateChildren, aggregateChild)
+					addedAggregateField[aggregateField.Name()] = true
+				}
+			}
+			rbac := auth.evaluateStaticRules(f.ConstructedFor())
+			if rbac == schema.Negative {
+				continue
+			}
+			var parentVarName, parentQryName string
+			if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
+				parentVarName = auth.parentVarName
+				parentQryName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+				auth.parentVarName = parentQryName
+				auth.varName = parentQryName
+			}
+			auth.parentVarName = parentVarName
+			auth.varName = parentQryName
+			var fieldAuth []*gql.GraphQuery
+			var authFilter *gql.FilterTree
+			if rbac == schema.Uncertain {
+				fieldAuth, authFilter = auth.rewriteAuthQueries(f.ConstructedFor())
+			}
+			for _, aggregateChild := range aggregateChildren {
+				if authFilter != nil {
+					if aggregateChild.Filter == nil {
+						aggregateChild.Filter = authFilter
+					} else {
+						aggregateChild.Filter = &gql.FilterTree{
+							Op:    "and",
+							Child: []*gql.FilterTree{aggregateChild.Filter, authFilter},
+						}
+					}
+				}
+			}
+			if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
+				// This adds the following query.
+				//	var(func: uid(Ticket)) {
+				//		User as Ticket.assignedTo
+				//	}
+				// where `Ticket` is the nodes selected at parent level and `User` is the nodes we
+				// need on the current level.
+				parentQry := &gql.GraphQuery{
+					Func: &gql.Function{
+						Name: "uid",
+						Args: []gql.Arg{{Value: auth.parentVarName}},
+					},
+					Attr:     "var",
+					Children: []*gql.GraphQuery{{Attr: f.ConstructedForDgraphPredicate(), Var: parentQryName}},
+				}
+
+				// This query aggregates all filters and auth rules and is used by root query to filter
+				// the final nodes for the current level.
+				// User6 as var(func: uid(User2), orderasc: ...) @filter((eq(User.username, "User1") AND (...Auth Filter))))
+				filtervarName := auth.varGen.Next(f.ConstructedFor(), "", "", auth.isWritingAuth)
+				selectionQry := &gql.GraphQuery{
+					Var:  filtervarName,
+					Attr: "var",
+					Func: &gql.Function{
+						Name: "uid",
+						Args: []gql.Arg{{Value: parentQryName}},
+					},
+				}
+
+				addFilterToField(selectionQry, f)
+				var authQueriesAppended bool = false
+				for _, aggregateChild := range aggregateChildren {
+					selectionQry.Filter = aggregateChild.Filter
+					if !authQueriesAppended {
+						authQueries = append(authQueries, parentQry, selectionQry)
+						authQueriesAppended = true
+					}
+					aggregateChild.Filter = &gql.FilterTree{
+						Func: &gql.Function{
+							Name: "uid",
+							Args: []gql.Arg{{Value: filtervarName}},
+						},
+					}
+				}
+			}
+			authQueries = append(authQueries, fieldAuth...)
+
+			q.Children = append(q.Children, aggregateChildren...)
+			// As all child fields inside aggregate have been looked at. We can continue
 			continue
 		}
 

@@ -20,11 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go/v4"
 	"io/ioutil"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/dgrijalva/jwt-go/v4"
 
 	"google.golang.org/grpc/metadata"
 
