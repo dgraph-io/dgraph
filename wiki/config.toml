@@ -25,7 +25,7 @@ startLevel = 2
 title = "Dgraph Documentation"
 
 [[menu.main]]
-    url = "/slash-graphql/introduction"
+    url = "/slash-graphql"
     name = "Slash GraphQL"
     identifier = "slash-graphql"
     weight = 1
