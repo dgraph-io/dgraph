@@ -269,13 +269,21 @@ func setupVersion(cfg *tls.Config, minVersion string, maxVersion string) error {
 		return fmt.Errorf("invalid min_version '%s'. Valid values [TLS11, TLS12]", minVersion)
 	}
 
-	if val, has := tlsVersion[strings.ToUpper(maxVersion)]; has && val >= cfg.MinVersion {
-		cfg.MaxVersion = val
-	} else {
-		if has {
-			return fmt.Errorf("cannot use '%s' as max_version, it's lower than '%s'", maxVersion, minVersion)
-		}
-		return fmt.Errorf("invalid max_version '%s'. Valid values [TLS11, TLS12]", maxVersion)
+	cfg.MaxVersion = tls.VersionTLS12
+	cfg.CipherSuites = []uint16{
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 	}
 
 	return nil
