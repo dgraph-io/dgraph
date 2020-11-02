@@ -638,8 +638,8 @@ interface MsgPost @auth(
     delete: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
     update: { rule: "{$ROLE: { eq: \"ADMIN\" } }" }
 ){
-    sender: Author!
-    receiver: Author!
+    sender: Author
+    receiver: Author
 }
 
 type Question implements Post  @auth(
@@ -672,7 +672,7 @@ type Question implements Post  @auth(
 }
 
 type FbPost implements Post & MsgPost {
-    postCount: Int!
+    postCount: Int
 }
 
 type Answer implements Post {
