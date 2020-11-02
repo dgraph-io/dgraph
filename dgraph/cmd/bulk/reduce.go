@@ -342,6 +342,8 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 
 		// req.countBuf is already sorted.
 		sz := req.countBuf.LenNoPadding()
+		// z.SetBufferDir(r.opt.TmpDir)
+		// defer z.ResetBufferDir()
 		ci.countBuf.Grow(sz)
 
 		req.countBuf.SliceIterate(func(slice []byte) error {

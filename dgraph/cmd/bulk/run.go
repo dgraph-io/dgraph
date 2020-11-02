@@ -29,6 +29,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/ristretto/z"
+
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
@@ -279,6 +281,10 @@ func run() {
 	if opt.CleanupTmp {
 		defer os.RemoveAll(opt.TmpDir)
 	}
+
+	// Set the directories for temporary buffers to be used during map-reduce.
+	z.SetBufferDir(opt.TmpDir)
+	defer z.ResetBufferDir()
 
 	loader := newLoader(&opt)
 	if !opt.SkipMapPhase {
