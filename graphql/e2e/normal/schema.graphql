@@ -189,6 +189,8 @@ type post1{
         id: ID
         title: String! @id @search(by: [regexp])
         numLikes: Int64
+        commentsByMonth: [Int]
+        likesByMonth: [Int64]
 }
 
 type Person1 {
