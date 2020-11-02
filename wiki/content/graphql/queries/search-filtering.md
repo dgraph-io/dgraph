@@ -180,7 +180,8 @@ scalar values using the `between` keyword.
 [DQL Functions: `between`](/query-language/functions/#between).{{% /notice %}}
 
 
-For example, you might start with the following example schema used to track students at a school:
+For example, you might start with the following example schema used to track
+students at a school:
 
 **Schema**:
 
