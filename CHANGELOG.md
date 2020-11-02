@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+## [1.2.8] - 2020-10-22
+[1.2.8]: https://github.com/dgraph-io/dgraph/compare/v1.2.7...v1.2.8
+
+### Changed
+
+- Update badger to 5e3d4b9. ([#6671][])
+- Return content length header for queries. ([#6478][])
+- Use raft storage in managedmode. ([#6546][])
+
+### Added
+
+- Makefile to build Dgraph inside docker container. ([#6603][])
+- Add separate compression flag for z and wal dirs. ([#6419][])
+
+### Fixed
+
+- Break out if g.Ctx is done. ([#6677][])
+- Update nextRaftId when starting a node with a raftId > 0. ([#6599][])
+- Use flags for cache. ([#6465][])
+
+[#6671]: https://github.com/dgraph-io/dgraph/issues/6671
+[#6478]: https://github.com/dgraph-io/dgraph/issues/6478
+[#6546]: https://github.com/dgraph-io/dgraph/issues/6546
+[#6603]: https://github.com/dgraph-io/dgraph/issues/6603
+[#6419]: https://github.com/dgraph-io/dgraph/issues/6419
+[#6677]: https://github.com/dgraph-io/dgraph/issues/6677
+[#6599]: https://github.com/dgraph-io/dgraph/issues/6599
+[#6465]: https://github.com/dgraph-io/dgraph/issues/6465
+
+
 ## [1.2.7] - 2020-09-21
 [1.2.7]: https://github.com/dgraph-io/dgraph/compare/v1.2.6...v1.2.7
 
