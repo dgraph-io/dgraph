@@ -44,13 +44,13 @@ func RegisterServerTLSFlags(flag *pflag.FlagSet) {
 		"The CA Cert file used to initiate server certificates. Required for enabling TLS.")
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	flag.String("tls_node_cert", "", "The node Cert file which is needed to " +
+	flag.String("tls_node_cert", "", "The node Cert file which is needed to "+
 		"initiate server in the cluster.")
 	flag.String("tls_node_key", "", "The node key file "+
 		"which is needed to initiate server in the cluster.")
 	flag.Bool("tls_internal_port_enabled", false,
 		"(optional) enable inter node TLS encryption between cluster nodes.")
-	flag.String("tls_cert", "", "(optional) The client Cert file which is needed to " +
+	flag.String("tls_cert", "", "(optional) The client Cert file which is needed to "+
 		"connect as a client with the other nodes in the cluster.")
 	flag.String("tls_key", "", "(optional) The private client key file "+
 		"which is needed to connect as a client with the other nodes in the cluster.")

@@ -4,14 +4,15 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
-	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
-	"github.com/soheilhy/cmux"
 	"io"
 	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
+	"github.com/soheilhy/cmux"
 )
 
 func StartListenHttpAndHttps(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
@@ -26,7 +27,7 @@ func StartListenHttpAndHttps(l net.Listener, tlsCfg *tls.Config, closer *z.Close
 
 func startServers(m cmux.CMux, tlsConf *tls.Config) {
 	httpRule := m.Match(func(r io.Reader) bool {
-		//no tls config is provided. http is being used.
+		// no tls config is provided. http is being used.
 		if tlsConf == nil {
 			return true
 		}
@@ -35,8 +36,8 @@ func startServers(m cmux.CMux, tlsConf *tls.Config) {
 			// not able to parse the request. Let it be resolved via TLS
 			return false
 		}
-		//health endpoint will always be available over http.
-		//This is necessary for orchestration. It needs to be worked for
+		// health endpoint will always be available over http.
+		// This is necessary for orchestration. It needs to be worked for
 		// monitoring tools which operate without authentication.
 		if strings.HasPrefix(path, "/health") {
 			return true
@@ -48,7 +49,8 @@ func startServers(m cmux.CMux, tlsConf *tls.Config) {
 	// if tls is enabled, make tls encryption based connections as default
 	if tlsConf != nil {
 		httpsRule := m.Match(cmux.Any())
-		//this is chained listener. tls listener will decrypt the message and send it in plain text to HTTP server
+		// this is chained listener. tls listener will decrypt
+		// the message and send it in plain text to HTTP server
 		go startListen(tls.NewListener(httpsRule, tlsConf))
 	}
 }
