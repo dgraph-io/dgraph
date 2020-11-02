@@ -1237,7 +1237,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	}
 
 	var andFt *gql.FilterTree
-	if len(ands) == 1 {
+	if len(ands) == 0 {
+		return or
+	} else if len(ands) == 1 {
 		andFt = ands[0]
 	} else if len(ands) > 1 {
 		andFt = &gql.FilterTree{

@@ -839,6 +839,21 @@
       }
     }
 
+-
+  name: "Filter with 'or' array"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { or: [ { name: { eq: "A. N. Author" } }, { dob: { le: "2001-01-01" } }] } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR le(Author.dob, "2001-01-01"))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
 
 -
   name: "Filter with implied and as well as 'or'"
