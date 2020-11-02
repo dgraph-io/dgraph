@@ -1021,3 +1021,52 @@
   uids: |
     { "ComplexLog1": "0x123" }
   skipauth: true
+
+- name: "Auth On interfaces."
+  gqlquery: |
+    mutation addQuestion($question: [AddQuestionInput!]!) {
+      addQuestion(input: $question) {
+        question{
+          id
+          text
+          author{
+            name
+          }
+        }
+      }
+    }
+  jwtvar: 
+    USER: "user1@dgraph.io"
+    ANS: "true"
+  variables: |
+    { "question": 
+      [{
+        "text": "A Question",
+        "author": {
+          "name": "user1@dgraph.io"
+        },
+        "answered": true
+      }]
+    }
+  uids: |
+    {"Question1": "0x123", "Author1": "0x456" }
+  authquery: |-
+    query {
+      Question(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3))) {
+        uid
+      }
+      Question1 as var(func: uid(0x123))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1@dgraph.io")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  authjson: |
+    {"Question": [ {"uid": "0x123"}], "Author": {"uid": "0x456"}}
