@@ -678,12 +678,6 @@
                 },
                 {
                     "name": "Post1.comments"
-                },
-                {
-                    "name": "post1.commentsByMonth"
-                },
-                {
-                    "name": "post1.likesByMonth"
                 }
             ],
             "name": "Post1"
@@ -891,7 +885,14 @@
                 },
                 {
                     "name": "post1.numLikes"
+                },
+                {
+                    "name": "post1.commentsByMonth"
+                },
+                {
+                    "name": "post1.likesByMonth"
                 }
+
             ],
             "name": "post1"
         },
