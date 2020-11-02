@@ -1051,13 +1051,11 @@ func EnterpriseEnabled() bool {
 	if !enc.EeBuild {
 		return false
 	}
-	g := groups()
-	g.RLock()
-	defer g.RUnlock()
-	if g.state == nil {
-		return g.askZeroForEE()
+	state := GetMembershipState()
+	if state == nil {
+		return groups().askZeroForEE()
 	}
-	return g.state.GetLicense().GetEnabled()
+	return state.GetLicense().GetEnabled()
 }
 
 func (g *groupi) askZeroForEE() bool {
