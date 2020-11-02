@@ -397,6 +397,16 @@
             "upsert": true
         },
         {
+            "predicate": "post1.commentsByMonth",
+            "list": true,
+            "type": "int"
+        },
+        {
+            "predicate": "post1.likesByMonth",
+            "list": true,
+            "type": "int"
+        },
+        {
             "predicate": "pwd",
             "type": "password"
         },
@@ -668,6 +678,12 @@
                 },
                 {
                     "name": "Post1.comments"
+                },
+                {
+                    "name": "post1.commentsByMonth"
+                },
+                {
+                    "name": "post1.likesByMonth"
                 }
             ],
             "name": "Post1"

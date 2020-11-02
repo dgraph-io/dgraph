@@ -178,6 +178,8 @@ type ThingTwo implements Thing {
 type Post1 {
        id: String! @id
        comments: [Comment1]
+       commentsByMonth: [Int]
+       likesByMonth: [Int64]
 }
 
 type Comment1 {
