@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -29,19 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
-
-type Person struct {
-	Name  string `json:"name,omitempty"`
-	count int
-}
-
-type Data struct {
-	Name   string `json:"name,omitempty"`
-	Counts []int  `json:"count,omitempty"`
-}
-type ResponseData struct {
-	All []Data `json:"all,omitempty"`
-}
 
 func InitData(t *testing.T) {
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
@@ -55,15 +41,11 @@ func InitData(t *testing.T) {
 	err = dg.Alter(context.Background(), &api.Operation{Schema: schema})
 	require.NoError(t, err)
 
-	p := Person{
-		Name:  "Alice",
-		count: 1,
-	}
-	pb, err := json.Marshal(p)
-	require.NoError(t, err)
-
 	mu := &api.Mutation{
-		SetJson:   pb,
+		SetNquads: []byte(`
+			_:a <name> "Alice" .
+			_:a <count> "1" .
+		`),
 		CommitNow: true,
 	}
 	txn := dg.NewTxn()
@@ -89,7 +71,7 @@ func TestConcurrentUpdate(t *testing.T) {
 		defer wg.Done()
 		query := `query {
 			user as var(func: eq(name, "Alice"))
-			}`
+		}`
 		mu := &api.Mutation{
 			SetNquads: []byte(fmt.Sprintf(`uid(user) <count> "%d" .`, i)),
 		}
@@ -110,7 +92,6 @@ func TestConcurrentUpdate(t *testing.T) {
 
 	q := `query all($a: string) {
 			all(func: eq(name, $a)) {
-			  name
 			  count
 			}
 		  }`
@@ -118,11 +99,7 @@ func TestConcurrentUpdate(t *testing.T) {
 	txn := dg.NewTxn()
 	res, err := txn.QueryWithVars(ctx, q, map[string]string{"$a": "Alice"})
 	require.NoError(t, err)
-	var dat ResponseData
-	err = json.Unmarshal(res.Json, &dat)
-	require.NoError(t, err)
-
-	require.Equal(t, 10, len(dat.All[0].Counts))
+	require.JSONEq(t, `{"all":[{"count":[0,4,5,2,8,1,3,9,6,7]}]}`, string(res.GetJson()))
 }
 
 func TestSequentialUpdate(t *testing.T) {
@@ -159,7 +136,6 @@ func TestSequentialUpdate(t *testing.T) {
 
 	q := `query all($a: string) {
 			all(func: eq(name, $a)) {
-			  name
 			  count
 			}
 		  }`
@@ -167,9 +143,63 @@ func TestSequentialUpdate(t *testing.T) {
 	txn := dg.NewTxn()
 	res, err := txn.QueryWithVars(ctx, q, map[string]string{"$a": "Alice"})
 	require.NoError(t, err)
-	var dat ResponseData
-	err = json.Unmarshal(res.Json, &dat)
+	require.JSONEq(t, `{"all":[{"count":[0,4,5,2,8,1,3,9,6,7]}]}`, string(res.GetJson()))
+}
+
+func TestDelete(t *testing.T) {
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	schema := `
+		name: string .
+		xid: string .
+		type MyType {
+		  name
+		  xid
+		}
+	`
+
+	err = dg.Alter(context.Background(), &api.Operation{Schema: schema})
 	require.NoError(t, err)
 
-	require.Equal(t, 10, len(dat.All[0].Counts))
+	mu := &api.Mutation{
+		SetNquads: []byte(`
+			_:n <dgraph.type> "MyType" .
+			_:n <name> "Alice" .
+			_:n <xid> "10" .
+		`),
+
+		CommitNow: true,
+	}
+	txn := dg.NewTxn()
+	ctx := context.Background()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Mutate(ctx, mu)
+	require.NoError(t, err)
+	uid := res.Uids["n"]
+
+	ctx = context.Background()
+	query := func() string {
+		q := `{ q(func: uid(` + uid + `)){ dgraph.type name xid } }`
+		res, err := dg.NewTxn().Query(ctx, q)
+		require.NoError(t, err)
+		return string(res.GetJson())
+	}
+	time.Sleep(time.Second)
+	expected := `{"q":[{"dgraph.type":["MyType"],"name":"Alice","xid":"10"}]}`
+	require.JSONEq(t, expected, query())
+
+	mu = &api.Mutation{
+		DelNquads: []byte(`<` + uid + `> * * .`),
+		CommitNow: true,
+	}
+	txn = dg.NewTxn()
+	ctx = context.Background()
+	defer txn.Discard(ctx)
+
+	_, err = txn.Mutate(ctx, mu)
+	require.NoError(t, err)
+	time.Sleep(time.Second)
+	require.JSONEq(t, `{"q":[]}`, query())
 }
