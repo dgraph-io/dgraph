@@ -26,28 +26,28 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 scalar DateTime
 
 input IntRange{
-	min: Int
-	max: Int
+	min: Int!
+	max: Int!
 }
 
 input FloatRange{
-	min: Float
-	max: Float
+	min: Float!
+	max: Float!
 }
 
 input Int64Range{
-	min: Int64
-	max: Int64
+	min: Int64!
+	max: Int64!
 }
 
 input DateTimeRange{
-	min: DateTime
-	max: DateTime
+	min: DateTime!
+	max: DateTime!
 }
 
 input StringRange{
-	min: String
-	max: String
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
