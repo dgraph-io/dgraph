@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# usage: test.sh [pkg_regex]
+# usage: test.sh [[pkg_regex] test_regex]
 
 # Notes for testing under macOS (Sierra and up)
 # Required Homebrew (https://brew.sh/) packages:
@@ -40,7 +40,7 @@ BUILD_TAGS=
 #
 
 function Usage {
-    echo "usage: $ME [opts] [pkg_regex]
+    echo "usage: $ME [opts] [[pkg_regex] test_regex]
 
 options:
 
@@ -214,7 +214,7 @@ elif [[ $# -eq 1 || $# -eq 2 ]]; then
         GO_TEST_OPTS+=( "-v" "-run=$2" )
     fi
 else
-    echo >&2 "usage: $ME [pkg_regex]"
+    echo >&2 "usage: $ME [pkg_regex [test_regex]]"
     exit 1
 fi
 
