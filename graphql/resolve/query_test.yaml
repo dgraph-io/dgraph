@@ -2614,7 +2614,7 @@
     }
   dgquery: |-
     query {
-      getAuthor(func: type(Country)) @filter(type(Author)) {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
         name : Author.name
         country : Author.country {
           count_aggregate_states : count(Country.states) @filter(eq(State.code, "state code"))

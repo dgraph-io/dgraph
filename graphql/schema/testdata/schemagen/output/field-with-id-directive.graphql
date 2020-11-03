@@ -14,7 +14,7 @@ type Author {
 	name: String! @id @search(by: [regexp])
 	pen_name: String
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	aggregate_posts(filter: PostFilter): [PostAggregateResult]
+	aggregate_posts(filter: PostFilter): PostAggregateResult
 }
 
 type Genre {

@@ -92,10 +92,11 @@ func graphQLCompletionOn(t *testing.T) {
 			}
 			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 			require.NoError(t, err)
-			require.Equal(t, 4, len(result.QueryCountry))
+			require.Equal(t, 5, len(result.QueryCountry))
 			expected.QueryCountry = []*country{
 				&country{Name: "Angola"},
 				&country{Name: "Bangladesh"},
+				&country{Name: "India"},
 				&country{Name: "Mozambique"},
 				nil,
 			}
@@ -107,11 +108,11 @@ func graphQLCompletionOn(t *testing.T) {
 				return result.QueryCountry[i].Name < result.QueryCountry[j].Name
 			})
 
-			for i := 0; i < 3; i++ {
+			for i := 0; i < 4; i++ {
 				require.NotNil(t, result.QueryCountry[i])
 				require.Equal(t, result.QueryCountry[i].Name, expected.QueryCountry[i].Name)
 			}
-			require.Nil(t, result.QueryCountry[3])
+			require.Nil(t, result.QueryCountry[4])
 		})
 	}
 

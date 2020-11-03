@@ -6,14 +6,14 @@ type Movie {
 	id: ID!
 	name: String!
 	director(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector] @dgraph(pred: "~directed.movies")
-	aggregate_director(filter: MovieDirectorFilter): [MovieDirectorAggregateResult]
+	aggregate_director(filter: MovieDirectorFilter): MovieDirectorAggregateResult
 }
 
 type MovieDirector {
 	id: ID!
 	name: String!
 	directed(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie] @dgraph(pred: "directed.movies")
-	aggregate_directed(filter: MovieFilter): [MovieAggregateResult]
+	aggregate_directed(filter: MovieFilter): MovieAggregateResult
 }
 
 #######################
