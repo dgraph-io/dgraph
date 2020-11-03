@@ -9,15 +9,21 @@ This page describes how you use GraphQL types to set the Dgraph GraphQL schema.
 
 ### Scalars
 
-Dgraph GraphQL comes with the standard GraphQL scalars: `Int`, `Float`, `String`, `Boolean` and `ID`.  There's also a `DateTime` scalar - represented as a string in RFC3339 format.
+Dgraph GraphQL comes with the standard GraphQL scalars: `Int`, `Float`, `String`,
+`Boolean` and `ID`.  There's also an `Int64` scalar, and a `DateTime` scalar
+that is represented as a string in RFC3339 format.
 
-Scalars `Int`, `Float`, `String` and `DateTime` can be used in lists. 
+Scalar types, including `Int`, `Int64`, `Float`, `String` and `DateTime` can be
+used in lists. Lists behave like an unordered set in Dgraph. For example:
+`["e1", "e1", "e2"]` may get stored as `["e2", "e1"]`, so duplicate values will
+not be stored and order may not be preserved. All scalars may be nullable or
+non-nullable.
 
-{{% notice "note" %}}
-Lists behave like an unordered set in Dgraph. For example: `["e1", "e1", "e2"]` may get stored as `["e2", "e1"]`, i.e., duplicate values will not be stored and order may not be preserved.
-{{% /notice %}}
-
-All scalars may be nullable or non-nullable.
+{{% notice "note" %}}The `Int64` type introduced in release 20.11 can represent
+any signed integer ranging between `-(2^53)+1` and `(2^53)-1`; the same range
+supported by [JSON](https://tools.ietf.org/html/rfc8259#section-6). Signed
+`Int64` values that lie outside of this range may trigger a type coercion
+error.{{% /notice %}}
 
 The `ID` type is special.  IDs are auto-generated, immutable, and can be treated as strings.  Fields of type `ID` can be listed as nullable in a schema, but Dgraph will never return null.
 
@@ -224,7 +230,7 @@ type Hotel {
   area: Polygon
 }
 ```
-    
+
 #### Point
 
 ```graphql
