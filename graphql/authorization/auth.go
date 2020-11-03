@@ -30,9 +30,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/v2/gqlerror"
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/square/go-jose.v2"
 )

@@ -109,7 +109,7 @@
     - deletejson: |
         [
           { "uid": "uid(x)" },
-          { 
+          {
             "uid":"uid(Column3)",
             "Column.tickets": [ { "uid":"uid(x)" } ]
           },
