@@ -26,14 +26,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/parser"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/v2/ast"
 )
 
-// Wrap the github.com/vektah/gqlparser/ast defintions so that the bulk of the GraphQL
+// Wrap the github.com/dgraph-io/gqlparser/ast defintions so that the bulk of the GraphQL
 // algorithm and interface is dependent on behaviours we expect from a GraphQL schema
 // and validation, but not dependent the exact structure in the gqlparser.
 //
@@ -786,7 +786,7 @@ func getChildValue(name, raw string, kind ast.ValueKind, position *ast.Position)
 	}
 }
 
-// AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
+// AsSchema wraps a github.com/dgraph-io/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
 	// Auth rules can't be effectively validated as part of the normal rules -
 	// because they need the fully generated schema to be checked against.

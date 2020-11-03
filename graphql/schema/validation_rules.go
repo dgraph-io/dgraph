@@ -20,8 +20,8 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/validator"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 )
 
 func variableTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {

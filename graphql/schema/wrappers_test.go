@@ -22,10 +22,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/v2/ast"
 	"gopkg.in/yaml.v2"
 )
 
@@ -591,7 +591,7 @@ func TestParseBodyTemplate(t *testing.T) {
 		},
 		{
 			"parses body template with an array of object and hardcoded scalars correctly",
-			`{ author: $id, admin: false, post: { id: $postID, rating: 4.5, 
+			`{ author: $id, admin: false, post: { id: $postID, rating: 4.5,
 				comments: [{ text: $text, type: "hidden" }] }, age: 23, meta: null}`,
 			map[string]interface{}{"author": "$id", "admin": false,
 				"post": map[string]interface{}{"id": "$postID", "rating": 4.5,
