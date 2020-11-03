@@ -39,7 +39,7 @@ func TestXidmap(t *testing.T) {
 	require.NotNil(t, conn)
 
 	withDB(t, func(db *badger.DB) {
-		xidmap := New(conn, db)
+		xidmap := New(conn, db, "")
 
 		uida, isNew := xidmap.AssignUid("a")
 		require.True(t, isNew)
@@ -62,7 +62,7 @@ func TestXidmap(t *testing.T) {
 		require.NoError(t, xidmap.Flush())
 		xidmap = nil
 
-		xidmap2 := New(conn, db)
+		xidmap2 := New(conn, db, "")
 		uida2, isNew := xidmap2.AssignUid("a")
 		require.Equal(t, uida, uida2)
 		require.False(t, isNew)
@@ -100,7 +100,7 @@ func TestXidmapMemory(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
-	xidmap := New(conn, nil)
+	xidmap := New(conn, nil, "")
 	defer xidmap.Flush()
 
 	start := time.Now()
@@ -148,7 +148,7 @@ func BenchmarkXidmapWrites(b *testing.B) {
 	}
 
 	var counter int64
-	xidmap := New(conn, nil)
+	xidmap := New(conn, nil, "")
 	defer xidmap.Flush()
 	b.ResetTimer()
 
@@ -166,7 +166,7 @@ func BenchmarkXidmapWritesRandom(b *testing.B) {
 		b.Fatalf("Error setting up connection: %s", err.Error())
 	}
 
-	xidmap := New(conn, nil)
+	xidmap := New(conn, nil, "")
 	defer xidmap.Flush()
 	b.ResetTimer()
 	buf := make([]byte, 32)
@@ -188,7 +188,7 @@ func BenchmarkXidmapReads(b *testing.B) {
 	}
 
 	var N = 1000000
-	xidmap := New(conn, nil)
+	xidmap := New(conn, nil, "")
 	defer xidmap.Flush()
 	for i := 0; i < N; i++ {
 		xidmap.AssignUid("xid-" + strconv.Itoa(i))
@@ -212,7 +212,7 @@ func BenchmarkXidmapReadsRandom(b *testing.B) {
 	var N = 1000000
 	buf := make([]byte, 32)
 	var list [][]byte
-	xidmap := New(conn, nil)
+	xidmap := New(conn, nil, "")
 	defer xidmap.Flush()
 	for i := 0; i < N; i++ {
 		rand.Read(buf)

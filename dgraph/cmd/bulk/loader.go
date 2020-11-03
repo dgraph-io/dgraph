@@ -142,8 +142,6 @@ func newLoader(opt *options) *loader {
 		mappers: make([]*mapper, opt.NumGoroutines),
 		zero:    zero,
 	}
-	// z.SetBufferDir(opt.TmpDir)
-	// defer z.ResetBufferDir()
 	for i := 0; i < opt.NumGoroutines; i++ {
 		ld.mappers[i] = newMapper(st)
 	}
@@ -199,9 +197,7 @@ func (ld *loader) mapStage() {
 		db, err = badger.Open(badger.DefaultOptions(ld.opt.ClientDir))
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
-	// z.SetBufferDir(ld.opt.TmpDir)
-	// defer z.ResetBufferDir()
-	ld.xids = xidmap.New(ld.zero, db)
+	ld.xids = xidmap.New(ld.zero, db, ld.opt.TmpDir)
 
 	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
