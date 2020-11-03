@@ -321,7 +321,7 @@ func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
 
 func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 	var buf bytes.Buffer
-	x.Check2(buf.WriteString(fmt.Sprintf("type %s {\n", attr)))
+	x.Check2(buf.WriteString(fmt.Sprintf("type <%s> {\n", attr)))
 	for _, field := range update.Fields {
 		x.Check2(buf.WriteString(fieldToString(field)))
 	}
@@ -663,6 +663,10 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			// Ignore this predicate.
 		case pk.Attr == "dgraph.graphql.schema_history":
 			// Ignore this predicate.
+		case pk.Attr == "dgraph.graphql.p_query":
+			// Ignore this predicate.
+		case pk.Attr == "dgraph.graphql.p_sha256hash":
+			// Ignore this predicate.
 		case pk.IsData() && pk.Attr == "dgraph.graphql.schema":
 			// Export the graphql schema.
 			pl, err := posting.ReadPostingList(key, itr)
@@ -673,7 +677,14 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot read value of GraphQL schema")
 			}
-			if len(vals) != 1 {
+			// if the GraphQL schema node was deleted with S * * delete mutation,
+			// then the data key will be overwritten with nil value.
+			// So, just skip exporting it as there will be no value for this data key.
+			if len(vals) == 0 {
+				return nil, nil
+			}
+			// Give an error only if we find more than one value for the schema.
+			if len(vals) > 1 {
 				return nil, errors.Errorf("found multiple values for the GraphQL schema")
 			}
 			val, ok := vals[0].Value.([]byte)

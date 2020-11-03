@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Ports Usage"
+weight = 3
 [menu.main]
     parent = "deploy"
-    weight = 3
 +++
 
 Dgraph cluster nodes use different ports to communicate over gRPC and HTTP. Users should pay attention while choosing these ports based on their topology and deployment-mode as each port needs different access security rules or firewall.

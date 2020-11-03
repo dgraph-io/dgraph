@@ -94,7 +94,7 @@ func (c *countIndexer) addCountEntry(ce countEntry) {
 	}
 
 	if !sameIndexKey {
-		if c.countBuf.Len() > 0 {
+		if c.countBuf.LenNoPadding() > 0 {
 			c.wg.Add(1)
 			go c.writeIndex(c.countBuf)
 			c.countBuf = getBuf()
@@ -128,7 +128,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		return left.less(right)
 	})
 
-	tmp, _ := buf.Slice(1)
+	tmp, _ := buf.Slice(buf.StartOffset())
 	lastCe := countEntry(tmp)
 	{
 		pk, err := x.Parse(lastCe.Key())
@@ -144,17 +144,14 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		if codec.ExactLen(pl.Pack) == 0 {
 			return
 		}
-		data, byt := posting.MarshalPostingList(&pl)
-		codec.FreePack(pl.Pack)
 
-		kv := &bpb.KV{
-			Key:      append([]byte{}, lastCe.Key()...),
-			Value:    data,
-			UserMeta: []byte{byt},
-			Version:  c.state.writeTs,
-			StreamId: streamId,
-		}
+		kv := posting.MarshalPostingList(&pl, nil)
+		codec.FreePack(pl.Pack)
+		kv.Key = append([]byte{}, lastCe.Key()...)
+		kv.Version = c.state.writeTs
+		kv.StreamId = streamId
 		list.Kv = append(list.Kv, kv)
+
 		listSz += kv.Size()
 		encoder = codec.Encoder{BlockSize: 256}
 		pl.Reset()
@@ -167,22 +164,21 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		}
 	}
 
-	slice, next := []byte{}, 1
-	for next != 0 {
-		slice, next = buf.Slice(next)
+	buf.SliceIterate(func(slice []byte) error {
 		ce := countEntry(slice)
 		if !bytes.Equal(lastCe.Key(), ce.Key()) {
 			encode()
 		}
 		encoder.Add(ce.Uid())
 		lastCe = ce
-	}
+		return nil
+	})
 	encode()
 	x.Check(c.writer.Write(list))
 }
 
 func (c *countIndexer) wait() {
-	if c.countBuf.Len() > 0 {
+	if c.countBuf.LenNoPadding() > 0 {
 		c.wg.Add(1)
 		go c.writeIndex(c.countBuf)
 	} else {

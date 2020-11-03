@@ -51,6 +51,31 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 """
 scalar DateTime
 
+input IntRange{
+	min: Int!
+	max: Int!
+}
+
+input FloatRange{
+	min: Float!
+	max: Float!
+}
+
+input Int64Range{
+	min: Int64!
+	max: Int64!
+}
+
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
+}
+
+input StringRange{
+	min: String!
+	max: String!
+}
+
 enum DgraphIndex {
 	int
 	int64
@@ -66,6 +91,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -100,6 +126,84 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
+}
+
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -110,10 +214,16 @@ directive @auth(
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT
+	delete:AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
-directive @remote on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -121,6 +231,7 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
@@ -129,6 +240,7 @@ input Int64Filter {
 	lt: Int64
 	ge: Int64
 	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
@@ -137,6 +249,7 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
@@ -145,6 +258,7 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
@@ -163,14 +277,17 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
 	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 
 #######################
@@ -186,6 +303,10 @@ type DeletePostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	msg: String
 	numUids: Int
+}
+
+type PostAggregateResult {
+	count: Int
 }
 
 type UpdatePostPayload {
@@ -359,27 +480,33 @@ input PostRef {
 
 input PostType_exact {
 	eq: PostType
+	in: PostType
 	le: PostType
 	lt: PostType
 	ge: PostType
 	gt: PostType
+	between: PostType
 }
 
 input PostType_exact_StringRegExpFilter {
 	eq: PostType
+	in: PostType
 	le: PostType
 	lt: PostType
 	ge: PostType
 	gt: PostType
+	between: PostType
 	regexp: String
 }
 
 input PostType_hash {
 	eq: PostType
+	in: PostType
 }
 
 input PostType_hash_StringRegExpFilter {
 	eq: PostType
+	in: PostType
 	regexp: String
 }
 
@@ -387,6 +514,7 @@ input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter 
 	alloftext: String
 	anyoftext: String
 	eq: String
+	in: [String]
 	allofterms: String
 	anyofterms: String
 	regexp: String
@@ -405,6 +533,7 @@ input UpdatePostInput {
 type Query {
 	getPost(postID: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	aggregatePost(filter: PostFilter): PostAggregateResult
 }
 
 #######################

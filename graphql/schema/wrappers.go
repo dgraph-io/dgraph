@@ -75,6 +75,7 @@ type FieldHTTPConfig struct {
 const (
 	GetQuery             QueryType    = "get"
 	FilterQuery          QueryType    = "query"
+	AggregateQuery       QueryType    = "aggregate"
 	SchemaQuery          QueryType    = "schema"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
@@ -106,6 +107,7 @@ type Operation interface {
 	IsQuery() bool
 	IsMutation() bool
 	IsSubscription() bool
+	CacheControl() string
 }
 
 // A Field is one field from an Operation.
@@ -125,13 +127,14 @@ type Field interface {
 	Include() bool
 	Cascade() []string
 	HasCustomDirective() (bool, map[string]bool)
+	HasLambdaDirective() bool
 	Type() Type
 	SelectionSet() []Field
 	Location() x.Location
 	DgraphPredicate() string
 	Operation() Operation
-	// InterfaceType tells us whether this field represents a GraphQL Interface.
-	InterfaceType() bool
+	// AbstractType tells us whether this field represents a GraphQL Interface.
+	AbstractType() bool
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
@@ -152,6 +155,7 @@ type Mutation interface {
 // A Query is a field (from the schema's Query type) from an Operation
 type Query interface {
 	Field
+	ConstructedFor() Type
 	QueryType() QueryType
 	DQLQuery() string
 	Rename(newName string)
@@ -172,11 +176,18 @@ type Type interface {
 	DgraphName() string
 	DgraphPredicate(fld string) string
 	Nullable() bool
+	// true if this is a union type
+	IsUnion() bool
+	IsInterface() bool
+	// returns a list of member types for this union
+	UnionMembers([]interface{}) []Type
 	ListType() Type
 	Interfaces() []string
+	ImplementingTypes() []Type
 	EnsureNonNulls(map[string]interface{}, string) error
 	FieldOriginatedFrom(fieldName string) string
 	AuthRules() *TypeAuth
+	IsGeo() bool
 	fmt.Stringer
 }
 
@@ -192,6 +203,7 @@ type FieldDefinition interface {
 	IsID() bool
 	HasIDDirective() bool
 	Inverse() FieldDefinition
+	WithMemberType(string) FieldDefinition
 	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
 	ForwardEdge() FieldDefinition
 }
@@ -225,6 +237,9 @@ type schema struct {
 	// something like field.Directives.ForName("custom"), which results in iterating over all the
 	// directives of the field.
 	customDirectives map[string]map[string]*ast.Directive
+	// lambdaDirectives stores the mapping of typeName->fieldName->true, if the field has @lambda.
+	// It is read-only.
+	lambdaDirectives map[string]map[string]bool
 	// Map from typename to auth rules
 	authRules map[string]*TypeAuth
 }
@@ -333,6 +348,13 @@ func (o *operation) Mutations() (ms []Mutation) {
 	return
 }
 
+func (o *operation) CacheControl() string {
+	if o.op.Directives.ForName(cacheControlDirective) == nil {
+		return ""
+	}
+	return "public,max-age=" + o.op.Directives.ForName(cacheControlDirective).Arguments[0].Value.Raw
+}
+
 // parentInterface returns the name of an interface that a field belonging to a type definition
 // typDef inherited from. If there is no such interface, then it returns an empty string.
 //
@@ -427,9 +449,12 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	dgraphPredicate := make(map[string]map[string]string)
 	for _, inputTyp := range sch.Types {
 		// We only want to consider input types (object and interface) defined by the user as part
-		// of the schema hence we ignore BuiltIn, query and mutation types.
+		// of the schema hence we ignore BuiltIn, query and mutation types and Geo types.
+		isInputTypeGeo := func(typName string) bool {
+			return typName == "Point" || typName == "PointList" || typName == "Polygon" || typName == "MultiPolygon"
+		}
 		if inputTyp.BuiltIn || isQueryOrMutationType(inputTyp) || inputTyp.Name == "Subscription" ||
-			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
+			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) || isInputTypeGeo(inputTyp.Name) {
 			continue
 		}
 
@@ -554,13 +579,8 @@ func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) 
 	repeatedFieldNames := make(map[string]bool)
 
 	for _, typ := range s.Types {
-		if typ.Kind != ast.Interface {
+		if !isAbstractKind(typ.Kind) {
 			continue
-		}
-
-		interfaceFields := make(map[string]bool)
-		for _, field := range typ.Fields {
-			interfaceFields[field.Name] = true
 		}
 
 		type fieldInfo struct {
@@ -575,12 +595,14 @@ func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) 
 				// ignore this field if it was inherited from the common interface or is of ID type.
 				// We ignore ID type fields too, because they map only to uid in dgraph and can't
 				// map to two different predicates.
-				if interfaceFields[field.Name] || field.Type.Name() == IDType {
+				if field.Type.Name() == IDType {
 					continue
 				}
 				// if we find a field with same name from types implementing a common interface
 				// and its DgraphPredicate is different than what was previously encountered, then
-				// we mark it as repeated field, so that queries will rewrite it with correct alias
+				// we mark it as repeated field, so that queries will rewrite it with correct alias.
+				// For fields, which these types have implemented from a common interface, their
+				// DgraphPredicate will be same, so they won't be marked as repeated.
 				dgPred := typPreds[field.Name]
 				if fInfo, ok := repeatedFieldsInTypesWithCommonAncestor[field.Name]; ok && fInfo.
 					dgPred != dgPred {
@@ -601,34 +623,167 @@ func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) 
 	return repeatedFieldNames
 }
 
-func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
+// customAndLambdaMappings does following things:
+// * If there is @custom on any field, it removes the directive from the list of directives on
+//	 that field. Instead, it puts it in a map of typeName->fieldName->custom directive definition.
+//	 This mapping is returned as the first return value, which is later used to determine if some
+//	 field has custom directive or not, and accordingly construct the HTTP request for the field.
+// * If there is @lambda on any field, it removes the directive from the list of directives on
+//	 that field. Instead, it puts it in a map of typeName->fieldName->bool. This mapping is returned
+//	 as the second return value, which is later used to determine if some field has lambda directive
+//	 or not. An appropriate @custom directive is also constructed for the field with @lambda and
+//	 put into the first mapping. Both of these mappings together are used to construct the HTTP
+//	 request for @lambda field. Internally, @lambda is just @custom(http: {
+//	   url: "<graphql_lambda_url: a-fixed-pre-defined-url>",
+//	   method: POST,
+//	   body: "<all-the-args-for-a-query-or-mutation>/<all-the-scalar-fields-from-parent-type-for-a
+//	   -@lambda-on-field>"
+//	   mode: BATCH (set only if @lambda was on a non query/mutation field)
+//	 })
+//	 So, by constructing an appropriate custom directive for @lambda fields,
+//	 we just reuse logic from @custom.
+func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directive,
+	map[string]map[string]bool) {
 	customDirectives := make(map[string]map[string]*ast.Directive)
+	lambdaDirectives := make(map[string]map[string]bool)
 
 	for _, typ := range s.Types {
 		for _, field := range typ.Fields {
 			for i, dir := range field.Directives {
-				if dir.Name == customDirective {
-					// remove custom directive from s
+				if dir.Name == customDirective || dir.Name == lambdaDirective {
+					// remove @custom/@lambda directive from s
 					lastIndex := len(field.Directives) - 1
 					field.Directives[i] = field.Directives[lastIndex]
 					field.Directives = field.Directives[:lastIndex]
-					// now put it into mapping
-					var fieldMap map[string]*ast.Directive
-					if innerMap, ok := customDirectives[typ.Name]; !ok {
-						fieldMap = make(map[string]*ast.Directive)
+					// get the @custom mapping for this type
+					var customFieldMap map[string]*ast.Directive
+					if existingCustomFieldMap, ok := customDirectives[typ.Name]; ok {
+						customFieldMap = existingCustomFieldMap
 					} else {
-						fieldMap = innerMap
+						customFieldMap = make(map[string]*ast.Directive)
 					}
-					fieldMap[field.Name] = dir
-					customDirectives[typ.Name] = fieldMap
-					// break, as there can only be one @custom
+
+					if dir.Name == customDirective {
+						// if it was @custom, put the directive at the @custom mapping for the field
+						customFieldMap[field.Name] = dir
+					} else {
+						// for lambda, first update the lambda directives map
+						var lambdaFieldMap map[string]bool
+						if existingLambdaFieldMap, ok := lambdaDirectives[typ.Name]; ok {
+							lambdaFieldMap = existingLambdaFieldMap
+						} else {
+							lambdaFieldMap = make(map[string]bool)
+						}
+						lambdaFieldMap[field.Name] = true
+						lambdaDirectives[typ.Name] = lambdaFieldMap
+						// then, build a custom directive with correct semantics to be put
+						// into custom directives map at this field
+						customFieldMap[field.Name] = buildCustomDirectiveForLambda(typ, field,
+							dir, func(f *ast.FieldDefinition) bool {
+								// Need to skip the fields which have a @custom/@lambda from
+								// going in body template. The field itself may not have the
+								// directive anymore because the directive may have been removed by
+								// this function already. So, using these maps to find the same.
+								return lambdaFieldMap[f.Name] || customFieldMap[f.Name] != nil
+							})
+					}
+					// finally, update the custom directives map for this type
+					customDirectives[typ.Name] = customFieldMap
+					// break, as there can only be one @custom/@lambda
 					break
 				}
 			}
 		}
 	}
 
-	return customDirectives
+	return customDirectives, lambdaDirectives
+}
+
+func hasCustomOrLambda(f *ast.FieldDefinition) bool {
+	for _, dir := range f.Directives {
+		if dir.Name == customDirective || dir.Name == lambdaDirective {
+			return true
+		}
+	}
+	return false
+}
+
+// buildCustomDirectiveForLambda returns custom directive for the given field to be used for @lambda
+// The constructed @custom looks like this:
+//	@custom(http: {
+//	   url: "<graphql_lambda_url: a-fixed-pre-defined-url>",
+//	   method: POST,
+//	   body: "<all-the-args-for-a-query-or-mutation>/<all-the-scalar-fields-from-parent-type-for-a
+//	   -@lambda-on-field>"
+//	   mode: BATCH (set only if @lambda was on a non query/mutation field)
+//	})
+func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinition,
+	lambdaDir *ast.Directive, skipInBodyTemplate func(f *ast.FieldDefinition) bool) *ast.Directive {
+	comma := ""
+	var bodyTemplate strings.Builder
+
+	// this function appends a variable to the body template for @custom
+	appendToBodyTemplate := func(varName string) {
+		bodyTemplate.WriteString(comma)
+		bodyTemplate.WriteString(varName)
+		bodyTemplate.WriteString(": $")
+		bodyTemplate.WriteString(varName)
+		comma = ", "
+	}
+
+	// first let's construct the body template for the custom directive
+	bodyTemplate.WriteString("{")
+	if isQueryOrMutationType(defn) {
+		// for queries and mutations we need to put their arguments in the body template
+		for _, arg := range field.Arguments {
+			appendToBodyTemplate(arg.Name)
+		}
+	} else {
+		// For fields in other types, skip the ones in body template which have a @lambda or @custom
+		// or are not scalar. The skipInBodyTemplate function is also used to check these
+		// conditions, in case the field can't tell by itself.
+		for _, f := range defn.Fields {
+			if hasCustomOrLambda(f) || !isScalar(f.Type.Name()) || skipInBodyTemplate(f) {
+				continue
+			}
+			appendToBodyTemplate(f.Name)
+		}
+	}
+	bodyTemplate.WriteString("}")
+
+	// build the children for http argument
+	httpArgChildrens := []*ast.ChildValue{
+		getChildValue(httpUrl, x.Config.GraphqlLambdaUrl, ast.StringValue, lambdaDir.Position),
+		getChildValue(httpMethod, http.MethodPost, ast.EnumValue, lambdaDir.Position),
+		getChildValue(httpBody, bodyTemplate.String(), ast.StringValue, lambdaDir.Position),
+	}
+	if !isQueryOrMutationType(defn) {
+		httpArgChildrens = append(httpArgChildrens,
+			getChildValue(mode, BATCH, ast.EnumValue, lambdaDir.Position))
+	}
+
+	// build the custom directive
+	return &ast.Directive{
+		Name: customDirective,
+		Arguments: []*ast.Argument{{
+			Name: httpArg,
+			Value: &ast.Value{
+				Kind:     ast.ObjectValue,
+				Children: httpArgChildrens,
+				Position: lambdaDir.Position,
+			},
+			Position: lambdaDir.Position,
+		}},
+		Position: lambdaDir.Position,
+	}
+}
+
+func getChildValue(name, raw string, kind ast.ValueKind, position *ast.Position) *ast.ChildValue {
+	return &ast.ChildValue{
+		Name:     name,
+		Value:    &ast.Value{Raw: raw, Kind: kind, Position: position},
+		Position: position,
+	}
 }
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
@@ -640,13 +795,15 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		return nil, err
 	}
 
+	customDirs, lambdaDirs := customAndLambdaMappings(s)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
 		schema:             s,
 		dgraphPredicate:    dgraphPredicate,
 		typeNameAst:        typeMappings(s),
 		repeatedFieldNames: repeatedFieldMappings(s, dgraphPredicate),
-		customDirectives:   customMappings(s),
+		customDirectives:   customDirs,
+		lambdaDirectives:   lambdaDirs,
 		authRules:          authRules,
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
@@ -840,6 +997,10 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	return true, rf
 }
 
+func (f *field) HasLambdaDirective() bool {
+	return f.op.inSchema.lambdaDirectives[f.GetObjectName()][f.Name()]
+}
+
 func (f *field) XIDArg() string {
 	xidArgName := ""
 	passwordField := f.Type().PasswordField()
@@ -921,8 +1082,12 @@ func (f *field) Type() Type {
 	}
 }
 
-func (f *field) InterfaceType() bool {
-	return f.op.inSchema.schema.Types[f.field.Definition.Type.Name()].Kind == ast.Interface
+func isAbstractKind(kind ast.DefinitionKind) bool {
+	return kind == ast.Interface || kind == ast.Union
+}
+
+func (f *field) AbstractType() bool {
+	return isAbstractKind(f.op.inSchema.schema.Types[f.field.Definition.Type.Name()].Kind)
 }
 
 func (f *field) GetObjectName() string {
@@ -970,6 +1135,8 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	}
 
 	fconf.ForwardHeaders = http.Header{}
+	// set application/json as the default Content-Type
+	fconf.ForwardHeaders.Set("Content-Type", "application/json")
 	secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
 	if secretHeaders != nil {
 		hc.RLock()
@@ -1106,11 +1273,15 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 		}
 		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
 			if origTyp.Kind == ast.Object {
-				// If the field is from an interface implemented by this object,
-				// and was fetched not because of a fragment on this object,
-				// but because of a fragment on some other object, then we don't need to include it.
+				// For fields coming from fragments inside an abstract type, there are two cases:
+				// * If the field is from an interface implemented by this object, and was fetched
+				//	 not because of a fragment on this object, but because of a fragment on some
+				//	 other object, then we don't need to include it.
+				// * If the field was fetched because of a fragment on an interface, and that
+				//	 interface is not one of the interfaces implemented by this object, then we
+				//	 don't need to include it.
 				fragType, ok := f.op.interfaceImplFragFields[f.field]
-				if ok && fragType != origTyp.Name {
+				if ok && fragType != origTyp.Name && !x.HasString(origTyp.Interfaces, fragType) {
 					return false
 				}
 
@@ -1194,6 +1365,10 @@ func (q *query) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(q).HasCustomDirective()
 }
 
+func (q *query) HasLambdaDirective() bool {
+	return (*field)(q).HasLambdaDirective()
+}
+
 func (q *query) IDArgValue() (*string, uint64, error) {
 	return (*field)(q).IDArgValue()
 }
@@ -1230,6 +1405,23 @@ func (q *query) EnumValues() []string {
 	return nil
 }
 
+func (q *query) ConstructedFor() Type {
+	if q.QueryType() != AggregateQuery {
+		return q.Type()
+	}
+
+	// Its of type AggregateQuery
+	queryName := q.Type().Name()
+	typeName := queryName[:len(queryName)-15]
+	return &astType{
+		typ: &ast.Type{
+			NamedType: typeName,
+		},
+		inSchema:        q.op.inSchema,
+		dgraphPredicate: q.op.inSchema.dgraphPredicate,
+	}
+}
+
 func (q *query) QueryType() QueryType {
 	return queryType(q.Name(), q.op.inSchema.customDirectives["Query"][q.Name()])
 }
@@ -1258,6 +1450,8 @@ func queryType(name string, custom *ast.Directive) QueryType {
 		return FilterQuery
 	case strings.HasPrefix(name, "check"):
 		return PasswordQuery
+	case strings.HasPrefix(name, "aggregate"):
+		return AggregateQuery
 	default:
 		return NotSupportedQuery
 	}
@@ -1271,8 +1465,8 @@ func (q *query) DgraphPredicate() string {
 	return (*field)(q).DgraphPredicate()
 }
 
-func (q *query) InterfaceType() bool {
-	return (*field)(q).InterfaceType()
+func (q *query) AbstractType() bool {
+	return (*field)(q).AbstractType()
 }
 
 func (q *query) TypeName(dgraphTypes []interface{}) string {
@@ -1327,12 +1521,16 @@ func (m *mutation) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(m).HasCustomDirective()
 }
 
+func (m *mutation) HasLambdaDirective() bool {
+	return (*field)(m).HasLambdaDirective()
+}
+
 func (m *mutation) Type() Type {
 	return (*field)(m).Type()
 }
 
-func (m *mutation) InterfaceType() bool {
-	return (*field)(m).InterfaceType()
+func (m *mutation) AbstractType() bool {
+	return (*field)(m).AbstractType()
 }
 
 func (m *mutation) XIDArg() string {
@@ -1445,6 +1643,10 @@ func (t *astType) AuthRules() *TypeAuth {
 	return t.inSchema.authRules[t.DgraphName()]
 }
 
+func (t *astType) IsGeo() bool {
+	return t.Name() == "Point" || t.Name() == "Polygon" || t.Name() == "MultiPolygon"
+}
+
 func (t *astType) Field(name string) FieldDefinition {
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
@@ -1545,6 +1747,23 @@ func (fd *fieldDefinition) Inverse() FieldDefinition {
 	}
 }
 
+func (fd *fieldDefinition) WithMemberType(memberType string) FieldDefinition {
+	// just need to return a copy of this fieldDefinition with type set to memberType
+	return &fieldDefinition{
+		fieldDef: &ast.FieldDefinition{
+			Name:         fd.fieldDef.Name,
+			Arguments:    fd.fieldDef.Arguments,
+			DefaultValue: fd.fieldDef.DefaultValue,
+			Type:         &ast.Type{NamedType: memberType},
+			Directives:   fd.fieldDef.Directives,
+			Position:     fd.fieldDef.Position,
+		},
+		inSchema:        fd.inSchema,
+		dgraphPredicate: fd.dgraphPredicate,
+		parentType:      fd.parentType,
+	}
+}
+
 // ForwardEdge gets the field definition for a forward edge if this field is a reverse edge
 // i.e. if it has a dgraph directive like
 // @dgraph(name: "~movies")
@@ -1613,6 +1832,38 @@ func (t *astType) DgraphName() string {
 
 func (t *astType) Nullable() bool {
 	return !t.typ.NonNull
+}
+
+func (t *astType) IsInterface() bool {
+	return t.inSchema.schema.Types[t.typ.Name()].Kind == ast.Interface
+}
+
+func (t *astType) IsUnion() bool {
+	return t.inSchema.schema.Types[t.typ.Name()].Kind == ast.Union
+}
+
+func (t *astType) UnionMembers(memberTypesList []interface{}) []Type {
+	var memberTypes []Type
+	if (memberTypesList) == nil {
+		// if no specific members were requested, find out all the members of this union
+		for _, typName := range t.inSchema.schema.Types[t.typ.Name()].Types {
+			memberTypes = append(memberTypes, &astType{
+				typ:             &ast.Type{NamedType: typName},
+				inSchema:        t.inSchema,
+				dgraphPredicate: t.dgraphPredicate,
+			})
+		}
+	} else {
+		// else return wrapper for only the members which were requested
+		for _, typName := range memberTypesList {
+			memberTypes = append(memberTypes, &astType{
+				typ:             &ast.Type{NamedType: typName.(string)},
+				inSchema:        t.inSchema,
+				dgraphPredicate: t.dgraphPredicate,
+			})
+		}
+	}
+	return memberTypes
 }
 
 func (t *astType) ListType() Type {
@@ -1754,6 +2005,22 @@ func (t *astType) Interfaces() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+func (t *astType) ImplementingTypes() []Type {
+	objects := t.inSchema.schema.PossibleTypes[t.typ.Name()]
+	if len(objects) == 0 {
+		return nil
+	}
+	types := make([]Type, 0, len(objects))
+	for _, typ := range objects {
+		types = append(types, &astType{
+			typ:             &ast.Type{NamedType: typ.Name},
+			inSchema:        t.inSchema,
+			dgraphPredicate: t.dgraphPredicate,
+		})
+	}
+	return types
 }
 
 // CheckNonNulls checks that any non nullables in t are present in obj.

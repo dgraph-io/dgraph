@@ -21,10 +21,11 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"sync"
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
@@ -46,34 +47,29 @@ type BackupProcessor struct {
 	// Request stores the backup request containing the parameters for this backup.
 	Request *pb.BackupRequest
 
-	// plList is an array of pre-allocated pb.PostingList objects.
-	plList []*pb.PostingList
-	// bplList is an array of pre-allocated pb.BackupPostingList objects.
-	bplList []*pb.BackupPostingList
-	// kvPool
-	kvPool *sync.Pool
+	threads []*threadLocal
+}
+
+type threadLocal struct {
+	Request *pb.BackupRequest
+	// pre-allocated pb.PostingList object.
+	pl pb.PostingList
+	// pre-allocated pb.BackupPostingList object.
+	bpl   pb.BackupPostingList
+	alloc *z.Allocator
 }
 
 func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 	bp := &BackupProcessor{
 		DB:      db,
 		Request: req,
-		plList:  make([]*pb.PostingList, backupNumGo),
-		bplList: make([]*pb.BackupPostingList, backupNumGo),
-		kvPool: &sync.Pool{
-			New: func() interface{} {
-				return &bpb.KV{}
-			},
-		},
+		threads: make([]*threadLocal, backupNumGo),
 	}
-
-	for i := range bp.plList {
-		bp.plList[i] = &pb.PostingList{}
+	for i := range bp.threads {
+		bp.threads[i] = &threadLocal{
+			Request: bp.Request,
+		}
 	}
-	for i := range bp.bplList {
-		bp.bplList[i] = &pb.BackupPostingList{}
-	}
-
 	return bp
 }
 
@@ -131,7 +127,13 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
 	stream.NumGo = backupNumGo
-	stream.KeyToList = pr.toBackupList
+
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+		tl := pr.threads[itr.ThreadId]
+		tl.alloc = stream.Allocator(itr.ThreadId)
+		return tl.toBackupList(key, itr)
+	}
+
 	stream.ChooseKey = func(item *badger.Item) bool {
 		parsedKey, err := x.Parse(item.Key())
 		if err != nil {
@@ -160,12 +162,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 				maxVersion = kv.Version
 			}
 		}
-		err := writeKVList(list, gzWriter)
-
-		for _, kv := range list.Kv {
-			pr.kvPool.Put(kv)
-		}
-		return err
+		return writeKVList(list, gzWriter)
 	}
 
 	if err := stream.Orchestrate(context.Background()); err != nil {
@@ -229,22 +226,19 @@ func (m *Manifest) GoString() string {
 		m.Since, m.Groups, m.Encrypted)
 }
 
-func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
+func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 	*bpb.KVList, error) {
 	list := &bpb.KVList{}
 
 	item := itr.Item()
-	if item.UserMeta() != posting.BitSchemaPosting && (item.Version() < pr.Request.SinceTs ||
-		item.IsDeletedOrExpired()) {
+	if item.UserMeta() != posting.BitSchemaPosting &&
+		(item.Version() < tl.Request.SinceTs || item.IsDeletedOrExpired()) {
 		// Ignore versions less than given timestamp, or skip older versions of
 		// the given key by returning an empty list.
 		// Do not do this for schema and type keys. Those keys always have a
 		// version of one so they would be incorrectly rejected by above check.
 		return list, nil
 	}
-
-	kv := pr.kvPool.Get().(*bpb.KV)
-	kv.Reset()
 
 	switch item.UserMeta() {
 	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
@@ -253,40 +247,39 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
 			return nil, errors.Wrapf(err, "while reading posting list")
 		}
 
-		err = l.SingleListRollup(kv)
+		// Don't allocate kv on tl.alloc, because we don't need it by the end of this func.
+		kv, err := l.ToBackupPostingList(&tl.bpl, tl.alloc)
 		if err != nil {
 			return nil, errors.Wrapf(err, "while rolling up list")
 		}
 
-		backupKey, err := toBackupKey(kv.Key)
+		backupKey, err := tl.toBackupKey(kv.Key)
 		if err != nil {
 			return nil, err
 		}
 		kv.Key = backupKey
-
-		backupPl, err := pr.toBackupPostingList(kv.Value, itr.ThreadId)
-		if err != nil {
-			return nil, err
-		}
-		kv.Value = backupPl
 		list.Kv = append(list.Kv, kv)
+
 	case posting.BitSchemaPosting:
-		valCopy, err := item.ValueCopy(nil)
-		if err != nil {
+		kv := y.NewKV(tl.alloc)
+		if err := item.Value(func(val []byte) error {
+			kv.Value = tl.alloc.Copy(val)
+			return nil
+		}); err != nil {
 			return nil, errors.Wrapf(err, "while copying value")
 		}
 
-		backupKey, err := toBackupKey(key)
+		backupKey, err := tl.toBackupKey(key)
 		if err != nil {
 			return nil, err
 		}
 
 		kv.Key = backupKey
-		kv.Value = valCopy
-		kv.UserMeta = []byte{item.UserMeta()}
+		kv.UserMeta = tl.alloc.Copy([]byte{item.UserMeta()})
 		kv.Version = item.Version()
 		kv.ExpiresAt = item.ExpiresAt()
 		list.Kv = append(list.Kv, kv)
+
 	default:
 		return nil, errors.Errorf(
 			"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
@@ -294,34 +287,16 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
 	return list, nil
 }
 
-func toBackupKey(key []byte) ([]byte, error) {
+func (tl *threadLocal) toBackupKey(key []byte) ([]byte, error) {
 	parsedKey, err := x.Parse(key)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
 	}
-	backupKey, err := parsedKey.ToBackupKey().Marshal()
-	if err != nil {
-		return nil, errors.Wrapf(err, "while converting key for backup")
-	}
-	return backupKey, nil
-}
+	bk := parsedKey.ToBackupKey()
 
-func (pr *BackupProcessor) toBackupPostingList(val []byte, threadNum int) ([]byte, error) {
-	pl := pr.plList[threadNum]
-	bpl := pr.bplList[threadNum]
-	pl.Reset()
-	bpl.Reset()
-
-	if err := pl.Unmarshal(val); err != nil {
-		return nil, errors.Wrapf(err, "while reading posting list")
-	}
-	posting.ToBackupPostingList(pl, bpl)
-	backupVal, err := bpl.Marshal()
-
-	if err != nil {
-		return nil, errors.Wrapf(err, "while converting posting list for backup")
-	}
-	return backupVal, nil
+	out := tl.alloc.Allocate(bk.Size())
+	n, err := bk.MarshalToSizedBuffer(out)
+	return out[:n], err
 }
 
 func writeKVList(list *bpb.KVList, w io.Writer) error {

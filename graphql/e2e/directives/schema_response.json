@@ -1,14 +1,12 @@
 {
     "schema": [
         {
-            "index": true,
-            "list": true,
-            "predicate": "dgraph.cors",
-            "tokenizer": [
-              "exact"
-            ],
+            "predicate": "Animal.category",
             "type": "string",
-            "upsert": true
+            "index": true,
+            "tokenizer": [
+                "hash"
+            ]
         },
         {
             "predicate": "Category.name",
@@ -18,6 +16,10 @@
             "predicate": "Category.posts",
             "type": "uid",
             "list": true
+        },
+        {
+            "predicate": "Cheetah.speed",
+            "type": "float"
         },
         {
             "predicate": "Comment1.id",
@@ -43,6 +45,59 @@
             ]
         },
         {
+            "predicate": "Dog.breed",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "term"
+            ]
+        },
+        {
+            "predicate": "Home.address",
+            "type": "string"
+        },
+        {
+            "predicate": "Home.favouriteMember",
+            "type": "uid"
+        },
+        {
+            "predicate": "Home.members",
+            "type": "uid",
+            "list": true
+        },
+        {
+            "predicate": "Hotel.area",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.branches",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.location",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.name",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ]
+        },
+        {
             "predicate": "Human.starships",
             "type": "uid",
             "list": true
@@ -54,6 +109,11 @@
         {
             "predicate": "MovieDirector.name",
             "type": "string"
+        },
+        {
+            "predicate": "Parrot.repeatsWords",
+            "type": "string",
+            "list": true
         },
         {
             "predicate": "People.name",
@@ -69,13 +129,17 @@
             "upsert": true
         },
         {
+            "predicate": "Person1.friends",
+            "type": "uid",
+            "list": true
+        },
+        {
             "predicate": "Person1.name",
             "type": "string"
         },
         {
-            "predicate": "Person1.friends",
-            "type": "uid",
-            "list": true
+            "predicate": "Plant.breed",
+            "type": "string"
         },
         {
             "predicate": "Post1.comments",
@@ -90,17 +154,6 @@
                 "hash"
             ],
             "upsert": true
-        },
-        {
-            "predicate": "post1.title",
-            "type": "string",
-            "index": true,
-            "tokenizer": ["trigram", "hash"],
-            "upsert": true
-        },
-        {
-            "predicate": "post1.numLikes",
-            "type": "int"
         },
         {
             "predicate": "State.capital",
@@ -155,6 +208,14 @@
             "type": "string"
         },
         {
+            "predicate": "University.name",
+            "type": "string"
+        },
+        {
+            "predicate": "University.numStudents",
+            "type": "int"
+        },
+        {
             "predicate": "User.name",
             "type": "string",
             "index": true,
@@ -162,6 +223,15 @@
                 "hash"
             ],
             "upsert": true
+        },
+        {
+            "predicate": "Zoo.animals",
+            "type": "uid",
+            "list": true
+        },
+        {
+            "predicate": "Zoo.city",
+            "type": "string"
         },
         {
             "predicate": "appears_in",
@@ -175,6 +245,26 @@
         {
             "predicate": "credits",
             "type": "float"
+        },
+        {
+            "predicate": "dgraph.cors",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "list": true,
+            "upsert": true
+        },
+        {
+            "predicate":"dgraph.graphql.p_query",
+            "type":"string"
+        },
+        {
+            "predicate":"dgraph.graphql.p_sha256hash",
+            "type":"string",
+            "index":true,
+            "tokenizer":["exact"]
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -293,6 +383,30 @@
             "type": "uid"
         },
         {
+            "predicate": "post1.numLikes",
+            "type": "int"
+        },
+        {
+            "predicate": "post1.title",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "upsert": true
+        },
+        {
+            "predicate": "post1.commentsByMonth",
+            "list": true,
+            "type": "int"
+        },
+        {
+            "predicate": "post1.likesByMonth",
+            "list": true,
+            "type": "int"
+        },
+        {
             "predicate": "pwd",
             "type": "password"
         },
@@ -375,6 +489,14 @@
         {
             "fields": [
                 {
+                    "name": "Animal.category"
+                }
+            ],
+            "name": "Animal"
+        },
+        {
+            "fields": [
+                {
                     "name": "Category.name"
                 },
                 {
@@ -382,6 +504,17 @@
                 }
             ],
             "name": "Category"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Cheetah.speed"
+                }
+            ],
+            "name": "Cheetah"
         },
         {
             "fields": [
@@ -404,6 +537,48 @@
                 }
             ],
             "name": "Country"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Dog.breed"
+                }
+            ],
+            "name": "Dog"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Home.address"
+                },
+                {
+                    "name": "Home.members"
+                },
+                {
+                    "name": "Home.favouriteMember"
+                }
+            ],
+            "name": "Home"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Hotel.name"
+                },
+                {
+                    "name": "Hotel.location"
+                },
+                {
+                    "name": "Hotel.area"
+                },
+                {
+                    "name": "Hotel.branches"
+                }
+            ],
+            "name": "Hotel"
         },
         {
             "fields": [
@@ -458,6 +633,17 @@
         {
             "fields": [
                 {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Parrot.repeatsWords"
+                }
+            ],
+            "name": "Parrot"
+        },
+        {
+            "fields": [
+                {
                     "name": "People.xid"
                 },
                 {
@@ -480,6 +666,14 @@
         {
             "fields": [
                 {
+                    "name": "Plant.breed"
+                }
+            ],
+            "name": "Plant"
+        },
+        {
+            "fields": [
+                {
                     "name": "Post1.id"
                 },
                 {
@@ -487,17 +681,6 @@
                 }
             ],
             "name": "Post1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "post1.title"
-                },
-                {
-                    "name": "post1.numLikes"
-                }
-            ],
-            "name": "post1"
         },
         {
             "fields": [
@@ -586,6 +769,17 @@
         {
             "fields": [
                 {
+                    "name": "University.name"
+                },
+                {
+                    "name": "University.numStudents"
+                }
+            ],
+            "name": "University"
+        },
+        {
+            "fields": [
+                {
                     "name": "User.name"
                 },
                 {
@@ -593,6 +787,17 @@
                 }
             ],
             "name": "User"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Zoo.animals"
+                },
+                {
+                    "name": "Zoo.city"
+                }
+            ],
+            "name": "Zoo"
         },
         {
             "fields": [
@@ -609,11 +814,23 @@
             "fields": [
                 {
                     "name": "dgraph.graphql.schema_history"
-                },{
+                },
+                {
                     "name": "dgraph.graphql.schema_created_at"
                 }
             ],
             "name": "dgraph.graphql.history"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.p_query"
+                },
+                {
+                    "name": "dgraph.graphql.p_sha256hash"
+                }
+            ],
+            "name": "dgraph.graphql.persisted_query"
         },
         {
             "fields": [
@@ -660,6 +877,24 @@
                 }
             ],
             "name": "performance.character"
+        },
+        {
+            "fields": [
+                {
+                    "name": "post1.title"
+                },
+                {
+                    "name": "post1.numLikes"
+                },
+                {
+                    "name": "post1.commentsByMonth"
+                },
+                {
+                    "name": "post1.likesByMonth"
+                }
+
+            ],
+            "name": "post1"
         },
         {
             "fields": [

@@ -27,6 +27,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof" // http profiler
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -64,11 +65,6 @@ import (
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 )
 
-const (
-	tlsNodeCert = "node.crt"
-	tlsNodeKey  = "node.key"
-)
-
 var (
 	bindall bool
 
@@ -104,27 +100,15 @@ they form a Raft group and provide synchronous replication.
 	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
 	// (e.g, config file, env vars, cli flags, etc.)
 	flag := Alpha.Cmd.Flags()
+	x.FillCommonFlags(flag)
+
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
-	flag.String("badger.tables", "mmap,mmap",
-		"[ram, mmap, disk] Specifies how Badger LSM tree is stored for the postings and "+
-			"write-ahead directory. Option sequence consume most to least RAM while providing "+
-			"best to worst read performance respectively. If you pass two values separated by a "+
-			"comma, the first value will be used for the postings directory and the second for "+
-			"the write-ahead log directory.")
-	flag.String("badger.vlog", "mmap,mmap",
-		"[mmap, disk] Specifies how Badger Value log is stored for the postings and write-ahead "+
-			"log directory. mmap consumes more RAM, but provides better performance. If you pass "+
-			"two values separated by a comma the first value will be used for the postings "+
-			"directory and the second for the w directory.")
-	flag.String("badger.compression_level", "3,0",
-		"Specifies the compression level for the postings and write-ahead log "+
-			"directory. A higher value uses more resources. The value of 0 disables "+
-			"compression. If you pass two values separated by a comma the first "+
-			"value will be used for the postings directory (p) and the second for "+
-			"the wal directory (w). If a single value is passed the value is used "+
-			"as compression level for both directories.")
+	flag.String("badger.compression", "snappy",
+		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
+			"level (if applicable) for the postings directory. none would disable compression,"+
+			" while zstd:1 would set zstd compression at level 1.")
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -136,14 +120,6 @@ they form a Raft group and provide synchronous replication.
 		"Abort any pending transactions older than this duration. The liveness of a"+
 			" transaction is determined by its last mutation.")
 
-	// OpenCensus flags.
-	flag.Float64("trace", 0.01, "The ratio of queries to trace.")
-	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
-	// See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
-	// about the status of supporting annotation logs through the datadog exporter
-	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
-		" exporter does not support annotation logs and would discard them.")
-
 	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
 	flag.String("whitelist", "",
 		"A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you "+
@@ -152,8 +128,6 @@ they form a Raft group and provide synchronous replication.
 	flag.String("export", "export", "Folder in which to store exports.")
 	flag.Int("pending_proposals", 256,
 		"Number of pending mutation proposals. Useful for rate limiting.")
-	flag.String("my", "",
-		"IP_ADDRESS:PORT of this Dgraph Alpha, so other Dgraph Alphas can talk to this.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph zero addresses of the form IP_ADDRESS:PORT.")
 	flag.Uint64("idx", 0,
@@ -162,10 +136,9 @@ they form a Raft group and provide synchronous replication.
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
 	flag.String("auth_token", "",
-		"If set, all Alter requests to Dgraph would need to have this token."+
+		"If set, all Admin requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
-	flag.Bool("enable_sentry", true, "Turn on/off sending events to Sentry. (default on)")
 
 	flag.String("acl_secret_file", "", "The file that stores the HMAC secret, "+
 		"which is used for signing the JWT and should have at least 32 ASCII characters. "+
@@ -174,14 +147,8 @@ they form a Raft group and provide synchronous replication.
 		"Enterprise feature.")
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
-	flag.Duration("acl_cache_ttl", 30*time.Second, "DEPRECATED: The interval to refresh the acl "+
-		"cache. Enterprise feature.")
-	flag.Float64P("lru_mb", "l", -1,
-		"Estimated memory the LRU cache can take. "+
-			"Actual usage by the process would be more than specified here.")
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
-	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
 
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
@@ -196,11 +163,6 @@ they form a Raft group and provide synchronous replication.
 	flag.Uint64("mutations_nquad_limit", 1e6,
 		"Limit for the maximum number of nquads that can be inserted in a mutation request")
 
-	// TLS configurations
-	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
-	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
-	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
@@ -210,16 +172,23 @@ they form a Raft group and provide synchronous replication.
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
 	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. This returns auth errors to clients. We do not recommend turning it on for production.")
-	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
+
+	// Ludicrous mode
+	flag.Bool("ludicrous_mode", false, "Run Dgraph in ludicrous mode.")
 	flag.Int("ludicrous_concurrency", 2000, "Number of concurrent threads in ludicrous mode")
+
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
+	flag.String("graphql_lambda_url", "",
+		"URL of lambda server that implements custom GraphQL JavaScript resolvers")
 
 	// Cache flags
-	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha.")
-	flag.String("cache_percentage", "0,65,25,0,10",
+	flag.String("cache_percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
-		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).`)
+		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
+
+	// TLS configurations
+	x.RegisterServerTLSFlags(flag)
 }
 
 func setupCustomTokenizers() {
@@ -419,29 +388,6 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	s.Stop()
 }
 
-func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
-	defer closer.Done()
-	srv := &http.Server{
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 600 * time.Second,
-		IdleTimeout:  2 * time.Minute,
-	}
-	var err error
-	switch {
-	case tlsCfg != nil:
-		srv.TLSConfig = tlsCfg
-		err = srv.ServeTLS(l, "", "")
-	default:
-		err = srv.Serve(l)
-	}
-	glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
-	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("Http(s) shutdown err: %v", err.Error())
-	}
-}
-
 func setupServer(closer *z.Closer) {
 	go worker.RunServer(bindall) // For pb.communication.
 
@@ -450,7 +396,7 @@ func setupServer(closer *z.Closer) {
 		laddr = "0.0.0.0"
 	}
 
-	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, tlsNodeCert, tlsNodeKey)
+	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf)
 	if err != nil {
 		log.Fatalf("Failed to setup TLS: %v\n", err)
 	}
@@ -553,7 +499,7 @@ func setupServer(closer *z.Closer) {
 			exportHandler(w, r, adminServer)
 		}))))
 
-	http.Handle("/admin/config/lru_mb", allowedMethodsHandler(allowedMethods{
+	http.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
 		http.MethodGet: true,
 		http.MethodPut: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -573,7 +519,7 @@ func setupServer(closer *z.Closer) {
 	// Initialize the servers.
 	admin.ServerCloser = z.NewCloser(3)
 	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
-	go serveHTTP(httpListener, tlsCfg, admin.ServerCloser)
+	go x.StartListenHttpAndHttps(httpListener, tlsCfg, admin.ServerCloser)
 
 	if Alpha.Conf.GetBool("telemetry") {
 		go edgraph.PeriodicallyPostTelemetry()
@@ -616,59 +562,26 @@ func run() {
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
 
 	cachePercentage := Alpha.Conf.GetString("cache_percentage")
-	cachePercent, err := x.GetCachePercentages(cachePercentage, 5)
+	cachePercent, err := x.GetCachePercentages(cachePercentage, 4)
 	x.Check(err)
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
 	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
-	wstoreBlockCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
-	wstoreIndexCacheSize := (cachePercent[4] * (totalCache << 20)) / 100
+	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
-	compressionLevelString := Alpha.Conf.GetString("badger.compression_level")
-	compressionLevels, err := x.GetCompressionLevels(compressionLevelString)
-	x.Check(err)
-	postingDirCompressionLevel := compressionLevels[0]
-	walDirCompressionLevel := compressionLevels[1]
-
+	ctype, clevel := x.ParseCompression(Alpha.Conf.GetString("badger.compression"))
 	opts := worker.Options{
 		PostingDir:                 Alpha.Conf.GetString("postings"),
 		WALDir:                     Alpha.Conf.GetString("wal"),
-		PostingDirCompressionLevel: postingDirCompressionLevel,
-		WALDirCompressionLevel:     walDirCompressionLevel,
+		PostingDirCompression:      ctype,
+		PostingDirCompressionLevel: clevel,
+		CachePercentage:            cachePercentage,
 		PBlockCacheSize:            pstoreBlockCacheSize,
 		PIndexCacheSize:            pstoreIndexCacheSize,
-		WBlockCacheSize:            wstoreBlockCacheSize,
-		WIndexCacheSize:            wstoreIndexCacheSize,
+		WalCache:                   walCache,
 
-		MutationsMode:  worker.AllowMutations,
-		AuthToken:      Alpha.Conf.GetString("auth_token"),
-		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
-	}
-
-	badgerTables := strings.Split(Alpha.Conf.GetString("badger.tables"), ",")
-	if len(badgerTables) != 1 && len(badgerTables) != 2 {
-		glog.Fatalf("Unable to read badger.tables options. Expected single value or two "+
-			"comma-separated values. Got %s", Alpha.Conf.GetString("badger.tables"))
-	}
-	if len(badgerTables) == 1 {
-		opts.BadgerTables = badgerTables[0]
-		opts.BadgerWalTables = badgerTables[0]
-	} else {
-		opts.BadgerTables = badgerTables[0]
-		opts.BadgerWalTables = badgerTables[1]
-	}
-
-	badgerVlog := strings.Split(Alpha.Conf.GetString("badger.vlog"), ",")
-	if len(badgerVlog) != 1 && len(badgerVlog) != 2 {
-		glog.Fatalf("Unable to read badger.vlog options. Expected single value or two "+
-			"comma-separated values. Got %s", Alpha.Conf.GetString("badger.vlog"))
-	}
-	if len(badgerVlog) == 1 {
-		opts.BadgerVlog = badgerVlog[0]
-		opts.BadgerWalVlog = badgerVlog[0]
-	} else {
-		opts.BadgerVlog = badgerVlog[0]
-		opts.BadgerWalVlog = badgerVlog[1]
+		MutationsMode: worker.AllowMutations,
+		AuthToken:     Alpha.Conf.GetString("auth_token"),
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -708,11 +621,14 @@ func run() {
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
+	tlsClientConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
+	x.Check(err)
+	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
+	x.Check(err)
+
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
-		Tracing:              Alpha.Conf.GetFloat64("trace"),
-		MyAddr:               Alpha.Conf.GetString("my"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
 		RaftId:               cast.ToUint64(Alpha.Conf.GetString("idx")),
 		WhiteListedIPRanges:  ips,
@@ -724,7 +640,11 @@ func run() {
 		StartTime:            startTime,
 		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
 		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
+		TLSClientConfig:      tlsClientConf,
+		TLSServerConfig:      tlsServerConf,
 	}
+	x.WorkerConfig.Parse(Alpha.Conf)
+
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
 		return
@@ -739,6 +659,19 @@ func run() {
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
 	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
+	x.Config.GraphqlLambdaUrl = Alpha.Conf.GetString("graphql_lambda_url")
+	if x.Config.GraphqlLambdaUrl != "" {
+		graphqlLambdaUrl, err := url.Parse(x.Config.GraphqlLambdaUrl)
+		if err != nil {
+			glog.Errorf("unable to parse graphql_lambda_url: %v", err)
+			return
+		}
+		if !graphqlLambdaUrl.IsAbs() {
+			glog.Errorf("expecting graphql_lambda_url to be an absolute URL, got: %s",
+				graphqlLambdaUrl.String())
+			return
+		}
+	}
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
@@ -811,7 +744,7 @@ func run() {
 		for updaters.Ctx().Err() == nil {
 			origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
 			if err != nil {
-				glog.Errorf("Error while retriving cors origins: %s", err.Error())
+				glog.Errorf("Error while retrieving cors origins: %s", err.Error())
 				continue
 			}
 			x.UpdateCorsOrigins(origins)

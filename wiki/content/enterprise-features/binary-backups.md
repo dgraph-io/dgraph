@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Binary Backups"
+weight = 1
 [menu.main]
     parent = "enterprise-features"
-    weight = 1
 +++
 
 {{% notice "note" %}}
@@ -248,6 +248,117 @@ mutation {
 }
 ```
 
+## Listing backups.
+
+The GraphQL admin interface includes the `listBackups` endpoint that lists the
+backups in the given location along with the information included in their
+`manifests.json` files. An example of a request to list the backups in the
+`/data/backup` location is included below:
+
+```
+query backup() {
+	listBackups(input: {location: "/data/backup"}) {
+		backupId
+		backupNum
+		encrypted
+		groups {
+			groupId
+			predicates
+		}
+		path
+		since
+		type
+	}
+}
+```
+
+The listBackups input can contain the following fields. Only the `location`
+field is required.
+
+```
+input ListBackupsInput {
+	"""
+	Destination for the backup: e.g. Minio or S3 bucket.
+	"""
+	location: String!
+
+	"""
+	Access key credential for the destination.
+	"""
+	accessKey: String
+
+	"""
+	Secret key credential for the destination.
+	"""
+	secretKey: String
+
+	"""
+	AWS session token, if required.
+	"""
+	sessionToken: String
+
+	"""
+	Whether the destination doesn't require credentials (e.g. S3 public bucket).
+	"""
+	anonymous: Boolean
+}
+```
+
+The output is of the `Manifest` type, which contains the fields below. The
+fields correspond to the fields inside the `manifest.json` files.
+
+```
+type Manifest {
+	"""
+	Unique ID for the backup series.
+	"""
+	backupId: String
+
+	"""
+	Number of this backup within the backup series. The full backup always has a value of one.
+	"""
+	backupNum: Int
+
+	"""
+	Whether this backup was encrypted.
+	"""
+	encrypted: Boolean
+
+	"""
+	List of groups and the predicates they store in this backup.
+	"""
+	groups: [BackupGroup]
+
+	"""
+	Path to the manifest file.
+	"""
+	path: String
+
+	"""
+	The timestamp at which this backup was taken. The next incremental backup will
+	start from this timestamp.
+	"""
+	since: Int
+
+	"""
+	The type of backup, either full or incremental.
+	"""
+	type: String
+}
+
+type BackupGroup {
+	"""
+	The ID of the cluster group.
+	"""
+	groupId: Int
+
+	"""
+	List of predicates assigned to the group.
+	"""
+	predicates: [String]
+}
+```
+
 ### Automating Backups
 
 You can use the provided endpoint to automate backups, however, there are a few
@@ -293,13 +404,16 @@ Backup is an online tool, meaning it is available when Alpha server is running. 
 `encryption_key_file` or `vault_*` options was used for encryption-at-rest and will now also be used for encrypted backups.
 {{% /notice %}}
 
-## Restore from Backup
-To restore from a backup, execute the following mutation on `/admin` endpoint.
+## Online restore
+
+To restore from a backup to a live cluster, execute a mutation on the `/admin`
+endpoint with the following format.
 
 ```graphql
 mutation{
   restore(input:{
     location: "/path/to/backup/directory",
+    backupId: "id_of_backup_to_restore"'
   }){
     message
     code
@@ -307,7 +421,15 @@ mutation{
   }
 }
 ```
-Restore can be performed from Amazon S3 / Minio or from a local directory. Below is the `RestoreInput` to be passed into the mutation.
+
+Online restores only require you to send this request. The UID and timestamp
+leases are updated accordingly. The latest backup to be restored should contain
+the same number of groups in its manifest.json file as the cluster to which it
+is being restored.
+
+Restore can be performed from Amazon S3 / Minio or from a local directory. Below
+is the documentation for the fields inside `RestoreInput` that can be passed into
+the mutation.
 
 ```graphql
 input RestoreInput {
@@ -389,10 +511,25 @@ input RestoreInput {
 }
 ```
 
-## Restore using `dgraph restore`
+Restore requests will return immediately without waiting for the operation to
+finish. The `restoreId` value included in the response can be used to query for
+the state of the restore operation via the `restoreStatus` endpoint. The request
+should be sent to the same alpha to which the original restore request was sent.
+Below is an example of how to perform the query.
+
+```
+query status() {
+	restoreStatus(restoreId: 8) {
+		status
+		errors
+	}
+}
+```
+
+## Offline restore using `dgraph restore`
 
 {{% notice "note" %}}
-`dgraph restore` is being deprecated, please use GraphQL api for Restoring from Backup.
+`dgraph restore` is being deprecated, please use GraphQL API for Restoring from Backup.
 {{% /notice %}}
 
 The restore utility is a standalone tool today. A new flag `--encryption_key_file` is added to the restore utility so it can decrypt the backup. This file must contain the same key that was used for encryption during backup.

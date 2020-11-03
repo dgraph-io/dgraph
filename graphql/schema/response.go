@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -46,6 +47,7 @@ type Response struct {
 	Errors     x.GqlErrorList
 	Data       bytes.Buffer
 	Extensions *Extensions
+	Header     http.Header
 }
 
 // ErrorResponse formats an error as a list of GraphQL errors and builds

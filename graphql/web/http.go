@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -97,6 +98,10 @@ func write(w http.ResponseWriter, rr *schema.Response, acceptGzip bool) {
 
 	// set TouchedUids header
 	w.Header().Set(touchedUidsHeader, strconv.FormatUint(rr.GetExtensions().GetTouchedUids(), 10))
+
+	for key, val := range rr.Header {
+		w.Header()[key] = val
+	}
 
 	// If the receiver accepts gzip, then we would update the writer
 	// and send gzipped content instead.
@@ -200,22 +205,27 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
+	// Pass in GraphQL @auth information
 	ctx = authorization.AttachAuthorizationJwt(ctx, r)
+	// Pass in PoorMan's auth, ACL and IP information if present.
 	ctx = x.AttachAccessJwt(ctx, r)
-	// Add remote addr as peer info so that the remote address can be logged
-	// inside Server.Login
 	ctx = x.AttachRemoteIP(ctx, r)
+	ctx = x.AttachAuthToken(ctx, r)
 
 	var res *schema.Response
 	gqlReq, err := getRequest(ctx, r)
 
 	if err != nil {
-		res = schema.ErrorResponse(err)
-	} else {
-		gqlReq.Header = r.Header
-		res = gh.resolver.Resolve(ctx, gqlReq)
+		write(w, schema.ErrorResponse(err), strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
+		return
 	}
 
+	if err = edgraph.ProcessPersistedQuery(ctx, gqlReq); err != nil {
+		write(w, schema.ErrorResponse(err), strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
+		return
+	}
+
+	res = gh.resolver.Resolve(ctx, gqlReq)
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 }
 
@@ -252,6 +262,15 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 		query := r.URL.Query()
 		gqlReq.Query = query.Get("query")
 		gqlReq.OperationName = query.Get("operationName")
+		if extensions, ok := query["extensions"]; ok {
+			if len(extensions) > 0 {
+				d := json.NewDecoder(strings.NewReader(extensions[0]))
+				d.UseNumber()
+				if err := d.Decode(&gqlReq.Extensions); err != nil {
+					return nil, errors.Wrap(err, "Not a valid GraphQL request body")
+				}
+			}
+		}
 		variables, ok := query["variables"]
 		if ok {
 			d := json.NewDecoder(strings.NewReader(variables[0]))
@@ -291,6 +310,7 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 		return nil,
 			errors.New("Unrecognised request method.  Please use GET or POST for GraphQL requests")
 	}
+	gqlReq.Header = r.Header
 
 	return gqlReq, nil
 }

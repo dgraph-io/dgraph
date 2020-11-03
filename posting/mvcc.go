@@ -70,7 +70,7 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		return err
 	}
 
-	kvs, err := l.Rollup()
+	kvs, err := l.Rollup(nil)
 	if err != nil {
 		return err
 	}

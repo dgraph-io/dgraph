@@ -81,18 +81,24 @@ var expectedSchema = `<movie>:string .` + " " + `
 <dgraph.type>:[string] @index(exact) .` + " " + `
 <dgraph.graphql.xid>:string @index(exact) @upsert .` + " " + `
 <dgraph.graphql.schema>:string .` + " " + `
+<dgraph.graphql.p_query>:string .` + " " + `
+<dgraph.graphql.p_sha256hash>:string @index(exact) .` + " " + `
 <dgraph.graphql.schema_history>:string .` + " " + `
 <dgraph.graphql.schema_created_at>:datetime .` + " " + `
-type Node {
+type <Node> {
 	movie
 }
-type dgraph.graphql {
+type <dgraph.graphql> {
 	dgraph.graphql.schema
 	dgraph.graphql.xid
 }
-type dgraph.graphql.history {
+type <dgraph.graphql.history> {
 	dgraph.graphql.schema_history
 	dgraph.graphql.schema_created_at
+}
+type <dgraph.graphql.persisted_query> {
+	dgraph.graphql.p_query
+	dgraph.graphql.p_sha256hash
 }
 `
 

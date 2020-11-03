@@ -1021,10 +1021,14 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
-	if isMutation && req.StartTs == 0 && !x.WorkerConfig.LudicrousMode {
-		start := time.Now()
-		req.StartTs = worker.State.GetTimestamp(false)
-		qc.latency.AssignTimestamp = time.Since(start)
+	if isMutation && req.StartTs == 0 {
+		if x.WorkerConfig.LudicrousMode {
+			req.StartTs = posting.Oracle().MaxAssigned()
+		} else {
+			start := time.Now()
+			req.StartTs = worker.State.GetTimestamp(false)
+			qc.latency.AssignTimestamp = time.Since(start)
+		}
 	}
 
 	if resp, rerr = processQuery(ctx, qc); rerr != nil {
@@ -1312,7 +1316,7 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
-var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Alter operations.")
+var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Admin operations.")
 
 func hasAdminAuth(ctx context.Context, tag string) (net.Addr, error) {
 	ipAddr, err := x.HasWhitelistedIP(ctx)

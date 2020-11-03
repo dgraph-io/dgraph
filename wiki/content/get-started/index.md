@@ -2,7 +2,6 @@
 title = "Get Started - Quickstart Guide"
 aliases = ["/get-started-old"]
 [menu.main]
-  url = "/get-started"
   name = "Get Started"
   identifier = "get-started"
   parent = "dql"
@@ -39,7 +38,7 @@ This is a quick-start guide to running Dgraph.
 For an interactive walkthrough, take the [tour](https://dgraph.io/tour/).
 
 {{% notice "tip" %}}
-This guide is for the powerful query language of Dgraph, [GraphQL+-](https://dgraph.io/docs/master/query-language/#graphql)
+This guide is for the powerful query language of Dgraph, [DQL](https://dgraph.io/docs/master/query-language/#graphql)
 which is a variation of a query language created by Facebook, [GraphQL](https://graphql.org/).
 
 You can find the instructions to get started with GraphQL from
@@ -64,14 +63,6 @@ docker run --rm -it -p 8080:8080 -p 9080:9080 -p 8000:8000 -v ~/dgraph:/dgraph d
 
 This would start a single container with **Dgraph Alpha**, **Dgraph Zero** and **Ratel** running in it.
 You would find the Dgraph data stored in a folder named *dgraph* of your *home directory*.
-
-{{% notice "tip" %}}
-Usually, you need to set the estimated memory Dgraph alpha can take through `lru_mb` flag.
-This is just a hint to the Dgraph alpha, and actual usage would be higher than this.
-It is recommended to set lru_mb to the one-third of the available RAM. For the standalone setup,
-it is set to that by default.
-{{% /notice %}}
-
 
 ### Step 2: Run Mutation
 
@@ -208,7 +199,7 @@ curl -H "Content-Type: application/graphql+-" "localhost:8080/query" -XPOST -d $
 ```
 
 {{% notice "tip" %}}
-You can also run the GraphQL+- query from the Ratel UI's query tab.
+You can also run the DQL query from the Ratel UI's query tab.
 {{% /notice %}}
 
 #### Get all movies released after "1980"

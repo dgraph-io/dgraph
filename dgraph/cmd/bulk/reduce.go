@@ -145,18 +145,16 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 
 	opt := badger.DefaultOptions(dir).
 		WithSyncWrites(false).
-		WithTableLoadingMode(bo.MemoryMap).
-		WithValueThreshold(1 << 10 /* 1 KB */).
+		WithValueThreshold(1 << 20 /* 1 KB */).
 		WithEncryptionKey(key).
 		WithBlockCacheSize(r.opt.BlockCacheSize).
-		WithIndexCacheSize(r.opt.IndexCacheSize).
-		WithLoadBloomsOnOpen(false)
+		WithIndexCacheSize(r.opt.IndexCacheSize)
 
 	opt.Compression = bo.None
 	opt.ZSTDCompressionLevel = 0
 	// Overwrite badger options based on the options provided by the user.
 	if compression {
-		opt.Compression = bo.ZSTD
+		opt.Compression = r.state.opt.BadgerCompression
 		opt.ZSTDCompressionLevel = r.state.opt.BadgerCompressionLevel
 	}
 
@@ -343,26 +341,43 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		}
 
 		// req.countBuf is already sorted.
-		sz := req.countBuf.Len()
+		sz := req.countBuf.LenNoPadding()
 		ci.countBuf.Grow(sz)
 
-		slice, next := []byte{}, 1
-		for next != 0 {
-			slice, next = req.countBuf.Slice(next)
+		req.countBuf.SliceIterate(func(slice []byte) error {
 			ce := countEntry(slice)
 			ci.addCountEntry(ce)
+			return nil
+		})
+	}
+
+	var lastStreamId uint32
+	write := func(req *encodeRequest) {
+		for kvlist := range req.listCh {
+			x.Check(ci.writer.Write(kvlist))
+
+			for _, kv := range kvlist.GetKv() {
+				if lastStreamId == kv.StreamId {
+					continue
+				}
+				if lastStreamId > 0 {
+					fmt.Printf("Finishing stream id: %d\n", lastStreamId)
+					list := &bpb.KVList{}
+					list.Kv = append(list.Kv, &bpb.KV{
+						StreamId:   lastStreamId,
+						StreamDone: true,
+					})
+					ci.writer.Write(list)
+				}
+				lastStreamId = kv.StreamId
+			}
 		}
 	}
 
 	for req := range writerCh {
-		req.wg.Add(1) // One for finishing the writes.
-		go func() {
-			defer req.wg.Done()
-			for kvlist := range req.listCh {
-				x.Check(ci.writer.Write(kvlist))
-			}
-		}()
+		write(req)
 		req.wg.Wait()
+
 		count(req)
 	}
 
@@ -399,18 +414,17 @@ func (r *reducer) throttle() {
 }
 
 func bufferStats(cbuf *z.Buffer) {
-	fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.Len())))
+	fmt.Printf("Found a buffer of size: %s\n", humanize.IBytes(uint64(cbuf.LenNoPadding())))
 
 	// Just check how many keys do we have in this giant buffer.
 	keys := make(map[uint64]int64)
 	var numEntries int
-	slice, next := []byte{}, 1
-	for next != 0 {
-		slice, next = cbuf.Slice(next)
+	cbuf.SliceIterate(func(slice []byte) error {
 		me := MapEntry(slice)
 		keys[z.MemHash(me.Key())]++
 		numEntries++
-	}
+		return nil
+	})
 	keyHist := z.NewHistogramData(z.HistogramBounds(10, 32))
 	for _, num := range keys {
 		keyHist.Update(num)
@@ -472,12 +486,12 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 				pkey := partitionKeys[i]
 				itr.Next(cbuf, pkey)
 			}
-			if cbuf.Len() < 256<<20 {
+			if cbuf.LenNoPadding() < 256<<20 {
 				// Pick up more data.
 				continue
 			}
 
-			hd.Update(int64(cbuf.Len()))
+			hd.Update(int64(cbuf.LenNoPadding()))
 			select {
 			case <-ticker.C:
 				fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
@@ -488,7 +502,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			cbuf = getBuf()
 		}
 		if !cbuf.IsEmpty() {
-			hd.Update(int64(cbuf.Len()))
+			hd.Update(int64(cbuf.LenNoPadding()))
 			buffers <- cbuf
 		} else {
 			cbuf.Release()
@@ -498,12 +512,12 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	}()
 
 	for cbuf := range buffers {
-		if cbuf.Len() > limit/2 {
+		if cbuf.LenNoPadding() > limit/2 {
 			bufferStats(cbuf)
 		}
 		r.throttle()
 
-		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.Len()))
+		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.LenNoPadding()))
 		sendReq(cbuf)
 	}
 
@@ -519,7 +533,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 func (r *reducer) toList(req *encodeRequest) {
 	cbuf := req.cbuf
 	defer func() {
-		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.Len()))
+		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.LenNoPadding()))
 		cbuf.Release()
 	}()
 
@@ -552,7 +566,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		freePostings = append(freePostings, p)
 	}
 
-	start, end, num := 1, 1, 0
+	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
 	appendToList := func() {
 		if num == 0 {
 			return
@@ -637,7 +651,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		if shouldSplit {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
-			kvs, err := l.Rollup()
+			kvs, err := l.Rollup(nil)
 			x.Check(err)
 
 			for _, kv := range kvs {
@@ -648,15 +662,11 @@ func (r *reducer) toList(req *encodeRequest) {
 				req.splitCh <- &bpb.KVList{Kv: splits}
 			}
 		} else {
-			data, byt := posting.MarshalPostingList(pl)
+			kv := posting.MarshalPostingList(pl, nil)
 			codec.FreePack(pl.Pack)
 
-			kv := &bpb.KV{
-				Key:      y.Copy(currentKey),
-				Value:    data,
-				UserMeta: []byte{byt},
-				Version:  writeVersionTs,
-			}
+			kv.Key = y.Copy(currentKey)
+			kv.Version = writeVersionTs
 			kv.StreamId = r.streamIdFor(pk.Attr)
 			kvList.Kv = append(kvList.Kv, kv)
 		}

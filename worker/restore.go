@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/pkg/errors"
 
@@ -65,8 +64,9 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice) LoadR
 			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 				WithSyncWrites(false).
-				WithTableLoadingMode(options.MemoryMap).
 				WithValueThreshold(1 << 10).
+				WithBlockCacheSize(100 * (1 << 20)).
+				WithIndexCacheSize(100 * (1 << 20)).
 				WithNumVersionsToKeep(math.MaxInt32).
 				WithEncryptionKey(key))
 			if err != nil {
@@ -176,11 +176,9 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 					// part without rolling the key first. This part is here for backwards
 					// compatibility. New backups are not affected because there was a change
 					// to roll up lists into a single one.
-					restoreVal, byt := posting.MarshalPostingList(pl)
+					kv := posting.MarshalPostingList(pl, nil)
 					codec.FreePack(pl.Pack)
 					kv.Key = restoreKey
-					kv.Value = restoreVal
-					kv.UserMeta = []byte{byt}
 					if err := loader.Set(kv); err != nil {
 						return 0, err
 					}
@@ -189,7 +187,7 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 					// a list that is too big to be read back from disk.
 					// Rollup will take ownership of the Pack and will free the memory.
 					l := posting.NewList(restoreKey, pl, kv.Version)
-					kvs, err := l.Rollup()
+					kvs, err := l.Rollup(nil)
 					if err != nil {
 						// TODO: wrap errors in this file for easier debugging.
 						return 0, err

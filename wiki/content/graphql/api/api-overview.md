@@ -1,9 +1,9 @@
 +++
 title = "Overview"
+weight = 1
 [menu.main]
     parent = "api"
     identifier = "api-overview"
-    weight = 1   
 +++
 
 How to use the GraphQL API. 

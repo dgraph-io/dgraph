@@ -28,6 +28,16 @@ Now you can make changes to the docs and see them being updated instantly thanks
 
 * While running locally, the version selector does not work because you need to build the documentation and serve it behind a reverse proxy to have multiple versions.
 
+### Running locally with Docker
+
+Make sure you have docker-compose.
+
+Run:
+
+```
+sh scripts/docker.sh
+```
+
 ### Branch
 
 Depending on what branch you are on, some code examples will dynamically change. For instance, go-grpc code examples will have different import path depending on branch name.

@@ -1,9 +1,9 @@
 +++
 title = "GraphQL Error Propagation"
+weight = 6
 [menu.main]
     parent = "api"
     name = "GraphQL Errors"
-    weight = 6   
 +++
 
 <!-- this needs something else?  probably an example to help explain better?-->

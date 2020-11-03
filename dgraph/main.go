@@ -17,7 +17,9 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
+	"os"
 	"runtime"
 	"time"
 
@@ -33,6 +35,7 @@ func main() {
 	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
 	// benchmark notes are located in badger-bench/randread.
 	runtime.GOMAXPROCS(128)
+	fmt.Printf("Page Size: %d\n", os.Getpagesize())
 
 	absDiff := func(a, b uint64) uint64 {
 		if a > b {
@@ -41,11 +44,10 @@ func main() {
 		return b - a
 	}
 
+	ticker := time.NewTicker(10 * time.Second)
+
 	// Make sure the garbage collector is run periodically.
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
 		minDiff := uint64(2 << 30)
 
 		var ms runtime.MemStats
@@ -85,14 +87,22 @@ func main() {
 
 			case ms.NumGC == lastNumGC:
 				runtime.GC()
-				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC,
+				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s. jemalloc: %s.\n", ms.NumGC,
 					humanize.IBytes(ms.HeapInuse),
-					humanize.IBytes(ms.HeapIdle-ms.HeapReleased))
+					humanize.IBytes(ms.HeapIdle-ms.HeapReleased),
+					humanize.IBytes(js.Active))
 				lastNumGC = ms.NumGC + 1
 				lastMs = ms
 			}
 		}
 	}()
 
+	// Run the program.
 	cmd.Execute()
+
+	ticker.Stop()
+	fmt.Printf("Allocated Bytes at program end: %s\n", humanize.Bytes(uint64(z.NumAllocBytes())))
+	if z.NumAllocBytes() > 0 {
+		z.PrintLeaks()
+	}
 }
