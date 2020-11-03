@@ -1143,9 +1143,7 @@ func addAggregateFields(schema *ast.Schema, defn *ast.Definition) {
 			aggregateField := &ast.FieldDefinition{
 				Name: "aggregate_" + fld.Name,
 				Type: &ast.Type{
-					Elem: &ast.Type{
-						NamedType: fld.Type.Name() + "AggregateResult",
-					},
+					NamedType: fld.Type.Name() + "AggregateResult",
 				},
 			}
 			addFilterArgumentForField(schema, aggregateField, fld.Type.Name())
