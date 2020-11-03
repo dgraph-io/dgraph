@@ -94,7 +94,7 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 
 func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
-		if value.Definition == nil || value.ExpectedType == nil || value.Kind == ast.Variable {
+		if value.Definition == nil || value.ExpectedType == nil || value.Kind == ast.Variable || value.Kind == ast.ListValue {
 			return
 		}
 
