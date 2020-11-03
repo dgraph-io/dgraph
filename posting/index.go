@@ -613,6 +613,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
+		WithEncryptionKey(x.WorkerConfig.EncryptionKey).
 		WithLogRotatesToFlush(10)
 
 	// Set cache if we have encryption.
