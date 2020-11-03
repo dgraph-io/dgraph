@@ -29,6 +29,7 @@ import (
 const (
 	mapShardDir    = "map_output"
 	reduceShardDir = "shards"
+	bufDir         = "buffer"
 )
 
 func mergeMapShardsIntoReduceShards(opt *options) {
