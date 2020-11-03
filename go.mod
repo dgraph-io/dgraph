@@ -3,7 +3,6 @@ module github.com/dgraph-io/dgraph
 go 1.12
 
 replace github.com/dgraph-io/ristretto => /home/algod/go/src/github.com/dgraph-io/ristretto
-
 replace github.com/dgraph-io/badger/v2 => /home/algod/go/src/github.com/dgraph-io/badger
 
 require (
