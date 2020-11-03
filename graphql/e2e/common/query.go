@@ -2239,6 +2239,96 @@ func queryWithCascade(t *testing.T) {
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }
 
+func filterQueries(t *testing.T) {
+	// for testing filter with AND,OR connectives
+	authors := addMultipleAuthorFromRef(t, []*author{
+		{
+			Name:       "George",
+			Reputation: 4.5,
+			Posts:      []*post{{Title: "A show about nothing", Text: "Got ya!", Tags: []string{}}},
+		}, {
+			Name:       "Jerry",
+			Reputation: 4.6,
+			Country:    &country{Name: "outer Galaxy2"},
+			Posts:      []*post{{Title: "Outside", Tags: []string{}}},
+		}, {
+			Name:    "Kramer",
+			Country: &country{Name: "outer space2"},
+			Posts:   []*post{{Title: "Ha! Cosmo Kramer", Text: "Giddy up!", Tags: []string{}}},
+		},
+	}, postExecutor)
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	authorIds := []string{authors[0].ID, authors[1].ID, authors[2].ID}
+	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID,
+		authors[2].Posts[0].PostID}
+	countryIds := []string{authors[1].Country.ID, authors[2].Country.ID}
+
+	states := []*state{
+		{Name: "California", Code: "CA", Capital: "Sacramento"},
+		{Name: "Texas", Code: "TX"},
+	}
+	addStateParams := GraphQLParams{
+		Query: `mutation ($input: [AddStateInput!]!) {
+					addState(input: $input) {
+						numUids
+					}
+				}`,
+		Variables: map[string]interface{}{"input": states},
+	}
+	resp := addStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+	testutil.CompareJSON(t, `{"addState":{"numUids":2}}`, string(resp.Data))
+
+	tcases := []struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		respData  string
+	}{{
+		name: "Single Statement in  Filter",
+		query: `query {
+                 queryAuthor(filter:{name:{eq:"George"}}){
+                    name
+                    reputation
+                    posts {
+                      text
+                    }
+                 }
+				}`,
+		respData: `{
+						"queryAuthor": [{
+							"name":"George",
+							"reputation": 4.5,
+							"posts": [{
+								"text": "Got ya!"
+							}]
+						}]
+					}`,
+	},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: tcase.variables,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.respData, string(resp.Data))
+		})
+	}
+
+	// cleanup
+	deleteAuthors(t, authorIds, nil)
+	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
+	deleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
+	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
+		nil)
+	cleanupStarwars(t, newStarship.ID, humanID, "")
+}
+
 func queryGeoNearFilter(t *testing.T) {
 	addHotelParams := &GraphQLParams{
 		Query: `

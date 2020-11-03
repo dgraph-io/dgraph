@@ -340,6 +340,7 @@ func RunAll(t *testing.T) {
 	t.Run("queries have extensions", queriesHaveExtensions)
 	t.Run("alias works for queries", queryWithAlias)
 	t.Run("cascade directive", queryWithCascade)
+	t.Run("Filter Queries", filterQueries)
 	t.Run("query geo near filter", queryGeoNearFilter)
 
 	// mutation tests
