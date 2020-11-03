@@ -534,10 +534,8 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "id": ["0x1", "0x2"]
     }
   jwtvar:
     ROLE: "ADMIN"
@@ -568,10 +566,8 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     ROLE: "USER"
@@ -594,10 +590,8 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     ROLE: "USER"
@@ -620,10 +614,8 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     ROLE: "ADMIN"
@@ -635,7 +627,7 @@
          }]
   dgquery: |-
     query {
-      x as deleteRole(func: type(Role)) {
+      x as deleteRole(func: uid(0x1, 0x2)) @filter(type(Role)) {
         uid
       }
     }
@@ -649,7 +641,7 @@
   variables: |
     { "filter":
       {
-        "id": ["0x1", "0x2"]
+        "ids": ["0x1", "0x2"]
       }
     }
   jwtvar:
@@ -693,10 +685,8 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    { 
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     ANS: "true"
@@ -717,10 +707,8 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     ROLE: "USER"
@@ -742,10 +730,8 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     ROLE: "ADMIN"
@@ -767,7 +753,7 @@
         Author3 as Post.author
       }
       FbPostRoot as var(func: uid(FbPost1)) @filter(uid(FbPostAuth2))
-      FbPost1 as var(func: type(FbPost))
+      FbPost1 as var(func: uid(0x1, 0x2)) @filter(type(FbPost))
       FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
@@ -786,10 +772,8 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     ROLE: "ADMIN"
@@ -812,7 +796,7 @@
         Author6 as Post.author
       }
       PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(FbPostAuth4) OR uid(AnswerAuth5)))
-      Post1 as var(func: type(Post))
+      Post1 as var(func: uid(0x1, 0x2)) @filter(type(Post))
       Question1 as var(func: type(Question))
       QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
         id : uid
@@ -853,10 +837,8 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     USER: "user1"
@@ -878,7 +860,7 @@
         Author5 as Post.author
       }
       PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(AnswerAuth4)))
-      Post1 as var(func: type(Post))
+      Post1 as var(func: uid(0x1, 0x2)) @filter(type(Post))
       Question1 as var(func: type(Question))
       QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
         id : uid
@@ -913,10 +895,8 @@
     ROLE: "ADMIN"
     AND: "true"
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   dgmutations:
     - deletejson: |
@@ -927,7 +907,7 @@
     query {
       x as deletePost()
     }
-- name: "Delete interface having no own auth rules but some implementing types have auth rules and they are not satisfied."
+- name: "Deleting interface having no own auth rules but some implementing types have auth rules and they are not satisfied."
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteA(filter: {id: $ids}) {
@@ -935,10 +915,8 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   dgmutations:
     - deletejson: |
@@ -951,6 +929,6 @@
         uid
       }
       ARoot as var(func: uid(A1)) @filter((uid(B1)))
-      A1 as var(func: type(A))
+      A1 as var(func: uid(0x1, 0x2)) @filter(type(A))
       B1 as var(func: type(B))
     }
