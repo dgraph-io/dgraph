@@ -8,7 +8,6 @@ weight = 9
 
 <div class="landing">
   <div class="hero">
-    <h1></h1>
     <p>
       Exclusive features like ACLs, binary backups, encryption at rest, and more.
     </p>
