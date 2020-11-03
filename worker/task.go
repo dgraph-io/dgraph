@@ -63,6 +63,8 @@ func invokeNetworkRequest(ctx context.Context, addr string,
 
 const backupRequestGracePeriod = time.Second
 
+const maxNodesToVisitForHasQuery = 10 << 20
+
 // TODO: Cross-server cancellation as described in Jeff Dean's talk.
 func processWithBackupRequest(
 	ctx context.Context,
@@ -2344,12 +2346,16 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		_, err := qs.getValsForUID(q.Attr, lang, uid, q.ReadTs)
 		return err
 	}
-
+	nodesVisited := 0
 loop:
 	// This function could be switched to the stream.Lists framework, but after the change to use
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
 	// occurs in filterStringFunction (like has(name) queries).
 	for it.Seek(startKey); it.Valid(); {
+		if nodesVisited > maxNodesToVisitForHasQuery {
+			break
+		}
+		nodesVisited += 1
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
 			it.Next()
