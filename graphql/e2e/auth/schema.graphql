@@ -682,6 +682,7 @@ type Answer implements Post {
 interface A {
     id: ID!
     fieldA: String @search(by: [exact])
+    random: String 
 }
 
 type B implements A {
