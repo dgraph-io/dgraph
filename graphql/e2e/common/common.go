@@ -124,13 +124,13 @@ type country struct {
 }
 
 type author struct {
-	ID         string     `json:"id,omitempty"`
-	Name       string     `json:"name,omitempty"`
-	Bio        string     `json:"bio,omitempty"`
-	Dob        *time.Time `json:"dob,omitempty"`
-	Reputation float32    `json:"reputation,omitempty"`
-	Country    *country   `json:"country,omitempty"`
-	Posts      []*post    `json:"posts,omitempty"`
+	ID            string     `json:"id,omitempty"`
+	Name          string     `json:"name,omitempty"`
+	Qualification string     `json:"qualification,omitempty"`
+	Dob           *time.Time `json:"dob,omitempty"`
+	Reputation    float32    `json:"reputation,omitempty"`
+	Country       *country   `json:"country,omitempty"`
+	Posts         []*post    `json:"posts,omitempty"`
 }
 
 type user struct {

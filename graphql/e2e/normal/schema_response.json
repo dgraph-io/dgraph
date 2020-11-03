@@ -43,6 +43,15 @@
             ]
         },
         {
+            "index": true,
+            "predicate": "Author.qualification",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
+        },
+        {
             "predicate": "Category.name",
             "type": "string"
         },
@@ -510,6 +519,9 @@
                 },
                 {
                     "name": "Author.posts"
+                },
+                {
+                    "name": "Author.qualification"
                 }
             ],
             "name": "Author"

@@ -2265,22 +2265,22 @@ func filterQueries(t *testing.T) {
 	// for testing filter with AND,OR connectives
 	authors := addMultipleAuthorFromRef(t, []*author{
 		{
-			Name:       "George",
-			Reputation: 4.5,
-			Bio:        "Phd in CSE",
-			Posts:      []*post{{Title: "A show about nothing", Text: "Got ya!", Tags: []string{}}},
+			Name:          "George",
+			Reputation:    4.5,
+			Qualification: "Phd in CSE",
+			Posts:         []*post{{Title: "A show about nothing", Text: "Got ya!", Tags: []string{}}},
 		}, {
-			Name:       "Jerry",
-			Reputation: 4.6,
-			Bio:        "Phd in ECE",
-			Country:    &country{Name: "outer Galaxy2"},
-			Posts:      []*post{{Title: "Outside", Tags: []string{}}},
+			Name:          "Jerry",
+			Reputation:    4.6,
+			Qualification: "Phd in ECE",
+			Country:       &country{Name: "outer Galaxy2"},
+			Posts:         []*post{{Title: "Outside", Tags: []string{}}},
 		}, {
-			Name:       "Kramer",
-			Reputation: 4.2,
-			Bio:        "PostDoc in CSE",
-			Country:    &country{Name: "outer space2"},
-			Posts:      []*post{{Title: "Ha! Cosmo Kramer", Text: "Giddy up!", Tags: []string{}}},
+			Name:          "Kramer",
+			Reputation:    4.2,
+			Qualification: "PostDoc in CSE",
+			Country:       &country{Name: "outer space2"},
+			Posts:         []*post{{Title: "Ha! Cosmo Kramer", Text: "Giddy up!", Tags: []string{}}},
 		},
 	}, postExecutor)
 	newStarship := addStarship(t)
@@ -2460,12 +2460,12 @@ func filterQueries(t *testing.T) {
 					}`,
 			variables: map[string]interface{}{"filter": map[string]interface{}{"and": []interface{}{map[string]interface {
 			}{"name": map[string]interface{}{"eq": "George"}}, map[string]interface{}{"and": map[string]interface {
-			}{"reputation": map[string]interface{}{"eq": "4.5"}}}}}},
+			}{"reputation": map[string]interface{}{"eq": 4.5}}}}}},
 		},
 		{
 			name: "Nested AND inside Filter",
 			query: `query{
-                 queryAuthor(filter:{and:[{name:{eq:"George"}},and:{reputation:{eq:"4.5"}}]}){
+                 queryAuthor(filter:{and:[{name:{eq:"George"}},{and:{reputation:{eq:4.5}}}]}){
                     name
                     reputation
                     posts {
@@ -2484,9 +2484,9 @@ func filterQueries(t *testing.T) {
 					}`,
 		},
 		{
-			name: "Nested OR in Filter using variables",
+			name: "Nested OR in Filter",
 			query: `query{
-                 queryAuthor(filter:{or:[{name:{eq:"George"}},or:{reputation:{eq:"4.2"}}]}){
+                 queryAuthor(filter:{or:[{name:{eq:"George"}},{or:{reputation:{eq:4.2}}}]}){
                     name
                     reputation
                     posts {
@@ -2511,9 +2511,6 @@ func filterQueries(t *testing.T) {
 
                         	}]
 					 }`,
-			variables: map[string]interface{}{"filter": map[string]interface{}{"or": []interface{}{map[string]interface {
-			}{"name": map[string]interface{}{"eq": "George"}}, map[string]interface{}{"or": map[string]interface {
-			}{"reputation": map[string]interface{}{"eq": "4.2"}}}}}},
 		},
 		{
 			name: "Nested OR in Filter using variables",
@@ -2545,7 +2542,7 @@ func filterQueries(t *testing.T) {
 					 }`,
 			variables: map[string]interface{}{"filter": map[string]interface{}{"or": []interface{}{map[string]interface {
 			}{"name": map[string]interface{}{"eq": "George"}}, map[string]interface{}{"or": map[string]interface {
-			}{"reputation": map[string]interface{}{"eq": "4.3"}}}}}},
+			}{"reputation": map[string]interface{}{"eq": 4.2}}}}}},
 		},
 		{
 			name: "(A OR B) AND (C OR D) using variables",
@@ -2568,7 +2565,8 @@ func filterQueries(t *testing.T) {
 						}]
 					}`,
 			variables: map[string]interface{}{"filter": map[string]interface{}{"and": []interface{}{map[string]interface {
-			}{"name": map[string]interface{}{"eq": "George"}, "or": map[string]interface{}{"name": map[string]interface{}{"eq": "Alice"}}}, map[string]interface{}{"reputation": map[string]interface{}{"eq": "3"}, "or": map[string]interface{}{"reputation": map[string]interface{}{"eq": "4.5"}}}}}},
+			}{"name": map[string]interface{}{"eq": "George"}, "or": map[string]interface{}{"name": map[string]interface{}{"eq": "Alice"}}},
+				map[string]interface{}{"reputation": map[string]interface{}{"eq": 3}, "or": map[string]interface{}{"reputation": map[string]interface{}{"eq": 4.5}}}}}},
 		},
 		{
 			name: "(A AND B AND C) using variables",
@@ -2576,7 +2574,7 @@ func filterQueries(t *testing.T) {
                  queryAuthor(filter:$filter){
                     name
                     reputation
-                    bio
+                    qualification
                     posts {
                       text
                     }
@@ -2586,14 +2584,15 @@ func filterQueries(t *testing.T) {
 						"queryAuthor": [{
 							"name":"George",
 							"reputation": 4.5,
-   							"bio":"Phd in CSE",	
+   							"qualification":"Phd in CSE",	
 							"posts": [{
 								"text": "Got ya!"
 							}]
 						}]
 					}`,
 			variables: map[string]interface{}{"filter": map[string]interface{}{"and": []interface{}{map[string]interface {
-			}{"name": map[string]interface{}{"eq": "George"}}, map[string]interface{}{"reputation": map[string]interface{}{"eq": "4.5"}}, map[string]interface{}{"bio": map[string]interface{}{"eq": "Phd in CSE"}}}}},
+			}{"name": map[string]interface{}{"eq": "George"}}, map[string]interface{}{"reputation": map[string]interface{}{"eq": 4.5}},
+				map[string]interface{}{"qualification": map[string]interface{}{"eq": "Phd in CSE"}}}}},
 		},
 		{
 			name: "(A OR B OR C) using variables",
@@ -2601,31 +2600,29 @@ func filterQueries(t *testing.T) {
                  queryAuthor(filter:$filter){
                     name
                     reputation
-                    bio
-                    posts {
-                      text
-                    }
+                    qualification
                  }
 				}`,
 			respData: `{
 						"queryAuthor": [{
-							"name":"George",
-							"reputation": 4.5,
-   							"bio":"Phd in CSE"
-						},
-                        {
 							 "name":"Kramer",
-					         "reputation": 4.2,
-							 "bio":"Phd in CSE"
+							 "qualification":"PostDoc in CSE",
+							 "reputation": 4.2
                         },
+                        {
+							"name":"George",
+   							"qualification":"Phd in CSE",
+							"reputation": 4.5
+						},
 						{    "name":"Jerry",
-					         "reputation": 4.6,
-							 "bio":"PostDoc in CSE"
+							 "qualification":"Phd in ECE",
+							 "reputation": 4.6
                                
                         }]
 					}`,
 			variables: map[string]interface{}{"filter": map[string]interface{}{"or": []interface{}{map[string]interface {
-			}{"name": map[string]interface{}{"eq": "George"}}, map[string]interface{}{"reputation": map[string]interface{}{"eq": "4.2"}}, map[string]interface{}{"bio": map[string]interface{}{"eq": "PostDoc in CSE"}}}}},
+			}{"name": map[string]interface{}{"eq": "George"}}, map[string]interface{}{"reputation": map[string]interface{}{"eq": 4.6}},
+				map[string]interface{}{"qualification": map[string]interface{}{"eq": "PostDoc in CSE"}}}}},
 		},
 	}
 

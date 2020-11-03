@@ -43,6 +43,7 @@ type Author {
 
         dob: DateTime @search
         reputation: Float @search
+        qualification: String @search(by: [hash, trigram])
         country: Country
         posts: [Post!] @hasInverse(field: author)
         bio: String @lambda

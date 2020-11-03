@@ -515,6 +515,7 @@ func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author,
 			  	author {
 					id
 					name
+                    qualification
 					reputation
 					country {
 						id

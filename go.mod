@@ -20,8 +20,8 @@ require (
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201023122926-2b71a94d1f03
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6
-	github.com/dgraph-io/gqlgen v0.13.1
-	github.com/dgraph-io/gqlparser/v2 v2.1.0
+	github.com/dgraph-io/gqlgen v0.13.2
+	github.com/dgraph-io/gqlparser/v2 v2.1.1
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
 	github.com/dgraph-io/ristretto v0.0.4-0.20201028045312-0eff948d52ac
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
