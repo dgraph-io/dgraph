@@ -777,3 +777,180 @@
         dgraph.uid : uid
       }
     }
+
+- name: "Deleting interface having its own auth rules and implementing types also have auth rules and all are satisfied."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deletePost(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+    ANS:  "true"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         },{
+           "Author.posts": [
+             {"uid": "uid(x)"}
+           ],
+           "uid": "uid(Author6)"
+         }]
+  dgquery: |-
+    query {
+      x as deletePost(func: uid(PostRoot)) {
+        uid
+        Author6 as Post.author
+      }
+      PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(FbPostAuth4) OR uid(AnswerAuth5)))
+      Post1 as var(func: type(Post))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      FbPost1 as var(func: type(FbPost))
+      FbPostAuth4 as var(func: uid(FbPost1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Answer1 as var(func: type(Answer))
+      AnswerAuth5 as var(func: uid(Answer1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Deleting interface having its own auth rules and implementing types also have auth rules and some of the rules of implementing types are not satisfied"
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deletePost(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  jwtvar:
+    USER: "user1"
+    ANS:  "true"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         },{
+           "Author.posts": [
+             {"uid": "uid(x)"}
+           ],
+           "uid": "uid(Author5)"
+         }]
+  dgquery: |-
+    query {
+      x as deletePost(func: uid(PostRoot)) {
+        uid
+        Author5 as Post.author
+      }
+      PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(AnswerAuth4)))
+      Post1 as var(func: type(Post))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Answer1 as var(func: type(Answer))
+      AnswerAuth4 as var(func: uid(Answer1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Deleting interface having its own auth rules and implementing types also have auth rules and the rules of interface are not satisfied"
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deletePost(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    AND: "true"
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deletePost()
+    }
+- name: "Delete interface having no own auth rules but some implementing types have auth rules and they are not satisfied."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteA(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteA(func: uid(ARoot)) {
+        uid
+      }
+      ARoot as var(func: uid(A1)) @filter((uid(B1)))
+      A1 as var(func: type(A))
+      B1 as var(func: type(B))
+    }

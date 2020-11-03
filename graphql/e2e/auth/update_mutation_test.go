@@ -165,6 +165,56 @@ func getAllQuestions(t *testing.T, users []string, answers []bool) ([]*Question,
 	return questions, keys
 }
 
+func getAllPosts(t *testing.T, users []string, roles []string, answers []bool) ([]*Post, []string) {
+	ids := make(map[string]struct{})
+	getParams := &common.GraphQLParams{
+		Query: `
+			query queryPost {
+				queryPost {
+					id
+					text
+					author {
+						id
+						name
+					}
+				}
+			}
+		`,
+	}
+
+	var result struct {
+		QueryPost []*Post
+	}
+	var posts []*Post
+	for _, user := range users {
+		for _, role := range roles {
+			for _, ans := range answers {
+				getParams.Headers = common.GetJWTForInterfaceAuth(t, user, role, ans, metaInfo)
+				gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+				require.Nil(t, gqlResponse.Errors)
+
+				err := json.Unmarshal(gqlResponse.Data, &result)
+				require.NoError(t, err)
+
+				for _, i := range result.QueryPost {
+					if _, ok := ids[i.Id]; ok {
+						continue
+					}
+					ids[i.Id] = struct{}{}
+					i.Id = ""
+					posts = append(posts, i)
+				}
+			}
+		}
+	}
+
+	var keys []string
+	for key := range ids {
+		keys = append(keys, key)
+	}
+	return posts, keys
+}
+
 func getAllFbPosts(t *testing.T, users []string, roles []string) ([]*FbPost, []string) {
 	ids := make(map[string]struct{})
 	getParams := &common.GraphQLParams{

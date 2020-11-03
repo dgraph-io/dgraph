@@ -694,6 +694,12 @@ type C implements A @auth(
               queryC(filter: { fieldC: $ANS } ) { 
                 id 
               } 
+            }""" },
+    delete:{ rule: """
+            query($ANS: Boolean!) { 
+              queryC(filter: { fieldC: $ANS } ) { 
+                id 
+              } 
             }""" }
 ){
     fieldC: Boolean @search

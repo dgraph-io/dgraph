@@ -65,6 +65,12 @@ type Author struct {
 	Posts []*Question `json:"posts,omitempty"`
 }
 
+type Post struct {
+	Id     string  `json:"id,omitempty"`
+	Text   string  `json:"text,omitempty"`
+	Author *Author `json:"author,omitempty"`
+}
+
 type Question struct {
 	Id       string  `json:"id,omitempty"`
 	Text     string  `json:"text,omitempty"`

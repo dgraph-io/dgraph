@@ -301,6 +301,10 @@ interface A {
     name: String! @id
 }
 
+type B implements A {
+    id: ID!
+}
+
 # union testing - start
 enum AnimalCategory {
     Fish

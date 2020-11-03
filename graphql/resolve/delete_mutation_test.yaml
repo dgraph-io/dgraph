@@ -245,28 +245,6 @@
         MovieDirector2 as ~directed.movies
       }
     }
-
--
-  name: "Delete mutation for an interface whose implementation has auth rules"
-  gqlmutation: |
-    mutation deleteX($filter: XFilter!) {
-      deleteX(filter: $filter) {
-        msg
-      }
-    }
-  gqlvariables: |
-    { "filter":
-      { "id": ["0x1", "0x2"] }
-    }
-  explanation: "The mutation should get rewritten to dummy query because its implementation has auth rules."
-  dgmutations:
-    - deletejson: |
-        [{ "uid": "uid(x)" }]
-  dgquery: |-
-    query {
-      x as deleteX()
-    }
-
 -
   name: "Deleting an interface with just a field with @id directive"
   gqlmutation: |
