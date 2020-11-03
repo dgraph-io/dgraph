@@ -732,6 +732,7 @@
         dgraph.uid : uid
       }
     }
+
 - name: "Update Type inheriting Graph Traversal Auth Rules on Interface failed."
   gqlquery: |
     mutation updateQuestion($question: UpdateQuestionInput!) {
@@ -755,6 +756,7 @@
     query {
       x as updateQuestion()
     }
+
 - name: "Update Type inheriting RBAC Auth Rules from Interface."
   gqlquery: |
     mutation updateFbPost($post: UpdateFbPostInput!) {
@@ -793,6 +795,7 @@
         dgraph.uid : uid
       }
     }
+
 - name: "Update Type inheriting RBAC Auth Rules from Interface failed"
   gqlquery: |
     mutation updateFbPost($post: UpdateFbPostInput!) {
