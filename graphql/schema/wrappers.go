@@ -75,6 +75,7 @@ type FieldHTTPConfig struct {
 const (
 	GetQuery             QueryType    = "get"
 	FilterQuery          QueryType    = "query"
+	AggregateQuery       QueryType    = "aggregate"
 	SchemaQuery          QueryType    = "schema"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
@@ -106,6 +107,7 @@ type Operation interface {
 	IsQuery() bool
 	IsMutation() bool
 	IsSubscription() bool
+	CacheControl() string
 }
 
 // A Field is one field from an Operation.
@@ -153,6 +155,7 @@ type Mutation interface {
 // A Query is a field (from the schema's Query type) from an Operation
 type Query interface {
 	Field
+	ConstructedFor() Type
 	QueryType() QueryType
 	DQLQuery() string
 	Rename(newName string)
@@ -175,10 +178,12 @@ type Type interface {
 	Nullable() bool
 	// true if this is a union type
 	IsUnion() bool
+	IsInterface() bool
 	// returns a list of member types for this union
 	UnionMembers([]interface{}) []Type
 	ListType() Type
 	Interfaces() []string
+	ImplementingTypes() []Type
 	EnsureNonNulls(map[string]interface{}, string) error
 	FieldOriginatedFrom(fieldName string) string
 	AuthRules() *TypeAuth
@@ -341,6 +346,13 @@ func (o *operation) Mutations() (ms []Mutation) {
 	}
 
 	return
+}
+
+func (o *operation) CacheControl() string {
+	if o.op.Directives.ForName(cacheControlDirective) == nil {
+		return ""
+	}
+	return "public,max-age=" + o.op.Directives.ForName(cacheControlDirective).Arguments[0].Value.Raw
 }
 
 // parentInterface returns the name of an interface that a field belonging to a type definition
@@ -1393,6 +1405,23 @@ func (q *query) EnumValues() []string {
 	return nil
 }
 
+func (q *query) ConstructedFor() Type {
+	if q.QueryType() != AggregateQuery {
+		return q.Type()
+	}
+
+	// Its of type AggregateQuery
+	queryName := q.Type().Name()
+	typeName := queryName[:len(queryName)-15]
+	return &astType{
+		typ: &ast.Type{
+			NamedType: typeName,
+		},
+		inSchema:        q.op.inSchema,
+		dgraphPredicate: q.op.inSchema.dgraphPredicate,
+	}
+}
+
 func (q *query) QueryType() QueryType {
 	return queryType(q.Name(), q.op.inSchema.customDirectives["Query"][q.Name()])
 }
@@ -1421,6 +1450,8 @@ func queryType(name string, custom *ast.Directive) QueryType {
 		return FilterQuery
 	case strings.HasPrefix(name, "check"):
 		return PasswordQuery
+	case strings.HasPrefix(name, "aggregate"):
+		return AggregateQuery
 	default:
 		return NotSupportedQuery
 	}
@@ -1803,6 +1834,10 @@ func (t *astType) Nullable() bool {
 	return !t.typ.NonNull
 }
 
+func (t *astType) IsInterface() bool {
+	return t.inSchema.schema.Types[t.typ.Name()].Kind == ast.Interface
+}
+
 func (t *astType) IsUnion() bool {
 	return t.inSchema.schema.Types[t.typ.Name()].Kind == ast.Union
 }
@@ -1970,6 +2005,22 @@ func (t *astType) Interfaces() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+func (t *astType) ImplementingTypes() []Type {
+	objects := t.inSchema.schema.PossibleTypes[t.typ.Name()]
+	if len(objects) == 0 {
+		return nil
+	}
+	types := make([]Type, 0, len(objects))
+	for _, typ := range objects {
+		types = append(types, &astType{
+			typ:             &ast.Type{NamedType: typ.Name},
+			inSchema:        t.inSchema,
+			dgraphPredicate: t.dgraphPredicate,
+		})
+	}
+	return types
 }
 
 // CheckNonNulls checks that any non nullables in t are present in obj.

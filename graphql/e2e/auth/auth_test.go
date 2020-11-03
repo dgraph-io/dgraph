@@ -20,16 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -59,6 +57,18 @@ type Issue struct {
 	Id    string       `json:"id,omitempty"`
 	Msg   string       `json:"msg,omitempty"`
 	Owner *common.User `json:"owner,omitempty"`
+}
+
+type Author struct {
+	Id    string      `json:"id,omitempty"`
+	Name  string      `json:"name,omitempty"`
+	Posts []*Question `json:"posts,omitempty"`
+}
+
+type Question struct {
+	Id     string  `json:"id,omitempty"`
+	Text   string  `json:"text,omitempty"`
+	Author *Author `json:"author,omitempty"`
 }
 
 type Log struct {
@@ -120,6 +130,7 @@ type TaskOccurrence struct {
 type TestCase struct {
 	user      string
 	role      string
+	ans       bool
 	result    string
 	name      string
 	filter    map[string]interface{}
@@ -350,6 +361,112 @@ func TestAuthWithDgraphDirective(t *testing.T) {
 	}
 }
 
+func TestAuthOnInterfaces(t *testing.T) {
+	TestCases := []TestCase{
+		{
+			name: "Types inherit Interface's auth rules and its own rules",
+			query: `
+		query{
+			queryQuestion{
+				text
+			}
+		}
+		`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			result: `{"queryQuestion":[{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Should return empty for non-existent user",
+			query: `
+		query{
+			queryQuestion{
+				text
+			}
+		}
+		`,
+			user:   "user3@dgraph.io",
+			ans:    true,
+			result: `{"queryQuestion":[]}`,
+		},
+		{
+			name: "Types inherit Only Interface's auth rules if it doesn't have its own auth rules",
+			query: `
+			query{
+				queryAnswer{
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			result: `{"queryAnswer": [{"text": "A Answer"}]}`,
+		},
+		{
+			name: "Types inherit auth rules from all the different Interfaces",
+			query: `
+			query{
+				queryFbPost{
+					text
+				}
+			}
+			`,
+			user:   "user2@dgraph.io",
+			role:   "ADMIN",
+			result: `{"queryFbPost": [{"text": "B FbPost"}]}`,
+		},
+		{
+			name: "Query Interface should interhit auth rules from all the interfaces",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			role:   "ADMIN",
+			result: `{"queryPost":[{"text": "A Answer"},{"text": "A FbPost"},{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Interface should return those implementing type whose auth rules are satisfied",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			result: `{"queryPost":[{"text": "A Answer"},{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Interface should return empty if the Auth rules of interface are not satisfied",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			ans:    true,
+			result: `{"queryPost":[]}`,
+		},
+	}
+
+	for _, tcase := range TestCases {
+		t.Run(tcase.name, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
+				Query:   tcase.query,
+			}
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
+	}
+}
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Query non auth field without JWT Token",
@@ -869,6 +986,42 @@ func TestRootFilter(t *testing.T) {
 	}
 }
 
+func TestRootCountQuery(t *testing.T) {
+	testCases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"aggregateColumn": {"count": 1}}`,
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"aggregateColumn": {"count": 3}}`,
+	}, {
+		user:   "user4",
+		role:   "USER",
+		result: `{"aggregateColumn": {"count": 2}}`,
+	}}
+	query := `
+	query {
+		aggregateColumn {
+			count
+		}
+	}`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			params := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
 func TestDeepRBACValue(t *testing.T) {
 	testCases := []TestCase{
 		{user: "user1", role: "USER", result: `{"queryUser": [{"username": "user1", "issues":[]}]}`},
@@ -923,6 +1076,35 @@ func TestRBACFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func TestRBACFilterWithCountQuery(t *testing.T) {
+	testCases := []TestCase{
+		{role: "USER", result: `{"aggregateLog": null}`},
+		{result: `{"aggregateLog": null}`},
+		{role: "ADMIN", result: `{"aggregateLog": {"count": 2}}`}}
+
+	query := `
+		query {
+			aggregateLog {
+		    	count
+		    }
+		}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			params := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
@@ -1302,21 +1484,10 @@ func TestDeepRBACValueCascade(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	schemaFile := "schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
-
-	jsonFile := "test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
-	if err != nil {
-		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
-	}
-
-	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
+	schema, data := common.BootstrapAuthData()
+	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
-		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem")
+		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem", false)
 		if err != nil {
 			panic(err)
 		}

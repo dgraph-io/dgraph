@@ -46,8 +46,23 @@ const (
 	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
 	lambdaDirective       = "lambda"
 
+	generateDirective       = "generate"
+	generateQueryArg        = "query"
+	generateGetField        = "get"
+	generateQueryField      = "query"
+	generatePasswordField   = "password"
+	generateAggregateField  = "aggregate"
+	generateMutationArg     = "mutation"
+	generateAddField        = "add"
+	generateUpdateField     = "update"
+	generateDeleteField     = "delete"
+	generateSubscriptionArg = "subscription"
+
 	cascadeDirective = "cascade"
 	cascadeArg       = "fields"
+
+	cacheControlDirective = "cacheControl"
+	CacheControlHeader    = "Cache-Control"
 
 	// custom directive args and fields
 	dqlArg      = "dql"
@@ -93,28 +108,28 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 scalar DateTime
 
 input IntRange{
-	min: Int
-	max: Int
+	min: Int!
+	max: Int!
 }
 
 input FloatRange{
-	min: Float
-	max: Float
+	min: Float!
+	max: Float!
 }
 
 input Int64Range{
-	min: Int64
-	max: Int64
+	min: Int64!
+	max: Int64!
 }
 
 input DateTimeRange{
-	min: DateTime
-	max: DateTime
+	min: DateTime!
+	max: DateTime!
 }
 
 input StringRange{
-	min: String
-	max: String
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
@@ -232,6 +247,19 @@ input PolygonGeoFilter {
 	intersects: IntersectsFilter
 }
 
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -242,11 +270,16 @@ directive @auth(
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT
+	delete:AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -469,6 +502,7 @@ var directiveValidators = map[string]directiveValidator{
 	remoteDirective:       ValidatorNoOp,
 	deprecatedDirective:   ValidatorNoOp,
 	lambdaDirective:       lambdaDirectiveValidation,
+	generateDirective:     ValidatorNoOp,
 }
 
 // directiveLocationMap stores the directives and their locations for the ones which can be
@@ -480,11 +514,89 @@ var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
 	idDirective:           nil,
 	subscriptionDirective: {ast.Object: true, ast.Interface: true},
 	secretDirective:       {ast.Object: true, ast.Interface: true},
-	authDirective:         {ast.Object: true},
+	authDirective:         {ast.Object: true, ast.Interface: true},
 	customDirective:       nil,
 	remoteDirective: {ast.Object: true, ast.Interface: true, ast.Union: true,
 		ast.InputObject: true, ast.Enum: true},
-	cascadeDirective: nil,
+	cascadeDirective:  nil,
+	generateDirective: {ast.Object: true, ast.Interface: true},
+}
+
+// Struct to store parameters of @generate directive
+type GenerateDirectiveParams struct {
+	generateGetQuery       bool
+	generateFilterQuery    bool
+	generatePasswordQuery  bool
+	generateAggregateQuery bool
+	generateAddMutation    bool
+	generateUpdateMutation bool
+	generateDeleteMutation bool
+	generateSubscription   bool
+}
+
+func parseGenerateDirectiveParams(defn *ast.Definition) *GenerateDirectiveParams {
+	ret := &GenerateDirectiveParams{
+		generateGetQuery:       true,
+		generateFilterQuery:    true,
+		generatePasswordQuery:  true,
+		generateAggregateQuery: true,
+		generateAddMutation:    true,
+		generateUpdateMutation: true,
+		generateDeleteMutation: true,
+		generateSubscription:   false,
+	}
+
+	if dir := defn.Directives.ForName(generateDirective); dir != nil {
+
+		if queryArg := dir.Arguments.ForName(generateQueryArg); queryArg != nil {
+			if getField := queryArg.Value.Children.ForName(generateGetField); getField != nil {
+				if getFieldVal, err := getField.Value(nil); err == nil {
+					ret.generateGetQuery = getFieldVal.(bool)
+				}
+			}
+			if queryField := queryArg.Value.Children.ForName(generateQueryField); queryField != nil {
+				if queryFieldVal, err := queryField.Value(nil); err == nil {
+					ret.generateFilterQuery = queryFieldVal.(bool)
+				}
+			}
+			if passwordField := queryArg.Value.Children.ForName(generatePasswordField); passwordField != nil {
+				if passwordFieldVal, err := passwordField.Value(nil); err == nil {
+					ret.generatePasswordQuery = passwordFieldVal.(bool)
+				}
+			}
+			if aggregateField := queryArg.Value.Children.ForName(generateAggregateField); aggregateField != nil {
+				if aggregateFieldVal, err := aggregateField.Value(nil); err == nil {
+					ret.generateAggregateQuery = aggregateFieldVal.(bool)
+				}
+			}
+		}
+
+		if mutationArg := dir.Arguments.ForName(generateMutationArg); mutationArg != nil {
+			if addField := mutationArg.Value.Children.ForName(generateAddField); addField != nil {
+				if addFieldVal, err := addField.Value(nil); err == nil {
+					ret.generateAddMutation = addFieldVal.(bool)
+				}
+			}
+			if updateField := mutationArg.Value.Children.ForName(generateUpdateField); updateField != nil {
+				if updateFieldVal, err := updateField.Value(nil); err == nil {
+					ret.generateUpdateMutation = updateFieldVal.(bool)
+				}
+			}
+			if deleteField := mutationArg.Value.Children.ForName(generateDeleteField); deleteField != nil {
+				if deleteFieldVal, err := deleteField.Value(nil); err == nil {
+					ret.generateDeleteMutation = deleteFieldVal.(bool)
+				}
+			}
+		}
+
+		if subscriptionArg := dir.Arguments.ForName(generateSubscriptionArg); subscriptionArg != nil {
+			if subscriptionVal, err := subscriptionArg.Value.Value(nil); err == nil {
+				ret.generateSubscription = subscriptionVal.(bool)
+			}
+		}
+	}
+
+	return ret
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
@@ -701,32 +813,49 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 			continue
 		}
 
+		params := parseGenerateDirectiveParams(defn)
+
 		// Common types to both Interface and Object.
 		addReferenceType(sch, defn)
-		addPatchType(sch, defn)
-		addUpdateType(sch, defn)
-		addUpdatePayloadType(sch, defn)
-		addDeletePayloadType(sch, defn)
+
+		if params.generateUpdateMutation {
+			addPatchType(sch, defn)
+			addUpdateType(sch, defn)
+			addUpdatePayloadType(sch, defn)
+		}
+
+		if params.generateDeleteMutation {
+			addDeletePayloadType(sch, defn)
+		}
 
 		switch defn.Kind {
 		case ast.Interface:
 			// addInputType doesn't make sense as interface is like an abstract class and we can't
 			// create objects of its type.
-			addUpdateMutation(sch, defn)
-			addDeleteMutation(sch, defn)
+			if params.generateUpdateMutation {
+				addUpdateMutation(sch, defn)
+			}
+			if params.generateDeleteMutation {
+				addDeleteMutation(sch, defn)
+			}
 
 		case ast.Object:
 			// types and inputs needed for mutations
-			addInputType(sch, defn)
-			addAddPayloadType(sch, defn)
-			addMutations(sch, defn)
+			if params.generateAddMutation {
+				addInputType(sch, defn)
+				addAddPayloadType(sch, defn)
+			}
+			addMutations(sch, defn, params)
 		}
 
 		// types and inputs needed for query and search
 		addFilterType(sch, defn)
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
-		addQueries(sch, defn)
+		if params.generateAggregateQuery {
+			addAggregationResultType(sch, defn)
+		}
+		addQueries(sch, defn, params)
 		addTypeHasFilter(sch, defn)
 	}
 }
@@ -995,7 +1124,10 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
-	fldTypeName := fld.Type.Name()
+	addFilterArgumentForField(schema, fld, fld.Type.Name())
+}
+
+func addFilterArgumentForField(schema *ast.Schema, fld *ast.FieldDefinition, fldTypeName string) {
 	fldType := schema.Types[fldTypeName]
 	if fldType.Kind == ast.Union || hasFilterable(fldType) {
 		fld.Arguments = append(fld.Arguments,
@@ -1402,7 +1534,22 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
+func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
+	aggregationResultTypeName := defn.Name + "AggregateResult"
+
+	countField := &ast.FieldDefinition{
+		Name: "count",
+		Type: &ast.Type{NamedType: "Int"},
+	}
+
+	schema.Types[aggregationResultTypeName] = &ast.Definition{
+		Kind:   ast.Object,
+		Name:   aggregationResultTypeName,
+		Fields: []*ast.FieldDefinition{countField},
+	}
+}
+
+func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	if !hasIDField && !hasXIDField {
@@ -1440,12 +1587,12 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 	subs := defn.Directives.ForName(subscriptionDirective)
-	if subs != nil {
+	if subs != nil || generateSubscription {
 		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 	}
 }
 
-func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
+func addFilterQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	qry := &ast.FieldDefinition{
 		Name: "query" + defn.Name,
 		Type: &ast.Type{
@@ -1460,7 +1607,24 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 	subs := defn.Directives.ForName(subscriptionDirective)
-	if subs != nil {
+	if subs != nil || generateSubscription {
+		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	}
+
+}
+
+func addAggregationQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
+	qry := &ast.FieldDefinition{
+		Name: "aggregate" + defn.Name,
+		Type: &ast.Type{
+			NamedType: defn.Name + "AggregateResult",
+		},
+	}
+	addFilterArgumentForField(schema, qry, defn.Name)
+
+	schema.Query.Fields = append(schema.Query.Fields, qry)
+	subs := defn.Directives.ForName(subscriptionDirective)
+	if subs != nil || generateSubscription {
 		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 	}
 
@@ -1504,13 +1668,29 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
-func addQueries(schema *ast.Schema, defn *ast.Definition) {
-	addGetQuery(schema, defn)
-	addPasswordQuery(schema, defn)
-	addFilterQuery(schema, defn)
+func addQueries(schema *ast.Schema, defn *ast.Definition, params *GenerateDirectiveParams) {
+	if params.generateGetQuery {
+		addGetQuery(schema, defn, params.generateSubscription)
+	}
+
+	if params.generatePasswordQuery {
+		addPasswordQuery(schema, defn)
+	}
+
+	if params.generateFilterQuery {
+		addFilterQuery(schema, defn, params.generateSubscription)
+	}
+
+	if params.generateAggregateQuery {
+		addAggregationQuery(schema, defn, params.generateSubscription)
+	}
 }
 
 func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
+	if schema.Types["Add"+defn.Name+"Input"] == nil {
+		return
+	}
+
 	add := &ast.FieldDefinition{
 		Name: "add" + defn.Name,
 		Type: &ast.Type{
@@ -1577,13 +1757,16 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 	schema.Mutation.Fields = append(schema.Mutation.Fields, del)
 }
 
-func addMutations(schema *ast.Schema, defn *ast.Definition) {
-	if schema.Types["Add"+defn.Name+"Input"] == nil {
-		return
+func addMutations(schema *ast.Schema, defn *ast.Definition, params *GenerateDirectiveParams) {
+	if params.generateAddMutation {
+		addAddMutation(schema, defn)
 	}
-	addAddMutation(schema, defn)
-	addUpdateMutation(schema, defn)
-	addDeleteMutation(schema, defn)
+	if params.generateUpdateMutation {
+		addUpdateMutation(schema, defn)
+	}
+	if params.generateDeleteMutation {
+		addDeleteMutation(schema, defn)
+	}
 }
 
 func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinition {

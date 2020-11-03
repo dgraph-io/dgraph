@@ -33,28 +33,28 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 scalar DateTime
 
 input IntRange{
-	min: Int
-	max: Int
+	min: Int!
+	max: Int!
 }
 
 input FloatRange{
-	min: Float
-	max: Float
+	min: Float!
+	max: Float!
 }
 
 input Int64Range{
-	min: Int64
-	max: Int64
+	min: Int64!
+	max: Int64!
 }
 
 input DateTimeRange{
-	min: DateTime
-	max: DateTime
+	min: DateTime!
+	max: DateTime!
 }
 
 input StringRange{
-	min: String
-	max: String
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
@@ -172,6 +172,19 @@ input PolygonGeoFilter {
 	intersects: IntersectsFilter
 }
 
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -182,11 +195,16 @@ directive @auth(
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT
+	delete:AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -267,6 +285,10 @@ type AddLibraryPayload {
 	numUids: Int
 }
 
+type BookAggregateResult {
+	count: Int
+}
+
 type DeleteBookPayload {
 	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
 	msg: String
@@ -277,6 +299,14 @@ type DeleteLibraryItemPayload {
 	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
 	msg: String
 	numUids: Int
+}
+
+type LibraryAggregateResult {
+	count: Int
+}
+
+type LibraryItemAggregateResult {
+	count: Int
 }
 
 type UpdateBookPayload {
@@ -393,9 +423,12 @@ input UpdateBookInput {
 type Query {
 	getLibraryItem(refID: String!): LibraryItem
 	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
 	getBook(refID: String!): Book
 	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	aggregateBook(filter: BookFilter): BookAggregateResult
 	queryLibrary(first: Int, offset: Int): [Library]
+	aggregateLibrary: LibraryAggregateResult
 }
 
 #######################

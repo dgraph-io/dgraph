@@ -43,13 +43,19 @@ type authVariablekey string
 const (
 	AuthJwtCtxKey  = ctxKey("authorizationJwt")
 	AuthVariables  = authVariablekey("authVariable")
-	RSA256         = "RS256"
-	HMAC256        = "HS256"
 	AuthMetaHeader = "# Dgraph.Authorization "
 )
 
 var (
-	authMeta = &AuthMeta{}
+	authMeta            = &AuthMeta{}
+	supportedAlgorithms = map[string]jwt.SigningMethod{
+		jwt.SigningMethodRS256.Name: jwt.SigningMethodRS256,
+		jwt.SigningMethodRS384.Name: jwt.SigningMethodRS384,
+		jwt.SigningMethodRS512.Name: jwt.SigningMethodRS512,
+		jwt.SigningMethodHS256.Name: jwt.SigningMethodHS256,
+		jwt.SigningMethodHS384.Name: jwt.SigningMethodHS384,
+		jwt.SigningMethodHS512.Name: jwt.SigningMethodHS512,
+	}
 )
 
 type AuthMeta struct {
@@ -61,7 +67,9 @@ type AuthMeta struct {
 	Header          string
 	Namespace       string
 	Algo            string
+	SigningMethod   jwt.SigningMethod `json:"-"` // Ignoring this field
 	Audience        []string
+	ClosedByDefault bool
 	sync.RWMutex
 }
 
@@ -106,10 +114,17 @@ func Parse(schema string) (*AuthMeta, error) {
 		return nil, nil
 	}
 	authInfo := schema[authInfoIdx:]
-
 	err := json.Unmarshal([]byte(authInfo[len(AuthMetaHeader):]), &meta)
 	if err == nil {
-		return &meta, meta.validate()
+		if err := meta.validate(); err != nil {
+			return nil, err
+		}
+
+		if algoErr := meta.initSigningMethod(); algoErr != nil {
+			return nil, algoErr
+		}
+
+		return &meta, nil
 	}
 
 	fmt.Println("Falling back to parsing `Dgraph.Authorization` in old format." +
@@ -141,13 +156,11 @@ func Parse(schema string) (*AuthMeta, error) {
 	meta.Namespace = authInfo[idx[0][6]:idx[0][7]]
 	meta.Algo = authInfo[idx[0][8]:idx[0][9]]
 	meta.VerificationKey = authInfo[idx[0][10]:idx[0][11]]
-	if meta.Algo == HMAC256 {
-		return &meta, nil
+
+	if err := meta.initSigningMethod(); err != nil {
+		return nil, err
 	}
-	if meta.Algo != RSA256 {
-		return nil, errors.Errorf(
-			"invalid jwt algorithm: found %s, but supported options are HS256 or RS256", meta.Algo)
-	}
+
 	return &meta, nil
 }
 
@@ -157,18 +170,17 @@ func ParseAuthMeta(schema string) (*AuthMeta, error) {
 		return nil, err
 	}
 
-	if metaInfo.Algo != RSA256 {
-		return metaInfo, nil
+	if _, ok := metaInfo.SigningMethod.(*jwt.SigningMethodRSA); ok {
+		// The jwt library internally uses `bytes.IndexByte(data, '\n')` to fetch new line and fails
+		// if we have newline "\n" as ASCII value {92,110} instead of the actual ASCII value of 10.
+		// To fix this we replace "\n" with new line's ASCII value.
+		bytekey := bytes.ReplaceAll([]byte(metaInfo.VerificationKey), []byte{92, 110}, []byte{10})
+
+		if metaInfo.RSAPublicKey, err = jwt.ParseRSAPublicKeyFromPEM(bytekey); err != nil {
+			return nil, err
+		}
 	}
 
-	// The jwt library internally uses `bytes.IndexByte(data, '\n')` to fetch new line and fails
-	// if we have newline "\n" as ASCII value {92,110} instead of the actual ASCII value of 10.
-	// To fix this we replace "\n" with new line's ASCII value.
-	bytekey := bytes.ReplaceAll([]byte(metaInfo.VerificationKey), []byte{92, 110}, []byte{10})
-
-	if metaInfo.RSAPublicKey, err = jwt.ParseRSAPublicKeyFromPEM(bytekey); err != nil {
-		return nil, err
-	}
 	return metaInfo, nil
 }
 
@@ -232,7 +244,9 @@ func SetAuthMeta(m *AuthMeta) {
 	authMeta.Header = m.Header
 	authMeta.Namespace = m.Namespace
 	authMeta.Algo = m.Algo
+	authMeta.SigningMethod = m.SigningMethod
 	authMeta.Audience = m.Audience
+	authMeta.ClosedByDefault = m.ClosedByDefault
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -311,9 +325,12 @@ func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
 	// return CustomClaims containing jwt and authvariables.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return &CustomClaims{}, nil
+		if authMeta.ClosedByDefault {
+			return &CustomClaims{}, fmt.Errorf("a valid JWT is required but was not provided")
+		} else {
+			return &CustomClaims{}, nil
+		}
 	}
-
 	jwtToken := md.Get(string(AuthJwtCtxKey))
 	if len(jwtToken) == 0 {
 		return &CustomClaims{}, nil
@@ -380,15 +397,14 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 					return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
 						amAlgo, algo)
 				}
-				if algo == HMAC256 {
-					if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
-						return []byte(authMeta.verificationKey()), nil
-					}
-				} else if algo == RSA256 {
-					if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
-						return authMeta.rsaPublicKey(), nil
-					}
+
+				switch authMeta.SigningMethod.(type) {
+				case *jwt.SigningMethodHMAC:
+					return []byte(authMeta.verificationKey()), nil
+				case *jwt.SigningMethodRSA:
+					return authMeta.rsaPublicKey(), nil
 				}
+
 				return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
 			}, jwt.WithoutAudienceValidation())
 	}
@@ -456,7 +472,7 @@ func (a *AuthMeta) FetchJWKs() error {
 	var maxAge int64
 
 	if resp.Header["Cache-Control"] != nil {
-		maxAge, err = ParseMaxAge(resp.Header["Cache-Control"][0])
+		maxAge, _ = ParseMaxAge(resp.Header["Cache-Control"][0])
 	}
 
 	if maxAge == 0 {
@@ -492,4 +508,33 @@ func (a *AuthMeta) isExpired() bool {
 		return false
 	}
 	return time.Now().After(a.expiryTime)
+}
+
+// initSigningMethod takes the current Algo value, validates it's a supported SigningMethod, then sets the SigningMethod
+// field.
+func (a *AuthMeta) initSigningMethod() error {
+	a.Lock()
+	defer a.Unlock()
+
+	// configurations using JWK URLs do not use signing methods.
+	if a.JWKUrl != "" {
+		return nil
+	}
+
+	signingMethod, ok := supportedAlgorithms[a.Algo]
+	if !ok {
+		arr := make([]string, 0, len(supportedAlgorithms))
+		for k := range supportedAlgorithms {
+			arr = append(arr, k)
+		}
+
+		return errors.Errorf(
+			"invalid jwt algorithm: found %s, but supported options are: %s",
+			a.Algo, strings.Join(arr, ","),
+		)
+	}
+
+	a.SigningMethod = signingMethod
+
+	return nil
 }

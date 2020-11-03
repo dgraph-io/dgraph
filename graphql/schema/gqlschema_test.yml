@@ -2483,29 +2483,6 @@ invalid_schemas:
         "locations":[{"line":1, "column":6}]},
       ]
 
-  - name: "@auth on interface"
-    input: |
-      interface X @auth(
-      query: { rule: """
-                 query($USER: String!) {
-                     queryX(filter: { username: { eq: $USER } }) {
-                        __typename
-                     }
-                 }
-                 """ }
-      ){
-        username: String! @id
-        age: Int
-      }
-      type Y implements X {
-        userRole: String @search(by: [hash])
-      }
-    errlist: [
-    {"message": "Type X; has the @auth directive, but it is not applicable on types of INTERFACE kind.",
-     "locations":[{"line":1, "column":14}]},
-    ]
-
-
   - name: "There shoudnt be any reserved arguments on any field"
     input: |
       type T {

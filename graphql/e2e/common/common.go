@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/schema"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -82,9 +84,10 @@ const (
 // header to the same.
 
 type GraphQLParams struct {
-	Query         string                 `json:"query"`
-	OperationName string                 `json:"operationName"`
-	Variables     map[string]interface{} `json:"variables"`
+	Query         string                    `json:"query"`
+	OperationName string                    `json:"operationName"`
+	Variables     map[string]interface{}    `json:"variables"`
+	Extensions    *schema.RequestExtensions `json:"extensions,omitempty"`
 	acceptGzip    bool
 	gzipEncoding  bool
 	Headers       http.Header
@@ -194,6 +197,12 @@ type UserSecret struct {
 	OwnedBy string `json:"ownedBy,omitempty"`
 }
 
+type Todo struct {
+	Id    string `json:"id,omitempty"`
+	Text  string `json:"text,omitempty"`
+	Owner string `json:"owner,omitempty"`
+}
+
 func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.AuthMeta) {
 	getParams := &GraphQLParams{
 		Headers: GetJWT(t, user, "", metaInfo),
@@ -280,6 +289,7 @@ func RunAll(t *testing.T) {
 
 	// header tests
 	t.Run("touched uids header", touchedUidsHeader)
+	t.Run("cache-control header", cacheControlHeader)
 
 	// encoding
 	t.Run("gzip compression", gzipCompression)
@@ -342,6 +352,10 @@ func RunAll(t *testing.T) {
 	t.Run("cascade directive", queryWithCascade)
 	t.Run("Filter Queries", filterQueries)
 	t.Run("query geo near filter", queryGeoNearFilter)
+	t.Run("persisted query", persistedQuery)
+	t.Run("query count without filter", queryCountWithoutFilter)
+	t.Run("query count with filter", queryCountWithFilter)
+	t.Run("query count with alias", queryCountWithAlias)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -383,6 +397,7 @@ func RunAll(t *testing.T) {
 	t.Run("three level deep", threeLevelDeepMutation)
 	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
 	t.Run("Input coercing for int64 type", int64BoundaryTesting)
+	t.Run("List of integers", intWithList)
 	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
 	t.Run("Geo - Point type", mutationPointType)
 	t.Run("Geo - Polygon type", mutationPolygonType)
@@ -393,6 +408,7 @@ func RunAll(t *testing.T) {
 	t.Run("request validation errors", requestValidationErrors)
 	t.Run("panic catcher", panicCatcher)
 	t.Run("deep mutation errors", deepMutationErrors)
+	t.Run("not generated query, mutation using generate directive", notGeneratedAPIErrors)
 
 	// fragment tests
 	t.Run("fragment in mutation", fragmentInMutation)
@@ -898,4 +914,39 @@ func GetJWT(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) http.H
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h
+}
+
+func GetJWTForInterfaceAuth(t *testing.T, user, role string, ans bool, metaInfo *testutil.AuthMeta) http.Header {
+	metaInfo.AuthVars = map[string]interface{}{}
+	if user != "" {
+		metaInfo.AuthVars["USER"] = user
+	}
+
+	if role != "" {
+		metaInfo.AuthVars["ROLE"] = role
+	}
+
+	metaInfo.AuthVars["ANS"] = ans
+
+	require.NotNil(t, metaInfo.PrivateKeyPath)
+	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
+	require.NoError(t, err)
+	h := make(http.Header)
+	h.Add(metaInfo.Header, jwtToken)
+	return h
+}
+
+func BootstrapAuthData() ([]byte, []byte) {
+	schemaFile := "../auth/schema.graphql"
+	schema, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		panic(err)
+	}
+
+	jsonFile := "../auth/test_data.json"
+	data, err := ioutil.ReadFile(jsonFile)
+	if err != nil {
+		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
+	}
+	return schema, data
 }

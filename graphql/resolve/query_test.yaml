@@ -1328,6 +1328,21 @@
     }
 
 -
+  name: "Count Query"
+  gqlquery: |
+    query {
+      aggregateCountry(filter: { name: { regexp: "/.*ust.*/" }}) {
+        count
+      }
+    }
+  dgquery: |-
+    query {
+      aggregateCountry(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
+        count : count(uid)
+      }
+    }
+
+-
   name: "Skip directive"
   variables:
     skipTrue: true
