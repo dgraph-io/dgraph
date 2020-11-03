@@ -54,7 +54,6 @@ var (
 
 func getTlsConf(t *testing.T) *tls.Config {
 	c := &x.TLSHelperConfig{
-		CertDir:          "../../tls/live",
 		CertRequired:     true,
 		Cert:             "../../tls/live/client.liveclient.crt",
 		Key:              "../../tls/live/client.liveclient.key",

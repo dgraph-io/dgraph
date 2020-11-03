@@ -19,7 +19,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/spf13/viper"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -28,6 +27,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/viper"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -53,7 +54,6 @@ var (
 
 func getTlsConf(t *testing.T) *tls.Config {
 	c := &x.TLSHelperConfig{
-		CertDir:          "../../tls/live",
 		CertRequired:     true,
 		Cert:             "../../tls/live/client.liveclient.crt",
 		Key:              "../../tls/live/client.liveclient.key",
