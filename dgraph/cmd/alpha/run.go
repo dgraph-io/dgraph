@@ -163,16 +163,6 @@ they form a Raft group and provide synchronous replication.
 	flag.Uint64("mutations_nquad_limit", 1e6,
 		"Limit for the maximum number of nquads that can be inserted in a mutation request")
 
-	// TLS configurations
-	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
-	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
-	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	flag.Bool("tls_internal_port_enabled", false, "(optional) enable inter node TLS encryption between cluster nodes.")
-	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to " +
-		"connect as a client with the other nodes in the cluster.")
-	flag.String("tls_key", "", "(optional) The private key file name "+
-		"in tls_dir needed to connect as a client with the other nodes in the cluster.")
-
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
@@ -196,6 +186,9 @@ they form a Raft group and provide synchronous replication.
 	flag.String("cache_percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
+
+	// TLS configurations
+	x.RegisterServerTLSFlags(flag)
 }
 
 func setupCustomTokenizers() {
@@ -395,29 +388,6 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	s.Stop()
 }
 
-func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
-	defer closer.Done()
-	srv := &http.Server{
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 600 * time.Second,
-		IdleTimeout:  2 * time.Minute,
-	}
-	var err error
-	switch {
-	case tlsCfg != nil:
-		srv.TLSConfig = tlsCfg
-		err = srv.ServeTLS(l, "", "")
-	default:
-		err = srv.Serve(l)
-	}
-	glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
-	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("Http(s) shutdown err: %v", err.Error())
-	}
-}
-
 func setupServer(closer *z.Closer) {
 	go worker.RunServer(bindall) // For pb.communication.
 
@@ -426,7 +396,7 @@ func setupServer(closer *z.Closer) {
 		laddr = "0.0.0.0"
 	}
 
-	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, x.TLSNodeCert, x.TLSNodeKey)
+	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf)
 	if err != nil {
 		log.Fatalf("Failed to setup TLS: %v\n", err)
 	}
@@ -549,7 +519,7 @@ func setupServer(closer *z.Closer) {
 	// Initialize the servers.
 	admin.ServerCloser = z.NewCloser(3)
 	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
-	go serveHTTP(httpListener, tlsCfg, admin.ServerCloser)
+	go x.StartListenHttpAndHttps(httpListener, tlsCfg, admin.ServerCloser)
 
 	if Alpha.Conf.GetBool("telemetry") {
 		go edgraph.PeriodicallyPostTelemetry()
@@ -651,8 +621,11 @@ func run() {
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
-	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
+	tlsClientConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
+	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
+	x.Check(err)
+
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
@@ -667,9 +640,8 @@ func run() {
 		StartTime:            startTime,
 		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
 		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
-		TLSClientConfig:      tlsConf,
-		TLSDir:               Alpha.Conf.GetString("tls_dir"),
-		TLSInterNodeEnabled: Alpha.Conf.GetBool("tls_internal_port_enabled"),
+		TLSClientConfig:      tlsClientConf,
+		TLSServerConfig:      tlsServerConf,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 

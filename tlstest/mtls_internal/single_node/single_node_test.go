@@ -2,6 +2,9 @@ package single_node
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -9,8 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"testing"
-	"time"
 )
 
 func runTests(t *testing.T, client *dgo.Dgraph) {
@@ -74,7 +75,6 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 
 func TestClusterSetup(t *testing.T) {
 	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
 		CertRequired:     true,
 		Cert:             "../tls/alpha1/client.alpha1.crt",
 		Key:              "../tls/alpha1/client.alpha1.key",

@@ -21,8 +21,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc/credentials"
 	"io/ioutil"
 	"net/http"
 	"path"
@@ -30,6 +28,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -52,7 +53,7 @@ func sendRestoreRequest(t *testing.T, backupId string, backupNum int) int {
 	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
-		Transport: &http.Transport {
+		Transport: &http.Transport{
 			TLSClientConfig: tlsConf,
 		},
 	}
@@ -87,7 +88,7 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
-		Transport: &http.Transport {
+		Transport: &http.Transport{
 			TLSClientConfig: tlsConf,
 		},
 	}
@@ -156,7 +157,7 @@ func disableDraining(t *testing.T) {
 	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
-		Transport: &http.Transport {
+		Transport: &http.Transport{
 			TLSClientConfig: tlsConf,
 		},
 	}
@@ -290,7 +291,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	client := http.Client{
 		Timeout: time.Second * 3,
 		Transport: &http.Transport{
-			TLSClientConfig:        tlsConf,
+			TLSClientConfig: tlsConf,
 		},
 	}
 	// Send a request with a backupNum greater than the number of manifests.
@@ -391,12 +392,11 @@ func TestInvalidBackupId(t *testing.T) {
 		}
 	}`
 
-
 	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
 		Transport: &http.Transport{
-			TLSClientConfig:        tlsConf,
+			TLSClientConfig: tlsConf,
 		},
 	}
 	adminUrl := "https://localhost:8180/admin"
@@ -456,7 +456,6 @@ func TestListBackups(t *testing.T) {
 
 func getAlphaClient(t *testing.T) *tls.Config {
 	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
 		CertRequired:     true,
 		Cert:             "../tls/alpha1/client.alpha1.crt",
 		Key:              "../tls/alpha1/client.alpha1.key",
