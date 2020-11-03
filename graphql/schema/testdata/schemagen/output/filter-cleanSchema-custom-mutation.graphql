@@ -1,0 +1,218 @@
+#######################
+# Input Schema
+#######################
+
+type User {
+	id: ID!
+	name: String!
+}
+
+input UserInput {
+	name: String!
+}
+
+#######################
+# Extended Definitions
+#######################
+
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+enum Mode {
+	BATCH
+	SINGLE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete:AuthRule) on OBJECT
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE
+directive @cascade on FIELD
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	msg: String
+	numUids: Int
+}
+
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum UserOrderable {
+	name
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AddUserInput {
+	name: String!
+}
+
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
+}
+
+input UserFilter {
+	id: [ID!]
+	not: UserFilter
+}
+
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
+}
+
+input UserPatch {
+	name: String
+}
+
+input UserRef {
+	id: ID
+	name: String
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getUser(id: ID!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {url:"http://my-api.com",method:"POST",body:"{ data: $input }"})
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
+}
+
