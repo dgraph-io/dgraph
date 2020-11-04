@@ -21,8 +21,8 @@ type testCase struct {
 var testCasesHttp = []testCase{
 	{
 		url:        "http://localhost:6180/health",
-		response:   "Client sent an HTTP request to an HTTPS server.\n",
-		statusCode: 400,
+		response:   "OK",
+		statusCode: 200,
 	},
 	{
 		url:        "http://localhost:6180/state",
@@ -51,7 +51,7 @@ func TestZeroWithAllRoutesTLSWithHTTPClient(t *testing.T) {
 		}
 
 		body := readResponseBody(t, do)
-		if test.response !=  string(body) {
+		if test.response != string(body) {
 			t.Fatalf("response is not same. Got: %s Expected: %s", string(body), test.response)
 		}
 	}
@@ -59,13 +59,13 @@ func TestZeroWithAllRoutesTLSWithHTTPClient(t *testing.T) {
 
 var testCasesHttps = []testCase{
 	{
-		url:       "https://localhost:6180/health",
-		response:  "OK",
+		url:        "https://localhost:6180/health",
+		response:   "OK",
 		statusCode: 200,
 	},
 	{
-		url:       "https://localhost:6180/state",
-		response:  "\"id\":\"1\",\"groupId\":0,\"addr\":\"zero1:5180\",\"leader\":true,\"amDead\":false",
+		url:        "https://localhost:6180/state",
+		response:   "\"id\":\"1\",\"groupId\":0,\"addr\":\"zero1:5180\",\"leader\":true,\"amDead\":false",
 		statusCode: 200,
 	},
 }
@@ -78,7 +78,7 @@ func TestZeroWithAllRoutesTLSWithTLSClient(t *testing.T) {
 	tr := &http.Transport{
 		IdleConnTimeout:    30 * time.Second,
 		DisableCompression: true,
-		TLSClientConfig: tlsCfg,
+		TLSClientConfig:    tlsCfg,
 	}
 	client := http.Client{
 		Transport: tr,
@@ -95,7 +95,7 @@ func TestZeroWithAllRoutesTLSWithTLSClient(t *testing.T) {
 		}
 
 		body := readResponseBody(t, do)
-		if !strings.Contains(string(body), test.response)  {
+		if !strings.Contains(string(body), test.response) {
 			t.Fatalf("response is not same. Got: %s Expected: %s", string(body), test.response)
 		}
 	}

@@ -352,3 +352,12 @@ type Home {
     favouriteMember: HomeMember
 }
 # union testing - end
+
+type Workflow {
+    id: ID!
+    nodes: [Node!]
+}
+
+type Node {
+    name: String!
+}

@@ -676,7 +676,7 @@
     }
   dgmutations:
     - deletejson: |
-        { 
+        {
                 "Author.posts": [{
                         "uid" : "0x124",
                         "Post.author": {
@@ -737,6 +737,33 @@
         uid
       }
     }
+
+-
+  name: "Update remove reference without id or xid"
+  gqlmutation: |
+    mutation updateWorkflow($patch: UpdateWorkflowInput!) {
+      updateWorkflow(input: $patch) {
+        workflow {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123"]
+        },
+        "remove": {
+          "nodes": [ { "name": "node" } ]
+        },
+        "set": {
+          "nodes": [ { "name": "node" } ]
+        }
+      }
+    }
+  error:
+    message: |-
+      failed to rewrite mutation payload because object of type: Node doesn't have a field of type ID! or @id and can't be referenced for deletion
 
 -
   name: "Update add and remove together"
@@ -1376,16 +1403,16 @@
 # Additional Deletes
 #
 # If we have
-# 
+#
 # type Post { ... author: Author @hasInverse(field: posts) ... }
 # type Author { ... posts: [Post] ... }
 #
 # and existing edge
-# 
+#
 # Post1 --- author --> Author1
-# 
+#
 # there must also exist edge
-# 
+#
 # Author1 --- posts --> Post1
 #
 # So if we did an update that changes the author of Post1 to Author2, we need to
@@ -1402,7 +1429,7 @@
 # author we are updating.
 #
 # Updates can only happen at the top level of a mutation, so there's no deep cases.
-# There's four cases to consider: 
+# There's four cases to consider:
 #  * updating a node by adding a reference by ID (e.g. attaching a post to an author
 #    causes a delete on the author the post was attached to - if it's not the post
 #    being updated)
@@ -1422,8 +1449,8 @@
       }
     }
   gqlvariables: |
-    { 
-      "patch": { 
+    {
+      "patch": {
         "filter": {
           "id": ["0x123"]
         },
@@ -1434,7 +1461,7 @@
     }
   dgmutations:
     - setjson: |
-        { 
+        {
           "uid" : "uid(x)",
           "Author.posts": [
             {
@@ -1488,7 +1515,7 @@
     - setjson: |
         { "uid" : "uid(x)",
           "Post.text": "updated text",
-          "Post.author": { 
+          "Post.author": {
             "uid": "0x456",
             "Author.posts": [ { "uid": "uid(x)" } ]
           }
@@ -1524,8 +1551,8 @@
       }
     }
   gqlvariables: |
-    { 
-      "patch": { 
+    {
+      "patch": {
         "filter": {
           "id": ["0x123"]
         },
@@ -1545,7 +1572,7 @@
       cond: "@if(eq(len(State4), 0) AND gt(len(x), 0))"
   dgmutationssec:
     - setjson: |
-        { 
+        {
           "uid" : "uid(x)",
           "Country.states": [
             {
@@ -1618,16 +1645,16 @@
       }
     }
   gqlvariables: |
-    { 
+    {
       "patch":
-      { 
+      {
         "filter": { "name": { "eq": "A.N. Owner" } },
         "set": { "computers": { "name": "Comp" } }
       }
     }
   dgmutations:
     - setjson: |
-        { 
+        {
           "uid": "_:Computer4",
           "dgraph.type": ["Computer"],
           "Computer.name": "Comp"
@@ -1636,7 +1663,7 @@
   dgmutationssec:
     - setjson: |
         { "uid" : "uid(x)",
-          "ComputerOwner.computers": { 
+          "ComputerOwner.computers": {
             "uid": "uid(Computer4)",
             "Computer.owners": [ { "uid": "uid(x)" } ]
           }

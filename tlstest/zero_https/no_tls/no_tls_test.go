@@ -23,7 +23,7 @@ var testCasesHttp = []testCase{
 	},
 	{
 		url:        "http://localhost:6180/state",
-		response:  "\"id\":\"1\",\"groupId\":0,\"addr\":\"zero1:5180\",\"leader\":true,\"amDead\":false",
+		response:   "\"id\":\"1\",\"groupId\":0,\"addr\":\"zero1:5180\",\"leader\":true,\"amDead\":false",
 		statusCode: 200,
 	},
 }

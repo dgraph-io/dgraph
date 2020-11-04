@@ -677,7 +677,14 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot read value of GraphQL schema")
 			}
-			if len(vals) != 1 {
+			// if the GraphQL schema node was deleted with S * * delete mutation,
+			// then the data key will be overwritten with nil value.
+			// So, just skip exporting it as there will be no value for this data key.
+			if len(vals) == 0 {
+				return nil, nil
+			}
+			// Give an error only if we find more than one value for the schema.
+			if len(vals) > 1 {
 				return nil, errors.Errorf("found multiple values for the GraphQL schema")
 			}
 			val, ok := vals[0].Value.([]byte)
