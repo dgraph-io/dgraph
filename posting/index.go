@@ -518,7 +518,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 }
 
 // prefixesToDeleteTokensFor returns the prefixes to be deleted for index for the given attribute and token.
-func prefixesToDeleteTokensFor(attr, tokenizerName string, hasLang bool) ([]byte, error) {
+func prefixesToDeleteTokensFor(attr, tokenizerName string, hasLang bool) ([][]byte, error) {
+	prefixes := [][]byte{}
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	tokenizer, ok := tok.GetTokenizer(tokenizerName)
@@ -531,15 +532,15 @@ func prefixesToDeleteTokensFor(attr, tokenizerName string, hasLang bool) ([]byte
 		tokenizer = tok.GetTokenizerForLang(tokenizer, "en")
 	}
 	prefix = append(prefix, tokenizer.Identifier())
-
+	prefixes = append(prefixes, prefix)
 	// All the parts of any list that has been split into multiple parts.
 	// Such keys have a different prefix (the last byte is set to 1).
-	prefix = append(prefix, x.ByteSplit)
-
-	prefix = append(prefix, pk.IndexPrefix()[1:]...)
+	prefix = pk.IndexPrefix()
+	prefix[0] = x.ByteSplit
 	prefix = append(prefix, tokenizer.Identifier())
+	prefixes = append(prefixes, prefix)
 
-	return prefix, nil
+	return prefixes, nil
 }
 
 // rebuilder handles the process of rebuilding an index.
@@ -774,7 +775,7 @@ func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
 	prefixes = append(prefixes, prefixesToDropReverseEdges(ctx, rb)...)
 	prefixes = append(prefixes, prefixesToDropCountIndex(ctx, rb)...)
 	glog.Infof("Deleting indexes for %s", rb.Attr)
-	return pstore.DropPrefix(prefixes)
+	return pstore.DropPrefix(prefixes...)
 }
 
 // BuildData updates data.
@@ -875,14 +876,15 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 	}
 }
 
-func prefixesForTokIndexes(ctx context.Context, rb *IndexRebuild) ([]byte, error) {
+func prefixesForTokIndexes(ctx context.Context, rb *IndexRebuild) ([][]byte, error) {
 	rebuildInfo := rb.needsTokIndexRebuild()
-	prefixes := []byte{}
+	prefixes := [][]byte{}
+
 	if rebuildInfo.op == indexNoop {
 		return prefixes, nil
 	}
 
-	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
+	glog.Infof("Computing prefix index for attr %s and tokenizers %s", rb.Attr,
 		rebuildInfo.tokenizersToDelete)
 	for _, tokenizer := range rebuildInfo.tokenizersToDelete {
 		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, false)
@@ -998,7 +1000,7 @@ func (rb *IndexRebuild) needsCountIndexRebuild() indexOp {
 	return indexRebuild
 }
 
-func prefixesToDropCountIndex(ctx context.Context, rb *IndexRebuild) []byte {
+func prefixesToDropCountIndex(ctx context.Context, rb *IndexRebuild) [][]byte {
 	// Exit early if indices do not need to be rebuilt.
 	op := rb.needsCountIndexRebuild()
 
@@ -1006,18 +1008,22 @@ func prefixesToDropCountIndex(ctx context.Context, rb *IndexRebuild) []byte {
 		return nil
 	}
 
+	prefixes := [][]byte{}
+
 	pk := x.ParsedKey{Attr: rb.Attr}
-	prefixes := pk.CountPrefix(false)
-	prefixes = append(prefixes, pk.CountPrefix(true)...)
+	prefixes = append(prefixes, pk.CountPrefix(false))
+	prefixes = append(prefixes, pk.CountPrefix(true))
 
 	// All the parts of any list that has been split into multiple parts.
 	// Such keys have a different prefix (the last byte is set to 1).
-	prefixes = append(prefixes, x.ByteSplit)
-	prefixes = append(prefixes, pk.CountPrefix(false)[1:]...)
+	countPrefix := pk.CountPrefix(false)
+	countPrefix[0] = x.ByteSplit
+	prefixes = append(prefixes, countPrefix)
 
 	// Parts for count-reverse index.
-	prefixes = append(prefixes, x.ByteSplit)
-	prefixes = append(prefixes, pk.CountPrefix(true)[1:]...)
+	countReversePrefix := pk.CountPrefix(true)
+	countReversePrefix[0] = x.ByteSplit
+	prefixes = append(prefixes, countReversePrefix)
 
 	return prefixes
 }
@@ -1096,20 +1102,22 @@ func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {
 	return indexDelete
 }
 
-func prefixesToDropReverseEdges(ctx context.Context, rb *IndexRebuild) []byte {
+func prefixesToDropReverseEdges(ctx context.Context, rb *IndexRebuild) [][]byte {
+	prefixes := [][]byte{}
 	op := rb.needsReverseEdgesRebuild()
 	if op == indexNoop {
 		return nil
 	}
 	pk := x.ParsedKey{Attr: rb.Attr}
-	prefix := pk.ReversePrefix()
+	prefixes = append(prefixes, pk.ReversePrefix())
 
 	// All the parts of any list that has been split into multiple parts.
 	// Such keys have a different prefix (the last byte is set to 1).
-	prefix = append(prefix, x.ByteSplit)
-	prefix = append(prefix, pk.ReversePrefix()[1:]...)
+	reversePrefix := pk.ReversePrefix()
+	reversePrefix[0] = x.ByteSplit
+	prefixes = append(prefixes, reversePrefix)
 
-	return prefix
+	return prefixes
 }
 
 // rebuildReverseEdges rebuilds the reverse edges for a given attribute.
