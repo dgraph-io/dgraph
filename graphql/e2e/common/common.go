@@ -351,7 +351,7 @@ func RunAll(t *testing.T) {
 	t.Run("queries have extensions", queriesHaveExtensions)
 	t.Run("alias works for queries", queryWithAlias)
 	t.Run("cascade directive", queryWithCascade)
-	t.Run("Filter Queries", filterQueries)
+	t.Run("filter in queries with array for AND/OR", filterInQueriesWithArrayForAndOr)
 	t.Run("query geo near filter", queryGeoNearFilter)
 	t.Run("persisted query", persistedQuery)
 	t.Run("query count without filter", queryCountWithoutFilter)
@@ -403,8 +403,8 @@ func RunAll(t *testing.T) {
 	t.Run("Geo - Point type", mutationPointType)
 	t.Run("Geo - Polygon type", mutationPolygonType)
 	t.Run("Geo - MultiPolygon type", mutationMultiPolygonType)
-	t.Run("Mutation With Filter", mutationWithFilter)
-	t.Run("update With Filter", updateWithFilter)
+	t.Run("filter in mutations with array for AND/OR", filterInMutationsWithArrayForAndOr)
+	t.Run("filter in update mutations with array for AND/OR", filterInUpdateMutationsWithFilterAndOr)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

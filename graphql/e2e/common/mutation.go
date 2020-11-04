@@ -4417,58 +4417,15 @@ func updateUniversity(t *testing.T, id string) {
 	require.NoError(t, err)
 }
 
-func mutationWithFilter(t *testing.T) {
+func filterInMutationsWithArrayForAndOr(t *testing.T) {
 	tcases := []struct {
 		name      string
 		query     string
-		variables map[string]interface{}
+		variables string
 		expected  string
 	}{
 		{
-			name: "Single Statement in Filter on Mutation",
-			query: `mutation {
-			          addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-				        post1(filter:{title:{eq:"Dgraph"}}) {
-							title
-							numLikes
-			        	}
-			          }
-		          }`,
-			expected: `{
-						  "addpost1": {
-							"post1": [
-							  {
-								"title": "Dgraph",
-								"numLikes": 100
-							  }
-							]
-						  }
-						}`,
-		},
-		{
-			name: "Single Statement in Filter on Mutation using variables",
-			query: `mutation($filter:post1Filter) {
-						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-							post1(filter:$filter) {
-								title
-								numLikes
-							}
-						}
-					}`,
-			variables: map[string]interface{}{"filter": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}},
-			expected: `{
-					  "addpost1": {
-						"post1": [
-						  {
-							"title": "Dgraph",
-							"numLikes": 100
-						  }
-						]
-					  }
-					}`,
-		},
-		{
-			name: "Single OR Statement in Filter on Mutation",
+			name: "Filter with OR at top level in Mutation",
 			query: `mutation {
 			         addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
 			        	post1(filter:{or:{title:{eq: "Dgraph"}}}) {
@@ -4489,7 +4446,7 @@ func mutationWithFilter(t *testing.T) {
 					}`,
 		},
 		{
-			name: "Single Statement in Filter on Mutation using variables",
+			name: "Filter with OR at top level in Mutation using variables",
 			query: `mutation($filter:post1Filter) {
 						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
 							post1(filter:$filter) {
@@ -4498,7 +4455,7 @@ func mutationWithFilter(t *testing.T) {
 							}
 						}
 					}`,
-			variables: map[string]interface{}{"filter": map[string]interface{}{"or": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}}},
+			variables: `{"filter":{"or":{"title":{"eq": "Dgraph"}}}}`,
 			expected: `{
 						  "addpost1": {
 							"post1": [
@@ -4511,7 +4468,7 @@ func mutationWithFilter(t *testing.T) {
 						}`,
 		},
 		{
-			name: "Single AND Statement in Filter on Mutation",
+			name: "Filter with AND at top level in Mutation",
 			query: `mutation {
 						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
 							post1(filter:{and:{title:{eq: "Dgraph"}}}) {
@@ -4532,7 +4489,7 @@ func mutationWithFilter(t *testing.T) {
 						}`,
 		},
 		{
-			name: "Single Statement in Filter on Mutation using variables",
+			name: "Filter with AND at top level in Mutation using variables",
 			query: `mutation($filter:post1Filter) {
 						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
 							post1(filter:$filter) {
@@ -4541,7 +4498,7 @@ func mutationWithFilter(t *testing.T) {
 							}
 						}
 					}`,
-			variables: map[string]interface{}{"filter": map[string]interface{}{"and": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}}},
+			variables: `{"filter":{"and":{"title":{"eq": "Dgraph"}}}}`,
 			expected: `{
 						  "addpost1": {
 							"post1": [
@@ -4554,7 +4511,7 @@ func mutationWithFilter(t *testing.T) {
 						}`,
 		},
 		{
-			name: "Nested  Statements in Filter on Mutation",
+			name: "Filter with Nested And-OR in Mutation",
 			query: `mutation {
 						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
 							post1(filter:{and:[{title:{eq: "Dgraph"}},{or:{numLikes:{eq: 100}}}]}) {
@@ -4575,7 +4532,7 @@ func mutationWithFilter(t *testing.T) {
 						}`,
 		},
 		{
-			name: "Nested  Statements in Filter on Mutation using variables",
+			name: "Filter with Nested And-OR in Mutation using variables",
 			query: `mutation($filter:post1Filter) {
 			          addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
 				        post1(filter:$filter) {
@@ -4584,9 +4541,7 @@ func mutationWithFilter(t *testing.T) {
 				        }
                       }
 		           }`,
-			variables: map[string]interface{}{"filter": map[string]interface{}{"and": []interface{}{map[string]interface {
-			}{"title": map[string]interface{}{"eq": "Dgraph"}}, map[string]interface{}{"or": map[string]interface {
-			}{"numLikes": map[string]interface{}{"eq": 100}}}}}},
+			variables: `{"filter": {"and": [{"title":{"eq": "Dgraph"}},{"or":{"numLikes":{"eq": 100}}}]}}`,
 			expected: `{
 						  "addpost1": {
 							"post1": [
@@ -4602,9 +4557,15 @@ func mutationWithFilter(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+
 			params := &GraphQLParams{
 				Query:     tcase.query,
-				Variables: tcase.variables,
+				Variables: vars,
 			}
 			resp := params.ExecuteAsPost(t, GraphqlURL)
 			RequireNoGQLErrors(t, resp)
@@ -4616,7 +4577,7 @@ func mutationWithFilter(t *testing.T) {
 
 }
 
-func updateWithFilter(t *testing.T) {
+func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 	params := &GraphQLParams{Query: `mutation {
 			addpost1(input: [{title: "Dgraph", numLikes: 100},{title: "Dgraph1", numLikes: 120}]) {
 				post1(filter:{title:{eq:"Dgraph"}}) {
@@ -4631,58 +4592,10 @@ func updateWithFilter(t *testing.T) {
 	tcases := []struct {
 		name      string
 		query     string
-		variables map[string]interface{}
+		variables string
 		expected  string
 	}{
-		{
-			name: "Single Statement in Filter on Update",
-			query: `mutation updatepost1{
-                    	updatepost1(input:{filter:{title:{eq:"Dgraph"}},set:{numLikes:150}}){
-				    		post1{
-								title
-								numLikes
-							}
-						}
-					}`,
-			expected: `{
-						  "updatepost1": {
-							"post1": [
-							  {
-								"title": "Dgraph",
-								"numLikes": 150
-							  }
-							]
-						  }
-						}`,
-		},
-		{
-			name: "Single Statement in Filter on Update with variable",
-			query: `mutation updatepost1($post1:Updatepost1Input!) {
-		               updatepost1(input:$post1){
-					    	post1{
-								title
-								numLikes
-							}
-						}
-					}`,
-			variables: map[string]interface{}{"post1": map[string]interface{}{
-				"filter": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}},
-				"set": map[string]interface{}{
-					"numLikes": "200",
-				},
-			}},
-			expected: `{
-						  "updatepost1": {
-							"post1": [
-							  {
-								"title": "Dgraph",
-								"numLikes": 200
-							  }
-							]
-						  }
-						}`,
-		},
-		{name: "Nested Statement in Filter on Update",
+		{name: "Filter with Nested OR-AND in Update Mutation",
 			query: `mutation updatepost1{
                     	updatepost1(input:{filter:{or:[{title:{eq:"Dgraph1"}},{and:{numLikes:{eq:130}}}]},set:{numLikes:200}}){
 				    		post1{
@@ -4702,7 +4615,7 @@ func updateWithFilter(t *testing.T) {
 						  }
 						}`,
 		},
-		{name: "Nested Statement in Filter on Update with variables",
+		{name: "Filter with Nested OR-AND in Update Mutation using variables",
 			query: `mutation updatepost1($post1:Updatepost1Input!) {
 		              updatepost1(input:$post1){
 					    post1{
@@ -4711,14 +4624,12 @@ func updateWithFilter(t *testing.T) {
 					}
 				}
 			}`,
-			variables: map[string]interface{}{"post1": map[string]interface{}{"filter": map[string]interface{}{"or": []interface{}{map[string]interface {
-			}{"title": map[string]interface{}{"eq": "Dgraph1"}}, map[string]interface{}{"and": map[string]interface {
-			}{"numLikes": map[string]interface{}{"eq": 140}}}}},
-				"set": map[string]interface{}{
-					"numLikes": "200",
-				},
-			},
-			},
+			variables: `{"post1": {"filter":{"or": [{"title":{"eq": "Dgraph1"}},{"and":{"numLikes":{"eq": 140}}}]},
+				"set":{
+					"numLikes": "200"
+				}
+			}
+			}`,
 			expected: `{
 			"updatepost1": {
 				"post1": [{
@@ -4732,9 +4643,14 @@ func updateWithFilter(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
 			params := &GraphQLParams{
 				Query:     tcase.query,
-				Variables: tcase.variables,
+				Variables: vars,
 			}
 			resp := params.ExecuteAsPost(t, GraphqlURL)
 			RequireNoGQLErrors(t, resp)
