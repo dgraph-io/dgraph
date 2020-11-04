@@ -403,6 +403,8 @@ func RunAll(t *testing.T) {
 	t.Run("Geo - Point type", mutationPointType)
 	t.Run("Geo - Polygon type", mutationPolygonType)
 	t.Run("Geo - MultiPolygon type", mutationMultiPolygonType)
+	t.Run("Mutation With Filter", mutationWithFilter)
+	t.Run("update With Filter", updateWithFilter)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

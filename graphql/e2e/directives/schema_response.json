@@ -383,7 +383,11 @@
             "type": "uid"
         },
         {
+            "index": true,
             "predicate": "post1.numLikes",
+            "tokenizer": [
+                "int"
+            ],
             "type": "int"
         },
         {

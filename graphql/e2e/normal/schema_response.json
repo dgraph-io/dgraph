@@ -470,7 +470,11 @@
             "list": true
         },
         {
+            "index": true,
             "predicate": "post1.numLikes",
+            "tokenizer": [
+              "int"
+            ],
             "type": "int"
         },
         {

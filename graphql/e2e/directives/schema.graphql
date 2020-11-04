@@ -188,7 +188,7 @@ type Comment1 {
 type post1{
     id: ID
     title: String! @id @search(by: [regexp])
-    numLikes: Int64
+    numLikes: Int64 @search
     commentsByMonth: [Int]
     likesByMonth: [Int64]
 }

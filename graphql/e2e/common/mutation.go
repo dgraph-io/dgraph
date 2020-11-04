@@ -4416,3 +4416,310 @@ func updateUniversity(t *testing.T, id string) {
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
 }
+
+func mutationWithFilter(t *testing.T) {
+	tcases := []struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		expected  string
+	}{
+		{
+			name: "Single Statement in Filter on Mutation",
+			query: `mutation {
+			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+				post1(filter:{title:{eq:"Dgraph"}}) {
+					title
+                    numLikes
+				}
+			}
+		}`,
+			expected: `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"numLikes": 100
+			}]
+		}
+	}`,
+		},
+		{
+			name: "Single Statement in Filter on Mutation using variables",
+			query: `mutation($filter:post1Filter) {
+			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+				post1(filter:$filter) {
+					title
+                    numLikes
+				}
+			}
+		}`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}},
+			expected: `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"numLikes": 100
+			}]
+		}
+	}`,
+		},
+		{
+			name: "Single or Statement in Filter on Mutation",
+			query: `mutation {
+			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+				post1(filter:{or:{title:{eq: "Dgraph"}}}) {
+					title
+                    numLikes
+				}
+			}
+		}`,
+			expected: `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"numLikes": 100
+			}]
+		}
+	}`,
+		},
+		{
+			name: "Single Statement in Filter on Mutation using variables",
+			query: `mutation($filter:post1Filter) {
+			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+				post1(filter:$filter) {
+					title
+                    numLikes
+				}
+			}
+		}`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"or": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}}},
+			expected: `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+                "numLikes": 100
+			}]
+		}
+	}`,
+		},
+		{
+			name: "Single and Statement in Filter on Mutation",
+			query: `mutation {
+			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+				post1(filter:{and:{title:{eq: "Dgraph"}}}) {
+					title
+                    numLikes
+				}
+			}
+		}`,
+			expected: `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"numLikes": 100
+			}]
+		}
+	}`,
+		},
+		{
+			name: "Single Statement in Filter on Mutation using variables",
+			query: `mutation($filter:post1Filter) {
+			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+				post1(filter:$filter) {
+					title
+                    numLikes
+				}
+			}
+		}`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"and": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}}},
+			expected: `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"numLikes": 100
+			}]
+		}
+	}`,
+		},
+		{
+			name: "Nested  Statements in Filter on Mutation",
+			query: `mutation {
+			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+				post1(filter:{and:[{title:{eq: "Dgraph"}},{or:{numLikes:{eq: 100}}}]}) {
+					title
+                    numLikes
+				}
+			}
+		}`,
+			expected: `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"numLikes": 100
+			}]
+		}
+	}`,
+		},
+		{
+			name: "Nested  Statements in Filter on Mutation using variables",
+			query: `mutation($filter:post1Filter) {
+			          addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+				        post1(filter:$filter) {
+					      title
+						  numLikes
+				        }
+                      }
+		           }`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"and": []interface{}{map[string]interface {
+			}{"title": map[string]interface{}{"eq": "Dgraph"}}, map[string]interface{}{"or": map[string]interface {
+			}{"numLikes": map[string]interface{}{"eq": 100}}}}}},
+			expected: `{
+		         "addpost1": {
+			         "post1": [{
+				         "title": "Dgraph",
+				          "numLikes": 100
+			          }]
+		         }
+	         }`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: tcase.variables,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+			filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
+			deleteGqlType(t, "post1", filter, 1, nil)
+		})
+	}
+
+}
+
+func updateWithFilter(t *testing.T) {
+	params := &GraphQLParams{Query: `mutation {
+			addpost1(input: [{title: "Dgraph", numLikes: 100},{title: "Dgraph1", numLikes: 120}]) {
+				post1(filter:{title:{eq:"Dgraph"}}) {
+					title
+                    numLikes
+				}
+			}
+		}`}
+	resp := params.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+
+	tcases := []struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		expected  string
+	}{
+		{
+			name: "Single Statement in Filter on Update",
+			query: `mutation updatepost1{
+                    updatepost1(input:{filter:{title:{eq:"Dgraph"}},set:{numLikes:150}}){
+				    post1{
+					title
+                    numLikes
+				}
+			}
+		}`,
+			expected: `{
+		"updatepost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"numLikes": 150
+			}]
+		}
+	}`,
+		},
+		{
+			name: "Single Statement in Filter on Update with variable",
+			query: `mutation updatepost1($post1:Updatepost1Input!) {
+		               updatepost1(input:$post1){
+					    post1{
+						title
+		               numLikes
+					}
+				}
+			}`,
+			variables: map[string]interface{}{"post1": map[string]interface{}{
+				"filter": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}},
+				"set": map[string]interface{}{
+					"numLikes": "200",
+				},
+			}},
+			expected: `{
+			"updatepost1": {
+				"post1": [{
+					"title": "Dgraph",
+					"numLikes": 200
+				}]
+			}
+		}`,
+		},
+		{name: "Nested Statement in Filter on Update",
+			query: `mutation updatepost1{
+                    updatepost1(input:{filter:{or:[{title:{eq:"Dgraph1"}},{and:{numLikes:{eq:130}}}]},set:{numLikes:200}}){
+				    post1{
+					title
+                    numLikes
+				}
+			}
+		}`,
+			expected: `{
+		"updatepost1": {
+			"post1": [{
+				"title": "Dgraph1",
+				"numLikes": 200
+			}]
+		}
+	}`,
+		},
+		{name: "Nested Statement in Filter on Update with variables",
+			query: `mutation updatepost1($post1:Updatepost1Input!) {
+		              updatepost1(input:$post1){
+					    post1{
+						 title
+		                 numLikes
+					}
+				}
+			}`,
+			variables: map[string]interface{}{"post1": map[string]interface{}{"filter": map[string]interface{}{"or": []interface{}{map[string]interface {
+			}{"title": map[string]interface{}{"eq": "Dgraph1"}}, map[string]interface{}{"and": map[string]interface {
+			}{"numLikes": map[string]interface{}{"eq": 140}}}}},
+				"set": map[string]interface{}{
+					"numLikes": "200",
+				},
+			},
+			},
+			expected: `{
+			"updatepost1": {
+				"post1": [{
+					"title": "Dgraph1",
+					"numLikes": 200
+				}]
+			}
+		}`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: tcase.variables,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+		})
+	}
+	filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
+	deleteGqlType(t, "post1", filter, 2, nil)
+
+}
