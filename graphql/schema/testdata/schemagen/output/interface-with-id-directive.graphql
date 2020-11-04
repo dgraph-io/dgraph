@@ -359,8 +359,8 @@ input AddLibraryInput {
 input BookFilter {
 	refID: StringHashFilter
 	has: BookHasFilter
-	and: BookFilter
-	or: BookFilter
+	and: [BookFilter]
+	or: [BookFilter]
 	not: BookFilter
 }
 
@@ -383,16 +383,16 @@ input BookRef {
 
 input LibraryFilter {
 	has: LibraryHasFilter
-	and: LibraryFilter
-	or: LibraryFilter
+	and: [LibraryFilter]
+	or: [LibraryFilter]
 	not: LibraryFilter
 }
 
 input LibraryItemFilter {
 	refID: StringHashFilter
 	has: LibraryItemHasFilter
-	and: LibraryItemFilter
-	or: LibraryItemFilter
+	and: [LibraryItemFilter]
+	or: [LibraryItemFilter]
 	not: LibraryItemFilter
 }
 

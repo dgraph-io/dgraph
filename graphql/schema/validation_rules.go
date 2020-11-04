@@ -20,31 +20,9 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/validator"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 )
-
-func listTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
-	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
-		if value.Definition == nil || value.ExpectedType == nil {
-			return
-		}
-
-		if value.Kind == ast.Variable {
-			return
-		}
-
-		// ExpectedType.Elem will be not nil if it is of list type. Otherwise
-		// it will be nil. So it's safe to say that value.Kind should be list
-		if !(value.ExpectedType.Elem != nil && value.Kind != ast.ListValue) {
-			return
-		}
-
-		addError(validator.Message("Value provided %s is incompatible with expected type %s",
-			value.String(),
-			value.ExpectedType.String()), validator.At(value.Position))
-	})
-}
 
 func variableTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {

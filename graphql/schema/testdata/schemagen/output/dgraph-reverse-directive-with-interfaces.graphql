@@ -385,8 +385,8 @@ input AddOscarMovieInput {
 input DirectorFilter {
 	id: [ID!]
 	has: DirectorHasFilter
-	and: DirectorFilter
-	or: DirectorFilter
+	and: [DirectorFilter]
+	or: [DirectorFilter]
 	not: DirectorFilter
 }
 
@@ -410,8 +410,8 @@ input DirectorRef {
 input MovieFilter {
 	id: [ID!]
 	has: MovieHasFilter
-	and: MovieFilter
-	or: MovieFilter
+	and: [MovieFilter]
+	or: [MovieFilter]
 	not: MovieFilter
 }
 
@@ -432,8 +432,8 @@ input MovieRef {
 input OscarMovieFilter {
 	id: [ID!]
 	has: OscarMovieHasFilter
-	and: OscarMovieFilter
-	or: OscarMovieFilter
+	and: [OscarMovieFilter]
+	or: [OscarMovieFilter]
 	not: OscarMovieFilter
 }
 

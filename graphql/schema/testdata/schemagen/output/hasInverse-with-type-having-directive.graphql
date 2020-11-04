@@ -441,8 +441,8 @@ input AnswerFilter {
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	has: AnswerHasFilter
-	and: AnswerFilter
-	or: AnswerFilter
+	and: [AnswerFilter]
+	or: [AnswerFilter]
 	not: AnswerFilter
 }
 
@@ -471,8 +471,8 @@ input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
 	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
+	and: [AuthorFilter]
+	or: [AuthorFilter]
 	not: AuthorFilter
 }
 
@@ -498,8 +498,8 @@ input PostFilter {
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
+	and: [PostFilter]
+	or: [PostFilter]
 	not: PostFilter
 }
 
@@ -524,8 +524,8 @@ input QuestionFilter {
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	has: QuestionHasFilter
-	and: QuestionFilter
-	or: QuestionFilter
+	and: [QuestionFilter]
+	or: [QuestionFilter]
 	not: QuestionFilter
 }
 

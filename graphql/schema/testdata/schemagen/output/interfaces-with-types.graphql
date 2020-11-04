@@ -450,8 +450,8 @@ input CharacterFilter {
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	has: CharacterHasFilter
-	and: CharacterFilter
-	or: CharacterFilter
+	and: [CharacterFilter]
+	or: [CharacterFilter]
 	not: CharacterFilter
 }
 
@@ -476,8 +476,8 @@ input DroidFilter {
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	has: DroidHasFilter
-	and: DroidFilter
-	or: DroidFilter
+	and: [DroidFilter]
+	or: [DroidFilter]
 	not: DroidFilter
 }
 
@@ -512,8 +512,8 @@ input HumanFilter {
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	has: HumanHasFilter
-	and: HumanFilter
-	or: HumanFilter
+	and: [HumanFilter]
+	or: [HumanFilter]
 	not: HumanFilter
 }
 
@@ -544,8 +544,8 @@ input StarshipFilter {
 	id: [ID!]
 	name: StringTermFilter
 	has: StarshipHasFilter
-	and: StarshipFilter
-	or: StarshipFilter
+	and: [StarshipFilter]
+	or: [StarshipFilter]
 	not: StarshipFilter
 }
 

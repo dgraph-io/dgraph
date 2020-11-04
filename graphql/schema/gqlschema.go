@@ -22,9 +22,9 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
-	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/dgraph-io/gqlparser/v2/parser"
 )
 
 const (
@@ -1292,8 +1292,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	// if the filter has more than one field or if it has one non-id field.
 	if (len(filter.Fields) == 1 && !isID(filter.Fields[0])) || len(filter.Fields) > 1 {
 		filter.Fields = append(filter.Fields,
-			&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
-			&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},
+			&ast.FieldDefinition{Name: "and", Type: &ast.Type{Elem: &ast.Type{NamedType: filterName}}},
+			&ast.FieldDefinition{Name: "or", Type: &ast.Type{Elem: &ast.Type{NamedType: filterName}}},
 		)
 	}
 

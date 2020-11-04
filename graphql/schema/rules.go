@@ -25,10 +25,10 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 )
 
 func init() {
@@ -44,7 +44,6 @@ func init() {
 		fieldNameCheck, isValidFieldForList, hasAuthDirective)
 
 	validator.AddRule("Check variable type is correct", variableTypeCheck)
-	validator.AddRule("Check for list type value", listTypeCheck)
 	validator.AddRule("Check arguments of cascade directive", directiveArgumentsCheck)
 	validator.AddRule("Check range for Int type", intRangeCheck)
 
@@ -454,7 +453,7 @@ func nameCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 }
 
 // This could be removed once the following gqlparser bug is fixed:
-// 	https://github.com/vektah/gqlparser/issues/128
+// 	https://github.com/dgraph-io/gqlparser/issues/128
 func directiveLocationCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 	var errs []*gqlerror.Error
 	for _, dir := range defn.Directives {
@@ -820,7 +819,7 @@ func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	invFieldArg := dir.Arguments.ForName("field")
 	if invFieldArg == nil {
 		// This check can be removed once gqlparser bug
-		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+		// #107(https://github.com/dgraph-io/gqlparser/issues/107) is fixed.
 		errs = append(errs,
 			gqlerror.ErrorPosf(
 				dir.Position,
@@ -948,7 +947,7 @@ func validateSearchArg(searchArg string,
 	switch {
 	case !ok:
 		// This check can be removed once gqlparser bug
-		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+		// #107(https://github.com/dgraph-io/gqlparser/issues/107) is fixed.
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: the argument to @search %s isn't valid."+
@@ -1010,7 +1009,7 @@ func searchValidation(
 	}
 
 	// This check can be removed once gqlparser bug
-	// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+	// #107(https://github.com/dgraph-io/gqlparser/issues/107) is fixed.
 	if arg.Value.Kind != ast.ListValue {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
@@ -1643,7 +1642,7 @@ func customDirectiveValidation(sch *ast.Schema,
 		//		*	multiple args with same name at the same level in query, etc.
 		// will get checked with the default validation itself.
 		// Added an issue in gqlparser to allow building ast.Schema from Introspection response
-		// similar to graphql-js utilities: https://github.com/vektah/gqlparser/issues/125
+		// similar to graphql-js utilities: https://github.com/dgraph-io/gqlparser/issues/125
 		// Once that is closed, we should be able to do this.
 		queryDoc, gqlErr := parser.ParseQuery(&ast.Source{Input: graphql.Raw})
 		if gqlErr != nil {

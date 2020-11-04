@@ -385,8 +385,8 @@ input AddObjectInput {
 input BusinessManFilter {
 	id: [ID!]
 	has: BusinessManHasFilter
-	and: BusinessManFilter
-	or: BusinessManFilter
+	and: [BusinessManFilter]
+	or: [BusinessManFilter]
 	not: BusinessManFilter
 }
 
@@ -410,8 +410,8 @@ input BusinessManRef {
 input ObjectFilter {
 	id: [ID!]
 	has: ObjectHasFilter
-	and: ObjectFilter
-	or: ObjectFilter
+	and: [ObjectFilter]
+	or: [ObjectFilter]
 	not: ObjectFilter
 }
 
@@ -435,8 +435,8 @@ input ObjectRef {
 input PersonFilter {
 	id: [ID!]
 	has: PersonHasFilter
-	and: PersonFilter
-	or: PersonFilter
+	and: [PersonFilter]
+	or: [PersonFilter]
 	not: PersonFilter
 }
 

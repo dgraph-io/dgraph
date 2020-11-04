@@ -839,6 +839,38 @@
       }
     }
 
+-
+  name: "Filter with 'or' array"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { or: [ { name: { eq: "A. N. Author" } }, { dob: { le: "2001-01-01" } }] } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR le(Author.dob, "2001-01-01"))) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Filter with 'or' object"
+  gqlquery: |
+    query {
+      queryAuthor(filter: { or: { name: { eq: "A. N. Author" } }} ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
 
 -
   name: "Filter with implied and as well as 'or'"
@@ -1192,6 +1224,55 @@
   dgquery: |-
     query {
       queryCountry(func: type(Country)) @filter((gt(Country.name, "AAA") OR (ge(Country.name, "AAA") OR (lt(Country.name, "AAA") OR (le(Country.name, "AAA") OR eq(Country.name, "AAA")))))) {
+        name : Country.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "All String exact filters work with an array for OR"
+  gqlquery: |
+    query {
+      queryCountry(filter: { name: { gt: "AAA" }, or: [{ name: { ge: "AAA" }}, { name: { lt: "AAA" }}, { name: { le: "AAA" }}, { name: { eq: "AAA" } }] }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryCountry(func: type(Country)) @filter((gt(Country.name, "AAA") OR (ge(Country.name, "AAA") OR lt(Country.name, "AAA") OR le(Country.name, "AAA") OR eq(Country.name, "AAA")))) {
+        name : Country.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "All String exact filters work with an array for AND"
+  gqlquery: |
+    query {
+      queryCountry(filter: { name: { gt: "AAA" }, and: [{ name: { ge: "AAA" }}, { name: { lt: "AAA" }}, { name: { le: "AAA" }}, { name: { eq: "AAA" } }] }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryCountry(func: type(Country)) @filter((ge(Country.name, "AAA") AND lt(Country.name, "AAA") AND le(Country.name, "AAA") AND eq(Country.name, "AAA") AND gt(Country.name, "AAA"))) {
+        name : Country.name
+        dgraph.uid : uid
+      }
+    }
+
+
+-
+  name: "Represent (A OR B) AND (C OR D)"
+  gqlquery: |
+    query {
+      queryCountry(filter: { and: [{ name: { gt: "AAA" }, or: { name: { lt: "XXX" }}}, { name: { gt : "CCC" }, or: { name: { lt: "MMM" }}}] }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryCountry(func: type(Country)) @filter(((gt(Country.name, "AAA") OR lt(Country.name, "XXX")) AND (gt(Country.name, "CCC") OR lt(Country.name, "MMM")))) {
         name : Country.name
         dgraph.uid : uid
       }

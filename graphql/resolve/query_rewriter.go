@@ -1225,14 +1225,60 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 			//                       we are here ^^
 			// ->
 			// @filter(anyofterms(Post.title, "GraphQL") AND ... )
-			ft := buildFilter(typ, filter[field].(map[string]interface{}))
-			ands = append(ands, ft)
+
+			// The value of the and argument can be either an object or an array, hence we handle
+			// both.
+			// ... and: {}
+			// ... and: [{}]
+			switch v := filter[field].(type) {
+			case map[string]interface{}:
+				ft := buildFilter(typ, v)
+				ands = append(ands, ft)
+			case []interface{}:
+				for _, obj := range v {
+					ft := buildFilter(typ, obj.(map[string]interface{}))
+					ands = append(ands, ft)
+				}
+			case []map[string]interface{}:
+				for _, obj := range v {
+					ft := buildFilter(typ, obj)
+					ands = append(ands, ft)
+				}
+			}
 		case "or":
 			// title: { anyofterms: "GraphQL" }, or: { ... }
 			//                       we are here ^^
 			// ->
 			// @filter(anyofterms(Post.title, "GraphQL") OR ... )
-			or = buildFilter(typ, filter[field].(map[string]interface{}))
+
+			// The value of the or argument can be either an object or an array, hence we handle
+			// both.
+			// ... or: {}
+			// ... or: [{}]
+			switch v := filter[field].(type) {
+			case map[string]interface{}:
+				or = buildFilter(typ, v)
+			case []interface{}:
+				ors := make([]*gql.FilterTree, 0, len(v))
+				for _, obj := range v {
+					ft := buildFilter(typ, obj.(map[string]interface{}))
+					ors = append(ors, ft)
+				}
+				or = &gql.FilterTree{
+					Child: ors,
+					Op:    "or",
+				}
+			case []map[string]interface{}:
+				ors := make([]*gql.FilterTree, 0, len(v))
+				for _, obj := range v {
+					ft := buildFilter(typ, obj)
+					ors = append(ands, ft)
+				}
+				or = &gql.FilterTree{
+					Child: ors,
+					Op:    "or",
+				}
+			}
 		case "not":
 			// title: { anyofterms: "GraphQL" }, not: { isPublished: true}
 			//                       we are here ^^
@@ -1378,7 +1424,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	}
 
 	var andFt *gql.FilterTree
-	if len(ands) == 1 {
+	if len(ands) == 0 {
+		return or
+	} else if len(ands) == 1 {
 		andFt = ands[0]
 	} else if len(ands) > 1 {
 		andFt = &gql.FilterTree{

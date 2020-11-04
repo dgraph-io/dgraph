@@ -43,6 +43,15 @@
             ]
         },
         {
+            "index": true,
+            "predicate": "Author.qualification",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
+        },
+        {
             "predicate": "Category.name",
             "type": "string"
         },
@@ -461,7 +470,11 @@
             "list": true
         },
         {
+            "index": true,
             "predicate": "post1.numLikes",
+            "tokenizer": [
+              "int"
+            ],
             "type": "int"
         },
         {
@@ -510,6 +523,9 @@
                 },
                 {
                     "name": "Author.posts"
+                },
+                {
+                    "name": "Author.qualification"
                 }
             ],
             "name": "Author"

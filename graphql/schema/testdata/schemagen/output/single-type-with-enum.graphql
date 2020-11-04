@@ -322,8 +322,8 @@ input AddPostInput {
 input PostFilter {
 	id: [ID!]
 	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
+	and: [PostFilter]
+	or: [PostFilter]
 	not: PostFilter
 }
 

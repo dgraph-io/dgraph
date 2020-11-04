@@ -351,8 +351,8 @@ input AddMovieInput {
 input MovieDirectorFilter {
 	id: [ID!]
 	has: MovieDirectorHasFilter
-	and: MovieDirectorFilter
-	or: MovieDirectorFilter
+	and: [MovieDirectorFilter]
+	or: [MovieDirectorFilter]
 	not: MovieDirectorFilter
 }
 
@@ -376,8 +376,8 @@ input MovieDirectorRef {
 input MovieFilter {
 	id: [ID!]
 	has: MovieHasFilter
-	and: MovieFilter
-	or: MovieFilter
+	and: [MovieFilter]
+	or: [MovieFilter]
 	not: MovieFilter
 }
 

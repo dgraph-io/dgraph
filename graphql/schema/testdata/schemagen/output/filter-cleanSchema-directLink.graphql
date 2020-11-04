@@ -343,8 +343,8 @@ input UpdateXInput {
 input XFilter {
 	id: [ID!]
 	has: XHasFilter
-	and: XFilter
-	or: XFilter
+	and: [XFilter]
+	or: [XFilter]
 	not: XFilter
 }
 
@@ -369,8 +369,8 @@ input YFilter {
 
 input ZFilter {
 	has: ZHasFilter
-	and: ZFilter
-	or: ZFilter
+	and: [ZFilter]
+	or: [ZFilter]
 	not: ZFilter
 }
 

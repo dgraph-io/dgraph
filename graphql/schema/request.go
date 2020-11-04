@@ -17,16 +17,17 @@
 package schema
 
 import (
-	"github.com/vektah/gqlparser/v2/gqlerror"
 	"net/http"
 	"reflect"
 	"strconv"
 
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+
 	"github.com/pkg/errors"
 
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 )
 
 // A Request represents a GraphQL request.  It makes no guarantees that the
@@ -113,8 +114,8 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 
 // This function validates the value of variables for fields of type Int and Int64.
 // Ideally this should happen in the gqlparser library.
-// There is an issue created with this vektah/gqlparser#134.
-// The code here is inspired by https://github.com/vektah/gqlparser/blob/master/validator/vars.go#L76.
+// There is an issue created with this dgraph-io/gqlparser#134.
+// The code here is inspired by https://github.com/dgraph-io/gqlparser/blob/master/validator/vars.go#L76.
 func variableValidateInt(schema *ast.Schema, op *ast.OperationDefinition, variables map[string]interface{}) *gqlerror.Error {
 	path := ast.Path{ast.PathName("variable")}
 	for _, v := range op.VariableDefinitions {

@@ -62,7 +62,7 @@ import (
 	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
 
-	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
+	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 )
 
 var (

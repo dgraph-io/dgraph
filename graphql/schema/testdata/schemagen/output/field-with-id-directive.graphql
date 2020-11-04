@@ -391,8 +391,8 @@ input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter_StringRegExpFilter
 	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
+	and: [AuthorFilter]
+	or: [AuthorFilter]
 	not: AuthorFilter
 }
 
@@ -417,8 +417,8 @@ input AuthorRef {
 input GenreFilter {
 	name: StringHashFilter
 	has: GenreHasFilter
-	and: GenreFilter
-	or: GenreFilter
+	and: [GenreFilter]
+	or: [GenreFilter]
 	not: GenreFilter
 }
 
@@ -435,8 +435,8 @@ input GenreRef {
 input PostFilter {
 	postID: [ID!]
 	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
+	and: [PostFilter]
+	or: [PostFilter]
 	not: PostFilter
 }
 

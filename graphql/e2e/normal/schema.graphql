@@ -43,6 +43,7 @@ type Author {
 
         dob: DateTime @search
         reputation: Float @search
+        qualification: String @search(by: [hash, trigram])
         country: Country
         posts: [Post!] @hasInverse(field: author)
         bio: String @lambda
@@ -188,7 +189,7 @@ type Comment1 {
 type post1{
         id: ID
         title: String! @id @search(by: [regexp])
-        numLikes: Int64
+        numLikes: Int64 @search
         commentsByMonth: [Int]
         likesByMonth: [Int64]
 }

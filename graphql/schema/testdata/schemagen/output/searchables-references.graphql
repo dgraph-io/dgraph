@@ -362,8 +362,8 @@ input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
 	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
+	and: [AuthorFilter]
+	or: [AuthorFilter]
 	not: AuthorFilter
 }
 
@@ -391,8 +391,8 @@ input PostFilter {
 	title: StringFullTextFilter_StringTermFilter
 	text: StringFullTextFilter_StringTermFilter
 	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
+	and: [PostFilter]
+	or: [PostFilter]
 	not: PostFilter
 }
 

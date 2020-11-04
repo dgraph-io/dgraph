@@ -68,6 +68,10 @@ const (
 				"description": ""
             },
             {
+                "name": "qualification",
+				"description": ""
+            },
+            {
                 "name": "country",
 				"description": ""
             },

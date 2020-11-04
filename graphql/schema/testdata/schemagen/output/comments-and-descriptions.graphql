@@ -363,8 +363,8 @@ input AddTInput {
 
 input IFilter {
 	has: IHasFilter
-	and: IFilter
-	or: IFilter
+	and: [IFilter]
+	or: [IFilter]
 	not: IFilter
 }
 
@@ -377,8 +377,8 @@ input IOrder {
 input TFilter {
 	id: [ID!]
 	has: THasFilter
-	and: TFilter
-	or: TFilter
+	and: [TFilter]
+	or: [TFilter]
 	not: TFilter
 }
 
