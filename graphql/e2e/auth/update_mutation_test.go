@@ -245,6 +245,7 @@ func getAllAnswers(t *testing.T, users []string) ([]*Answer, []string) {
 					id
 					text
 					author {
+						id
 						name
 					}
 				}
@@ -253,7 +254,7 @@ func getAllAnswers(t *testing.T, users []string) ([]*Answer, []string) {
 	}
 
 	var result struct {
-		QueryAnswers []*Answer
+		QueryAnswer []*Answer
 	}
 	var answers []*Answer
 	for _, user := range users {
@@ -264,7 +265,7 @@ func getAllAnswers(t *testing.T, users []string) ([]*Answer, []string) {
 		err := json.Unmarshal(gqlResponse.Data, &result)
 		require.NoError(t, err)
 
-		for _, i := range result.QueryAnswers {
+		for _, i := range result.QueryAnswer {
 			if _, ok := ids[i.Id]; ok {
 				continue
 			}
@@ -426,7 +427,7 @@ func getAllLogs(t *testing.T, users, roles []string) ([]*Log, []string) {
 	return logs, keys
 }
 
-func TestUpdateInterfaceWithAuthRules(t *testing.T) {
+func TestAuth_UpdateOnInterfaceWithAuthRules(t *testing.T) {
 	_, _, _, ids := getAllPosts(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []string{"ADMIN"}, []bool{true, false})
 	fmt.Println(ids)
 	testCases := []TestCase{{
@@ -470,7 +471,7 @@ func TestUpdateInterfaceWithAuthRules(t *testing.T) {
 	}
 }
 
-func TestUpdateTypeWithGraphFilterOnInterface(t *testing.T) {
+func TestAuth_UpdateOnTypeWithGraphFilterOnInterface(t *testing.T) {
 	_, ids := getAllQuestions(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []bool{true, false})
 
 	testCases := []TestCase{{
