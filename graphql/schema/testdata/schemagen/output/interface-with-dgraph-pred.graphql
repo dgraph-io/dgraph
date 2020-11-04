@@ -13,12 +13,14 @@ type BusinessMan implements Person {
 	name: String
 	owns(filter: ObjectFilter, order: ObjectOrder, first: Int, offset: Int): [Object] @dgraph(pred: "~Object.owner")
 	companyName: String
+	ownsAggregate(filter: ObjectFilter): ObjectAggregateResult
 }
 
 interface Person {
 	id: ID!
 	name: String
 	owns(filter: ObjectFilter, order: ObjectOrder, first: Int, offset: Int): [Object] @dgraph(pred: "~Object.owner")
+	ownsAggregate(filter: ObjectFilter): ObjectAggregateResult
 }
 
 #######################

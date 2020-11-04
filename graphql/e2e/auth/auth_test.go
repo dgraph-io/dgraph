@@ -1513,3 +1513,82 @@ func TestMain(m *testing.M) {
 	}
 	os.Exit(0)
 }
+
+func TestChildCountQueryWithDeepRBAC(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user:   "user1",
+			role:   "USER",
+			result: `{"queryUser": [{"username": "user1", "issuesAggregate":{"count": null}}]}`},
+		{
+			user:   "user1",
+			role:   "ADMIN",
+			result: `{"queryUser":[{"username":"user1","issuesAggregate":{"count":1}}]}`},
+	}
+
+	query := `
+	query {
+	  queryUser (filter:{username:{eq:"user1"}}) {
+		username
+		issuesAggregate {
+		  count
+		}
+	  }
+	}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func TestChildCountQueryWithOtherFields(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user:   "user1",
+			role:   "USER",
+			result: `{"queryUser": [{"username": "user1","issues":[],"issuesAggregate":{"count": null}}]}`},
+		{
+			user:   "user1",
+			role:   "ADMIN",
+			result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}],"issuesAggregate":{"count":1}}]}`},
+	}
+
+	query := `
+	query {
+	  queryUser (filter:{username:{eq:"user1"}}) {
+		username
+		issuesAggregate {
+		  count
+		}
+		issues {
+		  msg
+		}
+	  }
+	}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}

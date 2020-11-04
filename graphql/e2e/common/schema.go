@@ -86,7 +86,11 @@ const (
             {
                 "name": "rank",
 				"description": ""
-            }
+            },
+			{
+				"name": "postsAggregate",
+				"description": ""
+			}
 		],
 		"enumValues":[]
 	}, "__typename" : "Query" }`

@@ -1353,6 +1353,20 @@ func completeObject(
 		seenField[f.ResponseName()] = true
 
 		val := res[f.DgraphAlias()]
+		// Handle aggregate queries:
+		// Aggregate Fields in DQL response don't follow the same response as other queries.
+		// Create a map aggregateVal and store response of aggregate fields in a way which
+		// GraphQL aggregate fields expect it to be. completeValue function called later on
+		// will convert then fill up the GraphQL response.
+		if f.IsAggregateField() {
+			aggregateVal := make(map[string]interface{})
+			for _, aggregateField := range f.SelectionSet() {
+				if aggregateField.DgraphAlias() == "count" {
+					aggregateVal["count"] = res["count_"+f.DgraphAlias()]
+				}
+			}
+			val = aggregateVal
+		}
 		if f.Name() == schema.Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection

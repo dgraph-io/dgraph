@@ -357,6 +357,9 @@ func RunAll(t *testing.T) {
 	t.Run("query count without filter", queryCountWithoutFilter)
 	t.Run("query count with filter", queryCountWithFilter)
 	t.Run("query count with alias", queryCountWithAlias)
+	t.Run("query count at child level", queryCountAtChildLevel)
+	t.Run("query count at child level with filter", queryCountAtChildLevelWithFilter)
+	t.Run("query count and other fields at child level", queryCountAndOtherFieldsAtChildLevel)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)

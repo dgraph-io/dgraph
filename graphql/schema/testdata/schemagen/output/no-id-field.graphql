@@ -12,6 +12,7 @@ type Author {
 	id: ID
 	name: String
 	posts(order: PostOrder, first: Int, offset: Int): [Post]
+	postsAggregate: PostAggregateResult
 }
 
 type Genre {

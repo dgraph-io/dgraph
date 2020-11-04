@@ -7,6 +7,8 @@ type Author {
 	name: String! @search(by: [hash])
 	questions(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question] @hasInverse(field: author)
 	answers(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer] @hasInverse(field: author)
+	questionsAggregate(filter: QuestionFilter): QuestionAggregateResult
+	answersAggregate(filter: AnswerFilter): AnswerAggregateResult
 }
 
 interface Post {

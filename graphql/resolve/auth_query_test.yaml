@@ -456,7 +456,6 @@
         User2 as var(func: type(User))
       }
 
-
 - name: "Auth with top level AND rbac true"
   gqlquery: |
     query {
@@ -580,7 +579,6 @@
     query {
       aggregateIssue()
     }
-
 
 - name: "Auth with top level OR rbac true"
   gqlquery: |
@@ -1143,6 +1141,172 @@
       }
     }
 
+- name: "Count at child with Auth deep filter and field filter"
+  gqlquery: |
+    query {
+      queryUser {
+        ticketsAggregate(filter: { title: { anyofterms: "graphql" } }) {
+          count
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  dgquery: |-
+    query {
+      queryUser(func: uid(UserRoot)) {
+        count_ticketsAggregate : count(User.tickets) @filter(uid(Ticket3))
+        dgraph.uid : uid
+      }
+      UserRoot as var(func: uid(User4))
+      User4 as var(func: type(User))
+      var(func: uid(UserRoot)) {
+        TicketAggregateResult1 as User.tickets
+      }
+      Ticket3 as var(func: uid(TicketAggregateResult1)) @filter((anyofterms(Ticket.title, "graphql") AND uid(TicketAuth2)))
+      TicketAuth2 as var(func: uid(TicketAggregateResult1)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Multiple Count queries at child level and other queries with Auth deep filter"
+  gqlquery: |
+    query {
+      queryUser {
+        ticketsAggregate(filter: { title: { anyofterms: "graphql" } }) {
+          count
+        }
+        issuesAggregate {
+          count
+        }
+        tickets(filter: { title: { anyofterms: "graphql2" } }) {
+          title
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+      queryUser(func: uid(UserRoot)) {
+        count_ticketsAggregate : count(User.tickets) @filter(uid(Ticket3))
+        count_issuesAggregate : count(User.issues) @filter(uid(Issue6))
+        tickets : User.tickets @filter(uid(Ticket9)) {
+          title : Ticket.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      UserRoot as var(func: uid(User10))
+      User10 as var(func: type(User))
+      var(func: uid(UserRoot)) {
+        TicketAggregateResult1 as User.tickets
+      }
+      Ticket3 as var(func: uid(TicketAggregateResult1)) @filter((anyofterms(Ticket.title, "graphql") AND uid(TicketAuth2)))
+      TicketAuth2 as var(func: uid(TicketAggregateResult1)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      var(func: uid(UserRoot)) {
+        IssueAggregateResult4 as User.issues
+      }
+      Issue6 as var(func: uid(IssueAggregateResult4)) @filter(uid(IssueAuth5))
+      IssueAuth5 as var(func: uid(IssueAggregateResult4)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+      var(func: uid(UserRoot)) {
+        Ticket7 as User.tickets
+      }
+      Ticket9 as var(func: uid(Ticket7)) @filter((anyofterms(Ticket.title, "graphql2") AND uid(TicketAuth8)))
+      TicketAuth8 as var(func: uid(Ticket7)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "count at child with RBAC rules true"
+  gqlquery: |
+    query {
+      queryUser {
+        issuesAggregate {
+          count
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+      queryUser(func: uid(UserRoot)) {
+        count_issuesAggregate : count(User.issues) @filter(uid(Issue3))
+        dgraph.uid : uid
+      }
+      UserRoot as var(func: uid(User4))
+      User4 as var(func: type(User))
+      var(func: uid(UserRoot)) {
+        IssueAggregateResult1 as User.issues
+      }
+      Issue3 as var(func: uid(IssueAggregateResult1)) @filter(uid(IssueAuth2))
+      IssueAuth2 as var(func: uid(IssueAggregateResult1)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+    }
+
+- name: "count with Deep RBAC rules false"
+  gqlquery: |
+    query {
+      queryUser {
+        username
+        issuesAggregate {
+          count
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+      queryUser(func: uid(UserRoot)) {
+        username : User.username
+        dgraph.uid : uid
+      }
+      UserRoot as var(func: uid(User1))
+      User1 as var(func: type(User))
+    }
+
 - name: "Type should apply Interface's query rules and along with its own auth rules"
   gqlquery: |
     query {
@@ -1299,6 +1463,7 @@
         dgraph.uid : uid
       }
     }
+
 - name: "Filters on query Interface should work correctly"
   gqlquery: |
     query {
@@ -1350,6 +1515,7 @@
         dgraph.uid : uid
       }
     }
+
 - name: "Query interface should return empty if the auth rule of interface is not satisfied"
   gqlquery: |
     query {
@@ -1364,6 +1530,7 @@
     query {
       queryPost()
     }
+
 - name: "Query interface should return partial types if the auth rule of interface is not satisfied"
   gqlquery: |
     query {
@@ -1405,6 +1572,7 @@
         dgraph.uid : uid
       }
     }
+
 - name: "Get Query interface having Auth Rules apply Auth filters of types also"
   gqlquery: |
     query {
@@ -1446,6 +1614,7 @@
         dgraph.uid : uid
       }
     }
+
 - name: "Get Query interface having Auth Rules should return empty if the Auth rules are not satisfied"
   gqlquery: |
     query {
@@ -1458,6 +1627,7 @@
     query {
       getPost()
     }
+
 - name: "Query interface having no Auth Rules should apply auth rules on implementing types that are satisfied"
   gqlquery: |
     query {
@@ -1482,6 +1652,7 @@
         id : uid
       }
     }
+
 - name: "Query interface having no Auth Rules but some type have Auth rules and those are not satified are excluded (for eg: type C )"
   gqlquery: |
     query {

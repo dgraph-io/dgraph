@@ -6,6 +6,7 @@ type Author {
 	id: ID!
 	name: String! @search(by: [hash])
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post] @hasInverse(field: author)
+	postsAggregate(filter: PostFilter): PostAggregateResult
 }
 
 interface Post @auth(query: {rule:"query($TEXT: String!) { \n  queryPost(filter: { text : {eq: $TEXT } } ) { \n    id \n  } \n}"}) {

@@ -20,8 +20,8 @@ type State {
         id: ID!
         xcode: String! @id @search(by: [regexp])
         name: String!
-	capital: String
-	country: Country @dgraph(pred: "inCountry")
+        capital: String
+	    country: Country @dgraph(pred: "inCountry")
 }
 
 # **Don't delete** Comments in the middle of schemas should work

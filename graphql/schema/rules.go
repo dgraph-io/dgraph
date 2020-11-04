@@ -305,6 +305,7 @@ func typeNameValidation(schema *ast.SchemaDocument) gqlerror.List {
 			forbiddenTypeNames["Update"+defName+"Input"] = true
 			forbiddenTypeNames["Update"+defName+"Payload"] = true
 			forbiddenTypeNames["Delete"+defName+"Input"] = true
+			forbiddenTypeNames[defName+"AggregateResult"] = true
 
 			if defn.Kind == ast.Object {
 				forbiddenTypeNames["Add"+defName+"Input"] = true
@@ -781,6 +782,13 @@ func fieldNameCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.Li
 			field.Position, "Type %s; Field %s: %s is a reserved keyword and "+
 				"you cannot declare a field with this name.",
 			typ.Name, field.Name, field.Name)}
+	}
+	// ensure that there are not fields with "Aggregate" as suffix
+	if strings.HasSuffix(field.Name, "Aggregate") {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			field.Position, "Type %s; Field %s: Aggregate is a reserved keyword and "+
+				"you cannot declare a field with Aggregate as suffix.",
+			typ.Name, field.Name)}
 	}
 
 	return nil

@@ -153,6 +153,7 @@ func queryByTypeWithEncoding(t *testing.T, acceptGzip, gzipEncoding bool) {
 	expected.QueryCountry = []*country{
 		&country{Name: "Angola"},
 		&country{Name: "Bangladesh"},
+		&country{Name: "India"},
 		&country{Name: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -188,6 +189,7 @@ func uidAlias(t *testing.T) {
 	expected.QueryCountry = []*countryUID{
 		&countryUID{UID: "Angola"},
 		&countryUID{UID: "Bangladesh"},
+		&countryUID{UID: "India"},
 		&countryUID{UID: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -216,6 +218,7 @@ func orderAtRoot(t *testing.T) {
 	expected.QueryCountry = []*country{
 		&country{Name: "Angola"},
 		&country{Name: "Bangladesh"},
+		&country{Name: "India"},
 		&country{Name: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -242,8 +245,8 @@ func pageAtRoot(t *testing.T) {
 		QueryCountry []*country
 	}
 	expected.QueryCountry = []*country{
+		&country{Name: "India"},
 		&country{Name: "Bangladesh"},
-		&country{Name: "Angola"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -1356,6 +1359,7 @@ func queryApplicationGraphQl(t *testing.T) {
 	"queryCountry": [
           { "name": "Angola"},
           { "name": "Bangladesh"},
+		  { "name": "India"},
           { "name": "Mozambique"}
         ]
 }`
@@ -1384,6 +1388,10 @@ func queryTypename(t *testing.T) {
           },
           {
                 "name": "Bangladesh",
+                "__typename": "Country"
+          },
+		  {
+                "name": "India",
                 "__typename": "Country"
           },
           {
@@ -2817,5 +2825,99 @@ func queryCountWithAlias(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
 		`{"aggregatePost":{"cnt":4}}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountAtChildLevel(t *testing.T) {
+	queryNumberOfStates := &GraphQLParams{
+		Query: `query
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate {
+					count
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 3
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountAtChildLevelWithFilter(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query 
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
+                	count   
+                }
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 2
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountAndOtherFieldsAtChildLevel(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query 
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate {
+                	count   
+                },
+				states {
+					name
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 3
+				},
+				"states": [
+				{
+					"name": "Maharashtra"
+				}, 
+				{
+					"name": "Gujarat"
+				},
+				{
+					"name": "Karnataka"
+				}]
+			}]
+		}`,
 		string(gqlResponse.Data))
 }

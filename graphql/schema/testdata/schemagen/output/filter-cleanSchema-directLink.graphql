@@ -6,15 +6,19 @@ type X {
 	f1(first: Int, offset: Int): [Y] @dgraph(pred: "f1")
 	name: String
 	id: ID
+	f1Aggregate: YAggregateResult
 }
 
 type Y {
 	f2(first: Int, offset: Int): [Z] @dgraph(pred: "~f2")
 	f1(filter: XFilter, order: XOrder, first: Int, offset: Int): [X] @dgraph(pred: "~f1")
+	f2Aggregate: ZAggregateResult
+	f1Aggregate(filter: XFilter): XAggregateResult
 }
 
 type Z {
 	f2(first: Int, offset: Int): [Y] @dgraph(pred: "f2")
+	f2Aggregate: YAggregateResult
 }
 
 #######################

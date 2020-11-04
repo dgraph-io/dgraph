@@ -10,6 +10,7 @@ type Post {
 type Author {
 	id: ID!
 	posts(filter: PostFilter, first: Int, offset: Int): [Post!]! @hasInverse(field: "author")
+	postsAggregate(filter: PostFilter): PostAggregateResult
 }
 
 #######################

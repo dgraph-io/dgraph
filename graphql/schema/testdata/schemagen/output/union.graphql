@@ -8,6 +8,7 @@ interface Character {
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	enemyOf(filter: ResidentFilter): Resident
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 type Human implements Character {
@@ -18,6 +19,8 @@ type Human implements Character {
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	totalCredits: Int
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
+	starshipsAggregate(filter: StarshipFilter): StarshipAggregateResult
 }
 
 type Droid implements Character {
@@ -27,6 +30,7 @@ type Droid implements Character {
 	enemyOf(filter: ResidentFilter): Resident
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	primaryFunction: String
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 enum Episode {

@@ -11,11 +11,13 @@ type Todo @auth(query: {or:[{rule:"query($X_MyApp_User: String!) { \n    queryTo
 	sharedWith(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	owner(filter: UserFilter): User @hasInverse(field: "todos")
 	somethingPrivate: String
+	sharedWithAggregate(filter: UserFilter): UserAggregateResult
 }
 
 type User @auth(update: {rule:"query($X_MyApp_User: String!) { \n    queryUser(filter: { username: { eq: $X_MyApp_User }}) {\n        username\n    }\n}"}) {
 	username: String! @id
 	todos(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo] @hasInverse(field: owner)
+	todosAggregate(filter: TodoFilter): TodoAggregateResult
 }
 
 #######################
