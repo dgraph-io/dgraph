@@ -2558,7 +2558,7 @@
     query {
       queryCountry {
         nm : name
-        ag : aggregate_states{
+        ag : aggregatestates {
           cnt : count
         }
       }
@@ -2567,7 +2567,7 @@
     query {
       queryCountry(func: type(Country)) {
         name : Country.name
-        count_aggregate_states : count(Country.states)
+        count_aggregatestates : count(Country.states)
         dgraph.uid : uid
       }
     }
@@ -2578,7 +2578,7 @@
     query {
       queryCountry {
         nm : name
-        ag : aggregate_states(filter: { code: { eq: "state code" } }) {
+        ag : aggregatestates(filter: { code: { eq: "state code" } }) {
           cnt : count
         }
         st : states {
@@ -2590,7 +2590,7 @@
     query {
       queryCountry(func: type(Country)) {
         name : Country.name
-        count_aggregate_states : count(Country.states) @filter(eq(State.code, "state code"))
+        count_aggregatestates : count(Country.states) @filter(eq(State.code, "state code"))
         states : Country.states {
           capital : State.capital
           dgraph.uid : uid
@@ -2606,7 +2606,7 @@
       getAuthor(id: "0x1") {
         nm : name
         country {
-          ag : aggregate_states(filter: { code: { eq: "state code" } }) {
+          ag : aggregatestates(filter: { code: { eq: "state code" } }) {
             count
           }
         }
@@ -2617,7 +2617,7 @@
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         name : Author.name
         country : Author.country {
-          count_aggregate_states : count(Country.states) @filter(eq(State.code, "state code"))
+          count_aggregatestates : count(Country.states) @filter(eq(State.code, "state code"))
           dgraph.uid : uid
         }
         dgraph.uid : uid

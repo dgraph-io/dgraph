@@ -2444,13 +2444,13 @@ func queryCountWithAlias(t *testing.T) {
 
 func queryCountAtChildLevel(t *testing.T) {
 	queryNumberOfStates := &GraphQLParams{
-		Query: `query 
+		Query: `query
 		{
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
-				ag : aggregate_states {
-                	count   
-                }
+				ag : aggregatestates {
+					count
+				}
 			}
 		}`,
 	}
@@ -2475,7 +2475,7 @@ func queryCountAtChildLevelWithFilter(t *testing.T) {
 		{
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
-				ag : aggregate_states(filter: {xcode: {in: ["ka", "mh"]}}) {
+				ag : aggregatestates(filter: {xcode: {in: ["ka", "mh"]}}) {
                 	count   
                 }
 			}
@@ -2502,7 +2502,7 @@ func queryCountAndOtherFieldsAtChildLevel(t *testing.T) {
 		{
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
-				ag : aggregate_states {
+				ag : aggregatestates {
                 	count   
                 },
 				states {

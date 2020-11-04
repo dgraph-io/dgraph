@@ -6,7 +6,7 @@ interface Character @secret(field: "password") @generate(query: {get:false,passw
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	aggregate_friends(filter: CharacterFilter): CharacterAggregateResult
+	aggregatefriends(filter: CharacterFilter): CharacterAggregateResult
 }
 
 type Human implements Character @generate(query: {aggregate:true}, subscription: true) @secret(field: "password") {
@@ -14,7 +14,7 @@ type Human implements Character @generate(query: {aggregate:true}, subscription:
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	totalCredits: Int
-	aggregate_friends(filter: CharacterFilter): CharacterAggregateResult
+	aggregatefriends(filter: CharacterFilter): CharacterAggregateResult
 }
 
 type Person @withSubscription @generate(query: {get:false,query:true,password:true,aggregate:false}, mutation: {add:false,delete:false}, subscription: false) {

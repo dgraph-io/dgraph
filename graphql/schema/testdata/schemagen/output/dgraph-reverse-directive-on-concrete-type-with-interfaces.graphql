@@ -6,7 +6,7 @@ interface Movie {
 	id: ID!
 	name: String!
 	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director] @dgraph(pred: "directed.movies")
-	aggregate_director(filter: DirectorFilter): DirectorAggregateResult
+	aggregatedirector(filter: DirectorFilter): DirectorAggregateResult
 }
 
 type OscarMovie implements Movie {
@@ -14,14 +14,14 @@ type OscarMovie implements Movie {
 	name: String!
 	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director] @dgraph(pred: "directed.movies")
 	year: Int!
-	aggregate_director(filter: DirectorFilter): DirectorAggregateResult
+	aggregatedirector(filter: DirectorFilter): DirectorAggregateResult
 }
 
 type Director {
 	id: ID!
 	name: String!
 	directed(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie] @dgraph(pred: "~directed.movies")
-	aggregate_directed(filter: OscarMovieFilter): OscarMovieAggregateResult
+	aggregatedirected(filter: OscarMovieFilter): OscarMovieAggregateResult
 }
 
 #######################

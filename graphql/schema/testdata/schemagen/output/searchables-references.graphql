@@ -7,7 +7,7 @@ type Author {
 	name: String! @search(by: [hash])
 	dob: DateTime
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	aggregate_posts(filter: PostFilter): PostAggregateResult
+	aggregateposts(filter: PostFilter): PostAggregateResult
 }
 
 type Post {

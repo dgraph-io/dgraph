@@ -856,7 +856,7 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addQueries(sch, defn, params)
 		addTypeHasFilter(sch, defn)
 		// We need to call this at last as aggregateFields
-		// should not be part of hasfilter of updatepayloadtype etc.
+		// should not be part of HasFilter or UpdatePayloadType etc.
 		addAggregateFields(sch, defn)
 	}
 }
@@ -1128,29 +1128,26 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 // type list of object. eg. If defn is like
 // type T {fiedldA : [A]}
 // The following aggregate field is added to type T
-// aggregate_fieldA(filter : AFilter) : AAggregateResult
+// aggregatefieldA(filter : AFilter) : AAggregateResult
 // These fields are added to support aggregate queries like count, avg, min
 func addAggregateFields(schema *ast.Schema, defn *ast.Definition) {
-	var aggregateFields []*ast.FieldDefinition
 	for _, fld := range defn.Fields {
 		// Aggregate Fields only makes sense for fields of
 		// list types of kind Object or Interface
 		// (not scalar lists or not singleton types or lists of other kinds).
-		// TODO: Add aggregateField generation for fields of type list[Union]
 		if isTypeList(fld) && !hasCustomOrLambda(fld) &&
 			(schema.Types[fld.Type.Name()].Kind == ast.Object ||
 				schema.Types[fld.Type.Name()].Kind == ast.Interface) {
 			aggregateField := &ast.FieldDefinition{
-				Name: "aggregate_" + fld.Name,
+				Name: "aggregate" + fld.Name,
 				Type: &ast.Type{
 					NamedType: fld.Type.Name() + "AggregateResult",
 				},
 			}
 			addFilterArgumentForField(schema, aggregateField, fld.Type.Name())
-			aggregateFields = append(aggregateFields, aggregateField)
+			defn.Fields = append(defn.Fields, aggregateField)
 		}
 	}
-	defn.Fields = append(defn.Fields, aggregateFields...)
 }
 
 func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {

@@ -84,7 +84,7 @@ const (
 				"description": ""
             },
 			{
-				"name": "aggregate_posts",
+				"name": "aggregateposts",
 				"description": ""
 			}
 		],

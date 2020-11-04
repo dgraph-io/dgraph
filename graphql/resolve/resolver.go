@@ -1355,7 +1355,7 @@ func completeObject(
 		val := res[f.DgraphAlias()]
 		// Handle aggregate queries:
 		// Aggregate Fields in DQL response don't follow the same response as other queries.
-		// Create a map aggregate_val and store response of aggregate fields in a way which
+		// Create a map aggregateVal and store response of aggregate fields in a way which
 		// GraphQL aggregate fields expect it to be. completeValue function called later on
 		// will convert then fill up the GraphQL response.
 		if f.IsAggregateField() {
