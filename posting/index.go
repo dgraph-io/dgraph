@@ -517,13 +517,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	return nil
 }
 
-// deleteTokensFor deletes the index for the given attribute and token.
-func deleteTokensFor(attr, tokenizerName string, hasLang bool) error {
+// prefixesToDeleteTokensFor returns the prefixes to be deleted for index for the given attribute and token.
+func prefixesToDeleteTokensFor(attr, tokenizerName string, hasLang bool) ([][]byte, error) {
+	prefixes := [][]byte{}
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	tokenizer, ok := tok.GetTokenizer(tokenizerName)
 	if !ok {
-		return errors.Errorf("Could not find valid tokenizer for %s", tokenizerName)
+		return nil, errors.Errorf("Could not find valid tokenizer for %s", tokenizerName)
 	}
 	if hasLang {
 		// We just need the tokenizer identifier for ExactTokenizer having language.
@@ -531,54 +532,15 @@ func deleteTokensFor(attr, tokenizerName string, hasLang bool) error {
 		tokenizer = tok.GetTokenizerForLang(tokenizer, "en")
 	}
 	prefix = append(prefix, tokenizer.Identifier())
-	if err := pstore.DropPrefix(prefix); err != nil {
-		return err
-	}
-
-	// Also delete all the parts of any list that has been split into multiple parts.
+	prefixes = append(prefixes, prefix)
+	// All the parts of any list that has been split into multiple parts.
 	// Such keys have a different prefix (the last byte is set to 1).
 	prefix = pk.IndexPrefix()
 	prefix[0] = x.ByteSplit
 	prefix = append(prefix, tokenizer.Identifier())
-	return pstore.DropPrefix(prefix)
-}
+	prefixes = append(prefixes, prefix)
 
-func deleteReverseEdges(attr string) error {
-	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.ReversePrefix()
-	if err := pstore.DropPrefix(prefix); err != nil {
-		return err
-	}
-
-	// Also delete all the parts of any list that has been split into multiple parts.
-	// Such keys have a different prefix (the last byte is set to 1).
-	prefix = pk.ReversePrefix()
-	prefix[0] = x.ByteSplit
-
-	return pstore.DropPrefix(prefix)
-}
-
-func deleteCountIndex(attr string) error {
-	pk := x.ParsedKey{Attr: attr}
-	if err := pstore.DropPrefix(pk.CountPrefix(false)); err != nil {
-		return err
-	}
-	if err := pstore.DropPrefix(pk.CountPrefix(true)); err != nil {
-		return err
-	}
-
-	// Also delete all the parts of any list that has been split into multiple parts.
-	// Such keys have a different prefix (the last byte is set to 1).
-	prefix := pk.CountPrefix(false)
-	prefix[0] = x.ByteSplit
-	if err := pstore.DropPrefix(prefix); err != nil {
-		return err
-	}
-
-	// Delete parts for count-reverse index.
-	prefix = pk.CountPrefix(true)
-	prefix[0] = x.ByteSplit
-	return pstore.DropPrefix(prefix)
+	return prefixes, nil
 }
 
 // rebuilder handles the process of rebuilding an index.
@@ -806,13 +768,14 @@ func (rb *IndexRebuild) GetQuerySchema() *pb.SchemaUpdate {
 
 // DropIndexes drops the indexes that need to be rebuilt.
 func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
-	if err := dropTokIndexes(ctx, rb); err != nil {
+	prefixes, err := prefixesForTokIndexes(ctx, rb)
+	if err != nil {
 		return err
 	}
-	if err := dropReverseEdges(ctx, rb); err != nil {
-		return err
-	}
-	return dropCountIndex(ctx, rb)
+	prefixes = append(prefixes, prefixesToDropReverseEdges(ctx, rb)...)
+	prefixes = append(prefixes, prefixesToDropCountIndex(ctx, rb)...)
+	glog.Infof("Deleting indexes for %s", rb.Attr)
+	return pstore.DropPrefix(prefixes...)
 }
 
 // BuildData updates data.
@@ -913,42 +876,52 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 	}
 }
 
-func dropTokIndexes(ctx context.Context, rb *IndexRebuild) error {
+func prefixesForTokIndexes(ctx context.Context, rb *IndexRebuild) ([][]byte, error) {
 	rebuildInfo := rb.needsTokIndexRebuild()
+	prefixes := [][]byte{}
+
 	if rebuildInfo.op == indexNoop {
-		return nil
+		return prefixes, nil
 	}
 
-	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
+	glog.Infof("Computing prefix index for attr %s and tokenizers %s", rb.Attr,
 		rebuildInfo.tokenizersToDelete)
 	for _, tokenizer := range rebuildInfo.tokenizersToDelete {
-		if err := deleteTokensFor(rb.Attr, tokenizer, false); err != nil {
-			return err
+		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, false)
+		if err != nil {
+			return nil, err
 		}
+		prefixes = append(prefixes, prefixesNonLang...)
 		if tokenizer != "exact" {
 			continue
 		}
-		if err := deleteTokensFor(rb.Attr, tokenizer, true); err != nil {
-			return err
+		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, true)
+		if err != nil {
+			return nil, err
 		}
+		prefixes = append(prefixes, prefixesWithLang...)
 	}
 
 	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
 		rebuildInfo.tokenizersToRebuild)
 	// Before rebuilding, the existing index needs to be deleted.
 	for _, tokenizer := range rebuildInfo.tokenizersToRebuild {
-		if err := deleteTokensFor(rb.Attr, tokenizer, false); err != nil {
-			return err
+		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, false)
+		if err != nil {
+			return nil, err
 		}
+		prefixes = append(prefixes, prefixesNonLang...)
 		if tokenizer != "exact" {
 			continue
 		}
-		if err := deleteTokensFor(rb.Attr, tokenizer, true); err != nil {
-			return err
+		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, true)
+		if err != nil {
+			return nil, err
 		}
+		prefixes = append(prefixes, prefixesWithLang...)
 	}
 
-	return nil
+	return prefixes, nil
 }
 
 // rebuildTokIndex rebuilds index for a given attribute.
@@ -1027,19 +1000,30 @@ func (rb *IndexRebuild) needsCountIndexRebuild() indexOp {
 	return indexRebuild
 }
 
-func dropCountIndex(ctx context.Context, rb *IndexRebuild) error {
+func prefixesToDropCountIndex(ctx context.Context, rb *IndexRebuild) [][]byte {
 	// Exit early if indices do not need to be rebuilt.
 	op := rb.needsCountIndexRebuild()
+
 	if op == indexNoop {
 		return nil
 	}
 
-	glog.Infof("Deleting count index for %s", rb.Attr)
-	if err := deleteCountIndex(rb.Attr); err != nil {
-		return err
-	}
+	pk := x.ParsedKey{Attr: rb.Attr}
+	prefixes := append([][]byte{}, pk.CountPrefix(false))
+	prefixes = append(prefixes, pk.CountPrefix(true))
 
-	return nil
+	// All the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	countPrefix := pk.CountPrefix(false)
+	countPrefix[0] = x.ByteSplit
+	prefixes = append(prefixes, countPrefix)
+
+	// Parts for count-reverse index.
+	countReversePrefix := pk.CountPrefix(true)
+	countReversePrefix[0] = x.ByteSplit
+	prefixes = append(prefixes, countReversePrefix)
+
+	return prefixes
 }
 
 // rebuildCountIndex rebuilds the count index for a given attribute.
@@ -1116,14 +1100,23 @@ func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {
 	return indexDelete
 }
 
-func dropReverseEdges(ctx context.Context, rb *IndexRebuild) error {
+func prefixesToDropReverseEdges(ctx context.Context, rb *IndexRebuild) [][]byte {
+	// Exit early if indices do not need to be rebuilt.
 	op := rb.needsReverseEdgesRebuild()
 	if op == indexNoop {
 		return nil
 	}
 
-	glog.Infof("Deleting reverse index for %s", rb.Attr)
-	return deleteReverseEdges(rb.Attr)
+	pk := x.ParsedKey{Attr: rb.Attr}
+	prefixes := append([][]byte{}, pk.ReversePrefix())
+
+	// All the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	reversePrefix := pk.ReversePrefix()
+	reversePrefix[0] = x.ByteSplit
+	prefixes = append(prefixes, reversePrefix)
+
+	return prefixes
 }
 
 // rebuildReverseEdges rebuilds the reverse edges for a given attribute.
