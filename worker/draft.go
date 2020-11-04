@@ -1346,7 +1346,7 @@ func (n *node) calculateTabletSizes() {
 			glog.V(3).Info("Skipping table not owned by one predicate")
 		}
 		previousLeft = left.Attr
-		previousSize = int64(tinfo.EstimatedSz)
+		previousSize = int64(tinfo.OnDiskSize)
 	}
 	// The last table has not been counted. Assign it to the predicate at the left of the table.
 	updateSize(previousLeft, previousSize)
