@@ -187,8 +187,8 @@ func getAllPosts(t *testing.T, users []string, roles []string, answers []bool) (
 	}
 	var posts []*Post
 	for _, user := range users {
-		for _, role := range roles {
-			for _, ans := range answers {
+		for _, ans := range answers {
+			for _, role := range roles {
 				getParams.Headers = common.GetJWTForInterfaceAuth(t, user, role, ans, metaInfo)
 				gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 				require.Nil(t, gqlResponse.Errors)
@@ -416,6 +416,48 @@ func getAllLogs(t *testing.T, users, roles []string) ([]*Log, []string) {
 	return logs, keys
 }
 
+func TestUpdateInterfaceWithAuthRules(t *testing.T) {
+	_, ids := getAllPosts(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []string{"ADMIN"}, []bool{true, false})
+
+	testCases := []TestCase{{
+		user:   "user1@dgraph.io",
+		ans:    true,
+		result: `{"updatePost":{"numUids":2}}`,
+	}, {
+		user:   "user1@dgraph.io",
+		role:   "ADMIN",
+		ans:    true,
+		result: `{"updatePost":{"numUids":3}}`,
+	}, {
+		user:   "user1@dgraph.io",
+		role:   "ADMIN",
+		ans:    false,
+		result: `{"updatePost":{"numUids":3}}`,
+	},
+	}
+
+	query := `
+		mutation($ids: [ID!]){
+			updatePost(input: {filter: {id: $ids}, set: {topic: "A Topic"}}){
+				numUids
+			}
+		}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.user+tcase.role+strconv.FormatBool(tcase.ans), func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
+				Query:     query,
+				Variables: map[string]interface{}{"ids": ids},
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
 func TestUpdateTypeWithGraphFilterOnInterface(t *testing.T) {
 	_, ids := getAllQuestions(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []bool{true, false})
 
