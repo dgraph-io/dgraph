@@ -18,10 +18,7 @@ package auth
 
 import (
 	"encoding/json"
-<<<<<<< HEAD
 	"fmt"
-=======
->>>>>>> 172ed2d127c7b82c54bf81d6d1108dce56c47ab7
 	"strconv"
 	"testing"
 
@@ -169,7 +166,6 @@ func getAllQuestions(t *testing.T, users []string, answers []bool) ([]*Question,
 	return questions, keys
 }
 
-<<<<<<< HEAD
 func getAllPosts(t *testing.T, users []string, roles []string, answers []bool) ([]*Question, []*Answer, []*FbPost, []string) {
 	Questions, getAllQuestionIds := getAllQuestions(t, users, answers)
 	Answers, getAllAnswerIds := getAllAnswers(t, users)
@@ -182,8 +178,6 @@ func getAllPosts(t *testing.T, users []string, roles []string, answers []bool) (
 
 }
 
-=======
->>>>>>> 172ed2d127c7b82c54bf81d6d1108dce56c47ab7
 func getAllFbPosts(t *testing.T, users []string, roles []string) ([]*FbPost, []string) {
 	ids := make(map[string]struct{})
 	getParams := &common.GraphQLParams{
@@ -241,7 +235,6 @@ func getAllFbPosts(t *testing.T, users []string, roles []string) ([]*FbPost, []s
 
 	return fbposts, keys
 }
-<<<<<<< HEAD
 
 func getAllAnswers(t *testing.T, users []string) ([]*Answer, []string) {
 	ids := make(map[string]struct{})
@@ -289,8 +282,6 @@ func getAllAnswers(t *testing.T, users []string) ([]*Answer, []string) {
 	return answers, keys
 }
 
-=======
->>>>>>> 172ed2d127c7b82c54bf81d6d1108dce56c47ab7
 func getAllIssues(t *testing.T, users, roles []string) ([]*Issue, []string) {
 	ids := make(map[string]struct{})
 	getParams := &common.GraphQLParams{
