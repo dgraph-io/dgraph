@@ -289,6 +289,21 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 	return result, nil
 }
 
+func insertDropRecord(ctx context.Context, restoreOp string) error {
+	_, err := (&Server{}).Query(context.WithValue(ctx, IsGraphql, true),
+		&api.Request{
+			Mutations: []*api.Mutation{{
+				Set: []*api.NQuad{{
+					Subject:     "_:r",
+					Predicate:   "dgraph.drop.op",
+					ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: restoreOp}},
+				}},
+			}},
+			CommitNow: true,
+		})
+	return err
+}
+
 // Alter handles requests to change the schema or remove parts or all of the data.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
@@ -321,6 +336,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, err
 		}
 
+		// insert a helper record for backup & restore, indicating that drop_all was done
+		err = insertDropRecord(ctx, "DROP_ALL;")
+		if err != nil {
+			return empty, err
+		}
+
 		// insert empty GraphQL schema, so all alphas get notified to
 		// reset their in-memory GraphQL schema
 		_, err = UpdateGQLSchema(ctx, "", "")
@@ -343,6 +364,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		m.DropOp = pb.Mutations_DATA
 		_, err = query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// insert a helper record for backup & restore, indicating that drop_data was done
+		err = insertDropRecord(ctx, "DROP_DATA;")
 		if err != nil {
 			return empty, err
 		}
@@ -386,6 +413,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		edges := []*pb.DirectedEdge{edge}
 		m.Edges = edges
 		_, err = query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// insert a helper record for backup & restore, indicating that drop_attr was done
+		err = insertDropRecord(ctx, "DROP_ATTR;"+attr)
 		return empty, err
 	}
 
@@ -403,6 +436,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		m.DropOp = pb.Mutations_TYPE
 		m.DropValue = op.DropValue
 		_, err := query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// insert a helper record for backup & restore, indicating that drop_attr was done
+		err = insertDropRecord(ctx, "DROP_TYPE;"+op.DropValue)
 		return empty, err
 	}
 
