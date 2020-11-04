@@ -84,7 +84,7 @@ const (
 	ErrorNoData = "ErrorNoData"
 	// ValidHostnameRegex is a regex that accepts our expected hostname format.
 	ValidHostnameRegex = `^([a-zA-Z0-9_]{1}[a-zA-Z0-9_-]{0,62}){1}(\.[a-zA-Z0-9_]{1}` +
-		`[a-zA-Z0-9_-]{0,62})*[\._]?$`
+		`[a-zA-Z0-9_-]{0,62})*[._]?$`
 	// Star is equivalent to using * in a mutation.
 	// When changing this value also remember to change in in client/client.go:DeleteEdges.
 	Star = "_STAR_ALL"
