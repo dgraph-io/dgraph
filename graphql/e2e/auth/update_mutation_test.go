@@ -429,20 +429,26 @@ func getAllLogs(t *testing.T, users, roles []string) ([]*Log, []string) {
 
 func TestAuth_UpdateOnInterfaceWithAuthRules(t *testing.T) {
 	_, _, _, ids := getAllPosts(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []string{"ADMIN"}, []bool{true, false})
-	fmt.Println(ids)
 	testCases := []TestCase{{
+		name:   "Only 2 nodes satisfy auth rules with the given values and hence should be updated",
 		user:   "user1@dgraph.io",
 		ans:    true,
 		result: `{"updatePost":{"numUids":2}}`,
 	}, {
+		name:   "Only 3 nodes satisfy auth rules with the given values and hence should be updated",
 		user:   "user1@dgraph.io",
 		role:   "ADMIN",
 		ans:    true,
 		result: `{"updatePost":{"numUids":3}}`,
 	}, {
+		name:   "Only 3 nodes satisfy auth rules with the given values and hence should be updated",
 		user:   "user1@dgraph.io",
 		role:   "ADMIN",
 		ans:    false,
+		result: `{"updatePost":{"numUids":3}}`,
+	}, {
+		name:   "No node satisfy auth rules with the given value of `user`",
+		user:   "user3@dgraph.io",
 		result: `{"updatePost":{"numUids":3}}`,
 	},
 	}
@@ -457,13 +463,13 @@ func TestAuth_UpdateOnInterfaceWithAuthRules(t *testing.T) {
 
 	for _, tcase := range testCases {
 		t.Run(tcase.user+tcase.role+strconv.FormatBool(tcase.ans), func(t *testing.T) {
-			getUserParams := &common.GraphQLParams{
+			params := &common.GraphQLParams{
 				Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"ids": ids},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 			fmt.Println(string(gqlResponse.Data))
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
