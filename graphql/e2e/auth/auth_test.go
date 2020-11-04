@@ -78,6 +78,12 @@ type Question struct {
 	Author   *Author `json:"author,omitempty"`
 }
 
+type Answer struct {
+	Id     string  `json:"id,omitempty"`
+	Text   string  `json:"text,omitempty"`
+	Author *Author `json:"author,omitempty"`
+}
+
 type FbPost struct {
 	Id        string  `json:"id,omitempty"`
 	Text      string  `json:"text,omitempty"`

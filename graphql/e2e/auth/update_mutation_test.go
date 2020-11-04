@@ -18,6 +18,7 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"testing"
 
@@ -165,54 +166,16 @@ func getAllQuestions(t *testing.T, users []string, answers []bool) ([]*Question,
 	return questions, keys
 }
 
-func getAllPosts(t *testing.T, users []string, roles []string, answers []bool) ([]*Post, []string) {
-	ids := make(map[string]struct{})
-	getParams := &common.GraphQLParams{
-		Query: `
-			query queryPost {
-				queryPost {
-					id
-					text
-					author {
-						id
-						name
-					}
-				}
-			}
-		`,
-	}
+func getAllPosts(t *testing.T, users []string, roles []string, answers []bool) ([]*Question, []*Answer, []*FbPost, []string) {
+	Questions, getAllQuestionIds := getAllQuestions(t, users, answers)
+	Answers, getAllAnswerIds := getAllAnswers(t, users)
+	FbPosts, getAllFbPostIds := getAllFbPosts(t, users, roles)
+	var postIds []string
+	postIds = append(postIds, getAllQuestionIds...)
+	postIds = append(postIds, getAllAnswerIds...)
+	postIds = append(postIds, getAllFbPostIds...)
+	return Questions, Answers, FbPosts, postIds
 
-	var result struct {
-		QueryPost []*Post
-	}
-	var posts []*Post
-	for _, user := range users {
-		for _, ans := range answers {
-			for _, role := range roles {
-				getParams.Headers = common.GetJWTForInterfaceAuth(t, user, role, ans, metaInfo)
-				gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-				require.Nil(t, gqlResponse.Errors)
-
-				err := json.Unmarshal(gqlResponse.Data, &result)
-				require.NoError(t, err)
-
-				for _, i := range result.QueryPost {
-					if _, ok := ids[i.Id]; ok {
-						continue
-					}
-					ids[i.Id] = struct{}{}
-					i.Id = ""
-					posts = append(posts, i)
-				}
-			}
-		}
-	}
-
-	var keys []string
-	for key := range ids {
-		keys = append(keys, key)
-	}
-	return posts, keys
 }
 
 func getAllFbPosts(t *testing.T, users []string, roles []string) ([]*FbPost, []string) {
@@ -272,6 +235,53 @@ func getAllFbPosts(t *testing.T, users []string, roles []string) ([]*FbPost, []s
 
 	return fbposts, keys
 }
+
+func getAllAnswers(t *testing.T, users []string) ([]*Answer, []string) {
+	ids := make(map[string]struct{})
+	getParams := &common.GraphQLParams{
+		Query: `
+			query Answer {
+				queryAnswer {
+					id
+					text
+					author {
+						name
+					}
+				}
+			}
+		`,
+	}
+
+	var result struct {
+		QueryAnswers []*Answer
+	}
+	var answers []*Answer
+	for _, user := range users {
+		getParams.Headers = common.GetJWT(t, user, "", metaInfo)
+		gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+		require.Nil(t, gqlResponse.Errors)
+
+		err := json.Unmarshal(gqlResponse.Data, &result)
+		require.NoError(t, err)
+
+		for _, i := range result.QueryAnswers {
+			if _, ok := ids[i.Id]; ok {
+				continue
+			}
+			ids[i.Id] = struct{}{}
+			i.Id = ""
+			answers = append(answers, i)
+		}
+	}
+
+	var keys []string
+	for key := range ids {
+		keys = append(keys, key)
+	}
+
+	return answers, keys
+}
+
 func getAllIssues(t *testing.T, users, roles []string) ([]*Issue, []string) {
 	ids := make(map[string]struct{})
 	getParams := &common.GraphQLParams{
@@ -417,8 +427,8 @@ func getAllLogs(t *testing.T, users, roles []string) ([]*Log, []string) {
 }
 
 func TestUpdateInterfaceWithAuthRules(t *testing.T) {
-	_, ids := getAllPosts(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []string{"ADMIN"}, []bool{true, false})
-
+	_, _, _, ids := getAllPosts(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []string{"ADMIN"}, []bool{true, false})
+	fmt.Println(ids)
 	testCases := []TestCase{{
 		user:   "user1@dgraph.io",
 		ans:    true,
@@ -453,11 +463,13 @@ func TestUpdateInterfaceWithAuthRules(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			fmt.Println(string(gqlResponse.Data))
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
 }
+
 func TestUpdateTypeWithGraphFilterOnInterface(t *testing.T) {
 	_, ids := getAllQuestions(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []bool{true, false})
 
