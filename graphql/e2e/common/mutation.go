@@ -4429,7 +4429,7 @@ func mutationWithFilter(t *testing.T) {
 			query: `mutation {
 			          addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
 				        post1(filter:{title:{eq:"Dgraph"}}) {
-					        title
+							title
 							numLikes
 			        	}
 			          }
@@ -4472,7 +4472,7 @@ func mutationWithFilter(t *testing.T) {
 			query: `mutation {
 			         addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
 			        	post1(filter:{or:{title:{eq: "Dgraph"}}}) {
-				        	title
+							title
 							numLikes
 				        }
 			         }
