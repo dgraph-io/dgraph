@@ -515,7 +515,7 @@ func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author,
 			  	author {
 					id
 					name
-                    qualification
+					qualification
 					reputation
 					country {
 						id
@@ -4427,138 +4427,152 @@ func mutationWithFilter(t *testing.T) {
 		{
 			name: "Single Statement in Filter on Mutation",
 			query: `mutation {
-			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-				post1(filter:{title:{eq:"Dgraph"}}) {
-					title
-                    numLikes
-				}
-			}
-		}`,
+			          addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+				        post1(filter:{title:{eq:"Dgraph"}}) {
+					        title
+							numLikes
+			        	}
+			          }
+		          }`,
 			expected: `{
-		"addpost1": {
-			"post1": [{
-				"title": "Dgraph",
-				"numLikes": 100
-			}]
-		}
-	}`,
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
 		},
 		{
 			name: "Single Statement in Filter on Mutation using variables",
 			query: `mutation($filter:post1Filter) {
-			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-				post1(filter:$filter) {
-					title
-                    numLikes
-				}
-			}
-		}`,
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:$filter) {
+								title
+								numLikes
+							}
+						}
+					}`,
 			variables: map[string]interface{}{"filter": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}},
 			expected: `{
-		"addpost1": {
-			"post1": [{
-				"title": "Dgraph",
-				"numLikes": 100
-			}]
-		}
-	}`,
+					  "addpost1": {
+						"post1": [
+						  {
+							"title": "Dgraph",
+							"numLikes": 100
+						  }
+						]
+					  }
+					}`,
 		},
 		{
 			name: "Single or Statement in Filter on Mutation",
 			query: `mutation {
-			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-				post1(filter:{or:{title:{eq: "Dgraph"}}}) {
-					title
-                    numLikes
-				}
-			}
-		}`,
+			         addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+			        	post1(filter:{or:{title:{eq: "Dgraph"}}}) {
+				        	title
+							numLikes
+				        }
+			         }
+		          }`,
 			expected: `{
-		"addpost1": {
-			"post1": [{
-				"title": "Dgraph",
-				"numLikes": 100
-			}]
-		}
-	}`,
+					  "addpost1": {
+						"post1": [
+						  {
+							"title": "Dgraph",
+							"numLikes": 100
+						  }
+						]
+					  }
+					}`,
 		},
 		{
 			name: "Single Statement in Filter on Mutation using variables",
 			query: `mutation($filter:post1Filter) {
-			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-				post1(filter:$filter) {
-					title
-                    numLikes
-				}
-			}
-		}`,
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:$filter) {
+								title
+								numLikes
+							}
+						}
+					}`,
 			variables: map[string]interface{}{"filter": map[string]interface{}{"or": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}}},
 			expected: `{
-		"addpost1": {
-			"post1": [{
-				"title": "Dgraph",
-                "numLikes": 100
-			}]
-		}
-	}`,
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
 		},
 		{
 			name: "Single and Statement in Filter on Mutation",
 			query: `mutation {
-			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-				post1(filter:{and:{title:{eq: "Dgraph"}}}) {
-					title
-                    numLikes
-				}
-			}
-		}`,
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:{and:{title:{eq: "Dgraph"}}}) {
+								title
+								numLikes
+							}
+						}
+					}`,
 			expected: `{
-		"addpost1": {
-			"post1": [{
-				"title": "Dgraph",
-				"numLikes": 100
-			}]
-		}
-	}`,
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
 		},
 		{
 			name: "Single Statement in Filter on Mutation using variables",
 			query: `mutation($filter:post1Filter) {
-			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-				post1(filter:$filter) {
-					title
-                    numLikes
-				}
-			}
-		}`,
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:$filter) {
+								title
+								numLikes
+							}
+						}
+					}`,
 			variables: map[string]interface{}{"filter": map[string]interface{}{"and": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}}},
 			expected: `{
-		"addpost1": {
-			"post1": [{
-				"title": "Dgraph",
-				"numLikes": 100
-			}]
-		}
-	}`,
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
 		},
 		{
 			name: "Nested  Statements in Filter on Mutation",
 			query: `mutation {
-			addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-				post1(filter:{and:[{title:{eq: "Dgraph"}},{or:{numLikes:{eq: 100}}}]}) {
-					title
-                    numLikes
-				}
-			}
-		}`,
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:{and:[{title:{eq: "Dgraph"}},{or:{numLikes:{eq: 100}}}]}) {
+								title 
+								numLikes
+							}
+						}
+						}`,
 			expected: `{
-		"addpost1": {
-			"post1": [{
-				"title": "Dgraph",
-				"numLikes": 100
-			}]
-		}
-	}`,
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
 		},
 		{
 			name: "Nested  Statements in Filter on Mutation using variables",
@@ -4566,7 +4580,7 @@ func mutationWithFilter(t *testing.T) {
 			          addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
 				        post1(filter:$filter) {
 					      title
-						  numLikes
+                          numLikes
 				        }
                       }
 		           }`,
@@ -4574,13 +4588,15 @@ func mutationWithFilter(t *testing.T) {
 			}{"title": map[string]interface{}{"eq": "Dgraph"}}, map[string]interface{}{"or": map[string]interface {
 			}{"numLikes": map[string]interface{}{"eq": 100}}}}}},
 			expected: `{
-		         "addpost1": {
-			         "post1": [{
-				         "title": "Dgraph",
-				          "numLikes": 100
-			          }]
-		         }
-	         }`,
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
 		},
 	}
 
@@ -4605,7 +4621,7 @@ func updateWithFilter(t *testing.T) {
 			addpost1(input: [{title: "Dgraph", numLikes: 100},{title: "Dgraph1", numLikes: 120}]) {
 				post1(filter:{title:{eq:"Dgraph"}}) {
 					title
-                    numLikes
+					numLikes
 				}
 			}
 		}`}
@@ -4621,32 +4637,34 @@ func updateWithFilter(t *testing.T) {
 		{
 			name: "Single Statement in Filter on Update",
 			query: `mutation updatepost1{
-                    updatepost1(input:{filter:{title:{eq:"Dgraph"}},set:{numLikes:150}}){
-				    post1{
-					title
-                    numLikes
-				}
-			}
-		}`,
+                    	updatepost1(input:{filter:{title:{eq:"Dgraph"}},set:{numLikes:150}}){
+				    		post1{
+								title
+								numLikes
+							}
+						}
+					}`,
 			expected: `{
-		"updatepost1": {
-			"post1": [{
-				"title": "Dgraph",
-				"numLikes": 150
-			}]
-		}
-	}`,
+						  "updatepost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 150
+							  }
+							]
+						  }
+						}`,
 		},
 		{
 			name: "Single Statement in Filter on Update with variable",
 			query: `mutation updatepost1($post1:Updatepost1Input!) {
 		               updatepost1(input:$post1){
-					    post1{
-						title
-		               numLikes
-					}
-				}
-			}`,
+					    	post1{
+								title
+								numLikes
+							}
+						}
+					}`,
 			variables: map[string]interface{}{"post1": map[string]interface{}{
 				"filter": map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}},
 				"set": map[string]interface{}{
@@ -4654,38 +4672,42 @@ func updateWithFilter(t *testing.T) {
 				},
 			}},
 			expected: `{
-			"updatepost1": {
-				"post1": [{
-					"title": "Dgraph",
-					"numLikes": 200
-				}]
-			}
-		}`,
+						  "updatepost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 200
+							  }
+							]
+						  }
+						}`,
 		},
 		{name: "Nested Statement in Filter on Update",
 			query: `mutation updatepost1{
-                    updatepost1(input:{filter:{or:[{title:{eq:"Dgraph1"}},{and:{numLikes:{eq:130}}}]},set:{numLikes:200}}){
-				    post1{
-					title
-                    numLikes
-				}
-			}
-		}`,
+                    	updatepost1(input:{filter:{or:[{title:{eq:"Dgraph1"}},{and:{numLikes:{eq:130}}}]},set:{numLikes:200}}){
+				    		post1{
+								title
+								numLikes
+							}
+						}
+					}`,
 			expected: `{
-		"updatepost1": {
-			"post1": [{
-				"title": "Dgraph1",
-				"numLikes": 200
-			}]
-		}
-	}`,
+						  "updatepost1": {
+							"post1": [
+							  {
+								"title": "Dgraph1",
+								"numLikes": 200
+							  }
+							]
+						  }
+						}`,
 		},
 		{name: "Nested Statement in Filter on Update with variables",
 			query: `mutation updatepost1($post1:Updatepost1Input!) {
 		              updatepost1(input:$post1){
 					    post1{
-						 title
-		                 numLikes
+							 title
+							 numLikes
 					}
 				}
 			}`,
