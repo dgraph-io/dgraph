@@ -347,7 +347,6 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 		// A dgraph.drop.op record can have values in only one of following formats:
 		// * DROP_ALL;
 		// * DROP_DATA;
-		// * DROP_TYPE;typeName
 		// * DROP_ATTR;attrName
 		// So, accordingly construct the *pb.DropOperation.
 		dropOp := &pb.DropOperation{}
@@ -360,9 +359,6 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 			dropOp.DropOp = pb.DropOperation_ALL
 		case "DROP_DATA":
 			dropOp.DropOp = pb.DropOperation_DATA
-		case "DROP_TYPE":
-			dropOp.DropOp = pb.DropOperation_TYPE
-			dropOp.DropValue = dropInfo[1]
 		case "DROP_ATTR":
 			dropOp.DropOp = pb.DropOperation_ATTR
 			dropOp.DropValue = dropInfo[1]

@@ -289,14 +289,14 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 	return result, nil
 }
 
-func insertDropRecord(ctx context.Context, restoreOp string) error {
+func insertDropRecord(ctx context.Context, dropOp string) error {
 	_, err := (&Server{}).Query(context.WithValue(ctx, IsGraphql, true),
 		&api.Request{
 			Mutations: []*api.Mutation{{
 				Set: []*api.NQuad{{
 					Subject:     "_:r",
 					Predicate:   "dgraph.drop.op",
-					ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: restoreOp}},
+					ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: dropOp}},
 				}},
 			}},
 			CommitNow: true,
@@ -436,12 +436,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		m.DropOp = pb.Mutations_TYPE
 		m.DropValue = op.DropValue
 		_, err := query.ApplyMutations(ctx, m)
-		if err != nil {
-			return empty, err
-		}
-
-		// insert a helper record for backup & restore, indicating that drop_attr was done
-		err = insertDropRecord(ctx, "DROP_TYPE;"+op.DropValue)
 		return empty, err
 	}
 

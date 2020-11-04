@@ -235,8 +235,6 @@ func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOp
 			return db.DropAll()
 		case pb.DropOperation_DATA:
 			return db.DropPrefix([]byte{x.DefaultPrefix})
-		case pb.DropOperation_TYPE:
-			// TODO: check if there is anything to be done here
 		case pb.DropOperation_ATTR:
 			return db.DropPrefix(x.PredicatePrefix(operation.DropValue))
 		}

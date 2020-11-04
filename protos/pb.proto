@@ -607,8 +607,7 @@ message DropOperation {
 	enum DropOp {
 		ALL = 0;
 		DATA = 1;
-		TYPE = 2;
-		ATTR = 3;
+		ATTR = 2;
 	}
 	DropOp drop_op    = 1;
 	string drop_value = 2;
