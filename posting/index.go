@@ -1008,10 +1008,8 @@ func prefixesToDropCountIndex(ctx context.Context, rb *IndexRebuild) [][]byte {
 		return nil
 	}
 
-	prefixes := [][]byte{}
-
 	pk := x.ParsedKey{Attr: rb.Attr}
-	prefixes = append(prefixes, pk.CountPrefix(false))
+	prefixes := append([][]byte{}, pk.CountPrefix(false))
 	prefixes = append(prefixes, pk.CountPrefix(true))
 
 	// All the parts of any list that has been split into multiple parts.
@@ -1103,13 +1101,14 @@ func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {
 }
 
 func prefixesToDropReverseEdges(ctx context.Context, rb *IndexRebuild) [][]byte {
-	prefixes := [][]byte{}
+	// Exit early if indices do not need to be rebuilt.
 	op := rb.needsReverseEdgesRebuild()
 	if op == indexNoop {
 		return nil
 	}
+
 	pk := x.ParsedKey{Attr: rb.Attr}
-	prefixes = append(prefixes, pk.ReversePrefix())
+	prefixes := append([][]byte{}, pk.ReversePrefix())
 
 	// All the parts of any list that has been split into multiple parts.
 	// Such keys have a different prefix (the last byte is set to 1).
