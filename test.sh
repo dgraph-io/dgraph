@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# usage: test.sh [pkg_regex]
+# usage: test.sh [[pkg_regex] test_regex]
 
 # Notes for testing under macOS (Sierra and up)
 # Required Homebrew (https://brew.sh/) packages:
@@ -40,7 +40,7 @@ BUILD_TAGS=
 #
 
 function Usage {
-    echo "usage: $ME [opts] [pkg_regex]
+    echo "usage: $ME [opts] [[pkg_regex] test_regex]
 
 options:
 
@@ -202,13 +202,19 @@ if [[ $# -eq 0 ]]; then
     if [[ $TEST_SET == unit ]]; then
         Info "Running only unit tests"
     fi
-elif [[ $# -eq 1 ]]; then
+elif [[ $# -eq 1 || $# -eq 2 ]]; then
+    # Remove the trailing slash from pkg_regex.
+    # This is helpful when autocomplete returns something like `dirname/`.
     REGEX=${1%/}
     go list ./... | grep $REGEX > $MATCHING_TESTS
     Info "Running only tests matching '$REGEX'"
     RUN_ALL=
+
+    if [ $# -eq 2 ]; then
+        GO_TEST_OPTS+=( "-v" "-run=$2" )
+    fi
 else
-    echo >&2 "usage: $ME [pkg_regex]"
+    echo >&2 "usage: $ME [pkg_regex [test_regex]]"
     exit 1
 fi
 

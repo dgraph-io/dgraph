@@ -167,7 +167,7 @@ func (p *Pools) Connect(addr string, tlsClientConf *tls.Config) *Pool {
 
 // newPool creates a new "pool" with one gRPC connection, refcount 0.
 func newPool(addr string, tlsClientConf *tls.Config) (*Pool, error) {
-	conOpts := []grpc.DialOption {
+	conOpts := []grpc.DialOption{
 		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),

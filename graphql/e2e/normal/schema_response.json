@@ -473,6 +473,16 @@
                 "trigram"
             ],
             "upsert": true
+        },
+        {
+            "predicate": "post1.commentsByMonth",
+            "list": true,
+            "type": "int"
+        },
+        {
+            "predicate": "post1.likesByMonth",
+            "list": true,
+            "type": "int"
         }
     ],
     "types": [
@@ -928,6 +938,12 @@
                 },
                 {
                     "name": "post1.numLikes"
+                },
+                {
+                    "name": "post1.commentsByMonth"
+                },
+                {
+                    "name": "post1.likesByMonth"
                 }
             ],
             "name": "post1"
