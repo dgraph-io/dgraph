@@ -8,7 +8,6 @@ weight = 8
 
 <div class="landing">
   <div class="hero">
-    <h1></h1>
     <p>
       This section talks about running Dgraph in various deployment modes, in a distributed fashion and involves
 running multiple instances of Dgraph, over multiple servers in a cluster.
