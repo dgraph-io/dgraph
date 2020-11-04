@@ -434,7 +434,7 @@ func bufferStats(cbuf *z.Buffer) {
 }
 
 func getBuf(dir string) *z.Buffer {
-	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc, filepath.Join(dir, bufDir))
+	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc, filepath.Join(dir, bufferDir))
 	x.Check(err)
 	cbuf.AutoMmapAfter(1 << 30)
 	return cbuf
