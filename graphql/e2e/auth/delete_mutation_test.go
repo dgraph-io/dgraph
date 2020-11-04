@@ -2,7 +2,6 @@ package auth
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -221,7 +220,6 @@ func TestAuth_DeleteOnInterfaceWithAuthRules(t *testing.T) {
 
 		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
-		fmt.Println(string(gqlResponse.Data))
 		require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 
 		// Restore the deleted Questions, Answers and FbPosts for other test cases.
