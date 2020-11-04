@@ -153,7 +153,7 @@ func (f *FbPost) delete(t *testing.T, user, role string) {
 	require.Nil(t, gqlResponse.Errors)
 }
 
-func TestAddOnTypeWithRBACFilterOnInterface(t *testing.T) {
+func TestAuth_AddOnTypeWithRBACRuleOnInterface(t *testing.T) {
 	testCases := []TestCase{{
 		user: "user1@dgraph.io",
 		role: "ADMIN",
@@ -170,7 +170,8 @@ func TestAddOnTypeWithRBACFilterOnInterface(t *testing.T) {
 			},
 			PostCount: 5,
 		}},
-		result: `{"addFbPost":{"fbPost":[{"id":"0x15f","text":"New FbPost","author":{"id":"0x15e","name":"user1@dgraph.io"},"sender":{"id":"0x15d","name":"user1@dgraph.io"},"receiver":{"id":"0x160","name":"user2@dgraph.io"}}]}}`,
+		expectedError: false,
+		result:        `{"addFbPost":{"fbPost":[{"id":"0x15f","text":"New FbPost","author":{"id":"0x15e","name":"user1@dgraph.io"},"sender":{"id":"0x15d","name":"user1@dgraph.io"},"receiver":{"id":"0x160","name":"user2@dgraph.io"}}]}}`,
 	}, {
 		user: "user1@dgraph.io",
 		role: "USER",
@@ -187,7 +188,7 @@ func TestAddOnTypeWithRBACFilterOnInterface(t *testing.T) {
 			},
 			PostCount: 5,
 		}},
-		result: ``,
+		expectedError: true,
 	},
 	}
 
@@ -221,14 +222,14 @@ func TestAddOnTypeWithRBACFilterOnInterface(t *testing.T) {
 	}
 
 	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
+		params := &common.GraphQLParams{
 			Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 			Query:     query,
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		if tcase.result == "" {
+		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+		if tcase.expectedError {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
@@ -257,7 +258,7 @@ func TestAddOnTypeWithRBACFilterOnInterface(t *testing.T) {
 	}
 }
 
-func TestAddOnTypeWithGraphFilterOnInterface(t *testing.T) {
+func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
 	testCases := []TestCase{{
 		user: "user1@dgraph.io",
 		ans:  true,
@@ -279,7 +280,7 @@ func TestAddOnTypeWithGraphFilterOnInterface(t *testing.T) {
 			},
 			Answered: true,
 		}},
-		result: ``,
+		expectedError: true,
 	},
 		{
 			user: "user2",
@@ -291,7 +292,7 @@ func TestAddOnTypeWithGraphFilterOnInterface(t *testing.T) {
 				},
 				Answered: true,
 			}},
-			result: ``,
+			expectedError: true,
 		},
 	}
 
@@ -316,14 +317,14 @@ func TestAddOnTypeWithGraphFilterOnInterface(t *testing.T) {
 	}
 
 	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
+		params := &common.GraphQLParams{
 			Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
 			Query:     query,
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		if tcase.result == "" {
+		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+		if tcase.expectedError {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue

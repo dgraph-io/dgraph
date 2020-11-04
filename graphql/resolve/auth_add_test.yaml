@@ -1022,7 +1022,7 @@
     { "ComplexLog1": "0x123" }
   skipauth: true
 
-- name: "Adding Type with having Auth on interfaces successfully."
+- name: "Adding nodes for a Type that inherits Auth rules from an interfaces successfully."
   gqlquery: |
     mutation addQuestion($question: [AddQuestionInput!]!) {
       addQuestion(input: $question) {
@@ -1069,8 +1069,8 @@
       }
     }
   authjson: |
-    {"Question": [ {"uid": "0x123"}], "Author": [{"uid": "0x456"}]}
-- name: "Adding Type with having Auth on interfaces failed."
+    {"Question": [ {"uid": "0x123"}]}
+- name: "Adding node for a Type that inherits auth rules from an interface fails."
   gqlquery: |
     mutation addQuestion($question: [AddQuestionInput!]!) {
       addQuestion(input: $question) {
@@ -1121,11 +1121,11 @@
   error: 
     { "message": "mutation failed because authorization failed"}
 
-- name: "Add type with Having RBAC rule on interface successfully"
+- name: "Add type with having RBAC rule on interface successfully"
   gqlquery: | 
     mutation addFbPost($post: [AddFbPostInput!]!){
       addFbPost(input: $post){
-        fbPost{
+        fbPost {
           text
           author {
             name
@@ -1163,7 +1163,7 @@
       }
     }
   authjson: |
-    {"FbPost": [ {"uid": "0x123"}], "Author": [{"uid": "0x456"}]}
+    {"FbPost": [ {"uid": "0x123"}]}
 
 - name: "Add type with Having RBAC rule on interface failed"
   gqlquery: | 
