@@ -18,6 +18,7 @@ package auth
 
 import (
 	"encoding/json"
+	"strconv"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -114,6 +115,113 @@ func getAllColumns(t *testing.T, users, roles []string) ([]*Column, []string) {
 	return columns, keys
 }
 
+func getAllQuestions(t *testing.T, users []string, answers []bool) ([]*Question, []string) {
+	ids := make(map[string]struct{})
+	getParams := &common.GraphQLParams{
+		Query: `
+			query queryQuestion {
+				queryQuestion {
+					id
+					text
+					author {
+						id
+						name
+					}
+					answered
+				}
+			}
+		`,
+	}
+
+	var result struct {
+		QueryQuestion []*Question
+	}
+	var questions []*Question
+	for _, user := range users {
+		for _, ans := range answers {
+			getParams.Headers = common.GetJWTForInterfaceAuth(t, user, "", ans, metaInfo)
+			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			err := json.Unmarshal(gqlResponse.Data, &result)
+			require.NoError(t, err)
+
+			for _, i := range result.QueryQuestion {
+				if _, ok := ids[i.Id]; ok {
+					continue
+				}
+				ids[i.Id] = struct{}{}
+				i.Id = ""
+				questions = append(questions, i)
+			}
+		}
+	}
+
+	var keys []string
+	for key := range ids {
+		keys = append(keys, key)
+	}
+
+	return questions, keys
+}
+
+func getAllFbPosts(t *testing.T, users []string, roles []string) ([]*FbPost, []string) {
+	ids := make(map[string]struct{})
+	getParams := &common.GraphQLParams{
+		Query: `
+			query queryFbPost {
+				queryFbPost {
+					id
+					text
+					author {
+						id
+						name
+					}
+					sender {
+						id
+						name
+					}
+					receiver {
+						id
+						name
+					}
+					postCount
+				}
+			}
+		`,
+	}
+
+	var result struct {
+		QueryFbPost []*FbPost
+	}
+	var fbposts []*FbPost
+	for _, user := range users {
+		for _, role := range roles {
+			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
+			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			err := json.Unmarshal(gqlResponse.Data, &result)
+			require.NoError(t, err)
+
+			for _, i := range result.QueryFbPost {
+				if _, ok := ids[i.Id]; ok {
+					continue
+				}
+				ids[i.Id] = struct{}{}
+				i.Id = ""
+				fbposts = append(fbposts, i)
+			}
+		}
+	}
+
+	var keys []string
+	for key := range ids {
+		keys = append(keys, key)
+	}
+
+	return fbposts, keys
+}
 func getAllIssues(t *testing.T, users, roles []string) ([]*Issue, []string) {
 	ids := make(map[string]struct{})
 	getParams := &common.GraphQLParams{
@@ -256,6 +364,100 @@ func getAllLogs(t *testing.T, users, roles []string) ([]*Log, []string) {
 	}
 
 	return logs, keys
+}
+
+func TestAuth_UpdateOnTypeWithGraphTraversalAuthRuleOnInterface(t *testing.T) {
+	_, ids := getAllQuestions(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []bool{true, false})
+
+	testCases := []TestCase{{
+		name:   "Only 1 Question Node, whose text is `A Question` satisfies the below `user` and `ans`",
+		user:   "user1@dgraph.io",
+		ans:    true,
+		result: `{"updateQuestion": {"question":[{"text": "A Question", "topic": "A Topic"}]}}`,
+	}, {
+		name:   "Only 1 Question Node, whose text is `B Question` satisfies the below `user` and `ans`",
+		user:   "user2@dgraph.io",
+		ans:    true,
+		result: `{"updateQuestion": {"question":[{"text": "B Question", "topic": "A Topic"}]}}`,
+	}, {
+		name:   "Only 1 Question Node, whose text is `C Question` satisfies the below `user` and `ans`",
+		user:   "user1@dgraph.io",
+		ans:    false,
+		result: `{"updateQuestion": {"question":[{"text": "C Question", "topic": "A Topic"}]}}`,
+	},
+	}
+
+	query := `
+		mutation($ids: [ID!]){
+			updateQuestion(input: {filter: {id: $ids}, set: {topic: "A Topic"}}){
+				question{
+					text
+					topic
+				}
+			}
+		}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.user+strconv.FormatBool(tcase.ans), func(t *testing.T) {
+			params := &common.GraphQLParams{
+				Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, "", tcase.ans, metaInfo),
+				Query:     query,
+				Variables: map[string]interface{}{"ids": ids},
+			}
+
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func TestAuth_UpdateOnTypeWithRBACAuthRuleOnInterface(t *testing.T) {
+	_, ids := getAllFbPosts(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []string{"ADMIN"})
+
+	testCases := []TestCase{{
+		name:   "Update node with given `user` as RBAC rule for FbPost is satisfied",
+		user:   "user1@dgraph.io",
+		role:   "ADMIN",
+		result: `{"updateFbPost": {"fbPost":[{"text": "A FbPost", "topic": "Topic of FbPost"}]}}`,
+	}, {
+		name:   "Update node with given `user`  as RBAC rule for FbPost is satisfied",
+		user:   "user2@dgraph.io",
+		role:   "ADMIN",
+		result: `{"updateFbPost": {"fbPost":[{"text": "B FbPost", "topic": "Topic of FbPost"}]}}`,
+	}, {
+		name:   "Authorization will fail for any role other than `ADMIN`",
+		user:   "user1@dgraph.io",
+		role:   "USER",
+		result: `{"updateFbPost": {"fbPost":[]}}`,
+	},
+	}
+
+	query := `
+		mutation($ids: [ID!]){
+			updateFbPost(input: {filter: {id: $ids}, set: {topic: "Topic of FbPost"}}){
+				fbPost{
+					text
+					topic
+				}
+			}
+		}
+	`
+	for _, tcase := range testCases {
+		t.Run(tcase.user+tcase.role, func(t *testing.T) {
+			params := &common.GraphQLParams{
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:     query,
+				Variables: map[string]interface{}{"ids": ids},
+			}
+
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+
 }
 
 func TestUpdateOrRBACFilter(t *testing.T) {

@@ -66,9 +66,19 @@ type Author struct {
 }
 
 type Question struct {
-	Id     string  `json:"id,omitempty"`
-	Text   string  `json:"text,omitempty"`
-	Author *Author `json:"author,omitempty"`
+	Id       string  `json:"id,omitempty"`
+	Text     string  `json:"text,omitempty"`
+	Answered bool    `json:"answered,omitempty"`
+	Author   *Author `json:"author,omitempty"`
+}
+
+type FbPost struct {
+	Id        string  `json:"id,omitempty"`
+	Text      string  `json:"text,omitempty"`
+	Author    *Author `json:"author,omitempty"`
+	Sender    *Author `json:"sender,omitempty"`
+	Receiver  *Author `json:"receiver,omitempty"`
+	PostCount int     `json:"postCount,omitempty"`
 }
 
 type Log struct {
@@ -128,14 +138,15 @@ type TaskOccurrence struct {
 }
 
 type TestCase struct {
-	user      string
-	role      string
-	ans       bool
-	result    string
-	name      string
-	filter    map[string]interface{}
-	variables map[string]interface{}
-	query     string
+	user          string
+	role          string
+	ans           bool
+	result        string
+	name          string
+	filter        map[string]interface{}
+	variables     map[string]interface{}
+	query         string
+	expectedError bool
 }
 
 type uidResult struct {
