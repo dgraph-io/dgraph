@@ -96,7 +96,7 @@ type Starship {
 		"dob":            "Author.dob",
 		"reputation":     "Author.reputation",
 		"posts":          "Author.posts",
-		"postsAggregate": "dgraph.author.postsAggregate",
+		"postsAggregate": "Author.postsAggregate",
 	}
 	post := map[string]string{
 		"postType": "Post.postType",
