@@ -222,13 +222,13 @@ func TestAuth_AddOnTypeWithRBACRuleOnInterface(t *testing.T) {
 	}
 
 	for _, tcase := range testCases {
-		Params := &common.GraphQLParams{
+		params := &common.GraphQLParams{
 			Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 			Query:     query,
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := Params.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 		if tcase.expectedError {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
@@ -317,13 +317,13 @@ func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
 	}
 
 	for _, tcase := range testCases {
-		Params := &common.GraphQLParams{
+		params := &common.GraphQLParams{
 			Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
 			Query:     query,
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := Params.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 		if tcase.expectedError {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")

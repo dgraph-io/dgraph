@@ -400,13 +400,13 @@ func TestAuth_UpdateOnTypeWithGraphTraversalAuthRuleOnInterface(t *testing.T) {
 
 	for _, tcase := range testCases {
 		t.Run(tcase.user+strconv.FormatBool(tcase.ans), func(t *testing.T) {
-			Params := &common.GraphQLParams{
+			params := &common.GraphQLParams{
 				Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, "", tcase.ans, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"ids": ids},
 			}
 
-			gqlResponse := Params.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -446,13 +446,13 @@ func TestAuth_UpdateOnTypeWithRBACAuthRuleOnInterface(t *testing.T) {
 	`
 	for _, tcase := range testCases {
 		t.Run(tcase.user+tcase.role, func(t *testing.T) {
-			Params := &common.GraphQLParams{
+			params := &common.GraphQLParams{
 				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"ids": ids},
 			}
 
-			gqlResponse := Params.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})

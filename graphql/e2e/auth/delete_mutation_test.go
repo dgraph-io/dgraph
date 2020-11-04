@@ -187,13 +187,13 @@ func TestDeleteTypeWithRBACFilteronInterface(t *testing.T) {
 		require.True(t, len(allFbPostsIds) == 2)
 		deleteFbPosts, _ := getAllFbPosts(t, []string{tcase.user}, []string{tcase.role})
 
-		Params := &common.GraphQLParams{
+		params := &common.GraphQLParams{
 			Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 			Query:     query,
 			Variables: map[string]interface{}{"questions": allFbPostsIds},
 		}
 
-		gqlResponse := Params.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
 		require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 
@@ -243,13 +243,13 @@ func TestAuth_DeleteOnTypeWithGraphTraversalAuthRuleOnInterface(t *testing.T) {
 			require.True(t, len(allQuestionsIds) == 3)
 			deleteQuestions, _ := getAllQuestions(t, []string{tcase.user}, []bool{tcase.ans})
 
-			Params := &common.GraphQLParams{
+			params := &common.GraphQLParams{
 				Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, "", tcase.ans, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"questions": allQuestionsIds},
 			}
 
-			gqlResponse := Params.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 
