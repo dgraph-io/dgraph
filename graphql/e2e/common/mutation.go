@@ -4468,7 +4468,7 @@ func mutationWithFilter(t *testing.T) {
 					}`,
 		},
 		{
-			name: "Single or Statement in Filter on Mutation",
+			name: "Single OR Statement in Filter on Mutation",
 			query: `mutation {
 			         addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
 			        	post1(filter:{or:{title:{eq: "Dgraph"}}}) {
@@ -4511,7 +4511,7 @@ func mutationWithFilter(t *testing.T) {
 						}`,
 		},
 		{
-			name: "Single and Statement in Filter on Mutation",
+			name: "Single AND Statement in Filter on Mutation",
 			query: `mutation {
 						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
 							post1(filter:{and:{title:{eq: "Dgraph"}}}) {
