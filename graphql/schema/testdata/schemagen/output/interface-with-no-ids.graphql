@@ -14,7 +14,7 @@ type Question implements Message {
 type User {
 	name: String
 	messages(order: MessageOrder, first: Int, offset: Int): [Message]
-	aggregatemessages: MessageAggregateResult
+	messagesAggregate: MessageAggregateResult
 }
 
 #######################

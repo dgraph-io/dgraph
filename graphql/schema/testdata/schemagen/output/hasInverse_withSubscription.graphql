@@ -10,7 +10,7 @@ type Post {
 type Author @withSubscription {
 	id: ID!
 	posts(filter: PostFilter, first: Int, offset: Int): [Post!]! @hasInverse(field: "author")
-	aggregateposts(filter: PostFilter): PostAggregateResult
+	postsAggregate(filter: PostFilter): PostAggregateResult
 }
 
 #######################

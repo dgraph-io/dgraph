@@ -2448,7 +2448,7 @@ func queryCountAtChildLevel(t *testing.T) {
 		{
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
-				ag : aggregatestates {
+				ag : statesAggregate {
 					count
 				}
 			}
@@ -2475,7 +2475,7 @@ func queryCountAtChildLevelWithFilter(t *testing.T) {
 		{
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
-				ag : aggregatestates(filter: {xcode: {in: ["ka", "mh"]}}) {
+				ag : statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
                 	count   
                 }
 			}
@@ -2502,7 +2502,7 @@ func queryCountAndOtherFieldsAtChildLevel(t *testing.T) {
 		{
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
-				ag : aggregatestates {
+				ag : statesAggregate {
                 	count   
                 },
 				states {

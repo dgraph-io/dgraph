@@ -784,11 +784,11 @@ func fieldNameCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.Li
 				"you cannot declare a field with this name.",
 			typ.Name, field.Name, field.Name)}
 	}
-	// ensure that there are not fields with "aggregate" as prefix
-	if strings.HasPrefix(field.Name, "aggregate") {
+	// ensure that there are not fields with "Aggregate" as suffix
+	if strings.HasSuffix(field.Name, "Aggregate") {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
-			field.Position, "Type %s; Field %s: aggregate is a reserved keyword and "+
-				"you cannot declare a field with aggregate as prefix.",
+			field.Position, "Type %s; Field %s: Aggregate is a reserved keyword and "+
+				"you cannot declare a field with Aggregate as suffix.",
 			typ.Name, field.Name)}
 	}
 

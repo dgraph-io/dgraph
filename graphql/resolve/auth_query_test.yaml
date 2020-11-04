@@ -1145,7 +1145,7 @@
   gqlquery: |
     query {
       queryUser {
-        aggregatetickets(filter: { title: { anyofterms: "graphql" } }) {
+        ticketsAggregate(filter: { title: { anyofterms: "graphql" } }) {
           count
         }
       }
@@ -1155,7 +1155,7 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        count_aggregatetickets : count(User.tickets) @filter(uid(Ticket3))
+        count_ticketsAggregate : count(User.tickets) @filter(uid(Ticket3))
         dgraph.uid : uid
       }
       UserRoot as var(func: uid(User4))
@@ -1183,10 +1183,10 @@
   gqlquery: |
     query {
       queryUser {
-        aggregatetickets(filter: { title: { anyofterms: "graphql" } }) {
+        ticketsAggregate(filter: { title: { anyofterms: "graphql" } }) {
           count
         }
-        aggregateissues {
+        issuesAggregate {
           count
         }
         tickets(filter: { title: { anyofterms: "graphql2" } }) {
@@ -1200,8 +1200,8 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        count_aggregatetickets : count(User.tickets) @filter(uid(Ticket3))
-        count_aggregateissues : count(User.issues) @filter(uid(Issue6))
+        count_ticketsAggregate : count(User.tickets) @filter(uid(Ticket3))
+        count_issuesAggregate : count(User.issues) @filter(uid(Issue6))
         tickets : User.tickets @filter(uid(Ticket9)) {
           title : Ticket.title
           dgraph.uid : uid
@@ -1258,7 +1258,7 @@
   gqlquery: |
     query {
       queryUser {
-        aggregateissues {
+        issuesAggregate {
           count
         }
       }
@@ -1269,7 +1269,7 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        count_aggregateissues : count(User.issues) @filter(uid(Issue3))
+        count_issuesAggregate : count(User.issues) @filter(uid(Issue3))
         dgraph.uid : uid
       }
       UserRoot as var(func: uid(User4))
@@ -1289,7 +1289,7 @@
     query {
       queryUser {
         username
-        aggregateissues {
+        issuesAggregate {
           count
         }
       }

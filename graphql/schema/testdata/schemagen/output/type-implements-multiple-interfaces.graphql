@@ -6,7 +6,7 @@ interface Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	aggregatefriends(filter: CharacterFilter): CharacterAggregateResult
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 interface Employee {
@@ -21,7 +21,7 @@ type Human implements Character & Employee {
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	totalCredits: Int
-	aggregatefriends(filter: CharacterFilter): CharacterAggregateResult
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 #######################

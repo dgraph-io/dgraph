@@ -873,7 +873,7 @@ func (f *field) IsAuthQuery() bool {
 }
 
 func (f *field) IsAggregateField() bool {
-	return strings.HasPrefix(f.DgraphAlias(), "aggregate") &&
+	return strings.HasSuffix(f.DgraphAlias(), "Aggregate") &&
 		strings.HasSuffix(f.Type().Name(), "AggregateResult")
 }
 
@@ -1420,7 +1420,7 @@ func (m *mutation) ConstructedFor() Type {
 	return (*field)(m).ConstructedFor()
 }
 
-// In case the field f is of type aggregate<Type>, the Type is retunred.
+// In case the field f is of type <Type>Aggregate, the Type is retunred.
 // In all other case the function returns the type of field f.
 func (f *field) ConstructedFor() Type {
 	if !f.IsAggregateField() {
@@ -1463,15 +1463,16 @@ func (q *query) ConstructedForDgraphPredicate() string {
 	return (*field)(q).ConstructedForDgraphPredicate()
 }
 
-// In case, the field f is of type aggregate<Type> it returns dgraph predicate of the Type.
+// In case, the field f is of type <Type>Aggregate it returns dgraph predicate of the Type.
 // In all other cases it returns dgraph predicate of the field.
 func (f *field) ConstructedForDgraphPredicate() string {
 	if !f.IsAggregateField() {
 		return f.DgraphPredicate()
 	}
-	// Remove first 9 characters of the field name they will be "aggregate"
-	// Eg. to get "FieldName" from "aggregateFieldName"
-	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][f.Name()[9:]]
+	// Remove last 9 characters of the field name.
+	// Eg. to get "FieldName" from "FieldNameAggregate"
+	fldName := f.Name()
+	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][fldName[:len(fldName)-9]]
 }
 
 func (q *query) QueryType() QueryType {

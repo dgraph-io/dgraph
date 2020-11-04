@@ -84,7 +84,7 @@ const (
 				"description": ""
             },
 			{
-				"name": "aggregateposts",
+				"name": "postsAggregate",
 				"description": ""
 			}
 		],

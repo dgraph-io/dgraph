@@ -5,18 +5,18 @@
 type X {
 	name(first: Int, offset: Int): [Y]
 	f1(first: Int, offset: Int): [Y] @dgraph(pred: "f1")
-	aggregatename: YAggregateResult
-	aggregatef1: YAggregateResult
+	nameAggregate: YAggregateResult
+	f1Aggregate: YAggregateResult
 }
 
 type Y {
 	f1(first: Int, offset: Int): [X] @dgraph(pred: "~f1")
-	aggregatef1: XAggregateResult
+	f1Aggregate: XAggregateResult
 }
 
 type Z {
 	add(first: Int, offset: Int): [X]
-	aggregateadd: XAggregateResult
+	addAggregate: XAggregateResult
 }
 
 #######################

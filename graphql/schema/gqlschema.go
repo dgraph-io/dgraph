@@ -1128,7 +1128,7 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 // type list of object. eg. If defn is like
 // type T {fiedldA : [A]}
 // The following aggregate field is added to type T
-// aggregatefieldA(filter : AFilter) : AAggregateResult
+// fieldAAggregate(filter : AFilter) : AAggregateResult
 // These fields are added to support aggregate queries like count, avg, min
 func addAggregateFields(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
@@ -1139,7 +1139,7 @@ func addAggregateFields(schema *ast.Schema, defn *ast.Definition) {
 			(schema.Types[fld.Type.Name()].Kind == ast.Object ||
 				schema.Types[fld.Type.Name()].Kind == ast.Interface) {
 			aggregateField := &ast.FieldDefinition{
-				Name: "aggregate" + fld.Name,
+				Name: fld.Name + "Aggregate",
 				Type: &ast.Type{
 					NamedType: fld.Type.Name() + "AggregateResult",
 				},

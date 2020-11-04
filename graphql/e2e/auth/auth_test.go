@@ -1519,18 +1519,18 @@ func TestChildCountQueryWithDeepRBAC(t *testing.T) {
 		{
 			user:   "user1",
 			role:   "USER",
-			result: `{"queryUser": [{"username": "user1", "aggregateissues":{"count": null}}]}`},
+			result: `{"queryUser": [{"username": "user1", "issuesAggregate":{"count": null}}]}`},
 		{
 			user:   "user1",
 			role:   "ADMIN",
-			result: `{"queryUser":[{"username":"user1","aggregateissues":{"count":1}}]}`},
+			result: `{"queryUser":[{"username":"user1","issuesAggregate":{"count":1}}]}`},
 	}
 
 	query := `
 	query {
 	  queryUser (filter:{username:{eq:"user1"}}) {
 		username
-		aggregateissues {
+		issuesAggregate {
 		  count
 		}
 	  }
@@ -1557,18 +1557,18 @@ func TestChildCountQueryWithOtherFields(t *testing.T) {
 		{
 			user:   "user1",
 			role:   "USER",
-			result: `{"queryUser": [{"username": "user1","issues":[],"aggregateissues":{"count": null}}]}`},
+			result: `{"queryUser": [{"username": "user1","issues":[],"issuesAggregate":{"count": null}}]}`},
 		{
 			user:   "user1",
 			role:   "ADMIN",
-			result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}],"aggregateissues":{"count":1}}]}`},
+			result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}],"issuesAggregate":{"count":1}}]}`},
 	}
 
 	query := `
 	query {
 	  queryUser (filter:{username:{eq:"user1"}}) {
 		username
-		aggregateissues {
+		issuesAggregate {
 		  count
 		}
 		issues {
