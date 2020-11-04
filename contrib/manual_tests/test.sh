@@ -88,27 +88,31 @@ function dgraph::start_zeros() {
   done
 }
 
+function dgraph::start_alpha() {
+  local -r i="$1"
+  log::debug "Starting Alpha $i."
+
+  local internal_port=$((7080 + i))
+  local http_port=$((8080 + i))
+  local grpc_port=$((9080 + i))
+
+  for port in "$internal_port" "$http_port" "$grpc_port"; do
+    portkill "$port"
+  done
+
+  "$DGRAPH_BIN" \
+    alpha \
+    --cwd "$DGRAPH_PATH/alpha$i" \
+    --port_offset "$i" \
+    --zero 'localhost:5081' \
+    "${@:2}" &>"$LOGS_PATH/alpha$i" &
+  sleep 1
+}
+
 function dgraph::start_alphas() {
   local -r n="$1"
-
   for i in $(seq "$n"); do
-    log::debug "Starting Alpha $i."
-
-    local internal_port=$((7080 + i))
-    local http_port=$((8080 + i))
-    local grpc_port=$((9080 + i))
-
-    for port in "$internal_port" "$http_port" "$grpc_port"; do
-      portkill "$port"
-    done
-
-    "$DGRAPH_BIN" \
-      alpha \
-      --cwd "$DGRAPH_PATH/alpha$i" \
-      --port_offset "$i" \
-      --zero 'localhost:5081' \
-      "${@:2}" &>"$LOGS_PATH/alpha$i" &
-    sleep 1
+    dgraph::start_alpha "$i" "${@:2}"
   done
 }
 
@@ -423,11 +427,38 @@ function test::bulk_loader() {
   log::info "Restore succeeded."
 }
 
+function test::increment() {
+  dgraph::start_zeros 1 --replicas 1
+  local alphas=()
+
+  dgraph::start_alpha 1
+  alphas+=("localhost:9081")
+
+  for i in {1..1000}; do
+    if [ "$i" -eq 200 ]; then
+      dgraph::start_alpha 2
+      alphas+=("localhost:9082")
+    elif [ "$i" -eq 500 ]; then
+      dgraph::start_alpha 3
+      alphas+=("localhost:9083")
+    fi
+
+    count="$("$DGRAPH_BIN" increment --alpha "${alphas[$((i % ${#alphas[@]}))]}" | grep -oP 'Counter VAL: \K\d+')"
+    if [ $((count % 10)) -eq 0 ]; then
+      log::debug "Increment: $count"
+    fi
+    if [ "$count" -ne "$i" ]; then
+      log::error "Increment error: expected: $count, got: $i"
+      return 1
+    fi
+  done
+}
+
 function dgraph::run_tests() {
   local passed=0
   local failed=0
 
-  for test in $(compgen -A function test::); do
+  for test in $(compgen -A function "test::$1"); do
     log::info "$test starting."
 
     setup
@@ -447,15 +478,19 @@ function dgraph::run_tests() {
   local -r summary="$passed tests passed, $failed failed."
   if [ "$failed" -ne 0 ]; then
     log::error "$summary"
+    return 1
   else
     log::info "$summary"
+    return 0
   fi
 }
 
 function main() {
   cleanup
-  dgraph::run_tests
+  dgraph::run_tests "$@"
+  local status="$?"
   cleanup
+  return $status
 }
 
 main "$@"
