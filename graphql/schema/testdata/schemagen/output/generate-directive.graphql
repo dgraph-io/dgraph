@@ -366,8 +366,8 @@ input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
 	has: CharacterHasFilter
-	and: CharacterFilter
-	or: CharacterFilter
+	and: [CharacterFilter]
+	or: [CharacterFilter]
 	not: CharacterFilter
 }
 
@@ -391,8 +391,8 @@ input HumanFilter {
 	id: [ID!]
 	name: StringExactFilter
 	has: HumanHasFilter
-	and: HumanFilter
-	or: HumanFilter
+	and: [HumanFilter]
+	or: [HumanFilter]
 	not: HumanFilter
 }
 
@@ -420,8 +420,8 @@ input HumanRef {
 input PersonFilter {
 	id: [ID!]
 	has: PersonHasFilter
-	and: PersonFilter
-	or: PersonFilter
+	and: [PersonFilter]
+	or: [PersonFilter]
 	not: PersonFilter
 }
 

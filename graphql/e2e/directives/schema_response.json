@@ -461,6 +461,15 @@
             ]
         },
         {
+            "index": true,
+            "predicate": "test.dgraph.author.qualification",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
+        },
+        {
             "predicate": "test.dgraph.employee.en.ename",
             "type": "string"
         },
@@ -937,6 +946,9 @@
                 },
                 {
                     "name": "test.dgraph.author.posts"
+                },
+                {
+                    "name": "test.dgraph.author.qualification"
                 }
             ],
             "name": "test.dgraph.author"

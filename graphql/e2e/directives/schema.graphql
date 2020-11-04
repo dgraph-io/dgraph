@@ -43,6 +43,7 @@ type Author @dgraph(type: "test.dgraph.author") {
 
         dob: DateTime @search
         reputation: Float @search
+        qualification: String @search(by: [hash, trigram])
         country: Country
         posts: [Post!] @hasInverse(field: author)
 		bio: String @lambda
