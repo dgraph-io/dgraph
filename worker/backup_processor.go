@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"reflect"
 	"strings"
 
 	"github.com/dgraph-io/badger/v2"
@@ -342,7 +343,8 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 	case 1:
 		val, ok := vals[0].Value.([]byte)
 		if !ok {
-			return nil, errors.Errorf("cannot convert value of dgraph.drop.op to byte array")
+			return nil, errors.Errorf("cannot convert value of dgraph.drop.op to byte array, "+
+				"got type: %s", reflect.TypeOf(vals[0].Value))
 		}
 		// A dgraph.drop.op record can have values in only one of the following formats:
 		// * DROP_ALL;
@@ -366,6 +368,6 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 		return dropOp, nil
 	default:
 		// getting more than one values for a non-list predicate is an error
-		return nil, errors.Errorf("found multiple values for dgraph.drop.op")
+		return nil, errors.Errorf("found multiple values for dgraph.drop.op: %v", vals)
 	}
 }

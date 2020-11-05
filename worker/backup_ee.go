@@ -170,25 +170,31 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	errCh := make(chan error, len(state.Groups))
-	var dropOperations []*pb.DropOperation
+	resOrErrCh := make(chan interface{}, len(state.Groups))
 	for _, gid := range groups {
 		br := proto.Clone(req).(*pb.BackupRequest)
 		br.GroupId = gid
 		br.Predicates = predMap[gid]
 		go func(req *pb.BackupRequest) {
 			res, err := BackupGroup(ctx, req)
-			if res != nil && len(res.DropOperations) > 0 {
-				dropOperations = append(dropOperations, res.DropOperations...)
+			if err != nil {
+				resOrErrCh <- err
+			} else {
+				resOrErrCh <- res
 			}
-			errCh <- err
 		}(br)
 	}
 
+	var dropOperations []*pb.DropOperation
 	for range groups {
-		if err := <-errCh; err != nil {
-			glog.Errorf("Error received during backup: %v", err)
-			return err
+		if resOrErr := <-resOrErrCh; resOrErr != nil {
+			switch val := resOrErr.(type) {
+			case error:
+				glog.Errorf("Error received during backup: %v", val)
+				return val
+			case *pb.BackupResponse:
+				dropOperations = append(dropOperations, val.DropOperations...)
+			}
 		}
 	}
 
