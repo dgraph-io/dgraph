@@ -6,7 +6,7 @@ weight = 3
     name = "Count Queries"
 +++
 
-Dgraph automatically generates count queries for a given GraphQL schema, enabling you to `count` on predicates, edges and to count nodes satisfying certain criteria specified using a filter. Count Queries are also compatible with `@auth` directive and honor the same authorization rules as `query`.
+Dgraph automatically generates count queries for a given GraphQL schema, enabling you to `count` on predicates, edges, and to count nodes satisfying certain criteria specified using a filter. Count Queries are also compatible with the `@auth` directive and honor the same authorization rules as `query`.
 
 ### Count at root
 
