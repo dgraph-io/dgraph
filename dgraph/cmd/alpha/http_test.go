@@ -970,7 +970,7 @@ func TestContentTypeCharset(t *testing.T) {
 	require.True(t, err != nil && strings.Contains(err.Error(), "Unsupported charset"))
 }
 
-func TestQueryBackwardCompatibleWithgraphqlPlusMinus(t *testing.T) {
+func TestQueryBackwardCompatibleWithgraphqlPlusMinusHeader(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`name: string @index(term) .`))
 
