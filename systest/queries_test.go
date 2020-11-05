@@ -390,6 +390,9 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
   {
     "schema": [
 	  {
+		"predicate": "dgraph.drop.op"
+	  },
+	  {
 		"predicate": "dgraph.cors"
 	  },
 	  {

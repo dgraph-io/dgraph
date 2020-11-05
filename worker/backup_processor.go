@@ -344,7 +344,7 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 		if !ok {
 			return nil, errors.Errorf("cannot convert value of dgraph.drop.op to byte array")
 		}
-		// A dgraph.drop.op record can have values in only one of following formats:
+		// A dgraph.drop.op record can have values in only one of the following formats:
 		// * DROP_ALL;
 		// * DROP_DATA;
 		// * DROP_ATTR;attrName

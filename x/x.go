@@ -169,6 +169,7 @@ const (
 
 	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
 	GraphqlPredicates = `
+{"predicate":"dgraph.drop.op", "type": "string"},
 {"predicate":"dgraph.graphql.schema", "type": "string"},
 {"predicate":"dgraph.graphql.schema_history", "type": "string"},
 {"predicate":"dgraph.graphql.schema_created_at", "type": "datetime"},
