@@ -674,16 +674,29 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 		Attr: m.Name(),
 	}
 
-	if m.MutatedType().InterfaceImplHasAuthRules() {
-		dgQuery.Attr = m.ResponseName() + "()"
-		return dgQuery
-	}
-
 	rbac := authRw.evaluateStaticRules(m.MutatedType())
 	if rbac == schema.Negative {
 		dgQuery.Attr = m.ResponseName() + "()"
 		return dgQuery
 	}
+
+	// For interface, empty delete mutation should be returned if Auth rules are
+	// not satisfied even for a single implementing type
+	if m.MutatedType().IsInterface() {
+		implementingTypesHasFailedRules := false
+		implementingTypes := m.MutatedType().ImplementingTypes()
+		for _, typ := range implementingTypes {
+			if authRw.evaluateStaticRules(typ) != schema.Negative {
+				implementingTypesHasFailedRules = true
+			}
+		}
+
+		if !implementingTypesHasFailedRules {
+			dgQuery.Attr = m.ResponseName() + "()"
+			return dgQuery
+		}
+	}
+
 	// Add uid child to the upsert query, so that we can get the list of nodes upserted.
 	dgQuery.Children = append(dgQuery.Children, &gql.GraphQuery{
 		Attr: "uid",

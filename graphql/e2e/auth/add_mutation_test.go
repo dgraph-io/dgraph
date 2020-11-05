@@ -106,6 +106,250 @@ func (m *Movie) delete(t *testing.T, user, role string) {
 	require.Nil(t, gqlResponse.Errors)
 }
 
+func (a *Author) delete(t *testing.T) {
+	getParams := &common.GraphQLParams{
+		Query: `
+			mutation deleteAuthor($ids: [ID!]) {
+				deleteAuthor(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{a.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (q *Question) delete(t *testing.T, user string) {
+	getParams := &common.GraphQLParams{
+		Headers: common.GetJWTForInterfaceAuth(t, user, "", q.Answered, metaInfo),
+		Query: `
+			mutation deleteQuestion($ids: [ID!]) {
+				deleteQuestion(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{q.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (f *FbPost) delete(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, user, role, metaInfo),
+		Query: `
+			mutation deleteFbPost($ids: [ID!]) {
+				deleteFbPost(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{f.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func TestAuth_AddOnTypeWithRBACRuleOnInterface(t *testing.T) {
+	testCases := []TestCase{{
+		user: "user1@dgraph.io",
+		role: "ADMIN",
+		variables: map[string]interface{}{"fbpost": &FbPost{
+			Text: "New FbPost",
+			Author: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Sender: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Receiver: &Author{
+				Name: "user2@dgraph.io",
+			},
+			PostCount: 5,
+		}},
+		expectedError: false,
+		result:        `{"addFbPost":{"fbPost":[{"id":"0x15f","text":"New FbPost","author":{"id":"0x15e","name":"user1@dgraph.io"},"sender":{"id":"0x15d","name":"user1@dgraph.io"},"receiver":{"id":"0x160","name":"user2@dgraph.io"}}]}}`,
+	}, {
+		user: "user1@dgraph.io",
+		role: "USER",
+		variables: map[string]interface{}{"fbpost": &FbPost{
+			Text: "New FbPost",
+			Author: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Sender: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Receiver: &Author{
+				Name: "user2@dgraph.io",
+			},
+			PostCount: 5,
+		}},
+		expectedError: true,
+	},
+	}
+
+	query := `
+		mutation addFbPost($fbpost: AddFbPostInput!) {
+			addFbPost(input: [$fbpost]) {
+				fbPost {
+					id
+					text
+					author {
+						id
+						name
+					}
+					sender {
+						id
+						name
+					}
+					receiver {
+						id
+						name
+					}
+				}
+			}
+		}
+	`
+
+	var expected, result struct {
+		AddFbPost struct {
+			FbPost []*FbPost
+		}
+	}
+
+	for _, tcase := range testCases {
+		params := &common.GraphQLParams{
+			Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+			Query:     query,
+			Variables: tcase.variables,
+		}
+
+		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+		if tcase.expectedError {
+			require.Equal(t, len(gqlResponse.Errors), 1)
+			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
+			continue
+		}
+
+		require.Nil(t, gqlResponse.Errors)
+
+		err := json.Unmarshal([]byte(tcase.result), &expected)
+		require.NoError(t, err)
+
+		err = json.Unmarshal(gqlResponse.Data, &result)
+		require.NoError(t, err)
+
+		opt := cmpopts.IgnoreFields(FbPost{}, "Id")
+		opt1 := cmpopts.IgnoreFields(Author{}, "Id")
+		if diff := cmp.Diff(expected, result, opt, opt1); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+
+		for _, i := range result.AddFbPost.FbPost {
+			i.Author.delete(t)
+			i.Sender.delete(t)
+			i.Receiver.delete(t)
+			i.delete(t, tcase.user, tcase.role)
+		}
+	}
+}
+
+func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
+	testCases := []TestCase{{
+		user: "user1@dgraph.io",
+		ans:  true,
+		variables: map[string]interface{}{"question": &Question{
+			Text: "A Question",
+			Author: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Answered: true,
+		}},
+		result: `{"addQuestion": {"question": [{"id": "0x123", "text": "A Question", "author": {"id": "0x124", "name": "user1@dgraph.io"}}]}}`,
+	}, {
+		user: "user1",
+		ans:  false,
+		variables: map[string]interface{}{"question": &Question{
+			Text: "A Question",
+			Author: &Author{
+				Name: "user1",
+			},
+			Answered: true,
+		}},
+		expectedError: true,
+	},
+		{
+			user: "user2",
+			ans:  true,
+			variables: map[string]interface{}{"question": &Question{
+				Text: "A Question",
+				Author: &Author{
+					Name: "user1",
+				},
+				Answered: true,
+			}},
+			expectedError: true,
+		},
+	}
+
+	query := `
+		mutation addQuestion($question: AddQuestionInput!) {
+			addQuestion(input: [$question]) {
+				question {
+					id
+					text
+					author {
+						id
+						name
+					}
+				}
+			}
+		}
+	`
+	var expected, result struct {
+		AddQuestion struct {
+			Question []*Question
+		}
+	}
+
+	for _, tcase := range testCases {
+		params := &common.GraphQLParams{
+			Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
+			Query:     query,
+			Variables: tcase.variables,
+		}
+
+		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+		if tcase.expectedError {
+			require.Equal(t, len(gqlResponse.Errors), 1)
+			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
+			continue
+		}
+
+		require.Nil(t, gqlResponse.Errors)
+
+		err := json.Unmarshal([]byte(tcase.result), &expected)
+		require.NoError(t, err)
+
+		err = json.Unmarshal(gqlResponse.Data, &result)
+		require.NoError(t, err)
+		opt := cmpopts.IgnoreFields(Question{}, "Id")
+		opt1 := cmpopts.IgnoreFields(Author{}, "Id")
+		if diff := cmp.Diff(expected, result, opt, opt1); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+
+		for _, i := range result.AddQuestion.Question {
+			i.Author.delete(t)
+			i.delete(t, tcase.user)
+		}
+	}
+}
+
 func TestAddDeepFilter(t *testing.T) {
 	// Column can only be added if the user has ADMIN role attached to the corresponding project.
 	testCases := []TestCase{{

@@ -531,17 +531,17 @@ func (authRw *authRewriter) addAuthQueries(
 
 		var qrys []*gql.GraphQuery
 		var filts []*gql.FilterTree
-		implementingTypesHasQueryAuthRules := false
+		implementingTypesHasAuthRules := false
 		for _, object := range implementingTypes {
 
 			// It could be the case that None of implementing Types have Auth Rules, which clearly
 			// indicates that neither the interface, nor any of the implementing type has its own
 			// Auth rules.
 			// ImplementingTypeHasAuthRules is set to true even if one of the implemented type have
-			// query Auth rules or Interface has its own Query auth rule, in the latter case, all the
+			// Auth rules or Interface has its own auth rule, in the latter case, all the
 			// implemented types must have inherited those auth rules.
-			if object.AuthRules().Rules != nil && object.AuthRules().Rules.Query != nil {
-				implementingTypesHasQueryAuthRules = true
+			if object.AuthRules().Rules != nil {
+				implementingTypesHasAuthRules = true
 			}
 
 			// First Check if the Auth Rules of the given type are satisfied or not.
@@ -575,7 +575,7 @@ func (authRw *authRewriter) addAuthQueries(
 			}).rewriteAuthQueries(object)
 
 			// If there is no Auth Query for the Given type then it means that
-			// neither the inherited interface, nor this type has any query Auth rules.
+			// neither the inherited interface, nor this type has any Auth rules.
 			// In this case the query must return all the nodes of this type.
 			// then simply we need to Put uid(Todo1) with OR in the main query filter.
 			if len(objAuthQueries) == 0 {
@@ -594,7 +594,7 @@ func (authRw *authRewriter) addAuthQueries(
 
 		// For an interface having Auth rules in some of the implementing types, len(qrys) = 0
 		// indicates that None of the type satisfied the Auth rules, We must return Empty Query here.
-		if implementingTypesHasQueryAuthRules == true && len(qrys) == 0 {
+		if implementingTypesHasAuthRules == true && len(qrys) == 0 {
 			return &gql.GraphQuery{
 				Attr: dgQuery.Attr + "()",
 			}
@@ -619,7 +619,7 @@ func (authRw *authRewriter) addAuthQueries(
 
 		// Adding the case of Query on interface in which None of the implementing type have
 		// Auth Query Rules, in that case, we also return simple query.
-		if typ.IsInterface() == true && implementingTypesHasQueryAuthRules == false {
+		if typ.IsInterface() == true && implementingTypesHasAuthRules == false {
 			return dgQuery
 		}
 

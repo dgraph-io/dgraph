@@ -599,19 +599,47 @@ interface Post @auth(
                       name
                   }
               } 
+            }""" },
+    add: { rule: """
+            query($USER: String!) { 
+              queryPost{
+                  author(filter: {name: {eq: $USER}}){
+                      name
+                  }
+              } 
+            }""" },
+    delete: { rule: """
+            query($USER: String!) { 
+              queryPost{
+                  author(filter: {name: {eq: $USER}}){
+                      name
+                  }
+              } 
+            }""" },
+    update: { rule: """
+            query($USER: String!) { 
+              queryPost{
+                  author(filter: {name: {eq: $USER}}){
+                      name
+                  }
+              } 
             }""" }
 ){
     id: ID!
     text: String! @search(by: [exact])
+    topic: String
     datePublished: DateTime @search
     author: Author! 
 }
 
 interface MsgPost @auth(
-    query: { rule: "{$ROLE: { eq: \"ADMIN\" } }" }
+    query: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
+    add: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
+    delete: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
+    update: { rule: "{$ROLE: { eq: \"ADMIN\" } }" }
 ){
-    sender: Author!
-    receiver: Author!
+    sender: Author
+    receiver: Author
 }
 
 type Question implements Post  @auth(
@@ -620,13 +648,31 @@ type Question implements Post  @auth(
               queryQuestion(filter: { answered: $ANS } ) { 
                 id 
               } 
-            }""" }
+            }""" },
+    add:{ rule: """
+            query($ANS: Boolean!) { 
+              queryQuestion(filter: { answered: $ANS } ) { 
+                id 
+              } 
+            }""" },
+    delete:{ rule: """
+            query($ANS: Boolean!) { 
+              queryQuestion(filter: { answered: $ANS } ) { 
+                id 
+              } 
+            }""" },
+    update:{ rule: """
+            query($ANS: Boolean!) { 
+              queryQuestion(filter: { answered: $ANS } ) { 
+                id 
+              } 
+            }""" },
 ){
     answered:  Boolean @search
 }
 
 type FbPost implements Post & MsgPost {
-    postCount: Int!
+    postCount: Int
 }
 
 type Answer implements Post {
@@ -636,6 +682,7 @@ type Answer implements Post {
 interface A {
     id: ID!
     fieldA: String @search(by: [exact])
+    random: String 
 }
 
 type B implements A {
@@ -644,6 +691,12 @@ type B implements A {
 
 type C implements A @auth(
     query:{ rule: """
+            query($ANS: Boolean!) { 
+              queryC(filter: { fieldC: $ANS } ) { 
+                id 
+              } 
+            }""" },
+    delete:{ rule: """
             query($ANS: Boolean!) { 
               queryC(filter: { fieldC: $ANS } ) { 
                 id 

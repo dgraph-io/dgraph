@@ -690,3 +690,306 @@
     query {
       x as updateComplexLog()
     }
+
+- name: "Update Type inheriting Graph Traversal Auth Rules from Interface."
+  gqlquery: |
+    mutation updateQuestion($question: UpdateQuestionInput!) {
+      updateQuestion(input: $question) {
+        question {
+          id
+        }
+      }
+    }
+  jwtvar: 
+    USER: "user1"
+    ANS: "true"
+  variables: |
+    {
+      "question":
+      {
+        "filter": {"id": ["0x123"] },
+        "set": {
+          "topic": "A topic"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateQuestion(func: uid(QuestionRoot)) {
+        uid
+      }
+      QuestionRoot as var(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3)))
+      Question1 as var(func: uid(0x123)) @filter(type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Update Type inheriting Graph Traversal Auth Rules on Interface failed."
+  gqlquery: |
+    mutation updateQuestion($question: UpdateQuestionInput!) {
+      updateQuestion(input: $question) {
+        question {
+          id
+        }
+      }
+    }
+  variables: |
+    {
+      "question":
+      {
+        "filter": {"id": ["0x123"] },
+        "set": {
+          "topic": "A topic"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateQuestion()
+    }
+
+- name: "Update Type inheriting RBAC Auth Rules from Interface."
+  gqlquery: |
+    mutation updateFbPost($post: UpdateFbPostInput!) {
+      updateFbPost(input: $post) {
+        fbPost {
+          id
+        }
+      }
+    }
+  jwtvar: 
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    {
+      "post":
+      {
+        "filter": {"id": ["0x123"] },
+        "set": {
+          "topic": "A topic"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateFbPost(func: uid(FbPostRoot)) {
+        uid
+      }
+      FbPostRoot as var(func: uid(FbPost1)) @filter(uid(FbPostAuth2))
+      FbPost1 as var(func: uid(0x123)) @filter(type(FbPost))
+      FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Update Type inheriting RBAC Auth Rules from Interface failed"
+  gqlquery: |
+    mutation updateFbPost($post: UpdateFbPostInput!) {
+      updateFbPost(input: $post) {
+        fbPost {
+          id
+        }
+      }
+    }
+  jwtvar: 
+    ROLE: "USER"
+    USER: "user1"
+  variables: |
+    {
+      "post":
+      {
+        "filter": {"id": ["0x123"] },
+        "set": {
+          "topic": "A topic"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateFbPost()
+    }
+
+- name: "Updating interface having its own auth rules and implementing types also have auth rules and all are satisfied"
+  gqlquery: |
+    mutation updatePost($post: UpdatePostInput!) {
+      updatePost(input: $post) {
+        post {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+    ANS: "true"
+  variables: |
+    {
+        "post":
+        {
+          "filter": {"id": ["0x123", "0x456"] },
+          "set": {
+            "topic": "A topic"
+          }
+        }
+      }
+  dgquery: |-
+    query {
+      x as updatePost(func: uid(PostRoot)) {
+        uid
+      }
+      PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(FbPostAuth4) OR uid(AnswerAuth5)))
+      Post1 as var(func: uid(0x123, 0x456)) @filter(type(Post))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      FbPost1 as var(func: type(FbPost))
+      FbPostAuth4 as var(func: uid(FbPost1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Answer1 as var(func: type(Answer))
+      AnswerAuth5 as var(func: uid(Answer1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Updating interface having its own auth rules and implementing types also have auth rules and some of the rules of implementing types are not satisfied"
+  gqlquery: |
+    mutation updatePost($post: UpdatePostInput!) {
+      updatePost(input: $post) {
+        post {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    {
+        "post":
+        {
+          "filter": {"id": ["0x123", "0x456"] },
+          "set": {
+            "topic": "A topic"
+          }
+        }
+      }
+  dgquery: |-
+    query {
+      x as updatePost(func: uid(PostRoot)) {
+        uid
+      }
+      PostRoot as var(func: uid(Post1)) @filter((uid(FbPostAuth2) OR uid(AnswerAuth3)))
+      Post1 as var(func: uid(0x123, 0x456)) @filter(type(Post))
+      FbPost1 as var(func: type(FbPost))
+      FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Answer1 as var(func: type(Answer))
+      AnswerAuth3 as var(func: uid(Answer1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Updating interface having its own auth rules and implementing types also have auth rules and the rules of interface are not satisfied"
+  gqlquery: |
+    mutation updatePost($post: UpdatePostInput!) {
+      updatePost(input: $post) {
+        post {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS: "true"
+  variables: |
+    {
+        "post":
+        {
+          "filter": {"id": ["0x123", "0x456"] },
+          "set": {
+            "topic": "A topic"
+          }
+        }
+      }
+  dgquery: |-
+    query {
+      x as updatePost()
+    }
+
+- name: "Updating interface having no own auth rules but some implementing types have auth rules and they are not satisfied."
+  gqlquery: |
+    mutation updateA($inp: UpdateAInput!) {
+      updateA(input: $inp) {
+        a {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS: "true"
+  variables: |
+    {
+        "inp":
+        {
+          "filter": {"id": ["0x123", "0x456"] },
+          "set": {
+            "random": "Random String"
+          }
+        }
+      }
+  dgquery: |-
+    query {
+      x as updateA(func: uid(ARoot)) {
+        uid
+      }
+      ARoot as var(func: uid(A1)) @filter((uid(B1) OR uid(C1)))
+      A1 as var(func: uid(0x123, 0x456)) @filter(type(A))
+      B1 as var(func: type(B))
+      C1 as var(func: type(C))
+    }
