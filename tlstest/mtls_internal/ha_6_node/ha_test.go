@@ -2,6 +2,9 @@ package ha_6_node
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -9,8 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"testing"
-	"time"
 )
 
 func runTests(t *testing.T, client *dgo.Dgraph) {
@@ -123,7 +124,6 @@ func TestHAClusterDiffClients(t *testing.T) {
 
 func getClientForAlpha(t *testing.T, name string, port string) *dgo.Dgraph {
 	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/" + name,
 		CertRequired:     true,
 		Cert:             "../tls/" + name + "/client." + name + ".crt",
 		Key:              "../tls/" + name + "/client." + name + ".key",
@@ -133,7 +133,7 @@ func getClientForAlpha(t *testing.T, name string, port string) *dgo.Dgraph {
 	}
 	tlsConf, err := x.GenerateClientTLSConfig(c)
 	require.NoError(t, err)
-	dgConn, err := grpc.Dial(":" + port, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	dgConn, err := grpc.Dial(":"+port, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
 	return client

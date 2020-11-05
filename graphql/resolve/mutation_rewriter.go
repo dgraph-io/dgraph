@@ -667,16 +667,29 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 		Attr: m.Name(),
 	}
 
-	if m.MutatedType().InterfaceImplHasAuthRules() {
-		dgQuery.Attr = m.ResponseName() + "()"
-		return dgQuery
-	}
-
 	rbac := authRw.evaluateStaticRules(m.MutatedType())
 	if rbac == schema.Negative {
 		dgQuery.Attr = m.ResponseName() + "()"
 		return dgQuery
 	}
+
+	// For interface, empty delete mutation should be returned if Auth rules are
+	// not satisfied even for a single implementing type
+	if m.MutatedType().IsInterface() {
+		implementingTypesHasFailedRules := false
+		implementingTypes := m.MutatedType().ImplementingTypes()
+		for _, typ := range implementingTypes {
+			if authRw.evaluateStaticRules(typ) != schema.Negative {
+				implementingTypesHasFailedRules = true
+			}
+		}
+
+		if !implementingTypesHasFailedRules {
+			dgQuery.Attr = m.ResponseName() + "()"
+			return dgQuery
+		}
+	}
+
 	// Add uid child to the upsert query, so that we can get the list of nodes upserted.
 	dgQuery.Children = append(dgQuery.Children, &gql.GraphQuery{
 		Attr: "uid",
@@ -1053,6 +1066,11 @@ func rewriteObject(
 			}
 		} else if !withAdditionalDeletes {
 			// In case of delete, id/xid is required
+			if xid == nil && id == nil {
+				err := errors.Errorf("object of type: %s doesn't have a field of type ID! "+
+					"or @id and can't be referenced for deletion", typ.Name())
+				return &mutationRes{secondPass: []*mutationFragment{{err: err}}}
+			}
 			var name string
 			if xid != nil {
 				name = xid.Name()

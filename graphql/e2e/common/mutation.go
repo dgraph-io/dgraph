@@ -3787,6 +3787,71 @@ func int64BoundaryTesting(t *testing.T) {
 	deleteGqlType(t, "post1", filter, 2, nil)
 }
 
+func intWithList(t *testing.T) {
+	tcases := []struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		expected  string
+	}{{
+		name: "list of integers in mutation",
+		query: `mutation {
+			addpost1(input: [{title: "Dgraph",commentsByMonth:[2,33,11,6],likesByMonth:[4,33,1,66] }]) {
+				post1 {
+					title
+                    commentsByMonth
+                    likesByMonth
+				}
+			}
+		}`,
+		expected: `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"commentsByMonth": [2,33,11,6],
+                "likesByMonth": [4,33,1,66]
+			}]
+		}
+	}`,
+	}, {
+		name: "list of integers in variable",
+		query: `mutation($post1:[Addpost1Input!]!) {
+			addpost1(input:$post1 ) {
+				post1 {
+					title
+                    commentsByMonth
+                    likesByMonth
+				}
+			}
+		}`,
+		variables: map[string]interface{}{"post1": []interface{}{map[string]interface{}{"title": "Dgraph", "commentsByMonth": []int{2, 33, 11, 6}, "likesByMonth": []int64{4, 33, 1, 66}}}},
+
+		expected: `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"commentsByMonth": [2,33,11,6],
+                "likesByMonth": [4,33,1,66]
+			}]
+		}
+	}`,
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: tcase.variables,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+			filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
+			deleteGqlType(t, "post1", filter, 1, nil)
+		})
+	}
+
+}
+
 func nestedAddMutationWithHasInverse(t *testing.T) {
 	params := &GraphQLParams{
 		Query: `mutation addPerson1($input: [AddPerson1Input!]!) {
