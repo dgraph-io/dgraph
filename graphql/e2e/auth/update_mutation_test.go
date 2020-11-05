@@ -18,7 +18,6 @@ package auth
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -470,7 +469,6 @@ func TestAuth_UpdateOnInterfaceWithAuthRules(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
-			fmt.Println(string(gqlResponse.Data))
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
