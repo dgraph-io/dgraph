@@ -158,7 +158,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 			"invalid username or passowrd")
 	}
 	if !user.PasswordMatch {
-		return nil, errors.Errorf("invalid username or password")
+		return nil, x.ErrorInvalidLogin
 	}
 	return user, nil
 }
