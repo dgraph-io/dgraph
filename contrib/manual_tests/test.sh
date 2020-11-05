@@ -427,30 +427,30 @@ function test::bulk_loader() {
   log::info "Restore succeeded."
 }
 
-function test::increment() {
+function testx::increment() {
+  local -r increment_factor=100
+
   dgraph::start_zeros 1 --replicas 1
   local alphas=()
 
   dgraph::start_alpha 1
   alphas+=("localhost:9081")
 
-  for i in {1..1000}; do
-    if [ "$i" -eq 200 ]; then
+  for i in {1..20000}; do
+    if [ "$i" -eq 5000 ]; then
       dgraph::start_alpha 2
       alphas+=("localhost:9082")
-    elif [ "$i" -eq 500 ]; then
+    elif [ "$i" -eq 10000 ]; then
       dgraph::start_alpha 3
       alphas+=("localhost:9083")
     fi
 
-    count="$("$DGRAPH_BIN" increment --alpha "${alphas[$((i % ${#alphas[@]}))]}" | grep -oP 'Counter VAL: \K\d+')"
-    if [ $((count % 10)) -eq 0 ]; then
-      log::debug "Increment: $count"
-    fi
-    if [ "$count" -ne "$i" ]; then
+    count="$("$DGRAPH_BIN" increment --alpha "${alphas[$((i % ${#alphas[@]}))]}" --num "$increment_factor" | grep -oP 'Counter VAL: \K\d+' | tail -1)"
+    if [ "$count" -ne $((i * increment_factor)) ]; then
       log::error "Increment error: expected: $count, got: $i"
       return 1
     fi
+    log::debug "Increment: $count"
   done
 }
 
@@ -458,7 +458,7 @@ function dgraph::run_tests() {
   local passed=0
   local failed=0
 
-  for test in $(compgen -A function "test::$1"); do
+  for test in $(compgen -A function "${1:-test::}"); do
     log::info "$test starting."
 
     setup

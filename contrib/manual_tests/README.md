@@ -7,6 +7,11 @@ To run manual tests:
   leaving Dgraph running and the test directory intact.
 - Execute `./test.sh`.
 
+For long-running tests:
+
+- These tests have been grouped under `testx::`, so they do not run by default.
+- Execute `./test.sh testx::`
+
 To add a new test:
 
 - Create a function with the `test::` prefix.
