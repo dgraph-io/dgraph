@@ -290,7 +290,7 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 }
 
 func insertDropRecord(ctx context.Context, dropOp string) error {
-	_, err := (&Server{}).Query(context.WithValue(ctx, IsGraphql, true),
+	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true),
 		&api.Request{
 			Mutations: []*api.Mutation{{
 				Set: []*api.NQuad{{
@@ -300,7 +300,7 @@ func insertDropRecord(ctx context.Context, dropOp string) error {
 				}},
 			}},
 			CommitNow: true,
-		})
+		}, NoAuthorize)
 	return err
 }
 

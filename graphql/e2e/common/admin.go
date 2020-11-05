@@ -154,6 +154,10 @@ const (
             "upsert": true
         },
         {
+            "predicate": "dgraph.drop.op",
+            "type": "string"
+        },
+        {
             "predicate":"dgraph.graphql.p_query",
             "type":"string"
         },
@@ -271,6 +275,10 @@ const (
              "exact"
             ],
             "upsert": true
+        },
+        {
+            "predicate": "dgraph.drop.op",
+            "type": "string"
         },
         {
             "predicate":"dgraph.graphql.p_query",
@@ -401,6 +409,10 @@ const (
              "exact"
             ],
             "upsert": true
+        },
+        {
+            "predicate": "dgraph.drop.op",
+            "type": "string"
         },
         {
             "predicate":"dgraph.graphql.p_query",
