@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -62,6 +63,8 @@ func invokeNetworkRequest(ctx context.Context, addr string,
 }
 
 const backupRequestGracePeriod = time.Second
+
+const maxResultsInHasQuery = 1 << 20
 
 // TODO: Cross-server cancellation as described in Jeff Dean's talk.
 func processWithBackupRequest(
@@ -2343,6 +2346,9 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 
 		_, err := qs.getValsForUID(q.Attr, lang, uid, q.ReadTs)
 		return err
+	}
+	if q.First == math.MaxInt32 {
+		q.First = maxResultsInHasQuery
 	}
 
 loop:
