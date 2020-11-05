@@ -631,76 +631,6 @@
         uid
       }
     }
-- name: "Delete Type Having Graph Traversal Auth Rules on Interface."
-  gqlquery: |
-    mutation ($ids: [ID!]) {
-      deleteQuestion(filter: {id: $ids}) {
-    	numUids
-      }
-    }
-  variables: |
-    { "filter":
-      {
-        "ids": ["0x1", "0x2"]
-      }
-    }
-  variables: |
-    {
-      "ids": ["0x1", "0x2"]
-    }
-  jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
-    ANS:  "true"
-  dgmutations:
-    - deletejson: |
-        [{
-           "uid": "uid(x)"
-         },{
-           "Author.posts": [
-             {"uid": "uid(x)"}
-           ],
-           "uid": "uid(Author6)"
-         }]
-  dgquery: |-
-    query {
-      x as deletePost(func: uid(PostRoot)) {
-        uid
-        Author6 as Post.author
-      }
-      PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(FbPostAuth4) OR uid(AnswerAuth5)))
-      Post1 as var(func: uid(0x1, 0x2)) @filter(type(Post))
-      Question1 as var(func: type(Question))
-      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
-        id : uid
-      }
-      QuestionAuth3 as var(func: uid(Question1)) @cascade {
-        dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-      FbPost1 as var(func: type(FbPost))
-      FbPostAuth4 as var(func: uid(FbPost1)) @cascade {
-        dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-      Answer1 as var(func: type(Answer))
-      AnswerAuth5 as var(func: uid(Answer1)) @cascade {
-        dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-    }
 
 - name: "Deleting interface having its own auth rules and implementing types also have auth rules and some of the rules of implementing types are not satisfied"
   gqlquery: |
@@ -780,6 +710,7 @@
     query {
       x as deletePost()
     }
+
 - name: "Deleting interface having no own auth rules but some implementing types have auth rules and they are not satisfied."
   gqlquery: |
     mutation ($ids: [ID!]) {
@@ -801,7 +732,11 @@
       x as deleteA(func: uid(ARoot)) {
         uid
       }
+      ARoot as var(func: uid(A1)) @filter((uid(B1)))
+      A1 as var(func: uid(0x1, 0x2)) @filter(type(A))
+      B1 as var(func: type(B))
     }
+
 - name: "Delete Type Having Graph Traversal Auth Rules on Interface."
   gqlquery: |
     mutation ($ids: [ID!]) {
@@ -846,6 +781,7 @@
         dgraph.uid : uid
       }
     }
+
 - name: "Delete Type Having Graph Traversal Auth Rules on Interface and those are not satisfied."
   gqlquery: |
     mutation ($ids: [ID!]) {

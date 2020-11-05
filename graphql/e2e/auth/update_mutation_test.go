@@ -18,7 +18,6 @@ package auth
 
 import (
 	"encoding/json"
-	"strconv"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -448,7 +447,7 @@ func TestAuth_UpdateOnInterfaceWithAuthRules(t *testing.T) {
 	}, {
 		name:   "No node satisfy auth rules with the given value of `user`",
 		user:   "user3@dgraph.io",
-		result: `{"updatePost":{"numUids":3}}`,
+		result: `{"updatePost":{"numUids":0}}`,
 	},
 	}
 
@@ -461,7 +460,7 @@ func TestAuth_UpdateOnInterfaceWithAuthRules(t *testing.T) {
 	`
 
 	for _, tcase := range testCases {
-		t.Run(tcase.user+tcase.role+strconv.FormatBool(tcase.ans), func(t *testing.T) {
+		t.Run(tcase.name, func(t *testing.T) {
 			params := &common.GraphQLParams{
 				Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
 				Query:     query,
@@ -470,7 +469,7 @@ func TestAuth_UpdateOnInterfaceWithAuthRules(t *testing.T) {
 
 			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }
@@ -479,6 +478,7 @@ func TestAuth_UpdateOnTypeWithGraphFilterOnInterface(t *testing.T) {
 	_, ids := getAllQuestions(t, []string{"user1@dgraph.io", "user2@dgraph.io"}, []bool{true, false})
 
 	testCases := []TestCase{{
+		name:   "Only 1 Question Node, whose text is `A Question` satisfies the below `user` and `ans`",
 		user:   "user1@dgraph.io",
 		ans:    true,
 		result: `{"updateQuestion": {"question":[{"text": "A Question", "topic": "A Topic"}]}}`,
@@ -507,7 +507,7 @@ func TestAuth_UpdateOnTypeWithGraphFilterOnInterface(t *testing.T) {
 	`
 
 	for _, tcase := range testCases {
-		t.Run(tcase.user+strconv.FormatBool(tcase.ans), func(t *testing.T) {
+		t.Run(tcase.name, func(t *testing.T) {
 			params := &common.GraphQLParams{
 				Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, "", tcase.ans, metaInfo),
 				Query:     query,
