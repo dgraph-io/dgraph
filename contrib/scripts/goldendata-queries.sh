@@ -18,7 +18,7 @@ function run_index_test {
   do
     set +e
     accessToken=`loginWithGroot`
-    N=`curl -s -H 'Content-Type: application/graphql+-' localhost:8180/query -XPOST -d @${X}.in -H "X-Dgraph-AccessToken: $accessToken"`
+    N=`curl -s -H 'Content-Type: application/dql' localhost:8180/query -XPOST -d @${X}.in -H "X-Dgraph-AccessToken: $accessToken"`
     exitCode=$?
 
     set -e

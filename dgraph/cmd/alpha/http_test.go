@@ -454,7 +454,7 @@ func TestTransactionBasic(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	_, ts, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -480,18 +480,18 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, "balance", parsedPreds[0])
 	require.Equal(t, "name", parsedPreds[1])
 
-	data, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	data, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/graphql+-", "", ts)
+	data, _, err = queryWithTs(q1, "application/dql", "", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
 	require.NoError(t, commitWithTs(mr.keys, mr.preds, ts))
-	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	data, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -508,7 +508,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	_, ts, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -526,18 +526,18 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.Equal(t, mr.startTs, ts)
 	require.Equal(t, 4, len(mr.keys))
 
-	data, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	data, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/graphql+-", "", ts)
+	data, _, err = queryWithTs(q1, "application/dql", "", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
 	require.NoError(t, commitWithTs(mr.keys, nil, ts))
-	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	data, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -553,7 +553,7 @@ func TestTransactionForCost(t *testing.T) {
 	  }
 	}
 	`
-	_, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	_, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -570,7 +570,7 @@ func TestTransactionForCost(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "5", mr.cost)
 
-	_, _, resp, err := queryWithTsForResp(q1, "application/graphql+-", "", 0)
+	_, _, resp, err := queryWithTsForResp(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, "2", resp.Header.Get(x.DgraphCostHeader))
 }
@@ -587,7 +587,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	_, ts, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -605,12 +605,12 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	require.Equal(t, mr.startTs, ts)
 	require.Equal(t, 4, len(mr.keys))
 
-	data, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	data, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/graphql+-", "", ts)
+	data, _, err = queryWithTs(q1, "application/dql", "", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
@@ -623,7 +623,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 
 	// Commit (using a list of keys instead of a map) and query.
 	require.NoError(t, commitWithTsKeysOnly(mr.keys, ts))
-	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	data, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
@@ -697,32 +697,32 @@ func TestHttpCompressionSupport(t *testing.T) {
 	err := runMutation(m1)
 	require.NoError(t, err)
 
-	data, resp, err := queryWithGz(q1, "application/graphql+-", "false", "", false, false)
+	data, resp, err := queryWithGz(q1, "application/dql", "false", "", false, false)
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", "", "", false, true)
+	data, resp, err = queryWithGz(q1, "application/dql", "", "", false, true)
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", "", "", true, false)
+	data, resp, err = queryWithGz(q1, "application/dql", "", "", true, false)
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", "", "", true, true)
+	data, resp, err = queryWithGz(q1, "application/dql", "", "", true, true)
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	// query with timeout
-	data, _, err = queryWithGz(q1, "application/graphql+-", "", "1ms", false, false)
+	data, _, err = queryWithGz(q1, "application/dql", "", "1ms", false, false)
 	require.EqualError(t, err, ": context deadline exceeded")
 	require.Equal(t, "", data)
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", "", "1s", false, false)
+	data, resp, err = queryWithGz(q1, "application/dql", "", "1s", false, false)
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
@@ -798,32 +798,32 @@ func TestDebugSupport(t *testing.T) {
 		require.Equal(t, exp, actual)
 	}
 
-	data, resp, err := queryWithGz(q1, "application/graphql+-", "true", "", false, false)
+	data, resp, err := queryWithGz(q1, "application/dql", "true", "", false, false)
 	require.NoError(t, err)
 	requireEqual(t, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", "true", "", false, true)
+	data, resp, err = queryWithGz(q1, "application/dql", "true", "", false, true)
 	require.NoError(t, err)
 	requireEqual(t, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", "true", "", true, false)
+	data, resp, err = queryWithGz(q1, "application/dql", "true", "", true, false)
 	require.NoError(t, err)
 	requireEqual(t, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", "true", "", true, true)
+	data, resp, err = queryWithGz(q1, "application/dql", "true", "", true, true)
 	require.NoError(t, err)
 	requireEqual(t, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	// query with timeout
-	data, _, err = queryWithGz(q1, "application/graphql+-", "true", "1ms", false, false)
+	data, _, err = queryWithGz(q1, "application/dql", "true", "1ms", false, false)
 	require.EqualError(t, err, ": context deadline exceeded")
 	require.Equal(t, "", data)
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", "true", "1s", false, false)
+	data, resp, err = queryWithGz(q1, "application/dql", "true", "1s", false, false)
 	require.NoError(t, err)
 	requireEqual(t, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
@@ -836,7 +836,7 @@ func TestDebugSupport(t *testing.T) {
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
 	// This test passes access token along with debug flag
-	data, _, err = queryWithTs(q1, "application/graphql+-", "true", 0)
+	data, _, err = queryWithTs(q1, "application/dql", "true", 0)
 	require.NoError(t, err)
 	requireEqual(t, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
@@ -883,7 +883,7 @@ func TestDrainingMode(t *testing.T) {
 	  }
 	}
 	`
-		_, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+		_, _, err := queryWithTs(q1, "application/dql", "", 0)
 		if expectErr {
 			require.True(t, err != nil && strings.Contains(err.Error(), "the server is in draining mode"))
 		} else {
@@ -968,4 +968,38 @@ func TestContentTypeCharset(t *testing.T) {
 
 	_, err = mutationWithTs(`{}`, "application/rdf; charset=latin1", false, true, 0)
 	require.True(t, err != nil && strings.Contains(err.Error(), "Unsupported charset"))
+}
+
+func TestQueryBackwardCompatibleWithGraphqlPlusMinusHeader(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
+
+	q1 := `
+	{
+	  balances(func: anyofterms(name, "Alice Bob")) {
+	    name
+	    balance
+	  }
+	}
+	`
+	_, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+
+	m1 := `
+    {
+	  set {
+		_:alice <name> "Bob" .
+		_:alice <balance> "110" .
+		_:bob <balance> "60" .
+	  }
+	}
+	`
+
+	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	require.Equal(t, "5", mr.cost)
+
+	_, _, resp, err := queryWithTsForResp(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.Equal(t, "2", resp.Header.Get(x.DgraphCostHeader))
 }

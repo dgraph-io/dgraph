@@ -549,7 +549,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	client := http.Client{}
 	req, err := http.NewRequest("POST", "http://localhost:8180/query", &bb)
 	require.NoError(t, err)
-	req.Header.Add("Content-Type", "application/graphql+-")
+	req.Header.Add("Content-Type", "application/dql")
 	req.Header.Add("X-Dgraph-AccessToken", accessJwt)
 	res, err := client.Do(req)
 	require.NoError(t, err)

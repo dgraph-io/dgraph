@@ -407,7 +407,7 @@ func (mrw *AddRewriter) FromMutationResult(
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), errs
 }
 
-// Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations.
+// Rewrite rewrites set and remove update patches into dql upsert mutations.
 // The GraphQL updates look like:
 //
 // input UpdateAuthorInput {
