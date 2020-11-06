@@ -9,17 +9,14 @@ Dgraph supports Persistent Queries. When a client uses persistent queries, the c
 
 Persistent queries significantly improve the performance and the security of an application since the smaller hash signature reduces bandwidth utilization and speeds up client loading times.
 
-### Query logic
+### Persisted Query logic
 
 The execution of Persistent Queries follows this logic:
 
 - If the `extensions` key is not provided in the `GET` request, Dgraph will process the request as usual
 - If a `persistedQuery ` exists under the `extensions` key, Dgraph will try to process a Persisted Query:
-
-#### Persisted Query
-
- - if no `sha256` hash is provided, process the query without persisting
- - if a `sha256` hash is provided, try to retrieve the persisted query
+	 - if no `sha256` hash is provided, process the query without persisting
+	 - if the `sha256` hash is provided, try to retrieve the persisted query
 
 Example:
 
@@ -51,4 +48,22 @@ Example:
 
 ```sh
 curl -g 'http://localhost:8080/graphql/?extensions={"persistedQuery":{"sha256Hash":"b952c19b894e1aa89dc05b7d53e15ab34ee0b3a3f11cdf3486acef4f0fe85c52"}}'
+```
+
+### Usage with Apollo
+
+You can create an [Apollo GraphQL](https://www.apollographql.com/) client with persisted queries enabled. In the background, Apollo will send the same requests like the ones previously shown.
+
+For example:
+
+```go
+import { createPersistedQueryLink } from "apollo-link-persisted-queries";
+import { createHttpLink } from "apollo-link-http";
+import { InMemoryCache } from "apollo-cache-inmemory";
+import ApolloClient from "apollo-client";
+const link = createPersistedQueryLink().concat(createHttpLink({ uri: "/graphql" }));
+const client = new ApolloClient({
+  cache: new InMemoryCache(),
+  link: link,
+});
 ```
