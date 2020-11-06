@@ -114,11 +114,11 @@ $ dgraph debug --postings ./p --keyfile ./key_file
 
 
 {{% notice "note" %}}
-The key file contains the key used to decrypt/encrypt the db. This key should be kept secret. As a best practice, 
+The key file contains the key used to decrypt/encrypt the db. This key should be kept secret. As a best practice,
 
 - Do not store the key file on the disk permanently. Back it up in a safe place and delete it after using it with the debug tool.
 
-- If the above is not possible, make sure correct privileges are set on the keyfile. Only the user who owns the dgraph process should be able to read / write the key file: `chmod 600` 
+- If the above is not possible, make sure correct privileges are set on the keyfile. Only the user who owns the dgraph process should be able to read / write the key file: `chmod 600`
 {{% /notice %}}
 
 ### Debug Tool Output
@@ -284,15 +284,15 @@ The debug output also shows UserMeta information:
 
 Sentry is a powerful service that allows applications to send arbitrary events, messages, exceptions, bread-crumbs (logs) to your sentry account. In simplest terms, it is a dial-home service but also has a  rich feature set including event filtering, data scrubbing, several SDKs, custom and release tagging, as well as integration with 3rd party tools such as Slack, GitHub.
 
-Although Sentry reporting is on by default, starting from v20.03.1 and v20.07.0, there is a configuration flag `enable-sentry` which can be used to completely turn off Sentry events reporting. 
+Although Sentry reporting is on by default, starting from v20.03.1 and v20.07.0, there is a configuration flag `enable-sentry` which can be used to completely turn off Sentry events reporting.
 
 ### Basic Integration
 
 **Panics (runtime and manual)**
 
-* As of now, at Dgraph, we use Sentry reporting for capturing panics only. For manual panics anywhere in the code, sentry.CaptureException() API is called. 
+* As of now, at Dgraph, we use Sentry reporting for capturing panics only. For manual panics anywhere in the code, sentry.CaptureException() API is called.
 
-* For runtime panics, Sentry does not have any native method. After further research, we chose the approach of a wrapper process to capture these panics. The basic idea for this is that whenever a dgraph instance is started, a 2nd monitoring process is started whose only job is to monitor the stderr for panics of the monitored process. When a panic is seen, it is reported back to sentry via the CaptureException API. 
+* For runtime panics, Sentry does not have any native method. After further research, we chose the approach of a wrapper process to capture these panics. The basic idea for this is that whenever a dgraph instance is started, a 2nd monitoring process is started whose only job is to monitor the stderr for panics of the monitored process. When a panic is seen, it is reported back to sentry via the CaptureException API.
 
 **Reporting**
 
@@ -300,7 +300,7 @@ Each event is tagged with the release version, environment, timestamp, tags and 
 **Release:**
 
   - This is the release version string of the Dgraph instance.
-  
+
 **Environments:**
 
 We have defined 4 environments:
@@ -319,7 +319,7 @@ Tags are key-value pairs that provide additional context for an event. We have d
 
 We strive to handle your data with care in a variety of ways when sending events to Sentry
 
-1. **Event Selection:** As of now, only panic events are sent to Sentry from Dgraph. 
+1. **Event Selection:** As of now, only panic events are sent to Sentry from Dgraph.
 2. **Data in Transit:** Events sent from the SDK to the Sentry server are encrypted on the wire with industry-standard TLS protocol with 256 bit AES Cipher.
 3. **Data at rest:** Events on the Sentry server are also encrypted with 256 bit AES cipher. Sentry is hosted on GCP and as such physical access is tightly controlled. Logical access is only available to sentry approved officials.
 4. **Data Retention:** Sentry stores events only for 90 days after which they are removed permanently.
@@ -336,7 +336,7 @@ We strive to handle your data with care in a variety of ways when sending events
 - `mysql_pwd`
 - `stripetoken`
 - `card[number]`
-- `ip addresses` 
+- `ip addresses`
 
 ## Using the Increment Tool
 
@@ -966,7 +966,7 @@ For JSON mutations, set the `Content-Type` header to `application/json`.
 Before (in Dgraph v1.0):
 
 ```sh
-curl -H 'X-Dgraph-MutationType: json' -H "X-Dgraph-CommitNow: true" locahost:8080/mutate -d '{
+curl -H 'X-Dgraph-MutationType: json' -H "X-Dgraph-CommitNow: true" localhost:8080/mutate -d '{
   "set": [
     {
       "name": "Alice"
@@ -978,7 +978,7 @@ curl -H 'X-Dgraph-MutationType: json' -H "X-Dgraph-CommitNow: true" locahost:808
 Now (in Dgraph v1.1):
 
 ```sh
-curl -H 'Content-Type: application/json' locahost:8080/mutate?commitNow=true -d '{
+curl -H 'Content-Type: application/json' localhost:8080/mutate?commitNow=true -d '{
   "set": [
     {
       "name": "Alice"
