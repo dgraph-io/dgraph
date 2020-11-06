@@ -64,7 +64,7 @@ type GraphQLResponse struct {
 
 func (resp *GraphQLResponse) RequireNoGraphQLErrors(t *testing.T) {
 	if resp == nil {
-		return
+		require.Fail(t, "got nil response")
 	}
 	require.Nil(t, resp.Errors, "required no GraphQL errors, but received :\n%s",
 		resp.Errors.Error())
