@@ -6,7 +6,7 @@ weight = 3
     name = "Count Queries"
 +++
 
-Dgraph automatically generates count queries for a given GraphQL schema, enabling you to `count` on predicates, edges and to count nodes satisfying certain criteria specified using a filter.
+Dgraph automatically generates count queries for a given GraphQL schema, enabling you to `count` on predicates, edges, and to count nodes satisfying certain criteria specified using a filter. Count Queries are also compatible with the `@auth` directive and honor the same authorization rules as `query`.
 
 ### Count at root
 
@@ -41,7 +41,7 @@ Example - Fetch the number of `posts` whose titles contain `GraphQL`.
 
 ### Count for a child
 
-Besides the `aggregate<type name>` query, Dgraph defines `aggregate_<predicate_name>` fields inside `query<type name>` queries, allowing you to do a `count` of predicate edges.
+Besides the `aggregate<type name>` query, Dgraph defines `<predicate_name>Aggregate` fields inside `query<type name>` queries, allowing you to do a `count` of predicate edges.
 
 #### Examples
 
@@ -51,7 +51,7 @@ Example - Fetch the number of `posts` for all authors along with their `name`.
    query {
      queryAuthor {
        name
-       aggregate_posts {
+       postsAggregate {
         count
        }
      }
@@ -64,7 +64,7 @@ Example - Fetch the number of `posts` with a `score` greater than `10` for all a
    query {
      queryAuthor {
        name
-       aggregate_posts(filter: {
+       postsAggregate(filter: {
          score: {
            gt: 10
          }
