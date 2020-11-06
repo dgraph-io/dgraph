@@ -426,7 +426,7 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
         "predicate": "age"
       }
     ],
-	"types": [` + testutil.GetInternalTypes(true) + `
+	"types": [` + testutil.GetInternalTypes(false) + `
 	]
   }`
 	testutil.CompareJSON(t, js, string(resp.Json))
