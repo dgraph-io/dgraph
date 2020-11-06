@@ -333,6 +333,9 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 	// transaction is committed because the transaction context does not keep track
 	// of the badger keys touched by mutations. It's useful to roll up lists even if
 	// the transaction is eventually aborted.
+	//
+	// TODO: We do know the keys when we commit a txn, because that's when we write them to Badger.
+	// So, this should be done at that point.
 	if len(l.mutationMap) > 0 {
 		IncrRollup.addKeyToBatch(l.key)
 	}
