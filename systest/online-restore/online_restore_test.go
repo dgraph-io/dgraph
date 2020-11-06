@@ -92,7 +92,7 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 			restoreDone = true
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(4 * time.Second)
 	}
 	require.True(t, restoreDone)
 

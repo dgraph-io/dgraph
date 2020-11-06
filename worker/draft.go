@@ -661,7 +661,9 @@ func (n *node) processApplyCh() {
 			psz := proposal.Size()
 			totalSize += int64(psz)
 
-			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil && proposal.Mutations.StartTs == 0 {
+			// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
+			// commit ts.
+			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil {
 				proposal.Mutations.StartTs = State.GetTimestamp(false)
 			}
 

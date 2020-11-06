@@ -8,14 +8,15 @@ title = "Delete"
 
 A delete mutation, signified with the `delete` keyword, removes triples from the store.
 
-For example, if the store contained
+For example, if the store contained the following:
 ```RDF
 <0xf11168064b01135b> <name> "Lewis Carrol"
 <0xf11168064b01135b> <died> "1998"
 <0xf11168064b01135b> <dgraph.type> "Person" .
 ```
 
-Then delete mutation
+Then the following delete mutation deletes the specified erroneous data, and
+removes it from any indexes:
 
 ```sh
 {
@@ -25,9 +26,11 @@ Then delete mutation
 }
 ```
 
-Deletes the erroneous data and removes it from indexes if present.
+## Wildcard delete
 
-For a particular node `N`, all data for predicate `P` (and corresponding indexing) is removed with the pattern `S P *`.
+In many cases you will need to delete multiple types of data for a predicate.
+For a particular node `N`, all data for predicate `P` (and all corresponding
+indexing) is removed with the pattern `S P *`.
 
 ```sh
 {
@@ -37,12 +40,13 @@ For a particular node `N`, all data for predicate `P` (and corresponding indexin
 }
 ```
 
-The pattern `S * *` deletes all known edges out of a node (the node itself may
-remain as the target of edges), any reverse edges corresponding to the removed
-edges and any indexing for the removed data. The predicates to delete are
-derived from the type information for that node (the value of the `dgraph.type`
-edges on that node and their corresponding definitions in the schema). If that
-information is missing, this operation will be a no-op.
+The pattern `S * *` deletes all the known edges out of a node, any reverse edges
+corresponding to the removed edges, and any indexing for the removed data.
+
+{{% notice "note" %}} For mutations that fit the `S * *` pattern, only
+predicates that are among the types associated with a given node (using
+`dgraph.type`) are deleted. Any predicates that don't match one of the
+node's types will remain after an `S * *` delete mutation.{{% /notice %}}
 
 ```sh
 {
@@ -51,16 +55,25 @@ information is missing, this operation will be a no-op.
   }
 }
 ```
+If the node `S` in the delete pattern `S * *` has only a few predicates with a
+type defined by `dgraph.type`, then only those triples with typed predicates are
+deleted. A node that contains untyped predicates will still exist after a
+`S * *` delete mutation.
 
-
-{{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
+{{% notice "note" %}} The patterns `* P O` and `* * O` are not supported because
+it's inefficient to store and find all the incoming edges. {{% /notice %}}
 
 ## Deletion of non-list predicates
 
-Deleting the value of a non-list predicate (i.e a 1-to-1 relation) can be done in two ways.
+Deleting the value of a non-list predicate (i.e a 1-to-1 relationship) can be
+done in two ways.
 
-1. Using the star notation mentioned in the last section.
-1. Setting the object to a specific value. If the value passed is not the current value, the mutation will succeed but will have no effect. If the value passed is the current value, the mutation will succeed and will delete the triple.
+* Using the [wildcard delete](#wildcard-delete) (star notation)
+ mentioned in the last section.
+* Setting the object to a specific value. If the value passed is not the
+current value, the mutation will succeed but will have no effect. If the value
+passed is the current value, the mutation will succeed and will delete the
+non-list predicate.
 
 For language-tagged values, the following special syntax is supported:
 
@@ -72,5 +85,5 @@ For language-tagged values, the following special syntax is supported:
 }
 ```
 
-In this example, the value of name tagged with language tag `es` will be deleted.
-Other tagged values are left untouched.
+In this example, the value of the `name` field that is tagged with the language
+tag `es` is deleted. Other tagged values are left untouched.

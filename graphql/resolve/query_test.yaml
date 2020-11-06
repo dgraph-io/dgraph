@@ -166,7 +166,21 @@
         dgraph.uid : uid
       }
     }
-
+-
+  name: "Filter connectives with null values gets skipped "
+  gqlquery: |
+    query {
+      queryAuthor(filter: { name: { eq: "A. N. Author" },not:null }) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
+        name : Author.name
+        dgraph.uid : uid
+      }
+    }
 -
   name: "Filters in same input object implies AND"
   gqlquery: |

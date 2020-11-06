@@ -1,0 +1,14 @@
+type X {
+    f1: [Y] @dgraph(pred: "f1")
+    name: String
+    id: ID
+}
+
+type Y {
+    f2: [Z] @dgraph(pred: "~f2")
+    f1: [X] @dgraph(pred: "~f1")
+}
+
+type Z {
+    f2: [Y] @dgraph(pred: "f2")
+}

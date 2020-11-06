@@ -126,8 +126,8 @@ Background indexing task may fail if an unexpected error occurs while computing
 the indexes. You should retry the Alter operation in order to update the schema,
 or sync the schema across all the alphas.
 
-We also plan to add a simpler API soon to check the status of background indexing.
-See this [PR](https://github.com/dgraph-io/dgraph/pull/4961) for more details.
+To learn about how to check background indexing status, see
+[Querying Health](https://dgraph.io/docs/master/deploy/dgraph-alpha/#querying-health).
 
 ### HTTP API
 
@@ -381,6 +381,18 @@ Incorrect index choice can impose performance penalties and an increased
 transaction conflict rate. Use only the minimum number of and simplest indexes
 that your application needs.
 {{% /notice %}}
+
+Please note that when specifying at the same time both `term` and `trigram` indexes, in the schema, you will need to specify them in the following exact order:   `<predicate>: string @index(term, trigram) .` not vice-versa.
+Doing otherwise causes queries using the index to return an error about invalid tokenizers.
+
+```
+{
+     "message": ": Attribute streamTitle does not have a valid tokenizer.",
+     "extensions": {
+       "code": "ErrorInvalidRequest"
+     }
+   }
+```   
 
 
 ### DateTime Indices

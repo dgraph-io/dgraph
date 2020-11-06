@@ -1,0 +1,225 @@
+#######################
+# Input Schema
+#######################
+
+type X {
+	f1(first: Int, offset: Int): [Y] @dgraph(pred: "f1")
+	name: String
+	id: ID
+}
+
+type Y {
+	f2(first: Int, offset: Int): [Z] @dgraph(pred: "~f2")
+	f1(filter: XFilter, order: XOrder, first: Int, offset: Int): [X] @dgraph(pred: "~f1")
+}
+
+type Z {
+	f2(first: Int, offset: Int): [Y] @dgraph(pred: "f2")
+}
+
+#######################
+# Extended Definitions
+#######################
+
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+enum Mode {
+	BATCH
+	SINGLE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete:AuthRule) on OBJECT
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE
+directive @cascade on FIELD
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddXPayload {
+	x(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
+	numUids: Int
+}
+
+type DeleteXPayload {
+	x(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
+	msg: String
+	numUids: Int
+}
+
+type UpdateXPayload {
+	x(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
+	numUids: Int
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum XOrderable {
+	name
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AddXInput {
+	name: String
+}
+
+input UpdateXInput {
+	filter: XFilter!
+	set: XPatch
+	remove: XPatch
+}
+
+input XFilter {
+	id: [ID!]
+	not: XFilter
+}
+
+input XOrder {
+	asc: XOrderable
+	desc: XOrderable
+	then: XOrder
+}
+
+input XPatch {
+	name: String
+}
+
+input XRef {
+	id: ID
+	name: String
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getX(id: ID!): X
+	queryX(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
+	queryY(first: Int, offset: Int): [Y]
+	queryZ(first: Int, offset: Int): [Z]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addX(input: [AddXInput!]!): AddXPayload
+	updateX(input: UpdateXInput!): UpdateXPayload
+	deleteX(filter: XFilter!): DeleteXPayload
+}
+

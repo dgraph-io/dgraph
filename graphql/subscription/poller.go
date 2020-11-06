@@ -172,7 +172,7 @@ func (p *Poller) poll(req *pollRequest) {
 		currentHash := farm.Fingerprint64(res.Data.Bytes())
 
 		if req.prevHash == currentHash {
-			if pollID%30 != 0 {
+			if pollID%2 != 0 {
 				// Don't update if there is no change in response.
 				continue
 			}
