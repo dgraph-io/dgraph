@@ -18,6 +18,7 @@ package raftwal
 
 import (
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"os"
 	"testing"
@@ -64,4 +65,46 @@ func TestEntryReadWrite(t *testing.T) {
 	x.WorkerConfig.EncryptionKey = nil
 	_, err = openWal(dir)
 	require.EqualError(t, err, "Logfile is encrypted but encryption key is nil")
+}
+
+// TestLogRotate writes enough log file entries to cause 1 file rotation.
+func TestLogRotate(t *testing.T) {
+	dir, err := ioutil.TempDir("", "raftwal")
+	require.NoError(t, err)
+	el, err := openWal(dir)
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	// Generate deterministic entries using a seed.
+	const SEED = 1
+	rand.Seed(SEED)
+	makeEntry := func(i int) raftpb.Entry {
+		data := make([]byte, rand.Intn(1<<20))
+		rand.Read(data)
+		return raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}
+	}
+
+	// Write enough entries to fill ~1.5x log files, causing a rotation.
+	totalEntries := 0
+	totalBytes := 0
+	for totalBytes < (logFileSize*3)/2 {
+		entry := makeEntry(totalEntries)
+		err = el.AddEntries([]raftpb.Entry{entry})
+		require.NoError(t, err)
+		totalEntries++
+		totalBytes += len(entry.Data)
+	}
+
+	// Reopen the file and retrieve all entries.
+	el, err = openWal(dir)
+	require.NoError(t, err)
+	entries := el.allEntries(0, math.MaxInt64, math.MaxInt64)
+	require.Equal(t, totalEntries, len(entries))
+
+	// Use the previous seed to verify the written entries.
+	rand.Seed(SEED)
+	for i, gotEntry := range entries {
+		expEntry := makeEntry(i)
+		require.Equal(t, expEntry, gotEntry)
+	}
 }
