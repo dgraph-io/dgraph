@@ -9,7 +9,6 @@ go 1.12
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
-	github.com/99designs/gqlgen v0.13.1-0.20200928230741-819e751c2416
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
 	github.com/DataDog/zstd v1.4.5 // indirect
@@ -21,10 +20,12 @@ require (
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201023122926-2b71a94d1f03
+	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201105102215-0860ca0326ca
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6
+	github.com/dgraph-io/gqlgen v0.13.2
+	github.com/dgraph-io/gqlparser/v2 v2.1.1
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
-	github.com/dgraph-io/ristretto v0.0.4-0.20201104062757-d8d537137c97
+	github.com/dgraph-io/ristretto v0.0.4-0.20201105000107-750f5be31aad
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
@@ -58,15 +59,14 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.3.2
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.5.1
 	github.com/tinylib/msgp v0.0.0-20190103190839-ade0ca4ace05 // indirect
 	github.com/twpayne/go-geom v1.0.5
-	github.com/vektah/gqlparser/v2 v2.1.0
 	github.com/willf/bitset v0.0.0-20181014161241-71fa2377963f // indirect
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.22.5
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
-	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
+	golang.org/x/net v0.0.0-20200421231249-e086a090c8fd
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/sys v0.0.0-20200918174421-af09f7315aff
 	golang.org/x/text v0.3.3

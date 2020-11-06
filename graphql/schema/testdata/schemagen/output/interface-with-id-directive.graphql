@@ -14,6 +14,7 @@ type Book implements LibraryItem {
 
 type Library {
 	items(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+	itemsAggregate(filter: LibraryItemFilter): LibraryItemAggregateResult
 }
 
 #######################
@@ -33,28 +34,28 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 scalar DateTime
 
 input IntRange{
-	min: Int
-	max: Int
+	min: Int!
+	max: Int!
 }
 
 input FloatRange{
-	min: Float
-	max: Float
+	min: Float!
+	max: Float!
 }
 
 input Int64Range{
-	min: Int64
-	max: Int64
+	min: Int64!
+	max: Int64!
 }
 
 input DateTimeRange{
-	min: DateTime
-	max: DateTime
+	min: DateTime!
+	max: DateTime!
 }
 
 input StringRange{
-	min: String
-	max: String
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
@@ -359,8 +360,8 @@ input AddLibraryInput {
 input BookFilter {
 	refID: StringHashFilter
 	has: BookHasFilter
-	and: BookFilter
-	or: BookFilter
+	and: [BookFilter]
+	or: [BookFilter]
 	not: BookFilter
 }
 
@@ -383,16 +384,16 @@ input BookRef {
 
 input LibraryFilter {
 	has: LibraryHasFilter
-	and: LibraryFilter
-	or: LibraryFilter
+	and: [LibraryFilter]
+	or: [LibraryFilter]
 	not: LibraryFilter
 }
 
 input LibraryItemFilter {
 	refID: StringHashFilter
 	has: LibraryItemHasFilter
-	and: LibraryItemFilter
-	or: LibraryItemFilter
+	and: [LibraryItemFilter]
+	or: [LibraryItemFilter]
 	not: LibraryItemFilter
 }
 

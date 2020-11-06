@@ -8,7 +8,6 @@ weight = 7
 
 <div class="landing">
   <div class="hero">
-    <h1></h1>
     <p>
       Dgraph client libraries in various programming languages.
     </p>

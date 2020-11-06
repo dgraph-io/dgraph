@@ -8,6 +8,7 @@ interface Character {
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	enemyOf(filter: ResidentFilter): Resident
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 type Human implements Character {
@@ -18,6 +19,8 @@ type Human implements Character {
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	totalCredits: Int
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
+	starshipsAggregate(filter: StarshipFilter): StarshipAggregateResult
 }
 
 type Droid implements Character {
@@ -27,6 +30,7 @@ type Droid implements Character {
 	enemyOf(filter: ResidentFilter): Resident
 	appearsIn(first: Int, offset: Int): [Episode!]! @search
 	primaryFunction: String
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 enum Episode {
@@ -69,28 +73,28 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 scalar DateTime
 
 input IntRange{
-	min: Int
-	max: Int
+	min: Int!
+	max: Int!
 }
 
 input FloatRange{
-	min: Float
-	max: Float
+	min: Float!
+	max: Float!
 }
 
 input Int64Range{
-	min: Int64
-	max: Int64
+	min: Int64!
+	max: Int64!
 }
 
 input DateTimeRange{
-	min: DateTime
-	max: DateTime
+	min: DateTime!
+	max: DateTime!
 }
 
 input StringRange{
-	min: String
-	max: String
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
@@ -509,8 +513,8 @@ input CharacterFilter {
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	has: CharacterHasFilter
-	and: CharacterFilter
-	or: CharacterFilter
+	and: [CharacterFilter]
+	or: [CharacterFilter]
 	not: CharacterFilter
 }
 
@@ -536,8 +540,8 @@ input DroidFilter {
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	has: DroidHasFilter
-	and: DroidFilter
-	or: DroidFilter
+	and: [DroidFilter]
+	or: [DroidFilter]
 	not: DroidFilter
 }
 
@@ -574,8 +578,8 @@ input HumanFilter {
 	name: StringExactFilter
 	appearsIn: Episode_hash
 	has: HumanHasFilter
-	and: HumanFilter
-	or: HumanFilter
+	and: [HumanFilter]
+	or: [HumanFilter]
 	not: HumanFilter
 }
 
@@ -607,8 +611,8 @@ input HumanRef {
 input PlanetFilter {
 	id: [ID!]
 	has: PlanetHasFilter
-	and: PlanetFilter
-	or: PlanetFilter
+	and: [PlanetFilter]
+	or: [PlanetFilter]
 	not: PlanetFilter
 }
 
@@ -646,8 +650,8 @@ input StarshipFilter {
 	id: [ID!]
 	name: StringTermFilter
 	has: StarshipHasFilter
-	and: StarshipFilter
-	or: StarshipFilter
+	and: [StarshipFilter]
+	or: [StarshipFilter]
 	not: StarshipFilter
 }
 
