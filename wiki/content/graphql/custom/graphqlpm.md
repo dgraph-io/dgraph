@@ -10,7 +10,7 @@ includes support for custom logic. You can specify the DQL (aka GraphQL+-) query
 you want to execute while running a custom GraphQL query, and Dgraph's GraphQL
 API will execute that for you.
 
-DQL lets you build custom logic that goes beyond whta is possible with the
+DQL lets you build custom logic that goes beyond what is possible with the
 current GraphQL CRUD API.
 
 For example, lets say you had following schema:
