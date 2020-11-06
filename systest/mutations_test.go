@@ -91,6 +91,10 @@ func TestSystem(t *testing.T) {
 	t.Run("force schema as list JSON", wrap(ForceSchemaAsListJSON))
 	t.Run("force schema as single JSON", wrap(ForceSchemaAsSingleJSON))
 	t.Run("overwrite uid predicates", wrap(OverwriteUidPredicates))
+	t.Run("overwrite uid predicates across txns", wrap(OverwriteUidPredicatesMultipleTxn))
+	t.Run("overwrite uid predicates reverse index", wrap(OverwriteUidPredicatesReverse))
+	t.Run("delete and query same txn", wrap(DeleteAndQuerySameTxn))
+	t.Run("add and query zero datetime value", wrap(AddAndQueryZeroTimeValue))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1904,4 +1908,234 @@ func OverwriteUidPredicates(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Carol"}}]}`,
 		string(resp.GetJson()))
+}
+
+func OverwriteUidPredicatesReverse(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	op := &api.Operation{DropAll: true}
+	require.NoError(t, c.Alter(ctx, op))
+
+	op = &api.Operation{
+		Schema: `
+		best_friend: uid @reverse .
+		name: string @index(exact) .`,
+	}
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	txn := c.NewTxn()
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+		_:alice <name> "Alice" .
+		_:bob <name> "Bob" .
+		_:alice <best_friend> _:bob .`),
+	})
+	require.NoError(t, err)
+
+	q := `{
+  me(func: eq(name, Alice)) {
+	name
+	best_friend {
+		name
+	}
+  }
+}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Bob"}}]}`,
+		string(resp.GetJson()))
+
+	reverseQuery := `{
+		reverse(func: has(~best_friend)) {
+			name
+			~best_friend {
+				name
+			}
+		}}`
+	resp, err = c.NewReadOnlyTxn().Query(ctx, reverseQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"reverse":[{"name":"Bob","~best_friend": [{"name": "Alice"}]}]}`,
+		string(resp.GetJson()))
+
+	upsertQuery := `query { alice as var(func: eq(name, Alice)) }`
+	upsertMutation := &api.Mutation{
+		SetNquads: []byte(`
+		_:carol <name> "Carol" .
+		uid(alice) <best_friend> _:carol .`),
+	}
+	req := &api.Request{
+		Query:     upsertQuery,
+		Mutations: []*api.Mutation{upsertMutation},
+		CommitNow: true,
+	}
+	_, err = c.NewTxn().Do(ctx, req)
+	require.NoError(t, err)
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, reverseQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"reverse":[{"name":"Carol","~best_friend": [{"name": "Alice"}]}]}`,
+		string(resp.GetJson()))
+
+	// Delete the triples and verify the reverse edge is gone.
+	upsertQuery = `query {
+		alice as var(func: eq(name, Alice))
+		carol as var(func: eq(name, Carol)) }`
+	upsertMutation = &api.Mutation{
+		DelNquads: []byte(`
+		uid(alice) <best_friend> uid(carol) .`),
+	}
+	req = &api.Request{
+		Query:     upsertQuery,
+		Mutations: []*api.Mutation{upsertMutation},
+		CommitNow: true,
+	}
+	_, err = c.NewTxn().Do(ctx, req)
+	require.NoError(t, err)
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, reverseQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"reverse":[]}`,
+		string(resp.GetJson()))
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice"}]}`,
+		string(resp.GetJson()))
+}
+
+func OverwriteUidPredicatesMultipleTxn(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	op := &api.Operation{DropAll: true}
+	require.NoError(t, c.Alter(ctx, op))
+
+	op = &api.Operation{
+		Schema: `
+		best_friend: uid .
+		name: string @index(exact) .`,
+	}
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	resp, err := c.NewTxn().Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+		_:alice <name> "Alice" .
+		_:bob <name> "Bob" .
+		_:alice <best_friend> _:bob .`),
+	})
+	require.NoError(t, err)
+
+	alice := resp.Uids["alice"]
+	bob := resp.Uids["bob"]
+
+	txn := c.NewTxn()
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
+		DelNquads: []byte(fmt.Sprintf("<%s> <best_friend> <%s> .", alice, bob)),
+	})
+	require.NoError(t, err)
+
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
+		SetNquads: []byte(fmt.Sprintf(`<%s> <best_friend> _:carl .
+		_:carl <name> "Carl" .`, alice)),
+	})
+	require.NoError(t, err)
+	err = txn.Commit(context.Background())
+	require.NoError(t, err)
+
+	query := fmt.Sprintf(`{
+		me(func:uid(%s)) {
+			name
+			best_friend {
+				name
+			}
+		}
+	}`, alice)
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Carl"}}]}`,
+		string(resp.GetJson()))
+}
+
+func DeleteAndQuerySameTxn(t *testing.T, c *dgo.Dgraph) {
+	// Set the schema.
+	ctx := context.Background()
+	op := &api.Operation{
+		Schema: `name: string @index(exact) .`,
+	}
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	// Add data and commit the transaction.
+	txn := c.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+		_:alice <name> "Alice" .
+		_:bob <name> "Bob" .`),
+	})
+	require.NoError(t, err)
+
+	// Create a new transaction. Delete data and verify queries using the same transaction
+	// see the change.
+	upsertQuery := `query { bob as var(func: eq(name, Bob)) }`
+	upsertMutation := &api.Mutation{
+		DelNquads: []byte(`
+		uid(bob) <name> * .`),
+	}
+	req := &api.Request{
+		Query:     upsertQuery,
+		Mutations: []*api.Mutation{upsertMutation},
+	}
+	txn2 := c.NewTxn()
+	_, err = txn2.Do(ctx, req)
+	require.NoError(t, err)
+
+	q := `{ me(func: has(name)) { name } }`
+	resp, err := txn2.Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice"}]}`,
+		string(resp.GetJson()))
+	require.NoError(t, txn2.Commit(ctx))
+
+	// Verify that changes are reflected after the transaction is committed.
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice"}]}`,
+		string(resp.GetJson()))
+}
+
+func AddAndQueryZeroTimeValue(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	op := &api.Operation{Schema: `val: datetime .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:value <val> "0000-01-01T00:00:00Z" .
+		`),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	const datetimeQuery = `
+	{
+		q(func: has(val)) {
+			val
+		}
+	}`
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx, datetimeQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{
+		"q": [
+		  {
+			"val": "0000-01-01T00:00:00Z"
+		  }
+		]
+	  }`, string(resp.Json))
 }
