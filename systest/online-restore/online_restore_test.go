@@ -583,7 +583,8 @@ func TestRestoreWithDropOperations(t *testing.T) {
 		})
 
 	// remove backup directories to make sure this test doesn't leave anything behind
-	cleanupDirs(t, localFsDirs)
+	// TODO: This is having some problem on TeamCity
+	//cleanupDirs(t, localFsDirs)
 }
 
 func setupDirs(t *testing.T, dirs []string) {
