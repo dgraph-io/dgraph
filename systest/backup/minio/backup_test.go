@@ -234,10 +234,10 @@ func TestBackupMinio(t *testing.T) {
 	// add some data
 	incr4, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		SetNquads: []byte(fmt.Sprintf(`
+		SetNquads: []byte(`
 				<x1> <movie> "El laberinto del fauno" .
 				<x2> <movie> "Black Panther 2" .
-			`)),
+			`),
 	})
 	require.NoError(t, err)
 
