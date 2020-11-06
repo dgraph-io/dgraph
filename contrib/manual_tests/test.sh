@@ -427,9 +427,11 @@ function test::bulk_loader() {
   log::info "Restore succeeded."
 }
 
+# Run `dgraph increment` in a loop with 1, 2, and 3 groups respectively and verify the result.
 function testx::increment() {
   local -r increment_factor=100
 
+  # Set replicas to 1 so that each Alpha forms its own group.
   dgraph::start_zeros 1 --replicas 1
   local alphas=()
 
@@ -445,7 +447,12 @@ function testx::increment() {
       alphas+=("localhost:9083")
     fi
 
-    count="$("$DGRAPH_BIN" increment --alpha "${alphas[$((i % ${#alphas[@]}))]}" --num "$increment_factor" | grep -oP 'Counter VAL: \K\d+' | tail -1)"
+    # Pick an Alpha in a round-robin manner and run the increment tool on it.
+    count="$(
+      "$DGRAPH_BIN" increment --alpha "${alphas[$((i % ${#alphas[@]}))]}" --num "$increment_factor" |
+      grep -oP 'Counter VAL: \K\d+' |
+      tail -1
+    )"
     if [ "$count" -ne $((i * increment_factor)) ]; then
       log::error "Increment error: expected: $count, got: $i"
       return 1
