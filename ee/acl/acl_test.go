@@ -486,7 +486,7 @@ func createGroupWithRules(t *testing.T, accessJwt, name string, rules []rule) *g
 func updateGroup(t *testing.T, accessJwt, name string, setRules []rule,
 	removeRules []string) *group {
 	queryParams := testutil.GraphQLParams{
-		Query: `mutation updateGroup($name: String!, $set: SetGroupPatch, 
+		Query: `mutation updateGroup($name: String!, $set: SetGroupPatch,
 $remove: RemoveGroupPatch){
 			updateGroup(input: {
 				filter: {
@@ -1910,4 +1910,281 @@ func TestAllowUIDAccess(t *testing.T) {
 	resp, err := userClient.NewReadOnlyTxn().Query(ctx, uidQuery)
 	require.Nil(t, err)
 	testutil.CompareJSON(t, `{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson()))
+}
+
+func TestAddNewPredicate(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	resetUser(t)
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	// Alice doesn't have access to create new predicate.
+	err = userClient.Alter(ctx, &api.Operation{
+		Schema: `newpred: string .`,
+	})
+	require.Error(t, err, "User can't create new predicate. Alter should have returned error.")
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+	addToGroup(t, accessJwt, userid, "guardians")
+	time.Sleep(5 * time.Second)
+
+	// Alice is a guardian now, it can create new predicate.
+	err = userClient.Alter(ctx, &api.Operation{
+		Schema: `newpred: string .`,
+	})
+	require.NoError(t, err, "User is a guardian. Alter should have succeeded.")
+}
+
+func TestCrossGroupPermission(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	err = dg.Alter(ctx, &api.Operation{
+		Schema: `newpred: string .`,
+	})
+	require.NoError(t, err)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err)
+
+	// TODO(@Animesh): I am Running all the operations with the same accessJwt
+	// but access token will expire after 3s. Find an idomatic way to run these.
+
+	// create groups
+	createGroup(t, accessJwt, "reader")
+	createGroup(t, accessJwt, "writer")
+	createGroup(t, accessJwt, "alterer")
+
+	// add rules to groups
+	addRulesToGroup(t, accessJwt, "reader", []rule{{Predicate: "newpred", Permission: 4}})
+	addRulesToGroup(t, accessJwt, "writer", []rule{{Predicate: "newpred", Permission: 2}})
+	addRulesToGroup(t, accessJwt, "alterer", []rule{{Predicate: "newpred", Permission: 1}})
+	// Wait for acl cache to be refreshed
+	time.Sleep(5 * time.Second)
+
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err)
+
+	// create 8 users.
+	for i := 0; i < 8; i++ {
+		userIdx := strconv.Itoa(i)
+		createUser(t, accessJwt, "user"+userIdx, "password"+userIdx)
+	}
+
+	// add users to groups. we create all possible combination
+	// of groups and assign a user for that combination.
+	for i := 0; i < 8; i++ {
+		userIdx := strconv.Itoa(i)
+		if i&1 > 0 {
+			addToGroup(t, accessJwt, "user"+userIdx, "alterer")
+		}
+		if i&2 > 0 {
+			addToGroup(t, accessJwt, "user"+userIdx, "writer")
+		}
+		if i&4 > 0 {
+			addToGroup(t, accessJwt, "user"+userIdx, "reader")
+		}
+	}
+	time.Sleep(5 * time.Second)
+
+	// operations
+	dgQuery := func(client *dgo.Dgraph, shouldFail bool, user string) {
+		_, err := client.NewTxn().Query(ctx, `
+		{
+			me(func: has(newpred)) {
+				newpred
+			}
+		}
+		`)
+		require.True(t, (err != nil) == shouldFail,
+			"Query test Failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
+	}
+	dgMutation := func(client *dgo.Dgraph, shouldFail bool, user string) {
+		_, err := client.NewTxn().Mutate(ctx, &api.Mutation{
+			Set: []*api.NQuad{
+				{
+					Subject:     "_:a",
+					Predicate:   "newpred",
+					ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "testval"}},
+				},
+			},
+			CommitNow: true,
+		})
+		require.True(t, (err != nil) == shouldFail,
+			"Mutation test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
+	}
+	dgAlter := func(client *dgo.Dgraph, shouldFail bool, user string) {
+		err := client.Alter(ctx, &api.Operation{Schema: `newpred: string @index(exact) .`})
+		require.True(t, (err != nil) == shouldFail,
+			"Alter test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
+
+		// set back the schema to initial value
+		err = client.Alter(ctx, &api.Operation{Schema: `newpred: string .`})
+		require.True(t, (err != nil) == shouldFail,
+			"Alter test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
+	}
+
+	// test user access.
+	for i := 0; i < 8; i++ {
+		userIdx := strconv.Itoa(i)
+		userClient, err := testutil.DgraphClient(testutil.SockAddr)
+		require.NoError(t, err, "Client creation error")
+
+		err = userClient.Login(ctx, "user"+userIdx, "password"+userIdx)
+		require.NoError(t, err, "Login error")
+
+		dgQuery(userClient, false, "user"+userIdx) // Query won't fail, will return empty result instead.
+		dgMutation(userClient, i&2 == 0, "user"+userIdx)
+		dgAlter(userClient, i&1 == 0, "user"+userIdx)
+	}
+}
+
+func TestMutationWithValueVar(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	err = dg.Alter(ctx, &api.Operation{
+		Schema: `
+			name	: string @index(exact) .
+			nickname: string .
+			age     : int .
+		`,
+	})
+	require.NoError(t, err)
+
+	data := &api.Mutation{
+		SetNquads: []byte(`
+			_:u1 <name> "RandomGuy" .
+			_:u1 <nickname> "r1" .
+		`),
+		CommitNow: true,
+	}
+	_, err = dg.NewTxn().Mutate(ctx, data)
+	require.NoError(t, err)
+
+	resetUser(t)
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err)
+	createUser(t, accessJwt, userid, userpassword)
+	createGroup(t, accessJwt, devGroup)
+	addToGroup(t, accessJwt, userid, devGroup)
+	addRulesToGroup(t, accessJwt, devGroup, []rule{
+		{
+			Predicate:  "name",
+			Permission: Read.Code | Write.Code,
+		},
+		{
+			Predicate:  "nickname",
+			Permission: Read.Code,
+		},
+		{
+			Predicate:  "age",
+			Permission: Write.Code,
+		},
+	})
+	time.Sleep(5 * time.Second)
+
+	query := `
+		{
+			u1 as var(func: has(name)) {
+				nick1 as nickname
+				age1 as age
+			}
+		}
+	`
+
+	mutation1 := &api.Mutation{
+		SetNquads: []byte(`
+			uid(u1) <name> val(nick1) .
+			uid(u1) <name> val(age1) .
+		`),
+		CommitNow: true,
+	}
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	_, err = userClient.NewTxn().Do(ctx, &api.Request{
+		Query:     query,
+		Mutations: []*api.Mutation{mutation1},
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	query = `
+		{
+			me(func: has(name)) {
+				nickname
+				name
+				age
+			}
+		}
+	`
+
+	resp, err := userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+
+	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson()))
+}
+
+func TestFailedLogin(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+
+	grootClient, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	op := api.Operation{DropAll: true}
+	if err := grootClient.Alter(ctx, &op); err != nil {
+		t.Fatalf("Unable to cleanup db:%v", err)
+	}
+	require.NoError(t, err)
+
+	client, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	// User is not present
+	err = client.Login(ctx, userid, "simplepassword")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
+
+	resetUser(t)
+	// User is present
+	err = client.Login(ctx, userid, "randomstring")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
+
 }

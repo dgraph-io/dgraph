@@ -687,6 +687,18 @@ func (qs *queryState) handleUidPostings(
 		return nil
 	}
 
+	// srcFn.n should be equal to len(q.UidList.Uids) for below implementation(DivideAndRule and
+	// calculate) to work correctly. But we have seen some panics while forming DataKey in
+	// calculate(). panic is of the form "index out of range [4] with length 1". Hence return error
+	// from here when srcFn.n != len(q.UidList.Uids).
+	switch srcFn.fnType {
+	case notAFunction, compareScalarFn, hasFn, uidInFn:
+		if srcFn.n != len(q.UidList.GetUids()) {
+			return errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
+				"handleUidPostings", srcFn.n, len(q.UidList.GetUids()), srcFn)
+		}
+	}
+
 	// Divide the task into many goroutines.
 	numGo, width := x.DivideAndRule(srcFn.n)
 	x.AssertTrue(width > 0)

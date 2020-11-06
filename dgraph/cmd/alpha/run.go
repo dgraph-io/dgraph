@@ -205,7 +205,7 @@ they form a Raft group and provide synchronous replication.
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
 
 	// Cache flags
-	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha.")
+	flag.Int64("cache_mb", 2048, "Total size of cache (in MB) to be used in alpha.")
 	// TODO(Naman): The PostingListCache is a no-op for now. Once the posting list cache is
 	// added in release branch, use it.
 	flag.String("cache_percentage", "0,65,25,0,10",

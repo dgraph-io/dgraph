@@ -64,9 +64,8 @@ func (s *Server) Login(ctx context.Context,
 
 	user, err := s.authenticateLogin(ctx, request)
 	if err != nil {
-		errMsg := fmt.Sprintf("Authentication from address %s failed: %v", addr, err)
-		glog.Errorf(errMsg)
-		return nil, errors.Errorf(errMsg)
+		glog.Errorf("Authentication from address %s failed: %v", addr, err)
+		return nil, x.ErrorInvalidLogin
 	}
 	glog.Infof("%s logged in successfully", user.UserID)
 
@@ -127,7 +126,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 
 		if user == nil {
 			return nil, errors.Errorf("unable to authenticate through refresh token: "+
-				"user not found for id %v", userId)
+				"invalid username or password")
 		}
 
 		glog.Infof("Authenticated user %s through refresh token", userId)
@@ -144,10 +143,10 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 
 	if user == nil {
 		return nil, errors.Errorf("unable to authenticate through password: "+
-			"user not found for id %v", request.Userid)
+			"invalid username or passowrd")
 	}
 	if !user.PasswordMatch {
-		return nil, errors.Errorf("password mismatch for user: %v", request.Userid)
+		return nil, x.ErrorInvalidLogin
 	}
 	return user, nil
 }
