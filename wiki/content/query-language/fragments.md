@@ -6,7 +6,7 @@ weight = 25
     parent = "query-language"
 +++
 
-The `fragment` keyword lets you to define new fragments that can be referenced
+The `fragment` keyword lets you define new fragments that can be referenced
 in a query, per the [GraphQL specification](https://facebook.github.io/graphql/#sec-Language.Fragments).
 Fragments allow for the reuse of common repeated selections of fields, reducing
 duplicated text in the DQL documents. Fragments can be nested inside fragments,
