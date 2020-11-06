@@ -214,7 +214,7 @@ For JSON mutations, set the `Content-Type` header to `application/json`.
 Before (in Dgraph v1.0):
 
 ```sh
-curl -H 'X-Dgraph-MutationType: json' -H "X-Dgraph-CommitNow: true" locahost:8080/mutate -d '{
+curl -H 'X-Dgraph-MutationType: json' -H "X-Dgraph-CommitNow: true" localhost:8080/mutate -d '{
   "set": [
     {
       "name": "Alice"
@@ -226,7 +226,7 @@ curl -H 'X-Dgraph-MutationType: json' -H "X-Dgraph-CommitNow: true" locahost:808
 Now (in Dgraph v1.1):
 
 ```sh
-curl -H 'Content-Type: application/json' locahost:8080/mutate?commitNow=true -d '{
+curl -H 'Content-Type: application/json' localhost:8080/mutate?commitNow=true -d '{
   "set": [
     {
       "name": "Alice"
