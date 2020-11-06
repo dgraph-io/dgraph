@@ -404,30 +404,6 @@
     }
 
 -
-  name: "Update mutation for an interface whose implementation has auth rules"
-  gqlmutation: |-
-    mutation {
-      updateX(input: {filter: { id: ["0x123"] }, set: {age: 50}}) {
-        x {
-          id
-          username
-          age
-        }
-      }
-    }
-  explanation: "The mutation should get rewritten to dummy query because its implementation has auth rules."
-  dgmutations:
-    - setjson: |
-        { "uid" : "uid(x)",
-          "X.age": 50
-        }
-      cond: "@if(gt(len(x), 0))"
-  dgquery: |-
-    query {
-      x as updateX()
-    }
-
--
   name: "Update mutation using filters"
   gqlmutation: |
     mutation updatePost($patch: UpdatePostInput!) {

@@ -7,7 +7,6 @@ title = "GraphQL"
 
 <div class="landing">
   <div class="hero">
-    <h1></h1>
     <p>
       Dgraph is the native GraphQL database with a graph backend. It is open-source, scalable, distributed, highly available and lightning fast.
     </p>

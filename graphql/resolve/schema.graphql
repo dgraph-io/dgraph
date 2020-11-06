@@ -19,7 +19,7 @@ type State {
         code: String! @id
         country: Country
         name: String!
-	capital: String
+        capital: String
 }
 
 type Author {
@@ -299,6 +299,10 @@ type Person {
 
 interface A {
     name: String! @id
+}
+
+type B implements A {
+    id: ID!
 }
 
 # union testing - start

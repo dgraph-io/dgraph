@@ -515,6 +515,7 @@ func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author,
 			  	author {
 					id
 					name
+					qualification
 					reputation
 					country {
 						id
@@ -4414,4 +4415,249 @@ func updateUniversity(t *testing.T, id string) {
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
+}
+
+func filterInMutationsWithArrayForAndOr(t *testing.T) {
+	tcases := []struct {
+		name      string
+		query     string
+		variables string
+		expected  string
+	}{
+		{
+			name: "Filter with OR at top level in Mutation",
+			query: `mutation {
+			         addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+			        	post1(filter:{or:{title:{eq: "Dgraph"}}}) {
+							title
+							numLikes
+				        }
+			         }
+		          }`,
+			expected: `{
+					  "addpost1": {
+						"post1": [
+						  {
+							"title": "Dgraph",
+							"numLikes": 100
+						  }
+						]
+					  }
+					}`,
+		},
+		{
+			name: "Filter with OR at top level in Mutation using variables",
+			query: `mutation($filter:post1Filter) {
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:$filter) {
+								title
+								numLikes
+							}
+						}
+					}`,
+			variables: `{"filter":{"or":{"title":{"eq": "Dgraph"}}}}`,
+			expected: `{
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
+		},
+		{
+			name: "Filter with AND at top level in Mutation",
+			query: `mutation {
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:{and:{title:{eq: "Dgraph"}}}) {
+								title
+								numLikes
+							}
+						}
+					}`,
+			expected: `{
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
+		},
+		{
+			name: "Filter with AND at top level in Mutation using variables",
+			query: `mutation($filter:post1Filter) {
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:$filter) {
+								title
+								numLikes
+							}
+						}
+					}`,
+			variables: `{"filter":{"and":{"title":{"eq": "Dgraph"}}}}`,
+			expected: `{
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
+		},
+		{
+			name: "Filter with Nested And-OR in Mutation",
+			query: `mutation {
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:{and:[{title:{eq: "Dgraph"}},{or:{numLikes:{eq: 100}}}]}) {
+								title 
+								numLikes
+							}
+						}
+						}`,
+			expected: `{
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
+		},
+		{
+			name: "Filter with Nested And-OR in Mutation using variables",
+			query: `mutation($filter:post1Filter) {
+			          addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+				        post1(filter:$filter) {
+					      title
+                          numLikes
+				        }
+                      }
+		           }`,
+			variables: `{"filter": {"and": [{"title":{"eq": "Dgraph"}},{"or":{"numLikes":{"eq": 100}}}]}}`,
+			expected: `{
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+			filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
+			deleteGqlType(t, "post1", filter, 1, nil)
+		})
+	}
+
+}
+
+func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
+	params := &GraphQLParams{Query: `mutation {
+			addpost1(input: [{title: "Dgraph", numLikes: 100},{title: "Dgraph1", numLikes: 120}]) {
+				post1(filter:{title:{eq:"Dgraph"}}) {
+					title
+					numLikes
+				}
+			}
+		}`}
+	resp := params.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+
+	tcases := []struct {
+		name      string
+		query     string
+		variables string
+		expected  string
+	}{
+		{name: "Filter with Nested OR-AND in Update Mutation",
+			query: `mutation updatepost1{
+                    	updatepost1(input:{filter:{or:[{title:{eq:"Dgraph1"}},{and:{numLikes:{eq:130}}}]},set:{numLikes:200}}){
+				    		post1{
+								title
+								numLikes
+							}
+						}
+					}`,
+			expected: `{
+						  "updatepost1": {
+							"post1": [
+							  {
+								"title": "Dgraph1",
+								"numLikes": 200
+							  }
+							]
+						  }
+						}`,
+		},
+		{name: "Filter with Nested OR-AND in Update Mutation using variables",
+			query: `mutation updatepost1($post1:Updatepost1Input!) {
+		              updatepost1(input:$post1){
+					    post1{
+							 title
+							 numLikes
+					}
+				}
+			}`,
+			variables: `{"post1": {"filter":{"or": [{"title":{"eq": "Dgraph1"}},{"and":{"numLikes":{"eq": 140}}}]},
+				"set":{
+					"numLikes": "200"
+				}
+			}
+			}`,
+			expected: `{
+			"updatepost1": {
+				"post1": [{
+					"title": "Dgraph1",
+					"numLikes": 200
+				}]
+			}
+		}`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+		})
+	}
+	filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
+	deleteGqlType(t, "post1", filter, 2, nil)
+
 }

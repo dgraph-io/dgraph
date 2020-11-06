@@ -263,7 +263,14 @@ func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 // }
 func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*UpsertMutation, error) {
 	mutatedType := m.MutatedType()
-	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
+	var val []interface{}
+
+	switch v := m.ArgValue(schema.InputArgName).(type) {
+	case []interface{}:
+		val = v
+	case interface{}:
+		val = append(val, v)
+	}
 
 	varGen := NewVariableGenerator()
 	xidMd := newXidMetadata()
@@ -400,7 +407,7 @@ func (mrw *AddRewriter) FromMutationResult(
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), errs
 }
 
-// Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations.
+// Rewrite rewrites set and remove update patches into dql upsert mutations.
 // The GraphQL updates look like:
 //
 // input UpdateAuthorInput {
@@ -667,16 +674,29 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 		Attr: m.Name(),
 	}
 
-	if m.MutatedType().InterfaceImplHasAuthRules() {
-		dgQuery.Attr = m.ResponseName() + "()"
-		return dgQuery
-	}
-
 	rbac := authRw.evaluateStaticRules(m.MutatedType())
 	if rbac == schema.Negative {
 		dgQuery.Attr = m.ResponseName() + "()"
 		return dgQuery
 	}
+
+	// For interface, empty delete mutation should be returned if Auth rules are
+	// not satisfied even for a single implementing type
+	if m.MutatedType().IsInterface() {
+		implementingTypesHasFailedRules := false
+		implementingTypes := m.MutatedType().ImplementingTypes()
+		for _, typ := range implementingTypes {
+			if authRw.evaluateStaticRules(typ) != schema.Negative {
+				implementingTypesHasFailedRules = true
+			}
+		}
+
+		if !implementingTypesHasFailedRules {
+			dgQuery.Attr = m.ResponseName() + "()"
+			return dgQuery
+		}
+	}
+
 	// Add uid child to the upsert query, so that we can get the list of nodes upserted.
 	dgQuery.Children = append(dgQuery.Children, &gql.GraphQuery{
 		Attr: "uid",

@@ -22,10 +22,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/v2/ast"
 	"gopkg.in/yaml.v2"
 )
 
@@ -92,10 +92,11 @@ type Starship {
 	require.True(t, ok, "expected to be able to convert sch to internal schema type")
 
 	author := map[string]string{
-		"name":       "Author.name",
-		"dob":        "Author.dob",
-		"reputation": "Author.reputation",
-		"posts":      "Author.posts",
+		"name":           "Author.name",
+		"dob":            "Author.dob",
+		"reputation":     "Author.reputation",
+		"posts":          "Author.posts",
+		"postsAggregate": "Author.postsAggregate",
 	}
 	post := map[string]string{
 		"postType": "Post.postType",
@@ -106,11 +107,12 @@ type Starship {
 		"appearsIn": "Character.appearsIn",
 	}
 	human := map[string]string{
-		"ename":        "Employee.ename",
-		"name":         "Character.name",
-		"appearsIn":    "Character.appearsIn",
-		"starships":    "Human.starships",
-		"totalCredits": "Human.totalCredits",
+		"ename":              "Employee.ename",
+		"name":               "Character.name",
+		"appearsIn":          "Character.appearsIn",
+		"starships":          "Human.starships",
+		"totalCredits":       "Human.totalCredits",
+		"starshipsAggregate": "Human.starshipsAggregate",
 	}
 	droid := map[string]string{
 		"name":            "Character.name",
@@ -221,10 +223,11 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 	require.True(t, ok, "expected to be able to convert sch to internal schema type")
 
 	author := map[string]string{
-		"name":       "dgraph.author.name",
-		"dob":        "dgraph.author.dob",
-		"reputation": "dgraph.author.reputation",
-		"posts":      "dgraph.author.posts",
+		"name":           "dgraph.author.name",
+		"dob":            "dgraph.author.dob",
+		"reputation":     "dgraph.author.reputation",
+		"posts":          "dgraph.author.posts",
+		"postsAggregate": "dgraph.author.postsAggregate",
 	}
 	post := map[string]string{
 		"postType": "dgraph.post_type",
@@ -235,11 +238,12 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 		"appearsIn": "appears_in",
 	}
 	human := map[string]string{
-		"ename":        "dgraph.employee.en.ename",
-		"name":         "performance.character.name",
-		"appearsIn":    "appears_in",
-		"starships":    "Human.starships",
-		"totalCredits": "credits",
+		"ename":              "dgraph.employee.en.ename",
+		"name":               "performance.character.name",
+		"appearsIn":          "appears_in",
+		"starships":          "Human.starships",
+		"totalCredits":       "credits",
+		"starshipsAggregate": "Human.starshipsAggregate",
 	}
 	droid := map[string]string{
 		"name":            "performance.character.name",
@@ -591,7 +595,7 @@ func TestParseBodyTemplate(t *testing.T) {
 		},
 		{
 			"parses body template with an array of object and hardcoded scalars correctly",
-			`{ author: $id, admin: false, post: { id: $postID, rating: 4.5, 
+			`{ author: $id, admin: false, post: { id: $postID, rating: 4.5,
 				comments: [{ text: $text, type: "hidden" }] }, age: 23, meta: null}`,
 			map[string]interface{}{"author": "$id", "admin": false,
 				"post": map[string]interface{}{"id": "$postID", "rating": 4.5,

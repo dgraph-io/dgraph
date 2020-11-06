@@ -387,7 +387,11 @@
             "type": "uid"
         },
         {
+            "index": true,
             "predicate": "post1.numLikes",
+            "tokenizer": [
+                "int"
+            ],
             "type": "int"
         },
         {
@@ -463,6 +467,15 @@
             "tokenizer": [
                 "float"
             ]
+        },
+        {
+            "index": true,
+            "predicate": "test.dgraph.author.qualification",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
         },
         {
             "predicate": "test.dgraph.employee.en.ename",
@@ -941,6 +954,9 @@
                 },
                 {
                     "name": "test.dgraph.author.posts"
+                },
+                {
+                    "name": "test.dgraph.author.qualification"
                 }
             ],
             "name": "test.dgraph.author"
