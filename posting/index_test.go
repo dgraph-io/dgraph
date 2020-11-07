@@ -286,7 +286,7 @@ func TestRebuildTokIndex(t *testing.T) {
 	var idxVals []*List
 	for it.Seek(prefix); it.Valid(); it.Next() {
 		item := it.Item()
-		key := item.Key()
+		key := item.KeyCopy(nil)
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}

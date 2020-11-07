@@ -38,13 +38,15 @@ func NewListMap(pack *pb.UidPack) *ListMap {
 	lm := &ListMap{
 		bitmaps: make(map[uint64]*roaring.Bitmap),
 	}
-	if pack != nil {
-		for _, block := range pack.Blocks {
-			bitmap := roaring.New()
-			x.Check2(bitmap.FromBuffer(block.Deltas))
-			lm.bitmaps[block.Base] = bitmap
-			x.AssertTrue(block.Base&lsbBitMask == 0)
-		}
+	if pack == nil {
+		return lm
+	}
+	for _, block := range pack.Blocks {
+		bitmap := roaring.New()
+		x.Check2(bitmap.FromBuffer(block.Deltas))
+		x.AssertTrue(bitmap.GetCopyOnWrite())
+		lm.bitmaps[block.Base] = bitmap
+		x.AssertTrue(block.Base&lsbBitMask == 0)
 	}
 	return lm
 }
@@ -65,7 +67,7 @@ func (lm *ListMap) ToUids() []uint64 {
 
 func FromListXXX(list *pb.List) *ListMap {
 	lm := NewListMap(nil)
-	lm.AddMany(list.Uids)
+	lm.AddMany(list.GetUids())
 	return lm
 }
 

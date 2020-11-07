@@ -29,7 +29,6 @@ import (
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -240,7 +239,8 @@ func (it *pIterator) next() error {
 	it.uidx = 0
 	it.uids = it.dec.Next()
 
-	return errors.Wrapf(it.moveToNextValidPart(), "cannot advance iterator for list with key %s",
+	err := it.moveToNextValidPart()
+	return errors.Wrapf(err, "cannot advance iterator for list with key %s",
 		hex.EncodeToString(it.l.key))
 }
 
@@ -1119,39 +1119,66 @@ func (l *List) ApproxLen() int {
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
 func (l *List) Uids(opt ListOptions) (*pb.List, error) {
+	lm, err := l.listMap(opt)
+	if err != nil {
+		return nil, err
+	}
+	uids := lm.ToUids()
+	return &pb.List{Uids: uids}, nil
+}
+
+func (l *List) listMap(opt ListOptions) (*codec.ListMap, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
-	// Use approximate length for initial capacity.
-	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
-	out := &pb.List{}
-	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
-		if opt.ReadTs < l.minTs {
-			l.RUnlock()
-			return out, ErrTsTooOld
-		}
-		algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
+	if opt.ReadTs < l.minTs {
 		l.RUnlock()
-		return out, nil
+		return nil, ErrTsTooOld
 	}
 
-	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
-		if p.PostingType == pb.Posting_REF {
-			res = append(res, p.Uid)
+	// Use approximate length for initial capacity.
+	// res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
+
+	deleteBelowTs, mposts := l.pickPostings(opt.ReadTs)
+	lm := codec.NewListMap(nil)
+
+	if deleteBelowTs == 0 {
+		switch {
+		case len(l.mutationMap) == 0 && len(l.plist.Splits) == 0:
+			lm = codec.NewListMap(l.plist.Pack)
+		case len(l.plist.Splits) > 0:
+			var pitr pIterator
+			err := pitr.init(l, opt.AfterUid, deleteBelowTs)
+			if err != nil {
+				return nil, err
+			}
+			for {
+				src := codec.NewListMap(pitr.plist.Pack)
+				lm.Merge(src)
+				if err := pitr.moveToNextPart(); err != nil {
+					break
+				}
+			}
 		}
-		return nil
-	})
-	l.RUnlock()
-	if err != nil {
-		return out, errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
-			hex.EncodeToString(l.key))
 	}
 
-	// Do The intersection here as it's optimized.
-	out.Uids = res
-	if opt.Intersect != nil {
-		algo.IntersectWith(out, opt.Intersect, out)
+	var lastUid uint64
+	for _, mpost := range mposts {
+		if mpost.Uid == lastUid {
+			// Only pick the latest one.
+			continue
+		}
+		lastUid = mpost.Uid
+		if mpost.Op != Del {
+			lm.AddOne(mpost.Uid)
+		} else {
+			lm.RemoveOne(mpost.Uid)
+		}
 	}
-	return out, nil
+	l.RUnlock()
+
+	lm.RemoveBefore(opt.AfterUid)
+	lm.Intersect(codec.FromListXXX(opt.Intersect))
+	return lm, nil
 }
 
 // Postings calls postFn with the postings that are common with
