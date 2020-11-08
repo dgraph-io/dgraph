@@ -574,8 +574,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithSyncWrites(false).
 		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
-		WithCompression(options.None).
-		WithLogRotatesToFlush(10)
+		WithCompression(options.None)
 
 	// Set cache if we have encryption.
 	if len(x.WorkerConfig.EncryptionKey) > 0 {
