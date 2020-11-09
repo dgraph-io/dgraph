@@ -1056,7 +1056,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
-	//1st response
+	// 1st response
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	err = json.Unmarshal(res, &resp)
@@ -1066,7 +1066,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
 
-	//second response
+	// second response
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	err = json.Unmarshal(res, &resp)
