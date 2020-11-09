@@ -1335,10 +1335,13 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types[filterName] = filter
 }
 
+// hasFilterable Returns whether TypeFilter for a defn will be generated or not.
+// It returns true if any field have search arguments or it is an `ID` field or
+// HasFilter for that defn is generated.
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool {
-			return len(getSearchArgs(fld)) != 0 || isID(fld)
+			return len(getSearchArgs(fld)) != 0 || isID(fld) || !hasCustomOrLambda(fld)
 		})
 }
 
