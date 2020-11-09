@@ -56,7 +56,7 @@ Reference: [Auth directive](/graphql/authorization/directive)
 
 ### @generate
 
-`@generate` directive is used to specify GraphQL APIs to generate for a type.
+`@generate` directive is used to specify the GraphQL APIs which are generated for a type.
 
 Reference: [Generate Directive](/graphql/schema/generate)
 
