@@ -1198,9 +1198,27 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 			var l ast.FieldList
 
 			for _, i := range schema.Types[stringFilterName].Fields {
+				typ := fld.Type
+				// It could be the case that the Filter takes ListType as argument and the field
+				// for which filter is being constructed is not of list type. For eg:
+				// For the following types:-
+				//		type Verification {
+				//			name: String @search(by: [exact])
+				//			status: Status @search
+				//		}
+				//
+				//		enum Status {
+				//			ACTIVE
+				//			DEACTIVATED
+				//		}
+				// In case of IN filter we need to construct [Status] as Input Type.
+				if i.Type.Elem != nil && fld.Type.Elem == nil {
+					typ = &ast.Type{Elem: &ast.Type{NamedType: fld.Type.NamedType}, NonNull: false}
+				}
+
 				l = append(l, &ast.FieldDefinition{
 					Name:         i.Name,
-					Type:         fld.Type,
+					Type:         typ,
 					Description:  i.Description,
 					DefaultValue: i.DefaultValue,
 				})
