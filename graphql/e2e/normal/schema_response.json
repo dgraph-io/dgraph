@@ -312,6 +312,10 @@
             "type": "password"
         },
         {
+            "predicate": "dgraph.drop.op",
+            "type": "string"
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },

@@ -206,6 +206,10 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 	finalDgraphSchema := fmt.Sprintf(`{
     "schema": [
         %s,
+		{
+			"predicate":"dgraph.drop.op",
+			"type":"string"
+		},
         {
             "predicate": "dgraph.graphql.schema",
             "type": "string"

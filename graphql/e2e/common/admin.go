@@ -42,6 +42,10 @@ const (
 	initSchema = `{
     "schema": [
         {
+            "predicate": "dgraph.drop.op",
+            "type": "string"
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
@@ -86,6 +90,10 @@ const (
     "schema": [
         {
             "predicate": "A.b",
+            "type": "string"
+        },
+        {
+            "predicate": "dgraph.drop.op",
             "type": "string"
         },
         {
@@ -157,6 +165,10 @@ const (
         {
             "predicate": "A.c",
             "type": "int"
+        },
+        {
+            "predicate": "dgraph.drop.op",
+            "type": "string"
         },
         {
             "predicate": "dgraph.graphql.schema",
@@ -238,6 +250,10 @@ const (
         {
             "predicate": "A.d",
             "type": "float"
+        },
+        {
+            "predicate": "dgraph.drop.op",
+            "type": "string"
         },
         {
             "predicate": "dgraph.graphql.schema",
