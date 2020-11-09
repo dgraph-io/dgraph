@@ -249,7 +249,7 @@ func main() {
 		Use:     "test_stats",
 		Short:   "Tests stats from TeamCity",
 		Long:    "Aggregate stats for tests that run on TeamCity",
-		Example: "$ teamcity test_stats -d=30 -bu=Dgraph_Ci # fetches stats for last month",
+		Example: "$ teamcity test_stats -d=30 -c=Dgraph_Ci -b=refs/heads/master # fetches stats for last month for master branch",
 		Run: func(cmd *cobra.Command, args []string) {
 			outputTestsStats(branchName, buildType, days)
 		},
