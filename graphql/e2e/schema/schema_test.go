@@ -216,6 +216,10 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
       		],
       		"upsert": true
         },
+		{
+			"predicate":"dgraph.drop.op",
+			"type":"string"
+		},
         {
             "predicate": "dgraph.graphql.schema",
             "type": "string"

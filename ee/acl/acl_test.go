@@ -1184,14 +1184,13 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	query := "{me(func: has(name)){expand(_all_)}}"
-	
+
 	// Test that groot has access to all the predicates
 	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
 	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
 		string(resp.GetJson()))
 
-	
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
 	time.Sleep(6 * time.Second)
@@ -1199,10 +1198,10 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
 
-	// Query via user when user has no permissions 
+	// Query via user when user has no permissions
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{}`,string(resp.GetJson()))
+	testutil.CompareJSON(t, `{}`, string(resp.GetJson()))
 
 	// Login to groot to modify accesses (1)
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -1214,7 +1213,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name>, write access of <age> to dev
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}})
-	time.Sleep(6 * time.Second) 
+	time.Sleep(6 * time.Second)
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
 	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
@@ -2090,6 +2089,10 @@ func TestSchemaQueryWithACL(t *testing.T) {
           "exact"
       	],
       	"upsert": true
+	},
+	{
+		"predicate":"dgraph.drop.op",
+		"type":"string"
 	},
     {
       "predicate": "dgraph.graphql.schema",

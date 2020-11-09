@@ -53,6 +53,10 @@ const (
             ],
             "upsert": true
         },
+		{
+			"predicate":"dgraph.drop.op",
+			"type":"string"
+		},
         {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
@@ -110,6 +114,10 @@ const (
             ],
             "upsert": true
         },
+		{
+			"predicate":"dgraph.drop.op",
+			"type":"string"
+		},
         {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
@@ -190,6 +198,10 @@ const (
             ],
             "upsert": true
         },
+		{
+			"predicate":"dgraph.drop.op",
+			"type":"string"
+		},
         {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
@@ -281,6 +293,10 @@ const (
             ],
             "upsert": true
         },
+		{
+			"predicate":"dgraph.drop.op",
+			"type":"string"
+		},
         {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
