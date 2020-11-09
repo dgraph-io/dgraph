@@ -66,7 +66,7 @@ var testCasesHttps = []testCase{
 	},
 	{
 		url:        "https://localhost:6180/state",
-		response:   "\"id\":\"1\",\"groupId\":0,\"addr\":\"zero1:5180\",\"leader\":true",
+		response:   "\"id\":\"1\",\"addr\":\"zero1:5180\",\"leader\":true",
 		statusCode: 200,
 	},
 }
