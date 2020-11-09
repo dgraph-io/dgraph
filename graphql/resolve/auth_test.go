@@ -258,6 +258,15 @@ func TestInvalidAuthInfo(t *testing.T) {
 	require.Error(t, err, fmt.Errorf("Expecting either JWKUrl or (VerificationKey, Algo), both were given"))
 }
 
+func TestMissingAudienceWithJWKUrl(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+	authSchema, err := testutil.AppendAuthInfoWithJWKUrlAndWithoutAudience(sch)
+	require.NoError(t, err)
+	_, err = schema.NewHandler(string(authSchema), false)
+	require.Error(t, err, fmt.Errorf("required field missing in Dgraph.Authorization: `Audience`"))
+}
+
 //Todo(Minhaj): Add a testcase for token without Expiry
 func TestVerificationWithJWKUrl(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
