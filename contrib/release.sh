@@ -104,6 +104,7 @@ codenameKey="github.com/dgraph-io/dgraph/x.dgraphCodename"
 branch="github.com/dgraph-io/dgraph/x.gitBranch"
 commitSHA1="github.com/dgraph-io/dgraph/x.lastCommitSHA"
 commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
+jemallocXgoFlags="--tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof"
 
 go install src.techknowlogick.com/xgo
 
@@ -198,14 +199,14 @@ popd
 # Build Linux.
 pushd $basedir/dgraph/dgraph
   xgo -go="go-$GOVERSION" --targets=linux/amd64 -ldflags \
-      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
+      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" $jemallocXgoFlags .
   strip -x dgraph-linux-amd64
   mkdir $TMP/linux
   mv dgraph-linux-amd64 $TMP/linux/dgraph
 popd
 
 pushd $basedir/badger/badger
-  xgo -go="go-$GOVERSION" --targets=linux/amd64 .
+  xgo -go="go-$GOVERSION" --targets=linux/amd64 $jemallocXgoFlags .
   strip -x badger-linux-amd64
   mv badger-linux-amd64 $TMP/linux/badger
 popd
