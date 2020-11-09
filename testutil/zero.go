@@ -18,6 +18,7 @@ package testutil
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -59,6 +60,35 @@ type StateResponse struct {
 // GetState queries the /state endpoint in zero and returns the response.
 func GetState() (*StateResponse, error) {
 	resp, err := http.Get("http://" + SockAddrZeroHttp + "/state")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if bytes.Contains(b, []byte("Error")) {
+		return nil, errors.Errorf("Failed to get state: %s", string(b))
+	}
+
+	var st StateResponse
+	if err := json.Unmarshal(b, &st); err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
+// GetStateHttps queries the /state endpoint in zero and returns the response.
+func GetStateHttps(tlsConfig *tls.Config) (*StateResponse, error) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+	}
+	resp, err := client.Get("https://" + SockAddrZeroHttp + "/state")
 	if err != nil {
 		return nil, err
 	}

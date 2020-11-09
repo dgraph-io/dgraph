@@ -17,7 +17,7 @@ func NewUpdateGroupRewriter() resolve.MutationRewriter {
 	return &updateGroupRewriter{}
 }
 
-// Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations
+// Rewrite rewrites set and remove update patches into dql upsert mutations
 // only for Group type. It ensures that if a rule already exists in db, it is updated;
 // otherwise, it is created. It also ensures that only the last rule out of all
 // duplicate rules in input is preserved. A rule is duplicate if it has same predicate

@@ -5,19 +5,28 @@ weight = 2
     parent = "schema"
 +++
 
-This page describes how you use GraphQL types to set the Dgraph GraphQL schema.
+This page describes how to use GraphQL types to set the a GraphQL schema for
+Dgraph database.
 
 ### Scalars
 
-Dgraph GraphQL comes with the standard GraphQL scalars: `Int`, `Float`, `String`, `Boolean` and `ID`.  There's also a `DateTime` scalar - represented as a string in RFC3339 format.
+Dgraph's GraphQL implementation comes with the standard GraphQL scalar types:
+`Int`, `Float`, `String`, `Boolean` and `ID`.  There's also an `Int64` scalar,
+and a `DateTime` scalar type that is represented as a string in RFC3339 format.
 
-Scalars `Int`, `Float`, `String` and `DateTime` can be used in lists. 
+Scalar types, including `Int`, `Int64`, `Float`, `String` and `DateTime`; can be
+used in lists. Lists behave like an unordered set in Dgraph. For example:
+`["e1", "e1", "e2"]` may get stored as `["e2", "e1"]`, so duplicate values will
+not be stored and order might not be preserved. All scalars may be nullable or
+non-nullable.
 
-{{% notice "note" %}}
-Lists behave like an unordered set in Dgraph. For example: `["e1", "e1", "e2"]` may get stored as `["e2", "e1"]`, i.e., duplicate values will not be stored and order may not be preserved.
-{{% /notice %}}
-
-All scalars may be nullable or non-nullable.
+{{% notice "note" %}}The `Int64` type introduced in release 20.11 represents
+a signed integer ranging between `-(2^63)` and `(2^63 -1)`. Signed `Int64` values
+in this range will be parsed correctly by Dgraph as long as the client can
+serialize the number correctly in JSON. For example, a JavaScript client might
+need to use a serialization library such as
+[`json-bigint`](https://www.npmjs.com/package/json-bigint) to correctly
+write an `Int64` value in JSON.{{% /notice %}}
 
 The `ID` type is special.  IDs are auto-generated, immutable, and can be treated as strings.  Fields of type `ID` can be listed as nullable in a schema, but Dgraph will never return null.
 
@@ -224,7 +233,7 @@ type Hotel {
   area: Polygon
 }
 ```
-    
+
 #### Point
 
 ```graphql

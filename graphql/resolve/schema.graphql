@@ -19,7 +19,7 @@ type State {
         code: String! @id
         country: Country
         name: String!
-	capital: String
+        capital: String
 }
 
 type Author {
@@ -313,6 +313,10 @@ interface A {
     name: String! @id
 }
 
+type B implements A {
+    id: ID!
+}
+
 # union testing - start
 enum AnimalCategory {
     Fish
@@ -364,3 +368,12 @@ type Home {
     favouriteMember: HomeMember
 }
 # union testing - end
+
+type Workflow {
+    id: ID!
+    nodes: [Node!]
+}
+
+type Node {
+    name: String!
+}

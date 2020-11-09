@@ -22,6 +22,7 @@ The following names are reserved and can't be used to define any other identifie
 - `PointList`
 - `Polygon`
 - `MultiPolygon`
+- `Aggregate` (as a suffix of any identifier name)
 
 
 For each type, Dgraph generates a number of GraphQL types needed to operate the GraphQL API, these generated type names also can't be present in the input schema.  For example, for a type `Author`, Dgraph generates:
@@ -36,5 +37,6 @@ For each type, Dgraph generates a number of GraphQL types needed to operate the 
 - `AddAuthorPayload`
 - `DeleteAuthorPayload`
 - `UpdateAuthorPayload`
+- `AuthorAggregateResult`
 
 Thus if `Author` is present in the input schema, all of those become reserved type names.

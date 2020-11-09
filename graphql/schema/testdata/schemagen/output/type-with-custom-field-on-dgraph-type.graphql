@@ -348,8 +348,8 @@ input AddUserInput {
 input CarFilter {
 	id: [ID!]
 	has: CarHasFilter
-	and: CarFilter
-	or: CarFilter
+	and: [CarFilter]
+	or: [CarFilter]
 	not: CarFilter
 }
 
@@ -384,8 +384,8 @@ input UserFilter {
 	id: [ID!]
 	age: IntFilter
 	has: UserHasFilter
-	and: UserFilter
-	or: UserFilter
+	and: [UserFilter]
+	or: [UserFilter]
 	not: UserFilter
 }
 

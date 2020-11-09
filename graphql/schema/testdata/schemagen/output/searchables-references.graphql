@@ -7,6 +7,7 @@ type Author {
 	name: String! @search(by: [hash])
 	dob: DateTime
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	postsAggregate(filter: PostFilter): PostAggregateResult
 }
 
 type Post {
@@ -362,8 +363,8 @@ input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
 	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
+	and: [AuthorFilter]
+	or: [AuthorFilter]
 	not: AuthorFilter
 }
 
@@ -391,8 +392,8 @@ input PostFilter {
 	title: StringFullTextFilter_StringTermFilter
 	text: StringFullTextFilter_StringTermFilter
 	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
+	and: [PostFilter]
+	or: [PostFilter]
 	not: PostFilter
 }
 
