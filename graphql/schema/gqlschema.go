@@ -1240,7 +1240,7 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 				//		}
 				// In case of IN filter we need to construct [Status] as Input Type.
 				if i.Type.Elem != nil && fld.Type.Elem == nil {
-					typ = &ast.Type{Elem: &ast.Type{NamedType: fld.Type.NamedType}, NonNull: false}
+					typ = &ast.Type{Elem: &ast.Type{NamedType: fld.Type.NamedType, NonNull: fld.Type.NonNull}}
 				}
 
 				l = append(l, &ast.FieldDefinition{
