@@ -6,7 +6,7 @@ weight = 6
     identifier = "schema-generate"
 +++
 
-The `@generate` directive is used to specify GraphQL APIs to generate for a given type.
+The `@generate` directive is used to specify the GraphQL APIs which are generated for a given type.
 
 Here's the GraphQL definition of the directive
 ```graphql
@@ -29,13 +29,13 @@ directive @generate(
 
 ```
 
-By passing `true` to the `Boolean` variables inside `@generate` directive, the corresponding APIs are generated while passing `false` forbids the generation of corresponding APIs. The default variable of `subscription` variable is `false` while the default value of
+By passing `true` to the `Boolean` variables inside `@generate` directive, the corresponding APIs are generated while passing `false` forbids the generation of corresponding APIs. The default value of `subscription` variable is `false` while the default value of
 other variables is `true`. Therefore, if no `@generate` directive is specified for a type, all queries and mutations except subscription are generated.
 
 ## Example of @generate directive
 
 ```graphql
-type Post @withSubscription @generate(
+type Person @generate(
     query: {
         get: false,
         query: true,
@@ -53,4 +53,4 @@ type Post @withSubscription @generate(
 ```
 
 The above GraphQL schema will generate `queryPerson` query and `addPerson`, `updatePerson` mutation. It won't generate `getPerson`, `aggregatePerson` query and `deletePerson` mutation as these have been marked as `false` using the @generate directive.
-Note that the `updatePerson` is generated because the default value of `update` variable is `true`.
+Note that the `updatePerson` mutation is generated because the default value of `update` variable is `true`.
