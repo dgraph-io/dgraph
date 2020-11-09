@@ -244,13 +244,13 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("OK"))
 }
 
-func (st *state) startListenHttpAndHttps(l net.Listener) {
+func (st *state) startListenHttpAndHttps(l net.Listener, tlsConf *tls.Config) {
 	if Zero.Conf.GetString("tls_dir") == "" && Zero.Conf.GetString("tls_disabled_route") != "" {
 		glog.Fatal("--tls_disabled_route is provided as an option but tls_dir is empty. Please provide --tls_dir")
 	}
 
 	m := cmux.New(l)
-	startServers(m)
+	startServers(m, tlsConf)
 
 	go func() {
 		defer st.zero.closer.Done()
@@ -261,41 +261,32 @@ func (st *state) startListenHttpAndHttps(l net.Listener) {
 	}()
 }
 
-func startServers(m cmux.CMux) {
+func startServers(m cmux.CMux, tlsConf *tls.Config) {
 	httpRule := m.Match(func(r io.Reader) bool {
-		//no tls config is provided. http is being used.
-		if opts.tlsDir == "" {
+		// no tls config is provided. http is being used.
+		if tlsConf == nil {
 			return true
 		}
-		//tls config is provided but none of the routes are disabled.
-		if len(opts.tlsDisabledRoutes) == 0 {
-			return false
-		}
 		path, ok := parseRequestPath(r)
-		// not able to parse the request. Let it be resolved via TLS
 		if !ok {
+			// not able to parse the request. Let it be resolved via TLS
 			return false
 		}
-		for _, r := range opts.tlsDisabledRoutes {
-			if strings.HasPrefix(path, r) {
-				return true
-			}
+		// health endpoint will always be available over http.
+		// This is necessary for orchestration. It needs to be worked for
+		// monitoring tools which operate without authentication.
+		if strings.HasPrefix(path, "/health") {
+			return true
 		}
 		return false
 	})
 	go startListen(httpRule)
 
 	// if tls is enabled, make tls encryption based connections as default
-	if Zero.Conf.GetString("tls_dir") != "" {
-		tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
-		x.Check(err)
-		if tlsCfg == nil {
-			glog.Fatalf("tls_dir is set but tls config provided is not correct. Please define correct variable --tls_dir")
-		}
-
+	if tlsConf != nil {
 		httpsRule := m.Match(cmux.Any())
 		//this is chained listener. tls listener will decrypt the message and send it in plain text to HTTP server
-		go startListen(tls.NewListener(httpsRule, tlsCfg))
+		go startListen(tls.NewListener(httpsRule, tlsConf))
 	}
 }
 

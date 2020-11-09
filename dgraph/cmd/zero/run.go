@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -57,10 +56,8 @@ type options struct {
 	rebalanceInterval time.Duration
 	LudicrousMode     bool
 
-	totalCache        int64
-	cachePercentage   string
-	tlsDir            string
-	tlsDisabledRoutes []string
+	totalCache      int64
+	cachePercentage string
 }
 
 var opts options
@@ -201,11 +198,6 @@ func run() {
 	}
 
 	x.PrintVersion()
-	var tlsDisRoutes []string
-	if Zero.Conf.GetString("tls_disabled_route") != "" {
-		tlsDisRoutes = strings.Split(Zero.Conf.GetString("tls_disabled_route"), ",")
-	}
-
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		myAddr:            Zero.Conf.GetString("my"),
@@ -218,8 +210,6 @@ func run() {
 		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
 		cachePercentage:   Zero.Conf.GetString("cache_percentage"),
-		tlsDir:            Zero.Conf.GetString("tls_dir"),
-		tlsDisabledRoutes: tlsDisRoutes,
 	}
 
 	if opts.nodeId == 0 {
@@ -326,7 +316,9 @@ func run() {
 	// Initialize the servers.
 	var st state
 	st.serveGRPC(grpcListener, store)
-	st.startListenHttpAndHttps(httpListener)
+	tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
+	x.Check(err)
+	st.startListenHttpAndHttps(httpListener, tlsCfg)
 
 	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)
