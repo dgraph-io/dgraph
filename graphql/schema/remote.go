@@ -25,8 +25,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/v2/ast"
 )
 
 func validateUrl(rawURL string) error {

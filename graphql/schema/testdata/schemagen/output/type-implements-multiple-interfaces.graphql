@@ -6,6 +6,7 @@ interface Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 interface Employee {
@@ -20,6 +21,7 @@ type Human implements Character & Employee {
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	totalCredits: Int
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 #######################
@@ -374,8 +376,8 @@ input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
 	has: CharacterHasFilter
-	and: CharacterFilter
-	or: CharacterFilter
+	and: [CharacterFilter]
+	or: [CharacterFilter]
 	not: CharacterFilter
 }
 
@@ -396,8 +398,8 @@ input CharacterRef {
 
 input EmployeeFilter {
 	has: EmployeeHasFilter
-	and: EmployeeFilter
-	or: EmployeeFilter
+	and: [EmployeeFilter]
+	or: [EmployeeFilter]
 	not: EmployeeFilter
 }
 
@@ -411,8 +413,8 @@ input HumanFilter {
 	id: [ID!]
 	name: StringExactFilter
 	has: HumanHasFilter
-	and: HumanFilter
-	or: HumanFilter
+	and: [HumanFilter]
+	or: [HumanFilter]
 	not: HumanFilter
 }
 

@@ -2272,8 +2272,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X; Field username: @auth directive is not allowed on fields",
-     "locations":[{"line":2, "column":3}]},
+    {"message": "Directive auth is not applicable on FIELD_DEFINITION.",
+     "locations":[{"line":2, "column":26}]},
     ]
 
   - name: "@auth and @remote directive on type"

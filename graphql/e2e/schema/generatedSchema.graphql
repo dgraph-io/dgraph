@@ -309,8 +309,8 @@ input AddAuthorInput {
 input AuthorFilter {
 	id: [ID!]
 	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
+	and: [AuthorFilter]
+	or: [AuthorFilter]
 	not: AuthorFilter
 }
 

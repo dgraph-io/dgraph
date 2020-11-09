@@ -20,8 +20,8 @@ type State {
         id: ID!
         xcode: String! @id @search(by: [regexp])
         name: String!
-	capital: String
-	country: Country @dgraph(pred: "inCountry")
+        capital: String
+	    country: Country @dgraph(pred: "inCountry")
 }
 
 # **Don't delete** Comments in the middle of schemas should work
@@ -43,6 +43,7 @@ type Author @dgraph(type: "test.dgraph.author") {
 
         dob: DateTime @search
         reputation: Float @search
+        qualification: String @search(by: [hash, trigram])
         country: Country
         posts: [Post!] @hasInverse(field: author)
 		bio: String @lambda
@@ -187,7 +188,7 @@ type Comment1 {
 type post1{
     id: ID
     title: String! @id @search(by: [regexp])
-    numLikes: Int64
+    numLikes: Int64 @search
     commentsByMonth: [Int]
     likesByMonth: [Int64]
 }

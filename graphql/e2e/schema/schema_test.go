@@ -70,7 +70,20 @@ func TestSchemaSubscribe(t *testing.T) {
 		Query: introspectionQuery,
 	}
 
-	expectedResult := `{"__type":{"name":"Author","fields":[{"name":"id"},{"name":"name"}]}}`
+	expectedResult :=
+		`{
+			"__type": {
+				"name":"Author",
+				"fields": [
+					{
+						"name": "id"
+					},
+					{
+						"name": "name"
+					}
+				]
+			}
+		}`
 	introspectionResult := introspect.ExecuteAsPost(t, groupOneServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
@@ -96,7 +109,26 @@ func TestSchemaSubscribe(t *testing.T) {
 	}`
 	updateGQLSchemaRequireNoErrors(t, schema, groupThreeAdminServer)
 
-	expectedResult = `{"__type":{"name":"Author","fields":[{"name":"id"},{"name":"name"},{"name":"posts"}]}}`
+	expectedResult =
+		`{
+			"__type": {
+				"name": "Author",
+				"fields": [
+					{
+						"name": "id"
+					},
+					{
+						"name": "name"
+					},
+					{
+						"name": "posts"
+					},
+					{
+						"name": "postsAggregate"
+					}
+				]
+			}
+		}`
 	introspectionResult = introspect.ExecuteAsPost(t, groupOneServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))

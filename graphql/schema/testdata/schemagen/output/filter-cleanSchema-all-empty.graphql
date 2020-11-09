@@ -5,14 +5,18 @@
 type X {
 	name(first: Int, offset: Int): [Y]
 	f1(first: Int, offset: Int): [Y] @dgraph(pred: "f1")
+	nameAggregate: YAggregateResult
+	f1Aggregate: YAggregateResult
 }
 
 type Y {
 	f1(first: Int, offset: Int): [X] @dgraph(pred: "~f1")
+	f1Aggregate: XAggregateResult
 }
 
 type Z {
 	add(first: Int, offset: Int): [X]
+	addAggregate: XAggregateResult
 }
 
 #######################
@@ -309,8 +313,8 @@ enum ZHasFilter {
 
 input XFilter {
 	has: XHasFilter
-	and: XFilter
-	or: XFilter
+	and: [XFilter]
+	or: [XFilter]
 	not: XFilter
 }
 
@@ -320,8 +324,8 @@ input YFilter {
 
 input ZFilter {
 	has: ZHasFilter
-	and: ZFilter
-	or: ZFilter
+	and: [ZFilter]
+	or: [ZFilter]
 	not: ZFilter
 }
 

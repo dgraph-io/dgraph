@@ -65,10 +65,32 @@ type Author struct {
 	Posts []*Question `json:"posts,omitempty"`
 }
 
-type Question struct {
+type Post struct {
 	Id     string  `json:"id,omitempty"`
 	Text   string  `json:"text,omitempty"`
 	Author *Author `json:"author,omitempty"`
+}
+
+type Question struct {
+	Id       string  `json:"id,omitempty"`
+	Text     string  `json:"text,omitempty"`
+	Answered bool    `json:"answered,omitempty"`
+	Author   *Author `json:"author,omitempty"`
+}
+
+type Answer struct {
+	Id     string  `json:"id,omitempty"`
+	Text   string  `json:"text,omitempty"`
+	Author *Author `json:"author,omitempty"`
+}
+
+type FbPost struct {
+	Id        string  `json:"id,omitempty"`
+	Text      string  `json:"text,omitempty"`
+	Author    *Author `json:"author,omitempty"`
+	Sender    *Author `json:"sender,omitempty"`
+	Receiver  *Author `json:"receiver,omitempty"`
+	PostCount int     `json:"postCount,omitempty"`
 }
 
 type Log struct {
@@ -128,14 +150,15 @@ type TaskOccurrence struct {
 }
 
 type TestCase struct {
-	user      string
-	role      string
-	ans       bool
-	result    string
-	name      string
-	filter    map[string]interface{}
-	variables map[string]interface{}
-	query     string
+	user          string
+	role          string
+	ans           bool
+	result        string
+	name          string
+	filter        map[string]interface{}
+	variables     map[string]interface{}
+	query         string
+	expectedError bool
 }
 
 type uidResult struct {
@@ -1512,4 +1535,83 @@ func TestMain(m *testing.M) {
 		}
 	}
 	os.Exit(0)
+}
+
+func TestChildCountQueryWithDeepRBAC(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user:   "user1",
+			role:   "USER",
+			result: `{"queryUser": [{"username": "user1", "issuesAggregate":{"count": null}}]}`},
+		{
+			user:   "user1",
+			role:   "ADMIN",
+			result: `{"queryUser":[{"username":"user1","issuesAggregate":{"count":1}}]}`},
+	}
+
+	query := `
+	query {
+	  queryUser (filter:{username:{eq:"user1"}}) {
+		username
+		issuesAggregate {
+		  count
+		}
+	  }
+	}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func TestChildCountQueryWithOtherFields(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user:   "user1",
+			role:   "USER",
+			result: `{"queryUser": [{"username": "user1","issues":[],"issuesAggregate":{"count": null}}]}`},
+		{
+			user:   "user1",
+			role:   "ADMIN",
+			result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}],"issuesAggregate":{"count":1}}]}`},
+	}
+
+	query := `
+	query {
+	  queryUser (filter:{username:{eq:"user1"}}) {
+		username
+		issuesAggregate {
+		  count
+		}
+		issues {
+		  msg
+		}
+	  }
+	}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
 }

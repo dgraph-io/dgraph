@@ -20,11 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go/v4"
 	"io/ioutil"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/dgrijalva/jwt-go/v4"
 
 	"google.golang.org/grpc/metadata"
 
@@ -36,8 +37,8 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
+	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/stretchr/testify/require"
-	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"gopkg.in/yaml.v2"
 )
 

@@ -330,8 +330,8 @@ input HotelFilter {
 	area: PolygonGeoFilter
 	branches: PolygonGeoFilter
 	has: HotelHasFilter
-	and: HotelFilter
-	or: HotelFilter
+	and: [HotelFilter]
+	or: [HotelFilter]
 	not: HotelFilter
 }
 
