@@ -54,6 +54,12 @@ Reference: [Password Type](/graphql/schema/types/#password-type)
 
 Reference: [Auth directive](/graphql/authorization/directive)
 
+### @generate
+
+`@generate` directive is used to specify GraphQL APIs to generate for a type.
+
+Reference: [Generate Directive](/graphql/schema/generate)
+
 ### @custom
 
 `@custom` directive is used to define custom queries, mutations and fields.
