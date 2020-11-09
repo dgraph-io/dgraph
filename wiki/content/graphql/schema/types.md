@@ -149,6 +149,12 @@ type Comment implements Post {
 
 GraphQL Unions represent an object that could be one of a list of GraphQL Object types, but provides for no guaranteed fields between those types. So no fields may be queried on this type without the use of type refining fragments or inline fragments.
 
+Union types have the potential to be invalid if incorrectly defined:
+
+- A `Union` type must include one or more unique member types.
+- The member types of a `Union` type must all be Object base types; [Scalar](#scalars), [Interface](#interfaces) and `Union` types must not be member types of a Union. Similarly, wrapping types must not be member types of a Union.
+
+
 For example, the following defines the `HomeMember` union type:
 
 ```graphql

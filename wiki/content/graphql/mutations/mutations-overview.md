@@ -124,7 +124,9 @@ mutation ($post: AddPostInput!, $author: AddAuthorInput!) {
   }
 }
 ```
+
 Variables:
+
 ```json
 {
   "author": {
@@ -138,6 +140,48 @@ Variables:
 	"author": {
 	  "name": "A.N. Author"
 	}
+  }
+}
+```
+
+## Union mutations
+
+Mutations can be used to add a node to a `union` field in a type. 
+
+For the following schema, 
+
+```graphql
+union HomeMember = Dog | Parrot | Human
+
+type Home {
+  id: ID!
+  address: String
+  members: [HomeMember]
+}
+```
+
+This is the mutation for adding `members` to the `Home` type:
+
+```graphql
+mutation {
+  addHome(input: [
+        {
+          "address": "United Street",
+          "members": [
+            { "dogRef": { "category": Mammal, "breed": "German Shephard"} },
+            { "parrotRef": { "category": Bird, "repeatsWords": ["squawk"]} },
+            { "humanRef": { "name": "Han Solo"} }
+          ]
+        }
+      ]) {
+    home {
+      address
+      members {
+        ... on Dog {
+          breed
+        }
+      }
+    }
   }
 }
 ```
