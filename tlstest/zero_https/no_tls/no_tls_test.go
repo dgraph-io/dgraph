@@ -1,12 +1,13 @@
 package no_tls
 
 import (
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 type testCase struct {
@@ -23,7 +24,7 @@ var testCasesHttp = []testCase{
 	},
 	{
 		url:        "http://localhost:6180/state",
-		response:  "\"id\":\"1\",\"groupId\":0,\"addr\":\"zero1:5180\",\"leader\":true,\"amDead\":false",
+		response:   "\"id\":\"1\",\"groupId\":0,\"addr\":\"zero1:5180\",\"leader\":true",
 		statusCode: 200,
 	},
 }
