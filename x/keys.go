@@ -553,6 +553,9 @@ var aclPredicateMap = map[string]struct{}{
 	"dgraph.acl.rule":        {},
 }
 
+// TODO: rename this map to a better suited name as per its properties. It is not just for GraphQL
+// predicates, but for all those which are PreDefined and whose value is not allowed to be mutated
+// by users. When renaming this also rename the IsGraphql context key in edgraph/server.go.
 var graphqlReservedPredicate = map[string]struct{}{
 	"dgraph.graphql.xid":               {},
 	"dgraph.graphql.schema":            {},

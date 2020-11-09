@@ -134,10 +134,14 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		tl := pr.threads[itr.ThreadId]
 		tl.alloc = stream.Allocator(itr.ThreadId)
 		kvList, dropOp, err := tl.toBackupList(key, itr)
+		if err != nil {
+			return nil, err
+		}
+		// we don't want to append a nil value to the slice, so need to check.
 		if dropOp != nil {
 			response.DropOperations = append(response.DropOperations, dropOp)
 		}
-		return kvList, err
+		return kvList, nil
 	}
 
 	stream.ChooseKey = func(item *badger.Item) bool {
@@ -344,7 +348,8 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 		val, ok := vals[0].Value.([]byte)
 		if !ok {
 			return nil, errors.Errorf("cannot convert value of dgraph.drop.op to byte array, "+
-				"got type: %s", reflect.TypeOf(vals[0].Value))
+				"got type: %s, value: %v, tid: %v", reflect.TypeOf(vals[0].Value), vals[0].Value,
+				vals[0].Tid)
 		}
 		// A dgraph.drop.op record can have values in only one of the following formats:
 		// * DROP_ALL;

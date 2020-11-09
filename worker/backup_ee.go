@@ -86,6 +86,13 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.BackupResponse,
 // backups with the same backupNum in their manifest.
 var backupLock sync.Mutex
 
+// BackupRes is used to represent the response and error of the Backup gRPC call together to be
+// transported via a channel.
+type BackupRes struct {
+	res *pb.BackupResponse
+	err error
+}
+
 func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
 	if !EnterpriseEnabled() {
 		return errors.New("you must enable enterprise features first. " +
@@ -170,31 +177,24 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	resOrErrCh := make(chan interface{}, len(state.Groups))
+	resCh := make(chan BackupRes, len(state.Groups))
 	for _, gid := range groups {
 		br := proto.Clone(req).(*pb.BackupRequest)
 		br.GroupId = gid
 		br.Predicates = predMap[gid]
 		go func(req *pb.BackupRequest) {
 			res, err := BackupGroup(ctx, req)
-			if err != nil {
-				resOrErrCh <- err
-			} else {
-				resOrErrCh <- res
-			}
+			resCh <- BackupRes{res: res, err: err}
 		}(br)
 	}
 
 	var dropOperations []*pb.DropOperation
 	for range groups {
-		if resOrErr := <-resOrErrCh; resOrErr != nil {
-			switch val := resOrErr.(type) {
-			case error:
-				glog.Errorf("Error received during backup: %v", val)
-				return val
-			case *pb.BackupResponse:
-				dropOperations = append(dropOperations, val.DropOperations...)
-			}
+		if backupRes := <-resCh; backupRes.err != nil {
+			glog.Errorf("Error received during backup: %v", backupRes.err)
+			return backupRes.err
+		} else {
+			dropOperations = append(dropOperations, backupRes.res.GetDropOperations()...)
 		}
 	}
 

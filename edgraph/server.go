@@ -289,6 +289,13 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 	return result, nil
 }
 
+// insertDropRecord is used to insert a helper record when a DROP operation is performed.
+// This helper record lets us know during backup that a DROP operation was performed and that we
+// need to write this information in backup manifest. So that while restoring from a backup series,
+// we can create an exact replica of the system which existed at the time the last backup was taken.
+// Note that if the server crashes after the DROP operation & before this helper record is inserted,
+// then restoring from the incremental backup of such a DB would restore even the dropped
+// data back.
 func insertDropRecord(ctx context.Context, dropOp string) error {
 	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true),
 		&api.Request{

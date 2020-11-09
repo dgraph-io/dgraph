@@ -4520,11 +4520,12 @@ func (m *BackupResponse) GetDropOperations() []*DropOperation {
 }
 
 type DropOperation struct {
-	DropOp               DropOperation_DropOp `protobuf:"varint,1,opt,name=drop_op,json=dropOp,proto3,enum=pb.DropOperation_DropOp" json:"drop_op,omitempty"`
-	DropValue            string               `protobuf:"bytes,2,opt,name=drop_value,json=dropValue,proto3" json:"drop_value,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
-	XXX_unrecognized     []byte               `json:"-"`
-	XXX_sizecache        int32                `json:"-"`
+	DropOp DropOperation_DropOp `protobuf:"varint,1,opt,name=drop_op,json=dropOp,proto3,enum=pb.DropOperation_DropOp" json:"drop_op,omitempty"`
+	// When drop_op is ATTR, drop_value will be the name of the ATTR; empty otherwise.
+	DropValue            string   `protobuf:"bytes,2,opt,name=drop_value,json=dropValue,proto3" json:"drop_value,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *DropOperation) Reset()         { *m = DropOperation{} }
