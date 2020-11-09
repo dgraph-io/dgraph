@@ -5109,3 +5109,13 @@ func TestParseExpandFilterErr(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expand is only compatible with type filters")
 }
+
+func TestEmptyId(t *testing.T) {
+	q := "query me($a: string) { q(func: uid($a)) { name }}"
+	r := Request{
+		Str:       q,
+		Variables: map[string]string{"$a": "   "},
+	}
+	_, err := Parse(r)
+	require.Error(t, err, "ID cannot be empty")
+}
