@@ -81,9 +81,13 @@ func init() {
 // by all tests, so there is no testing.T instance for it to use.
 func DgraphClientDropAll(serviceAddr string) (*dgo.Dgraph, error) {
 	dg, err := DgraphClient(serviceAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	for {
 		// keep retrying until we succeed or receive a non-retriable error
-		err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
+		err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
 		if err == nil || !strings.Contains(err.Error(), "Please retry") {
 			break
 		}
@@ -158,6 +162,14 @@ func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.NoError(t, err)
+}
+
+// VerifyQueryResponse executes the given query and verifies that the response of the query is
+// same as the expected response.
+func VerifyQueryResponse(t *testing.T, dg *dgo.Dgraph, query, expectedResponse string) {
+	resp, err := dg.NewReadOnlyTxn().Query(context.Background(), query)
+	require.NoError(t, err)
+	CompareJSON(t, expectedResponse, string(resp.GetJson()))
 }
 
 // RetryQuery will retry a query until it succeeds or a non-retryable error is received.
