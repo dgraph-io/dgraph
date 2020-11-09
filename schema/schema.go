@@ -675,6 +675,9 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			Tokenizer: []string{"exact"},
 			List:      true,
 		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.drop.op",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.schema",
 			ValueType: pb.Posting_STRING,
 		}, &pb.SchemaUpdate{
@@ -743,7 +746,7 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 
 // IsPreDefPredChanged returns true if the initial update for the pre-defined
 // predicate is different than the passed update.
-//If the passed update is not a pre-defined predicate then it just returns false.
+// If the passed update is not a pre-defined predicate then it just returns false.
 func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
 	if !x.IsPreDefinedPredicate(update.Predicate) {

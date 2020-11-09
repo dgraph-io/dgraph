@@ -44,7 +44,8 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice) LoadR
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return LoadBackup(location, backupId, 0, nil,
-		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+		func(r io.Reader, groupId uint32, preds predicateSet,
+			dropOperations []*pb.DropOperation) (uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
 			r, err := enc.GetReader(key, r)
@@ -76,7 +77,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice) LoadR
 			if !pathExist(dir) {
 				fmt.Println("Creating new db:", dir)
 			}
-			maxUid, err := loadFromBackup(db, gzReader, 0, preds)
+			maxUid, err := loadFromBackup(db, gzReader, 0, preds, dropOperations)
 			if err != nil {
 				return 0, err
 			}
@@ -90,10 +91,16 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice) LoadR
 // If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
 // Otherwise, the original value is used.
 // TODO(DGRAPH-1234): Check whether restoreTs can be removed.
-func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicateSet) (
-	uint64, error) {
+func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicateSet,
+	dropOperations []*pb.DropOperation) (uint64, error) {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
+
+	// if there were any DROP operations that need to be applied before loading the backup into
+	// the db, then apply them here
+	if err := applyDropOperationsBeforeRestore(db, dropOperations); err != nil {
+		return 0, errors.Wrapf(err, "cannot apply DROP operations while loading backup")
+	}
 
 	// Delete schemas and types. Each backup file should have a complete copy of the schema.
 	if err := db.DropPrefix([]byte{x.ByteSchema}); err != nil {
@@ -219,6 +226,20 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 	}
 
 	return maxUid, nil
+}
+
+func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOperation) error {
+	for _, operation := range dropOperations {
+		switch operation.DropOp {
+		case pb.DropOperation_ALL:
+			return db.DropAll()
+		case pb.DropOperation_DATA:
+			return db.DropPrefix([]byte{x.DefaultPrefix})
+		case pb.DropOperation_ATTR:
+			return db.DropPrefix(x.PredicatePrefix(operation.DropValue))
+		}
+	}
+	return nil
 }
 
 func fromBackupKey(key []byte) ([]byte, error) {

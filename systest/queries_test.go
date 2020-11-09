@@ -28,7 +28,6 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -331,32 +330,15 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	txn = c.NewTxn()
-	resp, err := txn.Query(ctx, `schema {}`)
-	require.NoError(t, err)
-	js := `
-  {
-    "schema": [` + x.CorsPredicate + "," + x.PersistedQueryPredicate + "," + x.AclPredicates + `,` + x.GraphqlPredicates + `,
-      {
-        "predicate": "dgraph.type",
-        "type": "string",
-        "index": true,
-        "tokenizer": [
-          "exact"
-        ],
-		"list": true
-      },
-      {
+	testutil.VerifySchema(t, c, testutil.SchemaOptions{UserPreds: `
+	  {
         "predicate": "name",
         "type": "string",
         "index": true,
         "tokenizer": [
           "exact"
         ]
-      }
-    ],` + x.InitialTypes + `
-  }`
-	testutil.CompareJSON(t, js, string(resp.Json))
+      }`})
 }
 
 func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
@@ -389,6 +371,9 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	js := `
   {
     "schema": [
+	  {
+		"predicate": "dgraph.drop.op"
+	  },
 	  {
 		"predicate": "dgraph.cors"
 	  },
@@ -440,7 +425,9 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "age"
       }
-    ],` + x.InitialTypes + `
+    ],
+	"types": [` + testutil.GetInternalTypes(false) + `
+	]
   }`
 	testutil.CompareJSON(t, js, string(resp.Json))
 }
@@ -564,27 +551,15 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, json.Unmarshal(bb.Bytes(), &m))
 	require.NotNil(t, m["extensions"])
 
-	js := `
-  {
-    "schema": [` + x.CorsPredicate + `,` + x.PersistedQueryPredicate + `,` + x.AclPredicates + `,` + x.GraphqlPredicates + `,
-      {
-        "index": true,
-        "predicate": "dgraph.type",
-        "type": "string",
-        "tokenizer": ["exact"],
-		"list": true
-      },
-      {
+	testutil.CompareJSON(t, testutil.GetFullSchemaJSON(testutil.SchemaOptions{UserPreds: `
+	  {
         "predicate": "name",
         "type": "string",
         "index": true,
         "tokenizer": [
           "exact"
         ]
-      }
-    ],` + x.InitialTypes + `
-  }`
-	testutil.CompareJSON(t, js, string(m["data"]))
+      }`}), string(m["data"]))
 }
 
 func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
