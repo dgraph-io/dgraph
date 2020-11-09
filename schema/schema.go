@@ -630,6 +630,9 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 		Tokenizer: []string{"exact"},
 		List:      true,
 	}, &pb.SchemaUpdate{
+		Predicate: "dgraph.drop.op",
+		ValueType: pb.Posting_STRING,
+	}, &pb.SchemaUpdate{
 		Predicate: "dgraph.graphql.schema",
 		ValueType: pb.Posting_STRING,
 	}, &pb.SchemaUpdate{

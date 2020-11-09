@@ -128,6 +128,28 @@ func PeriodicallyPostTelemetry() {
 	}
 }
 
+// insertDropRecord is used to insert a helper record when a DROP operation is performed.
+// This helper record lets us know during backup that a DROP operation was performed and that we
+// need to write this information in backup manifest. So that while restoring from a backup series,
+// we can create an exact replica of the system which existed at the time the last backup was taken.
+// Note that if the server crashes after the DROP operation & before this helper record is inserted,
+// then restoring from the incremental backup of such a DB would restore even the dropped
+// data back.
+func insertDropRecord(ctx context.Context, dropOp string) error {
+	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true),
+		&api.Request{
+			Mutations: []*api.Mutation{{
+				Set: []*api.NQuad{{
+					Subject:     "_:r",
+					Predicate:   "dgraph.drop.op",
+					ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: dropOp}},
+				}},
+			}},
+			CommitNow: true,
+		}, NoAuthorize)
+	return err
+}
+
 // Alter handles requests to change the schema or remove parts or all of the data.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
@@ -177,6 +199,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		m.DropOp = pb.Mutations_ALL
 		_, err := query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// insert a helper record for backup & restore, indicating that drop_all was done
+		err = insertDropRecord(ctx, "DROP_ALL;")
 
 		// recreate the admin account after a drop all operation
 		ResetAcl(nil)
@@ -190,6 +218,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		m.DropOp = pb.Mutations_DATA
 		_, err := query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// insert a helper record for backup & restore, indicating that drop_data was done
+		err = insertDropRecord(ctx, "DROP_DATA;")
 
 		// recreate the admin account after a drop data operation
 		ResetAcl(nil)
@@ -228,6 +262,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		edges := []*pb.DirectedEdge{edge}
 		m.Edges = edges
 		_, err = query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// insert a helper record for backup & restore, indicating that drop_attr was done
+		err = insertDropRecord(ctx, "DROP_ATTR;"+attr)
 		return empty, err
 	}
 

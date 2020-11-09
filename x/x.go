@@ -111,36 +111,12 @@ const (
 	GrootId = "groot"
 	// GuardiansId is the ID of the admin group for ACLs.
 	GuardiansId = "guardians"
-	// AclPredicates is the JSON representation of the predicates reserved for use
-	// by the ACL system.
-	AclPredicates = `
-{"predicate":"dgraph.xid","type":"string", "index":true, "tokenizer":["exact"], "upsert":true},
-{"predicate":"dgraph.password","type":"password"},
-{"predicate":"dgraph.user.group","list":true, "reverse":true, "type":"uid"},
-{"predicate":"dgraph.acl.rule","type":"uid","list":true},
-{"predicate":"dgraph.rule.predicate","type":"string","index":true,"tokenizer":["exact"],"upsert":true},
-{"predicate":"dgraph.rule.permission","type":"int"}
-`
-
-	InitialTypes = `
-"types": [
-{"fields":[{"name":"dgraph.graphql.schema"},{"name":"dgraph.graphql.xid"}],"name":"dgraph.graphql"},
-{"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],"name": "User"},
-{"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],"name": "Group"},
-{"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],"name": "Rule"}
-]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper
 	// group the first time an Alpha comes up with data from a restored backup or a
 	// bulk load.
 	GroupIdFileName = "group_id"
-
-	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
-	GraphqlPredicates = `
-{"predicate":"dgraph.graphql.schema", "type": "string"},
-{"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
-`
 )
 
 var (
