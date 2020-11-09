@@ -6,10 +6,10 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/99designs/gqlgen/graphql"
-	"github.com/99designs/gqlgen/graphql/introspection"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlgen/graphql"
+	"github.com/dgraph-io/gqlgen/graphql/introspection"
+	"github.com/dgraph-io/gqlparser/v2/ast"
 )
 
 // Introspection works by walking through the selection set which are part of ast.Operation

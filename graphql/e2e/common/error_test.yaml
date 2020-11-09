@@ -275,3 +275,77 @@
   errors:
     [ { "message": "Type mismatched for Value `180143985094.0`, expected:`Int64`",
         "path": [ "variable", "Post",0.0,"numViews" ] } ]
+
+-
+  name: "Error for int64 value given in list as variable"
+  gqlrequest: |
+    mutation addpost1($Post: [Addpost1Input!]!){
+      addpost1(input:$Post){
+        post1{
+          title
+          likesByMonth
+        }
+      }
+    }
+  gqlvariables: |
+    { "Post": [
+      { "title": "Dgraph",
+         "likesByMonth": [180143985094.0,33,1,66]
+      } ]
+    }
+  errors:
+    [ { "message": "Type mismatched for Value `180143985094.0`, expected:`Int64`",
+        "path": [ "variable", "Post",0.0,"likesByMonth",0.0 ] } ]
+
+- name: "Error for int64 value given in list"
+  gqlrequest: |
+    mutation {
+      addpost1(input:[{title:"Dgraph",likesByMonth: [180143985094.0,33,1,66]}]){
+        post1{
+          title
+          likesByMonth
+        }
+      }
+    }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Type mismatched for Value `180143985094.0`, expected: Int64, got: 'Float'",
+        "locations": [ { "line": 2, "column": 50 } ] } ]
+
+-
+  name: "Error for int value given in list as variable"
+  gqlrequest: |
+    mutation addpost1($Post: [Addpost1Input!]!){
+      addpost1(input:$Post){
+        post1{
+          title
+          commentsByMonth
+        }
+      }
+    }
+  gqlvariables: |
+    { "Post": [
+      { "title": "Dgraph",
+         "commentsByMonth": [2147483648,33,1,66]
+      } ]
+    }
+  errors:
+    [ { "message": "Out of range value '2147483648', for type `Int`",
+        "path": [ "variable", "Post",0.0,"commentsByMonth",0.0 ] } ]
+
+- name: "Error for int value given in list"
+  gqlrequest: |
+    mutation {
+      addpost1(input:[{title:"Dgraph",commentsByMonth: [2147483648,33,1,66]}]){
+        post1{
+          title
+          commentsByMonth
+        }
+      }
+    }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Out of range value '2147483648', for type `Int`",
+        "locations": [ { "line": 2, "column": 53 } ] } ]

@@ -108,7 +108,13 @@ new transaction is initiated.**
 ## Run a query
 
 To query the database, the `/query` endpoint is used. Remember to set the `Content-Type` header
-to `application/graphql+-` in order to ensure that the body of the request is correctly parsed.
+to `application/dql` to ensure that the body of the request is parsed correctly.
+
+{{% notice "note" %}}
+GraphQL+- has been renamed to Dgraph Query Language (DQL). While `application/dql`
+is the preferred value for the `Content-Type` header, we will continue to support
+`Content-Type: application/graphql+-` to avoid making breaking changes.
+{{% /notice %}}
 
 To get the balances for both accounts:
 

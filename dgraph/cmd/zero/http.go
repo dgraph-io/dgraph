@@ -17,22 +17,16 @@
 package zero
 
 import (
-	"bufio"
 	"context"
-	"crypto/tls"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
-	"github.com/soheilhy/cmux"
 )
 
 // intFromQueryParam checks for name as a query param, converts it to uint64 and returns it.
@@ -242,86 +236,4 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("OK"))
-}
-
-func (st *state) startListenHttpAndHttps(l net.Listener) {
-	if Zero.Conf.GetString("tls_dir") == "" && Zero.Conf.GetString("tls_disabled_route") != "" {
-		glog.Fatal("--tls_disabled_route is provided as an option but tls_dir is empty. Please provide --tls_dir")
-	}
-
-	m := cmux.New(l)
-	startServers(m)
-
-	go func() {
-		defer st.zero.closer.Done()
-		err := m.Serve()
-		if err != nil {
-			glog.Errorf("error from cmux serve: %v", err)
-		}
-	}()
-}
-
-func startServers(m cmux.CMux) {
-	httpRule := m.Match(func(r io.Reader) bool {
-		//no tls config is provided. http is being used.
-		if opts.tlsDir == "" {
-			return true
-		}
-		//tls config is provided but none of the routes are disabled.
-		if len(opts.tlsDisabledRoutes) == 0 {
-			return false
-		}
-		path, ok := parseRequestPath(r)
-		// not able to parse the request. Let it be resolved via TLS
-		if !ok {
-			return false
-		}
-		for _, r := range opts.tlsDisabledRoutes {
-			if strings.HasPrefix(path, r) {
-				return true
-			}
-		}
-		return false
-	})
-	go startListen(httpRule)
-
-	// if tls is enabled, make tls encryption based connections as default
-	if Zero.Conf.GetString("tls_dir") != "" {
-		tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, x.TLSNodeCert, x.TLSNodeKey)
-		x.Check(err)
-		if tlsCfg == nil {
-			glog.Fatalf("tls_dir is set but tls config provided is not correct. Please define correct variable --tls_dir")
-		}
-
-		httpsRule := m.Match(cmux.Any())
-		//this is chained listener. tls listener will decrypt the message and send it in plain text to HTTP server
-		go startListen(tls.NewListener(httpsRule, tlsCfg))
-	}
-}
-
-func startListen(l net.Listener) {
-	srv := &http.Server{
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 600 * time.Second,
-		IdleTimeout:  2 * time.Minute,
-	}
-
-	err := srv.Serve(l)
-	glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
-	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
-	defer cancel()
-	err = srv.Shutdown(ctx)
-	glog.Infoln("All http(s) requests finished.")
-	if err != nil {
-		glog.Errorf("Http(s) shutdown err: %v", err)
-	}
-}
-
-func parseRequestPath(r io.Reader) (path string, ok bool) {
-	request, err := http.ReadRequest(bufio.NewReader(r))
-	if err != nil {
-		return "", false
-	}
-
-	return request.URL.Path, true
 }

@@ -5,16 +5,22 @@
 type X {
 	f1(first: Int, offset: Int): [Y] @dgraph(pred: "f1")
 	f3(first: Int, offset: Int): [Z] @dgraph(pred: "~f3")
+	f1Aggregate: YAggregateResult
+	f3Aggregate: ZAggregateResult
 }
 
 type Y {
 	f1(first: Int, offset: Int): [X] @dgraph(pred: "~f1")
 	f2(first: Int, offset: Int): [Z] @dgraph(pred: "f2")
+	f1Aggregate: XAggregateResult
+	f2Aggregate: ZAggregateResult
 }
 
 type Z {
 	f2(first: Int, offset: Int): [Y] @dgraph(pred: "~f2")
 	f3(first: Int, offset: Int): [X] @dgraph(pred: "f3")
+	f2Aggregate: YAggregateResult
+	f3Aggregate: XAggregateResult
 }
 
 #######################
@@ -34,28 +40,28 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 scalar DateTime
 
 input IntRange{
-	min: Int
-	max: Int
+	min: Int!
+	max: Int!
 }
 
 input FloatRange{
-	min: Float
-	max: Float
+	min: Float!
+	max: Float!
 }
 
 input Int64Range{
-	min: Int64
-	max: Int64
+	min: Int64!
+	max: Int64!
 }
 
 input DateTimeRange{
-	min: DateTime
-	max: DateTime
+	min: DateTime!
+	max: DateTime!
 }
 
 input StringRange{
-	min: String
-	max: String
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
@@ -340,8 +346,8 @@ input AddZInput {
 
 input XFilter {
 	has: XHasFilter
-	and: XFilter
-	or: XFilter
+	and: [XFilter]
+	or: [XFilter]
 	not: XFilter
 }
 
@@ -351,8 +357,8 @@ input XRef {
 
 input YFilter {
 	has: YHasFilter
-	and: YFilter
-	or: YFilter
+	and: [YFilter]
+	or: [YFilter]
 	not: YFilter
 }
 
@@ -362,8 +368,8 @@ input YRef {
 
 input ZFilter {
 	has: ZHasFilter
-	and: ZFilter
-	or: ZFilter
+	and: [ZFilter]
+	or: [ZFilter]
 	not: ZFilter
 }
 

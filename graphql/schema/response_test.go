@@ -21,9 +21,9 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 func TestDataAndErrors(t *testing.T) {
@@ -129,7 +129,7 @@ func TestWriteTo_BadData(t *testing.T) {
 	resp.WriteTo(buf)
 
 	assert.JSONEq(t,
-		`{"errors":[{"message":"Internal error - failed to marshal a valid JSON response"}], 
+		`{"errors":[{"message":"Internal error - failed to marshal a valid JSON response"}],
 		"data": null}`,
 		buf.String())
 }
@@ -155,7 +155,7 @@ func TestErrorResponse(t *testing.T) {
 				x.GqlErrorf("A GraphQL error"),
 				x.GqlErrorf("Another GraphQL error").WithLocations(x.Location{Line: 1, Column: 2})},
 			expected: `{"errors":[
-				{"message":"A GraphQL error"}, 
+				{"message":"A GraphQL error"},
 				{"message":"Another GraphQL error", "locations": [{"column":2, "line":1}]}]}`},
 		"a gqlerror": {
 			err: &gqlerror.Error{
@@ -171,7 +171,7 @@ func TestErrorResponse(t *testing.T) {
 					Message:   "Another GraphQL error",
 					Locations: []gqlerror.Location{{Line: 1, Column: 2}}}},
 			expected: `{"errors":[
-				{"message":"A GraphQL error"}, 
+				{"message":"A GraphQL error"},
 				{"message":"Another GraphQL error", "locations": [{"line":1,"column":2}]}]}`,
 		},
 	}
@@ -198,7 +198,7 @@ func TestNilResponse(t *testing.T) {
 	resp.WriteTo(buf)
 
 	assert.JSONEq(t,
-		`{"errors":[{"message":"Internal error - no response to write."}], 
+		`{"errors":[{"message":"Internal error - no response to write."}],
 		"data": null}`,
 		buf.String())
 }

@@ -73,8 +73,8 @@ type Server struct {
 	// tls client config used to connect with zero internally
 	tlsClientConfig *tls.Config
 
-	moveOngoing     chan struct{}
-	blockCommitsOn  *sync.Map
+	moveOngoing    chan struct{}
+	blockCommitsOn *sync.Map
 }
 
 // Init initializes the zero server.

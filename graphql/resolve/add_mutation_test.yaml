@@ -522,6 +522,26 @@
         }
 
 -
+  name: "Add Mutation with object at root instead of an array"
+  gqlmutation: |
+    mutation addAuthor {
+      addAuthor(input: { name: "A.N. Author"}) {
+        author {
+          name
+        }
+      }
+    }
+  explanation: "The input being an object should also work because of the input coercion rules
+  for input objects."
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Author1",
+          "dgraph.type":["Author"],
+          "Author.name":"A.N. Author"
+        }
+
+
+-
   name: "Add Mutation with embedded value"
   gqlmutation: |
     mutation addAuthor {
