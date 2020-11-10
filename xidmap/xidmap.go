@@ -89,8 +89,12 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		if err != z.NewFile {
 			y.Check(err)
 		}
+		s := skl.NewSkiplistWith(mf.Data, false)
+		s.OnClose = func() {
+			mf.Close(math.MaxUint32)
+		}
 		xm.shards[i] = &shard{
-			skiplist: skl.NewSkiplistWith(mf.Data, false),
+			skiplist: s,
 		}
 	}
 	if db != nil {
