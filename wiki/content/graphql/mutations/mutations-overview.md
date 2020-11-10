@@ -151,6 +151,33 @@ Mutations can be used to add a node to a `union` field in a type.
 For the following schema, 
 
 ```graphql
+enum Category {
+  Fish
+  Amphibian
+  Reptile
+  Bird
+  Mammal
+  InVertebrate
+}
+
+interface Animal {
+  id: ID!
+  category: Category @search
+}
+
+type Dog implements Animal {
+  breed: String @search
+}
+
+type Parrot implements Animal {
+  repeatsWords: [String]
+}
+
+type Human {
+  name: String!
+  pets: [Animal!]!
+}
+
 union HomeMember = Dog | Parrot | Human
 
 type Home {
@@ -179,6 +206,12 @@ mutation {
       members {
         ... on Dog {
           breed
+        }
+        ... on Parrot {
+          repeatsWords
+        }
+        ... on Human {
+          name
         }
       }
     }
