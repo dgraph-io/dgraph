@@ -4,26 +4,32 @@ This backup script that supports many of the features in Dgraph, such as ACLs, M
 
 ## Requirements
 
-* The scripts (`dgraph-backup.sh` and `compose-setup.sh`) require GNU getopt.  This was tested on:
-  * macOS with Homebrew [gnu-getopt](https://formulae.brew.sh/formula/gnu-getopt) bottle,
-  * [Ubuntu 20.04.1 (Focal Fossa)](https://releases.ubuntu.com/20.04/) (any modern Linux distro should work), and
+* The scripts (`dgraph-backup.sh` and `compose-setup.sh`) require the following tools to run properly:
+  * GNU `bash`
+  * GNU `getopt`
+  * GNU `grep`<sup>†</sup>
+* These scripts were tested on the following environments:
+  * macOS with Homebrew [gnu-getopt](https://formulae.brew.sh/formula/gnu-getopt) bottle and [grep](https://formulae.brew.sh/formula/grep) bottle,
+  * [Ubuntu 20.04.1 (Focal Fossa)](https://releases.ubuntu.com/20.04/) (any modern Linux distro should work, such as the [dgraph/dgraph](https://hub.docker.com/r/dgraph/dgraph/) docker container), and
   * Windows with [MSYS2](https://www.msys2.org/).
 * For the test demo environment, both [docker](https://docs.docker.com/engine/) and [docker-compose](https://docs.docker.com/compose/) are required.
 
+† Some versions of macOS 10.x do not include have a compatible version of `grep`.  You need to have GNU grep in the path for this script to work.
+
 ## Important Notes
 
-If you are using this script another system other than alpha, we'll call this *backup workstation*, you should be aware of the following:
+If you are using this script on a system other than alpha, we'll call this *backup workstation*, you should be aware of the following:
 
 * **General**
-  * a *backup workstation* will need to have access to the alpha server
+  * the *backup workstation* will need to have access to the alpha server, e.g. `localhost:8080`
 * **TLS**
-  * when accessing alpha server secured by TLS, the *backup workstation* will need access to `ca.crt` created with `dgraph cert`
-  * if Mutual TLS is used, the *backup workstation* will also need access to the client cert and key as well.
+  * when accessing alpha server secured by TLS, the *backup workstation* will need access to `ca.crt` created with `dgraph cert` in the path.
+  * if Mutual TLS is used, the *backup workstation* will also need access to the client cert and key in the path.
 * **`subpath` option**
-  * when specifying sub-path that uses a datestamp, the *backup workstation* needs to have the same timestamp as the server.
-  * when backing up to a file path, such as NFS, the *backup workstation* will need access to the same file path at the same mount point, e.g. if `/dgraph/backups` is used on alpha, the same path has to be on the *backup workstation*
+  * when specifying sub-path that uses a datestamp, the *backup workstation* needs to have the same timestamp as the alpha server.
+  * when backing up to a file path, such as NFS, the *backup workstation* will need access to the same file path at the same mount point, e.g. if `/dgraph/backups` is used on alpha, the same path `/dgraph/backups` has to be accessible on the *backup workstation*
 
-## Testing (Demo)
+## Demo (Test) with local file path
 
 You can try out these features using [Docker Compose](https://docs.docker.com/compose/).  There's a `./compose-setup.sh` script that can configure the environment with the desired features.  As you need to have a common shared directory for file paths, you can use `ratel` container as the *backup workstation* to run the backup script.
 

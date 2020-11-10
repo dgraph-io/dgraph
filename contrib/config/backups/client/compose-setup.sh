@@ -44,6 +44,50 @@ USAGE
 }
 
 ######
+# get_grep - find grep that supports look-ahead/behind regex
+##########################
+get_grep() {
+ unset GREP_CMD
+
+ ## Check for GNU grep compatibility
+ if ! grep --version | head -1 | fgrep -q GNU; then
+   local SYSTEM="$(uname -s)"
+   if [[ "${SYSTEM,,}" == "freebsd" ]]; then
+     ## Check FreeBSD install location
+     if [[ -f "/usr/local/bin/grep" ]]; then
+        GREP_CMD="/usr/local/bin/grep"
+     else
+       ## Save FreeBSD Instructions
+       local MESSAGE="On FreeBSD, compatible grep can be installed with 'sudo pkg install gnugrep'"
+     fi
+   elif [[ "${SYSTEM,,}" == "darwin" ]]; then
+     ## Check HomeBrew install location
+     if [[ -f "/usr/local/opt/grep/libexec/gnubin/grep" ]]; then
+        GREP_CMD="/usr/local/opt/grep/libexec/gnubin/grep"
+     ## Check MacPorts install location
+     elif [[ -f "/opt/local/bin/grep" ]]; then
+        GREP_CMD="/opt/local/bin/grep"
+     else
+        ## Save MacPorts or HomeBrew Instructions
+        if command -v brew > /dev/null; then
+          local MESSAGE="On macOS, gnu-grep can be installed with 'brew install grep'\n"
+        elif command -v port > /dev/null; then
+          local MESSAGE="On macOS, grep can be installed with 'sudo port install grep'\n"
+        fi
+     fi
+   fi
+ else
+   GREP_CMD="$(command -v grep)"
+ fi
+
+ ## Error if no suitable grep command found
+ if [[ -z $GREP_CMD ]]; then
+   printf "ERROR: GNU grep not found.  Please install GNU compatible 'grep'\n\n%s" "$MESSAGE" 1>&2
+   exit 1
+ fi
+}
+
+######
 # get_getopt - find GNU getopt or print error message
 ##########################
 get_getopt() {
@@ -129,7 +173,7 @@ parse_command() {
   done
 
   ## Set DGRAPH_VERSION to latest if it is not set yet
-  [[ -z $DGRAPH_VERSION ]] && DGRAPH_VERSION=$(curl -s https://get.dgraph.io/latest | grep -oP '(?<=tag_name":")[^"]*')
+  [[ -z $DGRAPH_VERSION ]] && get_grep && DGRAPH_VERSION=$(curl -s https://get.dgraph.io/latest | $GREP_CMD -oP '(?<=tag_name":")[^"]*')
 }
 
 ######
