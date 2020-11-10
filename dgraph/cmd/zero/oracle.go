@@ -61,7 +61,7 @@ type Oracle struct {
 // Init initializes the oracle.
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
-	o.keyCommit = z.NewTreeWithFile(1<<30, filepath.Join(opts.w, "btree"))
+	o.keyCommit = z.NewTree(1<<30, filepath.Join(opts.w, "btree"))
 	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init(nil)
