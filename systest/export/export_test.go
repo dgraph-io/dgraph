@@ -79,6 +79,7 @@ func TestExportSchemaToMinio(t *testing.T) {
 var expectedSchema = `<movie>:string .` + " " + `
 <dgraph.cors>:[string] @index(exact) @upsert .` + " " + `
 <dgraph.type>:[string] @index(exact) .` + " " + `
+<dgraph.drop.op>:string .` + " " + `
 <dgraph.graphql.xid>:string @index(exact) @upsert .` + " " + `
 <dgraph.graphql.schema>:string .` + " " + `
 <dgraph.graphql.p_query>:string .` + " " + `

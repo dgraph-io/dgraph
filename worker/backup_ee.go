@@ -29,12 +29,12 @@ import (
 )
 
 // Backup handles a request coming from another node.
-func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
+func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupResponse, error) {
 	glog.V(2).Infof("Received backup request via Grpc: %+v", req)
 	return backupCurrentGroup(ctx, req)
 }
 
-func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
+func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupResponse, error) {
 	glog.Infof("Backup request: group %d at %d", req.GroupId, req.ReadTs)
 	if err := ctx.Err(); err != nil {
 		glog.Errorf("Context error during backup: %v\n", err)
@@ -61,7 +61,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Status,
 }
 
 // BackupGroup backs up the group specified in the backup request.
-func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.Status, error) {
+func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.BackupResponse, error) {
 	glog.V(2).Infof("Sending backup request: %+v\n", in)
 	if groups().groupId() == in.GroupId {
 		return backupCurrentGroup(ctx, in)
@@ -85,6 +85,13 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.Status, error) 
 // to be processed at the same time. Multiple requests could lead to multiple
 // backups with the same backupNum in their manifest.
 var backupLock sync.Mutex
+
+// BackupRes is used to represent the response and error of the Backup gRPC call together to be
+// transported via a channel.
+type BackupRes struct {
+	res *pb.BackupResponse
+	err error
+}
 
 func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
 	if !EnterpriseEnabled() {
@@ -170,25 +177,28 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	errCh := make(chan error, len(state.Groups))
+	resCh := make(chan BackupRes, len(state.Groups))
 	for _, gid := range groups {
 		br := proto.Clone(req).(*pb.BackupRequest)
 		br.GroupId = gid
 		br.Predicates = predMap[gid]
 		go func(req *pb.BackupRequest) {
-			_, err := BackupGroup(ctx, req)
-			errCh <- err
+			res, err := BackupGroup(ctx, req)
+			resCh <- BackupRes{res: res, err: err}
 		}(br)
 	}
 
+	var dropOperations []*pb.DropOperation
 	for range groups {
-		if err := <-errCh; err != nil {
-			glog.Errorf("Error received during backup: %v", err)
-			return err
+		if backupRes := <-resCh; backupRes.err != nil {
+			glog.Errorf("Error received during backup: %v", backupRes.err)
+			return backupRes.err
+		} else {
+			dropOperations = append(dropOperations, backupRes.res.GetDropOperations()...)
 		}
 	}
 
-	m := Manifest{Since: req.ReadTs, Groups: predMap}
+	m := Manifest{Since: req.ReadTs, Groups: predMap, DropOperations: dropOperations}
 	if req.SinceTs == 0 {
 		m.Type = "full"
 		m.BackupId = x.GetRandomName(1)

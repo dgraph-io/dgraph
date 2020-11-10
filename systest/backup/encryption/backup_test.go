@@ -188,7 +188,7 @@ func TestBackupMinio(t *testing.T) {
 	require.NoError(t, err)
 
 	// Perform second full backup.
-	dirs := runBackupInternal(t, true, 12, 4)
+	_ = runBackupInternal(t, true, 12, 4)
 	restored = runRestore(t, "", incr3.Txn.CommitTs)
 
 	// Check all the values were restored to their most recent value.
@@ -205,10 +205,39 @@ func TestBackupMinio(t *testing.T) {
 		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
 
+	// Do a DROP_DATA
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropOp: api.Operation_DATA}))
+
+	// add some data
+	incr4, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+				<_:x1> <movie> "El laberinto del fauno" .
+				<_:x2> <movie> "Black Panther 2" .
+			`),
+	})
+	require.NoError(t, err)
+
+	// perform an incremental backup and then restore
+	dirs := runBackup(t, 15, 5)
+	restored = runRestore(t, "", incr4.Txn.CommitTs)
+
+	// Check that the newly added data is the only data for the movie predicate
+	require.Len(t, restored, 2)
+	checks = []struct {
+		blank, expected string
+	}{
+		{blank: "x1", expected: "El laberinto del fauno"},
+		{blank: "x2", expected: "Black Panther 2"},
+	}
+	for _, check := range checks {
+		require.EqualValues(t, check.expected, restored[incr4.Uids[check.blank]])
+	}
+
 	// Remove the full backup dirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))
-	runFailingRestore(t, backupDir, "", incr3.Txn.CommitTs)
+	runFailingRestore(t, backupDir, "", incr4.Txn.CommitTs)
 
 	// Clean up test directories.
 	dirCleanup(t)
@@ -296,7 +325,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.cors", "dgraph.graphql.xid",
 		"dgraph.type", "movie", "dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at",
-		"dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash"},
+		"dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash", "dgraph.drop.op"},
 		restoredPreds)
 
 	restoredTypes, err := testutil.GetTypeNames(pdir)
