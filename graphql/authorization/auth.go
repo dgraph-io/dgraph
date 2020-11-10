@@ -83,6 +83,11 @@ func (a *AuthMeta) validate() error {
 		if a.VerificationKey != "" || a.Algo != "" {
 			return fmt.Errorf("expecting either JWKUrl or (VerificationKey, Algo), both were given")
 		}
+
+		// Audience should be a required field if JWKUrl is provided.
+		if len(a.Audience) == 0 {
+			fields = " `Audience` "
+		}
 	} else {
 		if a.VerificationKey == "" {
 			fields = " `Verification key`/`JWKUrl`"

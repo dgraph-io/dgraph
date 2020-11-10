@@ -241,6 +241,11 @@ func AppendAuthInfoWithJWKUrl(schema []byte) ([]byte, error) {
 	return append(schema, []byte(authInfo)...), nil
 }
 
+func AppendAuthInfoWithJWKUrlAndWithoutAudience(schema []byte) ([]byte, error) {
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurl":"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":[]}`
+	return append(schema, []byte(authInfo)...), nil
+}
+
 // Add JWKUrl and (VerificationKey, Algo) in the same Authorization JSON
 // Adding Dummy values as this should result in validation error
 func AppendJWKAndVerificationKey(schema []byte) ([]byte, error) {
