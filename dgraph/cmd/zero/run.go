@@ -108,8 +108,6 @@ instances to achieve high-availability.
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	flag.String("tls_disabled_route", "", "comma separated zero endpoint which will be disabled from TLS encryption."+
-		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
 
 	// Cache flags
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")

@@ -245,10 +245,6 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 }
 
 func (st *state) startListenHttpAndHttps(l net.Listener, tlsConf *tls.Config) {
-	if Zero.Conf.GetString("tls_dir") == "" && Zero.Conf.GetString("tls_disabled_route") != "" {
-		glog.Fatal("--tls_disabled_route is provided as an option but tls_dir is empty. Please provide --tls_dir")
-	}
-
 	m := cmux.New(l)
 	startServers(m, tlsConf)
 
