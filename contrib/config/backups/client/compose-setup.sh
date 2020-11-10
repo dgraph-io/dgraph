@@ -44,23 +44,58 @@ USAGE
 }
 
 ######
+# get_getopt - find GNU getopt or print error message
+##########################
+get_getopt() {
+ unset GETOPT_CMD
+
+ ## Check for GNU getopt compatibility
+ if [[ "$(getopt --version)" =~ "--" ]]; then
+   local SYSTEM="$(uname -s)"
+   if [[ "${SYSTEM,,}" == "freebsd" ]]; then
+     ## Check FreeBSD install location
+     if [[ -f "/usr/local/bin/getopt" ]]; then
+        GETOPT_CMD="/usr/local/bin/getopt"
+     else
+       ## Save FreeBSD Instructions
+       local MESSAGE="On FreeBSD, compatible getopt can be installed with 'sudo pkg install getopt'"
+     fi
+   elif [[ "${SYSTEM,,}" == "darwin" ]]; then
+     ## Check HomeBrew install location
+     if [[ -f "/usr/local/opt/gnu-getopt/bin/getopt" ]]; then
+        GETOPT_CMD="/usr/local/opt/gnu-getopt/bin/getopt"
+     ## Check MacPorts install location
+     elif [[ -f "/opt/local/bin/getopt" ]]; then
+        GETOPT_CMD="/opt/local/bin/getopt"
+     else
+        ## Save MacPorts or HomeBrew Instructions
+        if command -v brew > /dev/null; then
+          local MESSAGE="On macOS, gnu-getopt can be installed with 'brew install gnu-getopt'\n"
+        elif command -v port > /dev/null; then
+          local MESSAGE="On macOS, getopt can be installed with 'sudo port install getopt'\n"
+        fi
+     fi
+   fi
+ else
+   GETOPT_CMD="$(command -v getopt)"
+ fi
+
+ ## Error if no suitable getopt command found
+ if [[ -z $GETOPT_CMD ]]; then
+   printf "ERROR: GNU getopt not found.  Please install GNU compatible 'getopt'\n\n%s" "$MESSAGE" 1>&2
+   exit 1
+ fi
+}
+
+######
 # parse_command - parse command line options using GNU getopt
 ##########################
 parse_command() {
-  ## Check for GNU getopt
-  if [[ "$(getopt --version)" =~ "--" ]]; then
-    printf "ERROR: GNU getopt not found.  Please install GNU getopt\n\n" 1>&2
-    if [[ "$(uname -s)" =~ "Darwin" ]]; then
-      printf "On macOS with Homebrew (https://brew.sh/), gnu-getopt can be installed with:\n" 1>&2
-      printf " brew install gnu-getopt\n" 1>&2
-      printf ' export PATH="/usr/local/opt/gnu-getopt/bin:$PATH"\n\n' 1>&2
-    fi
-    exit 1
-  fi
+  get_getopt
 
   ## Parse Arguments with GNU getopt
   PARSED_ARGUMENTS=$(
-    getopt -o jtdhekmc:v: \
+    $GETOPT_CMD -o jtdhekmc:v: \
     --long acl,auth_token,enc,tls,make_tls_cert,tls_client_auth:,dgraph_version:,debug,help \
     -n 'compose-setup.sh' -- "$@"
   )

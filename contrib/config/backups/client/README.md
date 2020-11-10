@@ -56,7 +56,7 @@ As an example of performing backups with a local mounted file path using ACLs, E
    ```
 4. Logout of the Ratel container
    ```bash
-   logout
+   exit
    ```
 4. Cleanup when finished
    ```bash
