@@ -1007,7 +1007,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 	require.Nil(t, resp.Errors)
 	require.JSONEq(t, `{"queryTodo":[]}`,
 		string(resp.Data))
-	// Terminate subscription and wait for second before starting new subscription
+	// Terminate subscription and wait for 1 second before starting new subscription
 	subscriptionClient.Terminate()
 	time.Sleep(time.Second)
 
@@ -1066,13 +1066,9 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
 
-	// second response
+	// second response should be nil
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-	err = json.Unmarshal(res, &resp)
-
-	require.NoError(t, err)
-	require.Nil(t, resp.Errors)
-	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
-		string(resp.Data))
+	require.Nil(t, res)
+	subscriptionClient1.Terminate()
 }
