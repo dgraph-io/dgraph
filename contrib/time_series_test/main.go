@@ -32,8 +32,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-const maxEventsInDB = 100
-const extraAddedEvents = 10
+const maxEventsInDB = 1000 * 1000
+const extraAddedEvents = 1000
 
 func dropAll(dg *dgo.Dgraph) error {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
@@ -107,12 +107,18 @@ func addEvents(dg *dgo.Dgraph, count int) ([]string, error) {
 	return uids, nil
 }
 
-func deleteEvents(dg *dgo.Dgraph, uids []string) error {
+func deleteEvents(dg *dgo.Dgraph, randoms map[int]bool, allUids []string) ([]string, error) {
 	nquads := ""
-	for _, uid := range uids {
-		nquads += fmt.Sprintf(`
+	var updatedUids []string
+
+	for i, uid := range allUids {
+		if _, ok := randoms[i]; ok {
+			nquads += fmt.Sprintf(`
 		<%s> * *.
 		`, uid)
+		} else {
+			updatedUids = append(updatedUids, uid)
+		}
 	}
 
 	mu := &api.Mutation{
@@ -124,9 +130,15 @@ func deleteEvents(dg *dgo.Dgraph, uids []string) error {
 	defer txn.Discard(ctx)
 	_, err := txn.Mutate(ctx, mu)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return updatedUids, nil
+}
+
+type Response struct {
+	Me []struct {
+		Count int
+	}
 }
 
 func hasQuery(dg *dgo.Dgraph) {
@@ -144,6 +156,12 @@ func hasQuery(dg *dgo.Dgraph) {
 		log.Fatal(err)
 	}
 	glog.V(2).Infof("Result of has query: %v \n", res)
+	// var response Response
+	// json.Unmarshal([]byte(res.Json), &response)
+
+	// fmt.Printf("%v", response)
+
+	// return response.Me[0].Count
 }
 
 func readUID(dg *dgo.Dgraph, uid string) {
@@ -156,18 +174,17 @@ func readUID(dg *dgo.Dgraph, uid string) {
 	fmt.Printf("%v \n", res)
 }
 
-func distinctRandoms(count int, upperLimit int) []int {
+func distinctRandoms(count int, upperLimit int) map[int]bool {
 	var isPresent map[int]bool = make(map[int]bool)
-	var randoms []int
+	var randoms map[int]bool = make(map[int]bool)
 	for i := 0; i < count; {
 		time.Sleep(10 * time.Millisecond)
 		x := rand.Intn(upperLimit)
-		println(x)
 		if _, ok := isPresent[x]; ok {
 			continue
 		}
 		isPresent[x] = true
-		randoms = append(randoms, x)
+		randoms[x] = true
 		i++
 	}
 
@@ -206,21 +223,17 @@ func main() {
 		allUids = append(allUids, uids...)
 		glog.V(2).Infoln("Finding randoms")
 		randoms := distinctRandoms(len(allUids)-maxEventsInDB, len(allUids))
-		var delUids []string
-		for _, num := range randoms {
-			delUids = append(delUids, allUids[num])
-		}
 		if err != nil {
 			continue
 		}
-		err = deleteEvents(dg, delUids)
+		updatedUids, err := deleteEvents(dg, randoms, allUids)
 		if err != nil {
-			// retry once
-			deleteEvents(dg, uids)
+			glog.Errorln(err)
+			continue
 		}
+		allUids = updatedUids
 		time.Sleep(10 * time.Millisecond)
 
 		hasQuery(dg)
-		break
 	}
 }
