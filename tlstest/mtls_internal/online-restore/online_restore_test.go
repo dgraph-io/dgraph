@@ -21,8 +21,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc/credentials"
 	"io/ioutil"
 	"net/http"
 	"path"
@@ -30,6 +28,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -40,19 +41,20 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func sendRestoreRequest(t *testing.T, backupId string, backupNum int) int {
+func sendRestoreRequest(t *testing.T, backupId string) int {
 	restoreRequest := fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
+		 restore(input: {location: "/data/backup", backupId: "%s",
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
 			restoreId
 		}
-	}`, backupId, backupNum)
+	}`, backupId)
+
 	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
-		Transport: &http.Transport {
+		Transport: &http.Transport{
 			TLSClientConfig: tlsConf,
 		},
 	}
@@ -87,7 +89,7 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
-		Transport: &http.Transport {
+		Transport: &http.Transport{
 			TLSClientConfig: tlsConf,
 		},
 	}
@@ -156,7 +158,7 @@ func disableDraining(t *testing.T) {
 	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
-		Transport: &http.Transport {
+		Transport: &http.Transport{
 			TLSClientConfig: tlsConf,
 		},
 	}
@@ -196,10 +198,7 @@ func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 
 		resp, err := dg.NewTxn().Query(context.Background(), bodies[0])
 		if shouldFail {
-			if err != nil {
-				continue
-			}
-			require.False(t, testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), "", true))
+			require.Error(t, err)
 		} else {
 			require.NoError(t, err)
 			require.True(t, testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), "", true))
@@ -254,91 +253,10 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	restoreId := sendRestoreRequest(t, "youthful_rhodes3", 0)
+	restoreId := sendRestoreRequest(t, "youthful_rhodes3")
 	waitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 	runMutations(t, dg)
-}
-
-func TestRestoreBackupNum(t *testing.T) {
-	disableDraining(t)
-	tlsConf := getAlphaClient(t)
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
-	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-
-	ctx := context.Background()
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
-	runQueries(t, dg, true)
-
-	restoreId := sendRestoreRequest(t, "youthful_rhodes3", 1)
-	waitForRestore(t, restoreId, dg)
-	runQueries(t, dg, true)
-	runMutations(t, dg)
-}
-
-func TestRestoreBackupNumInvalid(t *testing.T) {
-	disableDraining(t)
-	tlsConf := getAlphaClient(t)
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
-	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-
-	ctx := context.Background()
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
-	runQueries(t, dg, true)
-	client := http.Client{
-		Timeout: time.Second * 3,
-		Transport: &http.Transport{
-			TLSClientConfig:        tlsConf,
-		},
-	}
-	// Send a request with a backupNum greater than the number of manifests.
-	adminUrl := "https://localhost:8180/admin"
-	restoreRequest := fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
-		 	encryptionKeyFile: "/data/keys/enc_key"}) {
-			code
-			message
-			restoreId
-		}
-	}`, "youthful_rhodes3", 1000)
-
-	params := testutil.GraphQLParams{
-		Query: restoreRequest,
-	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
-	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
-	bufString := string(buf)
-	require.NoError(t, err)
-	require.Contains(t, bufString, "not enough backups")
-
-	// Send a request with a negative backupNum value.
-	restoreRequest = fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
-		 	encryptionKeyFile: "/data/keys/enc_key"}) {
-			code
-			message
-			restoreId
-		}
-	}`, "youthful_rhodes3", -1)
-
-	params = testutil.GraphQLParams{
-		Query: restoreRequest,
-	}
-	b, err = json.Marshal(params)
-	require.NoError(t, err)
-
-	resp, err = client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
-	require.NoError(t, err)
-	buf, err = ioutil.ReadAll(resp.Body)
-	bufString = string(buf)
-	require.NoError(t, err)
-	require.Contains(t, bufString, "backupNum value should be equal or greater than zero")
 }
 
 func TestMoveTablets(t *testing.T) {
@@ -351,13 +269,13 @@ func TestMoveTablets(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	restoreId := sendRestoreRequest(t, "youthful_rhodes3", 0)
+	restoreId := sendRestoreRequest(t, "youthful_rhodes3")
 	waitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
-	restoreId = sendRestoreRequest(t, "blissful_hermann1", 0)
+	restoreId = sendRestoreRequest(t, "blissful_hermann1")
 	waitForRestore(t, restoreId, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
@@ -391,12 +309,11 @@ func TestInvalidBackupId(t *testing.T) {
 		}
 	}`
 
-
 	tlsConf := getAlphaClient(t)
 	client := http.Client{
 		Timeout: time.Second * 3,
 		Transport: &http.Transport{
-			TLSClientConfig:        tlsConf,
+			TLSClientConfig: tlsConf,
 		},
 	}
 	adminUrl := "https://localhost:8180/admin"

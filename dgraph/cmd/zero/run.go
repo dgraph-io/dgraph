@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -59,11 +58,9 @@ type options struct {
 	rebalanceInterval time.Duration
 	LudicrousMode     bool
 
-	totalCache        int64
-	cachePercentage   string
-	tlsDir            string
-	tlsDisabledRoutes []string
-	tlsClientConfig   *tls.Config
+	totalCache      int64
+	cachePercentage string
+	tlsClientConfig *tls.Config
 }
 
 var opts options
@@ -214,11 +211,6 @@ func run() {
 	}
 
 	x.PrintVersion()
-	var tlsDisRoutes []string
-	if Zero.Conf.GetString("tls_disabled_route") != "" {
-		tlsDisRoutes = strings.Split(Zero.Conf.GetString("tls_disabled_route"), ",")
-	}
-
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
 	opts = options{
@@ -233,8 +225,6 @@ func run() {
 		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
 		cachePercentage:   Zero.Conf.GetString("cache_percentage"),
-		tlsDir:            Zero.Conf.GetString("tls_dir"),
-		tlsDisabledRoutes: tlsDisRoutes,
 		tlsClientConfig:   tlsConf,
 	}
 
