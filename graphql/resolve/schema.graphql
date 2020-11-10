@@ -86,6 +86,18 @@ type Human implements Character & Employee {
         female: Boolean
 }
 
+# just for testing IN filter on enum types
+
+type Verification {
+  name: String @search(by: [exact])
+  status: Status @search
+}
+
+enum Status {
+  ACTIVE
+  DEACTIVATED
+}
+
 # just for testing singluar (non-list) edges in both directions
 
 type House {

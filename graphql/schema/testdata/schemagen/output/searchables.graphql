@@ -480,7 +480,7 @@ input PostRef {
 
 input PostType_exact {
 	eq: PostType
-	in: PostType
+	in: [PostType]
 	le: PostType
 	lt: PostType
 	ge: PostType
@@ -490,7 +490,7 @@ input PostType_exact {
 
 input PostType_exact_StringRegExpFilter {
 	eq: PostType
-	in: PostType
+	in: [PostType]
 	le: PostType
 	lt: PostType
 	ge: PostType
@@ -501,12 +501,12 @@ input PostType_exact_StringRegExpFilter {
 
 input PostType_hash {
 	eq: PostType
-	in: PostType
+	in: [PostType]
 }
 
 input PostType_hash_StringRegExpFilter {
 	eq: PostType
-	in: PostType
+	in: [PostType]
 	regexp: String
 }
 
