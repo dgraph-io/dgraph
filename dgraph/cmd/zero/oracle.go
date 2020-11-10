@@ -64,7 +64,7 @@ func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
 	// Remove the older btree file, before creating NewTree, as it may contain stale data leading
 	// to wrong results.
-	fname := filepath.Join(opts.w, "btree")
+	fname := filepath.Join(opts.w, "keyCommit.bin")
 	os.RemoveAll(fname)
 	o.keyCommit = z.NewTree(fname, 1<<30)
 	o.subscribers = make(map[int]chan pb.OracleDelta)
@@ -107,8 +107,7 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 func (o *Oracle) purgeBelow(minTs uint64) {
 	o.Lock()
 	defer o.Unlock()
-	glog.Infof("Purging below ts:%d, len(o.commits):%d, keyCommit: %+v\n",
-		minTs, len(o.commits), o.keyCommit.Stats())
+	stats := o.keyCommit.Stats()
 	// Dropping would be cheaper if abort/commits map is sharded
 	for ts := range o.commits {
 		if ts < minTs {
@@ -119,8 +118,8 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	// So we can delete everything from rowCommit whose commitTs < minTs
 	o.keyCommit.DeleteBelow(minTs)
 	o.tmax = minTs
-	glog.Infof("Purged below ts:%d, len(o.commits):%d, keyCommit: %+v\n",
-		minTs, len(o.commits), o.keyCommit.Stats())
+	glog.Infof("Purged below ts:%d, len(o.commits):%d, keyCommit: [before: %+v, after: %+v]\n",
+		minTs, len(o.commits), stats, o.keyCommit.Stats())
 }
 
 func (o *Oracle) commit(src *api.TxnContext) error {
