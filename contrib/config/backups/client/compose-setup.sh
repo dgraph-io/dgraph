@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+######
+## compose-setup.sh - configure a docker compose configuration and generate
+##   private certs/keys using `dgraph cert` command.
+##
+##   This will also fetch an explicit Dgraph version that is tagged as `latest`
+##   online if DGRAPH_VERSION environment variable is not specified.
+##
+##   This can be used to setup an environment that can be used explore Dgraph
+##   backup functionality for operators
+##########################
 
 ######
 # main - runs the script
@@ -121,7 +131,7 @@ config_compose() {
   [[ -f $CFGPATH/config.toml ]] && rm $CFGPATH/config.toml
   touch $CFGPATH/config.toml
 
-  ## configuredefaults
+  ## configure defaults
   echo "whitelist = '10.0.0.0/8,172.16.0.0/12,192.168.0.0/16'" >> "$CFGPATH/config.toml"
   echo "lru_mb = 1024" >> "$CFGPATH/config.toml"
 

@@ -1,4 +1,9 @@
 ######
+## backup_helper.sh - general purpose shell script library used to support
+##  Dgraph binary backups enterprise feature.
+##########################
+
+######
 # get_token_rest - get accessJWT token with REST command for Dgraph 1.x
 ##########################
 get_token_rest() {

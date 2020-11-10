@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+######
+## dgraph-backup.sh - general purpose shell script that can be used to
+##  facilitate binary backups (an enterprise feature) with Dgraph.  This script
+##  demonstrates how to use backups options available in either REST or
+##  GraphQL API using the curl command.
+##########################
 
 ######
 # main - runs the script

@@ -15,10 +15,10 @@ This backup script that supports many of the features in Dgraph, such as ACLs, M
 If you are using this script another system other than alpha, we'll call this *backup workstation*, you should be aware of the following:
 
 * **General**
-  * *backup workstation* will need to have access to the alpha server
+  * a *backup workstation* will need to have access to the alpha server
 * **TLS**
-  * when accessing alpha server secured by TLS, *backup workstation* will need access to `ca.crt` created with `dgraph cert`
-  * if Mutual TLS is used, *backup workstation* will also need access to the client cert and key as well.
+  * when accessing alpha server secured by TLS, the *backup workstation* will need access to `ca.crt` created with `dgraph cert`
+  * if Mutual TLS is used, the *backup workstation* will also need access to the client cert and key as well.
 * **`subpath` option**
   * when specifying sub-path that uses a datestamp, the *backup workstation* needs to have the same timestamp as the server.
   * when backing up to a file path, such as NFS, the *backup workstation* will need access to the same file path at the same mount point, e.g. if `/dgraph/backups` is used on alpha, the same path has to be on the *backup workstation*
