@@ -22,8 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/spf13/viper"
-	"google.golang.org/grpc"
 	"io"
 	"io/ioutil"
 	"math"
@@ -36,6 +34,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 
 	"google.golang.org/grpc/metadata"
 
@@ -385,7 +386,6 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 	tlsConfig, tlsErr := x.LoadClientTLSConfigForInternalPort(conf)
 	x.Check(tlsErr)
 
-
 	// compression with zero server actually makes things worse
 	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
@@ -452,7 +452,7 @@ func run() error {
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
 
-	l := setup(bmOpts, dg)
+	l := setup(bmOpts, dg, Live.Conf)
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {

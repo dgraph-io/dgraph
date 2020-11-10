@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -113,11 +114,8 @@ instances to achieve high-availability.
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	flag.String("tls_disabled_route", "",
-		"comma separated zero endpoint which will be disabled from TLS encryption."+
-		"Valid values are /health,/state,/removeNode,/moveTablet,/assign,/enterpriseLicense,/debug.")
-	flag.Bool("tls_internal_port_enabled", false, "enable inter node TLS encryption between cluster nodes.")
-	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to " +
+	flag.Bool("tls_internal_port_enabled", false, "(optional) enable inter node TLS encryption between cluster nodes.")
+	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to "+
 		"connect as a client with the other nodes in the cluster.")
 	flag.String("tls_key", "", "(optional) The private key file name "+
 		"in tls_dir which is needed to connect as a client with the other nodes in the cluster.")
