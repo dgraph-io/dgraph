@@ -71,7 +71,7 @@ mkdir $GOPATH
 PATH="$GOPATH/bin:$PATH"
 
 # The Go version used for release builds must match this version.
-GOVERSION=${GOVERSION:-"1.14.4"}
+GOVERSION=${GOVERSION:-"1.15.4"}
 
 TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
@@ -104,7 +104,7 @@ codenameKey="github.com/dgraph-io/dgraph/x.dgraphCodename"
 branch="github.com/dgraph-io/dgraph/x.gitBranch"
 commitSHA1="github.com/dgraph-io/dgraph/x.lastCommitSHA"
 commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
-jemallocXgoFlags="--tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof'"
+jemallocXgoFlags=
 
 go install src.techknowlogick.com/xgo
 
@@ -162,19 +162,19 @@ popd
 
 # Build Windows.
 pushd $basedir/dgraph/dgraph
-  xgo -go="go-$GOVERSION" --targets=windows/amd64 -ldflags \
+  xgo -go="go-$GOVERSION" --targets=windows/amd64 -buildmode=exe -ldflags \
       "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/windows
   mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
 popd
 
 pushd $basedir/badger/badger
-  xgo -go="go-$GOVERSION" --targets=windows/amd64 .
+  xgo -go="go-$GOVERSION" --targets=windows/amd64  -buildmode=exe .
   mv badger-windows-4.0-amd64.exe $TMP/windows/badger.exe
 popd
 
 pushd $basedir/ratel
-  xgo -go="go-$GOVERSION" --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
+  xgo -go="go-$GOVERSION" --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version"  -buildmode=exe .
   mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
 popd
 
@@ -199,14 +199,14 @@ popd
 # Build Linux.
 pushd $basedir/dgraph/dgraph
   xgo -go="go-$GOVERSION" --targets=linux/amd64 -ldflags \
-      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" $jemallocXgoFlags .
+      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
   strip -x dgraph-linux-amd64
   mkdir $TMP/linux
   mv dgraph-linux-amd64 $TMP/linux/dgraph
 popd
 
 pushd $basedir/badger/badger
-  xgo -go="go-$GOVERSION" --targets=linux/amd64 $jemallocXgoFlags .
+  xgo -go="go-$GOVERSION" --targets=linux/amd64 --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
   strip -x badger-linux-amd64
   mv badger-linux-amd64 $TMP/linux/badger
 popd
