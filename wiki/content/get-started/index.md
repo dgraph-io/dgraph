@@ -148,7 +148,7 @@ curl -H "Content-Type: application/rdf" "localhost:8080/mutate?commitNow=true" -
    _:st1 <dgraph.type> "Film" .
   }
 }
-' | python -m json.tool | less
+' | python3 -m json.tool | less
 ```
 
 
