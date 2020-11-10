@@ -36,11 +36,9 @@ type Trie struct {
 func NewTrie() *Trie {
 	buf, err := z.NewBufferWith(32<<20, math.MaxUint32, z.UseMmap)
 	x.Check(err)
-	// Add additional 8 bytes at the start, because offset=0 is used for checking non-existing node.
-	// Therefore we can't keep root at 0 offset.
-	ro := buf.AllocateOffset(nodeSz + 8)
+	ro := buf.AllocateOffset(nodeSz)
 	return &Trie{
-		root: uint32(ro + 8),
+		root: uint32(ro),
 		buf:  buf,
 	}
 }

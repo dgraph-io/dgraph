@@ -112,9 +112,6 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	// So we can delete everything from rowCommit whose commitTs < minTs
 	o.keyCommit.DeleteBelow(minTs)
 	o.tmax = minTs
-	stats := o.keyCommit.Stats()
-	glog.Infof("Purged below ts:%d, len(o.commits):%d, pages:%d, occupancy:%f\n",
-		minTs, len(o.commits), stats.NumPages, stats.Occupancy)
 }
 
 func (o *Oracle) commit(src *api.TxnContext) error {

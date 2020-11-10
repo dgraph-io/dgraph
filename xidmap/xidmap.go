@@ -19,6 +19,7 @@ package xidmap
 import (
 	"context"
 	"encoding/binary"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"sync"
@@ -82,10 +83,14 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		shards:    make([]*shard, numShards),
 	}
 	for i := range xm.shards {
-		buf, err := z.NewBufferWith(math.MaxUint32, math.MaxUint32, z.UseMmap)
-		x.Check(err)
+		fd, err := ioutil.TempFile("", "skiplist")
+		y.Check(err)
+		mf, err := z.OpenMmapFileUsing(fd, math.MaxUint32, true)
+		if err != z.NewFile {
+			y.Check(err)
+		}
 		xm.shards[i] = &shard{
-			skiplist: skl.NewSkiplistWithBuffer(buf, false),
+			skiplist: skl.NewSkiplistWith(mf.Data, false),
 		}
 	}
 	if db != nil {
