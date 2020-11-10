@@ -145,6 +145,112 @@ type Comment implements Post {
 }
 ```
 
+### Union type
+
+GraphQL Unions represent an object that could be one of a list of GraphQL Object types, but provides for no guaranteed fields between those types. So no fields may be queried on this type without the use of type refining fragments or inline fragments.
+
+Union types have the potential to be invalid if incorrectly defined:
+
+- A `Union` type must include one or more unique member types.
+- The member types of a `Union` type must all be Object base types; [Scalar](#scalars), [Interface](#interfaces) and `Union` types must not be member types of a Union. Similarly, wrapping types must not be member types of a Union.
+
+
+For example, the following defines the `HomeMember` union type:
+
+```graphql
+enum Category {
+  Fish
+  Amphibian
+  Reptile
+  Bird
+  Mammal
+  InVertebrate
+}
+
+interface Animal {
+  id: ID!
+  category: Category @search
+}
+
+type Dog implements Animal {
+  breed: String @search
+}
+
+type Parrot implements Animal {
+  repeatsWords: [String]
+}
+
+type Cheetah implements Animal {
+  speed: Float
+}
+
+type Human {
+  name: String!
+  pets: [Animal!]!
+}
+
+union HomeMember = Dog | Parrot | Human
+
+type Zoo {
+  id: ID!
+  animals: [Animal]
+  city: String
+}
+
+type Home {
+  id: ID!
+  address: String
+  members: [HomeMember]
+}
+```
+
+So, when you want to query members in a `Home`, you will be able to do a GraphQL query like this:
+
+```graphql
+query {
+  queryHome {
+    address
+    members {
+      ... on Animal {
+        category
+      }
+      ... on Dog {
+        breed
+      }
+      ... on Parrot {
+        repeatsWords
+      }
+      ... on Human {
+        name
+      }
+    }
+  }
+}
+```
+
+And the results of the GraphQL query will look like the following:
+
+```json
+{
+  "data": {
+    "queryHome": {
+      "address": "Earth",
+      "members": [
+        {
+          "category": "Mammal",
+          "breed": "German Shepherd"
+        }, {
+          "category": "Bird",
+          "repeatsWords": ["Good Morning!", "I am a GraphQL parrot"]
+        }, {
+          "name": "Alice"
+        }
+      ]
+    }
+  }
+}
+```
+
 ### Password type
 
 A password for an entity is set with setting the schema for the node type with `@secret` directive. Passwords cannot be queried directly, only checked for a match using the `checkTypePassword` function where `Type` is the node type.

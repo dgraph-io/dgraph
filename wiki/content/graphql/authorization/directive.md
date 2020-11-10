@@ -5,7 +5,11 @@ weight = 2
     parent = "authorization"
 +++
 
-Given an authentication mechanism and signed JWT, it's the `@auth` directive that tells Dgraph how to apply authorization.  The directive can be used on any type (that isn't a `@remote` type) and specifies the authorization for `query` as well as `add`, `update` and `delete` mutations.
+Given an authentication mechanism and signed JWT, it's the `@auth` directive that tells Dgraph how to apply authorization.  The directive can be used on any type except `union` (that isn't a `@remote` type) and specifies the authorization for `query` as well as the `add`, `update` and `delete` mutations.
+
+{{% notice "note" %}}
+The [Union type](/graphql/schema/types#union-type) does not support the `@auth` directive 
+{{% /notice %}}
 
 In each case, `@auth` specifies rules that Dgraph applies during queries and mutations.  Those rules are expressed in exactly the same syntax as GraphQL queries.  Why?  Because the authorization you add to your app is about the graph of your application, so graph rules make sense.  It's also the syntax you already know about, you get syntax help from GraphQL tools in writing such rules, and it turns out to be exactly the kinds of rules Dgraph already knows how to evaluate.
 
@@ -31,7 +35,7 @@ type Todo @auth(
 }
 ```
 
-In addition to it, details of the authentication provider should be given in the last line of the schema, as discussed in section  [authorization-overview](/graphql/authorization/authorization-overview).
+In addition to it, details of the authentication provider should be given in the last line of the schema, as discussed in the [Authorization overview](/graphql/authorization/authorization-overview) section.
 
 Here we define a type `Todo`, that's got an `id`, the `text` of the todo and the username of the `owner` of the todo.  What todos can a user query?  Any `Todo` that the `query` rule would also return.
 
