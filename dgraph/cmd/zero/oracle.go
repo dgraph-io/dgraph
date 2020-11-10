@@ -19,6 +19,7 @@ package zero
 import (
 	"context"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -61,7 +62,11 @@ type Oracle struct {
 // Init initializes the oracle.
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
-	o.keyCommit = z.NewTree(1<<30, filepath.Join(opts.w, "btree"))
+	// Remove the older btree file, before creating NewTree, as it may contain stale data leading
+	// to wrong results.
+	fname := filepath.Join(opts.w, "btree")
+	os.RemoveAll(fname)
+	o.keyCommit = z.NewTree(1<<30, fname)
 	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init(nil)
