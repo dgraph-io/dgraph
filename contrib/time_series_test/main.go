@@ -23,7 +23,6 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -32,10 +31,12 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Configurable parameters
 const batchSize = 1000
 const totalBatches = 1000
 const maxEventsInDB = batchSize * 1000
 const extraAddedEvents = 1000
+const alphAddress = "localhost:9080"
 
 func dropAll(dg *dgo.Dgraph) error {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
@@ -166,21 +167,10 @@ func hasQuery(dg *dgo.Dgraph) {
 	// return response.Me[0].Count
 }
 
-func readUID(dg *dgo.Dgraph, uid string) {
-	q := fmt.Sprintf("{ me(func: uid(%s)) { name about uid } }", uid)
-	txn := dg.NewReadOnlyTxn()
-	res, err := txn.Query(context.Background(), q)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("%v \n", res)
-}
-
 func distinctRandoms(count int, upperLimit int) map[int]bool {
 	var isPresent map[int]bool = make(map[int]bool)
 	var randoms map[int]bool = make(map[int]bool)
 	for i := 0; i < count; {
-		time.Sleep(10 * time.Millisecond)
 		x := rand.Intn(upperLimit)
 		if _, ok := isPresent[x]; ok {
 			continue
@@ -208,7 +198,7 @@ func init() {
 }
 
 func main() {
-	conn, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
+	conn, err := grpc.Dial(alphAddress, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -232,11 +222,11 @@ func main() {
 		glog.V(2).Infoln("Added extra events")
 		allUids = append(allUids, uids...)
 		glog.V(2).Infoln("Finding randoms")
-		randoms := distinctRandoms(len(allUids)-maxEventsInDB, len(allUids))
+		indicesToBeDeleted := distinctRandoms(len(allUids)-maxEventsInDB, len(allUids))
 		if err != nil {
 			continue
 		}
-		updatedUids, err := deleteEvents(dg, randoms, allUids)
+		updatedUids, err := deleteEvents(dg, indicesToBeDeleted, allUids)
 		if err != nil {
 			glog.Errorln(err)
 			continue
