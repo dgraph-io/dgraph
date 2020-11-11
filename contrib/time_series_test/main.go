@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019-2020 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -152,9 +152,6 @@ func hasQuery(dg *dgo.Dgraph) {
 	res, err := txn.Query(context.Background(), q)
 	timer.Record("HasQuery time")
 	glog.V(2).Infof("Time taken : %s", timer.String())
-	if timer.Total().Microseconds() > 2000 {
-		glog.Warning("Has query took ", timer.String())
-	}
 	if err != nil {
 		log.Fatal(err)
 	}
