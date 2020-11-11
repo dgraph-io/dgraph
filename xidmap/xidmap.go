@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/binary"
 	"io/ioutil"
-	"math"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -85,13 +84,25 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	for i := range xm.shards {
 		fd, err := ioutil.TempFile("", "skiplist")
 		y.Check(err)
-		mf, err := z.OpenMmapFileUsing(fd, math.MaxUint32, true)
+		mf, err := z.OpenMmapFileUsing(fd, 100<<20, true)
 		if err != z.NewFile {
 			y.Check(err)
 		}
-		s := skl.NewSkiplistWith(mf.Data, false)
+		grow := func(sz uint32) []byte {
+			var newSz int
+			// double the size if doubled size is sufficient.
+			if cap(mf.Data) > int(sz) {
+				newSz = cap(mf.Data) * 2
+			} else {
+				newSz = cap(mf.Data) + int(sz)
+			}
+			err := mf.Truncate(int64(newSz))
+			y.Check(err)
+			return mf.Data
+		}
+		s := skl.NewSkiplistWith(mf.Data, false, grow)
 		s.OnClose = func() {
-			mf.Close(math.MaxUint32)
+			mf.Delete()
 		}
 		xm.shards[i] = &shard{
 			skiplist: s,
