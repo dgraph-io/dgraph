@@ -245,7 +245,7 @@ mutation {
 }
 ```
 
-## Listing backups.
+## Listing backups
 
 The GraphQL admin interface includes the `listBackups` endpoint that lists the
 backups in the given location along with the information included in their
