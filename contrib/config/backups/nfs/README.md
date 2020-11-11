@@ -5,8 +5,8 @@ When using a file system for binary backups, NFS is recommended so that *backups
 * [Overview of NFS Servers](#overview-of-nfs-servers)
 * [Provision NFS Server Instructions](#provision-nfs-server-instructions)
   * [Using Remote Cloud Solutions](#using-remote-cloud-solutions)
-  * [Using Rook Solution](#using-rook-solution)
-  * [Using Local Vagrant Solution](#using-local-vagrant-solution)
+  * [Using the Rook Solution](#using-the-rook-solution)
+  * [Using a Local Vagrant Solution](#using-a-local-vagrant-solution)
     * [Vagrant Server](#vagrant-server)
     * [Vagrant Client (Optional)](#vagrant-client-optional)
     * [Vagrant Cleanup](#vagrant-cleanup)
@@ -15,7 +15,7 @@ When using a file system for binary backups, NFS is recommended so that *backups
   * [Start Docker Compose with NFS Volume](#start-docker-compose-with-nfs-volume)
   * [Docker Cleanup](#docker-cleanup)
 * [Testing NFS with Kubernetes](#testing-nfs-with-kubernetes)
-  * [Setup Env Vars for Kbuernetes](#setup-env-vars-for-kubernets)
+  * [Setup Env Vars for Kubernetes](#setup-env-vars-for-kubernetes)
   * [Deploy Using Helmfile](#deploy-using-helmfile)
   * [Cleanup Using Helmfile](#cleanup-using-helmfile)
   * [Minikube Notes](#minikube-notes)
@@ -33,10 +33,10 @@ This guide is not meant to be complete, but rather to get you started on your ba
 
 * External NFS
   * Cloud Providers
-    * [GCFS](https://cloud.google.com/filestore) ([Google Cloud Filestore](https://cloud.google.com/filestore))
-    * AWS [EFS](https://aws.amazon.com/efs/) ([Elastic File System](https://aws.amazon.com/efs/))
+      * [GCFS](https://cloud.google.com/filestore) ([Google Cloud Filestore](https://cloud.google.com/filestore))
+      * AWS [EFS](https://aws.amazon.com/efs/) ([Elastic File System](https://aws.amazon.com/efs/))
   * Local NFS Server
-    * [Vagrant](https://www.vagrantup.com/) managed virtual server that implements Linux kernel-based NFS Server
+      * [Vagrant](https://www.vagrantup.com/) managed virtual server that implements Linux kernel-based NFS Server
 * Internal NFS (deployed as a container)
   * [Rook](https://rook.io/) NFS operator to deploy container offering NFS Server with [Genesha NFS Server](https://github.com/nfs-ganesha/nfs-ganesha/wiki)
 
@@ -52,7 +52,7 @@ You can provision external NFS with the scripts for use with the Dgraph cluster 
   * [Google Cloud Filestore](gcfs-terraform/README.md) - use Filestore as NFS share on GKE.
   * [Amazon Elastic File System](efs-terraform/README.md) - use EFS as NFS share on EKS.
 
-### Using Rook Solution
+### Using the Rook Solution
 
 You can use a NFS server running as a pod using [Rook](https://rook.io/) NFS Operator.  To enabled this run the following before running [Kubernetes Environment](#testing-nfs-with-kubernetes).
 
@@ -63,7 +63,7 @@ charts/rook/fetch-operator.sh
 cp charts/rook/env.sh env.sh
 ```
 
-### Using Local Vagrant Solution
+### Using a Local Vagrant Solution
 
 As configuring NFS for your local operating system or distro can vary greatly, a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, this NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [Minikube](https://github.com/kubernetes/minikube) environments.
 
