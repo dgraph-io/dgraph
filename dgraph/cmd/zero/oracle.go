@@ -19,6 +19,8 @@ package zero
 import (
 	"context"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -60,7 +62,11 @@ type Oracle struct {
 // Init initializes the oracle.
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
-	o.keyCommit = z.NewTree(1 << 30)
+	// Remove the older btree file, before creating NewTree, as it may contain stale data leading
+	// to wrong results.
+	fname := filepath.Join(opts.w, "keyCommit.bin")
+	os.RemoveAll(fname)
+	o.keyCommit = z.NewTree(fname, 1<<30)
 	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init(nil)
@@ -76,8 +82,7 @@ func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
 	defer o.Unlock()
 	o.startTxnTs = ts
-	o.keyCommit.Release()
-	o.keyCommit = z.NewTree(1 << 30)
+	o.keyCommit.Reset(1 << 30)
 }
 
 // TODO: This should be done during proposal application for Txn status.
@@ -102,6 +107,7 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 func (o *Oracle) purgeBelow(minTs uint64) {
 	o.Lock()
 	defer o.Unlock()
+	stats := o.keyCommit.Stats()
 	// Dropping would be cheaper if abort/commits map is sharded
 	for ts := range o.commits {
 		if ts < minTs {
@@ -112,9 +118,8 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	// So we can delete everything from rowCommit whose commitTs < minTs
 	o.keyCommit.DeleteBelow(minTs)
 	o.tmax = minTs
-	stats := o.keyCommit.Stats()
-	glog.Infof("Purged below ts:%d, len(o.commits):%d, pages:%d, occupancy:%f\n",
-		minTs, len(o.commits), stats.NumPages, stats.Occupancy)
+	glog.Infof("Purged below ts:%d, len(o.commits):%d, keyCommit: [before: %+v, after: %+v]\n",
+		minTs, len(o.commits), stats, o.keyCommit.Stats())
 }
 
 func (o *Oracle) commit(src *api.TxnContext) error {
