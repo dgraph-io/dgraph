@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -73,6 +74,7 @@ func (d *DgraphCluster) StartZeroOnly() error {
 		"-o", strconv.Itoa(d.zeroPortOffset),
 		"--replicas", "3",
 	)
+	d.zero.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	d.zero.Dir = d.dir
 	//d.zero.Stdout = os.Stdout
 	//d.zero.Stderr = os.Stderr
@@ -93,6 +95,7 @@ func (d *DgraphCluster) StartAlphaOnly() error {
 		"--port_offset", strconv.Itoa(d.alphaPortOffset),
 		"--custom_tokenizers", d.TokenizerPluginsArg,
 	)
+	d.dgraph.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	d.dgraph.Dir = d.dir
 	if err := d.dgraph.Start(); err != nil {
 		return err
@@ -134,6 +137,7 @@ func (d *DgraphCluster) AddNode(dir string) (Node, error) {
 		"--zero", ":"+d.zeroPort,
 		"--port_offset", o,
 	)
+	dgraph.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	dgraph.Dir = dir
 	dgraph.Stdout = os.Stdout
 	dgraph.Stderr = os.Stderr
@@ -151,11 +155,12 @@ func (d *DgraphCluster) Close() {
 	if d == nil {
 		return
 	}
+	// Kill processes as well as their child processes.
 	if d.zero != nil && d.zero.Process != nil {
-		d.zero.Process.Kill()
+		syscall.Kill(-d.zero.Process.Pid, syscall.SIGKILL)
 	}
 	if d.dgraph != nil && d.dgraph.Process != nil {
-		d.dgraph.Process.Kill()
+		syscall.Kill(-d.dgraph.Process.Pid, syscall.SIGKILL)
 	}
 }
 
