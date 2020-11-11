@@ -32,7 +32,9 @@ import (
 	"google.golang.org/grpc"
 )
 
-const maxEventsInDB = 1000 * 1000
+const batchSize = 1000
+const totalBatches = 1000
+const maxEventsInDB = batchSize * 1000
 const extraAddedEvents = 1000
 
 func dropAll(dg *dgo.Dgraph) error {
@@ -214,10 +216,18 @@ func main() {
 	dg := dgo.NewDgraphClient(dc)
 	dropAll(dg)
 	initSchema(dg)
-	allUids, err := addEvents(dg, maxEventsInDB)
+	var allUids []string
+	for i := 0; i < totalBatches; i++ {
+		uids, err := addEvents(dg, batchSize)
+		if err != nil {
+			continue
+		}
+		glog.V(2).Info("Added batch", i+1)
+		allUids = append(allUids, uids...)
+	}
+
 	glog.V(2).Infoln("Added intial events")
 	for {
-		time.Sleep(10 * time.Millisecond)
 		uids, err := addEvents(dg, extraAddedEvents)
 		glog.V(2).Infoln("Added extra events")
 		allUids = append(allUids, uids...)
@@ -232,8 +242,6 @@ func main() {
 			continue
 		}
 		allUids = updatedUids
-		time.Sleep(10 * time.Millisecond)
-
 		hasQuery(dg)
 	}
 }
