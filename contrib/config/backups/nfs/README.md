@@ -56,7 +56,7 @@ You can provision external NFS with the scripts for use with the Dgraph cluster 
 
 ### Using the Rook Solution
 
-You can use an internal NFS server running on Kubernetes with [Rook](https://rook.io/) NFS Operator.  To enable this, run the following before running [Kubernetes Environment](#testing-nfs-with-kubernetes).
+You can use an internal NFS server running on Kubernetes with [Rook](https://rook.io/) NFS Operator.  To enable this, run the following before running the [Kubernetes Environment](#testing-nfs-with-kubernetes).  Both of these steps are required for this feature: 
 
 ```bash
 ## Download Rook NFS Operator Manifests
@@ -153,7 +153,7 @@ If you have [helmfile](https://github.com/roboll/helmfile#installation) and [hel
 ```bash
 ## Source required environments variables
 source env.sh
-## Deploy Dgraph (and optional Rook)
+## Deploy Dgraph (and optional Rook if Rook was enabled)
 helmfile apply
 ```
 

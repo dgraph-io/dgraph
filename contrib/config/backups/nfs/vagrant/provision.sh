@@ -46,7 +46,7 @@ setup_hosts() {
 }
 
 ######
-## install_nfs_server S
+## install_nfs_server
 #################################
 install_nfs_server() {
   SHAREPATH=${1:-"/srv/share"}

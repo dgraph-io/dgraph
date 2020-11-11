@@ -1,4 +1,4 @@
-## read lines from configuration
+## Read lines from configuration
 lines = File.readlines("./vagrant/hosts")
 
 ## Hash of hostname:inet_addr
