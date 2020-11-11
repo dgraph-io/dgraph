@@ -69,7 +69,7 @@ cp charts/rook/env.sh env.sh
 
 As configuring NFS for your local operating system or distro can vary greatly<sup>†</sup>, a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, this NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [Minikube](https://github.com/kubernetes/minikube) environments.
 
-† Linux and macOS have native NFS implementations with macOS NFS configuration varying between macOS versions.  Windows Server has different [NFS Server implementations](https://docs.microsoft.com/en-us/windows-server/storage/nfs/nfs-overview) between Windows Server versions.  For Windows 10, there are open source options such as [Cygwin](https://www.cygwin.com/) or using Linux through [WSL](https://docs.microsoft.com/en-us/windows/wsl/install-win10)
+† <sup><sub>Linux and macOS have native NFS implementations with macOS NFS configuration varying between macOS versions.  Windows Server has different [NFS Server implementations](https://docs.microsoft.com/en-us/windows-server/storage/nfs/nfs-overview) between Windows Server versions.  For Windows 10, there are open source options such as [Cygwin](https://www.cygwin.com/) or using Linux through [WSL](https://docs.microsoft.com/en-us/windows/wsl/install-win10)</sub></sup>
 
 #### Vagrant Server
 
