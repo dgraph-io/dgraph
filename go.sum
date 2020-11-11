@@ -80,8 +80,6 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dgraph-io/badger v1.6.0 h1:DshxFxZWXUcO0xX476VJC07Xsr6ZCBVRHKZ93Oh7Evo=
 github.com/dgraph-io/badger v1.6.0/go.mod h1:zwt7syl517jmP8s94KqSxTlM6IMsdhYy6psNgSztDR4=
-github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201106140743-6c074551f8f5 h1:8m4WAJ/Z1gvTzDVg8EmEy2NJgCCBQFMrvB1PWQjS/RU=
-github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201106140743-6c074551f8f5/go.mod h1:AyKZ2teZKQkxJ6+u2Sl/gFKqV30G0kiAixdw8slZAdY=
 github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201111212729-b571cf9cc2c5 h1:Y4+M17Vp9Y/lFilnJ+KJHu8G1F8FP35CjbxE6c7Gqgs=
 github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201111212729-b571cf9cc2c5/go.mod h1:7bVjdSb11fB2n4yHq9mypE1wBr4jQY2iU9OP14uAttc=
 github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6 h1:toHzMCdCUgYsjM0cW9+wafnKFXfp1HizIJUyzihN+vk=
@@ -92,8 +90,6 @@ github.com/dgraph-io/gqlparser/v2 v2.1.1 h1:OBGI6VR+WcegjDB3JdNPMpKpEtITHWzgmiCX
 github.com/dgraph-io/gqlparser/v2 v2.1.1/go.mod h1:MYS4jppjyx8b9tuUtjV7jU1UFZK6P9fvO8TsIsQtRKU=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b h1:PDEhlwHpkEQ5WBfOOKZCNZTXFDGyCEWTYDhxGQbyIpk=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b/go.mod h1:7z3c/5w0sMYYZF5bHsrh8IH4fKwG5O5Y70cPH1ZLLRQ=
-github.com/dgraph-io/ristretto v0.0.4-0.20201105000107-750f5be31aad h1:BN2A+lqBwLx57/l1MUv3iKLIY8XddNkZg2zZN/BFM1I=
-github.com/dgraph-io/ristretto v0.0.4-0.20201105000107-750f5be31aad/go.mod h1:bDI4cDaalvYSji3vBVDKrn9ouDZrwN974u8ZO/AhYXs=
 github.com/dgraph-io/ristretto v0.0.4-0.20201111190620-1040b7ded521 h1:81yY9QfuVfSVccqD7cLA/JohhMX+TQCfSjmGS7jUJCc=
 github.com/dgraph-io/ristretto v0.0.4-0.20201111190620-1040b7ded521/go.mod h1:bDI4cDaalvYSji3vBVDKrn9ouDZrwN974u8ZO/AhYXs=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
