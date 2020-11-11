@@ -41,7 +41,7 @@ These are values affected by discovery:
 
 ### Requirements for Discovery
 
-For the discovery feature where these [Terraform](https://www.terraform.io/) scripts will find the required resources needed that will allow EFS configured alongside by Amazon EKS cluster and subsequent required SG configuration to allow EKS worker nodes to access EFS.  You will need to have the appropriate tag schema per subnets and security groups.  If you used `eksctl` to provision your cluster, these tags and keys will be setup automatically.
+For the discovery feature where these [Terraform](https://www.terraform.io/) scripts will find the required resources needed that will allow EFS configured alongside by Amazon EKS cluster and subsequent required SG configuration to allow EKS worker nodes to access EFS, you will need to have the appropriate tags per subnets and security groups.  If you used `eksctl` to provision your cluster, these tags and keys will be setup automatically.
 
 #### Subnets
 

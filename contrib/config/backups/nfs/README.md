@@ -27,9 +27,11 @@ When using a file system for binary backups, NFS is recommended so that *backups
 
 ## Overview of NFS Servers
 
-You can use external NFS outside of the [Docker](https://www.docker.com/) or [Kubernetes](https://kubernetes.io/), or deploy a container offering NFS services.  For production environments, using an NFS server external to the cluster can increase availability in an event where [Kubernetes](https://kubernetes.io/) services get interrupted. In more advanced scenarios, deploying a container offering NFS services, where the storage is backed by high-speed storage such as [Ceph](https://ceph.io/) is beneficial for large datasets.  In this latter scenario, secondary storage such as an object store by the cloud provider could be used for greater availability in event of where Kubernetes services or the [Kubernetes](https://kubernetes.io/) cluster itself has a failure event.
+You can use external NFS outside of the [Docker](https://www.docker.com/) or [Kubernetes](https://kubernetes.io/), or deploy a container offering NFS services.  
 
-This guide is not meant to be complete, but rather to get you started on your backup journey with Dgraph and NFS.  For this scope, automation here covers the following:
+For production environments, using an NFS server external to the cluster can increase availability in an event where [Kubernetes](https://kubernetes.io/) services get interrupted.  In more advanced scenarios, deploying a container offering NFS services, where the storage is backed by high-speed storage such as [Ceph](https://ceph.io/) is beneficial for large datasets.  In this latter scenario, secondary storage such as an object store by the cloud provider could be used for greater availability in event of where Kubernetes services or the [Kubernetes](https://kubernetes.io/) cluster itself has a failure event.
+
+This guide is not meant to be complete but rather a small guide to get you started on your backup journey with Dgraph and NFS.  For this scope, automation here covers the following:
 
 * External NFS
   * Cloud Providers
@@ -38,7 +40,7 @@ This guide is not meant to be complete, but rather to get you started on your ba
   * Local NFS Server
       * [Vagrant](https://www.vagrantup.com/) managed virtual server that implements Linux kernel-based NFS Server
 * Internal NFS (deployed as a container)
-  * [Rook](https://rook.io/) NFS operator to deploy container offering NFS Server with [Genesha NFS Server](https://github.com/nfs-ganesha/nfs-ganesha/wiki)
+  * [Rook](https://rook.io/) NFS operator to deploy a container offering NFS Server with [Genesha NFS Server](https://github.com/nfs-ganesha/nfs-ganesha/wiki)
 
 ## Provision NFS Server Instructions
 
@@ -54,7 +56,7 @@ You can provision external NFS with the scripts for use with the Dgraph cluster 
 
 ### Using the Rook Solution
 
-You can use a NFS server running as a pod using [Rook](https://rook.io/) NFS Operator.  To enabled this run the following before running [Kubernetes Environment](#testing-nfs-with-kubernetes).
+You can use an internal NFS server running on Kubernetes with [Rook](https://rook.io/) NFS Operator.  To enable this, run the following before running [Kubernetes Environment](#testing-nfs-with-kubernetes).
 
 ```bash
 ## Download Rook NFS Operator Manifests
@@ -65,7 +67,9 @@ cp charts/rook/env.sh env.sh
 
 ### Using a Local Vagrant Solution
 
-As configuring NFS for your local operating system or distro can vary greatly, a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, this NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [Minikube](https://github.com/kubernetes/minikube) environments.
+As configuring NFS for your local operating system or distro can vary greatly<sup>†</sup>, a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, this NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [Minikube](https://github.com/kubernetes/minikube) environments.
+
+† Linux and macOS have native NFS implementations with macOS NFS configuration varying between macOS versions.  Windows Server has different [NFS Server implementations](https://docs.microsoft.com/en-us/windows-server/storage/nfs/nfs-overview) between Windows Server versions.  For Windows 10, there are open source options such as [Cygwin](https://www.cygwin.com/) or using Linux through [WSL](https://docs.microsoft.com/en-us/windows/wsl/install-win10)
 
 #### Vagrant Server
 
@@ -256,7 +260,7 @@ kubectl --namespace default port-forward $RATEL_POD_NAME 8000:8000
 
 ## Trigger a Backup
 
-In the [Kubernetes Environment](#testing-nfs-with-kubernetes), backups will be scheduled automatically using [Kubernetes CronJob](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/).  As long as the services are available locally (see [Accessing Dgraph Services](#accessing-dgraph-services)), we can trigger a backup using curl.
+In the [Kubernetes Environment](#testing-nfs-with-kubernetes), backups will be scheduled automatically using the [Kubernetes CronJob](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/).  As long as the services are available locally (see [Accessing Dgraph Services](#accessing-dgraph-services)), we can trigger a backup using curl.
 
 For the [Docker Compose Environment](#testing-nfs-with-docker-compose) you can do the following:
 
@@ -270,7 +274,7 @@ HEADER="Content-Type: application/json"
 curl --silent --header "$HEADER" --request POST $ALPHA_HOST:8080/admin --data "$GRAPHQL"
 ```
 
-For [Kubernetes Environment](#testing-nfs-with-kubernetes), after runnign port-forward, you can do the following:
+For [Kubernetes Environment](#testing-nfs-with-kubernetes), after running port-forward, you can do the following:
 
 ```bash
 ALPHA_HOST="localhost"
