@@ -57,6 +57,9 @@ You can provision external NFS with the scripts for use with the Dgraph cluster 
 You can use a NFS server running as a pod using [Rook](https://rook.io/) NFS Operator.  To enabled this run the following before running [Kubernetes Environment](#testing-nfs-with-kubernetes).
 
 ```bash
+## Download Rook NFS Operator Manifests
+charts/rook/fetch-operator.sh
+## Setup Environment for using Rook NFS Server
 cp charts/rook/env.sh env.sh
 ```
 
