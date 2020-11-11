@@ -214,3 +214,8 @@ queryStudent(fitler: {name: between: {min: "ba", max: "hz"}}){
     name
 }
 ```
+
+## Filter a query with `has`
+
+
+## Filter a query with `in`
