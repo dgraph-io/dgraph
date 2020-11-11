@@ -1,8 +1,11 @@
-# Google Cloud Filestore
+# Google Cloud Filestore with Terraform
 
-## About
+These [Terraform](https://www.terraform.io/) scripts and modules will create the required resources needed to create NFS server instance using Google Cloud Filestore.
 
-This script will create the required resources needed to create NFS server instance using Google Cloud Filestore.
+This automation will create the following resources:
+
+  * [Google Cloud Filestore Server](https://cloud.google.com/filestore)
+  * Configuration file (`../env.sh`) that specifies NFS Server and Path
 
 ## Prerequisites
 
@@ -30,7 +33,7 @@ You will need to define the following variables:
 
 ### Define Variables
 
-You can define these when prompted, or in `terrafrom.tfvars` file, or through command line variables, e.g. `TF_VAR_project_id`, `TF_VAR_project_id`, and `TF_VAR_name`. Below is an example `terraform.tfvars` file:
+You can define these when prompted, in `terrafrom.tfvars` file, or through command line variables, e.g. `TF_VAR_project_id`, `TF_VAR_project_id`, and `TF_VAR_name`. Below is an example `terraform.tfvars` file:
 
 ```terraform
 ## terraform.tfvars
@@ -55,7 +58,7 @@ terraform apply
 
 ## Cleanup
 
-When finished you can destroy resources created with [Terraform](https://www.terraform.io/) using this:
+When finished, you can destroy resources created with [Terraform](https://www.terraform.io/) using this:
 
 ```bash
 terraform destroy

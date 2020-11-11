@@ -33,8 +33,8 @@ This guide is not meant to be complete, but rather to get you started on your ba
 
 * External NFS
   * Cloud Providers
-      * [GCFS](https://cloud.google.com/filestore) ([Google Cloud Filestore](https://cloud.google.com/filestore))
       * AWS [EFS](https://aws.amazon.com/efs/) ([Elastic File System](https://aws.amazon.com/efs/))
+      * [Google Cloud Filestore](https://cloud.google.com/filestore)
   * Local NFS Server
       * [Vagrant](https://www.vagrantup.com/) managed virtual server that implements Linux kernel-based NFS Server
 * Internal NFS (deployed as a container)

@@ -1,8 +1,11 @@
-# Provisioning Google Cloud Filestore
+# Google Cloud Filestore using Google Cloud SDK (Shell)
 
-## About
+Theis shell script will create the required resources needed to create NFS server instance using Google Cloud Filestore.
 
-This script will create the Google Cloud Filestore required resources needed and then popular values (`env.sh`) needed for running Docker-Compose or Kubernetes on Google Cloud.
+This automation will create the following resources:
+
+  * [Google Cloud Filestore Server](https://cloud.google.com/filestore)
+  * Configuration file (`../env.sh`) that specifies NFS Server and Path
 
 ## Prerequisites
 
@@ -25,7 +28,7 @@ You will need to define these environment variables:
 
 ## Create Filestore
 
-Run these steps to create Filestore and populate configuration (`../env.sh`)
+Run these steps to create [filestore](https://cloud.google.com/filestore) and populate the configuration (`../env.sh`)
 
 ### Define Variables
 
@@ -39,7 +42,7 @@ export MY_ZONE="us-central1-b"
 EOF
 ```
 
-These values can be use to create and destroy filestore.
+These values can be used to create and destroy [filestore](https://cloud.google.com/filestore).
 
 ### Run the Script
 

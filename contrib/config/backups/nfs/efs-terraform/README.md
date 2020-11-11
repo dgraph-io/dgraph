@@ -1,11 +1,11 @@
 # Amazon Elastic File Services with Terraform
 
-This script will create the required resources needed to create NFS server instance using [Amazon Elastic File Services](https://aws.amazon.com/efs/).
+These [Terraform](https://www.terraform.io/) scripts and modules will create the required resources needed to create NFS server instance using [Amazon Elastic File Services](https://aws.amazon.com/efs/).
 
-This script will create the following resources:
+This automation script will create the following resources:
 
-* EFS Server
-* SG to allow EKS worker nodes to access EFS Server (if discovery used)
+* [EFS](https://aws.amazon.com/efs/) Server
+* SG to allow EKS worker nodes to access the [EFS](https://aws.amazon.com/efs/) Server (if discovery used)
 * Configuration file (`../env.sh`) that specifies NFS Server and Path
 
 ## Prerequisites
@@ -41,7 +41,7 @@ These are values affected by discovery:
 
 ### Requirements for Discovery
 
-For the discovery feature where this [Terraform](https://www.terraform.io/) script will find the required resources needed that will allow EFS configured alongside by Amazon EKS cluster and required SG configuration to allow EKS worker nodes to access EFS.  You will need to have the appropriate tags schema per subnets and security groups.  If you used `eksctl` to provision your cluster, these tags and keys will be setup automatically.
+For the discovery feature where these [Terraform](https://www.terraform.io/) scripts will find the required resources needed that will allow EFS configured alongside by Amazon EKS cluster and subsequent required SG configuration to allow EKS worker nodes to access EFS.  You will need to have the appropriate tag schema per subnets and security groups.  If you used `eksctl` to provision your cluster, these tags and keys will be setup automatically.
 
 #### Subnets
 
@@ -116,7 +116,7 @@ terraform apply
 
 ## Cleanup
 
-When finished you can destroy resources created with [Terraform](https://www.terraform.io/) using this:
+When finished, you can destroy resources created with [Terraform](https://www.terraform.io/) using this:
 
 ```bash
 terraform destroy
