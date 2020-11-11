@@ -18,7 +18,6 @@ package raftwal
 
 import (
 	"bytes"
-	"fmt"
 	"sort"
 
 	"github.com/dgraph-io/badger/v2/y"
@@ -163,19 +162,12 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 	}
 
 	for _, re := range entries {
-		// Ensure that we do not cross the 1 MB limit when storing entries, or
-		// cross the logfile size when storing data.
-		if l.nextEntryIdx >= maxNumEntries || !l.current.CanAllocate(len(re.Data)) {
+		if l.nextEntryIdx >= maxNumEntries {
 			if err := l.rotate(re.Index); err != nil {
 				return err
 			}
-			// If we are still unable to allocate after rotating the logfile, give up.
-			if !l.current.CanAllocate(len(re.Data)) {
-				return fmt.Errorf("cannot write data of size %d to log file of size %d", len(re.Data), len(l.current.Data))
-			}
 			l.nextEntryIdx, offset = 0, logFileOffset
 		}
-
 		// If encryption is enabled then encrypt the data.
 		if l.current.dataKey != nil {
 			var ebuf bytes.Buffer
@@ -188,7 +180,10 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		}
 
 		// Allocate slice for the data and copy bytes.
-		destBuf, next := l.current.AllocateSlice(len(re.Data), offset)
+		destBuf, next, err := l.current.AllocateSlice(len(re.Data), offset)
+		if err != nil {
+			return err
+		}
 		x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 
 		// Write the entry at the given slot.

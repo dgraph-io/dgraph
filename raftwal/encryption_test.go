@@ -18,6 +18,7 @@ package raftwal
 
 import (
 	"io/ioutil"
+	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -79,21 +80,23 @@ func TestLogRotate(t *testing.T) {
 	const SEED = 1
 	rand.Seed(SEED)
 	makeEntry := func(i int) raftpb.Entry {
-		data := make([]byte, rand.Intn(1<<20))
+		// Be careful when changing this value, as it could easily end up filling up
+		// the entire tmpfs. Currently, this writes ~1.5GB.
+		data := make([]byte, rand.Intn(1<<16))
 		rand.Read(data)
 		return raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}
 	}
 
-	// Write enough entries to fill ~1.5x log files, causing a rotation.
-	totalEntries := 0
+	// Write enough entries to fill ~1.5x logfiles, causing a rotation.
+	const totalEntries = (maxNumEntries * 3) / 2
 	totalBytes := 0
-	for totalBytes < (logFileSize*3)/2 {
-		entry := makeEntry(totalEntries)
+	for i := 0; i < totalEntries; i++ {
+		entry := makeEntry(i)
 		err = el.AddEntries([]raftpb.Entry{entry})
 		require.NoError(t, err)
-		totalEntries++
 		totalBytes += len(entry.Data)
 	}
+	log.Printf("Wrote %d bytes", totalBytes)
 
 	// Reopen the file and retrieve all entries.
 	el, err = openWal(dir)
@@ -105,6 +108,12 @@ func TestLogRotate(t *testing.T) {
 	rand.Seed(SEED)
 	for i, gotEntry := range entries {
 		expEntry := makeEntry(i)
-		require.Equal(t, expEntry, gotEntry)
+		require.Equal(t, len(expEntry.Data), len(gotEntry.Data))
+		if len(expEntry.Data) > 0 {
+			require.Equal(t, expEntry.Data, gotEntry.Data)
+		}
+		require.Equal(t, expEntry.Index, gotEntry.Index)
+		require.Equal(t, expEntry.Term, gotEntry.Term)
+		require.Equal(t, expEntry.Type, gotEntry.Type)
 	}
 }

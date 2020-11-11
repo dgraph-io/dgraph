@@ -91,6 +91,10 @@ github.com/dgraph-io/ristretto v0.0.4-0.20201022105248-f32a01612740 h1:TzbxnxH3P
 github.com/dgraph-io/ristretto v0.0.4-0.20201022105248-f32a01612740/go.mod h1:bDI4cDaalvYSji3vBVDKrn9ouDZrwN974u8ZO/AhYXs=
 github.com/dgraph-io/ristretto v0.0.4-0.20201028045312-0eff948d52ac h1:vQVQkNho3qVZrVueqoefGZLZgl2imLY2xMbf8LGpr+s=
 github.com/dgraph-io/ristretto v0.0.4-0.20201028045312-0eff948d52ac/go.mod h1:bDI4cDaalvYSji3vBVDKrn9ouDZrwN974u8ZO/AhYXs=
+github.com/dgraph-io/ristretto v0.0.4-0.20201110103954-544c64a9325b h1:ruQJOiWGaBJLlaJRxqqG/tsU9h/BVEkYEM7BGvW7xVk=
+github.com/dgraph-io/ristretto v0.0.4-0.20201110103954-544c64a9325b/go.mod h1:bDI4cDaalvYSji3vBVDKrn9ouDZrwN974u8ZO/AhYXs=
+github.com/dgraph-io/ristretto v0.0.4-0.20201111074620-824d1dfd85b6 h1:EskxPxGLW9QIwWTRHIEUhoye0r1bJIdRvYMSAWz1uMY=
+github.com/dgraph-io/ristretto v0.0.4-0.20201111074620-824d1dfd85b6/go.mod h1:bDI4cDaalvYSji3vBVDKrn9ouDZrwN974u8ZO/AhYXs=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1 h1:CaO/zOnF8VvUfEbhRatPcwKVWamvbYd8tQGRWacE9kU=
