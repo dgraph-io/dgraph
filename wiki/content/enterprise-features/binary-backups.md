@@ -245,6 +245,117 @@ mutation {
 }
 ```
 
+## Listing backups
+
+The GraphQL admin interface includes the `listBackups` endpoint that lists the
+backups in the given location along with the information included in their
+`manifests.json` files. An example of a request to list the backups in the
+`/data/backup` location is included below:
+
+```
+query backup() {
+	listBackups(input: {location: "/data/backup"}) {
+		backupId
+		backupNum
+		encrypted
+		groups {
+			groupId
+			predicates
+		}
+		path
+		since
+		type
+	}
+}
+```
+
+The listBackups input can contain the following fields. Only the `location`
+field is required.
+
+```
+input ListBackupsInput {
+	"""
+	Destination for the backup: e.g. Minio or S3 bucket.
+	"""
+	location: String!
+
+	"""
+	Access key credential for the destination.
+	"""
+	accessKey: String
+
+	"""
+	Secret key credential for the destination.
+	"""
+	secretKey: String
+
+	"""
+	AWS session token, if required.
+	"""
+	sessionToken: String
+
+	"""
+	Whether the destination doesn't require credentials (e.g. S3 public bucket).
+	"""
+	anonymous: Boolean
+}
+```
+
+The output is of the `Manifest` type, which contains the fields below. The
+fields correspond to the fields inside the `manifest.json` files.
+
+```
+type Manifest {
+	"""
+	Unique ID for the backup series.
+	"""
+	backupId: String
+
+	"""
+	Number of this backup within the backup series. The full backup always has a value of one.
+	"""
+	backupNum: Int
+
+	"""
+	Whether this backup was encrypted.
+	"""
+	encrypted: Boolean
+
+	"""
+	List of groups and the predicates they store in this backup.
+	"""
+	groups: [BackupGroup]
+
+	"""
+	Path to the manifest file.
+	"""
+	path: String
+
+	"""
+	The timestamp at which this backup was taken. The next incremental backup will
+	start from this timestamp.
+	"""
+	since: Int
+
+	"""
+	The type of backup, either full or incremental.
+	"""
+	type: String
+}
+
+type BackupGroup {
+	"""
+	The ID of the cluster group.
+	"""
+	groupId: Int
+
+	"""
+	List of predicates assigned to the group.
+	"""
+	predicates: [String]
+}
+```
+
 ### Automating Backups
 
 You can use the provided endpoint to automate backups, however, there are a few
