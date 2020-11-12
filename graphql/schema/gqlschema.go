@@ -1220,24 +1220,23 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 	for i, search := range searchArgs {
 		filterNames[i] = builtInFilters[search]
 
+		// For enum type, if the index is "hash" or "exact", we construct filter named
+		// enumTypeName_hash/ enumTypeName_exact from StringHashFilter/StringExactFilter
+		// by replacing the Argument type.
 		if (search == "hash" || search == "exact") && schema.Types[fld.Type.Name()].Kind == ast.Enum {
 			stringFilterName := fmt.Sprintf("String%sFilter", strings.Title(search))
 			var l ast.FieldList
 
 			for _, i := range schema.Types[stringFilterName].Fields {
-				typ := fld.Type
 
-				// In case of IN filter we need to construct List of enums as Input Type.
-				if i.Type.Elem != nil && fld.Type.Elem == nil {
-					typ = &ast.Type{Elem: &ast.Type{NamedType: fld.Type.NamedType, NonNull: fld.Type.NonNull}}
+				enumTypeName := fld.Type.Name()
+				if i.Type.Elem == nil {
+					i.Type.NamedType = enumTypeName
+				} else {
+					i.Type.Elem.NamedType = enumTypeName
 				}
 
-				l = append(l, &ast.FieldDefinition{
-					Name:         i.Name,
-					Type:         typ,
-					Description:  i.Description,
-					DefaultValue: i.DefaultValue,
-				})
+				l = append(l, i)
 			}
 
 			filterNames[i] = fld.Type.Name() + "_" + search

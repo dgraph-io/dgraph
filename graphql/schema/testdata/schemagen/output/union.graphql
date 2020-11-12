@@ -569,8 +569,8 @@ input DroidRef {
 }
 
 input Episode_hash {
-	eq: [Episode!]!
-	in: [Episode!]!
+	eq: Episode
+	in: [Episode]
 }
 
 input HumanFilter {
