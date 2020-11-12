@@ -6,6 +6,7 @@ interface Character @secret(field: "password") @generate(query: {get:false,passw
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 type Human implements Character @generate(query: {aggregate:true}, subscription: true) @secret(field: "password") {
@@ -13,6 +14,7 @@ type Human implements Character @generate(query: {aggregate:true}, subscription:
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	totalCredits: Int
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 type Person @withSubscription @generate(query: {get:false,query:true,password:true,aggregate:false}, mutation: {add:false,delete:false}, subscription: false) {
@@ -304,6 +306,10 @@ type HumanAggregateResult {
 	count: Int
 }
 
+type PersonAggregateResult {
+	count: Int
+}
+
 type UpdateCharacterPayload {
 	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	numUids: Int
@@ -366,8 +372,8 @@ input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
 	has: CharacterHasFilter
-	and: CharacterFilter
-	or: CharacterFilter
+	and: [CharacterFilter]
+	or: [CharacterFilter]
 	not: CharacterFilter
 }
 
@@ -391,8 +397,8 @@ input HumanFilter {
 	id: [ID!]
 	name: StringExactFilter
 	has: HumanHasFilter
-	and: HumanFilter
-	or: HumanFilter
+	and: [HumanFilter]
+	or: [HumanFilter]
 	not: HumanFilter
 }
 
@@ -420,8 +426,8 @@ input HumanRef {
 input PersonFilter {
 	id: [ID!]
 	has: PersonHasFilter
-	and: PersonFilter
-	or: PersonFilter
+	and: [PersonFilter]
+	or: [PersonFilter]
 	not: PersonFilter
 }
 

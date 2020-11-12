@@ -95,7 +95,7 @@ func (r *reducer) run() error {
 				splitWriter: splitWriter,
 				tmpDb:       tmpDb,
 				splitCh:     make(chan *bpb.KVList, 2*runtime.NumCPU()),
-				countBuf:    getBuf(),
+				countBuf:    getBuf(r.opt.TmpDir),
 			}
 
 			partitionKeys := make([][]byte, 0, len(partitions))
@@ -433,8 +433,8 @@ func bufferStats(cbuf *z.Buffer) {
 		numEntries, len(keys), keyHist.String())
 }
 
-func getBuf() *z.Buffer {
-	cbuf, err := z.NewBufferWith(64<<20, 64<<30, z.UseCalloc)
+func getBuf(dir string) *z.Buffer {
+	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc, filepath.Join(dir, bufferDir))
 	x.Check(err)
 	cbuf.AutoMmapAfter(1 << 30)
 	return cbuf
@@ -463,7 +463,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			wg:       wg,
 			listCh:   make(chan *bpb.KVList, 3),
 			splitCh:  ci.splitCh,
-			countBuf: getBuf(),
+			countBuf: getBuf(r.opt.TmpDir),
 		}
 		encoderCh <- req
 		writerCh <- req
@@ -477,7 +477,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	go func() {
 		// Start collecting buffers.
 		hd := z.NewHistogramData(z.HistogramBounds(16, 40))
-		cbuf := getBuf()
+		cbuf := getBuf(r.opt.TmpDir)
 		// Append nil for the last entries.
 		partitionKeys = append(partitionKeys, nil)
 
@@ -499,7 +499,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			}
 
 			buffers <- cbuf
-			cbuf = getBuf()
+			cbuf = getBuf(r.opt.TmpDir)
 		}
 		if !cbuf.IsEmpty() {
 			hd.Update(int64(cbuf.LenNoPadding()))

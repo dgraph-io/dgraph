@@ -46,13 +46,19 @@ Reference: [Subscriptions](/graphql/subscriptions)
 
 `@secret` directive is used to store secret information, it gets encrypted and then stored in Dgraph.
 
-Reference: [Password Type](/graphql/schema/#password-type)
+Reference: [Password Type](/graphql/schema/types/#password-type)
 
 ### @auth
 
 `@auth` allows you to define how to apply authorization rules on the queries/mutation for a type.
 
 Reference: [Auth directive](/graphql/authorization/directive)
+
+### @generate
+
+The `@generate` directive is used to specify which GraphQL APIs are generated for a type.
+
+Reference: [Generate Directive](/graphql/schema/generate)
 
 ### @custom
 

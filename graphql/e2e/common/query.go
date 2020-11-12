@@ -153,6 +153,7 @@ func queryByTypeWithEncoding(t *testing.T, acceptGzip, gzipEncoding bool) {
 	expected.QueryCountry = []*country{
 		&country{Name: "Angola"},
 		&country{Name: "Bangladesh"},
+		&country{Name: "India"},
 		&country{Name: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -188,6 +189,7 @@ func uidAlias(t *testing.T) {
 	expected.QueryCountry = []*countryUID{
 		&countryUID{UID: "Angola"},
 		&countryUID{UID: "Bangladesh"},
+		&countryUID{UID: "India"},
 		&countryUID{UID: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -216,6 +218,7 @@ func orderAtRoot(t *testing.T) {
 	expected.QueryCountry = []*country{
 		&country{Name: "Angola"},
 		&country{Name: "Bangladesh"},
+		&country{Name: "India"},
 		&country{Name: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -242,8 +245,8 @@ func pageAtRoot(t *testing.T) {
 		QueryCountry []*country
 	}
 	expected.QueryCountry = []*country{
+		&country{Name: "India"},
 		&country{Name: "Bangladesh"},
-		&country{Name: "Angola"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -1356,6 +1359,7 @@ func queryApplicationGraphQl(t *testing.T) {
 	"queryCountry": [
           { "name": "Angola"},
           { "name": "Bangladesh"},
+		  { "name": "India"},
           { "name": "Mozambique"}
         ]
 }`
@@ -1384,6 +1388,10 @@ func queryTypename(t *testing.T) {
           },
           {
                 "name": "Bangladesh",
+                "__typename": "Country"
+          },
+		  {
+                "name": "India",
                 "__typename": "Country"
           },
           {
@@ -2261,6 +2269,392 @@ func queryWithCascade(t *testing.T) {
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }
 
+func filterInQueriesWithArrayForAndOr(t *testing.T) {
+	// for testing filter with AND,OR connectives
+	authors := addMultipleAuthorFromRef(t, []*author{
+		{
+			Name:          "George",
+			Reputation:    4.5,
+			Qualification: "Phd in CSE",
+			Posts:         []*post{{Title: "A show about nothing", Text: "Got ya!", Tags: []string{}}},
+		}, {
+			Name:          "Jerry",
+			Reputation:    4.6,
+			Qualification: "Phd in ECE",
+			Country:       &country{Name: "outer Galaxy2"},
+			Posts:         []*post{{Title: "Outside", Tags: []string{}}},
+		}, {
+			Name:          "Kramer",
+			Reputation:    4.2,
+			Qualification: "PostDoc in CSE",
+			Country:       &country{Name: "outer space2"},
+			Posts:         []*post{{Title: "Ha! Cosmo Kramer", Text: "Giddy up!", Tags: []string{}}},
+		},
+	}, postExecutor)
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	authorIds := []string{authors[0].ID, authors[1].ID, authors[2].ID}
+	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID,
+		authors[2].Posts[0].PostID}
+	countryIds := []string{authors[1].Country.ID, authors[2].Country.ID}
+
+	states := []*state{
+		{Name: "California", Code: "CA", Capital: "Sacramento"},
+		{Name: "Texas", Code: "TX"},
+	}
+	addStateParams := GraphQLParams{
+		Query: `mutation ($input: [AddStateInput!]!) {
+					addState(input: $input) {
+						numUids
+					}
+				}`,
+		Variables: map[string]interface{}{"input": states},
+	}
+	resp := addStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+	testutil.CompareJSON(t, `{"addState":{"numUids":2}}`, string(resp.Data))
+
+	tcases := []struct {
+		name      string
+		query     string
+		variables string
+		respData  string
+	}{
+		{
+			name: "Filter with only AND key at top level",
+			query: `query{
+                      queryAuthor(filter:{and:{name:{eq:"George"}}}){
+                        name
+						reputation
+                        posts {
+                          text
+                        }
+                      }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "Filter with only AND key at top level using variables",
+			query: `query($filter:AuthorFilter) {
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                          text
+                        }
+                      }
+			    	}`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+
+			variables: `{"filter":{"and":{"name":{"eq":"George"}}}}`,
+		},
+		{
+			name: "Filter with only OR key at top level",
+			query: `query {
+                      queryAuthor(filter:{or:{name:{eq:"George"}}}){
+                        name
+                        reputation
+                        posts {
+						  text
+                        }
+                      }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "Filter with only OR key at top level using variables",
+			query: `query($filter:AuthorFilter) {
+                      queryAuthor(filter:$filter){
+						name
+                        reputation
+                        posts {
+                          text
+                        }
+                      }
+			    	}`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"or":{"name":{"eq":"George"}}}}`,
+		}, {
+			name: "Filter with Nested AND using variables",
+			query: `query($filter:AuthorFilter) {
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                         text
+                        }
+                      }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"and":[{"name":{"eq":"George"}},{"and":{"reputation":{"eq":4.5}}}]}}`,
+		},
+		{
+			name: "Filter with Nested AND",
+			query: `query{
+                      queryAuthor(filter:{and:[{name:{eq:"George"}},{and:{reputation:{eq:4.5}}}]}){
+                        name
+                        reputation
+                        posts {
+                          text
+                        }
+                       }
+				     }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "Filter with Nested OR",
+			query: `query{
+                      queryAuthor(filter:{or:[{name:{eq:"George"}},{or:{reputation:{eq:4.2}}}]}){
+                        name
+                        reputation
+						posts {
+                          text
+                        }
+                      }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							},
+							{
+							  "name": "Kramer",
+							  "reputation": 4.2,
+							  "posts": [
+								{
+								  "text": "Giddy up!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "Filter with Nested OR using variables",
+			query: `query($filter:AuthorFilter) {
+                      queryAuthor(filter:$filter){
+                        name
+						reputation
+                        posts {
+                          text
+                        }
+                      }
+			      	}`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							},
+							{
+							  "name": "Kramer",
+							  "reputation": 4.2,
+							  "posts": [
+								{
+								  "text": "Giddy up!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"or":[{"name":{"eq":"George"}},{"or":{"reputation":{"eq":4.2}}}]}}`,
+		},
+		{
+			name: "(A OR B) AND (C OR D) using variables",
+			query: `query($filter:AuthorFilter) {
+                       queryAuthor(filter:$filter){
+                         name
+                         reputation
+                         posts {
+                           text
+                        }
+                       }
+				     }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"and": [{"name":{"eq": "George"},"or":{"name":{"eq": "Alice"}}},
+						{"reputation":{"eq": 3}, "or":{"reputation":{"eq": 4.5}}}]}}`,
+		},
+		{
+			name: "(A AND B AND C) using variables",
+			query: `query($filter:AuthorFilter) {
+                       queryAuthor(filter:$filter){
+                         name
+                         reputation
+                         qualification
+                          posts {
+                            text
+                          }
+                       }
+			      	}`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "qualification": "Phd in CSE",
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"and": [{"name":{"eq": "George"}},{"reputation":{"eq": 4.5}},{"qualification": {"eq": "Phd in CSE"}}]}}`,
+		},
+		{
+			name: "(A OR B OR C) using variables",
+			query: `query($filter:AuthorFilter) {
+                       queryAuthor(filter:$filter){
+                         name
+                         reputation
+                         qualification
+                       }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "Kramer",
+							  "qualification": "PostDoc in CSE",
+							  "reputation": 4.2
+							},
+							{
+							  "name": "George",
+							  "qualification": "Phd in CSE",
+							  "reputation": 4.5
+							},
+							{
+							  "name": "Jerry",
+							  "qualification": "Phd in ECE",
+							  "reputation": 4.6
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"or": [{"name": {"eq": "George"}}, {"reputation": {"eq": 4.6}}, {"qualification": {"eq": "PostDoc in CSE"}}]}}`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.respData, string(resp.Data))
+		})
+	}
+
+	// cleanup
+	deleteAuthors(t, authorIds, nil)
+	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
+	deleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
+	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
+		nil)
+	cleanupStarwars(t, newStarship.ID, humanID, "")
+}
+
 func queryGeoNearFilter(t *testing.T) {
 	addHotelParams := &GraphQLParams{
 		Query: `
@@ -2431,5 +2825,99 @@ func queryCountWithAlias(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
 		`{"aggregatePost":{"cnt":4}}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountAtChildLevel(t *testing.T) {
+	queryNumberOfStates := &GraphQLParams{
+		Query: `query
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate {
+					count
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 3
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountAtChildLevelWithFilter(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query 
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
+                	count   
+                }
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 2
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountAndOtherFieldsAtChildLevel(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query 
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate {
+                	count   
+                },
+				states {
+					name
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 3
+				},
+				"states": [
+				{
+					"name": "Maharashtra"
+				}, 
+				{
+					"name": "Gujarat"
+				},
+				{
+					"name": "Karnataka"
+				}]
+			}]
+		}`,
 		string(gqlResponse.Data))
 }

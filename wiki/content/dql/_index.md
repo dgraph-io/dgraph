@@ -8,7 +8,9 @@ title = "DQL"
 <div class="landing">
   <div class="hero">
     <p>
-      DQL (also known as GraphQL+-) is the powerful query language of Dgraph, which is a variation of a query language created by Facebook, GraphQL.
+      Dgraph Query Language (DQL, formerly GraphQL+-)  extends and modifies
+      the GraphQL standard created by Facebook to support deep queries for
+      modern apps.
     </p>
     <img class="hero-deco" src="/images/hero-deco.png" />
   </div>

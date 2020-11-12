@@ -19,7 +19,7 @@ type State {
         code: String! @id
         country: Country
         name: String!
-	capital: String
+        capital: String
 }
 
 type Author {
@@ -84,6 +84,18 @@ type Director implements Character {
 type Human implements Character & Employee {
         dob: DateTime
         female: Boolean
+}
+
+# just for testing IN filter on enum types
+
+type Verification {
+  name: String @search(by: [exact])
+  status: Status @search
+}
+
+enum Status {
+  ACTIVE
+  DEACTIVATED
 }
 
 # just for testing singluar (non-list) edges in both directions
@@ -299,6 +311,10 @@ type Person {
 
 interface A {
     name: String! @id
+}
+
+type B implements A {
+    id: ID!
 }
 
 # union testing - start

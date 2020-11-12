@@ -68,6 +68,10 @@ const (
 				"description": ""
             },
             {
+                "name": "qualification",
+				"description": ""
+            },
+            {
                 "name": "country",
 				"description": ""
             },
@@ -82,7 +86,11 @@ const (
             {
                 "name": "rank",
 				"description": ""
-            }
+            },
+			{
+				"name": "postsAggregate",
+				"description": ""
+			}
 		],
 		"enumValues":[]
 	}, "__typename" : "Query" }`
