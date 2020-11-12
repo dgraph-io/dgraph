@@ -64,27 +64,31 @@ function dgraph::killall() {
   done
 }
 
+function dgraph::start_zero() {
+  local -r i="$i"
+  log::debug "Starting Zero $i."
+
+  local grpc_port=$((5080 + i))
+  local http_port=$((6080 + i))
+
+  for port in "$grpc_port" "$http_port"; do
+    portkill "$port"
+  done
+
+  local zero_args_default=(--cwd "$DGRAPH_PATH/zero$i" --idx "$i" --port_offset "$i")
+
+  if [ "$i" -ne 1 ]; then
+    zero_args_default+=(--peer 'localhost:5081')
+  fi
+
+  "$DGRAPH_BIN" zero "${zero_args_default[@]}" "${@:2}" &>"$LOGS_PATH/zero$i" &
+  sleep 1
+}
+
 function dgraph::start_zeros() {
   local -r n="$1"
-
   for i in $(seq "$n"); do
-    log::debug "Starting Zero $i."
-
-    local grpc_port=$((5080 + i))
-    local http_port=$((6080 + i))
-
-    for port in "$grpc_port" "$http_port"; do
-      portkill "$port"
-    done
-
-    local zero_args_default=(--cwd "$DGRAPH_PATH/zero$i" --idx "$i" --port_offset "$i")
-
-    if [ "$i" -ne 1 ]; then
-      zero_args_default+=(--peer 'localhost:5081')
-    fi
-
-    "$DGRAPH_BIN" zero "${zero_args_default[@]}" "${@:2}" &>"$LOGS_PATH/zero$i" &
-    sleep 1
+    dgraph::start_zero "$i" "${@:2}"
   done
 }
 
@@ -125,7 +129,7 @@ function dgraph::generate_acl_secret() {
 }
 
 function dgraph::generate_tls() {
-  "$DGRAPH_BIN" cert --cwd "$DGRAPH_PATH" --nodes localhost
+  "$DGRAPH_BIN" cert --cwd "$DGRAPH_PATH" --nodes 'localhost'
 }
 
 function dgraph::healthcheck_zero() {
@@ -200,6 +204,14 @@ function dgraph::healthcheck_alpha_tls() {
   log::debug "Alpha $i is healthy."
 }
 
+function dgraph::increment() {
+  local -r i="$1"
+  local -r grpc_port=$((9080 + i))
+  "$DGRAPH_BIN" increment --alpha "localhost:$grpc_port" "${@:2}" |
+    grep -oP 'Counter VAL: \K\d+' |
+    tail -1
+}
+
 function setup() {
   dgraph::killall
 
@@ -237,6 +249,15 @@ function test::manual_start() {
   for i in $(seq "$n_alphas"); do
     dgraph::healthcheck_alpha "$i"
   done
+
+  local count
+  for i in $(seq "$n_alphas"); do
+    count="$(dgraph::increment "$i")"
+    if [ "$i" -ne "$count" ]; then
+      log::error "Expected increment: $i but got: $count"
+      return 1
+    fi
+  done
 }
 
 function test::manual_start_encryption() {
@@ -256,6 +277,15 @@ function test::manual_start_encryption() {
 
   for i in $(seq "$n_alphas"); do
     dgraph::healthcheck_alpha "$i"
+  done
+
+  local count
+  for i in $(seq "$n_alphas"); do
+    count="$(dgraph::increment "$i")"
+    if [ "$i" -ne "$count" ]; then
+      log::error "Expected increment: $i but got: $count"
+      return 1
+    fi
   done
 }
 
@@ -277,6 +307,15 @@ function test::manual_start_acl() {
   for i in $(seq "$n_alphas"); do
     dgraph::healthcheck_alpha "$i"
   done
+
+  local count
+  for i in $(seq "$n_alphas"); do
+    count="$(dgraph::increment "$i" --user groot --password password)"
+    if [ "$i" -ne "$count" ]; then
+      log::error "Expected increment: $i but got: $count"
+      return 1
+    fi
+  done
 }
 
 function test::manual_start_tls() {
@@ -296,6 +335,63 @@ function test::manual_start_tls() {
 
   for i in $(seq "$n_alphas"); do
     dgraph::healthcheck_alpha_tls "$i"
+  done
+
+  local count
+  for i in $(seq "$n_alphas"); do
+    count="$(dgraph::increment "$i" --tls_cacert "$TLS_PATH"/ca.crt)"
+    if [ "$i" -ne "$count" ]; then
+      log::error "Expected increment: $i but got: $count"
+      return 1
+    fi
+  done
+}
+
+function test::manual_start_tls2() {
+  dgraph::generate_tls
+
+  local -r n_zeros=2
+  local -r n_alphas=4
+
+  for i in $(seq "$n_zeros"); do
+    "$DGRAPH_BIN" cert --client "zero$i" --cwd "$DGRAPH_PATH"
+    dgraph::start_zero "$i" \
+      --tls_cacert "$TLS_PATH"/ca.crt \
+      --tls_internal_port_enabled \
+      --tls_cert "$TLS_PATH/client.zero$i.crt" \
+      --tls_key "$TLS_PATH/client.zero$i.key" \
+      --tls_node_cert "$TLS_PATH"/node.crt \
+      --tls_node_key "$TLS_PATH"/node.key
+  done
+
+  for i in $(seq "$n_alphas"); do
+    "$DGRAPH_BIN" cert --client "alpha$i" --cwd "$DGRAPH_PATH"
+    dgraph::start_alpha "$i" \
+      --tls_cacert "$TLS_PATH"/ca.crt \
+      --tls_internal_port_enabled \
+      --tls_cert "$TLS_PATH/client.alpha$i.crt" \
+      --tls_key "$TLS_PATH/client.alpha$i.key" \
+      --tls_node_cert "$TLS_PATH"/node.crt \
+      --tls_node_key "$TLS_PATH"/node.key
+  done
+
+  for i in $(seq "$n_zeros"); do
+    dgraph::healthcheck_zero "$i"
+  done
+
+  sleep 5
+
+  for i in $(seq "$n_alphas"); do
+    dgraph::healthcheck_alpha_tls "$i"
+  done
+
+  local count
+  for i in $(seq "$n_alphas"); do
+    count="$(dgraph::increment "$i" --tls_cacert "$TLS_PATH"/ca.crt)"
+    if [ "$i" -ne "$count" ]; then
+      log::error "Expected increment: $i but got: $count"
+      return 1
+    fi
   done
 }
 
@@ -321,6 +417,15 @@ function test::manual_start_encryption_acl_tls() {
 
   for i in $(seq "$n_alphas"); do
     dgraph::healthcheck_alpha_tls "$i"
+  done
+
+  local count
+  for i in $(seq "$n_alphas"); do
+    count="$(dgraph::increment "$i" --tls_cacert "$TLS_PATH"/ca.crt --user groot --password password)"
+    if [ "$i" -ne "$count" ]; then
+      log::error "Expected increment: $i but got: $count"
+      return 1
+    fi
   done
 }
 
@@ -450,8 +555,8 @@ function testx::increment() {
     # Pick an Alpha in a round-robin manner and run the increment tool on it.
     count="$(
       "$DGRAPH_BIN" increment --alpha "${alphas[$((i % ${#alphas[@]}))]}" --num "$increment_factor" |
-      grep -oP 'Counter VAL: \K\d+' |
-      tail -1
+        grep -oP 'Counter VAL: \K\d+' |
+        tail -1
     )"
     if [ "$count" -ne $((i * increment_factor)) ]; then
       log::error "Increment error: expected: $count, got: $i"
