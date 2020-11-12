@@ -116,7 +116,6 @@ instances to achieve high-availability.
 		"connect as a client with the other nodes in the cluster.")
 	flag.String("tls_key", "", "(optional) The private key file name "+
 		"in tls_dir which is needed to connect as a client with the other nodes in the cluster.")
-
 	// Cache flags
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
 	flag.String("cache_percentage", "100,0",
