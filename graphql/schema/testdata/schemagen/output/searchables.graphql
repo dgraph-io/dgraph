@@ -3,6 +3,22 @@
 #######################
 
 type Post {
+	postID: ID!
+	title: String! @search(by: [term])
+	titleByEverything: String! @search(by: [term,fulltext,trigram,hash])
+	text: String @search(by: [fulltext])
+	tags: [String] @search(by: [trigram])
+	tagsHash: [String] @search(by: [hash])
+	tagsExact: [String] @search(by: [exact])
+	publishByYear: DateTime @search(by: [year])
+	publishByMonth: DateTime @search(by: [month])
+	publishByDay: DateTime @search(by: [day])
+	publishByHour: DateTime @search(by: [hour])
+	publishTimestamp: Int64 @search
+	numViewers: Int64 @search(by: [int64])
+	numLikes: Int @search
+	score: Float @search
+	isPublished: Boolean @search
 	postType: PostType @search
 	postTypeNonNull: PostType! @search
 	postTypeList(first: Int, offset: Int): [PostType] @search
@@ -281,12 +297,12 @@ input StringHashFilter {
 #######################
 
 type AddPostPayload {
-	post(filter: PostFilter, first: Int, offset: Int): [Post]
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	numUids: Int
 }
 
 type DeletePostPayload {
-	post(filter: PostFilter, first: Int, offset: Int): [Post]
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	msg: String
 	numUids: Int
 }
@@ -296,7 +312,7 @@ type PostAggregateResult {
 }
 
 type UpdatePostPayload {
-	post(filter: PostFilter, first: Int, offset: Int): [Post]
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	numUids: Int
 }
 
@@ -305,6 +321,21 @@ type UpdatePostPayload {
 #######################
 
 enum PostHasFilter {
+	title
+	titleByEverything
+	text
+	tags
+	tagsHash
+	tagsExact
+	publishByYear
+	publishByMonth
+	publishByDay
+	publishByHour
+	publishTimestamp
+	numViewers
+	numLikes
+	score
+	isPublished
 	postType
 	postTypeNonNull
 	postTypeList
@@ -317,11 +348,40 @@ enum PostHasFilter {
 	postTypeNone
 }
 
+enum PostOrderable {
+	title
+	titleByEverything
+	text
+	publishByYear
+	publishByMonth
+	publishByDay
+	publishByHour
+	publishTimestamp
+	numViewers
+	numLikes
+	score
+}
+
 #######################
 # Generated Inputs
 #######################
 
 input AddPostInput {
+	title: String!
+	titleByEverything: String!
+	text: String
+	tags: [String]
+	tagsHash: [String]
+	tagsExact: [String]
+	publishByYear: DateTime
+	publishByMonth: DateTime
+	publishByDay: DateTime
+	publishByHour: DateTime
+	publishTimestamp: Int64
+	numViewers: Int64
+	numLikes: Int
+	score: Float
+	isPublished: Boolean
 	postType: PostType
 	postTypeNonNull: PostType!
 	postTypeList: [PostType]
@@ -335,6 +395,22 @@ input AddPostInput {
 }
 
 input PostFilter {
+	postID: [ID!]
+	title: StringTermFilter
+	titleByEverything: StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter
+	text: StringFullTextFilter
+	tags: StringRegExpFilter
+	tagsHash: StringHashFilter
+	tagsExact: StringExactFilter
+	publishByYear: DateTimeFilter
+	publishByMonth: DateTimeFilter
+	publishByDay: DateTimeFilter
+	publishByHour: DateTimeFilter
+	publishTimestamp: Int64Filter
+	numViewers: Int64Filter
+	numLikes: IntFilter
+	score: FloatFilter
+	isPublished: Boolean
 	postType: PostType_hash
 	postTypeNonNull: PostType_hash
 	postTypeList: PostType_hash
@@ -351,7 +427,28 @@ input PostFilter {
 	not: PostFilter
 }
 
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
 input PostPatch {
+	title: String
+	titleByEverything: String
+	text: String
+	tags: [String]
+	tagsHash: [String]
+	tagsExact: [String]
+	publishByYear: DateTime
+	publishByMonth: DateTime
+	publishByDay: DateTime
+	publishByHour: DateTime
+	publishTimestamp: Int64
+	numViewers: Int64
+	numLikes: Int
+	score: Float
+	isPublished: Boolean
 	postType: PostType
 	postTypeNonNull: PostType
 	postTypeList: [PostType]
@@ -365,6 +462,22 @@ input PostPatch {
 }
 
 input PostRef {
+	postID: ID
+	title: String
+	titleByEverything: String
+	text: String
+	tags: [String]
+	tagsHash: [String]
+	tagsExact: [String]
+	publishByYear: DateTime
+	publishByMonth: DateTime
+	publishByDay: DateTime
+	publishByHour: DateTime
+	publishTimestamp: Int64
+	numViewers: Int64
+	numLikes: Int
+	score: Float
+	isPublished: Boolean
 	postType: PostType
 	postTypeNonNull: PostType
 	postTypeList: [PostType]
@@ -409,6 +522,16 @@ input PostType_hash_StringRegExpFilter {
 	regexp: String
 }
 
+input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter {
+	alloftext: String
+	anyoftext: String
+	eq: PostType
+	in: [PostType]
+	allofterms: String
+	anyofterms: String
+	regexp: String
+}
+
 input UpdatePostInput {
 	filter: PostFilter!
 	set: PostPatch
@@ -420,7 +543,8 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	queryPost(filter: PostFilter, first: Int, offset: Int): [Post]
+	getPost(postID: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	aggregatePost(filter: PostFilter): PostAggregateResult
 }
 
