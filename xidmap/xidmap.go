@@ -100,7 +100,8 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 			y.Check(err)
 			return mf.Data
 		}
-		s := skl.NewSkiplistWith(mf.Data, false, grow)
+		s := skl.NewSkiplistWith(mf.Data, false)
+		s.SetGrow(grow)
 		s.OnClose = func() {
 			mf.Delete()
 		}
