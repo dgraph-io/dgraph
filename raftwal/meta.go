@@ -63,7 +63,7 @@ const (
 	// metaName is the name of the file used to store metadata (e.g raft ID, checkpoint).
 	metaName = "wal.meta"
 	// metaFileSize is the size of the wal.meta file.
-	metaFileSize = 16 << 20
+	metaFileSize = 1 << 20
 	//hardStateOffset is the offset of the hard sate within the wal.meta file.
 	hardStateOffset = 512
 	// snapshotIndex stores the index and term corresponding to the snapshot.
