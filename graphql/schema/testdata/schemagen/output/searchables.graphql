@@ -525,7 +525,7 @@ input PostType_hash_StringRegExpFilter {
 input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter {
 	alloftext: String
 	anyoftext: String
-	eq: PostType
+	eq: String
 	in: [PostType]
 	allofterms: String
 	anyofterms: String
