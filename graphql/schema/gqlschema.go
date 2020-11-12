@@ -1230,6 +1230,7 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 			for _, i := range schema.Types[stringFilterName].Fields {
 				enumTypeName := fld.Type.Name()
 				var typ *ast.Type
+
 				if i.Type.Elem == nil {
 					typ = &ast.Type{
 						NamedType: enumTypeName,
