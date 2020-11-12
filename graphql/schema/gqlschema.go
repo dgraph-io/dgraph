@@ -1228,17 +1228,23 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 			var l ast.FieldList
 
 			for _, i := range schema.Types[stringFilterName].Fields {
-				typ := *(i.Type)
 				enumTypeName := fld.Type.Name()
+				var typ *ast.Type
 				if i.Type.Elem == nil {
-					typ.NamedType = enumTypeName
+					typ = &ast.Type{
+						NamedType: enumTypeName,
+						NonNull:   false,
+					}
 				} else {
-					typ.Elem.NamedType = enumTypeName
+					typ = &ast.Type{
+						Elem:    &ast.Type{NamedType: enumTypeName, NonNull: false},
+						NonNull: false,
+					}
 				}
 
 				l = append(l, &ast.FieldDefinition{
 					Name:         i.Name,
-					Type:         &typ,
+					Type:         typ,
 					Description:  i.Description,
 					DefaultValue: i.DefaultValue,
 				})

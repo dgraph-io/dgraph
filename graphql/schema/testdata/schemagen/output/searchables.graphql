@@ -526,7 +526,7 @@ input StringFullTextFilter_StringHashFilter_StringTermFilter_StringRegExpFilter 
 	alloftext: String
 	anyoftext: String
 	eq: String
-	in: [PostType]
+	in: [String]
 	allofterms: String
 	anyofterms: String
 	regexp: String
