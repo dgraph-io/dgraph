@@ -104,6 +104,10 @@ instances to achieve high-availability.
 		" exporter does not support annotation logs and would discard them.")
 	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+	// TLS configurations
+	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
+	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
+	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
 
 	// Cache flags
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
@@ -310,7 +314,9 @@ func run() {
 	// Initialize the servers.
 	var st state
 	st.serveGRPC(grpcListener, store)
-	st.serveHTTP(httpListener)
+	tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
+	x.Check(err)
+	st.startListenHttpAndHttps(httpListener, tlsCfg)
 
 	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)
