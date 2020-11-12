@@ -89,12 +89,10 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 			y.Check(err)
 		}
 		grow := func(sz uint32) []byte {
-			var newSz int
 			// double the size if doubled size is sufficient.
-			if cap(mf.Data) > int(sz) {
-				newSz = cap(mf.Data) * 2
-			} else {
-				newSz = cap(mf.Data) + int(sz)
+			newSz := 2 * len(mf.Data)
+			if newSz < len(mf.Data)+int(sz) {
+				newSz = len(mf.Data) + int(sz)
 			}
 			err := mf.Truncate(int64(newSz))
 			y.Check(err)
