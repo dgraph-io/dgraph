@@ -24,7 +24,7 @@ type Post {
 	postTypeList(first: Int, offset: Int): [PostType] @search
 	postTypeTrigram: PostType @search(by: [trigram])
 	postTypeRegexp: PostType @search(by: [regexp])
-	postTypeExact: PostType @search(by: [exact])
+	postTypeExact(first: Int, offset: Int): [PostType] @search(by: [exact])
 	postTypeHash: PostType @search(by: [hash])
 	postTypeRegexpExact: PostType @search(by: [exact,regexp])
 	postTypeHashRegexp: PostType @search(by: [hash,regexp])
@@ -387,7 +387,7 @@ input AddPostInput {
 	postTypeList: [PostType]
 	postTypeTrigram: PostType
 	postTypeRegexp: PostType
-	postTypeExact: PostType
+	postTypeExact: [PostType]
 	postTypeHash: PostType
 	postTypeRegexpExact: PostType
 	postTypeHashRegexp: PostType
@@ -454,7 +454,7 @@ input PostPatch {
 	postTypeList: [PostType]
 	postTypeTrigram: PostType
 	postTypeRegexp: PostType
-	postTypeExact: PostType
+	postTypeExact: [PostType]
 	postTypeHash: PostType
 	postTypeRegexpExact: PostType
 	postTypeHashRegexp: PostType
@@ -483,7 +483,7 @@ input PostRef {
 	postTypeList: [PostType]
 	postTypeTrigram: PostType
 	postTypeRegexp: PostType
-	postTypeExact: PostType
+	postTypeExact: [PostType]
 	postTypeHash: PostType
 	postTypeRegexpExact: PostType
 	postTypeHashRegexp: PostType

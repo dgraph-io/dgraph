@@ -1234,12 +1234,10 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 				if i.Type.Elem == nil {
 					typ = &ast.Type{
 						NamedType: enumTypeName,
-						NonNull:   false,
 					}
 				} else {
 					typ = &ast.Type{
-						Elem:    &ast.Type{NamedType: enumTypeName, NonNull: false},
-						NonNull: false,
+						Elem: &ast.Type{NamedType: enumTypeName},
 					}
 				}
 
