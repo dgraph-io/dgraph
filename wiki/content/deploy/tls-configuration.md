@@ -6,21 +6,24 @@ weight = 10
     parent = "deploy"
 +++
 
-{{% notice "note" %}}
-This section refers to the `dgraph cert` command which was introduced in v1.0.9. For previous releases, see the previous [TLS configuration documentation](https://dgraph.io/docs/v1.0.7/deploy/#tls-configuration).
-{{% /notice %}}
-
-
-Connections between client and server can be secured with TLS. Password protected private keys are **not supported**.
+Connections between clients of Dgraph database and Dgraph server nodes (and between nodes) can be secured using TLS. In addition, current versions of Dgraph database secure gRPC communications between Dgraph Alpha and Dgraph Zero nodes in a
+cluster using mutual TLS (mTLS). Dgraph now uses only TLS v1.2 cypher suites. Password-protected private keys are **not supported**.
 
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
 
 ## Dgraph Certificate Management Tool
 
-The `dgraph cert` program creates and manages CA-signed certificates and private keys using a generated Dgraph Root CA. There are three types of these pairs:
-1. The Root CA certificate/key pair: It is used to sign and verify node and client certificates, if the root CA certificate is changed then you must regenerate all the certificates.
-2. Node certificate/key pair: It is shared by the alpha nodes for accepting TLS connections.
-3. Client certificate/key pair: It is used by the clients (like live loader, ratel etc) to communicate with the alpha server.
+{{% notice "note" %}}
+This section refers to the `dgraph cert` command which was introduced in v1.0.9. For previous releases, see the previous [TLS configuration documentation](https://dgraph.io/docs/v1.0.7/deploy/#tls-configuration).
+{{% /notice %}}
+
+The `dgraph cert` program creates and manages CA-signed certificates and private keys using a generated Dgraph Root CA. There are three types of certificate/key pairs:
+1. Root CA certificate/key pair: This is used to sign and verify node and client
+   certificates. If the root CA certificate is changed then you must regenerate
+   all certificates.
+2. Node certificate/key pair: This is shared by the Dgraph Alpha nodes and used
+   for accepting TLS connections.
+3. Client certificate/key pair: This is used by the clients (like live loader, ratel etc) to communicate with Dgraph Alpha server nodes.
 
 ```sh
 # To see the available flags.
@@ -126,7 +129,7 @@ Important points:
 
 The following configuration options are available for Alpha:
 
-* `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
+* `--tls_dir <path>` - Path to a directory that has TLS certificates and keys. This directory is usually named `tls`. Setting this option enables TLS connections.
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
 * `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client Authentication Options](#client-authentication-options) for details.
 
