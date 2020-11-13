@@ -138,6 +138,9 @@ func toPort(i int) string {
 }
 
 func getOffset(idx int) int {
+	if !opts.ExposePorts {
+		return 0
+	}
 	if idx == 1 {
 		return 0
 	}
@@ -216,7 +219,11 @@ func getZero(idx int) service {
 		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/zw", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" -o %d --idx=%d", opts.PortOffset+getOffset(idx), idx)
+	offset := getOffset(idx)
+	if (opts.PortOffset + offset) != 0 {
+		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
+	}
+	svc.Command += fmt.Sprintf(" --idx=%d", idx)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
 	if opts.NumAlphas > 1 {
 		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
@@ -267,13 +274,16 @@ func getAlpha(idx int) service {
 	zeroHostAddr := fmt.Sprintf("zero%d:%d", 1, zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
-		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+i)
+		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+getOffset(i))
 		zeros = append(zeros, zeroHostAddr)
 	}
 
 	zerosOpt := strings.Join(zeros, ",")
 
-	svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+getOffset(idx))
+	offset := getOffset(idx)
+	if (opts.PortOffset + offset) != 0 {
+		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
+	}
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
