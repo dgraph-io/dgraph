@@ -46,9 +46,9 @@ var (
 	dg          *dgo.Dgraph
 )
 
-const (
-	alphaName       = "alpha1"
-	alphaExportPath = alphaName + ":/data/" + alphaName + "/export"
+var (
+	alphaName       string
+	alphaExportPath string
 	localExportPath = "./export_copy"
 )
 
@@ -365,6 +365,14 @@ func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	alphaName = testutil.Instance
+
+	x.AssertTrue(strings.Count(alphaName, "_") == 2)
+	left := strings.Index(alphaName, "_")
+	right := strings.LastIndex(alphaName, "_")
+	alphaExportPath = alphaName + ":/data/" + alphaName[left+1:right] + "/export"
+	fmt.Printf("alphaExportPath: %s\n", alphaExportPath)
+
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
 

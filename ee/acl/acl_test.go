@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -30,9 +31,8 @@ import (
 )
 
 var (
-	userid         = "alice"
-	userpassword   = "simplepassword"
-	dgraphEndpoint = testutil.SockAddr
+	userid       = "alice"
+	userpassword = "simplepassword"
 )
 
 func createUser(t *testing.T, accessToken, username, password string) *testutil.GraphQLResponse {
@@ -3334,4 +3334,9 @@ func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
 
 	time.Sleep(defaultTimeToSleep)
 	deleteGuardiansGroupAndGrootUserShouldFail(t)
+}
+
+func TestMain(m *testing.M) {
+	adminEndpoint = "http://" + testutil.SockAddrHttp + "/admin"
+	os.Exit(m.Run())
 }
