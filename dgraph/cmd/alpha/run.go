@@ -706,6 +706,7 @@ func run() {
 		TLSClientConfig:     tlsConf,
 		TLSDir:              Alpha.Conf.GetString("tls_dir"),
 		TLSInterNodeEnabled: Alpha.Conf.GetBool("tls_internal_port_enabled"),
+		TLSMinVersion:       Alpha.Conf.GetString("tls_min_version"),
 	}
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)

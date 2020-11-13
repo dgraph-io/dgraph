@@ -51,7 +51,7 @@ type TLSHelperConfig struct {
 	MinVersion       string
 }
 
-// RegisterClientTLSFlags registers the required flags to set up a TLS client.
+// RegisterServerTLSFlags registers the required flags to set up a TLS client.
 func RegisterServerTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
@@ -114,7 +114,7 @@ func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 }
 
 // LoadServerTLSConfigForInternalPort loads the TLS config for the internal ports of the cluster
-func LoadServerTLSConfigForInternalPort(tlsEnabled bool, tlsDir string) (*tls.Config, error) {
+func LoadServerTLSConfigForInternalPort(tlsEnabled bool, tlsDir, tlsMinVersion string) (*tls.Config, error) {
 	if !tlsEnabled {
 		return nil, nil
 	}
@@ -127,6 +127,7 @@ func LoadServerTLSConfigForInternalPort(tlsEnabled bool, tlsDir string) (*tls.Co
 		conf.Cert = path.Join(conf.CertDir, TLSNodeCert)
 		conf.Key = path.Join(conf.CertDir, TLSNodeKey)
 		conf.ClientAuth = "REQUIREANDVERIFY"
+		conf.MinVersion = tlsMinVersion
 		return GenerateServerTLSConfig(&conf)
 	}
 
