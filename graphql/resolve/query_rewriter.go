@@ -98,6 +98,14 @@ func hasCascadeDirective(field schema.Field) bool {
 	return false
 }
 
+// Returns the auth selector to be used depending on the query type.
+func getAuthSelector(queryType schema.QueryType) func(t schema.Type) *schema.RuleNode {
+	if queryType == schema.PasswordQuery {
+		return passwordAuthSelector
+	}
+	return queryAuthSelector
+}
+
 // Rewrite rewrites a GraphQL query into a Dgraph GraphQuery.
 func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
@@ -116,7 +124,7 @@ func (qr *queryRewriter) Rewrite(
 	authRw := &authRewriter{
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
-		selector:      queryAuthSelector,
+		selector:      getAuthSelector(gqlQuery.QueryType()),
 		parentVarName: gqlQuery.ConstructedFor().Name() + "Root",
 	}
 	authRw.hasAuthRules = hasAuthRules(gqlQuery, authRw)
@@ -695,6 +703,16 @@ func queryAuthSelector(t schema.Type) *schema.RuleNode {
 	}
 
 	return auth.Rules.Query
+}
+
+// passwordAuthSelector is used as auth selector for checkPassword queries
+func passwordAuthSelector(t schema.Type) *schema.RuleNode {
+	auth := t.AuthRules()
+	if auth == nil || auth.Rules == nil {
+		return nil
+	}
+
+	return auth.Rules.Password
 }
 
 func (authRw *authRewriter) rewriteAuthQueries(typ schema.Type) ([]*gql.GraphQuery, *gql.FilterTree) {
