@@ -106,6 +106,8 @@ type options struct {
 	LudicrousMode  bool
 	SnapshotAfter  string
 	ContainerNames bool
+	AlphaVolumes   []string
+	ZeroVolumes    []string
 
 	// Extra flags
 	AlphaFlags string
@@ -245,6 +247,12 @@ func getZero(idx int) service {
 	if opts.ZeroFlags != "" {
 		svc.Command += " " + opts.ZeroFlags
 	}
+
+	if len(opts.ZeroVolumes) > 0 {
+		for _, vol := range opts.ZeroVolumes {
+			svc.Volumes = append(svc.Volumes, getVolume(vol))
+		}
+	}
 	return svc
 }
 
@@ -345,11 +353,29 @@ func getAlpha(idx int) service {
 			ReadOnly: true,
 		})
 	}
+	if len(opts.AlphaVolumes) > 0 {
+		for _, vol := range opts.AlphaVolumes {
+			svc.Volumes = append(svc.Volumes, getVolume(vol))
+		}
+	}
 	if opts.AlphaFlags != "" {
 		svc.Command += " " + opts.AlphaFlags
 	}
 
 	return svc
+}
+
+func getVolume(vol string) volume {
+	s := strings.Split(vol, ":")
+	srcDir := s[0]
+	dstDir := s[1]
+	readOnly := len(s) > 2 && s[2] == "ro"
+	return volume{
+		Type:     "bind",
+		Source:   srcDir,
+		Target:   dstDir,
+		ReadOnly: readOnly,
+	}
 }
 
 func getJaeger() service {
@@ -535,6 +561,8 @@ func main() {
 		"extra flags for zeros.")
 	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", true,
 		"set container names in docker compose.")
+	cmd.PersistentFlags().StringArrayVar(&opts.AlphaVolumes, "alpha_volume", nil, "alpha volume mounts, following srcdir:dstdir[:ro]")
+	cmd.PersistentFlags().StringArrayVar(&opts.ZeroVolumes, "zero_volume", nil, "zero volume mounts, following srcdir:dstdir[:ro]")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
