@@ -270,14 +270,6 @@ func TestAuthorization(t *testing.T) {
 	}
 	testAuthorization(t, dg1)
 	glog.Infof("done")
-
-	glog.Infof("testing with port 9182")
-	dg2, err := testutil.DgraphClientWithGroot(":9182")
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-	testAuthorization(t, dg2)
-	glog.Infof("done")
 }
 
 func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {

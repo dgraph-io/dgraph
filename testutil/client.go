@@ -56,8 +56,6 @@ var (
 // This allows running (most) tests against dgraph running on the default ports, for example.
 // Only the GRPC ports are needed and the others are deduced.
 func init() {
-	var grpcPort int
-
 	getPort := func(envVar string, dfault int) int {
 		p := os.Getenv(envVar)
 		if p == "" {
@@ -67,13 +65,11 @@ func init() {
 		return port
 	}
 
-	grpcPort = getPort("TEST_PORT_ALPHA", 9180)
-	SockAddr = fmt.Sprintf("localhost:%d", grpcPort)
-	SockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
+	SockAddr = fmt.Sprintf("localhost:%d", getPort("TEST_PORT_ALPHA", 9080))
+	SockAddrHttp = fmt.Sprintf("localhost:%d", getPort("TEST_PORT_ALPHA_HTTP", 8080))
 
-	grpcPort = getPort("TEST_PORT_ZERO", 5180)
-	SockAddrZero = fmt.Sprintf("localhost:%d", grpcPort)
-	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", grpcPort+1000)
+	SockAddrZero = fmt.Sprintf("localhost:%d", getPort("TEST_PORT_ZERO", 5080))
+	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", getPort("TEST_PORT_ZERO_HTTP", 6080))
 }
 
 // DgraphClientDropAll creates a Dgraph client and drops all existing data.

@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
@@ -19,7 +22,8 @@ import (
 )
 
 var (
-	ctxb = context.Background()
+	ctxb       = context.Background()
+	isTeamcity bool
 
 	baseDir = pflag.StringP("base", "", "../",
 		"Base dir for Dgraph")
@@ -30,6 +34,7 @@ func commandWithContext(ctx context.Context, q string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, splits[0], splits[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
 	return cmd
 }
 func command(cmd string) *exec.Cmd {
@@ -55,18 +60,43 @@ func stopCluster(composeFile, prefix string) {
 		composeFile, prefix)
 	runFatal(q)
 }
-func getContainer(prefix, name string) types.Container {
+
+type instance struct {
+	Prefix string
+	Name   string
+}
+
+func getInstance(prefix, name string) instance {
+	return instance{Prefix: prefix, Name: name}
+}
+func (in instance) String() string {
+	return fmt.Sprintf("%s %s", in.Prefix, in.Name)
+}
+
+func allContainers(prefix string) []types.Container {
 	cli, err := client.NewEnvClient()
-	if err != nil {
-		panic(err)
-	}
+	x.Check(err)
 
 	containers, err := cli.ContainerList(ctxb, types.ContainerListOptions{})
 	if err != nil {
 		log.Fatalf("While listing container: %v\n", err)
 	}
 
-	q := fmt.Sprintf("/%s_%s_", prefix, name)
+	var out []types.Container
+	for _, c := range containers {
+		for _, name := range c.Names {
+			if strings.HasPrefix(name, "/"+prefix) {
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
+
+func (in instance) getContainer() types.Container {
+	containers := allContainers(in.Prefix)
+
+	q := fmt.Sprintf("/%s_%s_", in.Prefix, in.Name)
 	for _, container := range containers {
 		for _, name := range container.Names {
 			if strings.HasPrefix(name, q) {
@@ -74,22 +104,25 @@ func getContainer(prefix, name string) types.Container {
 			}
 		}
 	}
+	for i, c := range containers {
+		fmt.Printf("[%d] %s\n", i, c.Names[0])
+	}
 	return types.Container{}
 }
-func getIPAddr(prefix, name string) string {
-	c := getContainer(prefix, name)
-	// fmt.Printf("Got container: %+v\n", c)
+func (in instance) publicPort(privatePort uint16) string {
+	c := in.getContainer()
+	fmt.Printf("Got container: %+v\n", c)
 	for _, p := range c.Ports {
-		if p.PrivatePort == 9080 {
+		if p.PrivatePort == privatePort {
 			return strconv.Itoa(int(p.PublicPort))
 		}
 	}
 	return ""
 }
-func login(prefix, name string) error {
-	addr := getIPAddr(prefix, name)
+func (in instance) login() error {
+	addr := in.publicPort(9080)
 	if len(addr) == 0 {
-		return fmt.Errorf("unable to find container: %s %s", prefix, name)
+		return fmt.Errorf("unable to find container: %s", in)
 	}
 	dg, err := testutil.DgraphClientWithGroot("localhost:" + addr)
 	if err != nil {
@@ -100,37 +133,72 @@ func login(prefix, name string) error {
 	if err := dg.Login(ctx, "groot", "password"); err != nil {
 		return fmt.Errorf("while logging in: %v", err)
 	}
-	fmt.Printf("Logged into %s %s\n", prefix, name)
+	fmt.Printf("Logged into %s\n", in)
 	return nil
 }
-func loginFatal(prefix, name string) error {
+func (in instance) loginFatal() {
 	for i := 0; i < 30; i++ {
-		err := login(prefix, name)
+		err := in.login()
 		if err == nil {
-			return nil
+			return
 		}
 		fmt.Printf("Login failed: %v. Retrying...\n", err)
 		time.Sleep(time.Second)
 	}
-	glog.Fatalf("Unable to login to %s %s\n", prefix, name)
-	return nil
+	glog.Fatalf("Unable to login to %s\n", in)
+}
+func runTestsFor(pkg, prefix string) {
+	q := fmt.Sprintf("go test -v %s", pkg)
+	cmd := command(q)
+	in := instance{
+		Prefix: prefix,
+		Name:   "alpha" + strconv.Itoa(1+rand.Intn(6)),
+	}
+	cmd.Env = append(cmd.Env, "TEST_PORT_ALPHA="+in.publicPort(9080))
+	cmd.Env = append(cmd.Env, "TEST_PORT_ALPHA_HTTP="+in.publicPort(8080))
+
+	in.Name = "zero" + strconv.Itoa(1)
+	cmd.Env = append(cmd.Env, "TEST_PORT_ZERO="+in.publicPort(5080))
+	cmd.Env = append(cmd.Env, "TEST_PORT_ZERO_HTTP="+in.publicPort(6080))
+
+	fmt.Printf("Running: %s\n", cmd)
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("While running command: %q Error: %v\n",
+			q, err)
+	}
+	fmt.Printf("Ran tests for package: %s", pkg)
 }
 
+func findGocache() string {
+	cmd := command("go env GOCACHE")
+	cmd.Stdout = nil
+	out, err := cmd.Output()
+	x.Check(err)
+	return "GOCACHE=" + string(out)
+}
 func main() {
 	pflag.Parse()
+
+	tmpDir, err := ioutil.TempDir("", "dgraph-test")
+	x.Check(err)
+	defer os.RemoveAll(tmpDir)
+
+	if tc := os.Getenv("TEAMCITY_VERSION"); len(tc) > 0 {
+		fmt.Printf("Found Teamcity: %s\n", tc)
+		isTeamcity = true
+	}
 
 	defaultCompose := path.Join(*baseDir, "dgraph/docker-compose.yml")
 
 	fmt.Printf("Using default Compose: %s\n", defaultCompose)
 
+	stopCluster(defaultCompose, "test1")
 	startCluster(defaultCompose, "test1")
 	defer stopCluster(defaultCompose, "test1")
 
-	startCluster(defaultCompose, "test2")
-	defer stopCluster(defaultCompose, "test2")
-
 	fmt.Println("Cluster is up and running")
-	loginFatal("test1", "alpha2")
-	loginFatal("test2", "alpha3")
+	getInstance("test1", "alpha2").loginFatal()
+
+	runTestsFor(path.Join(*baseDir, "ee/acl"), "test1")
 	fmt.Println("Log IN done")
 }

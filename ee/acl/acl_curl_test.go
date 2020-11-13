@@ -49,7 +49,7 @@ func TestCurlAuthorization(t *testing.T) {
 	queryArgs := func(jwt string) []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
 			"-H", "Content-Type: application/dql",
-			"-d", query, curlQueryEndpoint}
+			"-d", query, testutil.SockAddrHttp + "/query"}
 	}
 	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
@@ -60,7 +60,7 @@ func TestCurlAuthorization(t *testing.T) {
 			"-H", "Content-Type: application/rdf",
 			"-d", fmt.Sprintf(`{ set {
 	   _:a <%s>  "string" .
-	   }}`, predicateToWrite), curlMutateEndpoint}
+	   }}`, predicateToWrite), testutil.SockAddrHttp + "/mutate"}
 
 	}
 
@@ -71,7 +71,7 @@ func TestCurlAuthorization(t *testing.T) {
 
 	alterArgs := func(jwt string) []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
-			"-d", fmt.Sprintf(`%s: int .`, predicateToAlter), curlAlterEndpoint}
+			"-d", fmt.Sprintf(`%s: int .`, predicateToAlter), testutil.SockAddrHttp + "/alter"}
 	}
 	testutil.VerifyCurlCmd(t, alterArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
@@ -147,10 +147,3 @@ func TestCurlAuthorization(t *testing.T) {
 		ShouldFail: false,
 	})
 }
-
-const (
-	curlLoginEndpoint  = "localhost:8180/login"
-	curlQueryEndpoint  = "localhost:8180/query"
-	curlMutateEndpoint = "localhost:8180/mutate"
-	curlAlterEndpoint  = "localhost:8180/alter"
-)
