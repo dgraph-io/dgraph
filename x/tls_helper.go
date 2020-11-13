@@ -52,6 +52,19 @@ type TLSHelperConfig struct {
 }
 
 // RegisterClientTLSFlags registers the required flags to set up a TLS client.
+func RegisterServerTLSFlags(flag *pflag.FlagSet) {
+	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
+	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
+	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
+	flag.Bool("tls_internal_port_enabled", false, "(optional) enable inter node TLS encryption between cluster nodes.")
+	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to "+
+		"connect as a client with the other nodes in the cluster.")
+	flag.String("tls_key", "", "(optional) The private key file name "+
+		"in tls_dir needed to connect as a client with the other nodes in the cluster.")
+	flag.String("tls_min_version", "TLS11", "min version of tls supported. Valid values are TLS11, TLS12")
+}
+
+// RegisterClientTLSFlags registers the required flags to set up a TLS client.
 func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls_cacert", "",
 		"The CA Cert file used to verify server certificates. Required for enabling TLS.")

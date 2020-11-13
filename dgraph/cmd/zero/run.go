@@ -107,15 +107,6 @@ instances to achieve high-availability.
 		" exporter does not support annotation logs and would discard them.")
 	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-	// TLS configurations
-	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
-	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
-	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	flag.Bool("tls_internal_port_enabled", false, "(optional) enable inter node TLS encryption between cluster nodes.")
-	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to "+
-		"connect as a client with the other nodes in the cluster.")
-	flag.String("tls_key", "", "(optional) The private key file name "+
-		"in tls_dir which is needed to connect as a client with the other nodes in the cluster.")
 	// Cache flags
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
 	flag.String("cache_percentage", "100,0",
@@ -131,6 +122,8 @@ instances to achieve high-availability.
 			"log directory. mmap consumes more RAM, but provides better performance.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
+	// TLS configurations
+	x.RegisterServerTLSFlags(flag)
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
