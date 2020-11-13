@@ -1019,20 +1019,24 @@ func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
+	abs := func(a, b int64) int64 {
+		if a > b {
+			return a - b
+		}
+		return b - a
+	}
+
+	var lastSz int64
 	runGC := func() {
-		_, before := store.Size()
-		var runs int
 		for err := error(nil); err == nil; {
 			// If a GC is successful, immediately run it again.
-			runs++
 			err = store.RunValueLogGC(0.7)
 		}
-		if runs == 0 {
-			return
+		_, sz := store.Size()
+		if abs(lastSz, sz) > 512<<20 {
+			glog.V(2).Infof("Value log size: %s\n", humanize.IBytes(uint64(sz)))
+			lastSz = sz
 		}
-		_, after := store.Size()
-		glog.V(2).Infof("Ran Value log GC %d times. Before: %s After: %s",
-			runs, humanize.IBytes(uint64(before)), humanize.IBytes(uint64(after)))
 	}
 
 	runGC()

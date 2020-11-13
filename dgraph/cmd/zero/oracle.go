@@ -59,14 +59,16 @@ type Oracle struct {
 	syncMarks   []syncMark
 }
 
+const keyCommitMapSz = 64 << 20
+
 // Init initializes the oracle.
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
 	// Remove the older btree file, before creating NewTree, as it may contain stale data leading
 	// to wrong results.
-	fname := filepath.Join(opts.w, "keyCommit.bin")
+	fname := filepath.Join(opts.w, "keyCommit.map")
 	os.RemoveAll(fname)
-	o.keyCommit = z.NewTree(fname, 1<<30)
+	o.keyCommit = z.NewTree(fname, keyCommitMapSz)
 	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init(nil)
@@ -82,7 +84,7 @@ func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
 	defer o.Unlock()
 	o.startTxnTs = ts
-	o.keyCommit.Reset(1 << 30)
+	o.keyCommit.Reset(keyCommitMapSz)
 }
 
 // TODO: This should be done during proposal application for Txn status.
