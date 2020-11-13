@@ -445,6 +445,7 @@ func (a *AuthMeta) FetchJWKs() error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
