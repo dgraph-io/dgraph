@@ -263,7 +263,9 @@ func getAlpha(idx int) service {
 	isMultiZeros := true
 	var isInvalidVersion, err = semverCompare("< 1.2.3 || 20.03.0", opts.Tag)
 	if err != nil || isInvalidVersion {
-		isMultiZeros = false
+		if opts.Tag != "latest" {
+			isMultiZeros = false
+		}
 	}
 
 	maxZeros := 1
