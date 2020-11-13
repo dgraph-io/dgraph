@@ -6,7 +6,7 @@ weight = 10
     parent = "deploy"
 +++
 
-Connections between clients of Dgraph database can be secured using TLS. In addition, current versions of Dgraph secure gRPC communications among the Dgraph Alpha and Dgraph Zero server nodes using mutual TLS (mTLS). To improve TLS security, current versions of Dgraph only use TLS v1.2 cypher suites. Password-protected private keys are **not supported**.
+Connections between Dgraph database and its clients can be secured using TLS. In addition, current versions of Dgraph secure gRPC communications among Dgraph Alpha and Dgraph Zero server nodes using mutual TLS (mTLS). To improve TLS security, only TLS v1.2 cypher suites are now used. Password-protected private keys are **not supported**.
 
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
 
