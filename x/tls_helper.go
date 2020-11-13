@@ -29,6 +29,11 @@ import (
 )
 
 const (
+	TLSNodeCert = "node.crt"
+	TLSNodeKey  = "node.key"
+)
+
+const (
 	tlsRootCert = "ca.crt"
 )
 
@@ -53,11 +58,68 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls_cert", "", "(optional) The Cert file provided by the client to the server.")
 	flag.String("tls_key", "", "(optional) The private key file "+
 		"provided by the client to the server.")
+	flag.Bool("tls_internal_port_enabled", false, "enable inter node TLS encryption between cluster nodes.")
+}
+
+// LoadClientTLSConfigForInternalPort loads tls config for connecting to internal ports of cluster
+func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
+	if !v.GetBool("tls_internal_port_enabled") {
+		return nil, nil
+	}
+	conf := &TLSHelperConfig{}
+	conf.UseSystemCACerts = true
+	conf.CertDir = v.GetString("tls_dir")
+	if conf.CertDir != "" {
+		conf.CertRequired = true
+		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
+		if v.GetString("tls_cert") == "" || v.GetString("tls_key") == "" {
+			return nil, errors.Errorf("inter node tls is enabled but client certs are not provided. " +
+				"Intern Node TLS is always client authenticated. Please provide --tls_cert and --tls_key")
+		}
+
+		conf.Cert = path.Join(conf.CertDir, v.GetString("tls_cert"))
+		conf.Key = path.Join(conf.CertDir, v.GetString("tls_key"))
+		return GenerateClientTLSConfig(conf)
+	}
+
+	// this is for clients which are defined via --tls_cacert
+	conf.RootCACert = v.GetString("tls_cacert")
+	if conf.RootCACert != "" {
+		conf.CertRequired = true
+		if v.GetString("tls_cert") == "" || v.GetString("tls_key") == "" {
+			return nil, errors.Errorf("inter node tls is enabled but client certs are not provided. " +
+				"Intern Node is TLS is always client authenticated. Please provide --tls_cert and --tls_key")
+		}
+
+		conf.Cert = v.GetString("tls_cert")
+		conf.Key = v.GetString("tls_key")
+		return GenerateClientTLSConfig(conf)
+	}
+	return nil, nil
+}
+
+// LoadServerTLSConfigForInternalPort loads the TLS config for the internal ports of the cluster
+func LoadServerTLSConfigForInternalPort(tlsEnabled bool, tlsDir string) (*tls.Config, error) {
+	if !tlsEnabled {
+		return nil, nil
+	}
+	conf := TLSHelperConfig{}
+	conf.CertDir = tlsDir
+	conf.UseSystemCACerts = true
+	if conf.CertDir != "" {
+		conf.CertRequired = true
+		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
+		conf.Cert = path.Join(conf.CertDir, TLSNodeCert)
+		conf.Key = path.Join(conf.CertDir, TLSNodeKey)
+		conf.ClientAuth = "REQUIREANDVERIFY"
+		return GenerateServerTLSConfig(&conf)
+	}
+
+	return nil, nil
 }
 
 // LoadServerTLSConfig loads the TLS config into the server with the given parameters.
-func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) (*tls.Config,
-	error) {
+func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) (*tls.Config, error) {
 	conf := TLSHelperConfig{}
 	conf.CertDir = v.GetString("tls_dir")
 	if conf.CertDir != "" {
@@ -192,10 +254,33 @@ func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err e
 // GenerateClientTLSConfig creates and returns a new client side *tls.Config with the
 // configuration provided.
 func GenerateClientTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err error) {
-	pool, err := generateCertPool(config.RootCACert, config.UseSystemCACerts)
-	if err != nil {
-		return nil, err
+	caCert := config.RootCACert
+	if caCert != "" {
+		tlsCfg := tls.Config{}
+
+		// 1. set up the root CA
+		pool, err := generateCertPool(caCert, config.UseSystemCACerts)
+		if err != nil {
+			return nil, err
+		}
+		tlsCfg.RootCAs = pool
+
+		// 2. set up the server name for verification
+		tlsCfg.ServerName = config.ServerName
+
+		// 3. optionally load the client cert files
+		certFile := config.Cert
+		keyFile := config.Key
+		if certFile != "" && keyFile != "" {
+			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+			if err != nil {
+				return nil, err
+			}
+			tlsCfg.Certificates = []tls.Certificate{cert}
+		}
+
+		return &tlsCfg, nil
 	}
 
-	return &tls.Config{RootCAs: pool, ServerName: config.ServerName}, nil
+	return nil, nil
 }

@@ -63,11 +63,6 @@ import (
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 )
 
-const (
-	tlsNodeCert = "node.crt"
-	tlsNodeKey  = "node.key"
-)
-
 var (
 	bindall bool
 
@@ -197,6 +192,11 @@ they form a Raft group and provide synchronous replication.
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
+	flag.Bool("tls_internal_port_enabled", false, "(optional) enable inter node TLS encryption between cluster nodes.")
+	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to "+
+		"connect as a client with the other nodes in the cluster.")
+	flag.String("tls_key", "", "(optional) The private key file name "+
+		"in tls_dir needed to connect as a client with the other nodes in the cluster.")
 
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
@@ -451,7 +451,7 @@ func setupServer(closer *z.Closer) {
 		laddr = "0.0.0.0"
 	}
 
-	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, tlsNodeCert, tlsNodeKey)
+	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, x.TLSNodeCert, x.TLSNodeKey)
 	if err != nil {
 		log.Fatalf("Failed to setup TLS: %v\n", err)
 	}
@@ -695,6 +695,8 @@ func run() {
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
+	x.Check(err)
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:          Alpha.Conf.GetString("export"),
 		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
@@ -710,6 +712,9 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
+		TLSClientConfig:     tlsConf,
+		TLSDir:              Alpha.Conf.GetString("tls_dir"),
+		TLSInterNodeEnabled: Alpha.Conf.GetBool("tls_internal_port_enabled"),
 	}
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)

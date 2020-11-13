@@ -108,7 +108,7 @@ func init() {
 	flag.String("badger.cache_percentage", "0,100",
 		"Cache percentages summing up to 100 for various caches"+
 			" (FORMAT: BlockCacheSize, IndexCacheSize).")
-
+	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
 }
