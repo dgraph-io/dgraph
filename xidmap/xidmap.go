@@ -19,7 +19,7 @@ package xidmap
 import (
 	"context"
 	"encoding/binary"
-	"math"
+	"hash/maphash"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -28,8 +28,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/skl"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -46,14 +44,15 @@ type XidMap struct {
 	maxUidSeen uint64
 
 	// Optionally, these can be set to persist the mappings.
-	writer *badger.WriteBatch
+	writer   *badger.WriteBatch
+	hashSeed maphash.Seed
 }
 
 type shard struct {
 	sync.RWMutex
 	block
 
-	skiplist *skl.Skiplist
+	tree *z.Tree
 }
 
 type block struct {
@@ -72,6 +71,13 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 	return uid
 }
 
+func (m *XidMap) getHash(xid string) uint64 {
+	var h maphash.Hash
+	h.SetSeed(m.hashSeed)
+	h.WriteString(xid)
+	return h.Sum64()
+}
+
 // New creates an XidMap. zero conn must be valid for UID allocations to happen. Optionally, a
 // badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
 // assignment operations.
@@ -80,12 +86,11 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
+		hashSeed:  maphash.MakeSeed(),
 	}
 	for i := range xm.shards {
-		buf, err := z.NewBufferWith(math.MaxUint32, math.MaxUint32, z.UseMmap)
-		x.Check(err)
 		xm.shards[i] = &shard{
-			skiplist: skl.NewSkiplistWithBuffer(buf, false),
+			tree: z.NewTree(100 << 20),
 		}
 	}
 	if db != nil {
@@ -105,7 +110,8 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 				err := item.Value(func(val []byte) error {
 					uid := binary.BigEndian.Uint64(val)
 					// No need to acquire a lock. This is all serial access.
-					sh.skiplist.PutUint64([]byte(key), uid)
+
+					sh.tree.Set(xm.getHash(key), uid)
 					return nil
 				})
 				if err != nil {
@@ -156,7 +162,7 @@ func (m *XidMap) CheckUid(xid string) bool {
 	sh := m.shardFor(xid)
 	sh.RLock()
 	defer sh.RUnlock()
-	uid, _ := sh.skiplist.GetUint64([]byte(xid))
+	uid := sh.tree.Get(m.getHash(xid))
 	return uid != 0
 }
 
@@ -164,7 +170,7 @@ func (m *XidMap) SetUid(xid string, uid uint64) {
 	sh := m.shardFor(xid)
 	sh.Lock()
 	defer sh.Unlock()
-	sh.skiplist.PutUint64([]byte(xid), uid)
+	sh.tree.Set(m.getHash(xid), uid)
 }
 
 // AssignUid creates new or looks up existing XID to UID mappings. It also returns if
@@ -172,7 +178,8 @@ func (m *XidMap) SetUid(xid string, uid uint64) {
 func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh := m.shardFor(xid)
 	sh.RLock()
-	uid, _ := sh.skiplist.GetUint64([]byte(xid))
+
+	uid := sh.tree.Get(m.getHash(xid))
 	sh.RUnlock()
 	if uid > 0 {
 		return uid, false
@@ -181,13 +188,21 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid, _ = sh.skiplist.GetUint64([]byte(xid))
+	uid = sh.tree.Get(m.getHash(xid))
 	if uid > 0 {
 		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
-	sh.skiplist.PutUint64([]byte(xid), newUid)
+	sh.tree.Set(m.getHash(xid), newUid)
+
+	if m.writer != nil {
+		var uidBuf [8]byte
+		binary.BigEndian.PutUint64(uidBuf[:], newUid)
+		if err := m.writer.Set([]byte(xid), uidBuf[:]); err != nil {
+			x.Panic(err)
+		}
+	}
 
 	return newUid, true
 }
@@ -249,26 +264,7 @@ func (m *XidMap) Flush() error {
 	}()
 
 	for _, shard := range m.shards {
-		var err error
-		if m.writer != nil {
-			shard.Lock()
-			it := shard.skiplist.NewIterator()
-			var uidBuf [8]byte
-			for it.SeekToFirst(); it.Valid(); it.Next() {
-				curKey := it.Key()
-				key := make([]byte, len(curKey))
-				copy(key, curKey)
-				binary.BigEndian.PutUint64(uidBuf[:], it.ValueUint64())
-				err = m.writer.Set(key, uidBuf[:])
-				y.Check(err)
-			}
-			it.Close()
-			shard.Unlock()
-		}
-		shard.skiplist.DecrRef()
-		if err != nil {
-			return err
-		}
+		shard.tree.Release()
 	}
 
 	if m.writer == nil {
