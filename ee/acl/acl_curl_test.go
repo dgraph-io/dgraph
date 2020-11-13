@@ -103,8 +103,7 @@ func TestCurlAuthorization(t *testing.T) {
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 
 	createGroupAndAcls(t, unusedGroup, false)
-	// wait for 5 seconds to ensure the new acl have reached all acl caches
-	time.Sleep(5 * time.Second)
+	time.Sleep(4 * time.Second)
 	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
@@ -130,7 +129,7 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 
 	createGroupAndAcls(t, devGroup, true)
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 	// refresh the jwts again
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:   adminEndpoint,

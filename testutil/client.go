@@ -371,8 +371,6 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) 
 
 // VerifyCurlCmd executes the curl command with the given arguments and verifies
 // the result against the expected output.
-// VerifyCurlCmd executes the curl command with the given arguments and verifies
-// the result against the expected output.
 func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig) {
 	queryCmd := exec.Command("curl", args...)
 	output, err := queryCmd.Output()

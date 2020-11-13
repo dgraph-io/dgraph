@@ -337,6 +337,8 @@ func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {
 	return grootUserUid, guardiansGroupUid
 }
 
+const defaultTimeToSleep = time.Second
+
 func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	createAccountAndData(t, dg)
 	ctx := context.Background()
@@ -351,8 +353,8 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t, unusedGroup, false)
 	// wait for 5 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for 5 seconds for acl caches to be refreshed")
-	time.Sleep(5 * time.Second)
+	glog.Infof("Sleeping for acl caches to be refreshed")
+	time.Sleep(defaultTimeToSleep)
 
 	// now all these operations except query should fail since
 	// there are rules defined on the unusedGroup
@@ -363,8 +365,8 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	createGroupAndAcls(t, devGroup, true)
 
 	// wait for 5 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for 5 seconds for acl caches to be refreshed")
-	time.Sleep(5 * time.Second)
+	glog.Infof("Sleeping for acl caches to be refreshed")
+	time.Sleep(defaultTimeToSleep)
 
 	// now the operations should succeed again through the devGroup
 	queryPredicateWithUserAccount(t, dg, false)
@@ -527,8 +529,8 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 		Schema: fmt.Sprintf(`%s: string @index(exact) .`, predicateToRead),
 	}))
 	// wait for 5 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for 5 seconds for acl caches to be refreshed")
-	time.Sleep(5 * time.Second)
+	t.Logf("Sleeping for acl caches to be refreshed\n")
+	time.Sleep(defaultTimeToSleep)
 
 	// create some data, e.g. user with name alice
 	resetUser(t)
@@ -860,8 +862,9 @@ func TestPredicatePermission(t *testing.T) {
 	createGroupAndAcls(t, unusedGroup, false)
 
 	// Wait for 5 seconds to ensure the new acl have reached all acl caches.
-	glog.Infof("Sleeping for 5 seconds for acl caches to be refreshed")
-	time.Sleep(5 * time.Second)
+	t.Logf("Sleeping for acl caches to be refreshed")
+	time.Sleep(defaultTimeToSleep)
+
 	// The operations except query should fail when there is a rule defined, but the
 	// current user is not allowed.
 	queryPredicateWithUserAccount(t, dg, false)
@@ -934,7 +937,7 @@ func TestUnauthorizedDeletion(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -967,7 +970,7 @@ func TestGuardianAccess(t *testing.T) {
 	nodeUID, ok := resp.Uids["a"]
 	require.True(t, ok)
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 	gClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err, "Error while creating client")
 
@@ -1105,7 +1108,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1261,7 +1264,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1281,7 +1284,8 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name>, write access of <age> to dev
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}})
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
+
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
 	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
@@ -1296,7 +1300,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err, "login failed")
 	// Add alice to sre group which has read access to <age> and write access to <name>
 	addToGroup(t, accessJwt, userid, sreGroup)
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.Nil(t, err)
@@ -1314,7 +1318,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name> and <nickname>, write access of <age> to dev
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}, {"nickname", Read.Code}})
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.Nil(t, err)
@@ -1389,7 +1393,7 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1413,7 +1417,7 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 
 	// Give write access of <name> <dgraph.type> to dev
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Write.Code}, {"age", Write.Code}, {"dgraph.type", Write.Code}})
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	// delete S * * (user now has permission to name, age and dgraph.type)
 	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "*", "*")
@@ -1600,7 +1604,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1625,7 +1629,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name> to dev
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	for _, tc := range tests {
 		desc := tc.descriptionNamePerm
@@ -1646,7 +1650,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name> and <age> to dev
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}, {"age", Read.Code}})
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	for _, tc := range tests {
 		desc := tc.descriptionNameAgePerm
@@ -1667,7 +1671,7 @@ func TestNewACLPredicates(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1785,7 +1789,7 @@ func TestDeleteRule(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1804,7 +1808,7 @@ func TestDeleteRule(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 	removeRuleFromGroup(t, accessJwt, devGroup, "name")
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, queryName)
 	require.NoError(t, err, "Error while querying data")
@@ -2345,7 +2349,7 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	resetUser(t)
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 	addDataAndRules(ctx, t, dg)
-	time.Sleep(5 * time.Second) // wait for ACL cache to refresh, otherwise it will be flaky test
+	time.Sleep(defaultTimeToSleep) // wait for ACL cache to refresh, otherwise it will be flaky test
 
 	// the other user should be able to view only the part of schema for which it has read access
 	dg, err = testutil.DgraphClient(testutil.SockAddr)
@@ -2924,7 +2928,7 @@ func TestAllowUIDAccess(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -2970,7 +2974,7 @@ func TestAddNewPredicate(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 	addToGroup(t, accessJwt, userid, "guardians")
-	time.Sleep(5 * time.Second)
+	time.Sleep(4 * time.Second)
 
 	// Alice is a guardian now, it can create new predicate.
 	err = userClient.Alter(ctx, &api.Operation{
@@ -3012,7 +3016,7 @@ func TestCrossGroupPermission(t *testing.T) {
 	addRulesToGroup(t, accessJwt, "writer", []rule{{Predicate: "newpred", Permission: 2}})
 	addRulesToGroup(t, accessJwt, "alterer", []rule{{Predicate: "newpred", Permission: 1}})
 	// Wait for acl cache to be refreshed
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
@@ -3041,7 +3045,7 @@ func TestCrossGroupPermission(t *testing.T) {
 			addToGroup(t, accessJwt, "user"+userIdx, "reader")
 		}
 	}
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	// operations
 	dgQuery := func(client *dgo.Dgraph, shouldFail bool, user string) {
@@ -3146,7 +3150,7 @@ func TestMutationWithValueVar(t *testing.T) {
 			Permission: Write.Code,
 		},
 	})
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	query := `
 		{
@@ -3325,7 +3329,7 @@ func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
 		t.Fatalf("Unable to drop all. Error:%v", err)
 	}
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 	deleteGuardiansGroupAndGrootUserShouldFail(t)
 
 	// Try Drop Data
@@ -3336,6 +3340,6 @@ func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
 		t.Fatalf("Unable to drop data. Error:%v", err)
 	}
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 	deleteGuardiansGroupAndGrootUserShouldFail(t)
 }
