@@ -337,7 +337,7 @@ func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {
 	return grootUserUid, guardiansGroupUid
 }
 
-const defaultTimeToSleep = time.Second
+const defaultTimeToSleep = 500 * time.Millisecond
 
 func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	createAccountAndData(t, dg)
