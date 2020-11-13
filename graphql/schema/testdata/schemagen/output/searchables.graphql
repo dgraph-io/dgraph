@@ -21,10 +21,10 @@ type Post {
 	isPublished: Boolean @search
 	postType: PostType @search
 	postTypeNonNull: PostType! @search
-	postTypeList(first: Int, offset: Int): [PostType] @search
+	postTypeList: [PostType] @search
 	postTypeTrigram: PostType @search(by: [trigram])
 	postTypeRegexp: PostType @search(by: [regexp])
-	postTypeExact(first: Int, offset: Int): [PostType] @search(by: [exact])
+	postTypeExact: [PostType] @search(by: [exact])
 	postTypeHash: PostType @search(by: [hash])
 	postTypeRegexpExact: PostType @search(by: [exact,regexp])
 	postTypeHashRegexp: PostType @search(by: [hash,regexp])

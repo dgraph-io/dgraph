@@ -1113,8 +1113,8 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 		addFilterArgument(schema, fld)
 
 		// Ordering and pagination, however, only makes sense for fields of
-		// list types (not scalar lists).
-		if isTypeList(fld) {
+		// list types (not scalar lists or enum lists).
+		if isTypeList(fld) && !isEnumList(fld, schema) {
 			addOrderArgument(schema, fld)
 
 			// Pagination even makes sense when there's no orderables because
@@ -1363,6 +1363,12 @@ func hasFilterable(defn *ast.Definition) bool {
 func isTypeList(fld *ast.FieldDefinition) bool {
 	_, scalar := inbuiltTypeToDgraph[fld.Type.Name()]
 	return !scalar && fld.Type.Elem != nil
+}
+
+// Returns true if given field is a list of enum
+func isEnumList(fld *ast.FieldDefinition, sch *ast.Schema) bool {
+	typeDefn := sch.Types[fld.Type.Name()]
+	return typeDefn.Kind == "ENUM" && fld.Type.Elem != nil
 }
 
 func hasOrderables(defn *ast.Definition) bool {
