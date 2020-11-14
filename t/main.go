@@ -1,3 +1,19 @@
+/*
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package main
 
 import (
@@ -12,6 +28,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,7 +61,7 @@ var (
 		"Only run this test")
 	count = pflag.IntP("count", "c", 0,
 		"If set, would add -count arg to go test.")
-	concurrency = pflag.IntP("concurrency", "j", 4,
+	concurrency = pflag.IntP("concurrency", "j", 3,
 		"Number of clusters to run concurrently.")
 	keepCluster = pflag.BoolP("keep", "k", false,
 		"Keep the clusters running on program end.")
@@ -198,10 +215,15 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	cmd.Stdout = fc
 
 	fmt.Printf("Running: %s with %s\n", cmd, in)
+	start := time.Now()
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("While running command: %q Error: %v", q, err)
 	}
-	fmt.Printf("Ran tests for package: %s\n", pkg)
+
+	dur := time.Since(start).Round(time.Second)
+	fc.Took(pkg, dur)
+	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
 	return nil
 }
 
@@ -259,9 +281,25 @@ func findPackageFor(testName string) string {
 	return ""
 }
 
+type pkgDuration struct {
+	pkg string
+	dur time.Duration
+}
+
 type failureCatcher struct {
 	sync.Mutex
 	failure bytes.Buffer
+	durs    []pkgDuration
+}
+
+func (o *failureCatcher) Took(pkg string, dur time.Duration) {
+	if dur < 10*time.Second {
+		// Don't capture packages which were fast.
+		return
+	}
+	o.Lock()
+	defer o.Unlock()
+	o.durs = append(o.durs, pkgDuration{pkg: pkg, dur: dur})
 }
 
 func (o *failureCatcher) Write(p []byte) (n int, err error) {
@@ -272,6 +310,22 @@ func (o *failureCatcher) Write(p []byte) (n int, err error) {
 		o.failure.Write(p)
 	}
 	return os.Stdout.Write(p)
+}
+
+func (o *failureCatcher) Print() {
+	o.Lock()
+	defer o.Unlock()
+
+	sort.Slice(o.durs, func(i, j int) bool {
+		return o.durs[i].dur > o.durs[j].dur
+	})
+
+	for _, dur := range o.durs {
+		fmt.Printf("Took: %s Package: %s\n", dur.dur, dur.pkg)
+	}
+	if fc.failure.Len() > 0 {
+		fmt.Printf("Failure output: %s\n", fc.failure.Bytes())
+	}
 }
 
 func main() {
@@ -340,12 +394,16 @@ func main() {
 		pkgs, err := packages.Load(nil, pattern)
 		x.Check(err)
 
-		var left int
-		for i := 0; i < len(pkgs); i++ {
-			if strings.Contains(pkgs[i].ID, "systest") ||
-				strings.Contains(pkgs[i].ID, "acl") {
-				pkgs[left], pkgs[i] = pkgs[i], pkgs[left]
-				left++
+		slowPkgs := []string{"systest", "ee/acl", "cmd/alpha"}
+		right := len(pkgs) - 1
+		for i := len(pkgs) - 1; i > 0; i-- {
+			// These packages take time. So, push them to the end.
+			for _, sp := range slowPkgs {
+				if strings.Contains(pkgs[i].ID, sp) {
+					pkgs[right], pkgs[i] = pkgs[i], pkgs[right]
+					right--
+					break
+				}
 			}
 		}
 		valid := pkgs[:0]
@@ -384,11 +442,12 @@ func main() {
 	close(errCh)
 	for err := range errCh {
 		if err != nil {
-			fmt.Printf("Failure output: %s\n", fc.failure.Bytes())
+			fc.Print()
 			fmt.Printf("Got error: %v.\n", err)
 			fmt.Println("Tests FAILED.")
 			os.Exit(1)
 		}
 	}
+	fc.Print()
 	fmt.Printf("Tests PASSED. Time taken: %v\n", time.Since(start).Truncate(time.Second))
 }
