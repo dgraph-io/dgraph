@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
+	_ "github.com/dgrijalva/jwt-go/v4"
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
@@ -76,14 +77,17 @@ func (p *Poller) AddSubscriber(
 	buf, err := json.Marshal(req)
 	x.Check(err)
 	var bucketID uint64
-	if customClaims.AuthVariables != nil {
-
+	if !(customClaims.AuthVariables == nil && customClaims.ExpiresAt == nil) {
 		// TODO - Add custom marshal function that marshal's the json in sorted order.
 		authvariables, err := json.Marshal(customClaims.AuthVariables)
 		if err != nil {
 			return nil, err
 		}
-		bucketID = farm.Fingerprint64(append(buf, authvariables...))
+		expiry, err := json.Marshal(customClaims.ExpiresAt)
+		if err != nil {
+			return nil, err
+		}
+		bucketID = farm.Fingerprint64(append(buf, append(expiry, authvariables...)...))
 	} else {
 		bucketID = farm.Fingerprint64(buf)
 	}
