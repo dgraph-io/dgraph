@@ -224,10 +224,15 @@ func TestBgIndexSchemaTokenizers(t *testing.T) {
 func TestBgIndexSchemaCount(t *testing.T) {
 	require.NoError(t, dropAll())
 	q1 := `schema(pred: [value]) {}`
+	t.Logf("Addr now 1: %s\n", addr)
 	require.NoError(t, alterSchemaInBackground(`value: [uid] @count .`))
+	t.Logf("Addr now 2: %s\n", addr)
 	checkSchema(t, q1, "count")
+	t.Logf("Addr now 3: %s\n", addr)
 	require.NoError(t, alterSchemaInBackground(`value: [uid] @reverse .`))
+	t.Logf("Addr now 4: %s\n", addr)
 	checkSchema(t, q1, "reverse")
+	t.Logf("Addr now 5: %s\n", addr)
 }
 
 func TestBgIndexSchemaReverseAndCount(t *testing.T) {

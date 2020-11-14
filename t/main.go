@@ -14,6 +14,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -30,6 +31,7 @@ import (
 
 var (
 	ctxb       = context.Background()
+	fc         = &failureCatcher{}
 	procId     int
 	isTeamcity bool
 	testId     int32
@@ -44,6 +46,8 @@ var (
 		"If set, would add -count arg to go test.")
 	concurrency = pflag.IntP("concurrency", "j", 4,
 		"Number of clusters to run concurrently.")
+	keepCluster = pflag.BoolP("keep", "k", false,
+		"Keep the clusters running on program end.")
 )
 
 func commandWithContext(ctx context.Context, q string) *exec.Cmd {
@@ -178,7 +182,8 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	cmd := commandWithContext(ctx, q)
 	in := instance{
 		Prefix: prefix,
-		Name:   "alpha" + strconv.Itoa(1+rand.Intn(6)),
+		// Name:   "alpha" + strconv.Itoa(1+rand.Intn(6)),
+		Name: "alpha1",
 	}
 	cmd.Env = append(cmd.Env, "TEST_PORT_ALPHA="+in.publicPort(9080))
 	cmd.Env = append(cmd.Env, "TEST_PORT_ALPHA_HTTP="+in.publicPort(8080))
@@ -188,6 +193,9 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	zeroIn := getInstance(prefix, "zero1")
 	cmd.Env = append(cmd.Env, "TEST_PORT_ZERO="+zeroIn.publicPort(5080))
 	cmd.Env = append(cmd.Env, "TEST_PORT_ZERO_HTTP="+zeroIn.publicPort(6080))
+
+	// Use failureCatcher.
+	cmd.Stdout = fc
 
 	fmt.Printf("Running: %s with %s\n", cmd, in)
 	if err := cmd.Run(); err != nil {
@@ -210,11 +218,13 @@ func runCommonTests(pkgCh chan string, closer *z.Closer) error {
 
 	defaultCompose := path.Join(*baseDir, "dgraph/docker-compose.yml")
 	id := atomic.AddInt32(&testId, 1)
-	prefix := fmt.Sprintf("test-%04d-%d", procId, id)
+	prefix := fmt.Sprintf("test%03d-%d", procId, id)
 
 	stopCluster(defaultCompose, prefix)
 	startCluster(defaultCompose, prefix)
-	defer stopCluster(defaultCompose, prefix)
+	if !*keepCluster {
+		defer stopCluster(defaultCompose, prefix)
+	}
 
 	// Wait for cluster to be healthy.
 	getInstance(prefix, "alpha1").loginFatal()
@@ -249,10 +259,25 @@ func findPackageFor(testName string) string {
 	return ""
 }
 
+type failureCatcher struct {
+	sync.Mutex
+	failure bytes.Buffer
+}
+
+func (o *failureCatcher) Write(p []byte) (n int, err error) {
+	o.Lock()
+	defer o.Unlock()
+
+	if bytes.Index(p, []byte("FAIL")) >= 0 {
+		o.failure.Write(p)
+	}
+	return os.Stdout.Write(p)
+}
+
 func main() {
 	pflag.Parse()
 	rand.Seed(time.Now().UnixNano())
-	procId = rand.Intn(10000)
+	procId = rand.Intn(1000)
 	start := time.Now()
 
 	if len(*runPkg) > 0 && len(*runTest) > 0 {
@@ -359,7 +384,9 @@ func main() {
 	close(errCh)
 	for err := range errCh {
 		if err != nil {
-			fmt.Printf("Got error: %v. Tests FAILED.\n", err)
+			fmt.Printf("Failure output: %s\n", fc.failure.Bytes())
+			fmt.Printf("Got error: %v.\n", err)
+			fmt.Println("Tests FAILED.")
 			os.Exit(1)
 		}
 	}
