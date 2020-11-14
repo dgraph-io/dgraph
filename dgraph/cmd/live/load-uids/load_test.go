@@ -131,6 +131,9 @@ func TestLiveLoadUpsert(t *testing.T) {
 }
 
 func checkLoadedData(t *testing.T, newUids bool) {
+	// HACK(dmai): Check schema
+	schemaResp, err := dg.NewTxn().Query(context.Background(), `schema {}`)
+	fmt.Println(schemaResp)
 	resp, err := dg.NewTxn().Query(context.Background(), `
 		{
 			q(func: anyofterms(name, "Homer")) {
@@ -202,8 +205,9 @@ func TestLiveLoadJsonUidKeep(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	_, err := testutil.Pipeline(pipeline)
-	fmt.Printf("pipeline: %+v\n", pipeline)
+	// HACK(dmai): Check live loader output
+	liveOut, err := testutil.Pipeline(pipeline)
+	fmt.Printf("pipeline: %+v\n%s\n", pipeline, liveOut)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, false)
