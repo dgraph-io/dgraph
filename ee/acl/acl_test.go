@@ -2579,6 +2579,7 @@ func TestHealthForAcl(t *testing.T) {
 	// we have 9 instances of alphas/zeros in teamcity environment
 	require.Len(t, guardianResp.Health, 9)
 	for _, v := range guardianResp.Health {
+		t.Logf("Got health: %+v\n", v)
 		require.Contains(t, []string{"alpha", "zero"}, v.Instance)
 		require.NotEmpty(t, v.Address)
 		require.NotEmpty(t, v.LastEcho)
@@ -3338,5 +3339,6 @@ func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	adminEndpoint = "http://" + testutil.SockAddrHttp + "/admin"
+	fmt.Printf("Using adminEndpoint for acl package: %s\n", adminEndpoint)
 	os.Exit(m.Run())
 }

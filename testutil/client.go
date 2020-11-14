@@ -43,7 +43,8 @@ import (
 // socket addr = IP address and port number
 var (
 	// Instance is the instance name of the Alpha.
-	Instance string
+	Instance      string
+	MinioInstance string
 	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
 	SockAddr string
 	// SockAddrHttp is the address to the HTTP of alpha used during tests.
@@ -66,6 +67,7 @@ func init() {
 		return port
 	}
 
+	MinioInstance = os.Getenv("TEST_MINIO")
 	Instance = os.Getenv("TEST_ALPHA")
 	SockAddr = fmt.Sprintf("localhost:%d", getPort("TEST_PORT_ALPHA", 9080))
 	SockAddrHttp = fmt.Sprintf("localhost:%d", getPort("TEST_PORT_ALPHA_HTTP", 8080))

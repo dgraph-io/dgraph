@@ -30,6 +30,7 @@ import (
 
 var (
 	ctxb       = context.Background()
+	procId     int
 	isTeamcity bool
 	testId     int32
 
@@ -39,8 +40,8 @@ var (
 		"Only run tests for this package")
 	runTest = pflag.StringP("test", "t", "",
 		"Only run this test")
-	cache = pflag.BoolP("cache", "c", true,
-		"If set to false, would force Go to re-run tests.")
+	count = pflag.IntP("count", "c", 0,
+		"If set, would add -count arg to go test.")
 	concurrency = pflag.IntP("concurrency", "j", 4,
 		"Number of clusters to run concurrently.")
 )
@@ -126,9 +127,6 @@ func (in instance) getContainer() types.Container {
 			}
 		}
 	}
-	for i, c := range containers {
-		fmt.Printf("[%d] %s\n", i, c.Names[0])
-	}
 	return types.Container{}
 }
 func (in instance) publicPort(privatePort uint16) string {
@@ -170,8 +168,8 @@ func (in instance) loginFatal() {
 }
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	var opts []string
-	if !*cache {
-		opts = append(opts, "-count=1")
+	if *count > 0 {
+		opts = append(opts, "-count="+strconv.Itoa(*count))
 	}
 	if len(*runTest) > 0 {
 		opts = append(opts, "-run="+*runTest)
@@ -185,8 +183,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	cmd.Env = append(cmd.Env, "TEST_PORT_ALPHA="+in.publicPort(9080))
 	cmd.Env = append(cmd.Env, "TEST_PORT_ALPHA_HTTP="+in.publicPort(8080))
 	cmd.Env = append(cmd.Env, "TEST_ALPHA="+in.String())
-
-	// in.Name = "alpha1"
+	cmd.Env = append(cmd.Env, "TEST_MINIO="+getInstance(prefix, "minio").publicPort(9001))
 
 	zeroIn := getInstance(prefix, "zero1")
 	cmd.Env = append(cmd.Env, "TEST_PORT_ZERO="+zeroIn.publicPort(5080))
@@ -213,7 +210,7 @@ func runCommonTests(pkgCh chan string, closer *z.Closer) error {
 
 	defaultCompose := path.Join(*baseDir, "dgraph/docker-compose.yml")
 	id := atomic.AddInt32(&testId, 1)
-	prefix := "test" + strconv.Itoa(int(id))
+	prefix := fmt.Sprintf("test-%04d-%d", procId, id)
 
 	stopCluster(defaultCompose, prefix)
 	startCluster(defaultCompose, prefix)
@@ -254,6 +251,9 @@ func findPackageFor(testName string) string {
 
 func main() {
 	pflag.Parse()
+	rand.Seed(time.Now().UnixNano())
+	procId = rand.Intn(10000)
+	start := time.Now()
 
 	if len(*runPkg) > 0 && len(*runTest) > 0 {
 		log.Fatalf("Both pkg and test can't be set.\n")
@@ -314,11 +314,15 @@ func main() {
 		}
 		pkgs, err := packages.Load(nil, pattern)
 		x.Check(err)
-		if len(pkgs) == 0 {
-			fmt.Println("Couldn't find any packages. Exiting...")
-			os.Exit(1)
-		}
 
+		var left int
+		for i := 0; i < len(pkgs); i++ {
+			if strings.Contains(pkgs[i].ID, "systest") ||
+				strings.Contains(pkgs[i].ID, "acl") {
+				pkgs[left], pkgs[i] = pkgs[i], pkgs[left]
+				left++
+			}
+		}
 		valid := pkgs[:0]
 		for _, pkg := range pkgs {
 			if len(*runPkg) > 0 && !strings.HasSuffix(pkg.ID, *runPkg) {
@@ -327,14 +331,20 @@ func main() {
 			valid = append(valid, pkg)
 			fmt.Printf("Found valid package: %s\n", pkg.ID)
 		}
+		if len(valid) == 0 {
+			fmt.Println("Couldn't find any packages. Exiting...")
+			os.Exit(1)
+		}
+		fmt.Printf("Running tests for %d packages.\n", len(valid))
 
-		for _, pkg := range valid {
+		for i, pkg := range valid {
 			dir := strings.Replace(pkg.ID, "github.com/dgraph-io/dgraph/", "", 1)
 			fname := path.Join(*baseDir, dir, "docker-compose.yml")
 			_, err := os.Stat(fname)
 			if os.IsNotExist(err) {
 				select {
 				case commonTestCh <- pkg.ID:
+					fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
 				case <-closer.HasBeenClosed():
 					return
 				}
@@ -353,5 +363,5 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	fmt.Println("Tests PASSED.")
+	fmt.Printf("Tests PASSED. Time taken: %v\n", time.Since(start).Truncate(time.Second))
 }

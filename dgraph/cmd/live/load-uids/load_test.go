@@ -38,15 +38,14 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var alphaService = testutil.SockAddr
-var zeroService = testutil.SockAddrZero
-
 var (
 	testDataDir string
 	dg          *dgo.Dgraph
 )
 
 var (
+	alphaService    string
+	zeroService     string
 	alphaName       string
 	alphaExportPath string
 	localExportPath = "./export_copy"
@@ -204,6 +203,7 @@ func TestLiveLoadJsonUidKeep(t *testing.T) {
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
 	_, err := testutil.Pipeline(pipeline)
+	fmt.Printf("pipeline: %+v\n", pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, false)
@@ -366,6 +366,8 @@ func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	alphaName = testutil.Instance
+	alphaService = testutil.SockAddr
+	zeroService = testutil.SockAddrZero
 
 	x.AssertTrue(strings.Count(alphaName, "_") == 2)
 	left := strings.Index(alphaName, "_")
@@ -375,6 +377,7 @@ func TestMain(m *testing.M) {
 
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
+	fmt.Printf("Using test data dir: %s\n", testDataDir)
 
 	var err error
 	dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
