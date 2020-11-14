@@ -370,12 +370,17 @@ func getVolume(vol string) volume {
 	srcDir := s[0]
 	dstDir := s[1]
 	readOnly := len(s) > 2 && s[2] == "ro"
+	volType := "volume"
+	if isBindMount(srcDir) {
+		volType = "bind"
+	}
 	return volume{
-		Type:     "bind",
+		Type:     volType,
 		Source:   srcDir,
 		Target:   dstDir,
 		ReadOnly: readOnly,
 	}
+
 }
 
 func getJaeger() service {
@@ -484,6 +489,10 @@ func semverCompare(constraint, version string) (bool, error) {
 	}
 
 	return c.Check(v), nil
+}
+
+func isBindMount(vol string) bool {
+	return strings.HasPrefix(vol, ".") || strings.HasPrefix(vol, "/")
 }
 
 func fatal(err error) {
@@ -608,6 +617,25 @@ func main() {
 		Version:  "3.5",
 		Services: services,
 		Volumes:  make(map[string]stringMap),
+	}
+
+	if len(opts.AlphaVolumes) > 0 {
+		for _, vol := range opts.AlphaVolumes {
+			s := strings.Split(vol, ":")
+			srcDir := s[0]
+			if !isBindMount(srcDir) {
+				cfg.Volumes[srcDir] = stringMap{}
+			}
+		}
+	}
+	if len(opts.ZeroVolumes) > 0 {
+		for _, vol := range opts.ZeroVolumes {
+			s := strings.Split(vol, ":")
+			srcDir := s[0]
+			if !isBindMount(srcDir) {
+				cfg.Volumes[srcDir] = stringMap{}
+			}
+		}
 	}
 
 	if opts.DataVol {
