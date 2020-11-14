@@ -11,8 +11,6 @@ Choose these ports carefully based on your topology and mode of deployment, as
 this will impact the access security rules or firewall configurations required
 for each port.
 
-{{% notice "tip" %}}
-
 ## Types of ports
 
 Dgraph Alpha and Dgraph Zero nodes use a variety of gRPC and HTTP ports, as follows:
