@@ -62,6 +62,7 @@ type service struct {
 	WorkingDir    string    `yaml:"working_dir,omitempty"`
 	DependsOn     []string  `yaml:"depends_on,omitempty"`
 	Labels        stringMap `yaml:",omitempty"`
+	EnvFile       []string  `yaml:",omitempty"`
 	Environment   []string  `yaml:",omitempty"`
 	Ports         []string  `yaml:",omitempty"`
 	Volumes       []volume  `yaml:",omitempty"`
@@ -108,6 +109,8 @@ type options struct {
 	ContainerNames bool
 	AlphaVolumes   []string
 	ZeroVolumes    []string
+	AlphaEnvFile   []string
+	ZeroEnvFile    []string
 
 	// Extra flags
 	AlphaFlags string
@@ -253,6 +256,8 @@ func getZero(idx int) service {
 			svc.Volumes = append(svc.Volumes, getVolume(vol))
 		}
 	}
+	svc.EnvFile = opts.ZeroEnvFile
+
 	return svc
 }
 
@@ -358,6 +363,7 @@ func getAlpha(idx int) service {
 			svc.Volumes = append(svc.Volumes, getVolume(vol))
 		}
 	}
+	svc.EnvFile = opts.AlphaEnvFile
 	if opts.AlphaFlags != "" {
 		svc.Command += " " + opts.AlphaFlags
 	}
@@ -570,8 +576,14 @@ func main() {
 		"extra flags for zeros.")
 	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", true,
 		"set container names in docker compose.")
-	cmd.PersistentFlags().StringArrayVar(&opts.AlphaVolumes, "alpha_volume", nil, "alpha volume mounts, following srcdir:dstdir[:ro]")
-	cmd.PersistentFlags().StringArrayVar(&opts.ZeroVolumes, "zero_volume", nil, "zero volume mounts, following srcdir:dstdir[:ro]")
+	cmd.PersistentFlags().StringArrayVar(&opts.AlphaVolumes, "alpha_volume", nil,
+		"alpha volume mounts, following srcdir:dstdir[:ro]")
+	cmd.PersistentFlags().StringArrayVar(&opts.ZeroVolumes, "zero_volume", nil,
+		"zero volume mounts, following srcdir:dstdir[:ro]")
+	cmd.PersistentFlags().StringArrayVar(&opts.AlphaEnvFile, "alpha_env_file", nil,
+		"env_file for alpha")
+	cmd.PersistentFlags().StringArrayVar(&opts.ZeroEnvFile, "zero_env_file", nil,
+		"env_file for zero")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
