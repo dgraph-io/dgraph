@@ -75,7 +75,10 @@ In general, an auth rule should select a field that's expected to exist at the i
 
 ## `@auth` on Interfaces
 
-The `@auth` directive works just like it works for types which are to provide authorization to perform `query`, `update`, and `delete` on interfaces. 
+The `@auth` directive works just like it works for types which are to provide authorization to perform `query`, `update`, and `delete` on interfaces.
+
+### Implementing types
+
 The rules provided inside the `@auth` directive on an interface will also be applied as an `AND` rule to those on the implementing types.
 
 {{% notice "tip" %}}
@@ -132,6 +135,17 @@ type Answer implements Post @auth(
   markedUseful: Boolean
 }
 ```
+
+If the `Question` type implemented more interfaces, then the rules for those would also be added in an `AND` condition to the `Question` type's authorization rules.
+
+### Interfaces
+
+When it comes to applying `@auth` rules on interfaces themselves, Dgraph will do a `union` query where it queries all the implementing types, and apply the authorization rules on them. 
+The final query will be an `OR` query joining the results from all the implementing types.
+
+### Mutations
+
+Mutations on an interface works in the same manner. For example, in case of a `delete` mutation on an interface, it will be broken down into the implementing type's `delete` mutation. The nodes that satisfy the `@auth` rules of the corresponding implementing types and the interface will get deleted.
 
 ## Graph traversal in auth rules
 
