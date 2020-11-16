@@ -124,12 +124,13 @@ type country struct {
 }
 
 type author struct {
-	ID         string     `json:"id,omitempty"`
-	Name       string     `json:"name,omitempty"`
-	Dob        *time.Time `json:"dob,omitempty"`
-	Reputation float32    `json:"reputation,omitempty"`
-	Country    *country   `json:"country,omitempty"`
-	Posts      []*post    `json:"posts,omitempty"`
+	ID            string     `json:"id,omitempty"`
+	Name          string     `json:"name,omitempty"`
+	Qualification string     `json:"qualification,omitempty"`
+	Dob           *time.Time `json:"dob,omitempty"`
+	Reputation    float32    `json:"reputation,omitempty"`
+	Country       *country   `json:"country,omitempty"`
+	Posts         []*post    `json:"posts,omitempty"`
 }
 
 type user struct {
@@ -350,11 +351,15 @@ func RunAll(t *testing.T) {
 	t.Run("queries have extensions", queriesHaveExtensions)
 	t.Run("alias works for queries", queryWithAlias)
 	t.Run("cascade directive", queryWithCascade)
+	t.Run("filter in queries with array for AND/OR", filterInQueriesWithArrayForAndOr)
 	t.Run("query geo near filter", queryGeoNearFilter)
 	t.Run("persisted query", persistedQuery)
 	t.Run("query count without filter", queryCountWithoutFilter)
 	t.Run("query count with filter", queryCountWithFilter)
 	t.Run("query count with alias", queryCountWithAlias)
+	t.Run("query count at child level", queryCountAtChildLevel)
+	t.Run("query count at child level with filter", queryCountAtChildLevelWithFilter)
+	t.Run("query count and other fields at child level", queryCountAndOtherFieldsAtChildLevel)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -396,10 +401,13 @@ func RunAll(t *testing.T) {
 	t.Run("three level deep", threeLevelDeepMutation)
 	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
 	t.Run("Input coercing for int64 type", int64BoundaryTesting)
+	t.Run("List of integers", intWithList)
 	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
 	t.Run("Geo - Point type", mutationPointType)
 	t.Run("Geo - Polygon type", mutationPolygonType)
 	t.Run("Geo - MultiPolygon type", mutationMultiPolygonType)
+	t.Run("filter in mutations with array for AND/OR", filterInMutationsWithArrayForAndOr)
+	t.Run("filter in update mutations with array for AND/OR", filterInUpdateMutationsWithFilterAndOr)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

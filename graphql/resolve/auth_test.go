@@ -20,11 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go/v4"
 	"io/ioutil"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/dgrijalva/jwt-go/v4"
 
 	"google.golang.org/grpc/metadata"
 
@@ -36,8 +37,8 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
+	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/stretchr/testify/require"
-	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"gopkg.in/yaml.v2"
 )
 
@@ -255,6 +256,15 @@ func TestInvalidAuthInfo(t *testing.T) {
 	require.NoError(t, err)
 	_, err = schema.NewHandler(string(authSchema), false)
 	require.Error(t, err, fmt.Errorf("Expecting either JWKUrl or (VerificationKey, Algo), both were given"))
+}
+
+func TestMissingAudienceWithJWKUrl(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+	authSchema, err := testutil.AppendAuthInfoWithJWKUrlAndWithoutAudience(sch)
+	require.NoError(t, err)
+	_, err = schema.NewHandler(string(authSchema), false)
+	require.Error(t, err, fmt.Errorf("required field missing in Dgraph.Authorization: `Audience`"))
 }
 
 //Todo(Minhaj): Add a testcase for token without Expiry

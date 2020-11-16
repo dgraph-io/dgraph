@@ -257,6 +257,10 @@
             "upsert": true
         },
         {
+            "predicate": "dgraph.drop.op",
+            "type": "string"
+        },
+        {
             "predicate":"dgraph.graphql.p_query",
             "type":"string"
         },
@@ -383,7 +387,11 @@
             "type": "uid"
         },
         {
+            "index": true,
             "predicate": "post1.numLikes",
+            "tokenizer": [
+                "int"
+            ],
             "type": "int"
         },
         {
@@ -395,6 +403,16 @@
                 "trigram"
             ],
             "upsert": true
+        },
+        {
+            "predicate": "post1.commentsByMonth",
+            "list": true,
+            "type": "int"
+        },
+        {
+            "predicate": "post1.likesByMonth",
+            "list": true,
+            "type": "int"
         },
         {
             "predicate": "pwd",
@@ -449,6 +467,15 @@
             "tokenizer": [
                 "float"
             ]
+        },
+        {
+            "index": true,
+            "predicate": "test.dgraph.author.qualification",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
         },
         {
             "predicate": "test.dgraph.employee.en.ename",
@@ -875,7 +902,14 @@
                 },
                 {
                     "name": "post1.numLikes"
+                },
+                {
+                    "name": "post1.commentsByMonth"
+                },
+                {
+                    "name": "post1.likesByMonth"
                 }
+
             ],
             "name": "post1"
         },
@@ -920,6 +954,9 @@
                 },
                 {
                     "name": "test.dgraph.author.posts"
+                },
+                {
+                    "name": "test.dgraph.author.qualification"
                 }
             ],
             "name": "test.dgraph.author"

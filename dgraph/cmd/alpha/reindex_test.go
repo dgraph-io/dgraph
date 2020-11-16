@@ -46,7 +46,7 @@ func TestReindexTerm(t *testing.T) {
         name
       }
     }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, `{"name":"Ab Bc"}`)
 	require.Contains(t, res, `{"name":"Bc Cd"}`)
@@ -76,7 +76,7 @@ func TestReindexLang(t *testing.T) {
       name@en
     }
   }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.JSONEq(t, `{
     "data": {
@@ -98,7 +98,7 @@ func TestReindexLang(t *testing.T) {
 	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
-	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.JSONEq(t, `{
     "data": {
@@ -149,7 +149,7 @@ func TestReindexReverseCount(t *testing.T) {
       uid
     }
   }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.JSONEq(t, `{
     "data": {
@@ -169,7 +169,7 @@ func TestReindexReverseCount(t *testing.T) {
 	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
-	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.JSONEq(t, `{
     "data": {
@@ -190,7 +190,7 @@ func TestReindexReverseCount(t *testing.T) {
 
 func checkSchema(t *testing.T, query, key string) {
 	for i := 0; i < 10; i++ {
-		res, _, err := queryWithTs(query, "application/graphql+-", "", 0)
+		res, _, err := queryWithTs(query, "application/dql", "", 0)
 		require.NoError(t, err)
 		if strings.Contains(res, key) {
 			return

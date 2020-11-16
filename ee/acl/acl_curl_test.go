@@ -48,7 +48,7 @@ func TestCurlAuthorization(t *testing.T) {
 	// alter and mutate should fail.
 	queryArgs := func(jwt string) []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
-			"-H", "Content-Type: application/graphql+-",
+			"-H", "Content-Type: application/dql",
 			"-d", query, curlQueryEndpoint}
 	}
 	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{

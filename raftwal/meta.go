@@ -63,7 +63,7 @@ const (
 	// metaName is the name of the file used to store metadata (e.g raft ID, checkpoint).
 	metaName = "wal.meta"
 	// metaFileSize is the size of the wal.meta file.
-	metaFileSize = 4 << 30
+	metaFileSize = 1 << 20
 	//hardStateOffset is the offset of the hard sate within the wal.meta file.
 	hardStateOffset = 512
 	// snapshotIndex stores the index and term corresponding to the snapshot.
@@ -158,8 +158,10 @@ func (m *metaFile) StoreSnapshot(snap *raftpb.Snapshot) error {
 	}
 	glog.V(1).Infof("Got valid snapshot to store of length: %d\n", len(buf))
 
-	if len(m.Data)-snapshotOffset < len(buf) {
-		return errors.Errorf("Unable to store snapshot of size: %d\n", len(buf))
+	for len(m.Data)-snapshotOffset < len(buf) {
+		if err := m.Truncate(2 * int64(len(m.Data))); err != nil {
+			return errors.Wrapf(err, "while truncating: %s", m.Fd.Name())
+		}
 	}
 	writeSlice(m.Data[snapshotOffset:], buf)
 	return nil

@@ -30,9 +30,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/v2/gqlerror"
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/square/go-jose.v2"
 )
@@ -82,6 +82,11 @@ func (a *AuthMeta) validate() error {
 	if a.JWKUrl != "" {
 		if a.VerificationKey != "" || a.Algo != "" {
 			return fmt.Errorf("expecting either JWKUrl or (VerificationKey, Algo), both were given")
+		}
+
+		// Audience should be a required field if JWKUrl is provided.
+		if len(a.Audience) == 0 {
+			fields = " `Audience` "
 		}
 	} else {
 		if a.VerificationKey == "" {

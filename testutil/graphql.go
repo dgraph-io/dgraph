@@ -64,7 +64,7 @@ type GraphQLResponse struct {
 
 func (resp *GraphQLResponse) RequireNoGraphQLErrors(t *testing.T) {
 	if resp == nil {
-		return
+		require.Fail(t, "got nil response")
 	}
 	require.Nil(t, resp.Errors, "required no GraphQL errors, but received :\n%s",
 		resp.Errors.Error())
@@ -238,6 +238,11 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault b
 
 func AppendAuthInfoWithJWKUrl(schema []byte) ([]byte, error) {
 	authInfo := `# Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurl":"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":["fir-project1-259e7"]}`
+	return append(schema, []byte(authInfo)...), nil
+}
+
+func AppendAuthInfoWithJWKUrlAndWithoutAudience(schema []byte) ([]byte, error) {
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurl":"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":[]}`
 	return append(schema, []byte(authInfo)...), nil
 }
 

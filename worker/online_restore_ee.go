@@ -297,8 +297,8 @@ func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
-		getCredentialsFromRestoreRequest(req),
-		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+		getCredentialsFromRestoreRequest(req), func(r io.Reader, groupId uint32,
+			preds predicateSet, dropOperations []*pb.DropOperation) (uint64, error) {
 			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
 				// Exit here if the group is not the one indicated by the request.
@@ -322,7 +322,7 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 				return 0, errors.Wrapf(err, "couldn't create gzip reader")
 			}
 
-			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds)
+			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds, dropOperations)
 			if err != nil {
 				return 0, errors.Wrapf(err, "cannot write backup")
 			}

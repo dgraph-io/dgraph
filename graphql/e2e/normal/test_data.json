@@ -103,5 +103,32 @@
         "dgraph.type": "State",
         "State.name": "Nusa",
         "State.xcode": "nusa"
+    },
+    {
+        "uid": "_:mh",
+        "dgraph.type": "State",
+        "State.name": "Maharashtra",
+        "State.xcode": "mh",
+        "State.country": {"uid":  "_:india"}
+    },
+    {
+        "uid": "_:gj",
+        "dgraph.type": "State",
+        "State.name": "Gujarat",
+        "State.xcode": "gj",
+        "State.country": {"uid":  "_:india"}
+    },
+    {
+        "uid": "_:ka",
+        "dgraph.type": "State",
+        "State.name": "Karnataka",
+        "State.xcode": "ka",
+        "State.country": {"uid":  "_:india"}
+    },
+    {
+        "uid": "_:india",
+        "dgraph.type": "Country",
+        "Country.name": "India",
+        "Country.states": [{ "uid": "_:mh" }, { "uid": "_:gj" }, { "uid":  "_:ka"}]
     }
 ]

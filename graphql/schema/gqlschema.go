@@ -22,9 +22,9 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
-	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/dgraph-io/gqlparser/v2/parser"
 )
 
 const (
@@ -108,28 +108,28 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 scalar DateTime
 
 input IntRange{
-	min: Int
-	max: Int
+	min: Int!
+	max: Int!
 }
 
 input FloatRange{
-	min: Float
-	max: Float
+	min: Float!
+	max: Float!
 }
 
 input Int64Range{
-	min: Int64
-	max: Int64
+	min: Int64!
+	max: Int64!
 }
 
 input DateTimeRange{
-	min: DateTime
-	max: DateTime
+	min: DateTime!
+	max: DateTime!
 }
 
 input StringRange{
-	min: String
-	max: String
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
@@ -852,11 +852,12 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addFilterType(sch, defn)
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
-		if params.generateAggregateQuery {
-			addAggregationResultType(sch, defn)
-		}
+		addAggregationResultType(sch, defn)
 		addQueries(sch, defn, params)
 		addTypeHasFilter(sch, defn)
+		// We need to call this at last as aggregateFields
+		// should not be part of HasFilter or UpdatePayloadType etc.
+		addAggregateFields(sch, defn)
 	}
 }
 
@@ -1113,12 +1114,38 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 
 		// Ordering and pagination, however, only makes sense for fields of
 		// list types (not scalar lists).
-		if _, scalar := inbuiltTypeToDgraph[fld.Type.Name()]; !scalar && fld.Type.Elem != nil {
+		if isTypeList(fld) {
 			addOrderArgument(schema, fld)
 
 			// Pagination even makes sense when there's no orderables because
 			// Dgraph will do UID order by default.
 			addPaginationArguments(fld)
+		}
+	}
+}
+
+// addAggregateFields adds aggregate fields for fields which are of
+// type list of object. eg. If defn is like
+// type T {fiedldA : [A]}
+// The following aggregate field is added to type T
+// fieldAAggregate(filter : AFilter) : AAggregateResult
+// These fields are added to support aggregate queries like count, avg, min
+func addAggregateFields(schema *ast.Schema, defn *ast.Definition) {
+	for _, fld := range defn.Fields {
+		// Aggregate Fields only makes sense for fields of
+		// list types of kind Object or Interface
+		// (not scalar lists or not singleton types or lists of other kinds).
+		if isTypeList(fld) && !hasCustomOrLambda(fld) &&
+			(schema.Types[fld.Type.Name()].Kind == ast.Object ||
+				schema.Types[fld.Type.Name()].Kind == ast.Interface) {
+			aggregateField := &ast.FieldDefinition{
+				Name: fld.Name + "Aggregate",
+				Type: &ast.Type{
+					NamedType: fld.Type.Name() + "AggregateResult",
+				},
+			}
+			addFilterArgumentForField(schema, aggregateField, fld.Type.Name())
+			defn.Fields = append(defn.Fields, aggregateField)
 		}
 	}
 }
@@ -1198,9 +1225,16 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 			var l ast.FieldList
 
 			for _, i := range schema.Types[stringFilterName].Fields {
+				typ := fld.Type
+
+				// In case of IN filter we need to construct List of enums as Input Type.
+				if i.Type.Elem != nil && fld.Type.Elem == nil {
+					typ = &ast.Type{Elem: &ast.Type{NamedType: fld.Type.NamedType, NonNull: fld.Type.NonNull}}
+				}
+
 				l = append(l, &ast.FieldDefinition{
 					Name:         i.Name,
-					Type:         fld.Type,
+					Type:         typ,
 					Description:  i.Description,
 					DefaultValue: i.DefaultValue,
 				})
@@ -1292,8 +1326,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	// if the filter has more than one field or if it has one non-id field.
 	if (len(filter.Fields) == 1 && !isID(filter.Fields[0])) || len(filter.Fields) > 1 {
 		filter.Fields = append(filter.Fields,
-			&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
-			&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},
+			&ast.FieldDefinition{Name: "and", Type: &ast.Type{Elem: &ast.Type{NamedType: filterName}}},
+			&ast.FieldDefinition{Name: "or", Type: &ast.Type{Elem: &ast.Type{NamedType: filterName}}},
 		)
 	}
 
@@ -1313,6 +1347,13 @@ func hasFilterable(defn *ast.Definition) bool {
 		func(fld *ast.FieldDefinition) bool {
 			return len(getSearchArgs(fld)) != 0 || isID(fld)
 		})
+}
+
+// Returns if given field is a list of type
+// This returns true for list of all non scalar types
+func isTypeList(fld *ast.FieldDefinition) bool {
+	_, scalar := inbuiltTypeToDgraph[fld.Type.Name()]
+	return !scalar && fld.Type.Elem != nil
 }
 
 func hasOrderables(defn *ast.Definition) bool {

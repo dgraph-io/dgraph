@@ -43,6 +43,15 @@
             ]
         },
         {
+            "index": true,
+            "predicate": "Author.qualification",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
+        },
+        {
             "predicate": "Category.name",
             "type": "string"
         },
@@ -421,6 +430,10 @@
             "upsert": true
         },
         {
+            "predicate": "dgraph.drop.op",
+            "type": "string"
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
         },
@@ -461,7 +474,11 @@
             "list": true
         },
         {
+            "index": true,
             "predicate": "post1.numLikes",
+            "tokenizer": [
+              "int"
+            ],
             "type": "int"
         },
         {
@@ -473,6 +490,16 @@
                 "trigram"
             ],
             "upsert": true
+        },
+        {
+            "predicate": "post1.commentsByMonth",
+            "list": true,
+            "type": "int"
+        },
+        {
+            "predicate": "post1.likesByMonth",
+            "list": true,
+            "type": "int"
         }
     ],
     "types": [
@@ -500,6 +527,9 @@
                 },
                 {
                     "name": "Author.posts"
+                },
+                {
+                    "name": "Author.qualification"
                 }
             ],
             "name": "Author"
@@ -928,6 +958,12 @@
                 },
                 {
                     "name": "post1.numLikes"
+                },
+                {
+                    "name": "post1.commentsByMonth"
+                },
+                {
+                    "name": "post1.likesByMonth"
                 }
             ],
             "name": "post1"

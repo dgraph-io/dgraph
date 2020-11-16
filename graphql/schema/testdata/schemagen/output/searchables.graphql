@@ -52,28 +52,28 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 scalar DateTime
 
 input IntRange{
-	min: Int
-	max: Int
+	min: Int!
+	max: Int!
 }
 
 input FloatRange{
-	min: Float
-	max: Float
+	min: Float!
+	max: Float!
 }
 
 input Int64Range{
-	min: Int64
-	max: Int64
+	min: Int64!
+	max: Int64!
 }
 
 input DateTimeRange{
-	min: DateTime
-	max: DateTime
+	min: DateTime!
+	max: DateTime!
 }
 
 input StringRange{
-	min: String
-	max: String
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
@@ -414,8 +414,8 @@ input PostFilter {
 	postTypeHashRegexp: PostType_hash_StringRegExpFilter
 	postTypeNone: PostType_hash
 	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
+	and: [PostFilter]
+	or: [PostFilter]
 	not: PostFilter
 }
 
@@ -480,7 +480,7 @@ input PostRef {
 
 input PostType_exact {
 	eq: PostType
-	in: PostType
+	in: [PostType]
 	le: PostType
 	lt: PostType
 	ge: PostType
@@ -490,7 +490,7 @@ input PostType_exact {
 
 input PostType_exact_StringRegExpFilter {
 	eq: PostType
-	in: PostType
+	in: [PostType]
 	le: PostType
 	lt: PostType
 	ge: PostType
@@ -501,12 +501,12 @@ input PostType_exact_StringRegExpFilter {
 
 input PostType_hash {
 	eq: PostType
-	in: PostType
+	in: [PostType]
 }
 
 input PostType_hash_StringRegExpFilter {
 	eq: PostType
-	in: PostType
+	in: [PostType]
 	regexp: String
 }
 
