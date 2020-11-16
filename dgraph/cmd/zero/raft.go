@@ -767,11 +767,22 @@ func (n *node) Run() {
 					glog.Infof("Done applying conf change at %#x", n.Id)
 
 				case entry.Type == raftpb.EntryNormal:
+					start := time.Now()
 					key, err := n.applyProposal(entry)
 					if err != nil {
 						glog.Errorf("While applying proposal: %v\n", err)
 					}
 					n.Proposals.Done(key, err)
+					if took := time.Since(start); took > time.Second {
+
+						var p pb.ZeroProposal
+						// Raft commits empty entry on becoming a leader.
+						if err := p.Unmarshal(e.Data); err == nil {
+							glog.V(2).Infof("Proposal took %s to apply: %+v\n",
+								took.Round(time.Second), p)
+						}
+
+					}
 
 				default:
 					glog.Infof("Unhandled entry: %+v\n", entry)
@@ -797,8 +808,8 @@ func (n *node) Run() {
 			if timer.Total() > 5*tickDur {
 				glog.Warningf(
 					"Raft.Ready took too long to process: %s."+
-						" Num entries: %d. MustSync: %v",
-					timer.String(), len(rd.Entries), rd.MustSync)
+						" Num entries: %d. Num committed entries: %d. MustSync: %v",
+					timer.String(), len(rd.Entries), len(rd.CommittedEntries), rd.MustSync)
 			}
 
 			// Apply license when I am the leader.
