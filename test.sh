@@ -120,6 +120,8 @@ function Run {
 
 function RunCmd {
     CURRENT_TEST=$1
+    export TEST_ALPHA_PORT=9180
+    export TEST_ALPHA_PORT_HTTP=8180
     IsCi && echo "##teamcity[testStarted name='$1' captureStandardOutput='true']"
     if eval "$@"; then
         echo -e "\e[1;32mok $1\e[0m"
