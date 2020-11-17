@@ -70,6 +70,11 @@ The `-U, --upsertPredicate` flag runs the Live Loader in upsertPredicate mode. T
 When the `upsertPredicate` already exists in the data, the existing node with this `xid` is modified and no new node is added.
 {{% /notice %}}
 
+For example:
+```sh
+dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -U <xid>
+```
+
 ### Other Live Loader options
 
 `--new_uids` (default: `false`): Assign new UIDs instead of using the existing
