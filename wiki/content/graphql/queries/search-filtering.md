@@ -23,7 +23,8 @@ query {
 }
 ```
 
-Fetching nested linked objects, while using `get` queries is also easy. For example, this is how you would fetch the authors for a post and their friends.
+Fetching nested linked objects, while using `get` queries is also easy. For
+example, this is how you would fetch the authors for a post and their friends.
 
 ```graphql
 query {
@@ -45,7 +46,7 @@ query {
 While fetching nested linked objects, you can also apply a filter on them.
 
 For example, the following query fetches the author with the `id` 0x1 and their
- posts about `GraphQL`.
+posts about `GraphQL`.
 
 ```graphql
 query {
@@ -216,11 +217,12 @@ queryStudent(fitler: {name: between: {min: "ba", max: "hz"}}){
 }
 ```
 
-## Filter queries that match specified values with `in`
+## Filter to match specified field values with `in`
 
-You can filter queries to find nodes with one or more specified values using the
+You can filter query results to find objects with one or more specified values using the
 `in` keyword. This keyword can find matches for fields with the `@id` directive
-applied.
+applied. This filter is also supported on `string` and `enum` types with a
+[`Hash` or `Exact` index](https://dgraph.io/docs/master/graphql/schema/search/#string-exact-and-hash-search).
 
 For example, let's say that your schema defines a `State` type that has the
 `@id` directive applied to the `code` field:
@@ -245,34 +247,29 @@ query {
     }
 ```
 
-## Filter a query for nodes with specified fields using `has`
+## Filter for objects with specified non-null fields using `has`
 
-You can filter queries to find nodes with a specified field using the `has`
-keyword. The `has` keyword can only check for the presence of a specified field,
-not for specific field values.
+You can filter queries to find objects with a non-null value in a specified
+field using the `has` keyword. The `has` keyword can only check whether a field
+returns a non-null value, not for specific field values.
 
-For example, your schema might define a `Teacher` type that has basic
-information about each teacher; such as their ID number, name, and age:
+For example, your schema might define a `Student` type that has basic
+information about each student; such as their ID number, age, and name:
 
 ```graphql
-type Teacher {
-  tid: ID!
-  age: Int!
-  name: String
+type Student {
+   tid: ID!
+   age: Int!
+   name: String
 }
 ```
 
-Specific `Teacher` nodes might have additional fields noting their specific area
-of expertise; for example, a boolean field noting if they have experience with
-teaching mathematics. To query for only those teachers that have a `mathematics`
-field, you could use the following query:
+To find those students who have a non-null `name`, run the following query:
 
 ```graphql
-query {
-  queryTeacher(filter: { has : mathematics } ) {
-    tid
-    age
-    name
-  }
+queryStudent(filter: { has : name } ){
+   tid
+   age
+   name
 }
 ```
