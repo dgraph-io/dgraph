@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/gorilla/websocket"
@@ -111,9 +112,13 @@ func NewGraphQLSubscription(url string, req *schema.Request, subscriptionPayload
 	}, nil
 }
 
+var mutex sync.Mutex
+
 // RecvMsg recives graphql update from the server.
 func (client *GraphQLSubscriptionClient) RecvMsg() ([]byte, error) {
 	// Receive message from graphql server.
+	mutex.Lock()
+	defer mutex.Unlock()
 	msg := &operationMessage{}
 	if err := client.conn.ReadJSON(msg); err != nil {
 		return nil, err

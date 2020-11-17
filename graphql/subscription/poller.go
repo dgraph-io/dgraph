@@ -77,17 +77,14 @@ func (p *Poller) AddSubscriber(
 	buf, err := json.Marshal(req)
 	x.Check(err)
 	var bucketID uint64
-	if !(customClaims.AuthVariables == nil && customClaims.ExpiresAt == nil) {
+	if customClaims.AuthVariables != nil {
+
 		// TODO - Add custom marshal function that marshal's the json in sorted order.
 		authvariables, err := json.Marshal(customClaims.AuthVariables)
 		if err != nil {
 			return nil, err
 		}
-		expiry, err := json.Marshal(customClaims.ExpiresAt)
-		if err != nil {
-			return nil, err
-		}
-		bucketID = farm.Fingerprint64(append(buf, append(expiry, authvariables...)...))
+		bucketID = farm.Fingerprint64(append(buf, authvariables...))
 	} else {
 		bucketID = farm.Fingerprint64(buf)
 	}
@@ -159,7 +156,7 @@ func (p *Poller) poll(req *pollRequest) {
 	pollID := uint64(0)
 	for {
 		pollID++
-		time.Sleep(x.Config.PollInterval)
+		//time.Sleep(x.Config.PollInterval)
 
 		globalEpoch := atomic.LoadUint64(p.globalEpoch)
 		if req.localEpoch != globalEpoch || globalEpoch == math.MaxUint64 {
@@ -175,10 +172,10 @@ func (p *Poller) poll(req *pollRequest) {
 		currentHash := farm.Fingerprint64(res.Data.Bytes())
 
 		if req.prevHash == currentHash {
-			if pollID%2 != 0 {
-				// Don't update if there is no change in response.
-				continue
-			}
+			//if pollID%2 != 0 {
+			//	// Don't update if there is no change in response.
+			//	continue
+			//}
 			// Every second poll, we'll check if there is any active subscription for the
 			// current goroutine. If not we'll terminate this poll.
 			p.Lock()

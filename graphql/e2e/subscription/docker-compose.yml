@@ -12,6 +12,8 @@ services:
     - 8180:8180
     - 9180:9180
     volumes:
+    - "/etc/timezone:/etc/timezone:ro"
+    - "/etc/localtime:/etc/localtime:ro"
     - type: bind
       source: $GOPATH/bin
       target: /gobin
@@ -30,6 +32,8 @@ services:
     - 8182:8182
     - 9182:9182
     volumes:
+    - "/etc/timezone:/etc/timezone:ro"
+    - "/etc/localtime:/etc/localtime:ro"
     - type: bind
       source: $GOPATH/bin
       target: /gobin
@@ -48,6 +52,8 @@ services:
     - 8183:8183
     - 9183:9183
     volumes:
+    - "/etc/timezone:/etc/timezone:ro"
+    - "/etc/localtime:/etc/localtime:ro"
     - type: bind
       source: $GOPATH/bin
       target: /gobin
@@ -64,6 +70,8 @@ services:
     - 5180:5180
     - 6180:6180
     volumes:
+    - "/etc/timezone:/etc/timezone:ro"
+    - "/etc/localtime:/etc/localtime:ro"
     - type: bind
       source: $GOPATH/bin
       target: /gobin
