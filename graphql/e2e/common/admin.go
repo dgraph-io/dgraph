@@ -523,13 +523,13 @@ const (
 )
 
 func admin(t *testing.T) {
-	d, err := grpc.Dial(alphaAdminTestgRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	testutil.DropAll(t, client)
 
-	hasSchema, err := hasCurrentGraphQLSchema(graphqlAdminTestAdminURL)
+	hasSchema, err := hasCurrentGraphQLSchema(graphqlAdminURL)
 	require.NoError(t, err)
 	require.False(t, hasSchema)
 
@@ -564,7 +564,7 @@ func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
 }
 
 func addGQLSchema(t *testing.T, client *dgo.Dgraph) {
-	err := addSchema(graphqlAdminTestAdminURL, firstTypes)
+	err := addSchema(graphqlAdminURL, firstTypes)
 	require.NoError(t, err)
 
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
@@ -576,7 +576,7 @@ func addGQLSchema(t *testing.T, client *dgo.Dgraph) {
 }
 
 func updateSchema(t *testing.T, client *dgo.Dgraph) {
-	err := addSchema(graphqlAdminTestAdminURL, updatedTypes)
+	err := addSchema(graphqlAdminURL, updatedTypes)
 	require.NoError(t, err)
 
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
@@ -626,7 +626,7 @@ func introspect(t *testing.T, expected string) {
 		}`,
 	}
 
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, expected, string(gqlResponse.Data))
@@ -648,7 +648,7 @@ func health(t *testing.T) {
         }
       }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -688,7 +688,7 @@ func partialHealth(t *testing.T) {
             }
         }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t, `{
         "health": [
@@ -717,7 +717,7 @@ func adminAlias(t *testing.T) {
             }
         }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t, `{
         "dgraphHealth": [
@@ -796,7 +796,7 @@ func adminState(t *testing.T) {
 			}
 		}`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
