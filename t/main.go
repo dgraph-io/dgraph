@@ -228,40 +228,77 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	return nil
 }
 
-func findGocache() string {
-	cmd := command("go env GOCACHE")
-	cmd.Stdout = nil
-	out, err := cmd.Output()
-	x.Check(err)
-	return "GOCACHE=" + string(out)
-}
-
-func runCommonTests(pkgCh chan string, closer *z.Closer) error {
+func runTests(taskCh chan task, closer *z.Closer) error {
 	defer closer.Done()
 
 	defaultCompose := path.Join(*baseDir, "dgraph/docker-compose.yml")
-	id := atomic.AddInt32(&testId, 1)
-	prefix := fmt.Sprintf("test%03d-%d", procId, id)
+	prefix := getPrefix()
 
-	stopCluster(defaultCompose, prefix)
-	startCluster(defaultCompose, prefix)
+	var started, stopped bool
+	start := func() {
+		if started {
+			return
+		}
+		startCluster(defaultCompose, prefix)
+
+		// Wait for cluster to be healthy.
+		getInstance(prefix, "alpha1").loginFatal()
+	}
+
+	stop := func() {
+		if *keepCluster || stopped {
+			return
+		}
+		stopCluster(defaultCompose, prefix)
+		stopped = true
+	}
+	defer stop()
+
+	ctx := closer.Ctx()
+
+	uncommon := false
+	for task := range taskCh {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if uncommon && task.isCommon {
+			glog.Fatalf("Package sorting is wrong. Common cluster tests should run first.")
+		}
+		if task.isCommon {
+			start()
+			if err := runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
+				return err
+			}
+		} else {
+			uncommon = true
+			stop() // Stop default cluster.
+
+			if err := runCustomClusterTest(ctx, task.pkg.ID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func getPrefix() string {
+	id := atomic.AddInt32(&testId, 1)
+	return fmt.Sprintf("test%03d-%d", procId, id)
+}
+
+func runCustomClusterTest(ctx context.Context, pkg string) error {
+	compose := composeFileFor(pkg)
+	prefix := getPrefix()
+
+	startCluster(compose, prefix)
 	if !*keepCluster {
-		defer stopCluster(defaultCompose, prefix)
+		defer stopCluster(compose, prefix)
 	}
 
 	// Wait for cluster to be healthy.
 	getInstance(prefix, "alpha1").loginFatal()
 
-	ctx := closer.Ctx()
-	for pkg := range pkgCh {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err := runTestsFor(ctx, pkg, prefix); err != nil {
-			return err
-		}
-	}
-	return nil
+	return runTestsFor(ctx, pkg, prefix)
 }
 
 func findPackageFor(testName string) string {
@@ -323,7 +360,7 @@ func (o *failureCatcher) Print() {
 		if dur.dur < 5*time.Second {
 			continue
 		}
-		fmt.Printf("[%s] [%s] pkg %s took: %s", dur.ts.Format(time.Kitchen),
+		fmt.Printf("[%s] [%s] pkg %s took: %s\n", dur.ts.Format(time.Kitchen),
 			dur.prefix, dur.pkg, dur.dur)
 	}
 
@@ -339,6 +376,67 @@ func (o *failureCatcher) Print() {
 	if fc.failure.Len() > 0 {
 		fmt.Printf("Failure output: %s\n", fc.failure.Bytes())
 	}
+}
+
+type task struct {
+	pkg      *packages.Package
+	isCommon bool
+}
+
+func composeFileFor(pkg string) string {
+	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
+	return path.Join(*baseDir, dir, "docker-compose.yml")
+}
+
+func getPackages() []task {
+	pattern := *baseDir + "/..."
+
+	if len(*runTest) > 0 {
+		pattern = findPackageFor(*runTest)
+		fmt.Printf("Found package for %s: %s\n", *runTest, pattern)
+	}
+	pkgs, err := packages.Load(nil, pattern)
+	x.Check(err)
+
+	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha"}
+	left := 0
+	for i := 0; i < len(pkgs); i++ {
+		// These packages take time. So, move them to the front.
+		for _, sp := range slowPkgs {
+			if strings.Contains(pkgs[i].ID, sp) {
+				pkgs[left], pkgs[i] = pkgs[i], pkgs[left]
+				left++
+				break
+			}
+		}
+	}
+	var valid []task
+	for _, pkg := range pkgs {
+		if len(*runPkg) > 0 && !strings.HasSuffix(pkg.ID, *runPkg) {
+			continue
+		}
+		fname := composeFileFor(pkg.ID)
+		_, err := os.Stat(fname)
+		valid = append(valid, task{pkg: pkg, isCommon: os.IsNotExist(err)})
+	}
+
+	if len(valid) == 0 {
+		fmt.Println("Couldn't find any packages. Exiting...")
+		os.Exit(1)
+	}
+
+	sort.SliceStable(valid, func(i, j int) bool {
+		if valid[i].isCommon != valid[j].isCommon {
+			return valid[i].isCommon
+		}
+		return false
+	})
+
+	for _, task := range valid {
+		fmt.Printf("Found valid task: %+v\n", task)
+	}
+	fmt.Printf("Running tests for %d packages.\n", len(valid))
+	return valid
 }
 
 func main() {
@@ -364,11 +462,11 @@ func main() {
 		N = 1
 	}
 	closer := z.NewCloser(N)
-	commonTestCh := make(chan string, N)
-	errCh := make(chan error, 100)
+	testCh := make(chan task, N)
+	errCh := make(chan error, 1000)
 	for i := 0; i < N; i++ {
 		go func() {
-			if err := runCommonTests(commonTestCh, closer); err != nil {
+			if err := runTests(testCh, closer); err != nil {
 				errCh <- err
 				closer.Signal()
 			}
@@ -397,56 +495,15 @@ func main() {
 
 	// pkgs, err := packages.Load(nil, "github.com/dgraph-io/dgraph/...")
 	go func() {
-		defer close(commonTestCh)
-		pattern := *baseDir + "/..."
+		defer close(testCh)
 
-		if len(*runTest) > 0 {
-			pattern = findPackageFor(*runTest)
-			fmt.Printf("Found package for %s: %s\n", *runTest, pattern)
-		}
-		pkgs, err := packages.Load(nil, pattern)
-		x.Check(err)
-
-		slowPkgs := []string{"systest", "ee/acl", "cmd/alpha"}
-		left := 0
-		for i := 0; i < len(pkgs); i++ {
-			// These packages take time. So, move them to the front.
-			for _, sp := range slowPkgs {
-				if strings.Contains(pkgs[i].ID, sp) {
-					pkgs[left], pkgs[i] = pkgs[i], pkgs[left]
-					left++
-					break
-				}
-			}
-		}
-		valid := pkgs[:0]
-		for _, pkg := range pkgs {
-			if len(*runPkg) > 0 && !strings.HasSuffix(pkg.ID, *runPkg) {
-				continue
-			}
-			valid = append(valid, pkg)
-			fmt.Printf("Found valid package: %s\n", pkg.ID)
-		}
-		if len(valid) == 0 {
-			fmt.Println("Couldn't find any packages. Exiting...")
-			os.Exit(1)
-		}
-		fmt.Printf("Running tests for %d packages.\n", len(valid))
-
-		for i, pkg := range valid {
-			dir := strings.Replace(pkg.ID, "github.com/dgraph-io/dgraph/", "", 1)
-			fname := path.Join(*baseDir, dir, "docker-compose.yml")
-			_, err := os.Stat(fname)
-			if os.IsNotExist(err) {
-				select {
-				case commonTestCh <- pkg.ID:
-					fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
-				case <-closer.HasBeenClosed():
-					return
-				}
-			} else {
-				fmt.Printf("IGNORING tests for %s\n", pkg.ID)
-				// Found it.
+		valid := getPackages()
+		for i, task := range valid {
+			select {
+			case testCh <- task:
+				fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
+			case <-closer.HasBeenClosed():
+				return
 			}
 		}
 	}()
