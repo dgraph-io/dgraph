@@ -542,7 +542,7 @@ func (a *AuthMeta) initSigningMethod() error {
 	return nil
 }
 
-func (a *AuthMeta) NewClient() {
+func (a *AuthMeta) InitHttpClient() {
 	a.httpClient = &http.Client{
 		Timeout: 30 * time.Second,
 	}
