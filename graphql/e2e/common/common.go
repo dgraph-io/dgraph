@@ -239,6 +239,18 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 	require.Nil(t, gqlResponse.Errors)
 }
 
+func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
+	err := addSchema(graphqlAdminURL, string(schema))
+	if err != nil {
+		x.Panic(err)
+	}
+
+	err = maybePopulateData(client, data)
+	if err != nil {
+		x.Panic(err)
+	}
+}
+
 func BootstrapServer(schema, data []byte) {
 	err := checkGraphQLStarted(graphqlAdminURL)
 	if err != nil {
@@ -255,15 +267,7 @@ func BootstrapServer(schema, data []byte) {
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
-	err = addSchema(graphqlAdminURL, string(schema))
-	if err != nil {
-		x.Panic(err)
-	}
-
-	err = maybePopulateData(client, data)
-	if err != nil {
-		x.Panic(err)
-	}
+	addSchemaAndData(schema, data, client)
 	if err = d.Close(); err != nil {
 		x.Panic(err)
 	}

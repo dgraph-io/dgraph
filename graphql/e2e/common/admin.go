@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -537,6 +538,23 @@ func admin(t *testing.T) {
 	updateSchema(t, client)
 	updateSchemaThroughAdminSchemaEndpt(t, client)
 	gqlSchemaNodeHasXid(t, client)
+
+	// restore the state to the initial schema and data.
+	testutil.DropAll(t, client)
+
+	schemaFile := "schema.graphql"
+	schema, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		panic(err)
+	}
+
+	jsonFile := "test_data.json"
+	data, err := ioutil.ReadFile(jsonFile)
+	if err != nil {
+		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
+	}
+
+	addSchemaAndData(schema, data, client)
 }
 
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
