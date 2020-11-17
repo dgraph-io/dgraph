@@ -29,6 +29,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -226,6 +227,24 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	return nil
 }
 
+func hasTestFiles(pkg string) bool {
+	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
+	dir = path.Join(*baseDir, dir)
+
+	hasTests := false
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if hasTests {
+			return filepath.SkipDir
+		}
+		if strings.HasSuffix(path, "_test.go") {
+			hasTests = true
+			return filepath.SkipDir
+		}
+		return nil
+	})
+	return hasTests
+}
+
 func runTests(taskCh chan task, closer *z.Closer) error {
 	wg := new(sync.WaitGroup)
 	defer func() {
@@ -268,6 +287,10 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if uncommon && task.isCommon {
 			glog.Fatalf("Package sorting is wrong. Common cluster tests should run first.")
 		}
+		if !hasTestFiles(task.pkg.ID) {
+			continue
+		}
+
 		if task.isCommon {
 			if *runCustom {
 				// If we only need to run custom cluster tests, then skip this one.
@@ -454,8 +477,8 @@ func getPackages() []task {
 		if len(*runPkg) > 0 && !strings.HasSuffix(pkg.ID, *runPkg) {
 			continue
 		}
-		if strings.Contains(pkg.ID, "mtls_internal") {
-			fmt.Printf("SKIPPING mtls_internal packages for now: %s\n", pkg.ID)
+		if has([]string{"mtls_internal", "graphql"}, pkg.ID) {
+			fmt.Printf("SKIPPING tests for package: %s for now. PLEASE FIX ASAP.\n", pkg.ID)
 			continue
 		}
 		if len(*runTest) > 0 {
