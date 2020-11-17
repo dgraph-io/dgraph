@@ -387,14 +387,35 @@ The `contains` filter matches all entities where the `Polygon` or `MultiPolygon`
 Only one `point` or `polygon` can be taken inside the `ContainsFilter` at a time.
 {{% /notice %}}
 
+A `cointains` example using `point`:
+
 ```graphql
 queryHotel(filter: {
     area: { 
         contains: {
             point: {
+              latitude: 0.5,
+              longitude: 2.5
+            }
+        }
+    }
+}) {
+  name
+}
+```
+
+A `cointains` example using `polygon`:
+
+```graphql
+ queryHotel(filter: {
+    area: { 
+        contains: {
+            polygon: {
                 coordinates: [{
-                    latitute: 37.771935, 
+                  points:[{
+                    latitude: 37.771935, 
                     longitude: -122.469829
+                  }]
                 }],
             }
         }
@@ -402,7 +423,6 @@ queryHotel(filter: {
 }) {
   name
 }
-
 ```
 
 #### intersects 
