@@ -1,12 +1,14 @@
 package no_tls
 
 import (
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 type testCase struct {
@@ -17,13 +19,13 @@ type testCase struct {
 
 var testCasesHttp = []testCase{
 	{
-		url:        "http://localhost:6180/health",
+		url:        "/health",
 		response:   "OK",
 		statusCode: 200,
 	},
 	{
-		url:        "http://localhost:6180/state",
-		response:   "\"id\":\"1\",\"groupId\":0,\"addr\":\"zero1:5180\",\"leader\":true,\"amDead\":false",
+		url:        "/state",
+		response:   "\"id\":\"1\",\"groupId\":0,\"addr\":\"zero1:5080\",\"leader\":true,\"amDead\":false",
 		statusCode: 200,
 	},
 }
@@ -34,7 +36,7 @@ func TestZeroWithNoTLS(t *testing.T) {
 	}
 	defer client.CloseIdleConnections()
 	for _, test := range testCasesHttp {
-		request, err := http.NewRequest("GET", test.url, nil)
+		request, err := http.NewRequest("GET", "http://"+testutil.SockAddrZeroHttp+test.url, nil)
 		require.NoError(t, err)
 		do, err := client.Do(request)
 		require.NoError(t, err)

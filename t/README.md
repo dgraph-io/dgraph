@@ -12,3 +12,12 @@ $ go build . && ./t
 You can run a specific package or a specific test via this script. You can use
 the concurrency flag to specify how many clusters to run.
 
+---
+
+This script runs many clusters of Dgraph. To make your tests work with this
+script, they can get the address for any instance by passing in the name of the
+instance and the port:
+
+`testutil.ContainerAddr("alpha2", 9080)`
+
+

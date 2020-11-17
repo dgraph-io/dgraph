@@ -59,6 +59,10 @@ var (
 	SockAddrZeroHttp string
 )
 
+func AdminUrl() string {
+	return "http://" + SockAddrHttp + "/admin"
+}
+
 func getContainer(name string) types.Container {
 	cli, err := client.NewEnvClient()
 	x.Check(err)

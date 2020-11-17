@@ -70,6 +70,10 @@ var (
 			" tests to fail on any concurrency setting > 1.")
 	keepCluster = pflag.BoolP("keep", "k", false,
 		"Keep the clusters running on program end.")
+	clear = pflag.BoolP("clear", "r", false,
+		"Clear all the test clusters.")
+	dry = pflag.BoolP("dry", "", false,
+		"Just show how the packages would be executed, without running tests.")
 )
 
 func commandWithContext(ctx context.Context, q string) *exec.Cmd {
@@ -129,7 +133,7 @@ func allContainers(prefix string) []types.Container {
 	cli, err := client.NewEnvClient()
 	x.Check(err)
 
-	containers, err := cli.ContainerList(ctxb, types.ContainerListOptions{})
+	containers, err := cli.ContainerList(ctxb, types.ContainerListOptions{All: true})
 	if err != nil {
 		log.Fatalf("While listing container: %v\n", err)
 	}
@@ -222,7 +226,9 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	}
 
 	dur := time.Since(start).Round(time.Second)
-	fc.Took(prefix, pkg, dur)
+
+	tid, _ := ctx.Value("threadId").(int32)
+	fc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
 	return nil
 }
@@ -245,7 +251,18 @@ func hasTestFiles(pkg string) bool {
 	return hasTests
 }
 
+var _threadId int32
+
 func runTests(taskCh chan task, closer *z.Closer) error {
+	threadId := atomic.AddInt32(&_threadId, 1)
+
+	{
+		ts := time.Now()
+		defer func() {
+			fc.Took(threadId, "DONE", time.Since(ts))
+		}()
+	}
+
 	wg := new(sync.WaitGroup)
 	defer func() {
 		wg.Wait()
@@ -278,6 +295,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	defer stop()
 
 	ctx := closer.Ctx()
+	ctx = context.WithValue(ctx, "threadId", threadId)
 
 	uncommon := false
 	for task := range taskCh {
@@ -318,6 +336,8 @@ func getPrefix() string {
 }
 
 func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
+	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
+
 	compose := composeFileFor(pkg)
 	prefix := getPrefix()
 
@@ -328,20 +348,21 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 	}
 
 	port := getInstance(prefix, "alpha1").publicPort(8080)
-
-	for i := 0; i < 30; i++ {
-		resp, err := http.Get("http://localhost:" + port + "/health")
-		if err == nil && resp.StatusCode == http.StatusOK {
-			fmt.Printf("Health check: OK for %s. Status: %s\n", prefix, resp.Status)
-			break
+	if len(port) > 0 {
+		for i := 0; i < 30; i++ {
+			resp, err := http.Get("http://localhost:" + port + "/health")
+			if err == nil && resp.StatusCode == http.StatusOK {
+				fmt.Printf("Health check: OK for %s. Status: %s\n", prefix, resp.Status)
+				break
+			}
+			var body []byte
+			if resp != nil && resp.Body != nil {
+				body, _ = ioutil.ReadAll(resp.Body)
+				resp.Body.Close()
+			}
+			fmt.Printf("Health failed: %v. Response: %q. Retrying...\n", err, body)
+			time.Sleep(time.Second)
 		}
-		var body []byte
-		if resp != nil && resp.Body != nil {
-			body, _ = ioutil.ReadAll(resp.Body)
-			resp.Body.Close()
-		}
-		fmt.Printf("Health failed: %v. Response: %q. Retrying...\n", err, body)
-		time.Sleep(time.Second)
 	}
 
 	// Wait for cluster to be healthy.
@@ -377,10 +398,10 @@ func findPackagesFor(testName string) []string {
 }
 
 type pkgDuration struct {
-	prefix string
-	pkg    string
-	dur    time.Duration
-	ts     time.Time
+	threadId int32
+	pkg      string
+	dur      time.Duration
+	ts       time.Time
 }
 
 type failureCatcher struct {
@@ -389,17 +410,18 @@ type failureCatcher struct {
 	durs    []pkgDuration
 }
 
-func (o *failureCatcher) Took(prefix, pkg string, dur time.Duration) {
+func (o *failureCatcher) Took(threadId int32, pkg string, dur time.Duration) {
 	o.Lock()
 	defer o.Unlock()
-	o.durs = append(o.durs, pkgDuration{prefix: prefix, pkg: pkg, dur: dur, ts: time.Now()})
+	o.durs = append(o.durs, pkgDuration{threadId: threadId, pkg: pkg, dur: dur, ts: time.Now()})
 }
 
 func (o *failureCatcher) Write(p []byte) (n int, err error) {
 	o.Lock()
 	defer o.Unlock()
 
-	if bytes.Index(p, []byte("FAIL")) >= 0 {
+	if bytes.Index(p, []byte("FAIL")) >= 0 ||
+		bytes.Index(p, []byte("TODO")) >= 0 {
 		o.failure.Write(p)
 	}
 	return os.Stdout.Write(p)
@@ -415,11 +437,11 @@ func (o *failureCatcher) Print() {
 	})
 	for _, dur := range o.durs {
 		// Don't capture packages which were fast.
-		if dur.dur < 5*time.Second {
+		if dur.dur < time.Second {
 			continue
 		}
-		fmt.Printf("[%s] [%s] pkg %s took: %s\n", dur.ts.Format(time.Kitchen),
-			dur.prefix, dur.pkg, dur.dur)
+		fmt.Printf("[%s]%s[%d] pkg %s took: %s\n", dur.ts.Format("3:04:05 PM"),
+			strings.Repeat("   ", int(dur.threadId)), dur.threadId, dur.pkg, dur.dur)
 	}
 
 	// sort.Slice(o.durs, func(i, j int) bool {
@@ -432,7 +454,7 @@ func (o *failureCatcher) Print() {
 	// 	fmt.Printf("Took: %s Package: %s\n", dur.dur, dur.pkg)
 	// }
 	if fc.failure.Len() > 0 {
-		fmt.Printf("Failure output: %s\n", fc.failure.Bytes())
+		fmt.Printf("Failure output:\n%s\n", fc.failure.Bytes())
 	}
 }
 
@@ -459,7 +481,7 @@ func getPackages() []task {
 		return false
 	}
 
-	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha"}
+	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker"}
 	left := 0
 	for i := 0; i < len(pkgs); i++ {
 		// These packages take time. So, move them to the front.
@@ -477,7 +499,7 @@ func getPackages() []task {
 		if len(*runPkg) > 0 && !strings.HasSuffix(pkg.ID, *runPkg) {
 			continue
 		}
-		if has([]string{"mtls_internal", "graphql"}, pkg.ID) {
+		if has([]string{"mtls_internal", "graphql", "online-restore"}, pkg.ID) {
 			fmt.Printf("SKIPPING tests for package: %s for now. PLEASE FIX ASAP.\n", pkg.ID)
 			continue
 		}
@@ -512,11 +534,47 @@ func getPackages() []task {
 	return valid
 }
 
+func removeAllTestContainers() {
+	containers := allContainers("test-")
+
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+	dur := 10 * time.Second
+
+	for _, c := range containers {
+		err := cli.ContainerStop(ctxb, c.ID, &dur)
+		fmt.Printf("Stopped container %s with error: %v\n", c.Names[0], err)
+
+		err = cli.ContainerRemove(ctxb, c.ID, types.ContainerRemoveOptions{})
+		fmt.Printf("Removed container %s with error: %v\n", c.Names[0], err)
+	}
+
+	networks, err := cli.NetworkList(ctxb, types.NetworkListOptions{})
+	x.Check(err)
+
+	for _, n := range networks {
+		if strings.HasPrefix(n.Name, "test-") {
+			if err := cli.NetworkRemove(ctxb, n.ID); err != nil {
+				fmt.Printf("Error: %v while removing network: %+v\n", err, n)
+			} else {
+				fmt.Printf("Removed network: %s\n", n.Name)
+			}
+		}
+	}
+
+	return
+}
+
 func main() {
 	pflag.Parse()
 	rand.Seed(time.Now().UnixNano())
 	procId = rand.Intn(1000)
 	start := time.Now()
+
+	if *clear {
+		removeAllTestContainers()
+		return
+	}
 
 	if len(*runPkg) > 0 && len(*runTest) > 0 {
 		log.Fatalf("Both pkg and test can't be set.\n")
@@ -571,6 +629,9 @@ func main() {
 		defer close(testCh)
 
 		valid := getPackages()
+		if *dry {
+			return
+		}
 		for i, task := range valid {
 			select {
 			case testCh <- task:
