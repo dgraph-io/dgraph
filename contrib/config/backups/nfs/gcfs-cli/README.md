@@ -1,6 +1,6 @@
 # Google Cloud Filestore using Google Cloud SDK (Shell)
 
-Theis shell script will create the required resources needed to create NFS server instance using Google Cloud Filestore.
+This shell script creates the resources needed to create an NFS server instance using Google Cloud Filestore.
 
 This automation will create the following resources:
 
@@ -32,7 +32,7 @@ Run these steps to create [filestore](https://cloud.google.com/filestore) and po
 
 ### Define Variables
 
-You can create a `env.sh` with the desired values, for example:
+You can create an `env.sh` with the desired values, for example:
 
 ```bash
 cat <<-EOF > env.sh

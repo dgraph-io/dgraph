@@ -1,6 +1,6 @@
 # Google Cloud Filestore with Terraform
 
-These [Terraform](https://www.terraform.io/) scripts and modules will create the required resources needed to create NFS server instance using Google Cloud Filestore.
+These [Terraform](https://www.terraform.io/) scripts and modules will create the resources required to create NFS server instance using Google Cloud Filestore.
 
 This automation will create the following resources:
 

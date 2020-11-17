@@ -1,6 +1,6 @@
 # Binary Backups to Network File System
 
-When using a file system for binary backups, NFS is recommended so that *backups work seamlessly across multiple machines and/or containers*.
+When using a file system for binary backups, NFS is recommended.  NFS will allow *"backups work seamlessly across multiple machines and/or containers"*.
 
 * [Overview of NFS Servers](#overview-of-nfs-servers)
 * [Provision NFS Server Instructions](#provision-nfs-server-instructions)
@@ -27,11 +27,11 @@ When using a file system for binary backups, NFS is recommended so that *backups
 
 ## Overview of NFS Servers
 
-You can use external NFS outside of the [Docker](https://www.docker.com/) or [Kubernetes](https://kubernetes.io/), or deploy a container offering NFS services.  
+You can use external NFS outside of the [Docker](https://www.docker.com/) or [Kubernetes](https://kubernetes.io/) cluster, or deploy a container offering NFS services.  
 
-For production environments, using an NFS server external to the cluster can increase availability in an event where [Kubernetes](https://kubernetes.io/) services get interrupted.  In more advanced scenarios, deploying a container offering NFS services, where the storage is backed by high-speed storage such as [Ceph](https://ceph.io/) is beneficial for large datasets.  In this latter scenario, secondary storage such as an object store by the cloud provider could be used for greater availability in event of where Kubernetes services or the [Kubernetes](https://kubernetes.io/) cluster itself has a failure event.
+For production environments, using an NFS server external to the cluster can increase availability in an event where [Kubernetes](https://kubernetes.io/) services get interrupted.  In more advanced scenarios, deploying a container offering NFS services where the storage is backed by high-speed storage such as [Ceph](https://ceph.io/) is beneficial for large datasets.  In this latter scenario, secondary storage such as an object store by the cloud provider could be used for greater availability in event of where Kubernetes services or the [Kubernetes](https://kubernetes.io/) cluster itself has a failure event.
 
-This guide is not meant to be complete but rather a small guide to get you started on your backup journey with Dgraph and NFS.  For this scope, automation here covers the following:
+This guide guide provides tips on how to back up Dgraph using NFS. For this scope, automation here covers the following:
 
 * External NFS
   * Cloud Providers
@@ -46,7 +46,7 @@ This guide is not meant to be complete but rather a small guide to get you start
 
 ### Using Remote Cloud Solutions
 
-You can provision external NFS with the scripts for use with the Dgraph cluster running on Kubernetes.  Unlike object storage, such as S3 or GCS, this storage will not be accessible from the public Internet, and so can only be accessed from within a private subnet.
+You can provision external NFS to use with your Dgraph cluster running on Kubernetes using these scripts.  Unlike object storage, such as S3 or GCS, this storage will not be accessible from the public Internet and so can only be accessed from within a private subnet.
 
 * Shell Scripts
   * [Google Cloud Filestore](gcfs-cli/README.md) - provision FileStore using `gcloud`
@@ -56,7 +56,7 @@ You can provision external NFS with the scripts for use with the Dgraph cluster 
 
 ### Using the Rook Solution
 
-You can use an internal NFS server running on Kubernetes with [Rook](https://rook.io/) NFS Operator.  To enable this, run the following before running the [Kubernetes Environment](#testing-nfs-with-kubernetes).  Both of these steps are required for this feature: 
+You can use an internal NFS server running on Kubernetes with [Rook](https://rook.io/) NFS Operator.  To enable this, run the following before running the [Kubernetes Environment](#testing-nfs-with-kubernetes).  Both of these steps are required for this feature:
 
 ```bash
 ## Download Rook NFS Operator Manifests
@@ -67,7 +67,7 @@ cp charts/rook/env.sh env.sh
 
 ### Using a Local Vagrant Solution
 
-As configuring NFS for your local operating system or distro can vary greatly<sup>†</sup>, a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, this NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [Minikube](https://github.com/kubernetes/minikube) environments.
+The steps to configure NFS for your local operating system or distro can vary greatly<sup>†</sup>, so a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, this NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [Minikube](https://github.com/kubernetes/minikube) environments.
 
 † <sup><sub>Linux and macOS have native NFS implementations with macOS NFS configuration varying between macOS versions.  Windows Server has different [NFS Server implementations](https://docs.microsoft.com/en-us/windows-server/storage/nfs/nfs-overview) between Windows Server versions.  For Windows 10, there are open source options such as [Cygwin](https://www.cygwin.com/) or using Linux through [WSL](https://docs.microsoft.com/en-us/windows/wsl/install-win10)</sub></sup>
 
@@ -184,7 +184,7 @@ minikube start --host-only-cidr='192.168.123.1/24'
 
 #### Minikube with KVM
 
-When using vagrant with libvirt (see [vagrant-libvirt](https://github.com/vagrant-libvirt/vagrant-libvirt)), you can have [minikube](https://github.com/kubernetes/minikube) target the same network
+When using vagrant with `libvirt` (see [vagrant-libvirt](https://github.com/vagrant-libvirt/vagrant-libvirt)), you can have [minikube](https://github.com/kubernetes/minikube) target the same network.
 
 ```bash
 ## Vagrant should have been started with KVM
@@ -260,7 +260,7 @@ kubectl --namespace default port-forward $RATEL_POD_NAME 8000:8000
 
 ## Trigger a Backup
 
-In the [Kubernetes Environment](#testing-nfs-with-kubernetes), backups will be scheduled automatically using the [Kubernetes CronJob](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/).  As long as the services are available locally (see [Accessing Dgraph Services](#accessing-dgraph-services)), we can trigger a backup using curl.
+In the [Kubernetes Environment](#testing-nfs-with-kubernetes), backups are scheduled automatically using the [Kubernetes CronJob](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/).  As long as the services are available locally (see [Accessing Dgraph Services](#accessing-dgraph-services)), we can trigger a backup using a `curl` command.
 
 For the [Docker Compose Environment](#testing-nfs-with-docker-compose) you can do the following:
 

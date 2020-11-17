@@ -1,6 +1,6 @@
 # Amazon Elastic File Services with Terraform
 
-These [Terraform](https://www.terraform.io/) scripts and modules will create the required resources needed to create NFS server instance using [Amazon Elastic File Services](https://aws.amazon.com/efs/).
+These [Terraform](https://www.terraform.io/) scripts and modules will create the resources required to create NFS server instance using [Amazon Elastic File Services](https://aws.amazon.com/efs/).
 
 This automation script will create the following resources:
 
@@ -10,14 +10,14 @@ This automation script will create the following resources:
 
 ## Prerequisites
 
-You need the following installed to use this automation:
+To use this automation, you must install the following:
 
 * [AWS CLI](https://aws.amazon.com/cli/) - AWS CLI installed and configured with local profile
 * [Terraform](https://www.terraform.io/downloads.html) - tool used to provision resources and create templates
 
 ## Configuration
 
-These are the following input variables you can set:
+You can use the following input variables to configure this automation:
 
 * **Required**
  * `vpc_name` or `vpc_id` - specify either explicit `vpc_id` or a name of Tag `Name` used
@@ -29,7 +29,7 @@ These are the following input variables you can set:
 
 ## Discovery
 
-The following are configured to discover resources used to configure EFS.  These can be overridden by specifying explicit values as input variables.
+Configuring the following values allows this automation to discover the resources used to configure EFS. These can be overridden by specifying explicit values as input variables.
 
 These are values affected by discovery:
 
@@ -41,7 +41,7 @@ These are values affected by discovery:
 
 ### Requirements for Discovery
 
-For the discovery feature where these [Terraform](https://www.terraform.io/) scripts will find the required resources needed that will allow EFS configured alongside by Amazon EKS cluster and subsequent required SG configuration to allow EKS worker nodes to access EFS, you will need to have the appropriate tags per subnets and security groups.  If you used `eksctl` to provision your cluster, these tags and keys will be setup automatically.
+You will need to have the appropriate tags per subnets and security groups configured to support the discovery feature. This feature will allow these [Terraform](https://www.terraform.io/) scripts to find the resources required to allow EFS configuration alongside an Amazon EKS cluster and SG configuration to allow EKS worker nodes to access EFS.  If you used `eksctl` to provision your cluster, these tags and keys will be set up automatically.
 
 #### Subnets
 
