@@ -69,6 +69,7 @@ type AuthMeta struct {
 	Algo            string
 	SigningMethod   jwt.SigningMethod `json:"-"` // Ignoring this field
 	Audience        []string
+	httpClient      *http.Client
 	ClosedByDefault bool
 	sync.RWMutex
 }
@@ -246,6 +247,7 @@ func SetAuthMeta(m *AuthMeta) {
 	authMeta.Algo = m.Algo
 	authMeta.SigningMethod = m.SigningMethod
 	authMeta.Audience = m.Audience
+	authMeta.httpClient = m.httpClient
 	authMeta.ClosedByDefault = m.ClosedByDefault
 }
 
@@ -439,10 +441,11 @@ func (a *AuthMeta) FetchJWKs() error {
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -537,4 +540,10 @@ func (a *AuthMeta) initSigningMethod() error {
 	a.SigningMethod = signingMethod
 
 	return nil
+}
+
+func (a *AuthMeta) InitHttpClient() {
+	a.httpClient = &http.Client{
+		Timeout: 30 * time.Second,
+	}
 }
