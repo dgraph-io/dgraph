@@ -1,14 +1,13 @@
-# Auto-generated with: [./compose -l -a 3 -z 1 -r 1 --alpha_volume data:/data --port_offset=0 --expose_ports=false --alpha_env_file=export.env --mem= -O ../systest/export/docker-compose.yml]
-# Manually added minio1
+# Auto-generated with: [./compose -l -a 3 -z 1 -r 1 --alpha_volume data:/data --minio --minio_port=9001 --minio_env_file=export.env --port_offset=0 --expose_ports=false --alpha_env_file=export.env --mem= --names=false -O ../systest/export/docker-compose.yml]
+#
 version: "3.5"
 services:
   alpha1:
     image: dgraph/dgraph:latest
-    container_name: alpha1
     working_dir: /data/alpha1
     labels:
       cluster: test
-    envfile:
+    env_file:
     - export.env
     ports:
     - "8080"
@@ -26,11 +25,10 @@ services:
       -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha2:
     image: dgraph/dgraph:latest
-    container_name: alpha2
     working_dir: /data/alpha2
     labels:
       cluster: test
-    envfile:
+    env_file:
     - export.env
     ports:
     - "8080"
@@ -48,11 +46,10 @@ services:
       -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha3:
     image: dgraph/dgraph:latest
-    container_name: alpha3
     working_dir: /data/alpha3
     labels:
       cluster: test
-    envfile:
+    env_file:
     - export.env
     ports:
     - "8080"
@@ -68,9 +65,15 @@ services:
       read_only: false
     command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr
       -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  minio1:
+    image: minio/minio:RELEASE.2020-11-13T20-10-18Z
+    env_file:
+    - export.env
+    ports:
+    - "9001"
+    command: minio server /data/minio --address :9001
   zero1:
     image: dgraph/dgraph:latest
-    container_name: zero1
     working_dir: /data/zero1
     labels:
       cluster: test
@@ -84,15 +87,5 @@ services:
       read_only: true
     command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --replicas=1 --logtostderr
       -v=2 --bindall
-  minio1:
-    image: minio/minio:latest
-    container_name: minio1
-    env_file:
-      - export.env
-    ports:
-      - 9001:9001
-    labels:
-      cluster: test
-    command: minio server /data/minio --address :9001
 volumes:
   data: {}

@@ -1,10 +1,9 @@
-# Auto-generated with: [./compose -l -a 6 -r 3 -z 3 --port_offset=0 --expose_ports=false --acl_secret ../../ee/acl/hmac-secret --extra_alpha_flags=--acl_access_ttl=300s --mem= -O ../systest/bgindex/docker-compose.yml]
+# Auto-generated with: [./compose -l -a 6 -r 3 -z 3 --port_offset=0 --expose_ports=false --acl_secret ../../ee/acl/hmac-secret --extra_alpha_flags=--acl_access_ttl=300s --mem= --names=false -O ../systest/bgindex/docker-compose.yml]
 #
 version: "3.5"
 services:
   alpha1:
     image: dgraph/dgraph:latest
-    container_name: alpha1
     working_dir: /data/alpha1
     labels:
       cluster: test
@@ -25,7 +24,6 @@ services:
       --acl_access_ttl=300s
   alpha2:
     image: dgraph/dgraph:latest
-    container_name: alpha2
     working_dir: /data/alpha2
     labels:
       cluster: test
@@ -46,7 +44,6 @@ services:
       --acl_access_ttl=300s
   alpha3:
     image: dgraph/dgraph:latest
-    container_name: alpha3
     working_dir: /data/alpha3
     labels:
       cluster: test
@@ -67,7 +64,6 @@ services:
       --acl_access_ttl=300s
   alpha4:
     image: dgraph/dgraph:latest
-    container_name: alpha4
     working_dir: /data/alpha4
     labels:
       cluster: test
@@ -88,7 +84,6 @@ services:
       --acl_access_ttl=300s
   alpha5:
     image: dgraph/dgraph:latest
-    container_name: alpha5
     working_dir: /data/alpha5
     labels:
       cluster: test
@@ -109,7 +104,6 @@ services:
       --acl_access_ttl=300s
   alpha6:
     image: dgraph/dgraph:latest
-    container_name: alpha6
     working_dir: /data/alpha6
     labels:
       cluster: test
@@ -130,7 +124,6 @@ services:
       --acl_access_ttl=300s
   zero1:
     image: dgraph/dgraph:latest
-    container_name: zero1
     working_dir: /data/zero1
     labels:
       cluster: test
@@ -146,7 +139,6 @@ services:
       -v=2 --bindall
   zero2:
     image: dgraph/dgraph:latest
-    container_name: zero2
     working_dir: /data/zero2
     depends_on:
     - zero1
@@ -164,7 +156,6 @@ services:
       -v=2 --peer=zero1:5080
   zero3:
     image: dgraph/dgraph:latest
-    container_name: zero3
     working_dir: /data/zero3
     depends_on:
     - zero2

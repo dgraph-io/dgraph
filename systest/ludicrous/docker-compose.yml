@@ -1,10 +1,9 @@
-# Auto-generated with: [./compose -l -a 3 -z 1 -r 1 --alpha_volume data:/data --port_offset=0 --expose_ports=false --mem= -O ../systest/ludicrous/docker-compose.yml]
+# Auto-generated with: [./compose -l -a 3 -z 1 -r 1 --alpha_volume data:/data --port_offset=0 --expose_ports=false --mem= --names=false -O ../systest/ludicrous/docker-compose.yml]
 #
 version: "3.5"
 services:
   alpha1:
     image: dgraph/dgraph:latest
-    container_name: alpha1
     working_dir: /data/alpha1
     labels:
       cluster: test
@@ -24,7 +23,6 @@ services:
       -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha2:
     image: dgraph/dgraph:latest
-    container_name: alpha2
     working_dir: /data/alpha2
     labels:
       cluster: test
@@ -44,7 +42,6 @@ services:
       -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha3:
     image: dgraph/dgraph:latest
-    container_name: alpha3
     working_dir: /data/alpha3
     labels:
       cluster: test
@@ -64,7 +61,6 @@ services:
       -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   zero1:
     image: dgraph/dgraph:latest
-    container_name: zero1
     working_dir: /data/zero1
     labels:
       cluster: test
