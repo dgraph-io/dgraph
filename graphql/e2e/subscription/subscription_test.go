@@ -612,16 +612,17 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-	time.Sleep(time.Second)
+	time.Sleep(5 * time.Second)
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res) // 1st subscription should get the empty response as subscription has expired.
 	fmt.Printf("\nbefore second update %v", time.Now().String())
 	subscriptionResp = common.GraphQLResponse{}
+
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	err = json.Unmarshal(res, &subscriptionResp)
-
+	fmt.Printf("\nres of 2nd subscription %v", string(res))
 	require.NoError(t, err)
 	require.Nil(t, subscriptionResp.Errors)
 	// 2nd one still running and should get the  update
@@ -822,7 +823,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-	time.Sleep(time.Second)
+	time.Sleep(5 * time.Second)
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
@@ -831,6 +832,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	//require.NoError(t, err)
 	subscriptionResp = common.GraphQLResponse{}
 	err = json.Unmarshal(res, &subscriptionResp)
+	fmt.Printf("\nres of 2nd subscription %v", string(res))
 	require.NoError(t, err)
 	require.Nil(t, subscriptionResp.Errors)
 	// 2nd one still running and should get the  update
