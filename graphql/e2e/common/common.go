@@ -44,12 +44,12 @@ const (
 	graphqlAdminURL = "http://localhost:8180/admin"
 	AlphagRPC       = "localhost:9180"
 
-	adminDgraphHealthURL           = "http://localhost:8280/health?all"
-	adminDgraphStateURL            = "http://localhost:8280/state"
-	graphqlAdminTestURL            = "http://localhost:8280/graphql"
-	graphqlAdminTestAdminURL       = "http://localhost:8280/admin"
-	graphqlAdminTestAdminSchemaURL = "http://localhost:8280/admin/schema"
-	alphaAdminTestgRPC             = "localhost:9280"
+	adminDgraphHealthURL           = "http://localhost:8180/health?all"
+	adminDgraphStateURL            = "http://localhost:8180/state"
+	graphqlAdminTestURL            = "http://localhost:8180/graphql"
+	graphqlAdminTestAdminURL       = "http://localhost:8180/admin"
+	graphqlAdminTestAdminSchemaURL = "http://localhost:8180/admin/schema"
+	alphaAdminTestgRPC             = "localhost:9180"
 )
 
 // GraphQLParams is parameters for the constructing a GraphQL query - that's
@@ -246,13 +246,6 @@ func BootstrapServer(schema, data []byte) {
 				"Got last error %+v", err.Error()))
 	}
 
-	err = checkGraphQLStarted(graphqlAdminTestAdminURL)
-	if err != nil {
-		x.Panic(errors.Errorf(
-			"Waited for GraphQL AdminTest server to become available, "+
-				"but it never did.\n Got last error: %+v", err.Error()))
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	d, err := grpc.DialContext(ctx, AlphagRPC, grpc.WithInsecure())
@@ -277,8 +270,7 @@ func BootstrapServer(schema, data []byte) {
 
 // RunAll runs all the test functions in this package as sub tests.
 func RunAll(t *testing.T) {
-	//admin tests
-	t.Run("admin", admin)
+	// admin tests
 	t.Run("health", health)
 	t.Run("partial health", partialHealth)
 	t.Run("alias should work in admin", adminAlias)
@@ -428,6 +420,8 @@ func RunAll(t *testing.T) {
 	t.Run("lambda on interface field", lambdaOnInterfaceField)
 	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
+
+	t.Run("admin", admin)
 }
 
 // RunCorsTest test all cors related tests.

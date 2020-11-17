@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
+	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -35,7 +36,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -526,12 +526,13 @@ func admin(t *testing.T) {
 	require.NoError(t, err)
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	testutil.DropAll(t, client)
 
 	hasSchema, err := hasCurrentGraphQLSchema(graphqlAdminTestAdminURL)
 	require.NoError(t, err)
 	require.False(t, hasSchema)
 
-	schemaIsInInitialState(t, client)
+	// schemaIsInInitialState(t, client)
 	addGQLSchema(t, client)
 	updateSchema(t, client)
 	updateSchemaThroughAdminSchemaEndpt(t, client)
