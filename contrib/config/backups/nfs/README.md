@@ -31,7 +31,7 @@ You can use external NFS outside of the [Docker](https://www.docker.com/) or [Ku
 
 For production environments, using an NFS server external to the cluster can increase availability in an event where [Kubernetes](https://kubernetes.io/) services get interrupted.  In more advanced scenarios, deploying a container offering NFS services where the storage is backed by high-speed storage such as [Ceph](https://ceph.io/) is beneficial for large datasets.  In this latter scenario, secondary storage such as an object store by the cloud provider could be used for greater availability in event of where Kubernetes services or the [Kubernetes](https://kubernetes.io/) cluster itself has a failure event.
 
-This guide guide provides tips on how to back up Dgraph using NFS. For this scope, automation here covers the following:
+This guide provides tips on how to back up Dgraph using NFS. For this scope, automation here covers the following:
 
 * External NFS
   * Cloud Providers
@@ -69,7 +69,7 @@ cp charts/rook/env.sh env.sh
 
 The steps to configure NFS for your local operating system or distro can vary greatly<sup>†</sup>, so a [Vagrant](https://www.vagrantup.com/) example is provided.  This should work [Virtualbox](https://www.virtualbox.org/) provider on Windows, Mac, and Linux, as [Virtualbox](https://www.virtualbox.org/) creates routable IP addresses available to the host.  Therefore, this NFS server can be accessed from either [Docker](https://docs.docker.com/engine/) or [Minikube](https://github.com/kubernetes/minikube) environments.
 
-† <sup><sub>Linux and macOS have native NFS implementations with macOS NFS configuration varying between macOS versions.  Windows Server has different [NFS Server implementations](https://docs.microsoft.com/en-us/windows-server/storage/nfs/nfs-overview) between Windows Server versions.  For Windows 10, there are open source options such as [Cygwin](https://www.cygwin.com/) or using Linux through [WSL](https://docs.microsoft.com/en-us/windows/wsl/install-win10)</sub></sup>
+† <sup><sub>Linux and macOS have native NFS implementations with macOS NFS configuration varying between macOS versions.  Windows Server has different [NFS Server implementations](https://docs.microsoft.com/en-us/windows-server/storage/nfs/nfs-overview) between Windows Server versions.  For Windows 10, there are open source options such as [Cygwin](https://www.cygwin.com/) or you can use Linux through [WSL](https://docs.microsoft.com/en-us/windows/wsl/install-win10)</sub></sup>
 
 #### Vagrant Server
 
@@ -201,7 +201,7 @@ minikube start --kvm-network nfs0
 
 #### Verify NFS between Minikube and Vagrant
 
-You can verify that NFS share works between the Vagrant NFS server and client Dgraph Alpha pod running in [minikube](https://github.com/kubernetes/minikube).
+Next, verify that NFS share works between the Vagrant NFS server and client Dgraph Alpha pod running in [minikube](https://github.com/kubernetes/minikube).
 
 Create a file from the client:
 

@@ -1,6 +1,6 @@
 # Amazon Elastic File Services with Terraform
 
-These [Terraform](https://www.terraform.io/) scripts and modules will create the resources required to create NFS server instance using [Amazon Elastic File Services](https://aws.amazon.com/efs/).
+These [Terraform](https://www.terraform.io/) scripts and modules will create the resources required to support an NFS server instance using [Amazon Elastic File Services](https://aws.amazon.com/efs/).
 
 This automation script will create the following resources:
 
