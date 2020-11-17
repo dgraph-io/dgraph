@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/user"
+	"strconv"
 	"strings"
 
 	sv "github.com/Masterminds/semver/v3"
@@ -111,6 +112,9 @@ type options struct {
 	ZeroVolumes    []string
 	AlphaEnvFile   []string
 	ZeroEnvFile    []string
+	Minio          bool
+	MinioPort      uint16
+	MinioEnvFile   []string
 
 	// Extra flags
 	AlphaFlags string
@@ -408,6 +412,20 @@ func getJaeger() service {
 	return svc
 }
 
+func getMinio() service {
+	svc := service{
+		Image:         "minio/minio:RELEASE.2020-11-13T20-10-18Z",
+		ContainerName: containerName("minio1"),
+		Ports: []string{
+			toPort(int(opts.MinioPort)),
+		},
+		EnvFile: opts.MinioEnvFile,
+		Command: "minio server /data/minio --address :" +
+			strconv.FormatUint(uint64(opts.MinioPort), 10),
+	}
+	return svc
+}
+
 func getRatel() service {
 	portFlag := ""
 	if opts.RatelPort != 8000 {
@@ -584,6 +602,12 @@ func main() {
 		"env_file for alpha")
 	cmd.PersistentFlags().StringArrayVar(&opts.ZeroEnvFile, "zero_env_file", nil,
 		"env_file for zero")
+	cmd.PersistentFlags().BoolVar(&opts.Minio, "minio", false,
+		"include minio service")
+	cmd.PersistentFlags().Uint16Var(&opts.MinioPort, "minio_port", 9001,
+		"minio service port")
+	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
+		"minio service env_file")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
@@ -664,6 +688,10 @@ func main() {
 
 	if opts.Metrics {
 		addMetrics(&cfg)
+	}
+
+	if opts.Minio {
+		services["minio1"] = getMinio()
 	}
 
 	if opts.Acl {
