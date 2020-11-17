@@ -63,7 +63,7 @@ type service struct {
 	WorkingDir    string    `yaml:"working_dir,omitempty"`
 	DependsOn     []string  `yaml:"depends_on,omitempty"`
 	Labels        stringMap `yaml:",omitempty"`
-	EnvFile       []string  `yaml:",omitempty"`
+	EnvFile       []string  `yaml:"env_file,omitempty"`
 	Environment   []string  `yaml:",omitempty"`
 	Ports         []string  `yaml:",omitempty"`
 	Volumes       []volume  `yaml:",omitempty"`
