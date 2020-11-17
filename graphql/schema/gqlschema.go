@@ -892,7 +892,7 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 	}
 	def.Fields = def.Fields[:i]
 
-	if len(def.Fields) == 0 {
+	if len(def.Fields) == 0 || (strings.HasPrefix(def.Name, "Update") && len(def.Fields) == 1) {
 		delete(sch.Types, def.Name)
 	}
 }
@@ -902,7 +902,7 @@ func cleanSchema(sch *ast.Schema) {
 	// don't have field inside them.
 	for k := range sch.Types {
 		if strings.HasSuffix(k, "Ref") || strings.HasSuffix(k, "Patch") ||
-			(strings.HasPrefix(k, "Add") && strings.HasSuffix(k, "Input")) {
+			((strings.HasPrefix(k, "Add") || strings.HasPrefix(k, "Update")) && strings.HasSuffix(k, "Input")) {
 			cleanupInput(sch, sch.Types[k], map[string]bool{})
 		}
 	}
@@ -912,8 +912,8 @@ func cleanSchema(sch *ast.Schema) {
 	i := 0 // helps us overwrite the array with valid entries.
 	for _, field := range sch.Mutation.Fields {
 		custom := field.Directives.ForName("custom")
-		// We would only modify add type queries.
-		if custom != nil || !strings.HasPrefix(field.Name, "add") {
+		// We would only modify add/
+		if custom != nil || !(strings.HasPrefix(field.Name, "add") || strings.HasPrefix(field.Name, "update")) {
 			sch.Mutation.Fields[i] = field
 			i++
 			continue
@@ -921,10 +921,18 @@ func cleanSchema(sch *ast.Schema) {
 
 		// addT type mutations have an input which is AddTInput so if that doesn't exist anymore,
 		// we can delete the AddTPayload and also skip this mutation.
-		typ := field.Name[3:]
-		input := sch.Types["Add"+typ+"Input"]
-		if input == nil {
-			delete(sch.Types, "Add"+typ+"Payload")
+
+		var typeName, input string
+		if strings.HasPrefix(field.Name, "add") {
+			typeName = field.Name[3:]
+			input = "Add" + typeName + "Input"
+		} else if strings.HasPrefix(field.Name, "update") {
+			typeName = field.Name[6:]
+			input = "Update" + typeName + "Input"
+		}
+
+		if sch.Types[input] == nil {
+			delete(sch.Types, input)
 			continue
 		}
 		sch.Mutation.Fields[i] = field

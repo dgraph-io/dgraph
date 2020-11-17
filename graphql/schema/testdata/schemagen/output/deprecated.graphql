@@ -267,12 +267,23 @@ input StringHashFilter {
 #######################
 
 type AddAtypePayload {
-	atype(order: AtypeOrder, first: Int, offset: Int): [Atype]
+	atype(filter: AtypeFilter, order: AtypeOrder, first: Int, offset: Int): [Atype]
 	numUids: Int
 }
 
 type AtypeAggregateResult {
 	count: Int
+}
+
+type DeleteAtypePayload {
+	atype(filter: AtypeFilter, order: AtypeOrder, first: Int, offset: Int): [Atype]
+	msg: String
+	numUids: Int
+}
+
+type UpdateAtypePayload {
+	atype(filter: AtypeFilter, order: AtypeOrder, first: Int, offset: Int): [Atype]
+	numUids: Int
 }
 
 #######################
@@ -311,9 +322,20 @@ input AtypeOrder {
 	then: AtypeOrder
 }
 
+input AtypePatch {
+	iamDeprecated: String
+	soAmI: String
+}
+
 input AtypeRef {
 	iamDeprecated: String
 	soAmI: String
+}
+
+input UpdateAtypeInput {
+	filter: AtypeFilter!
+	set: AtypePatch
+	remove: AtypePatch
 }
 
 #######################
@@ -321,8 +343,8 @@ input AtypeRef {
 #######################
 
 type Query {
-	queryAtype(order: AtypeOrder, first: Int, offset: Int): [Atype]
-	aggregateAtype: AtypeAggregateResult
+	queryAtype(filter: AtypeFilter, order: AtypeOrder, first: Int, offset: Int): [Atype]
+	aggregateAtype(filter: AtypeFilter): AtypeAggregateResult
 }
 
 #######################
@@ -331,5 +353,7 @@ type Query {
 
 type Mutation {
 	addAtype(input: [AddAtypeInput!]!): AddAtypePayload
+	updateAtype(input: UpdateAtypeInput!): UpdateAtypePayload
+	deleteAtype(filter: AtypeFilter!): DeleteAtypePayload
 }
 

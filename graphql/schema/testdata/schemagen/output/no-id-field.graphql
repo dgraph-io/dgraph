@@ -5,14 +5,14 @@
 type Post {
 	content: String!
 	author(filter: AuthorFilter): Author!
-	genre: Genre
+	genre(filter: GenreFilter): Genre
 }
 
 type Author {
 	id: ID
 	name: String
-	posts(order: PostOrder, first: Int, offset: Int): [Post]
-	postsAggregate: PostAggregateResult
+	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	postsAggregate(filter: PostFilter): PostAggregateResult
 }
 
 type Genre {
@@ -284,12 +284,12 @@ type AddAuthorPayload {
 }
 
 type AddGenrePayload {
-	genre(order: GenreOrder, first: Int, offset: Int): [Genre]
+	genre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
 	numUids: Int
 }
 
 type AddPostPayload {
-	post(order: PostOrder, first: Int, offset: Int): [Post]
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	numUids: Int
 }
 
@@ -299,6 +299,18 @@ type AuthorAggregateResult {
 
 type DeleteAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	msg: String
+	numUids: Int
+}
+
+type DeleteGenrePayload {
+	genre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
+	msg: String
+	numUids: Int
+}
+
+type DeletePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	msg: String
 	numUids: Int
 }
@@ -313,6 +325,16 @@ type PostAggregateResult {
 
 type UpdateAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
+}
+
+type UpdateGenrePayload {
+	genre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
+	numUids: Int
+}
+
+type UpdatePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	numUids: Int
 }
 
@@ -404,6 +426,10 @@ input GenreOrder {
 	then: GenreOrder
 }
 
+input GenrePatch {
+	name: String
+}
+
 input GenreRef {
 	name: String
 }
@@ -421,6 +447,12 @@ input PostOrder {
 	then: PostOrder
 }
 
+input PostPatch {
+	content: String
+	author: AuthorRef
+	genre: GenreRef
+}
+
 input PostRef {
 	content: String
 	author: AuthorRef
@@ -433,18 +465,30 @@ input UpdateAuthorInput {
 	remove: AuthorPatch
 }
 
+input UpdateGenreInput {
+	filter: GenreFilter!
+	set: GenrePatch
+	remove: GenrePatch
+}
+
+input UpdatePostInput {
+	filter: PostFilter!
+	set: PostPatch
+	remove: PostPatch
+}
+
 #######################
 # Generated Query
 #######################
 
 type Query {
-	queryPost(order: PostOrder, first: Int, offset: Int): [Post]
-	aggregatePost: PostAggregateResult
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	aggregatePost(filter: PostFilter): PostAggregateResult
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	aggregateAuthor(filter: AuthorFilter): AuthorAggregateResult
-	queryGenre(order: GenreOrder, first: Int, offset: Int): [Genre]
-	aggregateGenre: GenreAggregateResult
+	queryGenre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
+	aggregateGenre(filter: GenreFilter): GenreAggregateResult
 }
 
 #######################
@@ -453,9 +497,13 @@ type Query {
 
 type Mutation {
 	addPost(input: [AddPostInput!]!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
 	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 	addGenre(input: [AddGenreInput!]!): AddGenrePayload
+	updateGenre(input: UpdateGenreInput!): UpdateGenrePayload
+	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
 

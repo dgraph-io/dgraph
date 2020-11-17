@@ -3,24 +3,24 @@
 #######################
 
 type X {
-	f1(first: Int, offset: Int): [Y] @dgraph(pred: "f1")
-	f3(first: Int, offset: Int): [Z] @dgraph(pred: "~f3")
-	f1Aggregate: YAggregateResult
-	f3Aggregate: ZAggregateResult
+	f1(filter: YFilter, first: Int, offset: Int): [Y] @dgraph(pred: "f1")
+	f3(filter: ZFilter, first: Int, offset: Int): [Z] @dgraph(pred: "~f3")
+	f1Aggregate(filter: YFilter): YAggregateResult
+	f3Aggregate(filter: ZFilter): ZAggregateResult
 }
 
 type Y {
-	f1(first: Int, offset: Int): [X] @dgraph(pred: "~f1")
-	f2(first: Int, offset: Int): [Z] @dgraph(pred: "f2")
-	f1Aggregate: XAggregateResult
-	f2Aggregate: ZAggregateResult
+	f1(filter: XFilter, first: Int, offset: Int): [X] @dgraph(pred: "~f1")
+	f2(filter: ZFilter, first: Int, offset: Int): [Z] @dgraph(pred: "f2")
+	f1Aggregate(filter: XFilter): XAggregateResult
+	f2Aggregate(filter: ZFilter): ZAggregateResult
 }
 
 type Z {
-	f2(first: Int, offset: Int): [Y] @dgraph(pred: "~f2")
-	f3(first: Int, offset: Int): [X] @dgraph(pred: "f3")
-	f2Aggregate: YAggregateResult
-	f3Aggregate: XAggregateResult
+	f2(filter: YFilter, first: Int, offset: Int): [Y] @dgraph(pred: "~f2")
+	f3(filter: XFilter, first: Int, offset: Int): [X] @dgraph(pred: "f3")
+	f2Aggregate(filter: YFilter): YAggregateResult
+	f3Aggregate(filter: XFilter): XAggregateResult
 }
 
 #######################
@@ -283,17 +283,50 @@ input StringHashFilter {
 #######################
 
 type AddXPayload {
-	x(first: Int, offset: Int): [X]
+	x(filter: XFilter, first: Int, offset: Int): [X]
 	numUids: Int
 }
 
 type AddYPayload {
-	y(first: Int, offset: Int): [Y]
+	y(filter: YFilter, first: Int, offset: Int): [Y]
 	numUids: Int
 }
 
 type AddZPayload {
-	z(first: Int, offset: Int): [Z]
+	z(filter: ZFilter, first: Int, offset: Int): [Z]
+	numUids: Int
+}
+
+type DeleteXPayload {
+	x(filter: XFilter, first: Int, offset: Int): [X]
+	msg: String
+	numUids: Int
+}
+
+type DeleteYPayload {
+	y(filter: YFilter, first: Int, offset: Int): [Y]
+	msg: String
+	numUids: Int
+}
+
+type DeleteZPayload {
+	z(filter: ZFilter, first: Int, offset: Int): [Z]
+	msg: String
+	numUids: Int
+}
+
+type UpdateXPayload {
+	x(filter: XFilter, first: Int, offset: Int): [X]
+	numUids: Int
+}
+
+type UpdateYPayload {
+	y(filter: YFilter, first: Int, offset: Int): [Y]
+	numUids: Int
+}
+
+type UpdateZPayload {
+	z(filter: ZFilter, first: Int, offset: Int): [Z]
 	numUids: Int
 }
 
@@ -344,11 +377,33 @@ input AddZInput {
 	f3: [XRef]
 }
 
+input UpdateXInput {
+	filter: XFilter!
+	set: XPatch
+	remove: XPatch
+}
+
+input UpdateYInput {
+	filter: YFilter!
+	set: YPatch
+	remove: YPatch
+}
+
+input UpdateZInput {
+	filter: ZFilter!
+	set: ZPatch
+	remove: ZPatch
+}
+
 input XFilter {
 	has: XHasFilter
 	and: [XFilter]
 	or: [XFilter]
 	not: XFilter
+}
+
+input XPatch {
+	f1: [YRef]
 }
 
 input XRef {
@@ -362,6 +417,10 @@ input YFilter {
 	not: YFilter
 }
 
+input YPatch {
+	f2: [ZRef]
+}
+
 input YRef {
 	f2: [ZRef]
 }
@@ -373,6 +432,10 @@ input ZFilter {
 	not: ZFilter
 }
 
+input ZPatch {
+	f3: [XRef]
+}
+
 input ZRef {
 	f3: [XRef]
 }
@@ -382,12 +445,12 @@ input ZRef {
 #######################
 
 type Query {
-	queryX(first: Int, offset: Int): [X]
-	aggregateX: XAggregateResult
-	queryY(first: Int, offset: Int): [Y]
-	aggregateY: YAggregateResult
-	queryZ(first: Int, offset: Int): [Z]
-	aggregateZ: ZAggregateResult
+	queryX(filter: XFilter, first: Int, offset: Int): [X]
+	aggregateX(filter: XFilter): XAggregateResult
+	queryY(filter: YFilter, first: Int, offset: Int): [Y]
+	aggregateY(filter: YFilter): YAggregateResult
+	queryZ(filter: ZFilter, first: Int, offset: Int): [Z]
+	aggregateZ(filter: ZFilter): ZAggregateResult
 }
 
 #######################
@@ -396,7 +459,13 @@ type Query {
 
 type Mutation {
 	addX(input: [AddXInput!]!): AddXPayload
+	updateX(input: UpdateXInput!): UpdateXPayload
+	deleteX(filter: XFilter!): DeleteXPayload
 	addY(input: [AddYInput!]!): AddYPayload
+	updateY(input: UpdateYInput!): UpdateYPayload
+	deleteY(filter: YFilter!): DeleteYPayload
 	addZ(input: [AddZInput!]!): AddZPayload
+	updateZ(input: UpdateZInput!): UpdateZPayload
+	deleteZ(filter: ZFilter!): DeleteZPayload
 }
 
