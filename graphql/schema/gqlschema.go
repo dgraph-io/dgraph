@@ -1113,8 +1113,8 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 		addFilterArgument(schema, fld)
 
 		// Ordering and pagination, however, only makes sense for fields of
-		// list types (not scalar lists).
-		if isTypeList(fld) {
+		// list types (not scalar lists or enum lists).
+		if isTypeList(fld) && !isEnumList(fld, schema) {
 			addOrderArgument(schema, fld)
 
 			// Pagination even makes sense when there's no orderables because
@@ -1220,16 +1220,25 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 	for i, search := range searchArgs {
 		filterNames[i] = builtInFilters[search]
 
+		// For enum type, if the index is "hash" or "exact", we construct filter named
+		// enumTypeName_hash/ enumTypeName_exact from StringHashFilter/StringExactFilter
+		// by replacing the Argument type.
 		if (search == "hash" || search == "exact") && schema.Types[fld.Type.Name()].Kind == ast.Enum {
 			stringFilterName := fmt.Sprintf("String%sFilter", strings.Title(search))
 			var l ast.FieldList
 
 			for _, i := range schema.Types[stringFilterName].Fields {
-				typ := fld.Type
+				enumTypeName := fld.Type.Name()
+				var typ *ast.Type
 
-				// In case of IN filter we need to construct List of enums as Input Type.
-				if i.Type.Elem != nil && fld.Type.Elem == nil {
-					typ = &ast.Type{Elem: &ast.Type{NamedType: fld.Type.NamedType, NonNull: fld.Type.NonNull}}
+				if i.Type.Elem == nil {
+					typ = &ast.Type{
+						NamedType: enumTypeName,
+					}
+				} else {
+					typ = &ast.Type{
+						Elem: &ast.Type{NamedType: enumTypeName},
+					}
 				}
 
 				l = append(l, &ast.FieldDefinition{
@@ -1354,6 +1363,12 @@ func hasFilterable(defn *ast.Definition) bool {
 func isTypeList(fld *ast.FieldDefinition) bool {
 	_, scalar := inbuiltTypeToDgraph[fld.Type.Name()]
 	return !scalar && fld.Type.Elem != nil
+}
+
+// Returns true if given field is a list of enum
+func isEnumList(fld *ast.FieldDefinition, sch *ast.Schema) bool {
+	typeDefn := sch.Types[fld.Type.Name()]
+	return typeDefn.Kind == "ENUM" && fld.Type.Elem != nil
 }
 
 func hasOrderables(defn *ast.Definition) bool {

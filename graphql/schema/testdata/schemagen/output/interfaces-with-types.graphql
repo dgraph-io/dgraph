@@ -6,7 +6,7 @@ interface Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search
+	appearsIn: [Episode!]! @search
 	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
@@ -14,7 +14,7 @@ type Human implements Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search
+	appearsIn: [Episode!]! @search
 	starships(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	totalCredits: Int
 	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
@@ -25,7 +25,7 @@ type Droid implements Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	appearsIn(first: Int, offset: Int): [Episode!]! @search
+	appearsIn: [Episode!]! @search
 	primaryFunction: String
 	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
@@ -507,8 +507,8 @@ input DroidRef {
 }
 
 input Episode_hash {
-	eq: [Episode!]!
-	in: [Episode!]!
+	eq: Episode
+	in: [Episode]
 }
 
 input HumanFilter {
