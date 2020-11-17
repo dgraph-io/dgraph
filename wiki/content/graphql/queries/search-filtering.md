@@ -223,13 +223,13 @@ You can filter queries to find nodes with one or more specified values using the
 applied.
 
 For example, let's say that your schema defines a `State` type that has the
-`@id` directive applied to the `postal-code` field:
+`@id` directive applied to the `code` field:
 
 ```graphql
 type State {
-        postal-code: String! @id
+        code: String! @id
         name: String!
-	      capital: String
+        capital: String
 }
 ```
 
@@ -238,25 +238,25 @@ code **WA** or **VA** using the following query:
 
 ```graphql
 query {
-      queryState(filter: {postal-code: {in : ["WA", "VA"]}}){
+      queryState(filter: {code: {in : ["WA", "VA"]}}){
         code
         name
       }
     }
 ```
 
-## Filter a query for nodes with specified fields with `has`
+## Filter a query for nodes with specified fields using `has`
 
 You can filter queries to find nodes with a specified field using the `has`
 keyword. The `has` keyword can only check for the presence of a specified field,
-not for specified field values.
+not for specific field values.
 
 For example, your schema might define a `Teacher` type that has basic
 information about each teacher; such as their ID number, name, and age:
 
 ```graphql
 type Teacher {
-  teacher-id: ID!
+  tid: ID!
   age: Int!
   name: String
 }
@@ -265,12 +265,12 @@ type Teacher {
 Specific `Teacher` nodes might have additional fields noting their specific area
 of expertise; for example, a boolean field noting if they have experience with
 teaching mathematics. To query for only those teachers that have a `mathematics`
-field applied, you could use the following query:
+field, you could use the following query:
 
 ```graphql
 query {
   queryTeacher(filter: { has : mathematics } ) {
-    teacher-id
+    tid
     age
     name
   }
