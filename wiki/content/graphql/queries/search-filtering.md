@@ -245,7 +245,7 @@ query {
     }
 ```
 
-## Filter a query with `has`
+## Filter a query for nodes with specified fields with `has`
 
 You can filter queries to find nodes with a specified field using the `has`
 keyword. The `has` keyword can only check for the presence of a specified field,
