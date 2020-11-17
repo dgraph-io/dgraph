@@ -70,6 +70,8 @@ type WorkerOptions struct {
 	TLSDir string
 	// Set to true if inter node tls is enabled for the cluster
 	TLSInterNodeEnabled bool
+	// min TLS version supported
+	TLSMinVersion string
 	// RaftId represents the id of this alpha instance for participating in the RAFT
 	// consensus protocol.
 	RaftId uint64

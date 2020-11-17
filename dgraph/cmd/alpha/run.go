@@ -187,17 +187,6 @@ they form a Raft group and provide synchronous replication.
 	flag.Uint64("normalize_node_limit", 1e4,
 		"Limit for the maximum number of nodes that can be returned in a query that uses the "+
 			"normalize directive.")
-
-	// TLS configurations
-	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
-	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
-	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	flag.Bool("tls_internal_port_enabled", false, "(optional) enable inter node TLS encryption between cluster nodes.")
-	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to "+
-		"connect as a client with the other nodes in the cluster.")
-	flag.String("tls_key", "", "(optional) The private key file name "+
-		"in tls_dir needed to connect as a client with the other nodes in the cluster.")
-
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
@@ -221,6 +210,8 @@ they form a Raft group and provide synchronous replication.
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).
 		PostingListCache should be 0 and is a no-op.
 		`)
+	// TLS configurations
+	x.RegisterServerTLSFlags(flag)
 }
 
 func setupCustomTokenizers() {
@@ -715,6 +706,7 @@ func run() {
 		TLSClientConfig:     tlsConf,
 		TLSDir:              Alpha.Conf.GetString("tls_dir"),
 		TLSInterNodeEnabled: Alpha.Conf.GetBool("tls_internal_port_enabled"),
+		TLSMinVersion:       Alpha.Conf.GetString("tls_min_version"),
 	}
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)

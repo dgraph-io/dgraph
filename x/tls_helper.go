@@ -19,6 +19,7 @@ package x
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io/ioutil"
 	"path"
 	"strings"
@@ -47,6 +48,20 @@ type TLSHelperConfig struct {
 	RootCACert       string
 	ClientAuth       string
 	UseSystemCACerts bool
+	MinVersion       string
+}
+
+// RegisterServerTLSFlags registers the required flags to set up a TLS client.
+func RegisterServerTLSFlags(flag *pflag.FlagSet) {
+	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
+	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
+	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
+	flag.Bool("tls_internal_port_enabled", false, "(optional) enable inter node TLS encryption between cluster nodes.")
+	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to "+
+		"connect as a client with the other nodes in the cluster.")
+	flag.String("tls_key", "", "(optional) The private key file name "+
+		"in tls_dir needed to connect as a client with the other nodes in the cluster.")
+	flag.String("tls_min_version", "TLS11", "min version of tls supported. Valid values are TLS11, TLS12")
 }
 
 // RegisterClientTLSFlags registers the required flags to set up a TLS client.
@@ -99,7 +114,7 @@ func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 }
 
 // LoadServerTLSConfigForInternalPort loads the TLS config for the internal ports of the cluster
-func LoadServerTLSConfigForInternalPort(tlsEnabled bool, tlsDir string) (*tls.Config, error) {
+func LoadServerTLSConfigForInternalPort(tlsEnabled bool, tlsDir, tlsMinVersion string) (*tls.Config, error) {
 	if !tlsEnabled {
 		return nil, nil
 	}
@@ -112,6 +127,7 @@ func LoadServerTLSConfigForInternalPort(tlsEnabled bool, tlsDir string) (*tls.Co
 		conf.Cert = path.Join(conf.CertDir, TLSNodeCert)
 		conf.Key = path.Join(conf.CertDir, TLSNodeKey)
 		conf.ClientAuth = "REQUIREANDVERIFY"
+		conf.MinVersion = tlsMinVersion
 		return GenerateServerTLSConfig(&conf)
 	}
 
@@ -128,6 +144,7 @@ func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) 
 		conf.Cert = path.Join(conf.CertDir, tlsCertFile)
 		conf.Key = path.Join(conf.CertDir, tlsKeyFile)
 		conf.ClientAuth = v.GetString("tls_client_auth")
+		conf.MinVersion = v.GetString("tls_min_version")
 	}
 	conf.UseSystemCACerts = v.GetBool("tls_use_system_ca")
 
@@ -243,12 +260,45 @@ func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err e
 		}
 		tlsCfg.ClientAuth = auth
 
-		tlsCfg.MinVersion = tls.VersionTLS11
-		tlsCfg.MaxVersion = tls.VersionTLS12
-
+		err = setupVersion(tlsCfg, config.MinVersion)
+		if err != nil {
+			return nil, err
+		}
 		return tlsCfg, nil
 	}
 	return nil, nil
+}
+
+func setupVersion(cfg *tls.Config, minVersion string) error {
+	tlsVersion := map[string]uint16{
+		"TLS11": tls.VersionTLS11,
+		"TLS12": tls.VersionTLS12,
+	}
+
+	if val, has := tlsVersion[strings.ToUpper(minVersion)]; has {
+		cfg.MinVersion = val
+	} else {
+		return fmt.Errorf("invalid min_version '%s'. Valid values [TLS11, TLS12]", minVersion)
+	}
+
+	cfg.MaxVersion = tls.VersionTLS12
+	cfg.CipherSuites = []uint16{
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+	}
+
+	return nil
 }
 
 // GenerateClientTLSConfig creates and returns a new client side *tls.Config with the
