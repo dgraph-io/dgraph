@@ -44,8 +44,7 @@ type XidMap struct {
 	maxUidSeen uint64
 
 	// Optionally, these can be set to persist the mappings.
-	writer   *badger.WriteBatch
-	hashSeed maphash.Seed
+	writer *badger.WriteBatch
 }
 
 type shard struct {
@@ -58,6 +57,8 @@ type shard struct {
 type block struct {
 	start, end uint64
 }
+
+var hashSeed maphash.Seed
 
 // assign assumes the write lock is already acquired.
 func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
@@ -73,7 +74,7 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 
 func (m *XidMap) getHash(xid string) uint64 {
 	var h maphash.Hash
-	h.SetSeed(m.hashSeed)
+	h.SetSeed(hashSeed)
 	h.WriteString(xid)
 	return h.Sum64()
 }
@@ -83,10 +84,10 @@ func (m *XidMap) getHash(xid string) uint64 {
 // assignment operations.
 func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	numShards := 32
+	hashSeed = maphash.MakeSeed()
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
-		hashSeed:  maphash.MakeSeed(),
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
