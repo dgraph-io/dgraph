@@ -62,6 +62,7 @@ type service struct {
 	WorkingDir    string    `yaml:"working_dir,omitempty"`
 	DependsOn     []string  `yaml:"depends_on,omitempty"`
 	Labels        stringMap `yaml:",omitempty"`
+	EnvFile       []string  `yaml:",omitempty"`
 	Environment   []string  `yaml:",omitempty"`
 	Ports         []string  `yaml:",omitempty"`
 	Volumes       []volume  `yaml:",omitempty"`
@@ -106,6 +107,10 @@ type options struct {
 	LudicrousMode  bool
 	SnapshotAfter  string
 	ContainerNames bool
+	AlphaVolumes   []string
+	ZeroVolumes    []string
+	AlphaEnvFile   []string
+	ZeroEnvFile    []string
 
 	// Extra flags
 	AlphaFlags string
@@ -138,6 +143,9 @@ func toPort(i int) string {
 }
 
 func getOffset(idx int) int {
+	if !opts.ExposePorts {
+		return 0
+	}
 	if idx == 1 {
 		return 0
 	}
@@ -216,7 +224,11 @@ func getZero(idx int) service {
 		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/zw", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" -o %d --idx=%d", opts.PortOffset+getOffset(idx), idx)
+	offset := getOffset(idx)
+	if (opts.PortOffset + offset) != 0 {
+		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
+	}
+	svc.Command += fmt.Sprintf(" --idx=%d", idx)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
 	if opts.NumAlphas > 1 {
 		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
@@ -238,6 +250,14 @@ func getZero(idx int) service {
 	if opts.ZeroFlags != "" {
 		svc.Command += " " + opts.ZeroFlags
 	}
+
+	if len(opts.ZeroVolumes) > 0 {
+		for _, vol := range opts.ZeroVolumes {
+			svc.Volumes = append(svc.Volumes, getVolume(vol))
+		}
+	}
+	svc.EnvFile = opts.ZeroEnvFile
+
 	return svc
 }
 
@@ -256,7 +276,9 @@ func getAlpha(idx int) service {
 	isMultiZeros := true
 	var isInvalidVersion, err = semverCompare("< 1.2.3 || 20.03.0", opts.Tag)
 	if err != nil || isInvalidVersion {
-		isMultiZeros = false
+		if opts.Tag != "latest" {
+			isMultiZeros = false
+		}
 	}
 
 	maxZeros := 1
@@ -267,13 +289,16 @@ func getAlpha(idx int) service {
 	zeroHostAddr := fmt.Sprintf("zero%d:%d", 1, zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
-		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+i)
+		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+getOffset(i))
 		zeros = append(zeros, zeroHostAddr)
 	}
 
 	zerosOpt := strings.Join(zeros, ",")
 
-	svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+getOffset(idx))
+	offset := getOffset(idx)
+	if (opts.PortOffset + offset) != 0 {
+		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
+	}
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
@@ -290,7 +315,7 @@ func getAlpha(idx int) service {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
 	if opts.Acl {
-		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s"
+		svc.Command += " --acl_secret_file=/secret/hmac"
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   "./acl-secret",
@@ -302,7 +327,7 @@ func getAlpha(idx int) service {
 		svc.Command += fmt.Sprintf(" --snapshot_after=%s", opts.SnapshotAfter)
 	}
 	if opts.AclSecret != "" {
-		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s"
+		svc.Command += " --acl_secret_file=/secret/hmac"
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   opts.AclSecret,
@@ -333,11 +358,35 @@ func getAlpha(idx int) service {
 			ReadOnly: true,
 		})
 	}
+	if len(opts.AlphaVolumes) > 0 {
+		for _, vol := range opts.AlphaVolumes {
+			svc.Volumes = append(svc.Volumes, getVolume(vol))
+		}
+	}
+	svc.EnvFile = opts.AlphaEnvFile
 	if opts.AlphaFlags != "" {
 		svc.Command += " " + opts.AlphaFlags
 	}
 
 	return svc
+}
+
+func getVolume(vol string) volume {
+	s := strings.Split(vol, ":")
+	srcDir := s[0]
+	dstDir := s[1]
+	readOnly := len(s) > 2 && s[2] == "ro"
+	volType := "volume"
+	if isBindMount(srcDir) {
+		volType = "bind"
+	}
+	return volume{
+		Type:     volType,
+		Source:   srcDir,
+		Target:   dstDir,
+		ReadOnly: readOnly,
+	}
+
 }
 
 func getJaeger() service {
@@ -448,6 +497,10 @@ func semverCompare(constraint, version string) (bool, error) {
 	return c.Check(v), nil
 }
 
+func isBindMount(vol string) bool {
+	return strings.HasPrefix(vol, ".") || strings.HasPrefix(vol, "/")
+}
+
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "compose: %v\n", err)
 	os.Exit(1)
@@ -523,6 +576,14 @@ func main() {
 		"extra flags for zeros.")
 	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", true,
 		"set container names in docker compose.")
+	cmd.PersistentFlags().StringArrayVar(&opts.AlphaVolumes, "alpha_volume", nil,
+		"alpha volume mounts, following srcdir:dstdir[:ro]")
+	cmd.PersistentFlags().StringArrayVar(&opts.ZeroVolumes, "zero_volume", nil,
+		"zero volume mounts, following srcdir:dstdir[:ro]")
+	cmd.PersistentFlags().StringArrayVar(&opts.AlphaEnvFile, "alpha_env_file", nil,
+		"env_file for alpha")
+	cmd.PersistentFlags().StringArrayVar(&opts.ZeroEnvFile, "zero_env_file", nil,
+		"env_file for zero")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
@@ -568,6 +629,25 @@ func main() {
 		Version:  "3.5",
 		Services: services,
 		Volumes:  make(map[string]stringMap),
+	}
+
+	if len(opts.AlphaVolumes) > 0 {
+		for _, vol := range opts.AlphaVolumes {
+			s := strings.Split(vol, ":")
+			srcDir := s[0]
+			if !isBindMount(srcDir) {
+				cfg.Volumes[srcDir] = stringMap{}
+			}
+		}
+	}
+	if len(opts.ZeroVolumes) > 0 {
+		for _, vol := range opts.ZeroVolumes {
+			s := strings.Split(vol, ":")
+			srcDir := s[0]
+			if !isBindMount(srcDir) {
+				cfg.Volumes[srcDir] = stringMap{}
+			}
+		}
 	}
 
 	if opts.DataVol {
