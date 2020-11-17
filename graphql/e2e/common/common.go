@@ -46,10 +46,7 @@ const (
 
 	adminDgraphHealthURL           = "http://localhost:8180/health?all"
 	adminDgraphStateURL            = "http://localhost:8180/state"
-	graphqlAdminTestURL            = "http://localhost:8180/graphql"
-	graphqlAdminTestAdminURL       = "http://localhost:8180/admin"
 	graphqlAdminTestAdminSchemaURL = "http://localhost:8180/admin/schema"
-	alphaAdminTestgRPC             = "localhost:9180"
 )
 
 // GraphQLParams is parameters for the constructing a GraphQL query - that's
