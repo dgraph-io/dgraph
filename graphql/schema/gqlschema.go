@@ -1155,6 +1155,10 @@ func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 }
 
 func addFilterArgumentForField(schema *ast.Schema, fld *ast.FieldDefinition, fldTypeName string) {
+	if _, ok := inbuiltTypeToDgraph[fldTypeName]; ok {
+		return
+	}
+
 	fldType := schema.Types[fldTypeName]
 	if fldType.Kind == ast.Union || hasFilterable(fldType) {
 		fld.Arguments = append(fld.Arguments,
