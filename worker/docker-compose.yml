@@ -1,10 +1,9 @@
-# Auto-generated with: [./compose -a 6 -z 3 -j -w --port_offset=0 --expose_ports=false -O ../worker/docker-compose.yml --mem= --snapshot_after=100]
+# Auto-generated with: [./compose -a 6 -z 3 -j -w --port_offset=0 --expose_ports=false -O ../worker/docker-compose.yml --mem= --snapshot_after=100 --names=false]
 #
 version: "3.5"
 services:
   alpha1:
     image: dgraph/dgraph:latest
-    container_name: alpha1
     working_dir: /data/alpha1
     labels:
       cluster: test
@@ -21,7 +20,6 @@ services:
       --snapshot_after=100
   alpha2:
     image: dgraph/dgraph:latest
-    container_name: alpha2
     working_dir: /data/alpha2
     labels:
       cluster: test
@@ -38,7 +36,6 @@ services:
       --snapshot_after=100
   alpha3:
     image: dgraph/dgraph:latest
-    container_name: alpha3
     working_dir: /data/alpha3
     labels:
       cluster: test
@@ -55,7 +52,6 @@ services:
       --snapshot_after=100
   alpha4:
     image: dgraph/dgraph:latest
-    container_name: alpha4
     working_dir: /data/alpha4
     labels:
       cluster: test
@@ -72,7 +68,6 @@ services:
       --snapshot_after=100
   alpha5:
     image: dgraph/dgraph:latest
-    container_name: alpha5
     working_dir: /data/alpha5
     labels:
       cluster: test
@@ -89,7 +84,6 @@ services:
       --snapshot_after=100
   alpha6:
     image: dgraph/dgraph:latest
-    container_name: alpha6
     working_dir: /data/alpha6
     labels:
       cluster: test
@@ -106,7 +100,6 @@ services:
       --snapshot_after=100
   jaeger:
     image: jaegertracing/all-in-one:1.18
-    container_name: jaeger
     working_dir: /working/jaeger
     environment:
     - SPAN_STORAGE_TYPE=badger
@@ -117,7 +110,6 @@ services:
       /working/jaeger
   zero1:
     image: dgraph/dgraph:latest
-    container_name: zero1
     working_dir: /data/zero1
     labels:
       cluster: test
@@ -133,7 +125,6 @@ services:
       --replicas=3 --logtostderr -v=2 --bindall
   zero2:
     image: dgraph/dgraph:latest
-    container_name: zero2
     working_dir: /data/zero2
     depends_on:
     - zero1
@@ -151,7 +142,6 @@ services:
       --replicas=3 --logtostderr -v=2 --peer=zero1:5080
   zero3:
     image: dgraph/dgraph:latest
-    container_name: zero3
     working_dir: /data/zero3
     depends_on:
     - zero2
