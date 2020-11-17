@@ -63,7 +63,7 @@ func getContainer(name string) types.Container {
 	cli, err := client.NewEnvClient()
 	x.Check(err)
 
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
+	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
 	if err != nil {
 		log.Fatalf("While listing container: %v\n", err)
 	}

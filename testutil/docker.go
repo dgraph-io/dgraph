@@ -22,6 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
@@ -34,6 +35,7 @@ const (
 func DockerRun(instance string, op int) error {
 	c := getContainer(instance)
 	if c.ID == "" {
+		glog.Fatalf("Unable to find container: %s\n", instance)
 		return nil
 	}
 
@@ -42,7 +44,10 @@ func DockerRun(instance string, op int) error {
 
 	switch op {
 	case Start:
-		return cli.ContainerStart(context.Background(), c.ID, types.ContainerStartOptions{})
+		if err := cli.ContainerStart(context.Background(), c.ID,
+			types.ContainerStartOptions{}); err != nil {
+			return err
+		}
 	case Stop:
 		dur := 30 * time.Second
 		return cli.ContainerStop(context.Background(), c.ID, &dur)

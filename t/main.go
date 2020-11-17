@@ -359,6 +359,7 @@ func (o *failureCatcher) Print() {
 	o.Lock()
 	defer o.Unlock()
 
+	fmt.Println("TIMELINE")
 	sort.Slice(o.durs, func(i, j int) bool {
 		return o.durs[i].ts.Before(o.durs[j].ts)
 	})

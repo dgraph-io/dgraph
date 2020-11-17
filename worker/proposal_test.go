@@ -67,7 +67,7 @@ func proposeAndWaitEmulator(l *rateLimiter, r *rand.Rand, maxRetry int, sleep bo
 // multiple goroutines. At the end it matches if sum of completed and aborted proposals is
 // equal to tried proposals or not.
 func TestLimiterDeadlock(t *testing.T) {
-	toTry := int64(10000) // total proposals count to propose.
+	toTry := int64(3000) // total proposals count to propose.
 	var currentCount, pending, completed, aborted int64
 
 	l := &rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: 256}

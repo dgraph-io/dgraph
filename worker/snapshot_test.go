@@ -50,6 +50,7 @@ func TestSnapshot(t *testing.T) {
 			address: string @index(term) .`,
 	}))
 
+	t.Logf("Stopping alpha2.\n")
 	err = testutil.DockerRun("alpha2", testutil.Stop)
 	require.NoError(t, err)
 
@@ -71,8 +72,10 @@ func TestSnapshot(t *testing.T) {
 		})
 		require.NoError(t, err)
 	}
+	t.Logf("Mutations done.\n")
 	snapshotTs = waitForSnapshot(t, snapshotTs)
 
+	t.Logf("Starting alpha2.\n")
 	err = testutil.DockerRun("alpha2", testutil.Start)
 	require.NoError(t, err)
 
@@ -84,6 +87,7 @@ func TestSnapshot(t *testing.T) {
 	}
 	verifySnapshot(t, dg2, 200)
 
+	t.Logf("Stopping alpha2.\n")
 	err = testutil.DockerRun("alpha2", testutil.Stop)
 	require.NoError(t, err)
 
@@ -96,6 +100,7 @@ func TestSnapshot(t *testing.T) {
 	}
 	_ = waitForSnapshot(t, snapshotTs)
 
+	t.Logf("Starting alpha2.\n")
 	err = testutil.DockerRun("alpha2", testutil.Start)
 	require.NoError(t, err)
 
