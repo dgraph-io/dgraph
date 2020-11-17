@@ -51,6 +51,8 @@ type suiteOpts struct {
 }
 
 func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
+	t.Skip("TODO: Switch this to use Docker container")
+
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
@@ -112,6 +114,8 @@ func newSuiteFromFile(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) *
 }
 
 func (s *suite) setup(schemaFile, rdfFile, gqlSchemaFile string) {
+	s.t.Skip("TODO: Switch this to use Docker container")
+
 	var (
 		bulkDir = filepath.Join(rootDir, "bulk")
 		liveDir = filepath.Join(rootDir, "live")

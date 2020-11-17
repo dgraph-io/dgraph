@@ -223,7 +223,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	}
 
 	dur := time.Since(start).Round(time.Second)
-	fc.Took(pkg, dur)
+	fc.Took(prefix, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
 	return nil
 }
@@ -283,8 +283,10 @@ func findPackageFor(testName string) string {
 }
 
 type pkgDuration struct {
-	pkg string
-	dur time.Duration
+	prefix string
+	pkg    string
+	dur    time.Duration
+	ts     time.Time
 }
 
 type failureCatcher struct {
@@ -293,14 +295,10 @@ type failureCatcher struct {
 	durs    []pkgDuration
 }
 
-func (o *failureCatcher) Took(pkg string, dur time.Duration) {
-	if dur < 10*time.Second {
-		// Don't capture packages which were fast.
-		return
-	}
+func (o *failureCatcher) Took(prefix, pkg string, dur time.Duration) {
 	o.Lock()
 	defer o.Unlock()
-	o.durs = append(o.durs, pkgDuration{pkg: pkg, dur: dur})
+	o.durs = append(o.durs, pkgDuration{prefix: prefix, pkg: pkg, dur: dur, ts: time.Now()})
 }
 
 func (o *failureCatcher) Write(p []byte) (n int, err error) {
@@ -318,12 +316,26 @@ func (o *failureCatcher) Print() {
 	defer o.Unlock()
 
 	sort.Slice(o.durs, func(i, j int) bool {
-		return o.durs[i].dur > o.durs[j].dur
+		return o.durs[i].ts.Before(o.durs[j].ts)
 	})
-
 	for _, dur := range o.durs {
-		fmt.Printf("Took: %s Package: %s\n", dur.dur, dur.pkg)
+		// Don't capture packages which were fast.
+		if dur.dur < 5*time.Second {
+			continue
+		}
+		fmt.Printf("[%s] [%s] pkg %s took: %s", dur.ts.Format(time.Kitchen),
+			dur.prefix, dur.pkg, dur.dur)
 	}
+
+	// sort.Slice(o.durs, func(i, j int) bool {
+	// 	return o.durs[i].dur > o.durs[j].dur
+	// })
+	// for _, dur := range o.durs {
+	// 	if dur > 10*time.Second {
+	// 		continue
+	// 	}
+	// 	fmt.Printf("Took: %s Package: %s\n", dur.dur, dur.pkg)
+	// }
 	if fc.failure.Len() > 0 {
 		fmt.Printf("Failure output: %s\n", fc.failure.Bytes())
 	}
@@ -396,13 +408,13 @@ func main() {
 		x.Check(err)
 
 		slowPkgs := []string{"systest", "ee/acl", "cmd/alpha"}
-		right := len(pkgs) - 1
-		for i := len(pkgs) - 1; i > 0; i-- {
-			// These packages take time. So, push them to the end.
+		left := 0
+		for i := 0; i < len(pkgs); i++ {
+			// These packages take time. So, move them to the front.
 			for _, sp := range slowPkgs {
 				if strings.Contains(pkgs[i].ID, sp) {
-					pkgs[right], pkgs[i] = pkgs[i], pkgs[right]
-					right--
+					pkgs[left], pkgs[i] = pkgs[i], pkgs[left]
+					left++
 					break
 				}
 			}
