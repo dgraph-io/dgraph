@@ -18,38 +18,38 @@ package testutil
 
 import (
 	"time"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
+	"golang.org/x/net/context"
+)
+
+const (
+	Start int = iota
+	Stop
 )
 
 // DockerStart starts the specified services.
-func DockerStart(services ...string) error {
-	argv := []string{"docker", "start"}
-	argv = append(argv, services...)
-	err := Exec(argv...)
-	time.Sleep(time.Second)
-	return err
-}
+func DockerRun(instance string, op int) error {
+	c := getContainer(instance)
+	if c.ID == "" {
+		return nil
+	}
 
-// DockerStop stops the specified services.
-func DockerStop(services ...string) error {
-	argv := []string{"docker", "stop"}
-	argv = append(argv, services...)
-	return Exec(argv...)
-}
+	cli, err := client.NewEnvClient()
+	x.Check(err)
 
-// DockerPause pauses the specified services.
-func DockerPause(services ...string) error {
-	argv := []string{"docker", "pause"}
-	argv = append(argv, services...)
-	return Exec(argv...)
-}
-
-// DockerUnpause unpauses the specified services.
-func DockerUnpause(services ...string) error {
-	argv := []string{"docker", "unpause"}
-	argv = append(argv, services...)
-	err := Exec(argv...)
-	time.Sleep(time.Second)
-	return err
+	switch op {
+	case Start:
+		return cli.ContainerStart(context.Background(), c.ID, types.ContainerStartOptions{})
+	case Stop:
+		dur := 30 * time.Second
+		return cli.ContainerStop(context.Background(), c.ID, &dur)
+	default:
+		x.Fatalf("Wrong Docker op: %v\n", op)
+	}
+	return nil
 }
 
 // DockerCp copies from/to a container. Paths inside a container have the format

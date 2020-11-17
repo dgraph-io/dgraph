@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -151,6 +152,7 @@ func (in instance) getContainer() types.Container {
 	}
 	return types.Container{}
 }
+
 func (in instance) publicPort(privatePort uint16) string {
 	c := in.getContainer()
 	for _, p := range c.Ports {
@@ -160,6 +162,7 @@ func (in instance) publicPort(privatePort uint16) string {
 	}
 	return ""
 }
+
 func (in instance) login() error {
 	addr := in.publicPort(9080)
 	if len(addr) == 0 {
@@ -177,6 +180,7 @@ func (in instance) login() error {
 	fmt.Printf("Logged into %s\n", in)
 	return nil
 }
+
 func (in instance) loginFatal() {
 	for i := 0; i < 30; i++ {
 		err := in.login()
@@ -188,6 +192,7 @@ func (in instance) loginFatal() {
 	}
 	glog.Fatalf("Unable to login to %s\n", in)
 }
+
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	var opts []string
 	if *count > 0 {
@@ -198,24 +203,12 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	}
 	q := fmt.Sprintf("go test -v %s %s", strings.Join(opts, " "), pkg)
 	cmd := commandWithContext(ctx, q)
-	in := instance{
-		Prefix: prefix,
-		// Name:   "alpha" + strconv.Itoa(1+rand.Intn(6)),
-		Name: "alpha1",
-	}
-	cmd.Env = append(cmd.Env, "TEST_PORT_ALPHA="+in.publicPort(9080))
-	cmd.Env = append(cmd.Env, "TEST_PORT_ALPHA_HTTP="+in.publicPort(8080))
-	cmd.Env = append(cmd.Env, "TEST_ALPHA="+in.String())
-	cmd.Env = append(cmd.Env, "TEST_MINIO="+getInstance(prefix, "minio").publicPort(9001))
-
-	zeroIn := getInstance(prefix, "zero1")
-	cmd.Env = append(cmd.Env, "TEST_PORT_ZERO="+zeroIn.publicPort(5080))
-	cmd.Env = append(cmd.Env, "TEST_PORT_ZERO_HTTP="+zeroIn.publicPort(6080))
+	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
 
 	// Use failureCatcher.
 	cmd.Stdout = fc
 
-	fmt.Printf("Running: %s with %s\n", cmd, in)
+	fmt.Printf("Running: %s with %s\n", cmd, prefix)
 	start := time.Now()
 
 	if err := cmd.Run(); err != nil {
@@ -283,7 +276,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 
 func getPrefix() string {
 	id := atomic.AddInt32(&testId, 1)
-	return fmt.Sprintf("test%03d-%d", procId, id)
+	return fmt.Sprintf("test-%03d-%d", procId, id)
 }
 
 func runCustomClusterTest(ctx context.Context, pkg string) error {
@@ -295,8 +288,22 @@ func runCustomClusterTest(ctx context.Context, pkg string) error {
 		defer stopCluster(compose, prefix)
 	}
 
+	port := getInstance(prefix, "alpha1").publicPort(8080)
+
+	for i := 0; i < 30; i++ {
+		resp, err := http.Get("http://localhost:" + port + "/health")
+		if err == nil && resp.StatusCode == http.StatusOK {
+			fmt.Printf("Health check: OK for %s. Status: %s\n", prefix, resp.Status)
+			break
+		}
+		body, _ := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
+		fmt.Printf("Health failed: %v. Response: %q. Retrying...\n", err, body)
+		time.Sleep(time.Second)
+	}
+
 	// Wait for cluster to be healthy.
-	getInstance(prefix, "alpha1").loginFatal()
+	// getInstance(prefix, "alpha1").loginFatal()
 
 	return runTestsFor(ctx, pkg, prefix)
 }

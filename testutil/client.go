@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -33,6 +34,8 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -43,6 +46,7 @@ import (
 // socket addr = IP address and port number
 var (
 	// Instance is the instance name of the Alpha.
+	DockerPrefix  string
 	Instance      string
 	MinioInstance string
 	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
@@ -55,25 +59,51 @@ var (
 	SockAddrZeroHttp string
 )
 
+func getContainer(name string) types.Container {
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+
+	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
+	if err != nil {
+		log.Fatalf("While listing container: %v\n", err)
+	}
+
+	q := fmt.Sprintf("/%s_%s_", DockerPrefix, name)
+	for _, c := range containers {
+		for _, n := range c.Names {
+			if !strings.HasPrefix(n, q) {
+				continue
+			}
+			return c
+		}
+	}
+	return types.Container{}
+}
+
+func ContainerAddr(name string, privatePort uint16) string {
+	c := getContainer(name)
+	for _, p := range c.Ports {
+		if p.PrivatePort == privatePort {
+			return "localhost:" + strconv.Itoa(int(p.PublicPort))
+		}
+	}
+	return "localhost:" + strconv.Itoa(int(privatePort))
+}
+
 // This allows running (most) tests against dgraph running on the default ports, for example.
 // Only the GRPC ports are needed and the others are deduced.
 func init() {
-	getPort := func(envVar string, dfault int) int {
-		p := os.Getenv(envVar)
-		if p == "" {
-			return dfault
-		}
-		port, _ := strconv.Atoi(p)
-		return port
-	}
+	DockerPrefix = os.Getenv("TEST_DOCKER_PREFIX")
 
-	MinioInstance = os.Getenv("TEST_MINIO")
-	Instance = os.Getenv("TEST_ALPHA")
-	SockAddr = fmt.Sprintf("localhost:%d", getPort("TEST_PORT_ALPHA", 9080))
-	SockAddrHttp = fmt.Sprintf("localhost:%d", getPort("TEST_PORT_ALPHA_HTTP", 8080))
+	MinioInstance = ContainerAddr("minio", 9001)
+	Instance = fmt.Sprintf("%s_%s_1", DockerPrefix, "alpha1")
+	SockAddr = ContainerAddr("alpha1", 9080)
+	SockAddrHttp = ContainerAddr("alpha1", 8080)
 
-	SockAddrZero = fmt.Sprintf("localhost:%d", getPort("TEST_PORT_ZERO", 5080))
-	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", getPort("TEST_PORT_ZERO_HTTP", 6080))
+	SockAddrZero = ContainerAddr("zero1", 5080)
+	SockAddrZeroHttp = ContainerAddr("zero1", 6080)
+
+	fmt.Printf("testutil: %q %s %s\n", DockerPrefix, SockAddr, SockAddrZero)
 }
 
 // DgraphClientDropAll creates a Dgraph client and drops all existing data.
