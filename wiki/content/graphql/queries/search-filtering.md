@@ -145,7 +145,8 @@ query {
 
 You can also filter nested objects while querying for a list of objects.
 
-For example, the following query fetches all of the authors whose name contains `Lee` and with their `completed` posts that have a score greater than `10`:
+For example, the following query fetches all of the authors whose name contains
+`Lee` and with their `completed` posts that have a score greater than `10`:
 
 ```graphql
 query {
@@ -173,7 +174,7 @@ query {
 
 ### Filter a query for a range of objects with `between`
 
-You can also filter query results within an inclusive range of indexed and typed
+You can filter query results within an inclusive range of indexed and typed
 scalar values using the `between` keyword.
 
 {{% notice "tip" %}}This keyword is also supported for DQL; to learn more, see
@@ -215,7 +216,63 @@ queryStudent(fitler: {name: between: {min: "ba", max: "hz"}}){
 }
 ```
 
+## Filter queries that match specified values with `in`
+
+You can filter queries to find nodes with one or more specified values using the
+`in` keyword. This keyword can find matches for fields with the `@id` directive
+applied.
+
+For example, let's say that your schema defines a `State` type that has the
+`@id` directive applied to the `postal-code` field:
+
+```graphql
+type State {
+        postal-code: String! @id
+        name: String!
+	      capital: String
+}
+```
+
+Using the `in` keyword, you can query for a list of states that have the postal
+code **WA** or **VA** using the following query:
+
+```graphql
+query {
+      queryState(filter: {postal-code: {in : ["WA", "VA"]}}){
+        code
+        name
+      }
+    }
+```
+
 ## Filter a query with `has`
 
+You can filter queries to find nodes with a specified field using the `has`
+keyword. The `has` keyword can only check for the presence of a specified field,
+not for specified field values.
 
-## Filter a query with `in`
+For example, your schema might define a `Teacher` type that has basic
+information about each teacher; such as their ID number, name, and age:
+
+```graphql
+type Teacher {
+  teacher-id: ID!
+  age: Int!
+  name: String
+}
+```
+
+Specific `Teacher` nodes might have additional fields noting their specific area
+of expertise; for example, a boolean field noting if they have experience with
+teaching mathematics. To query for only those teachers that have a `mathematics`
+field applied, you could use the following query:
+
+```graphql
+query {
+  queryTeacher(filter: { has : mathematics } ) {
+    teacher-id
+    age
+    name
+  }
+}
+```
