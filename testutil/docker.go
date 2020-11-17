@@ -65,8 +65,13 @@ func DockerCp(srcPath, dstPath string) error {
 }
 
 // DockerExec executes a command inside the given container.
-func DockerExec(container string, cmd ...string) error {
-	argv := []string{"docker", "exec", "--user", "root", container}
+func DockerExec(instance string, cmd ...string) error {
+	c := getContainer(instance)
+	if c.ID == "" {
+		glog.Fatalf("Unable to find container: %s\n", instance)
+		return nil
+	}
+	argv := []string{"docker", "exec", "--user", "root", c.ID}
 	argv = append(argv, cmd...)
 	return Exec(argv...)
 }

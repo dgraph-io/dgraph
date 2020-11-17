@@ -103,10 +103,13 @@ func startCluster(composeFile, prefix string) {
 	// Let it stabilize.
 	time.Sleep(3 * time.Second)
 }
-func stopCluster(composeFile, prefix string) {
+func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	q := fmt.Sprintf("docker-compose -f %s -p %s down",
 		composeFile, prefix)
-	runFatal(q)
+	go func() {
+		runFatal(q)
+		wg.Done()
+	}()
 }
 
 type instance struct {
@@ -224,7 +227,11 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 }
 
 func runTests(taskCh chan task, closer *z.Closer) error {
-	defer closer.Done()
+	wg := new(sync.WaitGroup)
+	defer func() {
+		wg.Wait()
+		closer.Done()
+	}()
 
 	defaultCompose := path.Join(*baseDir, "dgraph/docker-compose.yml")
 	prefix := getPrefix()
@@ -245,7 +252,8 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if *keepCluster || stopped {
 			return
 		}
-		stopCluster(defaultCompose, prefix)
+		wg.Add(1)
+		stopCluster(defaultCompose, prefix, wg)
 		stopped = true
 	}
 	defer stop()
@@ -273,7 +281,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			uncommon = true
 			stop() // Stop default cluster.
 
-			if err := runCustomClusterTest(ctx, task.pkg.ID); err != nil {
+			if err := runCustomClusterTest(ctx, task.pkg.ID, wg); err != nil {
 				return err
 			}
 		}
@@ -286,13 +294,14 @@ func getPrefix() string {
 	return fmt.Sprintf("test-%03d-%d", procId, id)
 }
 
-func runCustomClusterTest(ctx context.Context, pkg string) error {
+func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
 	compose := composeFileFor(pkg)
 	prefix := getPrefix()
 
 	startCluster(compose, prefix)
 	if !*keepCluster {
-		defer stopCluster(compose, prefix)
+		wg.Add(1)
+		defer stopCluster(compose, prefix, wg)
 	}
 
 	port := getInstance(prefix, "alpha1").publicPort(8080)
@@ -318,22 +327,30 @@ func runCustomClusterTest(ctx context.Context, pkg string) error {
 	return runTestsFor(ctx, pkg, prefix)
 }
 
-func findPackageFor(testName string) string {
+func findPackagesFor(testName string) []string {
+	if len(testName) == 0 {
+		return []string{}
+	}
+
 	cmd := command(fmt.Sprintf("ack %s %s -l", testName, *baseDir))
 	var b bytes.Buffer
 	cmd.Stdout = &b
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Unable to find %s: %v\n", *runTest, err)
-		return ""
+		return []string{}
 	}
+
+	var dirs []string
 	scan := bufio.NewScanner(&b)
 	for scan.Scan() {
 		fname := scan.Text()
 		if strings.HasSuffix(fname, "_test.go") {
-			return path.Dir(fname)
+			dir := strings.Replace(path.Dir(fname), *baseDir, "", 1)
+			dirs = append(dirs, dir)
 		}
 	}
-	return ""
+	fmt.Printf("dirs: %+v\n", dirs)
+	return dirs
 }
 
 type pkgDuration struct {
@@ -407,32 +424,47 @@ func composeFileFor(pkg string) string {
 }
 
 func getPackages() []task {
-	pattern := *baseDir + "/..."
-
-	if len(*runTest) > 0 {
-		pattern = findPackageFor(*runTest)
-		fmt.Printf("Found package for %s: %s\n", *runTest, pattern)
-	}
-	pkgs, err := packages.Load(nil, pattern)
+	pkgs, err := packages.Load(nil, *baseDir+"/...")
 	x.Check(err)
+
+	has := func(list []string, in string) bool {
+		for _, l := range list {
+			if strings.Contains(in, l) {
+				return true
+			}
+		}
+		return false
+	}
 
 	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha"}
 	left := 0
 	for i := 0; i < len(pkgs); i++ {
 		// These packages take time. So, move them to the front.
-		for _, sp := range slowPkgs {
-			if strings.Contains(pkgs[i].ID, sp) {
-				pkgs[left], pkgs[i] = pkgs[i], pkgs[left]
-				left++
-				break
-			}
+		if has(slowPkgs, pkgs[i].ID) {
+			pkgs[left], pkgs[i] = pkgs[i], pkgs[left]
+			left++
+			break
 		}
 	}
+
+	limitTo := findPackagesFor(*runTest)
+
 	var valid []task
 	for _, pkg := range pkgs {
 		if len(*runPkg) > 0 && !strings.HasSuffix(pkg.ID, *runPkg) {
 			continue
 		}
+		if strings.Contains(pkg.ID, "mtls_internal") {
+			fmt.Printf("SKIPPING mtls_internal packages for now: %s\n", pkg.ID)
+			continue
+		}
+		if len(*runTest) > 0 {
+			if !has(limitTo, pkg.ID) {
+				continue
+			}
+			fmt.Printf("Found package for %s: %s\n", *runTest, pkg.ID)
+		}
+
 		fname := composeFileFor(pkg.ID)
 		_, err := os.Stat(fname)
 		valid = append(valid, task{pkg: pkg, isCommon: os.IsNotExist(err)})
@@ -451,7 +483,7 @@ func getPackages() []task {
 	})
 
 	for _, task := range valid {
-		fmt.Printf("Found valid task: %+v\n", task)
+		fmt.Printf("Found valid task: %s isCommon:%v\n", task.pkg.ID, task.isCommon)
 	}
 	fmt.Printf("Running tests for %d packages.\n", len(valid))
 	return valid

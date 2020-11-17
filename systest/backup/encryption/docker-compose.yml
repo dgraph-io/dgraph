@@ -80,4 +80,13 @@ services:
       read_only: true
     command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --replicas=1 --logtostderr
       -v=2 --bindall
+  minio:
+    image: minio/minio:latest
+    env_file:
+      - ../../backup.env
+    ports:
+      - "9001"
+    labels:
+      cluster: test
+    command: minio server /data/minio --address :9001
 volumes: {}
