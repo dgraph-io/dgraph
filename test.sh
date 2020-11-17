@@ -220,33 +220,16 @@ else
     exit 1
 fi
 
-# assemble list of tests before executing any
-FindCustomClusterTests
-FindDefaultClusterTests
-
 # abort all tests on Ctrl-C, not just the current one
 trap "echo >&2 SIGINT ; exit 2" SIGINT
 
 START_TIME=$(date +%s)
 
-if [[ :${TEST_SET}: == *:unit:* ]]; then
-    if [[ -s $DEFAULT_CLUSTER_TESTS ]]; then
-        Info "Running tests using the default cluster"
-        restartCluster
-        RunDefaultClusterTests || TestFailed
-    else
-        Info "Skipping default cluster tests because none match"
-    fi
-fi
-
-if [[ :${TEST_SET}: == *:cluster:* ]]; then
-    if [[ -s $CUSTOM_CLUSTER_TESTS ]]; then
-        Info "Running tests using custom clusters"
-        RunCustomClusterTests || TestFailed
-    else
-        Info "Skipping custom cluster tests because none match"
-    fi
-fi
+# TODO: Remove all the unnecessary code here.
+pushd t
+echo "Running t Go script."
+go run .
+popd
 
 if [[ :${TEST_SET}: == *:systest:* ]]; then
     # TODO: Fix this test. The fix consists of updating the test script to

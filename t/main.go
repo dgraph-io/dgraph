@@ -224,12 +224,15 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	fmt.Printf("Running: %s with %s\n", cmd, prefix)
 	start := time.Now()
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("While running command: %q Error: %v", q, err)
+	if *dry {
+		time.Sleep(time.Second)
+	} else {
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("While running command: %q Error: %v", q, err)
+		}
 	}
 
 	dur := time.Since(start).Round(time.Second)
-
 	tid, _ := ctx.Value("threadId").(int32)
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
@@ -445,8 +448,9 @@ func (o *outputCatcher) Print() {
 		if dur.dur < time.Second {
 			continue
 		}
+		pkg := strings.Replace(dur.pkg, "github.com/dgraph-io/dgraph/", "", 1)
 		fmt.Printf("[%6s]%s[%d] pkg %s took: %s\n", dur.ts.Sub(baseTs).Round(time.Second),
-			strings.Repeat("   ", int(dur.threadId)), dur.threadId, dur.pkg,
+			strings.Repeat("   ", int(dur.threadId)), dur.threadId, pkg,
 			dur.dur.Round(time.Second))
 	}
 
@@ -626,10 +630,6 @@ func main() {
 		defer close(testCh)
 
 		valid := getPackages()
-		if *dry {
-			return
-		}
-
 		for i, task := range valid {
 			select {
 			case testCh <- task:
