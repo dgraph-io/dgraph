@@ -387,7 +387,7 @@ The `contains` filter matches all entities where the `Polygon` or `MultiPolygon`
 Only one `point` or `polygon` can be taken inside the `ContainsFilter` at a time.
 {{% /notice %}}
 
-A `cointains` example using `point`:
+A `contains` example using `point`:
 
 ```graphql
 queryHotel(filter: {
@@ -404,7 +404,7 @@ queryHotel(filter: {
 }
 ```
 
-A `cointains` example using `polygon`:
+A `contains` example using `polygon`:
 
 ```graphql
  queryHotel(filter: {
