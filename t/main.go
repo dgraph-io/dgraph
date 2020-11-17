@@ -211,6 +211,9 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if len(*runTest) > 0 {
 		opts = append(opts, "-run="+*runTest)
 	}
+	if isTeamcity {
+		opts = append(opts, "-json")
+	}
 	q := fmt.Sprintf("go test -v %s %s", strings.Join(opts, " "), pkg)
 	cmd := commandWithContext(ctx, q)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
@@ -441,18 +444,10 @@ func (o *failureCatcher) Print() {
 			continue
 		}
 		fmt.Printf("[%s]%s[%d] pkg %s took: %s\n", dur.ts.Format("3:04:05 PM"),
-			strings.Repeat("   ", int(dur.threadId)), dur.threadId, dur.pkg, dur.dur)
+			strings.Repeat("   ", int(dur.threadId)), dur.threadId, dur.pkg,
+			dur.dur.Round(time.Second))
 	}
 
-	// sort.Slice(o.durs, func(i, j int) bool {
-	// 	return o.durs[i].dur > o.durs[j].dur
-	// })
-	// for _, dur := range o.durs {
-	// 	if dur > 10*time.Second {
-	// 		continue
-	// 	}
-	// 	fmt.Printf("Took: %s Package: %s\n", dur.dur, dur.pkg)
-	// }
 	if fc.failure.Len() > 0 {
 		fmt.Printf("Failure output:\n%s\n", fc.failure.Bytes())
 	}
@@ -632,6 +627,7 @@ func main() {
 		if *dry {
 			return
 		}
+
 		for i, task := range valid {
 			select {
 			case testCh <- task:
