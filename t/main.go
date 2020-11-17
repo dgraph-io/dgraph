@@ -50,7 +50,7 @@ import (
 
 var (
 	ctxb       = context.Background()
-	fc         = &failureCatcher{}
+	oc         = &outputCatcher{}
 	procId     int
 	isTeamcity bool
 	testId     int32
@@ -219,7 +219,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
 
 	// Use failureCatcher.
-	cmd.Stdout = fc
+	cmd.Stdout = oc
 
 	fmt.Printf("Running: %s with %s\n", cmd, prefix)
 	start := time.Now()
@@ -231,7 +231,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	dur := time.Since(start).Round(time.Second)
 
 	tid, _ := ctx.Value("threadId").(int32)
-	fc.Took(tid, pkg, dur)
+	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
 	return nil
 }
@@ -262,7 +262,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	{
 		ts := time.Now()
 		defer func() {
-			fc.Took(threadId, "DONE", time.Since(ts))
+			oc.Took(threadId, "DONE", time.Since(ts))
 		}()
 	}
 
@@ -407,19 +407,19 @@ type pkgDuration struct {
 	ts       time.Time
 }
 
-type failureCatcher struct {
+type outputCatcher struct {
 	sync.Mutex
 	failure bytes.Buffer
 	durs    []pkgDuration
 }
 
-func (o *failureCatcher) Took(threadId int32, pkg string, dur time.Duration) {
+func (o *outputCatcher) Took(threadId int32, pkg string, dur time.Duration) {
 	o.Lock()
 	defer o.Unlock()
 	o.durs = append(o.durs, pkgDuration{threadId: threadId, pkg: pkg, dur: dur, ts: time.Now()})
 }
 
-func (o *failureCatcher) Write(p []byte) (n int, err error) {
+func (o *outputCatcher) Write(p []byte) (n int, err error) {
 	o.Lock()
 	defer o.Unlock()
 
@@ -430,26 +430,28 @@ func (o *failureCatcher) Write(p []byte) (n int, err error) {
 	return os.Stdout.Write(p)
 }
 
-func (o *failureCatcher) Print() {
+func (o *outputCatcher) Print() {
 	o.Lock()
 	defer o.Unlock()
 
-	fmt.Println("TIMELINE")
 	sort.Slice(o.durs, func(i, j int) bool {
 		return o.durs[i].ts.Before(o.durs[j].ts)
 	})
+
+	baseTs := o.durs[0].ts
+	fmt.Printf("TIMELINE starting at %s\n", baseTs.Format("3:04:05 PM"))
 	for _, dur := range o.durs {
 		// Don't capture packages which were fast.
 		if dur.dur < time.Second {
 			continue
 		}
-		fmt.Printf("[%s]%s[%d] pkg %s took: %s\n", dur.ts.Format("3:04:05 PM"),
+		fmt.Printf("[%6s]%s[%d] pkg %s took: %s\n", dur.ts.Sub(baseTs).Round(time.Second),
 			strings.Repeat("   ", int(dur.threadId)), dur.threadId, dur.pkg,
 			dur.dur.Round(time.Second))
 	}
 
-	if fc.failure.Len() > 0 {
-		fmt.Printf("Failure output:\n%s\n", fc.failure.Bytes())
+	if oc.failure.Len() > 0 {
+		fmt.Printf("Caught output:\n%s\n", oc.failure.Bytes())
 	}
 }
 
@@ -642,12 +644,12 @@ func main() {
 	close(errCh)
 	for err := range errCh {
 		if err != nil {
-			fc.Print()
+			oc.Print()
 			fmt.Printf("Got error: %v.\n", err)
 			fmt.Println("Tests FAILED.")
 			os.Exit(1)
 		}
 	}
-	fc.Print()
+	oc.Print()
 	fmt.Printf("Tests PASSED. Time taken: %v\n", time.Since(start).Truncate(time.Second))
 }
