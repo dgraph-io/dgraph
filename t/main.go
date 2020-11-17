@@ -60,6 +60,8 @@ var (
 		"Only run tests for this package")
 	runTest = pflag.StringP("test", "t", "",
 		"Only run this test")
+	runCustom = pflag.BoolP("custom-only", "o", false,
+		"Run only custom cluster tests.")
 	count = pflag.IntP("count", "c", 0,
 		"If set, would add -count arg to go test.")
 	concurrency = pflag.IntP("concurrency", "j", 1,
@@ -233,6 +235,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			return
 		}
 		startCluster(defaultCompose, prefix)
+		started = true
 
 		// Wait for cluster to be healthy.
 		getInstance(prefix, "alpha1").loginFatal()
@@ -258,6 +261,10 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			glog.Fatalf("Package sorting is wrong. Common cluster tests should run first.")
 		}
 		if task.isCommon {
+			if *runCustom {
+				// If we only need to run custom cluster tests, then skip this one.
+				continue
+			}
 			start()
 			if err := runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
 				return err
@@ -296,8 +303,11 @@ func runCustomClusterTest(ctx context.Context, pkg string) error {
 			fmt.Printf("Health check: OK for %s. Status: %s\n", prefix, resp.Status)
 			break
 		}
-		body, _ := ioutil.ReadAll(resp.Body)
-		resp.Body.Close()
+		var body []byte
+		if resp != nil && resp.Body != nil {
+			body, _ = ioutil.ReadAll(resp.Body)
+			resp.Body.Close()
+		}
 		fmt.Printf("Health failed: %v. Response: %q. Retrying...\n", err, body)
 		time.Sleep(time.Second)
 	}
@@ -470,7 +480,7 @@ func main() {
 		N = 1
 	}
 	closer := z.NewCloser(N)
-	testCh := make(chan task, N)
+	testCh := make(chan task)
 	errCh := make(chan error, 1000)
 	for i := 0; i < N; i++ {
 		go func() {
