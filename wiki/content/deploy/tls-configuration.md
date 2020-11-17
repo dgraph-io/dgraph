@@ -241,7 +241,7 @@ $ certutil -addstore -f "ROOT" /path/to/ca.crt
 
 ### Step 3. Point ratel to the `https://` endpoint of alpha server.
 
-* Change the Dgraph's alpha server address to `https://` instead of `http://`, for example `https://localhost:8080`.
+* Change the Dgraph Alpha server address to `https://` instead of `http://`, for example `https://localhost:8080`.
 
 For `REQUIREANY` and `REQUIREANDVERIFY` as `--tls_client_auth` option of alpha, you need to follow the steps above and you
 also need to install client certificate on your browser:

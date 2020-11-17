@@ -13,10 +13,12 @@ for each port.
 
 ## Types of ports
 
-Dgraph Alpha and Dgraph Zero nodes use a variety of gRPC and HTTP ports, as follows:
+Dgraph Alpha and Dgraph Zero nodes use a variety of gRPC and HTTP ports, as
+follows:
 
 - **gRPC-internal-private**: Used between the cluster nodes for internal
- communication and message exchange. Communication using these ports is TLS-encrypted.
+ communication and message exchange. Communication using these ports is
+ TLS-encrypted.
 - **gRPC-external-private**: Used by Dgraph Live Loader and Dgraph Bulk loader
  to access APIs over gRPC.
 - **gRPC-external-public**: Used by Dgraph clients to access APIs in a session
@@ -41,45 +43,45 @@ Dgraph Alpha and Dgraph Zero nodes use a variety of gRPC and HTTP ports, as foll
 [administrative]({{< relref "deploy/dgraph-zero.md" >}}) operations. Dgraph
 clients cannot access this port.
 
-Users must modify security rules or open firewall ports depending up on their
+Users must modify security rules or open firewall ports depending upon their
 underlying network to allow communication between cluster nodes, between the
 Dgraph instances, and between Dgraph clients. In general, you should configure
 the gRPC and HTTP `external-public` ports for open access by Dgraph clients,
 and configure the gRPC-internal ports for open access by the cluster nodes.
 
-**Ratel UI** accesses Dgraph Alpha on the HTTP-external-public port (default
-localhost:8080) and can be configured to talk to a remote Dgraph cluster. This
+**Ratel UI** accesses Dgraph Alpha on the `HTTP-external-public port` (which defaults to localhost:8080) and can be configured to talk to a remote Dgraph cluster. This
 way you can run Ratel on your local machine and point to a remote cluster. But,
 if you are deploying Ratel along with Dgraph cluster, then you may have to
-expose 8000 to the public.
+expose port 8000 to the public.
 
-**Port Offset** To make it easier for user to setup the cluster, Dgraph defaults
-the ports used by Dgraph nodes and let user to provide an offset  (through
-command option `--port_offset`) to define actual ports used by the node. Offset
-can also be used when starting multiple zero nodes in a HA setup.
+**Port Offset** To make it easier for users to set up the cluster, Dgraph has
+default values for the ports used by Dgraph nodes and lets users provide an
+offset (using the command option `--port_offset`) to define actual ports used by
+the node. Port offset can also be used when starting multiple Dgraph Zero nodes
+in a high-availability (HA) setup.
 
-For example, when a user runs a Dgraph Alpha by setting `--port_offset 2`, then
-the Alpha node binds to port 7082 (gRPC-internal-private), 8082 (HTTP-external-public)
-and 9082 (gRPC-external-public), respectively.
+For example, when a user runs Dgraph Alpha with the `--port_offset 2` setting,
+then the Alpha node binds to port 7082 (`gRPC-internal-private`), 8082
+(`HTTP-external-public`) and 9082 (`gRPC-external-public`), respectively.
 
 **Ratel UI** by default listens on port 8000. You can use the `-port` flag to
 configure it to listen on any other port.
 
 ## High Availability (HA) cluster configuration
 
-In a high-availability cluster configuration, you should run three or five
-replicas for the Zero node, and three or five replicas for Alpha.
+In a HA cluster configuration, you should run three or five
+replicas for the Zero node, and three or five replicas for the Alpha node.
 
 {{% notice "note" %}}
-If number the of replicas is 2N + 1, up to **N servers** can go offline without
+If the number of replicas is 2N + 1, up to **N servers** can go offline without
 any impact on reads or writes. The total number of Zero and Alpha node replicas
 should be an odd number, as an even number of replicas will prevent consensus if
-nodes go offline (which will impact reads and writes)
+nodes go offline (which will impact reads and writes).
 {{% /notice %}}
 
 ### Dgraph Zero
 
-Run three Zero instances, assigning a unique integer ID to each using the
+Run three Dgraph Zero instances, assigning a unique integer ID to each using the
 `--idx` flag, and passing the address of any healthy Zero instance using the
 `--peer` flag.
 
@@ -102,7 +104,7 @@ address in the list. For example:
 
 Typically, a Zero node would first attempt to replicate a group, by assigning a
 new Alpha node to run the same group previously assigned to another. After the
-group hasbeen replicated per the `--replicas` flag, Dgraph Zero creates a new
+group has been replicated per the `--replicas` flag, Dgraph Zero creates a new
 group.
 
 Over time, the data will be evenly split across all of the groups. So, it's
