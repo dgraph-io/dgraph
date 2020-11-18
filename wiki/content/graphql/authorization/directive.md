@@ -138,22 +138,6 @@ type Answer implements Post @auth(
 
 If the `Question` type implemented more interfaces, then the rules for those would also be added in an `AND` condition to the `Question` type's authorization rules.
 
-An example query to get every posted `Question`:
-
-```graphql
-query {
-	queryQuestion {
-		id
-		text
-		author {
-			id
-			name
-		}
-		answered
-	}
-}
-```
-
 ### Interfaces
 
 When it comes to applying `@auth` rules on interfaces themselves, Dgraph will do a `union` query where it queries all the implementing types, and apply the authorization rules on them. 
