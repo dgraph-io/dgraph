@@ -46,23 +46,23 @@ func loadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	// When the --tls_cacert option is pecified, the connection will be set up using TLS instead of
 	// plaintext. However the client cert files are optional, depending on whether the server is
 	// requiring a client certificate.
-	caCert := v.GetString("tls_cacert")
+	caCert := v.GetString("tls-cacert")
 	if caCert != "" {
 		tlsCfg := tls.Config{}
 
 		// 1. set up the root CA
-		pool, err := generateCertPool(caCert, v.GetBool("tls_use_system_ca"))
+		pool, err := generateCertPool(caCert, v.GetBool("tls-use-system-ca"))
 		if err != nil {
 			return nil, err
 		}
 		tlsCfg.RootCAs = pool
 
 		// 2. set up the server name for verification
-		tlsCfg.ServerName = v.GetString("tls_server_name")
+		tlsCfg.ServerName = v.GetString("tls-server-name")
 
 		// 3. optionally load the client cert files
-		certFile := v.GetString("tls_cert")
-		keyFile := v.GetString("tls_key")
+		certFile := v.GetString("tls-cert")
+		keyFile := v.GetString("tls-key")
 		if certFile != "" && keyFile != "" {
 			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 			if err != nil {
@@ -99,8 +99,8 @@ func dgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 func TestLoginOverTLS(t *testing.T) {
 	t.Skipf("TODO: This test fails for some reason. FIX IT.")
 	conf := viper.New()
-	conf.Set("tls_cacert", "../tls/ca.crt")
-	conf.Set("tls_server_name", "node")
+	conf.Set("tls-cacert", "../tls/ca.crt")
+	conf.Set("tls-server-name", "node")
 
 	dg, err := dgraphClientWithCerts(testutil.SockAddr, conf)
 	if err != nil {

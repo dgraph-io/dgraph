@@ -18,12 +18,13 @@ package main
 
 import (
 	"context"
-	"github.com/spf13/viper"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/viper"
 
 	"github.com/stretchr/testify/require"
 
@@ -35,9 +36,9 @@ import (
 // TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
 func TestLoaderXidmap(t *testing.T) {
 	conf := viper.GetViper()
-	conf.Set("tls_cacert", "../tls/live/ca.crt")
-	conf.Set("tls_internal_port_enabled", true)
-	conf.Set("tls_server_name", "alpha1")
+	conf.Set("tls-cacert", "../tls/live/ca.crt")
+	conf.Set("tls-internal-port-enabled", true)
+	conf.Set("tls-server-name", "alpha1")
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 	ctx := context.Background()

@@ -536,18 +536,18 @@ func main() {
 	}
 	cmd.SetGlobalNormalizationFunc(x.NormalizeFlags)
 
-	cmd.PersistentFlags().IntVarP(&opts.NumZeros, "num_zeros", "z", 3,
+	cmd.PersistentFlags().IntVarP(&opts.NumZeros, "num-zeros", "z", 3,
 		"number of zeros in dgraph cluster")
-	cmd.PersistentFlags().IntVarP(&opts.NumAlphas, "num_alphas", "a", 3,
+	cmd.PersistentFlags().IntVarP(&opts.NumAlphas, "num-alphas", "a", 3,
 		"number of alphas in dgraph cluster")
-	cmd.PersistentFlags().IntVarP(&opts.NumReplicas, "num_replicas", "r", 3,
+	cmd.PersistentFlags().IntVarP(&opts.NumReplicas, "num-replicas", "r", 3,
 		"number of alpha replicas in dgraph cluster")
-	cmd.PersistentFlags().BoolVar(&opts.DataVol, "data_vol", false,
+	cmd.PersistentFlags().BoolVar(&opts.DataVol, "data-vol", false,
 		"mount a docker volume as /data in containers")
-	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
+	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data-dir", "d", "",
 		"mount a host directory as /data in containers")
 	cmd.PersistentFlags().BoolVar(&opts.Acl, "acl", false, "Create ACL secret file and enable ACLs")
-	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
+	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl-secret", "",
 		"enable ACL feature with specified HMAC secret file")
 	cmd.PersistentFlags().BoolVarP(&opts.UserOwnership, "user", "u", false,
 		"run as the current user rather than root")
@@ -557,7 +557,7 @@ func main() {
 		"include jaeger service")
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
-	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 100,
+	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port-offset", "o", 100,
 		"port offset for alpha and, if not 100, zero as well")
 	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
 		"glog verbosity level")
@@ -573,41 +573,41 @@ func main() {
 		"include a whitelist if true")
 	cmd.PersistentFlags().BoolVar(&opts.Ratel, "ratel", false,
 		"include ratel service")
-	cmd.PersistentFlags().IntVar(&opts.RatelPort, "ratel_port", 8000,
+	cmd.PersistentFlags().IntVar(&opts.RatelPort, "ratel-port", 8000,
 		"Port to expose Ratel service")
 	cmd.PersistentFlags().StringVarP(&opts.MemLimit, "mem", "", "32G",
 		"Limit memory provided to the docker containers, for example 8G.")
-	cmd.PersistentFlags().StringVar(&opts.TlsDir, "tls_dir", "",
+	cmd.PersistentFlags().StringVar(&opts.TlsDir, "tls-dir", "",
 		"TLS Dir.")
-	cmd.PersistentFlags().BoolVar(&opts.ExposePorts, "expose_ports", true,
+	cmd.PersistentFlags().BoolVar(&opts.ExposePorts, "expose-ports", true,
 		"expose host:container ports for each service")
 	cmd.PersistentFlags().StringVar(&opts.Vmodule, "vmodule", "",
 		"comma-separated list of pattern=N settings for file-filtered logging")
 	cmd.PersistentFlags().BoolVar(&opts.Encryption, "encryption", false,
 		"enable encryption-at-rest feature.")
-	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous_mode", false,
+	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous-mode", false,
 		"enable zeros and alphas in ludicrous mode.")
-	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot_after", "",
+	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot-after", "",
 		"create a new Raft snapshot after this many number of Raft entries.")
-	cmd.PersistentFlags().StringVar(&opts.AlphaFlags, "extra_alpha_flags", "",
+	cmd.PersistentFlags().StringVar(&opts.AlphaFlags, "extra-alpha-flags", "",
 		"extra flags for alphas.")
-	cmd.PersistentFlags().StringVar(&opts.ZeroFlags, "extra_zero_flags", "",
+	cmd.PersistentFlags().StringVar(&opts.ZeroFlags, "extra-zero-flags", "",
 		"extra flags for zeros.")
 	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", true,
 		"set container names in docker compose.")
-	cmd.PersistentFlags().StringArrayVar(&opts.AlphaVolumes, "alpha_volume", nil,
+	cmd.PersistentFlags().StringArrayVar(&opts.AlphaVolumes, "alpha-volume", nil,
 		"alpha volume mounts, following srcdir:dstdir[:ro]")
-	cmd.PersistentFlags().StringArrayVar(&opts.ZeroVolumes, "zero_volume", nil,
+	cmd.PersistentFlags().StringArrayVar(&opts.ZeroVolumes, "zero-volume", nil,
 		"zero volume mounts, following srcdir:dstdir[:ro]")
-	cmd.PersistentFlags().StringArrayVar(&opts.AlphaEnvFile, "alpha_env_file", nil,
+	cmd.PersistentFlags().StringArrayVar(&opts.AlphaEnvFile, "alpha-env-file", nil,
 		"env_file for alpha")
-	cmd.PersistentFlags().StringArrayVar(&opts.ZeroEnvFile, "zero_env_file", nil,
+	cmd.PersistentFlags().StringArrayVar(&opts.ZeroEnvFile, "zero-env-file", nil,
 		"env_file for zero")
 	cmd.PersistentFlags().BoolVar(&opts.Minio, "minio", false,
 		"include minio service")
-	cmd.PersistentFlags().Uint16Var(&opts.MinioPort, "minio_port", 9001,
+	cmd.PersistentFlags().Uint16Var(&opts.MinioPort, "minio-port", 9001,
 		"minio service port")
-	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
+	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio-env-file", nil,
 		"minio service env_file")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
@@ -629,13 +629,13 @@ func main() {
 		fatal(errors.Errorf("number of replicas must be odd"))
 	}
 	if opts.DataVol && opts.DataDir != "" {
-		fatal(errors.Errorf("only one of --data_vol and --data_dir may be used at a time"))
+		fatal(errors.Errorf("only one of --data-vol and --data-dir may be used at a time"))
 	}
 	if opts.UserOwnership && opts.DataDir == "" {
-		fatal(errors.Errorf("--user option requires --data_dir=<path>"))
+		fatal(errors.Errorf("--user option requires --data-dir=<path>"))
 	}
-	if cmd.Flags().Changed("ratel_port") && !opts.Ratel {
-		fatal(errors.Errorf("--ratel_port option requires --ratel"))
+	if cmd.Flags().Changed("ratel-port") && !opts.Ratel {
+		fatal(errors.Errorf("--ratel-port option requires --ratel"))
 	}
 
 	services := make(map[string]service)

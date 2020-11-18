@@ -116,9 +116,9 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
 		"Directory where posting lists are stored (required).")
 	flag.StringVarP(&opt.zero, "zero", "z", "", "gRPC address for Dgraph zero. ex: localhost:5080")
-	flag.StringVarP(&opt.backupId, "backup_id", "", "", "The ID of the backup series to "+
+	flag.StringVarP(&opt.backupId, "backup-id", "", "", "The ID of the backup series to "+
 		"restore. If empty, it will restore the latest series.")
-	flag.BoolVarP(&opt.forceZero, "force_zero", "", true, "If false, no connection to "+
+	flag.BoolVarP(&opt.forceZero, "force-zero", "", true, "If false, no connection to "+
 		"a zero in the cluster will be required. Keep in mind this requires you to manually "+
 		"update the timestamp and max uid when you start the cluster. The correct values are "+
 		"printed near the end of this command's output.")

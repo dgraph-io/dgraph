@@ -280,7 +280,7 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live",
 			"--schema", localExportPath + "/" + exportId + "/" + groupId + ".schema.gz",
 			"--files", localExportPath + "/" + exportId + "/" + groupId + ".rdf.gz",
-			"--encryption_key_file", testDataDir + "/../../../../ee/enc/test-fixtures/enc-key",
+			"--encryption-key-file", testDataDir + "/../../../../ee/enc/test-fixtures/enc-key",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
 	_, err := testutil.Pipeline(pipeline)

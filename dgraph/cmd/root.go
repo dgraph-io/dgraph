@@ -84,16 +84,16 @@ func initCmds() {
 	RootCmd.SetGlobalNormalizationFunc(x.NormalizeFlags)
 	RootCmd.PersistentFlags().String("cwd", "",
 		"Change working directory to the path specified. The parent must exist.")
-	RootCmd.PersistentFlags().String("profile_mode", "",
+	RootCmd.PersistentFlags().String("profile-mode", "",
 		"Enable profiling mode, one of [cpu, mem, mutex, block]")
-	RootCmd.PersistentFlags().Int("block_rate", 0,
-		"Block profiling rate. Must be used along with block profile_mode")
+	RootCmd.PersistentFlags().Int("block-rate", 0,
+		"Block profiling rate. Must be used along with block profile-mode")
 	RootCmd.PersistentFlags().String("config", "",
 		"Configuration file. Takes precedence over default values, but is "+
 			"overridden to values set with environment variables and flags.")
 	RootCmd.PersistentFlags().Bool("bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	RootCmd.PersistentFlags().Bool("expose_trace", false,
+	RootCmd.PersistentFlags().Bool("expose-trace", false,
 		"Allow trace endpoint to be accessible from remote")
 	x.Check(rootConf.BindPFlags(RootCmd.PersistentFlags()))
 
