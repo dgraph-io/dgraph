@@ -1163,6 +1163,7 @@ func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 }
 
 func addFilterArgumentForField(schema *ast.Schema, fld *ast.FieldDefinition, fldTypeName string) {
+	// Don't add filters for inbuilt types.
 	if _, ok := inbuiltTypeToDgraph[fldTypeName]; ok {
 		return
 	}
