@@ -143,18 +143,6 @@ If the `Question` type implemented more interfaces, then the rules for those wou
 When it comes to applying `@auth` rules on interfaces themselves, Dgraph will do a `union` query where it queries all the implementing types, and apply the authorization rules on them. 
 The final query will be an `OR` query joining the results from all the implementing types.
 
-For example:
-
-```graphql
-query {
-  queryPost {
-    id
-    text
-    datePublished
-  }
-}
-```
-
 ### Mutations
 
 Mutations on an interface works in the same manner. For example, in case of a `delete` mutation on an interface, it will be broken down into the implementing type's `delete` mutation. The nodes that satisfy the `@auth` rules of the corresponding implementing types and the interface will get deleted.
