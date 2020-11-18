@@ -21,12 +21,11 @@ import (
 )
 
 var (
-	accessKey     = "accesskey"
-	secretKey     = "secretkey"
-	minioEndpoint = "localhost:9001"
+	accessKey = "accesskey"
+	secretKey = "secretkey"
 )
 
 // NewMinioClient returns a minio client.
 func NewMinioClient() (*minio.Client, error) {
-	return minio.New(minioEndpoint, accessKey, secretKey, false)
+	return minio.New(MinioInstance, accessKey, secretKey, false)
 }

@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var adminEndpoint = "http://" + testutil.SockAddrHttp + "/admin"
+var adminEndpoint string
 
 func TestCurlAuthorization(t *testing.T) {
 	if testing.Short() {
@@ -49,7 +49,7 @@ func TestCurlAuthorization(t *testing.T) {
 	queryArgs := func(jwt string) []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
 			"-H", "Content-Type: application/dql",
-			"-d", query, curlQueryEndpoint}
+			"-d", query, testutil.SockAddrHttp + "/query"}
 	}
 	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail: false,
@@ -60,7 +60,7 @@ func TestCurlAuthorization(t *testing.T) {
 			"-H", "Content-Type: application/rdf",
 			"-d", fmt.Sprintf(`{ set {
 	   _:a <%s>  "string" .
-	   }}`, predicateToWrite), curlMutateEndpoint}
+	   }}`, predicateToWrite), testutil.SockAddrHttp + "/mutate"}
 
 	}
 
@@ -71,7 +71,7 @@ func TestCurlAuthorization(t *testing.T) {
 
 	alterArgs := func(jwt string) []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
-			"-d", fmt.Sprintf(`%s: int .`, predicateToAlter), curlAlterEndpoint}
+			"-d", fmt.Sprintf(`%s: int .`, predicateToAlter), testutil.SockAddrHttp + "/alter"}
 	}
 	testutil.VerifyCurlCmd(t, alterArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
@@ -103,8 +103,7 @@ func TestCurlAuthorization(t *testing.T) {
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 
 	createGroupAndAcls(t, unusedGroup, false)
-	// wait for 5 seconds to ensure the new acl have reached all acl caches
-	time.Sleep(5 * time.Second)
+	time.Sleep(4 * time.Second)
 	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
@@ -130,7 +129,7 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 
 	createGroupAndAcls(t, devGroup, true)
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 	// refresh the jwts again
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:   adminEndpoint,
@@ -148,10 +147,3 @@ func TestCurlAuthorization(t *testing.T) {
 		ShouldFail: false,
 	})
 }
-
-const (
-	curlLoginEndpoint  = "localhost:8180/login"
-	curlQueryEndpoint  = "localhost:8180/query"
-	curlMutateEndpoint = "localhost:8180/mutate"
-	curlAlterEndpoint  = "localhost:8180/alter"
-)

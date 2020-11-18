@@ -48,8 +48,8 @@ var (
 
 	mc             *minio.Client
 	bucketName     = "dgraph-backup"
-	backupDst      = "minio://minio1:9001/dgraph-backup?secure=false"
-	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
+	backupDst      string
+	localBackupDst string
 )
 
 func getTlsConf(t *testing.T) *tls.Config {
@@ -74,7 +74,7 @@ func getHttpClient(t *testing.T) *http.Client {
 	}
 }
 
-func TestBackupMinio(t *testing.T) {
+func TestBackupMinioEncrypted(t *testing.T) {
 	conf := viper.GetViper()
 	conf.Set("tls_cacert", "../../tls/live/ca.crt")
 	conf.Set("tls_internal_port_enabled", true)
@@ -82,9 +82,16 @@ func TestBackupMinio(t *testing.T) {
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 
+	// TODO: Fix this.
+	backupDst = "minio://minio:9001/dgraph-backup?secure=false"
+
+	addr := testutil.ContainerAddr("minio", 9001)
+	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
+
 	mc, err = testutil.NewMinioClient()
 	require.NoError(t, err)
 	require.NoError(t, mc.MakeBucket(bucketName, ""))
+	t.Logf("Bucket created\n")
 
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
@@ -253,7 +260,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 		}
 	}`
 
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
