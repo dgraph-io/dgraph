@@ -97,7 +97,7 @@ func (c *countIndexer) addCountEntry(ce countEntry) {
 		if c.countBuf.LenNoPadding() > 0 {
 			c.wg.Add(1)
 			go c.writeIndex(c.countBuf)
-			c.countBuf = getBuf()
+			c.countBuf = getBuf(c.opt.TmpDir)
 		}
 		c.cur.pred = pk.Attr
 		c.cur.rev = pk.IsReverse()

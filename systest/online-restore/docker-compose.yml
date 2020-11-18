@@ -2,13 +2,12 @@ version: "3.5"
 services:
   alpha1:
     image: dgraph/dgraph:latest
-    container_name: alpha1
     working_dir: /data/alpha1
     labels:
       cluster: test
     ports:
-    - 8180:8180
-    - 9180:9180
+    - 8080
+    - 9080
     volumes:
     - type: bind
       source: $GOPATH/bin
@@ -27,15 +26,14 @@ services:
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha2:
     image: dgraph/dgraph:latest
-    container_name: alpha2
     working_dir: /data/alpha2
     depends_on:
     - alpha1
     labels:
       cluster: test
     ports:
-    - 8182:8182
-    - 9182:9182
+    - 8080
+    - 9080
     volumes:
     - type: bind
       source: $GOPATH/bin
@@ -54,15 +52,14 @@ services:
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha3:
     image: dgraph/dgraph:latest
-    container_name: alpha3
     working_dir: /data/alpha3
     depends_on:
     - alpha2
     labels:
       cluster: test
     ports:
-    - 8183:8183
-    - 9183:9183
+    - 8080
+    - 9080
     volumes:
     - type: bind
       source: $GOPATH/bin
@@ -81,15 +78,14 @@ services:
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha4:
     image: dgraph/dgraph:latest
-    container_name: alpha4
     working_dir: /data/alpha4
     depends_on:
     - alpha3
     labels:
       cluster: test
     ports:
-    - 8184:8184
-    - 9184:9184
+    - 8080
+    - 9080
     volumes:
     - type: bind
       source: $GOPATH/bin
@@ -108,15 +104,14 @@ services:
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha5:
     image: dgraph/dgraph:latest
-    container_name: alpha5
     working_dir: /data/alpha5
     depends_on:
     - alpha4
     labels:
       cluster: test
     ports:
-    - 8185:8185
-    - 9185:9185
+    - 8080
+    - 9080
     volumes:
     - type: bind
       source: $GOPATH/bin
@@ -135,15 +130,14 @@ services:
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha6:
     image: dgraph/dgraph:latest
-    container_name: alpha6
     working_dir: /data/alpha6
     depends_on:
     - alpha5
     labels:
       cluster: test
     ports:
-    - 8186:8186
-    - 9186:9186
+    - 8080
+    - 9080
     volumes:
     - type: bind
       source: $GOPATH/bin
@@ -162,19 +156,17 @@ services:
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   ratel:
     image: dgraph/dgraph:latest
-    container_name: ratel
     ports:
-    - 8000:8000
+    - 8000
     command: dgraph-ratel
   zero1:
     image: dgraph/dgraph:latest
-    container_name: zero1
     working_dir: /data/zero1
     labels:
       cluster: test
     ports:
-    - 5180:5180
-    - 6180:6180
+    - 5080
+    - 6080
     volumes:
     - type: bind
       source: $GOPATH/bin

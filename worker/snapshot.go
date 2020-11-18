@@ -68,6 +68,8 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	var writer badgerWriter
 	if snap.SinceTs == 0 {
 		sw := pstore.NewStreamWriter()
+		defer sw.Cancel()
+
 		if err := sw.Prepare(); err != nil {
 			return 0, err
 		}

@@ -180,7 +180,10 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		}
 
 		// Allocate slice for the data and copy bytes.
-		destBuf, next := l.current.AllocateSlice(len(re.Data), offset)
+		destBuf, next, err := l.current.AllocateSlice(len(re.Data), offset)
+		if err != nil {
+			return err
+		}
 		x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 
 		// Write the entry at the given slot.

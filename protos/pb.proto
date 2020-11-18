@@ -537,7 +537,7 @@ service Worker {
 	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc Backup (BackupRequest)              returns (Status) {}
+	rpc Backup (BackupRequest)              returns (BackupResponse) {}
 	rpc Restore (RestoreRequest)            returns (Status) {}
 	rpc Export (ExportRequest)              returns (ExportResponse) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
@@ -597,6 +597,21 @@ message BackupRequest {
 	// The predicates to backup. All other predicates present in the group (e.g
 	// stale data from a predicate move) will be ignored.
 	repeated string predicates = 10;
+}
+
+message BackupResponse {
+	repeated DropOperation drop_operations = 1;
+}
+
+message DropOperation {
+	enum DropOp {
+		ALL = 0;
+		DATA = 1;
+		ATTR = 2;
+	}
+	DropOp drop_op    = 1;
+	// When drop_op is ATTR, drop_value will be the name of the ATTR; empty otherwise.
+	string drop_value = 2;
 }
 
 message ExportRequest {

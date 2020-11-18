@@ -1,6 +1,6 @@
 +++
 title = "Dgraph Schema Fragment"
-weight = 8
+weight = 9
 [menu.main]
     parent = "schema"
 +++

@@ -23,7 +23,8 @@ query {
 }
 ```
 
-Fetching nested linked objects, while using `get` queries is also easy. For example, this is how you would fetch the authors for a post and their friends.
+Fetching nested linked objects, while using `get` queries is also easy. For
+example, this is how you would fetch the authors for a post and their friends.
 
 ```graphql
 query {
@@ -45,7 +46,7 @@ query {
 While fetching nested linked objects, you can also apply a filter on them.
 
 For example, the following query fetches the author with the `id` 0x1 and their
- posts about `GraphQL`.
+posts about `GraphQL`.
 
 ```graphql
 query {
@@ -145,7 +146,8 @@ query {
 
 You can also filter nested objects while querying for a list of objects.
 
-For example, the following query fetches all of the authors whose name contains `Lee` and with their `completed` posts that have a score greater than `10`:
+For example, the following query fetches all of the authors whose name contains
+`Lee` and with their `completed` posts that have a score greater than `10`:
 
 ```graphql
 query {
@@ -173,7 +175,7 @@ query {
 
 ### Filter a query for a range of objects with `between`
 
-You can also filter query results within an inclusive range of indexed and typed
+You can filter query results within an inclusive range of indexed and typed
 scalar values using the `between` keyword.
 
 {{% notice "tip" %}}This keyword is also supported for DQL; to learn more, see
@@ -212,5 +214,62 @@ alphabetically between `ba` and `hz`:
 queryStudent(fitler: {name: between: {min: "ba", max: "hz"}}){
     age
     name
+}
+```
+
+## Filter to match specified field values with `in`
+
+You can filter query results to find objects with one or more specified values using the
+`in` keyword. This keyword can find matches for fields with the `@id` directive
+applied. This filter is also supported on `string` and `enum` types with a
+[`Hash` or `Exact` index](/graphql/schema/search/#string-exact-and-hash-search).
+
+For example, let's say that your schema defines a `State` type that has the
+`@id` directive applied to the `code` field:
+
+```graphql
+type State {
+        code: String! @id
+        name: String!
+        capital: String
+}
+```
+
+Using the `in` keyword, you can query for a list of states that have the postal
+code **WA** or **VA** using the following query:
+
+```graphql
+query {
+      queryState(filter: {code: {in : ["WA", "VA"]}}){
+        code
+        name
+      }
+    }
+```
+
+## Filter for objects with specified non-null fields using `has`
+
+You can filter queries to find objects with a non-null value in a specified
+field using the `has` keyword. The `has` keyword can only check whether a field
+returns a non-null value, not for specific field values.
+
+For example, your schema might define a `Student` type that has basic
+information about each student; such as their ID number, age, and name:
+
+```graphql
+type Student {
+   tid: ID!
+   age: Int!
+   name: String
+}
+```
+
+To find those students who have a non-null `name`, run the following query:
+
+```graphql
+queryStudent(filter: { has : name } ){
+   tid
+   age
+   name
 }
 ```

@@ -2,11 +2,10 @@ version: "3.5"
 services:
   zero1:
     image: dgraph/dgraph:latest
-    container_name: zero1
     working_dir: /data/zero1
     ports:
-      - 5180:5180
-      - 6180:6180
+      - 5080
+      - 6080
     labels:
       cluster: test
       service: zero
@@ -15,17 +14,16 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 100 --my=zero1:5180 --replicas 3 --idx 1 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10
+    command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --idx 1 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10
 
   zero2:
     image: dgraph/dgraph:latest
-    container_name: zero2
     working_dir: /data/zero2
     depends_on:
       - zero1
     ports:
-      - 5182:5182
-      - 6182:6182
+      - 5080
+      - 6080
     labels:
       cluster: test
       service: zero
@@ -34,17 +32,16 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 102 --my=zero2:5182 --replicas 3 --idx 2 --logtostderr -v=2 --peer=zero1:5180
+    command: /gobin/dgraph zero --my=zero2:5080 --replicas 3 --idx 2 --logtostderr -v=2 --peer=zero1:5080
 
   zero3:
     image: dgraph/dgraph:latest
-    container_name: zero3
     working_dir: /data/zero3
     depends_on:
       - zero2
     ports:
-      - 5183:5183
-      - 6183:6183
+      - 5080
+      - 6080
     labels:
       cluster: test
       service: zero
@@ -53,11 +50,10 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 103 --my=zero3:5183 --replicas 3 --idx 3 --logtostderr -v=2 --peer=zero1:5180
+    command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --idx 3 --logtostderr -v=2 --peer=zero1:5080
 
   alpha1:
     image: dgraph/dgraph:latest
-    container_name: alpha1
     working_dir: /data/alpha1
     volumes:
       - type: bind
@@ -73,16 +69,15 @@ services:
         target: /dgraph-enc/enc-key
         read_only: true
     ports:
-      - 8180:8180
-      - 9180:9180
+      - 8080
+      - 9080
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha1:7180 --zero=zero1:5180,zero2:5182,zero3:5183 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha1:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
 
   alpha2:
     image: dgraph/dgraph:latest
-    container_name: alpha2
     working_dir: /data/alpha2
     depends_on:
       - alpha1
@@ -100,16 +95,15 @@ services:
         target: /dgraph-enc/enc-key
         read_only: true
     ports:
-      - 8182:8182
-      - 9182:9182
+      - 8080
+      - 9080
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha2:7182 --zero=zero1:5180,zero2:5182,zero3:5183 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha2:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
 
   alpha3:
     image: dgraph/dgraph:latest
-    container_name: alpha3
     working_dir: /data/alpha3
     depends_on:
       - alpha2
@@ -127,16 +121,15 @@ services:
         target: /dgraph-enc/enc-key
         read_only: true
     ports:
-      - 8183:8183
-      - 9183:9183
+      - 8080
+      - 9080
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha3:7183 --zero=zero1:5180,zero2:5182,zero3:5183 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha3:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
 
   alpha4:
     image: dgraph/dgraph:latest
-    container_name: alpha4
     working_dir: /data/alpha4
     depends_on:
       - alpha3
@@ -154,16 +147,15 @@ services:
         target: /dgraph-enc/enc-key
         read_only: true
     ports:
-      - 8184:8184
-      - 9184:9184
+      - 8080
+      - 9080
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha4:7184 --zero=zero1:5180,zero2:5182,zero3:5183 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha4:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
 
   alpha5:
     image: dgraph/dgraph:latest
-    container_name: alpha5
     working_dir: /data/alpha5
     depends_on:
       - alpha4
@@ -181,16 +173,15 @@ services:
         target: /dgraph-enc/enc-key
         read_only: true
     ports:
-      - 8185:8185
-      - 9185:9185
+      - 8080
+      - 9080
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha5:7185 --zero=zero1:5180,zero2:5182,zero3:5183 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha5:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
 
   alpha6:
     image: dgraph/dgraph:latest
-    container_name: alpha6
     working_dir: /data/alpha6
     depends_on:
       - alpha5
@@ -208,21 +199,20 @@ services:
         target: /dgraph-enc/enc-key
         read_only: true
     ports:
-      - 8186:8186
-      - 9186:9186
+      - 8080
+      - 9080
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha6:7186 --zero=zero1:5180,zero2:5182,zero3:5183 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha6:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
 
   minio1:
     image: minio/minio:latest
-    container_name: minio1
     env_file:
       - ./minio.env
     working_dir: /data/minio1
     ports:
-      - 9001:9001
+      - 9001
     labels:
       cluster: test
     command: minio server /data/minio --address :9001

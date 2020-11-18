@@ -1,86 +1,91 @@
+# Auto-generated with: [./compose -l -a 3 -z 1 -r 1 --alpha_volume data:/data --minio --minio_port=9001 --minio_env_file=export.env --port_offset=0 --expose_ports=false --alpha_env_file=export.env --mem= --names=false -O ../systest/export/docker-compose.yml]
+#
 version: "3.5"
 services:
+  alpha1:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    env_file:
+    - export.env
+    ports:
+    - "8080"
+    - "9080"
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - type: volume
+      source: data
+      target: /data
+      read_only: false
+    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
+      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha2:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha2
+    labels:
+      cluster: test
+    env_file:
+    - export.env
+    ports:
+    - "8080"
+    - "9080"
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - type: volume
+      source: data
+      target: /data
+      read_only: false
+    command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr
+      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha3:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha3
+    labels:
+      cluster: test
+    env_file:
+    - export.env
+    ports:
+    - "8080"
+    - "9080"
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - type: volume
+      source: data
+      target: /data
+      read_only: false
+    command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr
+      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  minio1:
+    image: minio/minio:RELEASE.2020-11-13T20-10-18Z
+    env_file:
+    - export.env
+    ports:
+    - "9001"
+    command: minio server /data/minio --address :9001
   zero1:
     image: dgraph/dgraph:latest
-    container_name: zero1
     working_dir: /data/zero1
     labels:
       cluster: test
     ports:
-      - 5180:5180
-      - 6180:6180
-    command: /gobin/dgraph zero --cwd=/data/zero1 --my=zero1:5180 -o 100 --bindall --logtostderr -v=0 --replicas 3
+    - "5080"
+    - "6080"
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-
-  alpha1:
-    image: dgraph/dgraph:latest
-    container_name: alpha1
-    working_dir: /data/alpha1
-    env_file:
-      - export.env
-    labels:
-      cluster: test
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    ports:
-      - 8180:8180
-      - 9180:9180
-    command: /gobin/dgraph alpha --cwd=/data/alpha1 --my=alpha1:7180 --zero=zero1:5180 -o 100 -v=0 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-
-  alpha2:
-    image: dgraph/dgraph:latest
-    container_name: alpha2
-    working_dir: /data/alpha2
-    env_file:
-      - export.env
-    labels:
-      cluster: test
-    depends_on:
-      - alpha1
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    ports:
-      - 8182:8182
-      - 9182:9182
-    command: /gobin/dgraph alpha --cwd=/data/alpha2 --my=alpha2:7182 --zero=zero1:5180 -o 102 -v=0 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-
-  alpha3:
-    image: dgraph/dgraph:latest
-    container_name: alpha3
-    working_dir: /data/alpha3
-    env_file:
-      - export.env
-    labels:
-      cluster: test
-    depends_on:
-      - alpha2
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    ports:
-      - 8183:8183
-      - 9183:9183
-    command: /gobin/dgraph alpha --cwd=/data/alpha3 --my=alpha3:7183 --zero=zero1:5180 -o 103 -v=0 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-
-  minio1:
-    image: minio/minio:latest
-    container_name: minio1
-    env_file:
-      - export.env
-    ports:
-      - 9001:9001
-    labels:
-      cluster: test
-    command: minio server /data/minio --address :9001
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --replicas=1 --logtostderr
+      -v=2 --bindall
+volumes:
+  data: {}

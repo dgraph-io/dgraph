@@ -407,9 +407,7 @@ func TestIgnoreIndexConflict(t *testing.T) {
 	txn = s.dg.NewTxn()
 	q := `{ me(func: eq(name, "Manish")) { uid }}`
 	resp, err := txn.Query(context.Background(), q)
-	if err != nil {
-		log.Fatalf("Error while running query: %v\n", err)
-	}
+	require.NoError(t, err)
 	expectedResp := []byte(fmt.Sprintf(`{"me":[{"uid":"%s"},{"uid":"%s"}]}`, uid1, uid2))
 	require.Equal(t, expectedResp, resp.Json)
 }

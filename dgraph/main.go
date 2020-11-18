@@ -99,12 +99,10 @@ func main() {
 
 	// Run the program.
 	cmd.Execute()
-	// Free up allocators from alloctors from allocatorPool.
-	z.Done()
-
 	ticker.Stop()
-	fmt.Printf("Allocated Bytes at program end: %s\n", humanize.Bytes(uint64(z.NumAllocBytes())))
 	if z.NumAllocBytes() > 0 {
+		glog.Warningf("MEMORY LEAK detected of size: %s\n",
+			humanize.Bytes(uint64(z.NumAllocBytes())))
 		z.PrintLeaks()
 	}
 }

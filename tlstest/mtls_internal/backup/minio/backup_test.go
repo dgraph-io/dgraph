@@ -73,7 +73,7 @@ func getHttpClient(t *testing.T) *http.Client {
 	}
 }
 
-func TestBackupMinio(t *testing.T) {
+func TestBackupMinioMtls(t *testing.T) {
 	conf := viper.GetViper()
 	conf.Set("tls_cacert", "../../tls/live/ca.crt")
 	conf.Set("tls_internal_port_enabled", true)
@@ -141,7 +141,7 @@ func TestBackupMinio(t *testing.T) {
 	// TODO: refactor tests so that minio and filesystem tests share most of their logic.
 	preds := []string{"dgraph.graphql.schema", "dgraph.cors", "dgraph.graphql.xid", "dgraph.type", "movie",
 		"dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at", "dgraph.graphql.p_query",
-		"dgraph.graphql.p_sha256hash"}
+		"dgraph.graphql.p_sha256hash", "dgraph.drop.op"}
 	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.history", "dgraph.graphql.persisted_query"}
 	testutil.CheckSchema(t, preds, types)
 
@@ -278,7 +278,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 		}
 	}`
 
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
