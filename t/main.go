@@ -566,15 +566,12 @@ func removeAllTestContainers() {
 	return
 }
 
-func main() {
-	pflag.Parse()
-	rand.Seed(time.Now().UnixNano())
-	procId = rand.Intn(1000)
+func run() error {
 	start := time.Now()
 
 	if *clear {
 		removeAllTestContainers()
-		return
+		return nil
 	}
 
 	if len(*runPkg) > 0 && len(*runTest) > 0 {
@@ -612,15 +609,12 @@ func main() {
 	}()
 	go func() {
 		var count int
-		for {
-			select {
-			case <-sdCh:
-				count++
-				if count == 3 {
-					os.Exit(1)
-				}
-				closer.Signal()
+		for range sdCh {
+			count++
+			if count == 3 {
+				os.Exit(1)
 			}
+			closer.Signal()
 		}
 	}()
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -647,9 +641,21 @@ func main() {
 			oc.Print()
 			fmt.Printf("Got error: %v.\n", err)
 			fmt.Println("Tests FAILED.")
-			os.Exit(1)
+			return err
 		}
 	}
 	oc.Print()
 	fmt.Printf("Tests PASSED. Time taken: %v\n", time.Since(start).Truncate(time.Second))
+	return nil
+}
+
+func main() {
+	pflag.Parse()
+	rand.Seed(time.Now().UnixNano())
+	procId = rand.Intn(1000)
+
+	err := run()
+	if err != nil {
+		os.Exit(1)
+	}
 }
