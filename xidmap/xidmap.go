@@ -19,7 +19,6 @@ package xidmap
 import (
 	"context"
 	"encoding/binary"
-	"hash/maphash"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -31,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
@@ -45,6 +45,10 @@ type XidMap struct {
 
 	// Optionally, these can be set to persist the mappings.
 	writer *badger.WriteBatch
+	wg     sync.WaitGroup
+
+	kvBuf  []kv
+	kvChan chan []kv
 }
 
 type shard struct {
@@ -58,7 +62,9 @@ type block struct {
 	start, end uint64
 }
 
-var hashSeed maphash.Seed
+type kv struct {
+	key, value []byte
+}
 
 // assign assumes the write lock is already acquired.
 func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
@@ -72,19 +78,11 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 	return uid
 }
 
-func (m *XidMap) getHash(xid string) uint64 {
-	var h maphash.Hash
-	h.SetSeed(hashSeed)
-	h.WriteString(xid)
-	return h.Sum64()
-}
-
 // New creates an XidMap. zero conn must be valid for UID allocations to happen. Optionally, a
 // badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
 // assignment operations.
 func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	numShards := 32
-	hashSeed = maphash.MakeSeed()
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
@@ -94,6 +92,14 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 			tree: z.NewTree(100 << 20),
 		}
 	}
+
+	xm.kvChan = make(chan []kv, 64)
+
+	for i := 0; i < 16; i++ {
+		xm.wg.Add(1)
+		go xm.dbWriter()
+	}
+
 	if db != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
 		xm.writer = db.NewWriteBatch()
@@ -111,8 +117,7 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 				err := item.Value(func(val []byte) error {
 					uid := binary.BigEndian.Uint64(val)
 					// No need to acquire a lock. This is all serial access.
-
-					sh.tree.Set(xm.getHash(key), uid)
+					sh.tree.Set(farm.Fingerprint64([]byte(key)), uid)
 					return nil
 				})
 				if err != nil {
@@ -163,7 +168,7 @@ func (m *XidMap) CheckUid(xid string) bool {
 	sh := m.shardFor(xid)
 	sh.RLock()
 	defer sh.RUnlock()
-	uid := sh.tree.Get(m.getHash(xid))
+	uid := sh.tree.Get(farm.Fingerprint64([]byte(xid)))
 	return uid != 0
 }
 
@@ -171,7 +176,18 @@ func (m *XidMap) SetUid(xid string, uid uint64) {
 	sh := m.shardFor(xid)
 	sh.Lock()
 	defer sh.Unlock()
-	sh.tree.Set(m.getHash(xid), uid)
+	sh.tree.Set(farm.Fingerprint64([]byte(xid)), uid)
+}
+
+func (m *XidMap) dbWriter() {
+	defer m.wg.Done()
+	for buf := range m.kvChan {
+		for _, kv := range buf {
+			if err := m.writer.Set(kv.key, kv.value); err != nil {
+				x.Panic(err)
+			}
+		}
+	}
 }
 
 // AssignUid creates new or looks up existing XID to UID mappings. It also returns if
@@ -180,7 +196,7 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh := m.shardFor(xid)
 	sh.RLock()
 
-	uid := sh.tree.Get(m.getHash(xid))
+	uid := sh.tree.Get(farm.Fingerprint64([]byte(xid)))
 	sh.RUnlock()
 	if uid > 0 {
 		return uid, false
@@ -189,19 +205,24 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid = sh.tree.Get(m.getHash(xid))
+	uid = sh.tree.Get(farm.Fingerprint64([]byte(xid)))
 	if uid > 0 {
 		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
-	sh.tree.Set(m.getHash(xid), newUid)
+	sh.tree.Set(farm.Fingerprint64([]byte(xid)), newUid)
 
 	if m.writer != nil {
 		var uidBuf [8]byte
 		binary.BigEndian.PutUint64(uidBuf[:], newUid)
-		if err := m.writer.Set([]byte(xid), uidBuf[:]); err != nil {
-			x.Panic(err)
+		m.kvBuf = append(m.kvBuf, kv{key: []byte(xid), value: uidBuf[:]})
+
+		if len(m.kvBuf) == 64 {
+			newBuf := make([]kv, len(m.kvBuf))
+			copy(newBuf, m.kvBuf)
+			m.kvChan <- newBuf
+			m.kvBuf = m.kvBuf[:0]
 		}
 	}
 
@@ -264,6 +285,11 @@ func (m *XidMap) Flush() error {
 		glog.Infof("Finished writing xid map to DB")
 	}()
 
+	if m.writer != nil && len(m.kvBuf) > 0 {
+		m.kvChan <- m.kvBuf
+	}
+	close(m.kvChan)
+	m.wg.Wait()
 	for _, shard := range m.shards {
 		shard.tree.Release()
 	}
