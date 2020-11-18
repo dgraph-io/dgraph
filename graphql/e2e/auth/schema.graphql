@@ -1,4 +1,4 @@
-type User @auth(
+type User @secret(field: "password") @auth(
   delete: { and: [
     { rule: """
     query($USER: String!) {
@@ -262,11 +262,12 @@ type Issue @auth(
   random: String
 }
 
-type Log @auth(
-      query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-      add: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-      update: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-      delete: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+type Log @secret(field: "pwd") @auth(
+    password: { rule: "{$ROLE: { eq: \"Admin\" } }"},
+    query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+    add: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+    update: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+    delete: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
 ) {
   id: ID!
   logs: String
@@ -301,7 +302,19 @@ type ComplexLog @auth(
   visible: Boolean @search
 }
 
-type Project @auth(
+type Project @secret(field: "pwd") @auth(
+    password: { or: [
+        { rule: """query($USER: String!) {
+                     queryProject {
+                       roles(filter: { permission: { eq: EDIT } }) {
+                        assignedTo(filter: { username: { eq: $USER } }) {
+                         __typename
+                        }
+                       }
+                     }
+                 }""" },
+        { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
+    ]},
      query: { or: [
          { rule: """query($USER: String!) {
                       queryProject {
