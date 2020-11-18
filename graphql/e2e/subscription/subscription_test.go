@@ -628,7 +628,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	require.NoError(t, err)
 	require.Nil(t, res) // 1st subscription should get the empty response as subscription has expired.
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(time.Second)
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	err = json.Unmarshal(res, &resp)
@@ -833,7 +833,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-	time.Sleep(2 * time.Second)
+	time.Sleep(time.Second)
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	err = json.Unmarshal(res, &resp)
