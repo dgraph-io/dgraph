@@ -1050,6 +1050,7 @@
     { "question": 
       [{
         "text": "A Question",
+        "pwd": "password",
         "author": {
           "name": "user1"
         },
@@ -1098,6 +1099,7 @@
     { "question": 
       [{
         "text": "A Question",
+        "pwd": "password",
         "author": {
           "name": "user1"
         },
@@ -1148,6 +1150,7 @@
     { "post": 
       [{
         "text": "A Question",
+        "pwd": "password",
         "author": {
           "name": "user1"
         }
@@ -1192,6 +1195,7 @@
     { "post": 
       [{
         "text": "A Question",
+        "pwd": "password",
         "author": {
           "name": "user1"
         }

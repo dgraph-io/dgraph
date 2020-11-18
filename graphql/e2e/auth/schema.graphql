@@ -604,7 +604,8 @@ type Author {
   posts: [Post] @hasInverse(field: author)
 }
 
-interface Post @auth(
+interface Post @secret(field: "pwd") @auth(
+    password: { rule: "{$ROLE: { eq: \"Admin\" } }"},
     query: { rule: """
             query($USER: String!) { 
               queryPost{
@@ -656,6 +657,13 @@ interface MsgPost @auth(
 }
 
 type Question implements Post  @auth(
+    password:{ rule: """
+            query($ANS: Boolean!) {
+              queryQuestion(filter: { answered: $ANS } ) {
+                id
+                text
+              }
+            }""" },
     query:{ rule: """
             query($ANS: Boolean!) { 
               queryQuestion(filter: { answered: $ANS } ) { 

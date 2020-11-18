@@ -1786,3 +1786,81 @@
         pwd as checkpwd(Project.pwd, "something")
       }
     }
+
+- name: "Type with password query should apply Interface's password rules and along with its own auth rules"
+  gqlquery: |
+    query {
+      checkQuestionPassword(id: "0x123", pwd: "something") {
+        id
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "Admin"
+    ANS: "true"
+    USER: "ADMIN"
+  dgquery: |-
+    query {
+      checkQuestionPassword(func: uid(QuestionRoot)) @filter((eq(val(pwd), 1) AND type(Question))) {
+        id : uid
+        text : Post.text
+      }
+      QuestionRoot as var(func: uid(Question1)) @filter(uid(QuestionAuth2))
+      Question1 as var(func: uid(0x123))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+        text : Post.text
+      }
+      checkPwd(func: uid(QuestionRoot)) @filter(type(Question)) {
+        pwd as checkpwd(Question.pwd, "something")
+      }
+    }
+
+- name: "Type which inherits password auth rules from interfaces returns no results when auth rules fail"
+  gqlquery: |
+    query {
+      checkQuestionPassword(id: "0x123", pwd: "something") {
+        id
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "NotAdmin"
+    ANS: "true"
+    USER: "ADMIN"
+  dgquery: |-
+    query {
+      checkQuestionPassword()
+    }
+
+- name: "Password Auth rules of All the implementing types should Apply to the interface also"
+  gqlquery: |
+    query {
+      checkPostPassword(id: "0x123", pwd: "something") {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "Admin"
+    ANS: "true"
+    USER: "ADMIN"
+  dgquery: |-
+    query {
+      checkPostPassword(func: uid(PostRoot)) @filter((eq(val(pwd), 1) AND type(Post))) {
+        dgraph.type
+        text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post1)) @filter((uid(QuestionAuth2) OR uid(FbPost1) OR uid(Answer1)))
+      Post1 as var(func: uid(0x123))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+        text : Post.text
+      }
+      FbPost1 as var(func: type(FbPost))
+      Answer1 as var(func: type(Answer))
+      checkPwd(func: uid(PostRoot)) @filter(type(Post)) {
+        pwd as checkpwd(Post.pwd, "something")
+      }
+    }
