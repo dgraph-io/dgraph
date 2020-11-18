@@ -73,6 +73,80 @@ This means your frontend doesn't need to be sensitive to the auth rules.  Your a
 
 In general, an auth rule should select a field that's expected to exist at the inner most field, often that's the `ID` or `@id` field.  Auth rules are run in a mode that requires all fields in the rule to find a value in order to succeed.  
 
+## `@auth` on Interfaces
+
+The `@auth` directive works just like it works for types which are to provide authorization to perform `query`, `update`, and `delete` on interfaces.
+
+### Implementing types
+
+The rules provided inside the `@auth` directive on an interface will also be applied as an `AND` rule to those on the implementing types.
+
+{{% notice "tip" %}}
+A type inherits the `@auth` rules of all the implemented interfaces. The final authorization rule is an `AND` of the type's `@auth` rule and of all the implemented interfaces.
+{{% /notice %}}
+
+In the following example, the `Question` and `Answer` types will automatically inherit the auth rules of the `Post` type. 
+This means that a user can only query a subset of questions and answers that are accessible through the `queryPost` query. 
+Dgraph will disallow situations where a user can query more posts through `queryAnswer` or `queryQuestion` than they can through `queryPost`.
+
+```graphql
+type Author {
+  id: ID!
+  name: String! @search(by: [hash])
+  posts: [Post] @hasInverse(field: author)
+}
+
+interface Post @auth(
+    query: { rule: """
+        query ($USER: String!) { 
+            queryPost(filter: { author : { id: { eq: $USER } } } ) { 
+                id 
+            } 
+        }"""
+    }
+){
+  id: ID!
+  text: String @search(by: [fulltext])
+  datePublished: DateTime @search
+  author: Author! 
+}
+
+type Question implements Post @auth(
+    query: { rule: """
+        query ($ANSWERED: Boolean!) { 
+            queryQuestion(filter: { answered: $ANSWERED } ) { 
+                id 
+            } 
+        }"""
+    }
+){
+  answered: Boolean
+}
+
+type Answer implements Post @auth(
+    query: { rule: """
+        query ($USEFUL:Boolean!) { 
+            queryAnswer(filter: { markedUseful: $USEFUL } ) { 
+                id 
+            } 
+        }"""
+    }
+){
+  markedUseful: Boolean
+}
+```
+
+If the `Question` type implemented more interfaces, then the rules for those would also be added in an `AND` condition to the `Question` type's authorization rules.
+
+### Interfaces
+
+When it comes to applying `@auth` rules on interfaces themselves, Dgraph will do a `union` query where it queries all the implementing types, and apply the authorization rules on them. 
+The final query will be an `OR` query joining the results from all the implementing types.
+
+### Mutations
+
+Mutations on an interface works in the same manner. For example, in case of a `delete` mutation on an interface, it will be broken down into the implementing type's `delete` mutation. The nodes that satisfy the `@auth` rules of the corresponding implementing types and the interface will get deleted.
+
 ## Graph traversal in auth rules
 
 Often authorization depends not on the object being queried, but on the connections in the graph that object has or doesn't have.  Because the auth rules are graph queries, they can express very powerful graph search and traversal.
