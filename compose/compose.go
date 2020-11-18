@@ -534,6 +534,7 @@ func main() {
 			// dummy to get "Usage:" template in Usage() output.
 		},
 	}
+	cmd.SetGlobalNormalizationFunc(x.NormalizeFlags)
 
 	cmd.PersistentFlags().IntVarP(&opts.NumZeros, "num_zeros", "z", 3,
 		"number of zeros in dgraph cluster")
