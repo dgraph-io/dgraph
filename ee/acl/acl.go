@@ -43,7 +43,7 @@ func checkForbiddenOpts(conf *viper.Viper, forbiddenOpts []string) error {
 		switch conf.Get(opt).(type) {
 		case string:
 			if opt == "group-list" {
-				// handle group_list specially since the default value is not an empty string
+				// handle group-list specially since the default value is not an empty string
 				isSet = conf.GetString(opt) != defaultGroupList
 			} else {
 				isSet = len(conf.GetString(opt)) > 0

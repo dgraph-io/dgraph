@@ -190,7 +190,7 @@ func runRestoreCmd() error {
 	fmt.Println("Writing postings to:", opt.pdir)
 
 	if opt.zero == "" && opt.forceZero {
-		return errors.Errorf("No Dgraph Zero address passed. Use the --force_zero option if you " +
+		return errors.Errorf("No Dgraph Zero address passed. Use the --force-zero option if you " +
 			"meant to do this")
 	}
 

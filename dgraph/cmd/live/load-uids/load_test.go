@@ -212,7 +212,7 @@ func TestLiveLoadJsonUidDiscard(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
-		{testutil.DgraphBinaryPath(), "live", "--new_uids",
+		{testutil.DgraphBinaryPath(), "live", "--new-uids",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
@@ -240,7 +240,7 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
-		{testutil.DgraphBinaryPath(), "live", "--new_uids",
+		{testutil.DgraphBinaryPath(), "live", "--new-uids",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}

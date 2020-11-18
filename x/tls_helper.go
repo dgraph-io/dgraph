@@ -143,7 +143,7 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 		return SlashTLSConfig(v.GetString("slash-grpc-endpoint"))
 	}
 
-	// When the --tls_cacert option is pecified, the connection will be set up using TLS instead of
+	// When the --tls-cacert option is pecified, the connection will be set up using TLS instead of
 	// plaintext. However the client cert files are optional, depending on whether the server
 	// requires a client certificate.
 	caCert := v.GetString("tls-cacert")

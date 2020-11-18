@@ -192,7 +192,7 @@ func run() {
 	x.WorkerConfig.Parse(Zero.Conf)
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise-license") != "" {
-		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
+		log.Fatalf("ERROR: enterprise-license option cannot be applied to OSS builds. ")
 	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {

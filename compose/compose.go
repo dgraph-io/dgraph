@@ -307,7 +307,7 @@ func getAlpha(idx int) service {
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if opts.LudicrousMode {
-		svc.Command += " --ludicrous_mode=true"
+		svc.Command += " --ludicrous-mode=true"
 	}
 
 	// Don't assign idx, let it auto-assign.
@@ -319,7 +319,7 @@ func getAlpha(idx int) service {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
 	if opts.Acl {
-		svc.Command += " --acl_secret_file=/secret/hmac"
+		svc.Command += " --acl-secret-file=/secret/hmac"
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   "./acl-secret",
@@ -328,10 +328,10 @@ func getAlpha(idx int) service {
 		})
 	}
 	if opts.SnapshotAfter != "" {
-		svc.Command += fmt.Sprintf(" --snapshot_after=%s", opts.SnapshotAfter)
+		svc.Command += fmt.Sprintf(" --snapshot-after=%s", opts.SnapshotAfter)
 	}
 	if opts.AclSecret != "" {
-		svc.Command += " --acl_secret_file=/secret/hmac"
+		svc.Command += " --acl-secret-file=/secret/hmac"
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   opts.AclSecret,
@@ -345,7 +345,7 @@ func getAlpha(idx int) service {
 		}
 	}
 	if opts.Encryption {
-		svc.Command += " --encryption_key_file=/secret/enc_key"
+		svc.Command += " --encryption-key-file=/secret/enc_key"
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   "./enc-secret",
@@ -354,7 +354,7 @@ func getAlpha(idx int) service {
 		})
 	}
 	if opts.TlsDir != "" {
-		svc.Command += " --tls_dir=/secret/tls"
+		svc.Command += " --tls-dir=/secret/tls"
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   opts.TlsDir,
