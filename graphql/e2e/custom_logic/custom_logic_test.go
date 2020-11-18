@@ -33,12 +33,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	alphaGrpc            = testutil.SockAddr
+	alphaURL             = "http://"+ testutil.SockAddrHttp +"/graphql"
+	alphaAdminURL        = "http://"+ testutil.SockAddrHttp +"/admin"
+	subscriptionEndpoint = "ws://"+ testutil.SockAddrHttp +"/graphql"
+	groupOnegRPC         = testutil.SockAddr
+)
 const (
-	alphaGrpc            = "localhost:9180"
-	alphaURL             = "http://localhost:8180/graphql"
-	alphaAdminURL        = "http://localhost:8180/admin"
-	subscriptionEndpoint = "ws://localhost:8180/graphql"
-	groupOnegRPC         = "localhost:9180"
 	customTypes          = `type MovieDirector @remote {
 		 id: ID!
 		 name: String!

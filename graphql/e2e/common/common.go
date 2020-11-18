@@ -39,14 +39,14 @@ import (
 	"google.golang.org/grpc"
 )
 
-const (
-	GraphqlURL      = "http://localhost:8180/graphql"
-	graphqlAdminURL = "http://localhost:8180/admin"
-	AlphagRPC       = "localhost:9180"
+var (
+	GraphqlURL      = "http://"+ testutil.SockAddrHttp +"/graphql"
+	graphqlAdminURL = "http://"+ testutil.SockAddrHttp +"/admin"
+	AlphagRPC       = testutil.SockAddr
 
-	adminDgraphHealthURL           = "http://localhost:8180/health?all"
-	adminDgraphStateURL            = "http://localhost:8180/state"
-	graphqlAdminTestAdminSchemaURL = "http://localhost:8180/admin/schema"
+	adminDgraphHealthURL           = "http://"+ testutil.SockAddrHttp +"/health?all"
+	adminDgraphStateURL            = "http://"+ testutil.SockAddrHttp +"/state"
+	graphqlAdminTestAdminSchemaURL = "http://"+ testutil.SockAddrHttp +"/admin/schema"
 )
 
 // GraphQLParams is parameters for the constructing a GraphQL query - that's

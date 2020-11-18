@@ -25,8 +25,8 @@ import (
 	"testing"
 )
 
-const (
-	graphqlURL = "http://localhost:8180/graphql"
+var (
+	graphqlURL = "http://"+ testutil.SockAddrHttp +"/graphql"
 )
 
 type TestCase struct {
