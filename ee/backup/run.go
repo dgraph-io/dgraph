@@ -15,9 +15,10 @@ package backup
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc/credentials"
 	"os"
 	"time"
+
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -266,7 +267,7 @@ func runLsbackupCmd() error {
 
 func initExportBackup() {
 	ExportBackup.Cmd = &cobra.Command{
-		Use:   "export_backup",
+		Use:   "export-backup",
 		Short: "Export data inside single full or incremental backup.",
 		Long:  ``,
 		Args:  cobra.NoArgs,

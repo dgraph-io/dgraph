@@ -81,6 +81,7 @@ var subcommands = []*x.SubCommand{
 }
 
 func initCmds() {
+	RootCmd.SetGlobalNormalizationFunc(x.NormalizeFlags)
 	RootCmd.PersistentFlags().String("cwd", "",
 		"Change working directory to the path specified. The parent must exist.")
 	RootCmd.PersistentFlags().String("profile_mode", "",

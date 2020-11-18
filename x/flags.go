@@ -16,7 +16,11 @@
 
 package x
 
-import "github.com/spf13/pflag"
+import (
+	"strings"
+
+	"github.com/spf13/pflag"
+)
 
 // FillCommonFlags stores flags common to Alpha and Zero.
 func FillCommonFlags(flag *pflag.FlagSet) {
@@ -46,4 +50,9 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 	// Telemetry.
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
 	flag.Bool("enable_sentry", true, "Turn on/off sending crash events to Sentry.")
+}
+
+// NormalizeFlags normalizes underscores in flags to hyphens.
+func NormalizeFlags(f *pflag.FlagSet, name string) pflag.NormalizedName {
+	return pflag.NormalizedName(strings.ReplaceAll(name, "_", "-"))
 }
