@@ -299,7 +299,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 			}
 		}`
 
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp +  "/admin"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{

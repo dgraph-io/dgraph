@@ -74,12 +74,12 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 }
 
 func TestHAClusterSetup(t *testing.T) {
-	client := getClientForAlpha(t, "alpha1", "9180")
+	client := getClientForAlpha(t, "alpha1", "9080")
 	runTests(t, client)
 }
 
 func TestHAClusterDiffClients(t *testing.T) {
-	client := getClientForAlpha(t, "alpha1", "9180")
+	client := getClientForAlpha(t, "alpha1", "9080")
 	client2 := getClientForAlpha(t, "alpha2", "9280")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

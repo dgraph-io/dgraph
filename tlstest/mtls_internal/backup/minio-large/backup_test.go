@@ -46,7 +46,7 @@ var (
 
 	mc                *minio.Client
 	bucketName        = "dgraph-backup"
-	backupDestination = "minio://minio1:9001/dgraph-backup?secure=false"
+	backupDestination = "minio://minio:9001/dgraph-backup?secure=false"
 	uidCounter        = 0
 	batchSize         = 100
 	totalTriples      = 20000
@@ -168,7 +168,7 @@ func addTriples(t *testing.T, dg *dgo.Dgraph, numTriples int) {
 func runBackup(t *testing.T) {
 	// Using the old /admin/backup endpoint to ensure it works. Change back to using
 	// the GraphQL endpoint at /admin once this endpoint is deprecated.
-	resp, err := getHttpClient(t).PostForm("https://localhost:8180/admin/backup", url.Values{
+	resp, err := getHttpClient(t).PostForm("https://" + testutil.SockAddrHttp + "/admin/backup", url.Values{
 		"destination": []string{backupDestination},
 	})
 	require.NoError(t, err)

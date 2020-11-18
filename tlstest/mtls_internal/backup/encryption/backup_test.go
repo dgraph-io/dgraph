@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math"
 	"net/http"
 	"os"
@@ -85,9 +86,9 @@ func TestBackupMinioEncrypted(t *testing.T) {
 	// TODO: Fix this.
 	backupDst = "minio://minio:9001/dgraph-backup?secure=false"
 
-	addr := testutil.ContainerAddr("minio", 9001)
-	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
-
+	//addr := testutil.ContainerAddr("minio", 9001)
+	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
+	log.Print(testutil.MinioInstance)
 	mc, err = testutil.NewMinioClient()
 	require.NoError(t, err)
 	require.NoError(t, mc.MakeBucket(bucketName, ""))

@@ -54,8 +54,6 @@ var (
 // Test to add a large database and verify backup and restore work as expected.
 func TestBackupMinioLarge(t *testing.T) {
 	// backupDestination = "minio://" + testutil.DockerPrefix + "_minio_1:9001/dgraph-backup?secure=false"
-	t.Skipf("TODO: This test is failing for some reason. FIX IT.")
-
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
