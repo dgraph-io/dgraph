@@ -898,7 +898,7 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 }
 
 func cleanSchema(sch *ast.Schema) {
-	// Let's go over inputs of the type TRef, TPatch and AddTInput and delete the ones which
+	// Let's go over inputs of the type TRef, TPatch AddTInput, UpdateTInput and delete the ones which
 	// don't have field inside them.
 	for k := range sch.Types {
 		if strings.HasSuffix(k, "Ref") || strings.HasSuffix(k, "Patch") ||
@@ -907,20 +907,20 @@ func cleanSchema(sch *ast.Schema) {
 		}
 	}
 
-	// Let's go over mutations and cleanup those which don't have AddTInput defined in the schema
+	// Let's go over mutations and cleanup those which don't have AddTInput/UpdateTInput defined in the schema
 	// anymore.
 	i := 0 // helps us overwrite the array with valid entries.
 	for _, field := range sch.Mutation.Fields {
 		custom := field.Directives.ForName("custom")
-		// We would only modify add/
+		// We would only modify add/update
 		if custom != nil || !(strings.HasPrefix(field.Name, "add") || strings.HasPrefix(field.Name, "update")) {
 			sch.Mutation.Fields[i] = field
 			i++
 			continue
 		}
 
-		// addT type mutations have an input which is AddTInput so if that doesn't exist anymore,
-		// we can delete the AddTPayload and also skip this mutation.
+		// addT / updateT type mutations have an input which is AddTInput / UpdateTInput so if that doesn't exist anymore,
+		// we can delete the AddTPayload / UpdateTPayload and also skip this mutation.
 
 		var typeName, input string
 		if strings.HasPrefix(field.Name, "add") {
