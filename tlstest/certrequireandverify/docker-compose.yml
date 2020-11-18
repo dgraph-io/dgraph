@@ -1,14 +1,15 @@
+# Auto-generated with: [./compose -a 1 -z 1 --alpha_volume=../tls:/dgraph-tls:ro --extra_alpha_flags=--tls_cacert /dgraph-tls/ca.crt --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key --tls_client_auth REQUIREANDVERIFY -w --port_offset=0 --expose_ports=false --mem= --names=false -O ../tlstest/certrequireandverify/docker-compose.yml]
+#
 version: "3.5"
 services:
   alpha1:
     image: dgraph/dgraph:latest
-    container_name: alpha1
     working_dir: /data/alpha1
     labels:
       cluster: test
     ports:
-    - 8180:8180
-    - 9180:9180
+    - "8080"
+    - "9080"
     volumes:
     - type: bind
       source: $GOPATH/bin
@@ -18,21 +19,22 @@ services:
       source: ../tls
       target: /dgraph-tls
       read_only: true
-    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180 --logtostderr -v=2 --tls_cacert /dgraph-tls/ca.crt --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key --tls_client_auth REQUIREANDVERIFY --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
+      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --tls_cacert /dgraph-tls/ca.crt
+      --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key --tls_client_auth
+      REQUIREANDVERIFY
   zero1:
     image: dgraph/dgraph:latest
-    container_name: zero1
     working_dir: /data/zero1
     labels:
       cluster: test
     ports:
-    - 5180:5180
-    - 6180:6180
+    - "5080"
+    - "6080"
     volumes:
     - type: bind
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --logtostderr
-      -v=2 --bindall
+    command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --logtostderr -v=2 --bindall
 volumes: {}

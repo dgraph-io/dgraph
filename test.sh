@@ -161,6 +161,8 @@ function RunCustomClusterTests {
 # MAIN
 #
 
+echo "test.sh is DEPRECATED. Please use the Go script in t directory instead."
+
 ARGS=$(getopt -n$ME -o"hucCfFvn" \
               -l"help,unit,cluster,cluster-only,full,systest-only,oss,verbose,no-cache,short,timeout:" -- "$@") \
     || exit 1

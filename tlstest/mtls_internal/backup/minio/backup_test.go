@@ -73,7 +73,7 @@ func getHttpClient(t *testing.T) *http.Client {
 	}
 }
 
-func TestBackupMinio(t *testing.T) {
+func TestBackupMinioMtls(t *testing.T) {
 	conf := viper.GetViper()
 	conf.Set("tls_cacert", "../../tls/live/ca.crt")
 	conf.Set("tls_internal_port_enabled", true)
@@ -278,7 +278,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 		}
 	}`
 
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{

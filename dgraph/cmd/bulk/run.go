@@ -280,6 +280,12 @@ func run() {
 		defer os.RemoveAll(opt.TmpDir)
 	}
 
+	// Create directory for temporary buffers used in map-reduce phase
+	bufDir := filepath.Join(opt.TmpDir, bufferDir)
+	x.Check(os.RemoveAll(bufDir))
+	x.Check(os.MkdirAll(bufDir, 0700))
+	defer os.RemoveAll(bufDir)
+
 	loader := newLoader(&opt)
 	if !opt.SkipMapPhase {
 		loader.mapStage()

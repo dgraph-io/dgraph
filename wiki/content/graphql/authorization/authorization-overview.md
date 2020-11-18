@@ -6,7 +6,7 @@ weight = 1
     identifier = "authorization-overview"
 +++
 
-Dgraph GraphQL comes with inbuilt authorization.  It allows you to annotate your schema with rules that determine who can access or mutate what data.
+Dgraph GraphQL comes with built-in authorization.  It allows you to annotate your schema with rules that determine who can access or mutate what data.
 
 Firstly, let's get some concepts defined.  There are two important concepts in what's often called 'auth'.
 
@@ -37,15 +37,21 @@ type B @auth(...) {
 
 Valid examples look like
 
-`# Dgraph.Authorization {"VerificationKey":"verificationkey","Header":"X-My-App-Auth","Namespace":"https://my.app.io/jwt/claims","Algo":"HS256","Audience":["aud1","aud5"]}`
+```
+# Dgraph.Authorization {"VerificationKey":"verificationkey","Header":"X-My-App-Auth","Namespace":"https://my.app.io/jwt/claims","Algo":"HS256","Audience":["aud1","aud5"]}
+```
 
 Without audience field
 
-`# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-My-App-Auth","Namespace":"https://my.app.io/jwt/claims","Algo":"HS256"}`
+```
+# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-My-App-Auth","Namespace":"https://my.app.io/jwt/claims","Algo":"HS256"}
+```
 
 for HMAC-SHA256 JWT with symmetric cryptography (the signing key and verification key are the same), and like
 
-`# Dgraph.Authorization {"VerificationKey":"-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----","Header":"X-My-App-Auth","Namespace":"https://my.app.io/jwt/claims","Algo":"RS256"}`
+```
+# Dgraph.Authorization {"VerificationKey":"-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----","Header":"X-My-App-Auth","Namespace":"https://my.app.io/jwt/claims","Algo":"RS256"}
+```
 
 for RSA Signature with SHA-256 asymmetric cryptography (the JWT is signed with the private key and Dgraph checks with the public key).
 
