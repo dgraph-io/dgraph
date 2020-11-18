@@ -80,7 +80,7 @@ func TestHAClusterSetup(t *testing.T) {
 
 func TestHAClusterDiffClients(t *testing.T) {
 	client := getClientForAlpha(t, "alpha1", "9080")
-	client2 := getClientForAlpha(t, "alpha2", "9280")
+	client2 := getClientForAlpha(t, "alpha2", "9080")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -133,7 +133,7 @@ func getClientForAlpha(t *testing.T, name string, port string) *dgo.Dgraph {
 	}
 	tlsConf, err := x.GenerateClientTLSConfig(c)
 	require.NoError(t, err)
-	dgConn, err := grpc.Dial(":"+port, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	dgConn, err := grpc.Dial(name+":"+port, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
 	return client

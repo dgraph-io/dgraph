@@ -6,7 +6,6 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
-	"log"
 	"testing"
 	"time"
 )
@@ -16,7 +15,6 @@ func TestLoginOverTLS(t *testing.T) {
 	conf.Set("tls_cacert", "../tls/alpha1/ca.crt")
 	conf.Set("tls_server_name", "alpha1")
 
-	log.Print(testutil.SockAddr)
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 	for i := 0; i < 30; i++ {
