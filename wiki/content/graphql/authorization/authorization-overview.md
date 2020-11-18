@@ -6,14 +6,41 @@ weight = 1
     identifier = "authorization-overview"
 +++
 
-Dgraph GraphQL comes with built-in authorization.  It allows you to annotate your schema with rules that determine who can access or mutate what data.
+Dgraph GraphQL comes with built-in authorization. It allows you to annotate your schema with rules that determine who can access or mutate the data.
 
-Firstly, let's get some concepts defined.  There are two important concepts in what's often called 'auth'.
+First, let's get some concepts defined. There are two important concepts in what's often called 'auth':
 
-* authentication : who are you; and
-* authorization : what are you allowed to do.
+* authentication: who are you,
+* authorization: what are you allowed to do.
 
-Dgraph GraphQL deals with authorization, but is completely flexible about how your app does authentication.  You could authenticate your users with a cloud service like OneGraph or Auth0, use some social sign in options, or write bespoke code.  The connection between Dgraph and your authentication mechanism is a signed JWT - you tell Dgraph, for example, the public key of the JWT signer and Dgraph trusts JWTs signed by the corresponding private key.
+### Authentication
+
+Dgraph GraphQL deals with authorization, but is completely flexible about how your app does authentication. You could authenticate your users with a cloud service like OneGraph or Auth0, use some social sign in options, or write bespoke code.  
+
+#### JSON Web Key at URL (JWK URL)
+
+#### JSON Web Token (JWT)
+
+The connection between Dgraph and your authentication mechanism is a signed JSON Web Token (JWT) - you tell Dgraph, for example, the public key of the JWT signer and Dgraph trusts JWTs signed by the corresponding private key.
+
+* `Header` is the header in which requests will send the signed JWT
+* `Namespace` is the key inside the JWT that contains the claims relevant to Dgraph auth
+* `Algo` is the JWT verification algorithm which can be either `HS256` or `RS256`
+* `VerificationKey` is the string value of the key (newlines replaced with `\n`) wrapped in `""`
+* `JWKURL` is the URL for the JSON Web Key
+* `Audience` (optional) is used to verify the `aud` field of JWT which might be set by certain providers. It indicates the intended audience for the JWT.
+
+
+Users will be allowed to give only one of `JWKURL` or `(VerificationKey, Algo)` and not both.
+
+- If (`VerificationKey`, `Algo`) is provided then the GraphQL server will verify JWT against this VerificationKey
+- If `JWKURL` is provided then Server will fetch all the JWKs and verify the token against one of the JWK based on the kid of JWK.
+
+{{% notice "note" %}}
+Some Identity Providers (such as Firebase) share the JWKs among multiple tenants. In this case, it is required for the user to provide the proper `Audience` value in `Dgraph.Authorization` JSON. Failing to do so could be a major security risk.
+{{% /notice %}}
+
+### Authorization
 
 With an authentication mechanism set up, you then annotate your schema with the `@auth` directive to define your authorization rules, attach details of your authentication provider to the last line of the schema, and pass the schema to Dgraph.  So your schema will follow this pattern.
 
@@ -29,13 +56,7 @@ type B @auth(...) {
 # Dgraph.Authorization {"VerificationKey":"","Header":"","Namespace":"","Algo":"","Audience":[]}
 ```
 
-* `Header` is the header in which requests will send the signed JWT
-* `Namespace` is the key inside the JWT that contains the claims relevant to Dgraph auth
-* `Algo` is JWT verification algorithm which can be either `HS256` or `RS256`, and
-* `VerificationKey` is the string value of the key (newlines replaced with `\n`) wrapped in `""`
-* `Audience` is used to verify `aud` field of JWT which might be set by certain providers. It indicates the intended audience for the JWT. This is an optional field.
-
-Valid examples look like
+Valid `Dgraph.Authorization` examples look like:
 
 ```
 # Dgraph.Authorization {"VerificationKey":"verificationkey","Header":"X-My-App-Auth","Namespace":"https://my.app.io/jwt/claims","Algo":"HS256","Audience":["aud1","aud5"]}
@@ -57,6 +78,6 @@ for RSA Signature with SHA-256 asymmetric cryptography (the JWT is signed with t
 
 Both cases expect the JWT to be in a header `X-My-App-Auth` and expect the JWT to contain custom claims object `"https://my.app.io/jwt/claims": { ... }` with the claims used in authorization rules.
 
-Note: authorization is in beta and some aspects may change - for example, it's possible that the method to specify the header, key, etc. will move into the /admin `updateGQLSchema` mutation that sets the schema.  Some features are also in active improvement and development - for example, auth is supported an on types, but interfaces (and the types that implement them) don't correctly support auth in the current beta.
-
----
+{{% notice "note" %}}
+Authorization is in beta and some aspects may change - for example, it's possible that the method to specify the `header`, `key`, etc. will move into the /admin `updateGQLSchema` mutation that sets the schema. Some features are also in active improvement and development.
+{{% /notice %}}
