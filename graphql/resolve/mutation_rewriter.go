@@ -404,7 +404,7 @@ func (mrw *AddRewriter) FromMutationResult(
 	}
 	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
 
-	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw, false), errs
+	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), errs
 }
 
 // Rewrite rewrites set and remove update patches into dql upsert mutations.
@@ -604,7 +604,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 		parentVarName: mutation.MutatedType().Name() + "Root",
 	}
 	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
-	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw, false), nil
+	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
 }
 
 func extractMutated(result map[string]interface{}, mutatedField string) []string {

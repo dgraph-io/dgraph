@@ -1619,12 +1619,63 @@ func TestChildCountQueryWithOtherFields(t *testing.T) {
 	}
 }
 
+func checkLogPassword(t *testing.T, logID, pwd, role string) *common.GraphQLResponse {
+	// Check Log Password for given logID, pwd, role
+	checkLogParamsFalse := &common.GraphQLParams{
+		Headers: common.GetJWT(t, "SomeUser", role, metaInfo),
+		Query: `query checkLogPassword($name: ID!, $pwd: String!) {
+			checkLogPassword(id: $name, pwd: $pwd) { id }
+		}`,
+		Variables: map[string]interface{}{
+			"name": logID,
+			"pwd":  pwd,
+		},
+	}
+
+	gqlResponse := checkLogParamsFalse.ExecuteAsPost(t, graphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	return gqlResponse
+}
+
+func deleteLog(t *testing.T, logID string) {
+	deleteLogParams := &common.GraphQLParams{
+		Query: `
+		mutation DelLog($logID: ID!) {
+		  deleteLog(filter:{id:[$logID]}) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"logID": logID},
+		Headers:   common.GetJWT(t, "SomeUser", "ADMIN", metaInfo),
+	}
+	gqlResponse := deleteLogParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func deleteUser(t *testing.T, username string) {
+	deleteUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, username, "ADMIN", metaInfo),
+		Query: `
+		mutation DelUser($username: String!) {
+		  deleteUser(filter:{username: {eq: $username } } ) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"username": username},
+	}
+	gqlResponse := deleteUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
 func TestAuthWithSecretDirective(t *testing.T) {
 
 	// Check that no auth rule is applied to checkUserPassword query.
 	newUser := &common.User{
 		Username: "Test User",
 		Password: "password",
+		IsPublic: true,
 	}
 
 	addUserParams := &common.GraphQLParams{
@@ -1644,8 +1695,11 @@ func TestAuthWithSecretDirective(t *testing.T) {
 
 	checkUserParams := &common.GraphQLParams{
 		Query: `query checkUserPassword($name: String!, $pwd: String!) {
-			checkUserPassword(username: $name, password: $pwd) { username }
-		}`,
+					checkUserPassword(username: $name, password: $pwd) { 
+						username
+						isPublic
+					}
+				}`,
 		Variables: map[string]interface{}{
 			"name": newUser.Username,
 			"pwd":  newUser.Password,
@@ -1666,6 +1720,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	if diff := cmp.Diff(newUser, result.CheckUserPassword, opt); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+	deleteUser(t, newUser.Username)
 
 	// Check that checkLogPassword works with RBAC rule
 	newLog := &Log{
@@ -1674,7 +1729,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 
 	addLogParams := &common.GraphQLParams{
 		Headers: common.GetJWT(t, "Random", "ADMIN", metaInfo),
-		Query: `mutation addLog(log: [AddLogInput!]!) {
+		Query: `mutation addLog($log: [AddLogInput!]!) {
 			addLog(input: $log) {
 				log {
 					id
@@ -1685,23 +1740,19 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	}
 
 	gqlResponse = addLogParams.ExecuteAsPost(t, graphqlURL)
-	require.Equal(t, `{"addLog":{"log":[{"id":"0x43210"}]}}`,
-		string(gqlResponse.Data))
-
-	checkLogParams := &common.GraphQLParams{
-		Headers: common.GetJWT(t, "SomeUser", "Admin", metaInfo),
-		Query: `query checkLogPassword($name: String!, $pwd: String!) {
-			checkLogPassword(id: $name, pwd: $pwd) { id }
-		}`,
-		Variables: map[string]interface{}{
-			"name": newLog.Id,
-			"pwd":  newLog.Pwd,
-		},
+	var addLogResult struct {
+		AddLog struct {
+			Log []*Log
+		}
 	}
 
-	gqlResponse = checkLogParams.ExecuteAsPost(t, graphqlURL)
-	common.RequireNoGQLErrors(t, gqlResponse)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &addLogResult)
+	require.Nil(t, err)
+	// Id of the created log
+	logID := addLogResult.AddLog.Log[0].Id
 
+	// checkLogPassword with RBAC rule true should work
+	gqlResponse = checkLogPassword(t, logID, newLog.Pwd, "Admin")
 	var resultLog struct {
 		CheckLogPassword *Log `json:"checkLogPassword,omitempty"`
 	}
@@ -1709,25 +1760,10 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	err = json.Unmarshal([]byte(gqlResponse.Data), &resultLog)
 	require.Nil(t, err)
 
-	opt = cmpopts.IgnoreFields(Log{}, "Pwd")
-	if diff := cmp.Diff(newLog, resultLog.CheckLogPassword, opt); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
-	}
+	require.Equal(t, resultLog.CheckLogPassword.Id, logID)
 
-	// Check Log Password with RBAC false
-	checkLogParamsFalse := &common.GraphQLParams{
-		Headers: common.GetJWT(t, "SomeUser", "User", metaInfo),
-		Query: `query checkLogPassword($name: String!, $pwd: String!) {
-			checkLogPassword(id: $name, pwd: $pwd) { id }
-		}`,
-		Variables: map[string]interface{}{
-			"name": newLog.Id,
-			"pwd":  newLog.Pwd,
-		},
-	}
-
-	gqlResponse = checkLogParamsFalse.ExecuteAsPost(t, graphqlURL)
-	common.RequireNoGQLErrors(t, gqlResponse)
-
+	// checkLogPassword with RBAC rule false should not work
+	gqlResponse = checkLogPassword(t, logID, newLog.Pwd, "USER")
 	require.JSONEq(t, `{"checkLogPassword": null}`, string(gqlResponse.Data))
+	deleteLog(t, logID)
 }

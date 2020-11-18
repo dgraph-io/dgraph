@@ -414,6 +414,18 @@ enum Permission {
 }
 
 type Column @auth(
+    password: { rule: """
+    query($USER: String!) {
+        queryColumn {
+            inProject {
+                roles(filter: { permission: { eq: EDIT } } ) {
+                    assignedTo(filter: { username: { eq: $USER } }) {
+                        __typename
+                    }
+                }
+            }
+        }
+    }"""},
     query: { rule: """
     query($USER: String!) {
         queryColumn {
@@ -692,7 +704,17 @@ type Question implements Post  @auth(
     answered:  Boolean @search
 }
 
-type FbPost implements Post & MsgPost {
+type FbPost implements Post & MsgPost @auth(
+    password: { rule: """
+        query($USER: String!) {
+            queryFbPost{
+                author(filter: {name: {eq: $USER}}){
+                    name
+                }
+            }
+        }"""
+    }
+) {
     postCount: Int
 }
 

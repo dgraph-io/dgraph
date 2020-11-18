@@ -199,11 +199,15 @@ func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error
 	}
 
 	dgQuery := rewriteAsGet(m, uid, xid, authRw)
+
 	// Handle empty dgQuery
 	if strings.HasSuffix(dgQuery.Attr, "()") {
 		return dgQuery, nil
 	}
 
+	// dgQuery may contain the query with check<Type>Password name
+	// or dgQuery may be empty and its children may contain check<Type>Password query.
+	// Find the exact dgQuery with the name check<Type>Password query.
 	mainQuery := dgQuery
 	for !strings.HasPrefix(mainQuery.Attr, m.ResponseName()) {
 		mainQuery = mainQuery.Children[0]
@@ -214,6 +218,7 @@ func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error
 	predicate := queriedType.DgraphPredicate(name)
 	password := m.ArgValue(name).(string)
 
+	// This adds the checkPwd function
 	op := &gql.GraphQuery{
 		Attr:   "checkPwd",
 		Func:   mainQuery.Func,
@@ -248,6 +253,8 @@ func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error
 
 	mainQuery.Filter = ft
 
+	// The additional checkPwd query should be added as child if dgQuery is empty.
+	// This is to ensure proper formation of the query.
 	if dgQuery.Attr == "" {
 		dgQuery.Children = append(dgQuery.Children, op)
 		return dgQuery, nil
@@ -309,8 +316,7 @@ func addUID(dgQuery *gql.GraphQuery) {
 func rewriteAsQueryByIds(
 	field schema.Field,
 	uids []uint64,
-	authRw *authRewriter,
-	isPasswordQuery bool) *gql.GraphQuery {
+	authRw *authRewriter) *gql.GraphQuery {
 	rbac := authRw.evaluateStaticRules(field.Type())
 	dgQuery := &gql.GraphQuery{
 		Attr: field.Name(),
@@ -332,11 +338,13 @@ func rewriteAsQueryByIds(
 
 	addArgumentsToField(dgQuery, field)
 
-	// Use query auth selector for selection set for password queries
+	// The function getQueryByIds is called for passwordQuery or fetching query result types
+	// after making a mutation. In both cases, we want the selectionSet to use the `query` auth
+	// rule. queryAuthSelector function is used as selector before calling addSelectionSetFrom function.
+	// The original selector function of authRw is stored in oldAuthSelector and used after returning
+	// from addSelectionSetFrom function.
 	oldAuthSelector := authRw.selector
-	if isPasswordQuery {
-		authRw.selector = queryAuthSelector
-	}
+	authRw.selector = queryAuthSelector
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
 	authRw.selector = oldAuthSelector
 
@@ -424,7 +432,7 @@ func rewriteAsGet(
 	}
 
 	if xid == nil {
-		dgQuery = rewriteAsQueryByIds(query, []uint64{uid}, auth, query.QueryType() == schema.PasswordQuery)
+		dgQuery = rewriteAsQueryByIds(query, []uint64{uid}, auth)
 
 		// Add the type filter to the top level get query. When the auth has been written into the
 		// query the top level get query may be present in query's children.

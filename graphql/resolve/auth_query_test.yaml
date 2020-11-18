@@ -1851,7 +1851,7 @@
         text : Post.text
         dgraph.uid : uid
       }
-      PostRoot as var(func: uid(Post1)) @filter((uid(QuestionAuth2) OR uid(FbPost1) OR uid(Answer1)))
+      PostRoot as var(func: uid(Post1)) @filter((uid(QuestionAuth2) OR uid(FbPostAuth3) OR uid(Answer1)))
       Post1 as var(func: uid(0x123))
       Question1 as var(func: type(Question))
       QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
@@ -1859,6 +1859,13 @@
         text : Post.text
       }
       FbPost1 as var(func: type(FbPost))
+      FbPostAuth3 as var(func: uid(FbPost1)) @cascade {
+        author : Post.author @filter(eq(Author.name, "ADMIN")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
       Answer1 as var(func: type(Answer))
       checkPwd(func: uid(PostRoot)) @filter(type(Post)) {
         pwd as checkpwd(Post.pwd, "something")
