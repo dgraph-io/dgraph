@@ -815,8 +815,8 @@ func testThreeLevelXID(t *testing.T) {
 			RequireNoGQLErrors(t, gqlResponse)
 			testutil.CompareJSON(t, tc.Expected, string(gqlResponse.Data))
 
-			deleteGqlType(t, "Post1", map[string]interface{}{}, 2, nil)
-			deleteGqlType(t, "Comment1", map[string]interface{}{}, tc.ExpectedNumDeletedComments,
+			DeleteGqlType(t, "Post1", map[string]interface{}{}, 2, nil)
+			DeleteGqlType(t, "Comment1", map[string]interface{}{}, tc.ExpectedNumDeletedComments,
 				nil)
 		})
 	}
@@ -1844,7 +1844,7 @@ func deleteCountry(
 	filter map[string]interface{},
 	expectedNumUids int,
 	expectedErrors x.GqlErrorList) {
-	deleteGqlType(t, "Country", filter, expectedNumUids, expectedErrors)
+	DeleteGqlType(t, "Country", filter, expectedNumUids, expectedErrors)
 }
 
 func deleteAuthors(
@@ -1852,7 +1852,7 @@ func deleteAuthors(
 	authorIDs []string,
 	expectedErrors x.GqlErrorList) {
 	filter := map[string]interface{}{"id": authorIDs}
-	deleteGqlType(t, "Author", filter, len(authorIDs), expectedErrors)
+	DeleteGqlType(t, "Author", filter, len(authorIDs), expectedErrors)
 }
 
 func deletePost(
@@ -1861,7 +1861,7 @@ func deletePost(
 	expectedNumUids int,
 	expectedErrors x.GqlErrorList) {
 	filter := map[string]interface{}{"postID": []string{postID}}
-	deleteGqlType(t, "Post", filter, expectedNumUids, expectedErrors)
+	DeleteGqlType(t, "Post", filter, expectedNumUids, expectedErrors)
 }
 
 func deleteWrongID(t *testing.T) {
@@ -2538,23 +2538,23 @@ func addHome(t *testing.T, humanId string) (string, string, string, string) {
 
 func deleteHome(t *testing.T, homeId, dogId, parrotId, plantId string) {
 	homeFilter := map[string]interface{}{"id": []string{homeId}}
-	deleteGqlType(t, "Home", homeFilter, 1, nil)
+	DeleteGqlType(t, "Home", homeFilter, 1, nil)
 	dogFilter := map[string]interface{}{"id": []string{dogId}}
-	deleteGqlType(t, "Dog", dogFilter, 1, nil)
+	DeleteGqlType(t, "Dog", dogFilter, 1, nil)
 	parrotFilter := map[string]interface{}{"id": []string{parrotId}}
-	deleteGqlType(t, "Parrot", parrotFilter, 1, nil)
+	DeleteGqlType(t, "Parrot", parrotFilter, 1, nil)
 	plantFilter := map[string]interface{}{"id": []string{plantId}}
-	deleteGqlType(t, "Plant", plantFilter, 1, nil)
+	DeleteGqlType(t, "Plant", plantFilter, 1, nil)
 }
 
 func deleteThingOne(t *testing.T, thingOneId string) {
 	thingOneFilter := map[string]interface{}{"id": []string{thingOneId}}
-	deleteGqlType(t, "ThingOne", thingOneFilter, 1, nil)
+	DeleteGqlType(t, "ThingOne", thingOneFilter, 1, nil)
 }
 
 func deleteThingTwo(t *testing.T, thingTwoId string) {
 	thingTwoFilter := map[string]interface{}{"id": []string{thingTwoId}}
-	deleteGqlType(t, "ThingTwo", thingTwoFilter, 1, nil)
+	DeleteGqlType(t, "ThingTwo", thingTwoFilter, 1, nil)
 }
 
 func updateCharacter(t *testing.T, id string) {
@@ -2763,15 +2763,15 @@ func cleanupStarwars(t *testing.T, starshipID, humanID, droidID string) {
 	// Delete everything
 	if starshipID != "" {
 		starshipFilter := map[string]interface{}{"id": []string{starshipID}}
-		deleteGqlType(t, "Starship", starshipFilter, 1, nil)
+		DeleteGqlType(t, "Starship", starshipFilter, 1, nil)
 	}
 	if humanID != "" {
 		humanFilter := map[string]interface{}{"id": []string{humanID}}
-		deleteGqlType(t, "Human", humanFilter, 1, nil)
+		DeleteGqlType(t, "Human", humanFilter, 1, nil)
 	}
 	if droidID != "" {
 		droidFilter := map[string]interface{}{"id": []string{droidID}}
-		deleteGqlType(t, "Droid", droidFilter, 1, nil)
+		DeleteGqlType(t, "Droid", droidFilter, 1, nil)
 	}
 }
 
@@ -2852,10 +2852,10 @@ func deleteState(
 	filter map[string]interface{},
 	expectedNumUids int,
 	expectedErrors x.GqlErrorList) {
-	deleteGqlType(t, "State", filter, expectedNumUids, expectedErrors)
+	DeleteGqlType(t, "State", filter, expectedNumUids, expectedErrors)
 }
 
-func deleteGqlType(
+func DeleteGqlType(
 	t *testing.T,
 	typeName string,
 	filter map[string]interface{},
@@ -3313,7 +3313,7 @@ func checkUser(t *testing.T, userObj, expectedObj *user) {
 }
 
 func deleteUser(t *testing.T, userObj user) {
-	deleteGqlType(t, "User", getXidFilter("name", []string{userObj.Name}), 1, nil)
+	DeleteGqlType(t, "User", getXidFilter("name", []string{userObj.Name}), 1, nil)
 }
 
 func passwordTest(t *testing.T) {
@@ -3440,9 +3440,9 @@ func threeLevelDeepMutation(t *testing.T) {
 
 	// cleanup
 	filter := getXidFilter("xid", []string{"HS1", "HS2"})
-	deleteGqlType(t, "Student", filter, 2, nil)
+	DeleteGqlType(t, "Student", filter, 2, nil)
 	filter = getXidFilter("xid", []string{"HT0"})
-	deleteGqlType(t, "Teacher", filter, 1, nil)
+	DeleteGqlType(t, "Teacher", filter, 1, nil)
 
 }
 
@@ -3522,9 +3522,9 @@ func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
 
 	// cleanup
 	filter := getXidFilter("xid", []string{newStudents[0].Xid, newStudents[1].Xid})
-	deleteGqlType(t, "Student", filter, 2, nil)
+	DeleteGqlType(t, "Student", filter, 2, nil)
 	filter = getXidFilter("xid", []string{newStudents[0].TaughtBy[0].Xid})
-	deleteGqlType(t, "Teacher", filter, 1, nil)
+	DeleteGqlType(t, "Teacher", filter, 1, nil)
 }
 
 func sliceSorter() cmp.Option {
@@ -3658,7 +3658,7 @@ func mutationsHaveExtensions(t *testing.T) {
 	}
 	err := json.Unmarshal(gqlResponse.Data, &resp)
 	require.NoError(t, err)
-	deleteGqlType(t, "Category",
+	DeleteGqlType(t, "Category",
 		map[string]interface{}{"id": []string{resp.AddCategory.Category[0].ID}}, 1, nil)
 }
 
@@ -3785,7 +3785,7 @@ func int64BoundaryTesting(t *testing.T) {
 	}`
 	testutil.CompareJSON(t, addPost1Expected, string(gqlResponse.Data))
 	filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
-	deleteGqlType(t, "post1", filter, 2, nil)
+	DeleteGqlType(t, "post1", filter, 2, nil)
 }
 
 func intWithList(t *testing.T) {
@@ -3847,7 +3847,7 @@ func intWithList(t *testing.T) {
 			RequireNoGQLErrors(t, resp)
 			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
 			filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
-			deleteGqlType(t, "post1", filter, 1, nil)
+			DeleteGqlType(t, "post1", filter, 1, nil)
 		})
 	}
 
@@ -3915,7 +3915,7 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
 	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 
 	// cleanup
-	deleteGqlType(t, "Person1", map[string]interface{}{}, 3, nil)
+	DeleteGqlType(t, "Person1", map[string]interface{}{}, 3, nil)
 }
 
 func mutationPointType(t *testing.T) {
@@ -3960,7 +3960,7 @@ func mutationPointType(t *testing.T) {
 	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
 
 	// Cleanup
-	deleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
 }
 
 func mutationPolygonType(t *testing.T) {
@@ -4077,7 +4077,7 @@ func mutationPolygonType(t *testing.T) {
 	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
 
 	// Cleanup
-	deleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
 }
 
 func mutationMultiPolygonType(t *testing.T) {
@@ -4270,7 +4270,7 @@ func mutationMultiPolygonType(t *testing.T) {
 	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
 
 	// Cleanup
-	deleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
 }
 
 func addMutationWithHasInverseOverridesCorrectly(t *testing.T) {
@@ -4571,7 +4571,7 @@ func filterInMutationsWithArrayForAndOr(t *testing.T) {
 			RequireNoGQLErrors(t, resp)
 			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
 			filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
-			deleteGqlType(t, "post1", filter, 1, nil)
+			DeleteGqlType(t, "post1", filter, 1, nil)
 		})
 	}
 
@@ -4658,6 +4658,6 @@ func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 		})
 	}
 	filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
-	deleteGqlType(t, "post1", filter, 2, nil)
+	DeleteGqlType(t, "post1", filter, 2, nil)
 
 }
