@@ -819,9 +819,6 @@ func TestDebugSupport(t *testing.T) {
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	// query with timeout
-	// HACK(dmai): Check schema
-	data, _, err = queryWithGz("schema", "application/dql", "true", "1ms", false, false)
-	fmt.Println(data)
 	data, _, err = queryWithGz(q1, "application/dql", "true", "1ms", false, false)
 	require.EqualError(t, err, ": context deadline exceeded")
 	require.Equal(t, "", data)

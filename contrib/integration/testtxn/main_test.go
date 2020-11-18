@@ -405,9 +405,6 @@ func TestIgnoreIndexConflict(t *testing.T) {
 	require.NoError(t, txn2.Commit(context.Background()))
 
 	txn = s.dg.NewTxn()
-	// HACK(dmai): Check schema
-	schemaResp, err := txn.Query(context.Background(), `schema {}`)
-	fmt.Println(schemaResp)
 	q := `{ me(func: eq(name, "Manish")) { uid }}`
 	resp, err := txn.Query(context.Background(), q)
 	require.NoError(t, err)
@@ -444,10 +441,7 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 	}
 
 	txn = s.dg.NewTxn()
-	// HACK(dmai): Check schema
 	defer txn.Discard(context.Background())
-	schemaResp, err := txn.Query(context.Background(), `schema {}`)
-	fmt.Println(schemaResp)
 	q := `{ me(func: le(name, "Manish")) { uid }}`
 	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
