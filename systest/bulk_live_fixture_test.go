@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -34,14 +33,6 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/pkg/errors"
 )
-
-func init() {
-	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
-	cmd.Env = os.Environ()
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
-	}
-}
 
 var rootDir = filepath.Join(os.TempDir(), "dgraph_systest")
 
@@ -60,6 +51,8 @@ type suiteOpts struct {
 }
 
 func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
+	t.Skip("TODO: Switch this to use Docker container")
+
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
@@ -121,6 +114,8 @@ func newSuiteFromFile(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) *
 }
 
 func (s *suite) setup(schemaFile, rdfFile, gqlSchemaFile string) {
+	s.t.Skip("TODO: Switch this to use Docker container")
+
 	var (
 		bulkDir = filepath.Join(rootDir, "bulk")
 		liveDir = filepath.Join(rootDir, "live")

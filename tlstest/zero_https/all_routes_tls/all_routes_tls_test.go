@@ -3,13 +3,15 @@ package all_routes_tls
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 )
 
 type testCase struct {
@@ -20,17 +22,17 @@ type testCase struct {
 
 var testCasesHttp = []testCase{
 	{
-		url:        "http://localhost:6180/health",
+		url:        "/health",
 		response:   "OK",
 		statusCode: 200,
 	},
 	{
-		url:        "http://localhost:6180/state",
+		url:        "/state",
 		response:   "Client sent an HTTP request to an HTTPS server.\n",
 		statusCode: 400,
 	},
 	{
-		url:        "http://localhost:6180/removeNode?id=2&group=0",
+		url:        "/removeNode?id=2&group=0",
 		response:   "Client sent an HTTP request to an HTTPS server.\n",
 		statusCode: 400,
 	},
@@ -42,7 +44,7 @@ func TestZeroWithAllRoutesTLSWithHTTPClient(t *testing.T) {
 	}
 	defer client.CloseIdleConnections()
 	for _, test := range testCasesHttp {
-		request, err := http.NewRequest("GET", test.url, nil)
+		request, err := http.NewRequest("GET", "http://"+testutil.SockAddrZeroHttp+test.url, nil)
 		require.NoError(t, err)
 		do, err := client.Do(request)
 		require.NoError(t, err)
@@ -59,13 +61,13 @@ func TestZeroWithAllRoutesTLSWithHTTPClient(t *testing.T) {
 
 var testCasesHttps = []testCase{
 	{
-		url:        "https://localhost:6180/health",
+		url:        "/health",
 		response:   "OK",
 		statusCode: 200,
 	},
 	{
-		url:        "https://localhost:6180/state",
-		response:   "\"id\":\"1\",\"groupId\":0,\"addr\":\"zero1:5180\",\"leader\":true,\"amDead\":false",
+		url:        "/state",
+		response:   "\"id\":\"1\",\"groupId\":0,\"addr\":\"zero1:5080\",\"leader\":true,\"amDead\":false",
 		statusCode: 200,
 	},
 }
@@ -86,7 +88,7 @@ func TestZeroWithAllRoutesTLSWithTLSClient(t *testing.T) {
 
 	defer client.CloseIdleConnections()
 	for _, test := range testCasesHttps {
-		request, err := http.NewRequest("GET", test.url, nil)
+		request, err := http.NewRequest("GET", "https://"+testutil.SockAddrZeroHttp+test.url, nil)
 		require.NoError(t, err)
 		do, err := client.Do(request)
 		require.NoError(t, err)

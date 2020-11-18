@@ -521,9 +521,10 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
+	url := fmt.Sprintf("http://%s", testutil.SockAddrHttp)
 	var loginBb bytes.Buffer
 	loginBb.WriteString(`{"userid":"groot","password":"password"}`)
-	loginRes, err := http.Post("http://localhost:8180/login", "application/json", &loginBb)
+	loginRes, err := http.Post(url+"/login", "application/json", &loginBb)
 	require.NoError(t, err)
 	loginBody, err := ioutil.ReadAll(loginRes.Body)
 	require.NoError(t, err)
@@ -534,7 +535,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	var bb bytes.Buffer
 	bb.WriteString(`schema{}`)
 	client := http.Client{}
-	req, err := http.NewRequest("POST", "http://localhost:8180/query", &bb)
+	req, err := http.NewRequest("POST", url+"/query", &bb)
 	require.NoError(t, err)
 	req.Header.Add("Content-Type", "application/dql")
 	req.Header.Add("X-Dgraph-AccessToken", accessJwt)
@@ -718,17 +719,17 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
 		_:alice1 <name> "Alice 1" .
-		_:alice1 <age> "23" . 
+		_:alice1 <age> "23" .
 		_:alice2 <name> "Alice 2" .
 		_:alice3 <name> "Alice 3" .
 		_:alice3 <age> "32" .
 		_:bob <name> "Bob" .
 		_:chris <name> "Chris" .
 		_:dave <name> "Dave" .
-		_:alice1 <friend> _:bob (close=true) .  
-		_:alice1 <friend> _:dave .    
-		_:alice2 <friend> _:chris (close=false) .	  
-		  _:bob <friend> _:chris .		
+		_:alice1 <friend> _:bob (close=true) .
+		_:alice1 <friend> _:dave .
+		_:alice2 <friend> _:chris (close=false) .
+		  _:bob <friend> _:chris .
 	`),
 	})
 	require.NoError(t, err)
@@ -740,8 +741,8 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 		{
 			// value preds Parameterized at root.
 			in: `
-			{  
-				q(func: anyoftext(name, "Alice")) @cascade(name, age)   {	
+			{
+				q(func: anyoftext(name, "Alice")) @cascade(name, age)   {
 					name
 					age
 					friend {
@@ -804,13 +805,13 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 			in: `{
 				q(func: anyoftext(name, "Alice")) @cascade {
 				  name
-				  age  
+				  age
 					friend {
 					  name
 				  	  age
 				  	}
 				}
-			}			  
+			}
 			  `,
 			out: `{
 				"q": []
@@ -821,13 +822,13 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 			in: `{
 				q(func: anyoftext(name, "Alice")) @cascade(__all__) {
 				  name
-				  age  
+				  age
 					friend {
 					  name
 				  	  age
 				  	}
 				}
-			}			  
+			}
 			  `,
 			out: `{
 				"q": []
@@ -838,13 +839,13 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 			in: `{
 				q(func: anyoftext(name, "Alice")) @cascade {
 				  name
-				  age  
+				  age
 					friend @cascade {
 					  name
 				  	  age
 				    }
 				}
-			}			  
+			}
 			  `,
 			out: `{
 				"q": []
@@ -862,7 +863,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				    age
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -908,7 +909,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				    age
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -925,7 +926,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					"age": "32"
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -941,12 +942,12 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				    age
 				  }
 				}
-			}						
+			}
 			`,
 			out: `
 			{
 				"q": []
-			}			
+			}
 			`,
 		},
 
@@ -961,7 +962,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 						  age
 				  }
 				}
-			}				  
+			}
 			`,
 			out: `
 			{
@@ -986,7 +987,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -1002,7 +1003,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					name
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -1016,7 +1017,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -1032,12 +1033,12 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					name
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
 				"q": []
-			}			
+			}
 			`,
 		},
 
@@ -1055,7 +1056,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					}
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -1090,7 +1091,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				      name
 				    }
 				}
-			}	
+			}
 			`,
 			out: `
 			{
@@ -1113,7 +1114,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -1129,7 +1130,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					  age
 				    }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
