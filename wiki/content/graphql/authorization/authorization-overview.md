@@ -17,11 +17,15 @@ First, let's get some concepts defined. There are two important concepts in what
 
 Dgraph GraphQL deals with authorization, but is completely flexible about how your app does authentication. You could authenticate your users with a cloud service like OneGraph or Auth0, use some social sign in options, or write bespoke code.  
 
-#### JSON Web Key at URL (JWK URL)
+The connection between Dgraph and your authentication mechanism can be a JSON Web Key URL (JWK URL) or a signed JSON Web Token (JWT). For example, you tell Dgraph the public key of the JWT signer and Dgraph trusts JWTs signed by the corresponding private key.
 
-#### JSON Web Token (JWT)
+#### `Dgraph.Authorization` parameters
 
-The connection between Dgraph and your authentication mechanism is a signed JSON Web Token (JWT) - you tell Dgraph, for example, the public key of the JWT signer and Dgraph trusts JWTs signed by the corresponding private key.
+To define the connection method, you must set the `#Dgraph.Authorization` object:
+
+```json
+{"Header":"", "Namespace":"", "Algo":"", "VerificationKey":"", "JWKURL":"", "Audience":[]}
+```
 
 * `Header` is the header in which requests will send the signed JWT
 * `Namespace` is the key inside the JWT that contains the claims relevant to Dgraph auth
@@ -30,11 +34,17 @@ The connection between Dgraph and your authentication mechanism is a signed JSON
 * `JWKURL` is the URL for the JSON Web Key
 * `Audience` (optional) is used to verify the `aud` field of JWT which might be set by certain providers. It indicates the intended audience for the JWT.
 
+To set up the authentication connection method:
 
-Users will be allowed to give only one of `JWKURL` or `(VerificationKey, Algo)` and not both.
+**JSON Web Token (JWT)**
+- A (`VerificationKey`, `Algo`) pair must be provided. The server will verify the JWT against the provided `VerificationKey`.
 
-- If (`VerificationKey`, `Algo`) is provided then the GraphQL server will verify JWT against this VerificationKey
-- If `JWKURL` is provided then Server will fetch all the JWKs and verify the token against one of the JWK based on the kid of JWK.
+**JSON Web Key URL (JWK URL)**
+- A `JWKURL` must provided. The server will fetch all the JWKs and verify the token against one of the JWK, based on the JWK's kind.
+
+{{% notice "note" %}}
+You can only define one method, either `JWKURL` or `(VerificationKey, Algo)`, but not both.
+{{% /notice %}}
 
 {{% notice "note" %}}
 Some Identity Providers (such as Firebase) share the JWKs among multiple tenants. In this case, it is required for the user to provide the proper `Audience` value in `Dgraph.Authorization` JSON. Failing to do so could be a major security risk.
