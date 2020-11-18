@@ -87,6 +87,7 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
+		kvChan:    make(chan []kv, 64),
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
@@ -94,16 +95,14 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 		}
 	}
 
-	xm.kvChan = make(chan []kv, 64)
-
-	for i := 0; i < 16; i++ {
-		xm.wg.Add(1)
-		go xm.dbWriter()
-	}
-
 	if db != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
 		xm.writer = db.NewWriteBatch()
+
+		for i := 0; i < 16; i++ {
+			xm.wg.Add(1)
+			go xm.dbWriter()
+		}
 
 		err := db.View(func(txn *badger.Txn) error {
 			var count int
@@ -184,9 +183,7 @@ func (m *XidMap) dbWriter() {
 	defer m.wg.Done()
 	for buf := range m.kvChan {
 		for _, kv := range buf {
-			if err := m.writer.Set(kv.key, kv.value); err != nil {
-				x.Panic(err)
-			}
+			x.Panic(m.writer.Set(kv.key, kv.value))
 		}
 	}
 }
@@ -220,10 +217,8 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 		m.kvBuf = append(m.kvBuf, kv{key: []byte(xid), value: uidBuf[:]})
 
 		if len(m.kvBuf) == 64 {
-			newBuf := make([]kv, len(m.kvBuf))
-			copy(newBuf, m.kvBuf)
-			m.kvChan <- newBuf
-			m.kvBuf = m.kvBuf[:0]
+			m.kvChan <- m.kvBuf
+			m.kvBuf = make([]kv, 0, 64)
 		}
 	}
 
