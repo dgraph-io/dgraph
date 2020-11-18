@@ -6,7 +6,11 @@ weight = 10
     parent = "deploy"
 +++
 
-Connections between Dgraph database and its clients can be secured using TLS. In addition, current versions of Dgraph secure gRPC communications among Dgraph Alpha and Dgraph Zero server nodes using mutual TLS (mTLS). To improve TLS security, only TLS v1.2 cypher suites are now used. Password-protected private keys are **not supported**.
+Connections between Dgraph database and its clients can be secured using TLS. In
+addition, current versions of Dgraph secure gRPC communications among Dgraph
+Alpha and Dgraph Zero server nodes using mutual TLS (mTLS). To improve TLS
+security, only TLS v1.2 cypher suites are now used. Password-protected private
+keys are **not supported**.
 
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
 
@@ -19,10 +23,12 @@ This section refers to the `dgraph cert` command which was introduced in v1.0.9.
 The `dgraph cert` program creates and manages CA-signed certificates and private keys using a generated Dgraph Root CA. There are three types of certificate/key pairs:
 1. Root CA certificate/key pair: This is used to sign and verify node and client
    certificates. If the root CA certificate is changed then you must regenerate
-   all certificates.
+   all certificates, and this certificate must be accessible to the Alpha nodes.
 2. Node certificate/key pair: This is shared by the Dgraph Alpha nodes and used
    for accepting TLS connections.
-3. Client certificate/key pair: This is used by the clients (like live loader, ratel etc) to communicate with Dgraph Alpha server nodes.
+3. Client certificate/key pair: This is used by the clients (like live loader
+   and Ratel) to communicate with Dgraph Alpha server nodes where client
+   authentication with mTLS is required.
 
 ```sh
 # To see the available flags.

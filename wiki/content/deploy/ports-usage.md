@@ -6,7 +6,7 @@ weight = 3
     parent = "deploy"
 +++
 
-Dgraph cluster nodes use a variety of ports to communicate over gRPC and HTTP.
+Dgraph cluster nodes use a range of ports to communicate over gRPC and HTTP.
 Choose these ports carefully based on your topology and mode of deployment, as
 this will impact the access security rules or firewall configurations required
 for each port.
@@ -54,11 +54,13 @@ way you can run Ratel on your local machine and point to a remote cluster. But,
 if you are deploying Ratel along with Dgraph cluster, then you may have to
 expose port 8000 to the public.
 
-**Port Offset** To make it easier for users to set up the cluster, Dgraph has
-default values for the ports used by Dgraph nodes and lets users provide an
-offset (using the command option `--port_offset`) to define actual ports used by
-the node. Port offset can also be used when starting multiple Dgraph Zero nodes
-in a high-availability (HA) setup.
+**Port Offset** To make it easier for users to set up a cluster, Dgraph has
+default values for the ports used by Dgraph nodes. To support multiple nodes
+running on a single machine (or a VM or instance), you can set a node
+to use different ports using an offset (using the command option `--port_offset`).
+This command increments the actual ports used by the node by the offset value
+provided. Port offset can also be used when starting multiple Dgraph Zero nodes
+in a development environment.
 
 For example, when a user runs Dgraph Alpha with the `--port_offset 2` setting,
 then the Alpha node binds to port 7082 (`gRPC-internal-private`), 8082
@@ -96,10 +98,11 @@ auto-assign an id to the Alpha node. This id persists in the write-ahead log, so
 be careful not to delete it.
 
 The new Alpha nodes will automatically detect each other by communicating with
-Dgraph Zero and establish connections to each other. You can provide a list of
-Zero node addresses to Alpha nodes using the `--zero` flag. The Alpha node will
-try to connect to one of the Zero nodes starting from the first Zero node
-address in the list. For example:
+Dgraph Zero and establish connections to each other. If you don't have a proxy
+or load balancer for the Zero nodes, you can provide a list of Zero node
+addresses for Alpha nodes to use at startup with the `--zero` flag. The Alpha
+node will try to connect to one of the Zero nodes starting from the first Zero
+node address in the list. For example:
 `--zero=zero1,zero2,zero3` where `zero1` is the `host:port` of a zero instance.
 
 Typically, a Zero node would first attempt to replicate a group, by assigning a
