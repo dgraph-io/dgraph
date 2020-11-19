@@ -189,6 +189,7 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 		// Write the entry at the given slot.
 		buf := l.current.getEntry(l.nextEntryIdx)
 		marshalEntry(buf, re.Term, re.Index, uint64(offset), uint64(re.Type))
+
 		// Update values for the next entry.
 		offset = next
 		l.nextEntryIdx++
