@@ -80,15 +80,16 @@ func TestLogRotate(t *testing.T) {
 	const SEED = 1
 	rand.Seed(SEED)
 	makeEntry := func(i int) raftpb.Entry {
-		// Be careful when changing this value, as it could easily end up filling up
-		// the entire tmpfs. Currently, this writes ~1.5GB.
-		data := make([]byte, rand.Intn(1<<16))
+		// Write data of size 30000 * 5 KB, which is ~150MB. This will cause
+		// the log-file with initial size of 64MB to grow.
+		data := make([]byte, 5<<10)
 		rand.Read(data)
 		return raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}
 	}
 
 	// Write enough entries to fill ~1.5x logfiles, causing a rotation.
 	const totalEntries = (maxNumEntries * 3) / 2
+
 	totalBytes := 0
 	for i := 0; i < totalEntries; i++ {
 		entry := makeEntry(i)
