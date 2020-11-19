@@ -92,17 +92,20 @@ func commandWithContext(ctx context.Context, q string) *exec.Cmd {
 func command(cmd string) *exec.Cmd {
 	return commandWithContext(ctxb, cmd)
 }
-func runFatal(q string) {
-	cmd := command(q)
+func runFatal(cmd *exec.Cmd) {
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("While running command: %q Error: %v\n",
-			q, err)
+			strings.Join(cmd.Args, " "), err)
 	}
 }
 func startCluster(composeFile, prefix string) {
 	q := fmt.Sprintf("docker-compose -f %s -p %s up --force-recreate --remove-orphans --detach",
 		composeFile, prefix)
-	runFatal(q)
+	cmd := command(q)
+	cmd.Stderr = nil
+	fmt.Printf("Bringing up cluster %s...\n", prefix)
+	runFatal(cmd)
+	fmt.Printf("CLUSTER UP: %s\n", prefix)
 
 	// Let it stabilize.
 	time.Sleep(3 * time.Second)
@@ -111,7 +114,14 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	q := fmt.Sprintf("docker-compose -f %s -p %s down",
 		composeFile, prefix)
 	go func() {
-		runFatal(q)
+		cmd := command(q)
+		cmd.Stderr = nil
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
+				prefix, err)
+		} else {
+			fmt.Printf("CLUSTER DOWN: %s\n", prefix)
+		}
 		wg.Done()
 	}()
 }
