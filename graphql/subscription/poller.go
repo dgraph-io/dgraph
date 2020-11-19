@@ -156,6 +156,7 @@ func (p *Poller) poll(req *pollRequest) {
 	pollID := uint64(0)
 	for {
 		pollID++
+		glog.Infof("polling,subscriptionID-%v,pollID-%v", p.subscriptionID, pollID)
 		time.Sleep(x.Config.PollInterval)
 
 		globalEpoch := atomic.LoadUint64(p.globalEpoch)
@@ -170,7 +171,6 @@ func (p *Poller) poll(req *pollRequest) {
 		res := resolver.Resolve(ctx, req.graphqlReq)
 
 		currentHash := farm.Fingerprint64(res.Data.Bytes())
-
 		if req.prevHash == currentHash {
 			if pollID%2 != 0 {
 				// Don't update if there is no change in response.
@@ -181,6 +181,7 @@ func (p *Poller) poll(req *pollRequest) {
 			p.Lock()
 			subscribers, ok := p.pollRegistry[req.bucketID]
 			if !ok || len(subscribers) == 0 {
+				glog.Infof("returns polling,subscriptionID-%v,pollID-%v,len(subscribers)-%v", p.subscriptionID, pollID, len(subscribers))
 				delete(p.pollRegistry, req.bucketID)
 				p.Unlock()
 				return
@@ -201,6 +202,7 @@ func (p *Poller) poll(req *pollRequest) {
 		if !ok || len(subscribers) == 0 {
 			// There is no subscribers to push the update. So, kill the current polling
 			// go routine.
+			glog.Infof("returns polling,subscriptionID-%v,pollID-%v,len(subscribers)-%v", p.subscriptionID, pollID, len(subscribers))
 			delete(p.pollRegistry, req.bucketID)
 			p.Unlock()
 			return
@@ -212,7 +214,8 @@ func (p *Poller) poll(req *pollRequest) {
 			}
 
 		}
-		for _, subscriber := range subscribers {
+		for subscriberID, subscriber := range subscribers {
+			glog.Infof("\nsubscription ID- %v, response sent-%v", subscriberID, res.Output())
 			subscriber.updateCh <- res.Output()
 		}
 		p.Unlock()
