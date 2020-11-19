@@ -106,6 +106,9 @@ type Starship {
 		"name":      "Character.name",
 		"appearsIn": "Character.appearsIn",
 	}
+	employee := map[string]string{
+		"ename": "Employee.ename",
+	}
 	human := map[string]string{
 		"ename":              "Employee.ename",
 		"name":               "Character.name",
@@ -125,15 +128,13 @@ type Starship {
 	}
 
 	expected := map[string]map[string]string{
-		"Author":              author,
-		"UpdateAuthorPayload": author,
-		"DeleteAuthorPayload": author,
-		"Post":                post,
-		"UpdatePostPayload":   post,
-		"DeletePostPayload":   post,
-		"Employee": map[string]string{
-			"ename": "Employee.ename",
-		},
+		"Author":                   author,
+		"UpdateAuthorPayload":      author,
+		"DeleteAuthorPayload":      author,
+		"Post":                     post,
+		"UpdatePostPayload":        post,
+		"DeletePostPayload":        post,
+		"Employee":                 employee,
 		"Character":                character,
 		"UpdateCharacterPayload":   character,
 		"DeleteCharacterPayload":   character,
@@ -143,8 +144,9 @@ type Starship {
 		"Droid":                    droid,
 		"UpdateDroidPayload":       droid,
 		"DeleteDroidPayload":       droid,
+		"UpdateEmployeePayload":    employee,
+		"DeleteEmployeePayload":    employee,
 		"Starship":                 starship,
-		"UpdateStarshipPayload":    starship,
 		"DeleteStarshipPayload":    starship,
 		"AuthorAggregateResult":    {"count": "AuthorAggregateResult.count"},
 		"CharacterAggregateResult": {"count": "CharacterAggregateResult.count"},
@@ -250,21 +252,24 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 		"appearsIn":       "appears_in",
 		"primaryFunction": "roboDroid.primaryFunction",
 	}
+	employee := map[string]string{
+		"ename": "dgraph.employee.en.ename",
+	}
 	starship := map[string]string{
 		"name":   "star.ship.name",
 		"length": "star.ship.length",
 	}
 
 	expected := map[string]map[string]string{
-		"Author":              author,
-		"UpdateAuthorPayload": author,
-		"DeleteAuthorPayload": author,
-		"Post":                post,
-		"UpdatePostPayload":   post,
-		"DeletePostPayload":   post,
-		"Employee": map[string]string{
-			"ename": "dgraph.employee.en.ename",
-		},
+		"Author":                   author,
+		"UpdateAuthorPayload":      author,
+		"DeleteAuthorPayload":      author,
+		"Post":                     post,
+		"UpdatePostPayload":        post,
+		"DeletePostPayload":        post,
+		"Employee":                 employee,
+		"DeleteEmployeePayload":    employee,
+		"UpdateEmployeePayload":    employee,
 		"Character":                character,
 		"UpdateCharacterPayload":   character,
 		"DeleteCharacterPayload":   character,

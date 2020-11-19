@@ -297,6 +297,12 @@ type AddTPayload {
 	numUids: Int
 }
 
+type DeleteIPayload {
+	i(filter: IFilter, order: IOrder, first: Int, offset: Int): [I]
+	msg: String
+	numUids: Int
+}
+
 type DeleteTPayload {
 	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 	msg: String
@@ -309,6 +315,11 @@ type IAggregateResult {
 
 type TAggregateResult {
 	count: Int
+}
+
+type UpdateIPayload {
+	i(filter: IFilter, order: IOrder, first: Int, offset: Int): [I]
+	numUids: Int
 }
 
 type UpdateTPayload {
@@ -374,6 +385,11 @@ input IOrder {
 	then: IOrder
 }
 
+input IPatch {
+	"""Desc"""
+	s: String
+}
+
 input TFilter {
 	id: [ID!]
 	has: THasFilter
@@ -401,6 +417,12 @@ input TRef {
 	i: Int
 }
 
+input UpdateIInput {
+	filter: IFilter!
+	set: IPatch
+	remove: IPatch
+}
+
 input UpdateTInput {
 	filter: TFilter!
 	set: TPatch
@@ -412,8 +434,8 @@ input UpdateTInput {
 #######################
 
 type Query {
-	queryI(order: IOrder, first: Int, offset: Int): [I]
-	aggregateI: IAggregateResult
+	queryI(filter: IFilter, order: IOrder, first: Int, offset: Int): [I]
+	aggregateI(filter: IFilter): IAggregateResult
 	getT(id: ID!): T
 	queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 	aggregateT(filter: TFilter): TAggregateResult
@@ -424,6 +446,8 @@ type Query {
 #######################
 
 type Mutation {
+	updateI(input: UpdateIInput!): UpdateIPayload
+	deleteI(filter: IFilter!): DeleteIPayload
 	addT(input: [AddTInput!]!): AddTPayload
 	updateT(input: UpdateTInput!): UpdateTPayload
 	deleteT(filter: TFilter!): DeleteTPayload
