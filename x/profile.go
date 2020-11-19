@@ -32,7 +32,7 @@ type Stopper interface {
 
 // StartProfile starts a new mode for profiling.
 func StartProfile(conf *viper.Viper) Stopper {
-	profileMode := conf.GetString("profile_mode")
+	profileMode := conf.GetString("profile-mode")
 	switch profileMode {
 	case "cpu":
 		return profile.Start(profile.CPUProfile)
@@ -41,7 +41,7 @@ func StartProfile(conf *viper.Viper) Stopper {
 	case "mutex":
 		return profile.Start(profile.MutexProfile)
 	case "block":
-		blockRate := conf.GetInt("block_rate")
+		blockRate := conf.GetInt("block-rate")
 		runtime.SetBlockProfileRate(blockRate)
 		return profile.Start(profile.BlockProfile)
 	case "":

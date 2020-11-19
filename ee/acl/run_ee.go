@@ -27,8 +27,8 @@ var (
 	CmdAcl x.SubCommand
 )
 
-const gName = "guardian_name"
-const gPassword = "guardian_password"
+const gName = "guardian-name"
+const gPassword = "guardian-password"
 const defaultGroupList = "dgraph-unused-group"
 
 func init() {
@@ -108,8 +108,8 @@ func initSubcommands() []*x.SubCommand {
 
 	modFlags := cmdMod.Cmd.Flags()
 	modFlags.StringP("user", "u", "", "The user id to be changed")
-	modFlags.BoolP("new_password", "n", false, "Whether to reset password for the user")
-	modFlags.StringP("group_list", "l", defaultGroupList,
+	modFlags.BoolP("new-password", "n", false, "Whether to reset password for the user")
+	modFlags.StringP("group-list", "l", defaultGroupList,
 		"The list of groups to be set for the user")
 	modFlags.StringP("group", "g", "", "The group whose permission is to be changed")
 	modFlags.StringP("pred", "p", "", "The predicates whose acls are to be changed")

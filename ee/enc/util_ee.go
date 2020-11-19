@@ -30,7 +30,7 @@ import (
 var EeBuild = true
 
 const (
-	encKeyFile = "encryption_key_file"
+	encKeyFile = "encryption-key-file"
 )
 
 // RegisterFlags registers the required encryption flags.

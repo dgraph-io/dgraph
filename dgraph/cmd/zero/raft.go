@@ -460,7 +460,7 @@ func (n *node) proposeNewCID() {
 	}
 
 	// Apply trial license only if not already licensed and no enterprise license provided.
-	if n.server.license() == nil && Zero.Conf.GetString("enterprise_license") == "" {
+	if n.server.license() == nil && Zero.Conf.GetString("enterprise-license") == "" {
 		if err := n.proposeTrialLicense(); err != nil {
 			glog.Errorf("while proposing trial license to cluster: %v", err)
 		}
@@ -807,7 +807,7 @@ func (n *node) Run() {
 				// Apply the EE License given on CLI which may over-ride previous
 				// license, if present. That is an intended behavior to allow customers
 				// to apply new/renewed licenses.
-				if license := Zero.Conf.GetString("enterprise_license"); len(license) > 0 {
+				if license := Zero.Conf.GetString("enterprise-license"); len(license) > 0 {
 					go n.server.applyLicenseFile(license)
 				}
 			}

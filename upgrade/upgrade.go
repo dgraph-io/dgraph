@@ -46,7 +46,7 @@ const (
 	alpha     = "alpha"
 	user      = "user"
 	password  = "password"
-	deleteOld = "deleteOld"
+	deleteOld = "delete-old"
 	from      = "from"
 	to        = "to"
 

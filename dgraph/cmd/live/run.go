@@ -143,23 +143,23 @@ func init() {
 	flag.IntP("batch", "b", 1000,
 		"Number of N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
-	flag.StringP("auth_token", "t", "",
-		"The auth token passed to the server for Alter operation of the schema file. If used with --slash_grpc_endpoint, then this "+
+	flag.StringP("auth-token", "t", "",
+		"The auth token passed to the server for Alter operation of the schema file. If used with --slash-grpc-endpoint, then this "+
 			"should be set to the API token issued by Slash GraphQL")
-	flag.String("slash_grpc_endpoint", "", "Path to Slash GraphQL GRPC endpoint. If --slash_grpc_endpoint is set, "+
+	flag.String("slash-grpc-endpoint", "", "Path to Slash GraphQL GRPC endpoint. If --slash-grpc-endpoint is set, "+
 		"all other TLS options and connection options will be ignored")
-	flag.BoolP("use_compression", "C", false,
+	flag.BoolP("use-compression", "C", false,
 		"Enable compression on connection to alpha server")
-	flag.Bool("new_uids", false,
+	flag.Bool("new-uids", false,
 		"Ignore UIDs in load files and assign new ones.")
 	flag.String("http", "localhost:6060", "Address to serve http (pprof).")
 	flag.Bool("verbose", false, "Run the live loader in verbose mode")
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
-	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
-	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
+	flag.StringP("buffer-size", "m", "100", "Buffer for each thread")
+	flag.Bool("ludicrous-mode", false, "Run live loader in ludicrous mode (Should "+
 		"only be done when alpha is under ludicrous mode)")
-	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
+	flag.StringP("upsert-predicate", "U", "", "run in upsert-predicate mode. the value would "+
 		"be used to store blank nodes as an xid")
 
 	// Encryption and Vault options
@@ -533,14 +533,14 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 	}
 
 	dialOpts := []grpc.DialOption{}
-	if conf.GetString("slash_grpc_endpoint") != "" && conf.IsSet("auth_token") {
-		dialOpts = append(dialOpts, x.WithAuthorizationCredentials(conf.GetString("auth_token")))
+	if conf.GetString("slash-grpc-endpoint") != "" && conf.IsSet("auth-token") {
+		dialOpts = append(dialOpts, x.WithAuthorizationCredentials(conf.GetString("auth-token")))
 	}
 
 	var tlsConfig *tls.Config = nil
-	if conf.GetString("slash_grpc_endpoint") != "" {
+	if conf.GetString("slash-grpc-endpoint") != "" {
 		var tlsErr error
-		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
+		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash-grpc-endpoint"))
 		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
 	} else {
 		var tlsErr error
@@ -575,8 +575,8 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 
 func run() error {
 	var zero string
-	if Live.Conf.GetString("slash_grpc_endpoint") != "" {
-		zero = Live.Conf.GetString("slash_grpc_endpoint")
+	if Live.Conf.GetString("slash-grpc-endpoint") != "" {
+		zero = Live.Conf.GetString("slash-grpc-endpoint")
 	} else {
 		zero = Live.Conf.GetString("zero")
 	}
@@ -591,14 +591,14 @@ func run() error {
 		concurrent:      Live.Conf.GetInt("conc"),
 		batchSize:       Live.Conf.GetInt("batch"),
 		clientDir:       Live.Conf.GetString("xidmap"),
-		authToken:       Live.Conf.GetString("auth_token"),
-		useCompression:  Live.Conf.GetBool("use_compression"),
-		newUids:         Live.Conf.GetBool("new_uids"),
+		authToken:       Live.Conf.GetString("auth-token"),
+		useCompression:  Live.Conf.GetBool("use-compression"),
+		newUids:         Live.Conf.GetBool("new-uids"),
 		verbose:         Live.Conf.GetBool("verbose"),
 		httpAddr:        Live.Conf.GetString("http"),
-		bufferSize:      Live.Conf.GetInt("bufferSize"),
-		ludicrousMode:   Live.Conf.GetBool("ludicrous_mode"),
-		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
+		bufferSize:      Live.Conf.GetInt("buffer-size"),
+		ludicrousMode:   Live.Conf.GetBool("ludicrous-mode"),
+		upsertPredicate: Live.Conf.GetString("upsert-predicate"),
 	}
 	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
 		fmt.Printf("unable to read key %v", err)

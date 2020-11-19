@@ -80,15 +80,15 @@ instances to achieve high-availability.
 	flag := Zero.Cmd.Flags()
 	x.FillCommonFlags(flag)
 
-	flag.IntP("port_offset", "o", 0,
+	flag.IntP("port-offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
 	flag.Uint64("idx", 1, "Unique node index for this server. idx cannot be 0.")
 	flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
-	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
-	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+	flag.Duration("rebalance-interval", 8*time.Minute, "Interval for trying a predicate move.")
+	flag.String("enterprise-license", "", "Path to the enterprise license file.")
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
 }
@@ -161,7 +161,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 }
 
 func run() {
-	if Zero.Conf.GetBool("enable_sentry") {
+	if Zero.Conf.GetBool("enable-sentry") {
 		x.InitSentry(enc.EeBuild)
 		defer x.FlushSentry()
 		x.ConfigureSentryScope("zero")
@@ -174,12 +174,12 @@ func run() {
 	x.Check(err)
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
-		portOffset:        Zero.Conf.GetInt("port_offset"),
+		portOffset:        Zero.Conf.GetInt("port-offset"),
 		nodeId:            uint64(Zero.Conf.GetInt("idx")),
 		numReplicas:       Zero.Conf.GetInt("replicas"),
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
-		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
+		rebalanceInterval: Zero.Conf.GetDuration("rebalance-interval"),
 		tlsClientConfig:   tlsConf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
@@ -189,8 +189,8 @@ func run() {
 	}
 	x.WorkerConfig.Parse(Zero.Conf)
 
-	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
-		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
+	if !enc.EeBuild && Zero.Conf.GetString("enterprise-license") != "" {
+		log.Fatalf("ERROR: enterprise-license option cannot be applied to OSS builds. ")
 	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
@@ -198,7 +198,7 @@ func run() {
 			opts.numReplicas)
 	}
 
-	if Zero.Conf.GetBool("expose_trace") {
+	if Zero.Conf.GetBool("expose-trace") {
 		// TODO: Remove this once we get rid of event logs.
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
