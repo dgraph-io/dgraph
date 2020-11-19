@@ -98,11 +98,14 @@ func ContainerAddr(name string, privatePort uint16) string {
 // Only the GRPC ports are needed and the others are deduced.
 func init() {
 	DockerPrefix = os.Getenv("TEST_DOCKER_PREFIX")
+	fmt.Println("DockerPrefix: ", DockerPrefix)
 
 	MinioInstance = ContainerAddr("minio", 9001)
 	Instance = fmt.Sprintf("%s_%s_1", DockerPrefix, "alpha1")
 	SockAddr = ContainerAddr("alpha1", 9080)
+	fmt.Println("SockAddr: ", SockAddr)
 	SockAddrHttp = ContainerAddr("alpha1", 8080)
+	fmt.Println("SockAddrHttp: ", SockAddrHttp)
 
 	SockAddrZero = ContainerAddr("zero1", 5080)
 	SockAddrZeroHttp = ContainerAddr("zero1", 6080)

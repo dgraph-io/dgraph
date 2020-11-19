@@ -40,13 +40,13 @@ import (
 )
 
 var (
-	GraphqlURL      = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/graphql"
-	GraphqlAdminURL = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/admin"
+	GraphqlURL      = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/graphql"
+	GraphqlAdminURL = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/admin"
 	AlphagRPC       = testutil.ContainerAddr("alpha1", 9080)
 
-	adminDgraphHealthURL           = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/health?all"
-	adminDgraphStateURL            = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/state"
-	graphqlAdminTestAdminSchemaURL = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/admin/schema"
+	adminDgraphHealthURL           = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/health?all"
+	adminDgraphStateURL            = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/state"
+	graphqlAdminTestAdminSchemaURL = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/admin/schema"
 )
 
 // GraphQLParams is parameters for the constructing a GraphQL query - that's
@@ -273,6 +273,7 @@ func BootstrapServer(schema, data []byte) {
 // RunAll runs all the test functions in this package as sub tests.
 func RunAll(t *testing.T) {
 	// admin tests
+	t.Run("admin", admin)
 	t.Run("health", health)
 	t.Run("partial health", partialHealth)
 	t.Run("alias should work in admin", adminAlias)
@@ -422,8 +423,6 @@ func RunAll(t *testing.T) {
 	t.Run("lambda on interface field", lambdaOnInterfaceField)
 	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
-
-	t.Run("admin", admin)
 }
 
 // RunCorsTest test all cors related tests.

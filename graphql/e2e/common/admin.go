@@ -533,7 +533,7 @@ func admin(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, hasSchema)
 
-	// schemaIsInInitialState(t, client)
+	schemaIsInInitialState(t, client)
 	addGQLSchema(t, client)
 	updateSchema(t, client)
 	updateSchemaThroughAdminSchemaEndpt(t, client)
@@ -671,6 +671,7 @@ func health(t *testing.T) {
 	opts := []cmp.Option{
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "Uptime"),
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "LastEcho"),
+		cmpopts.IgnoreFields(pb.HealthInfo{}, "Ongoing"),
 		cmpopts.EquateEmpty(),
 	}
 	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
