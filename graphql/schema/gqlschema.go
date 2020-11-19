@@ -892,6 +892,11 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 	}
 	def.Fields = def.Fields[:i]
 
+	// In case of UpdateTypeInput, if TypePatch gets cleaned up then it becomes
+	// input UpdateTypeInput {
+	//		filter: TypeFilter!
+	// }
+	// In this case, UpdateTypeInput should also be deleted.
 	if len(def.Fields) == 0 || (strings.HasPrefix(def.Name, "Update") && len(def.Fields) == 1) {
 		delete(sch.Types, def.Name)
 	}
@@ -1163,7 +1168,7 @@ func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 }
 
 func addFilterArgumentForField(schema *ast.Schema, fld *ast.FieldDefinition, fldTypeName string) {
-	// Don't add filters for inbuilt types.
+	// Don't add filters for inbuilt types like String, Point, Polygon ...
 	if _, ok := inbuiltTypeToDgraph[fldTypeName]; ok {
 		return
 	}
@@ -1350,7 +1355,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 
 // hasFilterable Returns whether TypeFilter for a defn will be generated or not.
 // It returns true if any field have search arguments or it is an `ID` field or
-// HasFilter for that defn is generated.
+// there is atleast one non-custom filter which would be the part of the has filter.
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool {
