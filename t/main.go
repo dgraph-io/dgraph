@@ -470,9 +470,6 @@ func composeFileFor(pkg string) string {
 }
 
 func getPackages() []task {
-	pkgs, err := packages.Load(nil, *baseDir+"/...")
-	x.Check(err)
-
 	has := func(list []string, in string) bool {
 		for _, l := range list {
 			if strings.Contains(in, l) {
@@ -482,20 +479,23 @@ func getPackages() []task {
 		return false
 	}
 
-	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker"}
-	left := 0
-	for i := 0; i < len(pkgs); i++ {
-		// These packages take time. So, move them to the front.
-		if has(slowPkgs, pkgs[i].ID) {
-			pkgs[left], pkgs[i] = pkgs[i], pkgs[left]
-			left++
-			break
+	moveSlowToFront := func(list []task) {
+		slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker"}
+		left := 0
+		for i := 0; i < len(list); i++ {
+			// These packages take time. So, move them to the front.
+			if has(slowPkgs, list[i].pkg.ID) {
+				list[left], list[i] = list[i], list[left]
+				left++
+			}
 		}
 	}
 
+	pkgs, err := packages.Load(nil, *baseDir+"/...")
+	x.Check(err)
 	limitTo := findPackagesFor(*runTest)
 
-	var valid []task
+	var common, custom []task
 	for _, pkg := range pkgs {
 		if len(*runPkg) > 0 && !strings.HasSuffix(pkg.ID, *runPkg) {
 			continue
@@ -513,21 +513,21 @@ func getPackages() []task {
 
 		fname := composeFileFor(pkg.ID)
 		_, err := os.Stat(fname)
-		valid = append(valid, task{pkg: pkg, isCommon: os.IsNotExist(err)})
+		t := task{pkg: pkg, isCommon: os.IsNotExist(err)}
+		if t.isCommon {
+			common = append(common, t)
+		} else {
+			custom = append(custom, t)
+		}
 	}
+	moveSlowToFront(common)
+	moveSlowToFront(custom)
 
+	valid := append(common, custom...)
 	if len(valid) == 0 {
 		fmt.Println("Couldn't find any packages. Exiting...")
 		os.Exit(1)
 	}
-
-	sort.SliceStable(valid, func(i, j int) bool {
-		if valid[i].isCommon != valid[j].isCommon {
-			return valid[i].isCommon
-		}
-		return false
-	})
-
 	for _, task := range valid {
 		fmt.Printf("Found valid task: %s isCommon:%v\n", task.pkg.ID, task.isCommon)
 	}
@@ -542,17 +542,22 @@ func removeAllTestContainers() {
 	x.Check(err)
 	dur := 10 * time.Second
 
+	var wg sync.WaitGroup
 	for _, c := range containers {
-		err := cli.ContainerStop(ctxb, c.ID, &dur)
-		fmt.Printf("Stopped container %s with error: %v\n", c.Names[0], err)
+		wg.Add(1)
+		go func(c types.Container) {
+			defer wg.Done()
+			err := cli.ContainerStop(ctxb, c.ID, &dur)
+			fmt.Printf("Stopped container %s with error: %v\n", c.Names[0], err)
 
-		err = cli.ContainerRemove(ctxb, c.ID, types.ContainerRemoveOptions{})
-		fmt.Printf("Removed container %s with error: %v\n", c.Names[0], err)
+			err = cli.ContainerRemove(ctxb, c.ID, types.ContainerRemoveOptions{})
+			fmt.Printf("Removed container %s with error: %v\n", c.Names[0], err)
+		}(c)
 	}
+	wg.Wait()
 
 	networks, err := cli.NetworkList(ctxb, types.NetworkListOptions{})
 	x.Check(err)
-
 	for _, n := range networks {
 		if strings.HasPrefix(n.Name, "test-") {
 			if err := cli.NetworkRemove(ctxb, n.ID); err != nil {
@@ -562,11 +567,15 @@ func removeAllTestContainers() {
 			}
 		}
 	}
-
-	return
 }
 
 func run() error {
+	cmd := command("make install")
+	cmd.Dir = *baseDir
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
 	start := time.Now()
 
 	if *clear {
