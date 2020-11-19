@@ -47,8 +47,8 @@ var (
 
 	mc             *minio.Client
 	bucketName     = "dgraph-backup"
-	backupDst      = "minio://minio1:9001/dgraph-backup?secure=false"
-	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
+	backupDst      = "minio://minio:9001/dgraph-backup?secure=false"
+	localBackupDst = "minio://"+ testutil.ContainerAddr("minio", 9001) + "/dgraph-backup?secure=false"
 )
 
 func getTlsConf(t *testing.T) *tls.Config {

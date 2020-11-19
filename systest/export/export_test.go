@@ -36,7 +36,7 @@ import (
 var (
 	mc             *minio.Client
 	bucketName     = "dgraph-backup"
-	destination    = "minio://minio1:9001/dgraph-backup?secure=false"
+	destination    = "minio://minio:9001/dgraph-backup?secure=false"
 	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
 )
 
@@ -44,7 +44,6 @@ var (
 // schema file has been exported to minio. The unit tests test the actual data
 // exported, so it's not tested here again
 func TestExportSchemaToMinio(t *testing.T) {
-	t.Skipf("TODO: Minio tests need FIXING.")
 	mc, err := testutil.NewMinioClient()
 	require.NoError(t, err)
 	mc.MakeBucket(bucketName, "")
@@ -143,7 +142,7 @@ func requestExport(t *testing.T) map[string]interface{} {
 		}
 	}`
 
-	adminUrl := "http://localhost:8180/admin"
+	adminUrl := "http://"+ testutil.SockAddrHttp+ "/admin"
 	params := testutil.GraphQLParams{
 		Query: exportRequest,
 		Variables: map[string]interface{}{

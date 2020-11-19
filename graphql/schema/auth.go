@@ -17,9 +17,10 @@
 package schema
 
 import (
-	"github.com/dgraph-io/dgraph/gql"
 	"regexp"
 	"strings"
+
+	"github.com/dgraph-io/dgraph/gql"
 
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
@@ -48,10 +49,11 @@ type RuleNode struct {
 }
 
 type AuthContainer struct {
-	Query  *RuleNode
-	Add    *RuleNode
-	Update *RuleNode
-	Delete *RuleNode
+	Password *RuleNode
+	Query    *RuleNode
+	Add      *RuleNode
+	Update   *RuleNode
+	Delete   *RuleNode
 }
 
 type RuleResult int
@@ -238,13 +240,15 @@ func mergeAuthRules(objectAuthRules, interfaceAuthRules *AuthContainer, mergeAut
 	// to unnecessary errors
 	if objectAuthRules == nil {
 		return &AuthContainer{
-			Query:  interfaceAuthRules.Query,
-			Add:    interfaceAuthRules.Add,
-			Delete: interfaceAuthRules.Delete,
-			Update: interfaceAuthRules.Update,
+			Password: interfaceAuthRules.Password,
+			Query:    interfaceAuthRules.Query,
+			Add:      interfaceAuthRules.Add,
+			Delete:   interfaceAuthRules.Delete,
+			Update:   interfaceAuthRules.Update,
 		}
 	}
 
+	objectAuthRules.Password = mergeAuthNode(objectAuthRules.Password, interfaceAuthRules.Password)
 	objectAuthRules.Query = mergeAuthNode(objectAuthRules.Query, interfaceAuthRules.Query)
 	objectAuthRules.Add = mergeAuthNode(objectAuthRules.Add, interfaceAuthRules.Add)
 	objectAuthRules.Delete = mergeAuthNode(objectAuthRules.Delete, interfaceAuthRules.Delete)
@@ -263,6 +267,11 @@ func parseAuthDirective(
 
 	var errResult, err error
 	result := &AuthContainer{}
+
+	if pwd := dir.Arguments.ForName("password"); pwd != nil && pwd.Value != nil {
+		result.Password, err = parseAuthNode(s, typ, pwd.Value)
+		errResult = AppendGQLErrs(errResult, err)
+	}
 
 	if qry := dir.Arguments.ForName("query"); qry != nil && qry.Value != nil {
 		result.Query, err = parseAuthNode(s, typ, qry.Value)

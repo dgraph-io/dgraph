@@ -2989,3 +2989,70 @@ func TestCustomPostMutationWithRESTError(t *testing.T) {
 	}, result.Errors)
 
 }
+
+func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
+	schema := `
+	interface Character {
+		id: ID!
+		name: String! @id
+	}
+	
+	type Human implements Character {
+		totalCredits: Int
+		bio: String @custom(http: {
+			url: "http://mock:8888/humanBio",
+			method: "POST",
+			body: "{name: $name, totalCredits: $totalCredits}"
+		})
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	addCharacterParams := &common.GraphQLParams{
+		Query: `mutation {
+			addHuman(input: [{name: "Han", totalCredits: 10}]) {
+				human {
+					id
+			  	}
+			}
+		}`,
+	}
+	resp := addCharacterParams.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, resp)
+
+	var addResp struct {
+		AddHuman struct {
+			Human []struct {
+				ID string
+			}
+		}
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &addResp))
+
+	queryCharacterParams := &common.GraphQLParams{
+		Query: `query {
+			queryCharacter {
+				name
+				... on Human {
+					bio
+				}
+			}
+		}`,
+	}
+	resp = queryCharacterParams.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, resp)
+
+	testutil.CompareJSON(t, `{
+	  "queryCharacter": [
+		{
+		  "name": "Han",
+		  "bio": "My name is Han and I have 10 credits."
+		}
+	  ]
+	}`, string(resp.Data))
+
+	// cleanup
+	common.DeleteGqlType(t, "Character", map[string]interface{}{"id": []interface{}{addResp.
+		AddHuman.Human[0].ID}},
+		1, nil)
+}

@@ -52,8 +52,6 @@ var (
 )
 
 func TestBackupMinio(t *testing.T) {
-	t.Skipf("TODO: This test is failing for some reason. FIX IT.")
-
 	backupDst = "minio://minio:9001/dgraph-backup?secure=false"
 
 	addr := testutil.ContainerAddr("minio", 9001)

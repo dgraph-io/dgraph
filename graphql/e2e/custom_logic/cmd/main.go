@@ -134,7 +134,11 @@ func check2(v interface{}, err error) {
 }
 
 func getError(key, val string) error {
-	return fmt.Errorf(`{ "errors": [{"message": "%s: %s"}] }`, key, val)
+	jsonKey, _ := json.Marshal(key)
+	jsonKey = jsonKey[1 : len(jsonKey)-1]
+	jsonVal, _ := json.Marshal(val)
+	jsonVal = jsonVal[1 : len(jsonVal)-1]
+	return fmt.Errorf(`{ "errors": [{"message": "%s: %s"}] }`, jsonKey, jsonVal)
 }
 
 func compareHeaders(headers map[string][]string, actual http.Header) error {
@@ -514,6 +518,21 @@ func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
         "id": "0x1",
         "name": "Mov1"
     }`)))
+}
+
+func humanBioHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/humanBio",
+		body:      `{"name":"Han","totalCredits":10}`,
+	})
+	if err != nil {
+		w.WriteHeader(400)
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	check2(w.Write([]byte(`"My name is Han and I have 10 credits."`)))
 }
 
 func emptyQuerySchema(w http.ResponseWriter, r *http.Request) {
@@ -1284,6 +1303,7 @@ func main() {
 	http.HandleFunc("/class", classHandler)
 	http.HandleFunc("/teacherName", teacherNameHandler)
 	http.HandleFunc("/schoolName", schoolNameHandler)
+	http.HandleFunc("/humanBio", humanBioHandler)
 
 	/*************************************
 	* For testing http with graphql

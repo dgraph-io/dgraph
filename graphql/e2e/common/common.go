@@ -115,6 +115,7 @@ type User struct {
 	Age      uint64 `json:"age,omitempty"`
 	IsPublic bool   `json:"isPublic,omitempty"`
 	Disabled bool   `json:"disabled,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 type country struct {
@@ -360,6 +361,7 @@ func RunAll(t *testing.T) {
 	t.Run("query count at child level", queryCountAtChildLevel)
 	t.Run("query count at child level with filter", queryCountAtChildLevelWithFilter)
 	t.Run("query count and other fields at child level", queryCountAndOtherFieldsAtChildLevel)
+	t.Run("checkUserPassword query", passwordTest)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -392,7 +394,6 @@ func RunAll(t *testing.T) {
 		addMutationWithReverseDgraphEdge)
 	t.Run("numUids test", testNumUids)
 	t.Run("empty delete", mutationEmptyDelete)
-	t.Run("password in mutation", passwordTest)
 	t.Run("duplicate xid in single mutation", deepMutationDuplicateXIDsSameObjectTest)
 	t.Run("query typename in mutation payload", queryTypenameInMutationPayload)
 	t.Run("ensure alias in mutation payload", ensureAliasInMutationPayload)

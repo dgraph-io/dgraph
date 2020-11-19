@@ -205,6 +205,7 @@ func TestUpsertExampleJSON(t *testing.T) {
 
 func TestUpsertExample0JSON(t *testing.T) {
 	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`email: string .`))
 	require.NoError(t, alterSchema(`email: string @index(exact) .`))
 
 	// Mutation with wrong name

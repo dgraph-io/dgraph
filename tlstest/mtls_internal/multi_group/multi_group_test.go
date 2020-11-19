@@ -84,7 +84,7 @@ func TestClusterSetupWithMultiGroup(t *testing.T) {
 	}
 	tlsConf, err := x.GenerateClientTLSConfig(c)
 	require.NoError(t, err)
-	dgConn, err := grpc.Dial(":9180", grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	dgConn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
 	runTests(t, client)

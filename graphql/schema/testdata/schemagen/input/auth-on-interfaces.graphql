@@ -4,7 +4,8 @@ type Author {
   posts: [Post] @hasInverse(field: author)
 }
 
-interface Post @auth(
+interface Post @secret(field: "pwd") @auth(
+    password: { rule: "{$ROLE: { eq: \"Admin\" } }"},
     query: { rule: """
             query($TEXT: String!) { 
               queryPost(filter: { text : {eq: $TEXT } } ) { 
