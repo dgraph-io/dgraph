@@ -502,10 +502,7 @@ func getPackages() []task {
 		if len(*runPkg) > 0 && !strings.HasSuffix(pkg.ID, *runPkg) {
 			continue
 		}
-		if has([]string{"graphql"}, pkg.ID) {
-			fmt.Printf("SKIPPING tests for package: %s for now. PLEASE FIX ASAP.\n", pkg.ID)
-			continue
-		}
+
 		if len(*runTest) > 0 {
 			if !has(limitTo, pkg.ID) {
 				continue

@@ -39,17 +39,14 @@ import (
 	"google.golang.org/grpc"
 )
 
-const (
-	GraphqlURL      = "http://localhost:8180/graphql"
-	graphqlAdminURL = "http://localhost:8180/admin"
-	AlphagRPC       = "localhost:9180"
+var (
+	GraphqlURL      = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/graphql"
+	GraphqlAdminURL = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/admin"
+	AlphagRPC       = testutil.ContainerAddr("alpha1", 9080)
 
-	adminDgraphHealthURL           = "http://localhost:8280/health?all"
-	adminDgraphStateURL            = "http://localhost:8280/state"
-	graphqlAdminTestURL            = "http://localhost:8280/graphql"
-	graphqlAdminTestAdminURL       = "http://localhost:8280/admin"
-	graphqlAdminTestAdminSchemaURL = "http://localhost:8280/admin/schema"
-	alphaAdminTestgRPC             = "localhost:9280"
+	adminDgraphHealthURL           = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/health?all"
+	adminDgraphStateURL            = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/state"
+	graphqlAdminTestAdminSchemaURL = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/admin/schema"
 )
 
 // GraphQLParams is parameters for the constructing a GraphQL query - that's
@@ -239,19 +236,24 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 	require.Nil(t, gqlResponse.Errors)
 }
 
+func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
+	err := addSchema(GraphqlAdminURL, string(schema))
+	if err != nil {
+		x.Panic(err)
+	}
+
+	err = maybePopulateData(client, data)
+	if err != nil {
+		x.Panic(err)
+	}
+}
+
 func BootstrapServer(schema, data []byte) {
-	err := checkGraphQLStarted(graphqlAdminURL)
+	err := checkGraphQLStarted(GraphqlAdminURL)
 	if err != nil {
 		x.Panic(errors.Errorf(
 			"Waited for GraphQL test server to become available, but it never did.\n"+
 				"Got last error %+v", err.Error()))
-	}
-
-	err = checkGraphQLStarted(graphqlAdminTestAdminURL)
-	if err != nil {
-		x.Panic(errors.Errorf(
-			"Waited for GraphQL AdminTest server to become available, "+
-				"but it never did.\n Got last error: %+v", err.Error()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -262,15 +264,7 @@ func BootstrapServer(schema, data []byte) {
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
-	err = addSchema(graphqlAdminURL, string(schema))
-	if err != nil {
-		x.Panic(err)
-	}
-
-	err = maybePopulateData(client, data)
-	if err != nil {
-		x.Panic(err)
-	}
+	addSchemaAndData(schema, data, client)
 	if err = d.Close(); err != nil {
 		x.Panic(err)
 	}
@@ -278,7 +272,7 @@ func BootstrapServer(schema, data []byte) {
 
 // RunAll runs all the test functions in this package as sub tests.
 func RunAll(t *testing.T) {
-	//admin tests
+	// admin tests
 	t.Run("admin", admin)
 	t.Run("health", health)
 	t.Run("partial health", partialHealth)
