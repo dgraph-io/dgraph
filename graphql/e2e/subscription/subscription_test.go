@@ -474,7 +474,6 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 		string(subscriptionResp.Data))
 	// Terminate Subscription
 	subscriptionClient.Terminate()
-
 }
 
 func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndependently(t *testing.T) {
@@ -635,7 +634,6 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	require.Nil(t, res)
-
 }
 
 func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndependently(t *testing.T) {
