@@ -60,6 +60,12 @@ The `@generate` directive is used to specify which GraphQL APIs are generated fo
 
 Reference: [Generate Directive](/graphql/schema/generate)
 
+### @lambda
+
+The `@lambda` directive allows you to call custom JavaScript resolvers. The `@lambda` fields are resolved through the lambda functions implemented on a given lambda server.
+
+Reference: [Lambda Directive](/graphql/schema/lambda)
+
 ### @custom
 
 `@custom` directive is used to define custom queries, mutations and fields.
