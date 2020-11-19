@@ -299,7 +299,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 			}
 		}`
 
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp +  "/admin"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
@@ -411,7 +411,7 @@ func copyToLocalFs(t *testing.T) {
 	if err := os.RemoveAll(copyBackupDir); err != nil {
 		t.Fatalf("Error removing directory: %s", err.Error())
 	}
-	srcPath := "alpha1:/data/backups"
+	srcPath := testutil.DockerPrefix + "_alpha1_1:/data/backups"
 	if err := testutil.DockerCp(srcPath, copyBackupDir); err != nil {
 		t.Fatalf("Error copying files from docker container: %s", err.Error())
 	}

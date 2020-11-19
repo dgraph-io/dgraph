@@ -206,11 +206,11 @@ services:
       service: alpha
     command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha6:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
 
-  minio1:
+  minio:
     image: minio/minio:latest
     env_file:
       - ./minio.env
-    working_dir: /data/minio1
+    working_dir: /data/minio
     ports:
       - 9001
     labels:

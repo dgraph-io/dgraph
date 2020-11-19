@@ -21,7 +21,7 @@ services:
       source: ./backup
       target: /data/backup
       read_only: false
-    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180
+    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=1 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha2:
@@ -47,7 +47,7 @@ services:
       source: ./backup
       target: /data/backup
       read_only: false
-    command: /gobin/dgraph alpha -o 102 --my=alpha2:7182 --zero=zero1:5180
+    command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=2 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha3:
@@ -73,7 +73,7 @@ services:
       source: ./backup
       target: /data/backup
       read_only: false
-    command: /gobin/dgraph alpha -o 103 --my=alpha3:7183 --zero=zero1:5180
+    command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=3 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha4:
@@ -99,7 +99,7 @@ services:
       source: ./backup
       target: /data/backup
       read_only: false
-    command: /gobin/dgraph alpha -o 104 --my=alpha4:7184 --zero=zero1:5180
+    command: /gobin/dgraph alpha --my=alpha4:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=4 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha5:
@@ -125,7 +125,7 @@ services:
       source: ./backup
       target: /data/backup
       read_only: false
-    command: /gobin/dgraph alpha -o 105 --my=alpha5:7185 --zero=zero1:5180
+    command: /gobin/dgraph alpha --my=alpha5:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=5 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha6:
@@ -151,7 +151,7 @@ services:
       source: ./backup
       target: /data/backup
       read_only: false
-    command: /gobin/dgraph alpha -o 106 --my=alpha6:7186 --zero=zero1:5180
+    command: /gobin/dgraph alpha --my=alpha6:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=6 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   ratel:
@@ -172,6 +172,6 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --logtostderr
+    command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --replicas=3 --logtostderr
       -v=2 --bindall
 volumes: {}
