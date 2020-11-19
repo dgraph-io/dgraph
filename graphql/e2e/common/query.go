@@ -1894,6 +1894,47 @@ func queryWithAlias(t *testing.T) {
 		string(gqlResponse.Data))
 }
 
+func queryWithMultipleAliasOfSameField(t *testing.T) {
+	queryAuthorParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor (filter: {name: {eq: "Ann Other Author"}}){
+			  name
+			  p1: posts(filter: {numLikes: {ge: 80}}){
+				title
+				numLikes
+			  }
+			  p2: posts(filter: {numLikes: {le: 5}}){
+				title
+				numLikes
+			  }
+			}
+		  }`,
+	}
+
+	gqlResponse := queryAuthorParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+		"queryAuthor": [
+      {
+        "name": "Ann Other Author",
+        "p1": [
+          {
+            "title": "Learning GraphQL in Dgraph",
+            "numLikes": 87
+          }
+        ],
+        "p2": [
+          {
+            "title": "Random post",
+            "numLikes": 0
+          }
+        ]
+      }
+    ]
+	}`,
+		string(gqlResponse.Data))
+}
 func DgraphDirectiveWithSpecialCharacters(t *testing.T) {
 	mutation := &GraphQLParams{
 		Query: `
@@ -2876,6 +2917,40 @@ func queryCountAtChildLevelWithFilter(t *testing.T) {
 				"name": "India",
 				"ag": { 
 					"count" : 2
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountAtChildLevelWithMultipleAlias(t *testing.T) {
+	fmt.Println("name")
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query 
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag1: statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
+                	count   
+				}
+				ag2: statesAggregate(filter: {xcode: {in: ["ka", "mh", "gj", "xyz"]}}) {
+                	count   
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag1": { 
+					"count" : 2
+				},
+				"ag2": {
+					"count" : 3
 				}
 			}]
 		}`,
