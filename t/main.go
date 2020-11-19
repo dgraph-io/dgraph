@@ -302,13 +302,9 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	ctx := closer.Ctx()
 	ctx = context.WithValue(ctx, "threadId", threadId)
 
-	uncommon := false
 	for task := range taskCh {
 		if ctx.Err() != nil {
 			return ctx.Err()
-		}
-		if uncommon && task.isCommon {
-			glog.Fatalf("Package sorting is wrong. Common cluster tests should run first.")
 		}
 		if !hasTestFiles(task.pkg.ID) {
 			continue
@@ -324,9 +320,6 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				return err
 			}
 		} else {
-			uncommon = true
-			stop() // Stop default cluster.
-
 			if err := runCustomClusterTest(ctx, task.pkg.ID, wg); err != nil {
 				return err
 			}
@@ -494,7 +487,7 @@ func getPackages() []task {
 	x.Check(err)
 	limitTo := findPackagesFor(*runTest)
 
-	var common, custom []task
+	var valid []task
 	for _, pkg := range pkgs {
 		if len(*runPkg) > 0 && !strings.HasSuffix(pkg.ID, *runPkg) {
 			continue
@@ -513,16 +506,9 @@ func getPackages() []task {
 		fname := composeFileFor(pkg.ID)
 		_, err := os.Stat(fname)
 		t := task{pkg: pkg, isCommon: os.IsNotExist(err)}
-		if t.isCommon {
-			common = append(common, t)
-		} else {
-			custom = append(custom, t)
-		}
+		valid = append(valid, t)
 	}
-	moveSlowToFront(common)
-	moveSlowToFront(custom)
-
-	valid := append(common, custom...)
+	moveSlowToFront(valid)
 	if len(valid) == 0 {
 		fmt.Println("Couldn't find any packages. Exiting...")
 		os.Exit(1)
