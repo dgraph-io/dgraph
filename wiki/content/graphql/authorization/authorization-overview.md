@@ -31,8 +31,8 @@ To define the connection method, you must set the `#Dgraph.Authorization` object
 * `Namespace` is the key inside the JWT that contains the claims relevant to Dgraph auth
 * `Algo` is the JWT verification algorithm which can be either `HS256` or `RS256`
 * `VerificationKey` is the string value of the key (newlines replaced with `\n`) wrapped in `""`
-* `JWKURL` is the URL for the JSON Web Key
-* `Audience` (optional) is used to verify the `aud` field of JWT which might be set by certain providers. It indicates the intended audience for the JWT.
+* `JWKURL` is the URL for the JSON Web Key sets
+* `Audience` is used to verify the `aud` field of a JWT which might be set by certain providers. It indicates the intended audience for the JWT. When doing authentication with `JWKURL`, this field is mandatory as Identity Providers share JWKs among multiple tenants
 
 To set up the authentication connection method:
 
@@ -40,14 +40,10 @@ To set up the authentication connection method:
 - A (`VerificationKey`, `Algo`) pair must be provided. The server will verify the JWT against the provided `VerificationKey`.
 
 **JSON Web Key URL (JWK URL)**
-- A `JWKURL` must provided. The server will fetch all the JWKs and verify the token against one of the JWK, based on the JWK's kind.
+- `JWKURL` and `Audience` must provided. The server will fetch all the JWKs and verify the token against one of the JWK, based on the JWK's kind.
 
 {{% notice "note" %}}
 You can only define one method, either `JWKURL` or `(VerificationKey, Algo)`, but not both.
-{{% /notice %}}
-
-{{% notice "note" %}}
-Some Identity Providers (such as Firebase) share the JWKs among multiple tenants. In this case, it is required for the user to provide the proper `Audience` value in `Dgraph.Authorization` JSON. Failing to do so could be a major security risk.
 {{% /notice %}}
 
 ### Authorization
