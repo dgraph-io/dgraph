@@ -1631,7 +1631,7 @@ func checkLogPassword(t *testing.T, logID, pwd, role string) *common.GraphQLResp
 		},
 	}
 
-	gqlResponse := checkLogParamsFalse.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := checkLogParamsFalse.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
 	return gqlResponse
 }
@@ -1648,7 +1648,7 @@ func deleteLog(t *testing.T, logID string) {
 		Variables: map[string]interface{}{"logID": logID},
 		Headers:   common.GetJWT(t, "SomeUser", "ADMIN", metaInfo),
 	}
-	gqlResponse := deleteLogParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := deleteLogParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -1664,7 +1664,7 @@ func deleteUser(t *testing.T, username string) {
 		`,
 		Variables: map[string]interface{}{"username": username},
 	}
-	gqlResponse := deleteUserParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := deleteUserParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -1688,7 +1688,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 		Variables: map[string]interface{}{"user": []*common.User{newUser}},
 	}
 
-	gqlResponse := addUserParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addUserParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Equal(t, `{"addUser":{"user":[{"username":"Test User"}]}}`,
 		string(gqlResponse.Data))
 
@@ -1705,7 +1705,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 		},
 	}
 
-	gqlResponse = checkUserParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse = checkUserParams.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -1738,7 +1738,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 		Variables: map[string]interface{}{"log": []*Log{newLog}},
 	}
 
-	gqlResponse = addLogParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse = addLogParams.ExecuteAsPost(t, common.GraphqlURL)
 	var addLogResult struct {
 		AddLog struct {
 			Log []*Log
