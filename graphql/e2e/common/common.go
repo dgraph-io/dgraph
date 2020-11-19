@@ -40,13 +40,13 @@ import (
 )
 
 var (
-	GraphqlURL      = "http://"+ testutil.SockAddrHttp +"/graphql"
-	GraphqlAdminURL = "http://"+ testutil.SockAddrHttp +"/admin"
-	AlphagRPC       = testutil.SockAddr
+	GraphqlURL      = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/graphql"
+	GraphqlAdminURL = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/admin"
+	AlphagRPC       = testutil.ContainerAddr("alpha1", 9080)
 
-	adminDgraphHealthURL           = "http://"+ testutil.SockAddrHttp +"/health?all"
-	adminDgraphStateURL            = "http://"+ testutil.SockAddrHttp +"/state"
-	graphqlAdminTestAdminSchemaURL = "http://"+ testutil.SockAddrHttp +"/admin/schema"
+	adminDgraphHealthURL           = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/health?all"
+	adminDgraphStateURL            = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/state"
+	graphqlAdminTestAdminSchemaURL = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/admin/schema"
 )
 
 // GraphQLParams is parameters for the constructing a GraphQL query - that's

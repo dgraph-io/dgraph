@@ -37,8 +37,8 @@ import (
 )
 
 var (
-	groupOneServer        = "http://"+ testutil.SockAddrHttp +"/graphql"
-	groupOneAdminServer   = "http://"+ testutil.SockAddrHttp +"/admin"
+	groupOneServer        = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/graphql"
+	groupOneAdminServer   = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/admin"
 	groupOnegRPC          = testutil.SockAddr
 	groupTwoServer        = "http://"+ testutil.ContainerAddr("alpha2", 8080) +"/graphql"
 	groupTwoAdminServer   = "http://"+ testutil.ContainerAddr("alpha2", 8080) +"/admin"

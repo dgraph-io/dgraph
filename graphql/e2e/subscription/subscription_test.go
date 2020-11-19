@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	subscriptionEndpoint = "ws://"+ testutil.SockAddrHttp +"/graphql"
+	subscriptionEndpoint = "ws://"+ testutil.ContainerAddr("alpha1", 8080) +"/graphql"
 )
 const (
 	sch                  = `
