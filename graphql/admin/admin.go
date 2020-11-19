@@ -531,9 +531,17 @@ func newAdminResolver(
 			ID:     query.UidToHex(pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
-
+		server.mux.Lock()
+		if newSchema.Schema == server.schema.Schema {
+			glog.Infof("Skiping Schema Update: Already have this schema in GraphQL")
+			server.mux.Unlock()
+			return
+		}
+		server.mux.Unlock()
 		var gqlSchema schema.Schema
 		// on drop_all, we will receive an empty string as the schema update
+
+		glog.Infof("newSchema-%v", newSchema.Schema)
 		if newSchema.Schema != "" {
 			gqlSchema, err = generateGQLSchema(newSchema)
 			if err != nil {
