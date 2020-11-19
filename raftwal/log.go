@@ -172,7 +172,7 @@ func (lf *logFile) GetRaftEntry(idx int) raftpb.Entry {
 		Type:  raftpb.EntryType(int32(entry.Type())),
 	}
 	if entry.DataOffset() > 0 {
-		y.AssertTrue(entry.DataOffset() < uint64(len(lf.Data)))
+		x.AssertTrue(entry.DataOffset() < uint64(len(lf.Data)))
 		data := lf.Slice(int(entry.DataOffset()))
 		if len(data) > 0 {
 			// Copy the data over to allow the mmaped file to be deleted later.
