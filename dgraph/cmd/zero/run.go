@@ -54,7 +54,6 @@ type options struct {
 	w                 string
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
-	totalCache        int64
 }
 
 var opts options
@@ -181,7 +180,6 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
-		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
 		tlsClientConfig:   tlsConf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
@@ -228,8 +226,6 @@ func run() {
 	x.Check(err)
 	httpListener, err := setupListener(addr, x.PortZeroHTTP+opts.portOffset, "http")
 	x.Check(err)
-
-	x.AssertTruef(opts.totalCache >= 0, "ERROR: Cache size must be non-negative")
 
 	// Create and initialize write-ahead log.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
