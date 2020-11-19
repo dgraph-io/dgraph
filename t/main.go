@@ -65,9 +65,8 @@ var (
 		"Run only custom cluster tests.")
 	count = pflag.IntP("count", "c", 0,
 		"If set, would add -count arg to go test.")
-	concurrency = pflag.IntP("concurrency", "j", 1,
-		"Number of clusters to run concurrently. There's a bug somewhere causing"+
-			" tests to fail on any concurrency setting > 1.")
+	concurrency = pflag.IntP("concurrency", "j", 2,
+		"Number of clusters to run concurrently.")
 	keepCluster = pflag.BoolP("keep", "k", false,
 		"Keep the clusters running on program end.")
 	clear = pflag.BoolP("clear", "r", false,
@@ -93,17 +92,20 @@ func commandWithContext(ctx context.Context, q string) *exec.Cmd {
 func command(cmd string) *exec.Cmd {
 	return commandWithContext(ctxb, cmd)
 }
-func runFatal(q string) {
-	cmd := command(q)
+func runFatal(cmd *exec.Cmd) {
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("While running command: %q Error: %v\n",
-			q, err)
+			strings.Join(cmd.Args, " "), err)
 	}
 }
 func startCluster(composeFile, prefix string) {
 	q := fmt.Sprintf("docker-compose -f %s -p %s up --force-recreate --remove-orphans --detach",
 		composeFile, prefix)
-	runFatal(q)
+	cmd := command(q)
+	cmd.Stderr = nil
+	fmt.Printf("Bringing up cluster %s...\n", prefix)
+	runFatal(cmd)
+	fmt.Printf("CLUSTER UP: %s\n", prefix)
 
 	// Let it stabilize.
 	time.Sleep(3 * time.Second)
@@ -112,7 +114,14 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	q := fmt.Sprintf("docker-compose -f %s -p %s down",
 		composeFile, prefix)
 	go func() {
-		runFatal(q)
+		cmd := command(q)
+		cmd.Stderr = nil
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
+				prefix, err)
+		} else {
+			fmt.Printf("CLUSTER DOWN: %s\n", prefix)
+		}
 		wg.Done()
 	}()
 }
@@ -303,13 +312,9 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	ctx := closer.Ctx()
 	ctx = context.WithValue(ctx, "threadId", threadId)
 
-	uncommon := false
 	for task := range taskCh {
 		if ctx.Err() != nil {
 			return ctx.Err()
-		}
-		if uncommon && task.isCommon {
-			glog.Fatalf("Package sorting is wrong. Common cluster tests should run first.")
 		}
 		if !hasTestFiles(task.pkg.ID) {
 			continue
@@ -325,9 +330,6 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				return err
 			}
 		} else {
-			uncommon = true
-			stop() // Stop default cluster.
-
 			if err := runCustomClusterTest(ctx, task.pkg.ID, wg); err != nil {
 				return err
 			}
@@ -470,9 +472,6 @@ func composeFileFor(pkg string) string {
 }
 
 func getPackages() []task {
-	pkgs, err := packages.Load(nil, *baseDir+"/...")
-	x.Check(err)
-
 	has := func(list []string, in string) bool {
 		for _, l := range list {
 			if strings.Contains(in, l) {
@@ -482,17 +481,20 @@ func getPackages() []task {
 		return false
 	}
 
-	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker"}
-	left := 0
-	for i := 0; i < len(pkgs); i++ {
-		// These packages take time. So, move them to the front.
-		if has(slowPkgs, pkgs[i].ID) {
-			pkgs[left], pkgs[i] = pkgs[i], pkgs[left]
-			left++
-			break
+	moveSlowToFront := func(list []task) {
+		slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker"}
+		left := 0
+		for i := 0; i < len(list); i++ {
+			// These packages take time. So, move them to the front.
+			if has(slowPkgs, list[i].pkg.ID) {
+				list[left], list[i] = list[i], list[left]
+				left++
+			}
 		}
 	}
 
+	pkgs, err := packages.Load(nil, *baseDir+"/...")
+	x.Check(err)
 	limitTo := findPackagesFor(*runTest)
 
 	var valid []task
@@ -513,21 +515,14 @@ func getPackages() []task {
 
 		fname := composeFileFor(pkg.ID)
 		_, err := os.Stat(fname)
-		valid = append(valid, task{pkg: pkg, isCommon: os.IsNotExist(err)})
+		t := task{pkg: pkg, isCommon: os.IsNotExist(err)}
+		valid = append(valid, t)
 	}
-
+	moveSlowToFront(valid)
 	if len(valid) == 0 {
 		fmt.Println("Couldn't find any packages. Exiting...")
 		os.Exit(1)
 	}
-
-	sort.SliceStable(valid, func(i, j int) bool {
-		if valid[i].isCommon != valid[j].isCommon {
-			return valid[i].isCommon
-		}
-		return false
-	})
-
 	for _, task := range valid {
 		fmt.Printf("Found valid task: %s isCommon:%v\n", task.pkg.ID, task.isCommon)
 	}
@@ -542,17 +537,22 @@ func removeAllTestContainers() {
 	x.Check(err)
 	dur := 10 * time.Second
 
+	var wg sync.WaitGroup
 	for _, c := range containers {
-		err := cli.ContainerStop(ctxb, c.ID, &dur)
-		fmt.Printf("Stopped container %s with error: %v\n", c.Names[0], err)
+		wg.Add(1)
+		go func(c types.Container) {
+			defer wg.Done()
+			err := cli.ContainerStop(ctxb, c.ID, &dur)
+			fmt.Printf("Stopped container %s with error: %v\n", c.Names[0], err)
 
-		err = cli.ContainerRemove(ctxb, c.ID, types.ContainerRemoveOptions{})
-		fmt.Printf("Removed container %s with error: %v\n", c.Names[0], err)
+			err = cli.ContainerRemove(ctxb, c.ID, types.ContainerRemoveOptions{})
+			fmt.Printf("Removed container %s with error: %v\n", c.Names[0], err)
+		}(c)
 	}
+	wg.Wait()
 
 	networks, err := cli.NetworkList(ctxb, types.NetworkListOptions{})
 	x.Check(err)
-
 	for _, n := range networks {
 		if strings.HasPrefix(n.Name, "test-") {
 			if err := cli.NetworkRemove(ctxb, n.ID); err != nil {
@@ -562,11 +562,15 @@ func removeAllTestContainers() {
 			}
 		}
 	}
-
-	return
 }
 
 func run() error {
+	cmd := command("make install")
+	cmd.Dir = *baseDir
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
 	start := time.Now()
 
 	if *clear {
