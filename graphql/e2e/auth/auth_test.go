@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgrijalva/jwt-go/v4"
@@ -97,6 +99,7 @@ type Log struct {
 	Id     string `json:"id,omitempty"`
 	Logs   string `json:"logs,omitempty"`
 	Random string `json:"random,omitempty"`
+	Pwd    string `json:"pwd,omitempty"`
 }
 
 type ComplexLog struct {
@@ -1614,4 +1617,153 @@ func TestChildCountQueryWithOtherFields(t *testing.T) {
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
+}
+
+func checkLogPassword(t *testing.T, logID, pwd, role string) *common.GraphQLResponse {
+	// Check Log Password for given logID, pwd, role
+	checkLogParamsFalse := &common.GraphQLParams{
+		Headers: common.GetJWT(t, "SomeUser", role, metaInfo),
+		Query: `query checkLogPassword($name: ID!, $pwd: String!) {
+			checkLogPassword(id: $name, pwd: $pwd) { id }
+		}`,
+		Variables: map[string]interface{}{
+			"name": logID,
+			"pwd":  pwd,
+		},
+	}
+
+	gqlResponse := checkLogParamsFalse.ExecuteAsPost(t, graphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	return gqlResponse
+}
+
+func deleteLog(t *testing.T, logID string) {
+	deleteLogParams := &common.GraphQLParams{
+		Query: `
+		mutation DelLog($logID: ID!) {
+		  deleteLog(filter:{id:[$logID]}) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"logID": logID},
+		Headers:   common.GetJWT(t, "SomeUser", "ADMIN", metaInfo),
+	}
+	gqlResponse := deleteLogParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func deleteUser(t *testing.T, username string) {
+	deleteUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, username, "ADMIN", metaInfo),
+		Query: `
+		mutation DelUser($username: String!) {
+		  deleteUser(filter:{username: {eq: $username } } ) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"username": username},
+	}
+	gqlResponse := deleteUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func TestAuthWithSecretDirective(t *testing.T) {
+
+	// Check that no auth rule is applied to checkUserPassword query.
+	newUser := &common.User{
+		Username: "Test User",
+		Password: "password",
+		IsPublic: true,
+	}
+
+	addUserParams := &common.GraphQLParams{
+		Query: `mutation addUser($user: [AddUserInput!]!) {
+			addUser(input: $user) {
+				user {
+					username
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"user": []*common.User{newUser}},
+	}
+
+	gqlResponse := addUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Equal(t, `{"addUser":{"user":[{"username":"Test User"}]}}`,
+		string(gqlResponse.Data))
+
+	checkUserParams := &common.GraphQLParams{
+		Query: `query checkUserPassword($name: String!, $pwd: String!) {
+					checkUserPassword(username: $name, password: $pwd) { 
+						username
+						isPublic
+					}
+				}`,
+		Variables: map[string]interface{}{
+			"name": newUser.Username,
+			"pwd":  newUser.Password,
+		},
+	}
+
+	gqlResponse = checkUserParams.ExecuteAsPost(t, graphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		CheckUserPassword *common.User `json:"checkUserPassword,omitempty"`
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.Nil(t, err)
+
+	opt := cmpopts.IgnoreFields(common.User{}, "Password")
+	if diff := cmp.Diff(newUser, result.CheckUserPassword, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+	deleteUser(t, newUser.Username)
+
+	// Check that checkLogPassword works with RBAC rule
+	newLog := &Log{
+		Pwd: "password",
+	}
+
+	addLogParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, "Random", "ADMIN", metaInfo),
+		Query: `mutation addLog($log: [AddLogInput!]!) {
+			addLog(input: $log) {
+				log {
+					id
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"log": []*Log{newLog}},
+	}
+
+	gqlResponse = addLogParams.ExecuteAsPost(t, graphqlURL)
+	var addLogResult struct {
+		AddLog struct {
+			Log []*Log
+		}
+	}
+
+	err = json.Unmarshal([]byte(gqlResponse.Data), &addLogResult)
+	require.Nil(t, err)
+	// Id of the created log
+	logID := addLogResult.AddLog.Log[0].Id
+
+	// checkLogPassword with RBAC rule true should work
+	gqlResponse = checkLogPassword(t, logID, newLog.Pwd, "Admin")
+	var resultLog struct {
+		CheckLogPassword *Log `json:"checkLogPassword,omitempty"`
+	}
+
+	err = json.Unmarshal([]byte(gqlResponse.Data), &resultLog)
+	require.Nil(t, err)
+
+	require.Equal(t, resultLog.CheckLogPassword.Id, logID)
+
+	// checkLogPassword with RBAC rule false should not work
+	gqlResponse = checkLogPassword(t, logID, newLog.Pwd, "USER")
+	require.JSONEq(t, `{"checkLogPassword": null}`, string(gqlResponse.Data))
+	deleteLog(t, logID)
 }

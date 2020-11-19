@@ -2,7 +2,7 @@
 # Input Schema
 #######################
 
-type Todo @auth(query: {or:[{rule:"query($X_MyApp_User: String!) { \n    queryTodo { \n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"},{rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        sharedWith (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"},{rule:"query { \n    queryTodo(filter: { isPublic: true }) {\n        id\n    }\n}"}]}, add: {rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"}, update: {rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"}) {
+type Todo @secret(field: "pwd") @auth(password: {rule:"{$ROLE: { eq: \"Admin\" } }"}, query: {or:[{rule:"query($X_MyApp_User: String!) { \n    queryTodo { \n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"},{rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        sharedWith (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"},{rule:"query { \n    queryTodo(filter: { isPublic: true }) {\n        id\n    }\n}"}]}, add: {rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"}, update: {rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"}) {
 	id: ID!
 	title: String
 	text: String
@@ -196,10 +196,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -361,6 +362,7 @@ input AddTodoInput {
 	sharedWith: [UserRef]
 	owner: UserRef
 	somethingPrivate: String
+	pwd: String!
 }
 
 input AddUserInput {
@@ -392,6 +394,7 @@ input TodoPatch {
 	sharedWith: [UserRef]
 	owner: UserRef
 	somethingPrivate: String
+	pwd: String
 }
 
 input TodoRef {
@@ -403,6 +406,7 @@ input TodoRef {
 	sharedWith: [UserRef]
 	owner: UserRef
 	somethingPrivate: String
+	pwd: String
 }
 
 input UpdateTodoInput {
@@ -446,6 +450,7 @@ input UserRef {
 
 type Query {
 	getTodo(id: ID!): Todo
+	checkTodoPassword(id: ID!, pwd: String!): Todo
 	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
 	aggregateTodo(filter: TodoFilter): TodoAggregateResult
 	getUser(username: String!): User
