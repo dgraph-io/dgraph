@@ -1029,7 +1029,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-	time.Sleep(2 * time.Second)
+	time.Sleep(time.Second)
 
 	// 1st response
 	subscriptionResp = common.GraphQLResponse{}
