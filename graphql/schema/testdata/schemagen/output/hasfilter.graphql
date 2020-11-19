@@ -275,7 +275,7 @@ input StringHashFilter {
 #######################
 
 type AddBPayload {
-	b(order: BOrder, first: Int, offset: Int): [B]
+	b(filter: BFilter, order: BOrder, first: Int, offset: Int): [B]
 	numUids: Int
 }
 
@@ -286,6 +286,12 @@ type AddTPayload {
 
 type BAggregateResult {
 	count: Int
+}
+
+type DeleteBPayload {
+	b(filter: BFilter, order: BOrder, first: Int, offset: Int): [B]
+	msg: String
+	numUids: Int
 }
 
 type DeleteIPayload {
@@ -306,6 +312,11 @@ type IAggregateResult {
 
 type TAggregateResult {
 	count: Int
+}
+
+type UpdateBPayload {
+	b(filter: BFilter, order: BOrder, first: Int, offset: Int): [B]
+	numUids: Int
 }
 
 type UpdateTPayload {
@@ -358,6 +369,10 @@ input BOrder {
 	then: BOrder
 }
 
+input BPatch {
+	name: String
+}
+
 input BRef {
 	name: String
 }
@@ -394,6 +409,12 @@ input TRef {
 	text: String
 }
 
+input UpdateBInput {
+	filter: BFilter!
+	set: BPatch
+	remove: BPatch
+}
+
 input UpdateTInput {
 	filter: TFilter!
 	set: TPatch
@@ -411,8 +432,8 @@ type Query {
 	getT(id: ID!): T
 	queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 	aggregateT(filter: TFilter): TAggregateResult
-	queryB(order: BOrder, first: Int, offset: Int): [B]
-	aggregateB: BAggregateResult
+	queryB(filter: BFilter, order: BOrder, first: Int, offset: Int): [B]
+	aggregateB(filter: BFilter): BAggregateResult
 }
 
 #######################
@@ -425,5 +446,7 @@ type Mutation {
 	updateT(input: UpdateTInput!): UpdateTPayload
 	deleteT(filter: TFilter!): DeleteTPayload
 	addB(input: [AddBInput!]!): AddBPayload
+	updateB(input: UpdateBInput!): UpdateBPayload
+	deleteB(filter: BFilter!): DeleteBPayload
 }
 

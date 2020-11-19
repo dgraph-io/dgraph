@@ -844,6 +844,20 @@
       }
     }
 
+- name: "Query Has Filter on type which has neither ID field nor any search argument"
+  gqlquery: |
+    query {
+      queryNode(filter: {has: name}){
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryNode(func: type(Node)) @filter(has(Node.name)) {
+        name : Node.name
+        dgraph.uid : uid
+      }
+    }
 -
   name: "Filters in same input object implies AND"
   gqlquery: |
