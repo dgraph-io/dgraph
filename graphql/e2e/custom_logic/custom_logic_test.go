@@ -3015,7 +3015,7 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 			}
 		}`,
 	}
-	resp := addCharacterParams.ExecuteAsPost(t, alphaURL)
+	resp := addCharacterParams.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, resp)
 
 	var addResp struct {
@@ -3037,7 +3037,7 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 			}
 		}`,
 	}
-	resp = queryCharacterParams.ExecuteAsPost(t, alphaURL)
+	resp = queryCharacterParams.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, resp)
 
 	testutil.CompareJSON(t, `{
