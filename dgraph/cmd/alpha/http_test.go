@@ -654,6 +654,7 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 
 func TestHttpCompressionSupport(t *testing.T) {
 	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string .`))
 	require.NoError(t, alterSchema(`name: string @index(term) .`))
 
 	q1 := `
