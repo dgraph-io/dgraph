@@ -89,7 +89,6 @@ func TestLogRotate(t *testing.T) {
 
 	// Write enough entries to fill ~1.5x logfiles, causing a rotation.
 	const totalEntries = (maxNumEntries * 3) / 2
-
 	totalBytes := 0
 	for i := 0; i < totalEntries; i++ {
 		entry := makeEntry(i)
