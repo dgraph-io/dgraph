@@ -65,7 +65,7 @@ var (
 		"Run only custom cluster tests.")
 	count = pflag.IntP("count", "c", 0,
 		"If set, would add -count arg to go test.")
-	concurrency = pflag.IntP("concurrency", "j", 2,
+	concurrency = pflag.IntP("concurrency", "j", 3,
 		"Number of clusters to run concurrently.")
 	keepCluster = pflag.BoolP("keep", "k", false,
 		"Keep the clusters running on program end.")
