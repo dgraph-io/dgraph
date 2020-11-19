@@ -595,6 +595,7 @@
     { 
       "proj": {
         "name": "Project1",
+        "pwd": "Password",
         "columns": [ { 
           "name": "a column",
           "tickets": [ { "id": "0x789" } ]
@@ -686,6 +687,7 @@
     { 
       "proj": {
         "name": "Project1",
+        "pwd": "Password",
         "columns": [ { 
           "name": "a column",
           "tickets": [ { "id": "0x789" } ]
@@ -776,7 +778,9 @@
     USER: "user1"
   variables: |
     { "log":
-      { "logs": "log123",
+      {
+        "pwd": "password",
+        "logs": "log123",
         "random": "random123"
       }
     }
@@ -800,7 +804,9 @@
     USER: "user1"
   variables: |
     { "log":
-      { "logs": "log123",
+      {
+        "pwd": "something",
+        "logs": "log123",
         "random": "random123"
       }
     }
@@ -823,7 +829,8 @@
   variables: |
     {
       "proj": {
-        "name": "Project1"
+        "name": "Project1",
+        "pwd": "somepassword"
       }
     }
   uids: |
@@ -847,7 +854,8 @@
   variables: |
     {
       "proj": {
-        "name": "Project1"
+        "name": "Project1",
+        "pwd": "password"
       }
     }
   uids: |
@@ -1042,6 +1050,7 @@
     { "question": 
       [{
         "text": "A Question",
+        "pwd": "password",
         "author": {
           "name": "user1"
         },
@@ -1090,6 +1099,7 @@
     { "question": 
       [{
         "text": "A Question",
+        "pwd": "password",
         "author": {
           "name": "user1"
         },
@@ -1140,6 +1150,7 @@
     { "post": 
       [{
         "text": "A Question",
+        "pwd": "password",
         "author": {
           "name": "user1"
         }
@@ -1184,6 +1195,7 @@
     { "post": 
       [{
         "text": "A Question",
+        "pwd": "password",
         "author": {
           "name": "user1"
         }

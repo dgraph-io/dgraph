@@ -2326,7 +2326,6 @@
       }
     }
 
-
 - name: "Rewrite without custom fields"
   gqlquery: |
     query {

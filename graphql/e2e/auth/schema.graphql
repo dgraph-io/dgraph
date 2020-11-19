@@ -1,4 +1,4 @@
-type User @auth(
+type User @secret(field: "password") @auth(
   delete: { and: [
     { rule: """
     query($USER: String!) {
@@ -262,11 +262,12 @@ type Issue @auth(
   random: String
 }
 
-type Log @auth(
-      query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-      add: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-      update: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-      delete: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+type Log @secret(field: "pwd") @auth(
+    password: { rule: "{$ROLE: { eq: \"Admin\" } }"},
+    query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+    add: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+    update: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+    delete: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
 ) {
   id: ID!
   logs: String
@@ -301,7 +302,19 @@ type ComplexLog @auth(
   visible: Boolean @search
 }
 
-type Project @auth(
+type Project @secret(field: "pwd") @auth(
+    password: { or: [
+        { rule: """query($USER: String!) {
+                     queryProject {
+                       roles(filter: { permission: { eq: EDIT } }) {
+                        assignedTo(filter: { username: { eq: $USER } }) {
+                         __typename
+                        }
+                       }
+                     }
+                 }""" },
+        { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
+    ]},
      query: { or: [
          { rule: """query($USER: String!) {
                       queryProject {
@@ -401,6 +414,18 @@ enum Permission {
 }
 
 type Column @auth(
+    password: { rule: """
+    query($USER: String!) {
+        queryColumn {
+            inProject {
+                roles(filter: { permission: { eq: EDIT } } ) {
+                    assignedTo(filter: { username: { eq: $USER } }) {
+                        __typename
+                    }
+                }
+            }
+        }
+    }"""},
     query: { rule: """
     query($USER: String!) {
         queryColumn {
@@ -591,7 +616,8 @@ type Author {
   posts: [Post] @hasInverse(field: author)
 }
 
-interface Post @auth(
+interface Post @secret(field: "pwd") @auth(
+    password: { rule: "{$ROLE: { eq: \"Admin\" } }"},
     query: { rule: """
             query($USER: String!) { 
               queryPost{
@@ -643,6 +669,13 @@ interface MsgPost @auth(
 }
 
 type Question implements Post  @auth(
+    password:{ rule: """
+            query($ANS: Boolean!) {
+              queryQuestion(filter: { answered: $ANS } ) {
+                id
+                text
+              }
+            }""" },
     query:{ rule: """
             query($ANS: Boolean!) { 
               queryQuestion(filter: { answered: $ANS } ) { 
@@ -671,7 +704,17 @@ type Question implements Post  @auth(
     answered:  Boolean @search
 }
 
-type FbPost implements Post & MsgPost {
+type FbPost implements Post & MsgPost @auth(
+    password: { rule: """
+        query($USER: String!) {
+            queryFbPost{
+                author(filter: {name: {eq: $USER}}){
+                    name
+                }
+            }
+        }"""
+    }
+) {
     postCount: Int
 }
 

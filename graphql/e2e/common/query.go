@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/dgraph-io/dgraph/graphql/schema"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -2920,4 +2922,89 @@ func queryCountAndOtherFieldsAtChildLevel(t *testing.T) {
 			}]
 		}`,
 		string(gqlResponse.Data))
+}
+
+func checkUser(t *testing.T, userObj, expectedObj *user) {
+	checkUserParams := &GraphQLParams{
+		Query: `query checkUserPassword($name: String!, $pwd: String!) {
+			checkUserPassword(name: $name, password: $pwd) { name }
+		}`,
+		Variables: map[string]interface{}{
+			"name": userObj.Name,
+			"pwd":  userObj.Password,
+		},
+	}
+
+	gqlResponse := checkUserParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		CheckUserPasword *user `json:"checkUserPassword,omitempty"`
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.Nil(t, err)
+
+	opt := cmpopts.IgnoreFields(user{}, "Password")
+	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func passwordTest(t *testing.T) {
+	newUser := &user{
+		Name:     "Test User",
+		Password: "password",
+	}
+
+	addUserParams := &GraphQLParams{
+		Query: `mutation addUser($user: [AddUserInput!]!) {
+			addUser(input: $user) {
+				user {
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"user": []*user{newUser}},
+	}
+
+	updateUserParams := &GraphQLParams{
+		Query: `mutation addUser($user: UpdateUserInput!) {
+			updateUser(input: $user) {
+				user {
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"user": map[string]interface{}{
+			"filter": map[string]interface{}{
+				"name": map[string]interface{}{
+					"eq": newUser.Name,
+				},
+			},
+			"set": map[string]interface{}{
+				"password": "password_new",
+			},
+		}},
+	}
+
+	t.Run("Test add and update user", func(t *testing.T) {
+		gqlResponse := postExecutor(t, GraphqlURL, addUserParams)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.Equal(t, `{"addUser":{"user":[{"name":"Test User"}]}}`,
+			string(gqlResponse.Data))
+
+		checkUser(t, newUser, newUser)
+		checkUser(t, &user{Name: "Test User", Password: "Wrong Pass"}, nil)
+
+		gqlResponse = postExecutor(t, GraphqlURL, updateUserParams)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.Equal(t, `{"updateUser":{"user":[{"name":"Test User"}]}}`,
+			string(gqlResponse.Data))
+		checkUser(t, newUser, nil)
+		updatedUser := &user{Name: newUser.Name, Password: "password_new"}
+		checkUser(t, updatedUser, updatedUser)
+	})
+
+	deleteUser(t, *newUser)
 }
