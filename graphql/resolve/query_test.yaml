@@ -1,5 +1,5 @@
 -
-  name: "in filter"
+  name: "in filter on string type"
   gqlquery: |
     query {
       queryState(filter: {code: {in: ["abc", "def", "ghi"]}}) {
@@ -16,6 +16,23 @@
       }
     }
 
+-
+  name: "in filter on enum type"
+  gqlquery: |
+    query{
+      queryVerification(filter: {status: {in: [ACTIVE, DEACTIVATED]}}){
+        name
+        status
+      }
+    }
+  dgquery: |-
+    query {
+      queryVerification(func: type(Verification)) @filter(eq(Verification.status, "ACTIVE", "DEACTIVATED")) {
+        name : Verification.name
+        status : Verification.status
+        dgraph.uid : uid
+      }
+    }
 -
   name: "Point query near filter"
   gqlquery: |
