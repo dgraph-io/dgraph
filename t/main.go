@@ -223,7 +223,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if isTeamcity {
 		opts = append(opts, "-json")
 	}
-	q := fmt.Sprintf("go test -v %s %s", strings.Join(opts, " "), pkg)
+	q := fmt.Sprintf("go test -failfast -v %s %s", strings.Join(opts, " "), pkg)
 	cmd := commandWithContext(ctx, q)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
 
