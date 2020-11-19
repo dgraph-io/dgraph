@@ -78,6 +78,7 @@ type Question struct {
 	Text     string  `json:"text,omitempty"`
 	Answered bool    `json:"answered,omitempty"`
 	Author   *Author `json:"author,omitempty"`
+	Pwd      string  `json:"pwd,omitempty"`
 }
 
 type Answer struct {
@@ -93,6 +94,7 @@ type FbPost struct {
 	Sender    *Author `json:"sender,omitempty"`
 	Receiver  *Author `json:"receiver,omitempty"`
 	PostCount int     `json:"postCount,omitempty"`
+	Pwd       string  `json:"pwd,omitempty"`
 }
 
 type Log struct {
@@ -133,6 +135,7 @@ type Project struct {
 	Name    string    `json:"name,omitempty"`
 	Roles   []*Role   `json:"roles,omitempty"`
 	Columns []*Column `json:"columns,omitempty"`
+	Pwd     string    `json:"pwd,omitempty"`
 }
 
 type Student struct {
