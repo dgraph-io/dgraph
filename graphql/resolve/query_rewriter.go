@@ -1010,13 +1010,10 @@ func addSelectionSetFrom(
 	// These fields might not have been requested by the user directly as part of the query but
 	// are required in the body template for other fields requested within the query. We must
 	// fetch them from Dgraph.
-	requiredFields := make(map[string]bool)
-	// count
-	fieldCount := make(map[string]int)
-	// addedFields is a map from field name to bool
-	addedFields := make(map[string]bool)
+	requiredFields := make(map[string]schema.FieldDefinition)
 	// fieldAdded is a map from field's dgraph alias to bool
 	fieldAdded := make(map[string]bool)
+	fieldCount := make(map[string]int)
 
 	for _, f := range field.SelectionSet() {
 		fieldCount[f.DgraphAlias()] = 0
@@ -1024,8 +1021,8 @@ func addSelectionSetFrom(
 	for _, f := range field.SelectionSet() {
 		hasCustom, rf := f.HasCustomDirective()
 		if hasCustom {
-			for k := range rf {
-				requiredFields[k] = true
+			for dgAlias, fieldDef := range rf {
+				requiredFields[dgAlias] = fieldDef
 			}
 			// This field is resolved through a custom directive so its selection set doesn't need
 			// to be part of query rewriting.
@@ -1102,7 +1099,6 @@ func addSelectionSetFrom(
 		// }
 		fieldCount[f.DgraphAlias()]++
 		fieldAdded[f.DgraphAlias()] = true
-		addedFields[f.Name()] = true
 
 		if rbac == schema.Positive || rbac == schema.Uncertain {
 			q.Children = append(q.Children, child)
@@ -1170,16 +1166,16 @@ func addSelectionSetFrom(
 	// Sort the required fields before adding them to q.Children so that the query produced after
 	// rewriting has a predictable order.
 	rfset := make([]string, 0, len(requiredFields))
-	for fname := range requiredFields {
-		rfset = append(rfset, fname)
+	for dgAlias := range requiredFields {
+		rfset = append(rfset, dgAlias)
 	}
 	sort.Strings(rfset)
 
 	// Add fields required by other custom fields which haven't already been added as a
 	// child to be fetched from Dgraph.
-	for _, fname := range rfset {
-		if _, ok := addedFields[fname]; !ok {
-			f := field.Type().Field(fname)
+	for _, dgAlias := range rfset {
+		if _, ok := fieldAdded[dgAlias]; !ok {
+			f := requiredFields[dgAlias]
 			child := &gql.GraphQuery{
 				Alias: f.DgraphAlias(),
 			}

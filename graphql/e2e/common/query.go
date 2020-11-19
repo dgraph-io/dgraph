@@ -454,7 +454,7 @@ func inFilter(t *testing.T) {
 	}
 
 	deleteFilter := map[string]interface{}{"xcode": map[string]interface{}{"in": []string{"abc", "def"}}}
-	deleteGqlType(t, "State", deleteFilter, 2, nil)
+	DeleteGqlType(t, "State", deleteFilter, 2, nil)
 }
 
 func betweenFilter(t *testing.T) {
@@ -2263,7 +2263,7 @@ func queryWithCascade(t *testing.T) {
 	// cleanup
 	deleteAuthors(t, authorIds, nil)
 	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
-	deleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
+	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
 	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
 		nil)
 	cleanupStarwars(t, newStarship.ID, humanID, "")
@@ -2649,7 +2649,7 @@ func filterInQueriesWithArrayForAndOr(t *testing.T) {
 	// cleanup
 	deleteAuthors(t, authorIds, nil)
 	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
-	deleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
+	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
 	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
 		nil)
 	cleanupStarwars(t, newStarship.ID, humanID, "")
@@ -2724,7 +2724,7 @@ func queryGeoNearFilter(t *testing.T) {
 	}`
 	testutil.CompareJSON(t, queryHotelExpected, string(gqlResponse.Data))
 	// Cleanup
-	deleteGqlType(t, "Hotel", map[string]interface{}{}, 3, nil)
+	DeleteGqlType(t, "Hotel", map[string]interface{}{}, 3, nil)
 }
 
 func persistedQuery(t *testing.T) {
