@@ -1453,7 +1453,7 @@ func typenameForInterface(t *testing.T) {
 			Query: `query {
 				queryCharacter (filter: {
 					appearsIn: {
-						eq: [EMPIRE]
+						in: [EMPIRE]
 					}
 				}) {
 					name
@@ -1581,7 +1581,7 @@ func onlytypenameForInterface(t *testing.T) {
 			Query: `query {
 				queryCharacter (filter: {
 					appearsIn: {
-						eq: [EMPIRE]
+						in: [EMPIRE]
 					}
 				}) {
 
@@ -1626,7 +1626,7 @@ func defaultEnumFilter(t *testing.T) {
 			Query: `query {
 				queryCharacter (filter: {
 					appearsIn: {
-						eq: [EMPIRE]
+						in: [EMPIRE]
 					}
 				}) {
 					name
@@ -2230,7 +2230,7 @@ func queryWithCascade(t *testing.T) {
 		{
 			name: "parameterized cascade on interface ",
 			query: `query {
-						queryCharacter (filter: { appearsIn: { eq: [EMPIRE] } }) @cascade(fields:["appearsIn"]){	
+						queryCharacter (filter: { appearsIn: { in: [EMPIRE] } }) @cascade(fields:["appearsIn"]){	
 							name
 							appearsIn
 						} 

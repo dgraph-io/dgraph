@@ -17,7 +17,25 @@
     }
 
 -
-  name: "in filter on enum type"
+  name: "in filter on field which is of enum type"
+  gqlquery: |
+    query{
+      queryVerification(filter: {prevStatus: {in: [ACTIVE, DEACTIVATED]}}){
+        name
+        prevStatus
+      }
+    }
+  dgquery: |-
+    query {
+      queryVerification(func: type(Verification)) @filter(eq(Verification.prevStatus, "ACTIVE", "DEACTIVATED")) {
+        name : Verification.name
+        prevStatus : Verification.prevStatus
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "in filter on field which is a List of enum type"
   gqlquery: |
     query{
       queryVerification(filter: {status: {in: [ACTIVE, DEACTIVATED]}}){
@@ -28,6 +46,40 @@
   dgquery: |-
     query {
       queryVerification(func: type(Verification)) @filter(eq(Verification.status, "ACTIVE", "DEACTIVATED")) {
+        name : Verification.name
+        status : Verification.status
+        dgraph.uid : uid
+      }
+    }
+
+- name: "eq filter on field which is a List of enum type"
+  gqlquery: |
+    query{
+      queryVerification(filter: {status: {eq: ACTIVE}}){
+        name
+        status
+      }
+    }
+  dgquery: |-
+    query {
+      queryVerification(func: type(Verification)) @filter(eq(Verification.status, "ACTIVE")) {
+        name : Verification.name
+        status : Verification.status
+        dgraph.uid : uid
+      }
+    }
+
+- name: "le filter on field which is a List of enum type"
+  gqlquery: |
+    query{
+      queryVerification(filter: {status: {le: INACTIVE}}){
+        name
+        status
+      }
+    }
+  dgquery: |-
+    query {
+      queryVerification(func: type(Verification)) @filter(le(Verification.status, "INACTIVE")) {
         name : Verification.name
         status : Verification.status
         dgraph.uid : uid
