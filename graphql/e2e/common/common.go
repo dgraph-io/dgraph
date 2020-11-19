@@ -41,7 +41,7 @@ import (
 
 var (
 	GraphqlURL      = "http://"+ testutil.SockAddrHttp +"/graphql"
-	graphqlAdminURL = "http://"+ testutil.SockAddrHttp +"/admin"
+	GraphqlAdminURL = "http://"+ testutil.SockAddrHttp +"/admin"
 	AlphagRPC       = testutil.SockAddr
 
 	adminDgraphHealthURL           = "http://"+ testutil.SockAddrHttp +"/health?all"
@@ -237,7 +237,7 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 }
 
 func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
-	err := addSchema(graphqlAdminURL, string(schema))
+	err := addSchema(GraphqlAdminURL, string(schema))
 	if err != nil {
 		x.Panic(err)
 	}
@@ -249,7 +249,7 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
 }
 
 func BootstrapServer(schema, data []byte) {
-	err := checkGraphQLStarted(graphqlAdminURL)
+	err := checkGraphQLStarted(GraphqlAdminURL)
 	if err != nil {
 		x.Panic(errors.Errorf(
 			"Waited for GraphQL test server to become available, but it never did.\n"+

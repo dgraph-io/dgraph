@@ -529,7 +529,7 @@ func admin(t *testing.T) {
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	testutil.DropAll(t, client)
 
-	hasSchema, err := hasCurrentGraphQLSchema(graphqlAdminURL)
+	hasSchema, err := hasCurrentGraphQLSchema(GraphqlAdminURL)
 	require.NoError(t, err)
 	require.False(t, hasSchema)
 
@@ -564,7 +564,7 @@ func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
 }
 
 func addGQLSchema(t *testing.T, client *dgo.Dgraph) {
-	err := addSchema(graphqlAdminURL, firstTypes)
+	err := addSchema(GraphqlAdminURL, firstTypes)
 	require.NoError(t, err)
 
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
@@ -576,7 +576,7 @@ func addGQLSchema(t *testing.T, client *dgo.Dgraph) {
 }
 
 func updateSchema(t *testing.T, client *dgo.Dgraph) {
-	err := addSchema(graphqlAdminURL, updatedTypes)
+	err := addSchema(GraphqlAdminURL, updatedTypes)
 	require.NoError(t, err)
 
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
@@ -648,7 +648,7 @@ func health(t *testing.T) {
         }
       }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -688,7 +688,7 @@ func partialHealth(t *testing.T) {
             }
         }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t, `{
         "health": [
@@ -717,7 +717,7 @@ func adminAlias(t *testing.T) {
             }
         }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t, `{
         "dgraphHealth": [
@@ -796,7 +796,7 @@ func adminState(t *testing.T) {
 			}
 		}`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -882,7 +882,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "getAllowedCORSOrigins": {
@@ -901,7 +901,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "replaceAllowedCORSOrigins": {
@@ -920,7 +920,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "getAllowedCORSOrigins": {
@@ -963,7 +963,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "replaceAllowedCORSOrigins": {
