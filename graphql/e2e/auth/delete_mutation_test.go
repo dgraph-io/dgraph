@@ -29,13 +29,13 @@ func (l *Log) add(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
 		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query: `
-		mutation addLog($log: AddLogInput!) {
-		  addLog(input: [$log]) {
+		mutation addLog($pwd: String!, $logs: String, $random: String) {
+		  addLog(input: [{pwd: $pwd, logs: $logs, random: $random}]) {
 			numUids
 		  }
 		}
 		`,
-		Variables: map[string]interface{}{"log": l},
+		Variables: map[string]interface{}{"pwd": "password", "logs": l.Logs, "random": l.Random},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
@@ -93,13 +93,13 @@ func (q *Question) add(t *testing.T, user string, ans bool) {
 	getParams := &common.GraphQLParams{
 		Headers: common.GetJWTForInterfaceAuth(t, user, "", ans, metaInfo),
 		Query: `
-		mutation addQuestion($text: String!,$id: ID!, $ans: Boolean ){
-			addQuestion(input: [{text: $text, author: {id: $id}, answered: $ans }]){
+		mutation addQuestion($text: String!,$id: ID!, $ans: Boolean, $pwd: String! ){
+			addQuestion(input: [{text: $text, author: {id: $id}, answered: $ans, pwd: $pwd }]){
 			  numUids
 			}
 		  }
 		`,
-		Variables: map[string]interface{}{"text": q.Text, "ans": q.Answered, "id": q.Author.Id},
+		Variables: map[string]interface{}{"text": q.Text, "ans": q.Answered, "id": q.Author.Id, "pwd": "password"},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
@@ -109,13 +109,13 @@ func (a *Answer) add(t *testing.T, user string) {
 	getParams := &common.GraphQLParams{
 		Headers: common.GetJWT(t, user, "", metaInfo),
 		Query: `
-		mutation addAnswer($text: String!,$id: ID!){
-			addAnswer(input: [{text: $text, author: {id: $id}}]){
+		mutation addAnswer($text: String!,$id: ID!, $pwd: String!){
+			addAnswer(input: [{text: $text, pwd: $pwd, author: {id: $id}}]){
 			  numUids
 			}
 		  }
 		`,
-		Variables: map[string]interface{}{"text": a.Text, "id": a.Author.Id},
+		Variables: map[string]interface{}{"text": a.Text, "id": a.Author.Id, "pwd": "password"},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
@@ -125,13 +125,13 @@ func (f *FbPost) add(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
 		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query: `
-		mutation addFbPost($text: String!,$id1: ID!,$id2:ID!, $id3: ID!, $postCount: Int! ){
-			addFbPost(input: [{text: $text, author: {id: $id1},sender: {id: $id2}, receiver: {id: $id3}, postCount: $postCount }]){
+		mutation addFbPost($text: String!,$id1: ID!,$id2:ID!, $id3: ID!, $postCount: Int!, $pwd: String! ){
+			addFbPost(input: [{text: $text, author: {id: $id1},sender: {id: $id2}, receiver: {id: $id3}, postCount: $postCount, pwd: $pwd }]){
 			  numUids
 			}
 		  }
 		`,
-		Variables: map[string]interface{}{"text": f.Text, "id1": f.Author.Id, "id2": f.Sender.Id, "id3": f.Receiver.Id, "postCount": f.PostCount},
+		Variables: map[string]interface{}{"text": f.Text, "id1": f.Author.Id, "id2": f.Sender.Id, "id3": f.Receiver.Id, "postCount": f.PostCount, "pwd": "password"},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)

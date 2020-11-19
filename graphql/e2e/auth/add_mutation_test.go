@@ -159,6 +159,7 @@ func TestAuth_AddOnTypeWithRBACRuleOnInterface(t *testing.T) {
 		role: "ADMIN",
 		variables: map[string]interface{}{"fbpost": &FbPost{
 			Text: "New FbPost",
+			Pwd:  "password",
 			Author: &Author{
 				Name: "user1@dgraph.io",
 			},
@@ -177,6 +178,7 @@ func TestAuth_AddOnTypeWithRBACRuleOnInterface(t *testing.T) {
 		role: "USER",
 		variables: map[string]interface{}{"fbpost": &FbPost{
 			Text: "New FbPost",
+			Pwd:  "password",
 			Author: &Author{
 				Name: "user1@dgraph.io",
 			},
@@ -264,6 +266,7 @@ func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
 		ans:  true,
 		variables: map[string]interface{}{"question": &Question{
 			Text: "A Question",
+			Pwd:  "password",
 			Author: &Author{
 				Name: "user1@dgraph.io",
 			},
@@ -275,6 +278,7 @@ func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
 		ans:  false,
 		variables: map[string]interface{}{"question": &Question{
 			Text: "A Question",
+			Pwd:  "password",
 			Author: &Author{
 				Name: "user1",
 			},
@@ -287,6 +291,7 @@ func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
 			ans:  true,
 			variables: map[string]interface{}{"question": &Question{
 				Text: "A Question",
+				Pwd:  "password",
 				Author: &Author{
 					Name: "user1",
 				},
@@ -361,6 +366,7 @@ func TestAddDeepFilter(t *testing.T) {
 			Name: "column_add_1",
 			InProject: &Project{
 				Name: "project_add_1",
+				Pwd:  "password1",
 			},
 		}},
 	}, {
@@ -372,10 +378,12 @@ func TestAddDeepFilter(t *testing.T) {
 			Name: "column_add_2",
 			InProject: &Project{
 				Name: "project_add_2",
+				Pwd:  "password2",
 				Roles: []*Role{{
 					Permission: "ADMIN",
 					AssignedTo: []*common.User{{
 						Username: "user2",
+						Password: "password",
 					}},
 				}},
 			},
@@ -388,15 +396,18 @@ func TestAddDeepFilter(t *testing.T) {
 			Name: "column_add_3",
 			InProject: &Project{
 				Name: "project_add_4",
+				Pwd:  "password4",
 				Roles: []*Role{{
 					Permission: "ADMIN",
 					AssignedTo: []*common.User{{
 						Username: "user6",
+						Password: "password",
 					}},
 				}, {
 					Permission: "VIEW",
 					AssignedTo: []*common.User{{
 						Username: "user6",
+						Password: "password",
 					}},
 				}},
 			},
@@ -468,6 +479,7 @@ func TestAddOrRBACFilter(t *testing.T) {
 		result: `{"addProject": {"project":[{"name":"project_add_1"}]}}`,
 		variables: map[string]interface{}{"project": &Project{
 			Name: "project_add_1",
+			Pwd:  "password1",
 		}},
 	}, {
 		// Test case fails as the role isn't assigned to the correct user
@@ -476,10 +488,12 @@ func TestAddOrRBACFilter(t *testing.T) {
 		result: ``,
 		variables: map[string]interface{}{"project": &Project{
 			Name: "project_add_2",
+			Pwd:  "password2",
 			Roles: []*Role{{
 				Permission: "ADMIN",
 				AssignedTo: []*common.User{{
 					Username: "user2",
+					Password: "password",
 				}},
 			}},
 		}},
@@ -489,15 +503,18 @@ func TestAddOrRBACFilter(t *testing.T) {
 		result: `{"addProject": {"project":[{"name":"project_add_3"}]}}`,
 		variables: map[string]interface{}{"project": &Project{
 			Name: "project_add_3",
+			Pwd:  "password3",
 			Roles: []*Role{{
 				Permission: "ADMIN",
 				AssignedTo: []*common.User{{
 					Username: "user7",
+					Password: "password",
 				}},
 			}, {
 				Permission: "VIEW",
 				AssignedTo: []*common.User{{
 					Username: "user7",
+					Password: "password",
 				}},
 			}},
 		}},
@@ -817,6 +834,7 @@ func TestAddRBACFilter(t *testing.T) {
 		result: `{"addLog": {"log":[{"logs":"log_add_1"}]}}`,
 		variables: map[string]interface{}{"issue": &Log{
 			Logs: "log_add_1",
+			Pwd:  "password1",
 		}},
 	}, {
 		user:   "user1",
@@ -824,6 +842,7 @@ func TestAddRBACFilter(t *testing.T) {
 		result: ``,
 		variables: map[string]interface{}{"issue": &Log{
 			Logs: "log_add_2",
+			Pwd:  "password2",
 		}},
 	}}
 
