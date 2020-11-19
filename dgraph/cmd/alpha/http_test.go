@@ -444,6 +444,7 @@ func commitWithTsKeysOnly(keys []string, ts uint64) error {
 
 func TestTransactionBasic(t *testing.T) {
 	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string .`))
 	require.NoError(t, alterSchema(`name: string @index(term) .`))
 
 	q1 := `

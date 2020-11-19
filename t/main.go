@@ -223,7 +223,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if isTeamcity {
 		opts = append(opts, "-json")
 	}
-	q := fmt.Sprintf("go test -v %s %s", strings.Join(opts, " "), pkg)
+	q := fmt.Sprintf("go test -failfast -v %s %s", strings.Join(opts, " "), pkg)
 	cmd := commandWithContext(ctx, q)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
 
@@ -451,7 +451,7 @@ func (o *outputCatcher) Print() {
 			continue
 		}
 		pkg := strings.Replace(dur.pkg, "github.com/dgraph-io/dgraph/", "", 1)
-		fmt.Printf("[%6s]%s[%d] pkg %s took: %s\n", dur.ts.Sub(baseTs).Round(time.Second),
+		fmt.Printf("[%6s]%s[%d] %s took: %s\n", dur.ts.Sub(baseTs).Round(time.Second),
 			strings.Repeat("   ", int(dur.threadId)), dur.threadId, pkg,
 			dur.dur.Round(time.Second))
 	}
@@ -565,18 +565,20 @@ func removeAllTestContainers() {
 }
 
 func run() error {
+	if *clear {
+		removeAllTestContainers()
+		return nil
+	}
+
+	start := time.Now()
+	oc.Took(0, "START", time.Millisecond)
+
 	cmd := command("make install")
 	cmd.Dir = *baseDir
 	if err := cmd.Run(); err != nil {
 		return err
 	}
-
-	start := time.Now()
-
-	if *clear {
-		removeAllTestContainers()
-		return nil
-	}
+	oc.Took(0, "COMPILE", time.Since(start))
 
 	if len(*runPkg) > 0 && len(*runTest) > 0 {
 		log.Fatalf("Both pkg and test can't be set.\n")
