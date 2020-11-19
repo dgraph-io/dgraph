@@ -896,7 +896,7 @@ func buildCommonAuthQueries(
 // It returns related DQL fields and Auth Queries which are then added to the final DQL query
 // by the caller.
 func buildAggregateFields(
-	f schema.Field,
+	f schema.Field, fieldCount map[string]int,
 	auth *authRewriter) ([]*gql.GraphQuery, []*gql.GraphQuery) {
 	constructedForType := f.ConstructedFor()
 	constructedForDgraphPredicate := f.ConstructedForDgraphPredicate()
@@ -911,7 +911,7 @@ func buildAggregateFields(
 		}
 		if aggregateField.DgraphAlias() == "count" {
 			aggregateChild := &gql.GraphQuery{
-				Alias: "count_" + f.DgraphAlias(),
+				Alias: "count_" + generateUniqueDgraphAlias(f.DgraphAlias(), fieldCount),
 				Attr:  "count(" + constructedForDgraphPredicate + ")",
 			}
 			filter, _ := f.ArgValue("filter").(map[string]interface{})
@@ -969,11 +969,14 @@ func buildAggregateFields(
 	return aggregateChildren, retAuthQueries
 }
 
-func generateUniqueDgraphAlias(alias string, count map[string]int) string {
-	if count[alias] == 0 {
+// Generated Unique Dgraph Alias for the field based on its count.
+// If count is 0 then simply returns the field alias, and if count is
+// let's say 3 then return "fieldName3" where "fieldName" is the name of the field.
+func generateUniqueDgraphAlias(alias string, fieldCount map[string]int) string {
+	if fieldCount[alias] == 0 {
 		return alias
 	}
-	return alias + strconv.Itoa(count[alias])
+	return alias + strconv.Itoa(fieldCount[alias])
 }
 
 // addSelectionSetFrom adds all the selections from field into q, and returns a list
@@ -1011,8 +1014,9 @@ func addSelectionSetFrom(
 	// are required in the body template for other fields requested within the query. We must
 	// fetch them from Dgraph.
 	requiredFields := make(map[string]schema.FieldDefinition)
-	// fieldAdded is a map from field's dgraph alias to bool
-	fieldAdded := make(map[string]bool)
+	// fieldCount is a map from field's dgraph alias to integer.
+	// It stores the count of number of times a field was encountered
+	// in the query.
 	fieldCount := make(map[string]int)
 
 	for _, f := range field.SelectionSet() {
@@ -1037,19 +1041,17 @@ func addSelectionSetFrom(
 
 		// Handle aggregation queries
 		if f.IsAggregateField() {
-			if _, isAddedField := fieldAdded[f.DgraphAlias()]; isAddedField {
-				continue
-			}
-			fieldAdded[f.DgraphAlias()] = true
 
-			aggregateChildren, aggregateAuthQueries := buildAggregateFields(f, auth)
+			aggregateChildren, aggregateAuthQueries := buildAggregateFields(f, fieldCount, auth)
 
 			authQueries = append(authQueries, aggregateAuthQueries...)
 			q.Children = append(q.Children, aggregateChildren...)
 			// As all child fields inside aggregate have been looked at. We can continue
+			fieldCount[f.DgraphAlias()]++
 			continue
 		}
 
+		// Generate Unique Alias for the field based on how many times it has been encountered till now.
 		child := &gql.GraphQuery{
 			Alias: generateUniqueDgraphAlias(f.DgraphAlias(), fieldCount),
 		}
@@ -1091,14 +1093,11 @@ func addSelectionSetFrom(
 			auth.varName = parentQryName
 		}
 
-		// skip if we have already added a query for this field in DQL. It helps make sure that if
-		// a field is being asked twice or more, each time with a new alias, then we only add it
-		// once in DQL query.
-		// if _, ok := fieldAdded[f.DgraphAlias()]; ok {
-		// 	continue
-		// }
+		// if field is InbuiltType and it has already been added then skip
+		if f.Type().IsInbuiltType() && (fieldCount[f.DgraphAlias()] > 0) {
+			continue
+		}
 		fieldCount[f.DgraphAlias()]++
-		fieldAdded[f.DgraphAlias()] = true
 
 		if rbac == schema.Positive || rbac == schema.Uncertain {
 			q.Children = append(q.Children, child)
@@ -1174,7 +1173,7 @@ func addSelectionSetFrom(
 	// Add fields required by other custom fields which haven't already been added as a
 	// child to be fetched from Dgraph.
 	for _, dgAlias := range rfset {
-		if _, ok := fieldAdded[dgAlias]; !ok {
+		if fieldCount[dgAlias] == 0 {
 			f := requiredFields[dgAlias]
 			child := &gql.GraphQuery{
 				Alias: f.DgraphAlias(),

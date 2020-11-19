@@ -1367,7 +1367,7 @@ func completeObject(
 			aggregateVal := make(map[string]interface{})
 			for _, aggregateField := range f.SelectionSet() {
 				if aggregateField.DgraphAlias() == "count" {
-					aggregateVal["count"] = res["count_"+f.DgraphAlias()]
+					aggregateVal["count"] = res["count_"+generateUniqueDgraphAlias(f.DgraphAlias(), fieldCount)]
 				}
 			}
 			val = aggregateVal
