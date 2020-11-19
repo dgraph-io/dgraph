@@ -147,6 +147,7 @@ type Starship {
 		"UpdateEmployeePayload":    employee,
 		"DeleteEmployeePayload":    employee,
 		"Starship":                 starship,
+		"UpdateStarshipPayload":    starship,
 		"DeleteStarshipPayload":    starship,
 		"AuthorAggregateResult":    {"count": "AuthorAggregateResult.count"},
 		"CharacterAggregateResult": {"count": "CharacterAggregateResult.count"},
