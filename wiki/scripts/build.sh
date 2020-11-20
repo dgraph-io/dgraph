@@ -126,7 +126,7 @@ checkAndUpdate()
 	fi
 }
 
-
+git fetch --all
 firstRun=1
 while true; do
 	# Lets move to the docs directory.
