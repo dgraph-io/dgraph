@@ -570,7 +570,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// All the temp indexes go into the following directory. We delete the whole
 	// directory after the indexing step is complete. This deletes any other temp
 	// indexes that may have been left around in case defer wasn't executed.
-	// TODO(Aman): If users are not happy, we could add a flag to choose this dir.
+	// TODO(Aman): If users are not happy, we could add flag to choose this dir.
 	tmpParentDir := filepath.Join(os.TempDir(), "dgraph_index")
 
 	// We write the index in a temporary badger first and then,
@@ -590,8 +590,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt64).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
-		WithLogRotatesToFlush(10).
-		WithBlockCacheSize(50) // TODO(Aman): Disable cache altogether
+		WithLogRotatesToFlush(10)
 
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
