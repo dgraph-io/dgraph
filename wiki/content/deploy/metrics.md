@@ -14,9 +14,9 @@ Dgraph metrics follow the
 
 ## Disk metrics
 
-Disk metrics let you track the disk activity of the Dgraph process. Dgraph does not interact
-directly with the filesystem. Instead it relies on [Badger](https://github.com/dgraph-io/badger) to
-read from and write to disk.
+Disk metrics let you track the disk activity of the Dgraph process. Dgraph does
+not interact directly with the filesystem. Instead it relies on
+[Badger](https://github.com/dgraph-io/badger) to read from and write to disk.
 
  Metrics                          	 | Description
  -------                          	 | -----------
