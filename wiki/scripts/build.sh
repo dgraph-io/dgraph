@@ -9,6 +9,8 @@
 
 set -e
 
+git fetch --all
+
 GREEN='\033[32;1m'
 RESET='\033[0m'
 HOST="${HOST:-https://dgraph.io/docs}"
@@ -126,7 +128,6 @@ checkAndUpdate()
 	fi
 }
 
-git fetch --all
 firstRun=1
 while true; do
 	# Lets move to the docs directory.
