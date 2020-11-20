@@ -7,7 +7,7 @@ weight = 12
   parent = "graphql"
 +++
 
-This article presents the Admin API and explains how to run Dgraph database with GraphQL.
+This article presents the Admin API and explains how to run a Dgraph database with GraphQL.
 
 ## Running Dgraph with GraphQL
 
