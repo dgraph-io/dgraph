@@ -22,7 +22,9 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -112,11 +114,24 @@ func setupDgraph(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	// Add schema and types.
-	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .
+	// this is because Alters are always blocked until the indexing is finished.
+	for i := 0; i < 10; i++ {
+		err = dg.Alter(ctx, &api.Operation{Schema: `movie: string .
 		type Node {
 			movie
-		}`}))
+		}`})
 
+		if err == nil {
+			break
+		}
+
+		if strings.Contains(err.Error(), "operation opIndexing is already running") {
+			time.Sleep(time.Second)
+			continue
+		}
+	}
+
+	require.NoError(t, err)
 	// Add initial data.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -142,7 +157,7 @@ func requestExport(t *testing.T) map[string]interface{} {
 		}
 	}`
 
-	adminUrl := "http://"+ testutil.SockAddrHttp+ "/admin"
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: exportRequest,
 		Variables: map[string]interface{}{
