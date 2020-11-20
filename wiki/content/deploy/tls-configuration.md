@@ -264,7 +264,7 @@ The server will always **request** Client Authentication.  There are four differ
 | `REQUEST`          | optional        | Client certificate is not VERIFIED if provided. (least secure) |
 | `REQUIREANY`       | required        | Client certificate is never VERIFIED |
 | `VERIFYIFGIVEN`    | optional        | Client certificate is VERIFIED if provided (default) |
-| `REQUIREANDVERIFY` | required        | Client certificate is always VERIFIED (most secure). |
+| `REQUIREANDVERIFY` | required        | Client certificate is always VERIFIED (most secure) |
 
 {{% notice "note" %}} `REQUIREANDVERIFY` is the most secure but also the most difficult to configure for remote clients. This option is required if you encrypt both internal and external ports. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
 
