@@ -2956,7 +2956,7 @@ func queryCountAtChildLevelWithMultipleAlias(t *testing.T) {
 		string(gqlResponse.Data))
 }
 
-func queryCountAtChildLevelWithMultipleAliasOnScalarField(t *testing.T) {
+func queryChildLevelWithMultipleAliasOnScalarField(t *testing.T) {
 	queryNumberOfIndianStates := &GraphQLParams{
 		Query: `query
 		{
