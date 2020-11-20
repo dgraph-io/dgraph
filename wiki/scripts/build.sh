@@ -79,6 +79,7 @@ rebuild() {
 		VERSIONS=${VERSION_STRING}\
 		CURRENT_BRANCH=${1}\
 		CURRENT_VERSION=${2} ${HUGO} \
+                --verbose \
 		--destination="${PUBLIC}"/"$dir"\
 		--baseURL="$HOST"/"$dir" 1> /dev/null
 }
