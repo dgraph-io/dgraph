@@ -10,7 +10,7 @@
 set -e
 
 hugo version
-git ls-remote git remote add origin https://github.com/dgraph-io/dgraph.git
+git remote add origin https://github.com/dgraph-io/dgraph.git
 git remote -vvv
 git fetch --all
 
