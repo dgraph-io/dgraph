@@ -298,6 +298,12 @@ type DeleteCharacterPayload {
 	numUids: Int
 }
 
+type DeleteEmployeePayload {
+	employee(filter: EmployeeFilter, order: EmployeeOrder, first: Int, offset: Int): [Employee]
+	msg: String
+	numUids: Int
+}
+
 type DeleteHumanPayload {
 	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	msg: String
@@ -314,6 +320,11 @@ type HumanAggregateResult {
 
 type UpdateCharacterPayload {
 	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	numUids: Int
+}
+
+type UpdateEmployeePayload {
+	employee(filter: EmployeeFilter, order: EmployeeOrder, first: Int, offset: Int): [Employee]
 	numUids: Int
 }
 
@@ -409,6 +420,11 @@ input EmployeeOrder {
 	then: EmployeeOrder
 }
 
+input EmployeePatch {
+	employeeId: String
+	title: String
+}
+
 input HumanFilter {
 	id: [ID!]
 	name: StringExactFilter
@@ -447,6 +463,12 @@ input UpdateCharacterInput {
 	remove: CharacterPatch
 }
 
+input UpdateEmployeeInput {
+	filter: EmployeeFilter!
+	set: EmployeePatch
+	remove: EmployeePatch
+}
+
 input UpdateHumanInput {
 	filter: HumanFilter!
 	set: HumanPatch
@@ -461,8 +483,8 @@ type Query {
 	getCharacter(id: ID!): Character
 	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
-	queryEmployee(order: EmployeeOrder, first: Int, offset: Int): [Employee]
-	aggregateEmployee: EmployeeAggregateResult
+	queryEmployee(filter: EmployeeFilter, order: EmployeeOrder, first: Int, offset: Int): [Employee]
+	aggregateEmployee(filter: EmployeeFilter): EmployeeAggregateResult
 	getHuman(id: ID!): Human
 	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	aggregateHuman(filter: HumanFilter): HumanAggregateResult
@@ -475,6 +497,8 @@ type Query {
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
 	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
+	updateEmployee(input: UpdateEmployeeInput!): UpdateEmployeePayload
+	deleteEmployee(filter: EmployeeFilter!): DeleteEmployeePayload
 	addHuman(input: [AddHumanInput!]!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload

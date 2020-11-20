@@ -892,39 +892,52 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 	}
 	def.Fields = def.Fields[:i]
 
-	if len(def.Fields) == 0 {
+	// In case of UpdateTypeInput, if TypePatch gets cleaned up then it becomes
+	// input UpdateTypeInput {
+	//		filter: TypeFilter!
+	// }
+	// In this case, UpdateTypeInput should also be deleted.
+	if len(def.Fields) == 0 || (strings.HasPrefix(def.Name, "Update") && len(def.Fields) == 1) {
 		delete(sch.Types, def.Name)
 	}
 }
 
 func cleanSchema(sch *ast.Schema) {
-	// Let's go over inputs of the type TRef, TPatch and AddTInput and delete the ones which
+	// Let's go over inputs of the type TRef, TPatch AddTInput, UpdateTInput and delete the ones which
 	// don't have field inside them.
 	for k := range sch.Types {
 		if strings.HasSuffix(k, "Ref") || strings.HasSuffix(k, "Patch") ||
-			(strings.HasPrefix(k, "Add") && strings.HasSuffix(k, "Input")) {
+			((strings.HasPrefix(k, "Add") || strings.HasPrefix(k, "Update")) && strings.HasSuffix(k, "Input")) {
 			cleanupInput(sch, sch.Types[k], map[string]bool{})
 		}
 	}
 
-	// Let's go over mutations and cleanup those which don't have AddTInput defined in the schema
+	// Let's go over mutations and cleanup those which don't have AddTInput/UpdateTInput defined in the schema
 	// anymore.
 	i := 0 // helps us overwrite the array with valid entries.
 	for _, field := range sch.Mutation.Fields {
 		custom := field.Directives.ForName("custom")
-		// We would only modify add type queries.
-		if custom != nil || !strings.HasPrefix(field.Name, "add") {
+		// We would only modify add/update
+		if custom != nil || !(strings.HasPrefix(field.Name, "add") || strings.HasPrefix(field.Name, "update")) {
 			sch.Mutation.Fields[i] = field
 			i++
 			continue
 		}
 
-		// addT type mutations have an input which is AddTInput so if that doesn't exist anymore,
-		// we can delete the AddTPayload and also skip this mutation.
-		typ := field.Name[3:]
-		input := sch.Types["Add"+typ+"Input"]
-		if input == nil {
-			delete(sch.Types, "Add"+typ+"Payload")
+		// addT / updateT type mutations have an input which is AddTInput / UpdateTInput so if that doesn't exist anymore,
+		// we can delete the AddTPayload / UpdateTPayload and also skip this mutation.
+
+		var typeName, input string
+		if strings.HasPrefix(field.Name, "add") {
+			typeName = field.Name[3:]
+			input = "Add" + typeName + "Input"
+		} else if strings.HasPrefix(field.Name, "update") {
+			typeName = field.Name[6:]
+			input = "Update" + typeName + "Input"
+		}
+
+		if sch.Types[input] == nil {
+			delete(sch.Types, input)
 			continue
 		}
 		sch.Mutation.Fields[i] = field
@@ -1155,6 +1168,11 @@ func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 }
 
 func addFilterArgumentForField(schema *ast.Schema, fld *ast.FieldDefinition, fldTypeName string) {
+	// Don't add filters for inbuilt types like String, Point, Polygon ...
+	if _, ok := inbuiltTypeToDgraph[fldTypeName]; ok {
+		return
+	}
+
 	fldType := schema.Types[fldTypeName]
 	if fldType.Kind == ast.Union || hasFilterable(fldType) {
 		fld.Arguments = append(fld.Arguments,
@@ -1351,10 +1369,13 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types[filterName] = filter
 }
 
+// hasFilterable Returns whether TypeFilter for a defn will be generated or not.
+// It returns true if any field have search arguments or it is an `ID` field or
+// there is atleast one non-custom filter which would be the part of the has filter.
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool {
-			return len(getSearchArgs(fld)) != 0 || isID(fld)
+			return len(getSearchArgs(fld)) != 0 || isID(fld) || !hasCustomOrLambda(fld)
 		})
 }
 
