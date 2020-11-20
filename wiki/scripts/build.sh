@@ -9,8 +9,7 @@
 
 set -e
 
-hugo version
-git remote add origin https://github.com/dgraph-io/dgraph.git
+# git remote add origin https://github.com/dgraph-io/dgraph.git
 git remote -vvv
 git fetch --all
 
@@ -25,6 +24,9 @@ LOOP="${LOOP:-true}"
 HUGO="${HUGO:-hugo}"
 OLD_THEME="${OLD_THEME:-old-theme}"
 NEW_THEME="${NEW_THEME:-master}"
+
+${HUGO} version
+
 
 # TODO - Maybe get list of released versions from Github API and filter
 # those which have docs.
