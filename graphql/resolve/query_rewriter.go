@@ -970,8 +970,8 @@ func buildAggregateFields(
 	return aggregateChildren, retAuthQueries
 }
 
-// Generated Unique Dgraph Alias for the field based on number of time we it has been
-// seen till now. If it is seen first time then simply returns the field's DgraphAlias,
+// Generate Unique Dgraph Alias for the field based on number of time it has been
+// seen till now in the given query at current level. If it is seen first time then simply returns the field's DgraphAlias,
 // and if  it is seen let's say 3rd time  then return "fieldAlias3" where "fieldAlias"
 // is the  DgraphAlias of the field.
 func generateUniqueDgraphAlias(f schema.Field, fieldSeenCount map[string]int) string {
@@ -1022,9 +1022,6 @@ func addSelectionSetFrom(
 	// in the query till now.
 	fieldSeenCount := make(map[string]int)
 
-	for _, f := range field.SelectionSet() {
-		fieldSeenCount[f.DgraphAlias()] = 0
-	}
 	for _, f := range field.SelectionSet() {
 		hasCustom, rf := f.HasCustomDirective()
 		if hasCustom {
@@ -1096,8 +1093,8 @@ func addSelectionSetFrom(
 			auth.varName = parentQryName
 		}
 
-		// if field is InbuiltType and it has already been added then skip
-		if f.Type().IsInbuiltType() && (fieldSeenCount[f.DgraphAlias()] > 0) {
+		// if field is InbuiltType or Enum and it has already been added then skip
+		if f.Type().IsInbuiltOrEnumType() && (fieldSeenCount[f.DgraphAlias()] > 0) {
 			continue
 		}
 		fieldSeenCount[f.DgraphAlias()]++

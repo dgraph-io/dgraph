@@ -2465,6 +2465,23 @@
       }
     }
 
+- name: "querying an Enum tupe field multiple times with different aliases adds it only once in rewrting"
+  gqlquery: |-
+    query {
+      queryPost {
+        title
+        p1: postType
+        p2: postType
+      }
+    }
+  dgquery: |-
+    query {
+      queryPost(func: type(Post)) {
+        title : Post.title
+        postType : Post.postType
+        dgraph.uid : uid
+      }
+    }
 - 
   name: "querying a non-inbuiltType field multiple times with different aliases should reflect in rewriting"
   gqlquery: |-

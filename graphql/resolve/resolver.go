@@ -1332,9 +1332,6 @@ func completeObject(
 	// to extract out the corresponding value of field from the response.
 	fieldSeenCount := make(map[string]int)
 	for _, f := range fields {
-		fieldSeenCount[f.DgraphAlias()] = 0
-	}
-	for _, f := range fields {
 		if f.Skip() || !f.Include() {
 			continue
 		}
@@ -1360,7 +1357,15 @@ func completeObject(
 		completeAlias(f, &buf)
 
 		seenField[f.ResponseName()] = true
-		uniqueDgraphAlias := generateUniqueDgraphAlias(f, fieldSeenCount)
+
+		var uniqueDgraphAlias string
+		// In case of InbuiltType or Enums, only one alias was passed into the dgraph query.
+		// So just map its value to all of its occurences.
+		if f.Type().IsInbuiltOrEnumType() {
+			uniqueDgraphAlias = f.DgraphAlias()
+		} else {
+			uniqueDgraphAlias = generateUniqueDgraphAlias(f, fieldSeenCount)
+		}
 		val := res[uniqueDgraphAlias]
 		// Handle aggregate queries:
 		// Aggregate Fields in DQL response don't follow the same response as other queries.

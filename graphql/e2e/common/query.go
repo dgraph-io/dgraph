@@ -2924,17 +2924,16 @@ func queryCountAtChildLevelWithFilter(t *testing.T) {
 }
 
 func queryCountAtChildLevelWithMultipleAlias(t *testing.T) {
-	fmt.Println("name")
 	queryNumberOfIndianStates := &GraphQLParams{
-		Query: `query 
+		Query: `query
 		{
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
 				ag1: statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
-                	count   
+						count
 				}
 				ag2: statesAggregate(filter: {xcode: {in: ["ka", "mh", "gj", "xyz"]}}) {
-                	count   
+					count
 				}
 			}
 		}`,
@@ -2953,6 +2952,31 @@ func queryCountAtChildLevelWithMultipleAlias(t *testing.T) {
 					"count" : 3
 				}
 			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryCountAtChildLevelWithMultipleAliasOnScalarField(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query
+		{
+			queryPost(filter: {numLikes: {ge: 100}}) {
+				t1: title
+				t2: title
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryPost": [
+				{
+					"t1": "Introducing GraphQL in Dgraph",
+					"t2": "Introducing GraphQL in Dgraph"
+				}
+			]
 		}`,
 		string(gqlResponse.Data))
 }
