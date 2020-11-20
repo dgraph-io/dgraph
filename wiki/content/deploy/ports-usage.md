@@ -56,11 +56,11 @@ expose port 8000 to the public.
 
 **Port Offset** To make it easier for users to set up a cluster, Dgraph has
 default values for the ports used by Dgraph nodes. To support multiple nodes
-running on a single machine (or a VM or instance), you can set a node
-to use different ports using an offset (using the command option `--port_offset`).
-This command increments the actual ports used by the node by the offset value
-provided. Port offset can also be used when starting multiple Dgraph Zero nodes
-in a development environment.
+running on a single machine or VM, you can set a node to use different ports
+using an offset (using the command option `--port_offset`). This command
+increments the actual ports used by the node by the offset value provided. You
+can also use port offsets when starting multiple Dgraph Zero nodes in a
+development environment.
 
 For example, when a user runs Dgraph Alpha with the `--port_offset 2` setting,
 then the Alpha node binds to port 7082 (`gRPC-internal-private`), 8082
@@ -76,7 +76,8 @@ replicas for the Zero node, and three or five replicas for the Alpha node.
 
 {{% notice "note" %}}
 If the number of replicas is 2N + 1, up to **N servers** can go offline without
-any impact on reads or writes. The total number of Zero and Alpha node replicas
+any impact on reads or writes. So, if there are 5 replicas, three must be online
+to avoid an impact to reads or writes. The total number of Zero and Alpha node replicas
 should be an odd number, as an even number of replicas will prevent consensus if
 nodes go offline (which will impact reads and writes).
 {{% /notice %}}
