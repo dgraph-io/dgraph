@@ -104,7 +104,7 @@ func runFatal(cmd *exec.Cmd) {
 func startCluster(composeFile, prefix string, containers string) {
 	q := fmt.Sprintf("docker-compose -f %s -p %s up --force-recreate --remove-orphans --detach %s",
 		composeFile, prefix, containers)
-
+	println(q)
 	runFatal(q)
 
 	// Let it stabilize.
@@ -139,7 +139,7 @@ func bulkLoad(prefix, benchmarksDir, dataDir, schemaFile, dataFile string) {
         mv /data/zero1/bulk/1/p /data/alpha2
 		mv /data/zero1/bulk/2/p /data/alpha3
 	EOF`, prefix, benchmarksDir, benchmarksDir, schemaFile, dataFile)
-
+	println(bulkLoadCmd)
 	runFatal(bulkLoadCmd)
 }
 
@@ -190,7 +190,7 @@ func handleSpecificPackages(ctx context.Context, task task, prefix string) bool 
 
 		startCluster(composeFile, prefix, "zero1")
 		// TODO: test healthiness of zero
-		bulkLoad(prefix, benchmarksDir, dataDir, oneMillionNoIndexSchema, oneMillionRdf)
+		bulkLoad(prefix, benchmarksDir, dataDir, path.Join(dataDir, oneMillionNoIndexSchema), path.Join(dataDir, oneMillionRdf))
 
 		startCluster(composeFile, prefix, "alpha1 alpha2 alpha3")
 
