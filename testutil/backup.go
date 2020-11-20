@@ -43,7 +43,7 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	if err := config.BindPFlags(flags); err != nil {
 		return nil, err
 	}
-	config.Set("encryption_key_file", KeyFile)
+	config.Set("encryption-key-file", KeyFile)
 	k, err := enc.ReadKey(config)
 	if err != nil {
 		return nil, err

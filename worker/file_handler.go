@@ -42,7 +42,7 @@ type fileHandler struct {
 }
 
 // BackupExporter is an alias of fileHandler so that this struct can be used
-// by the export_backup command.
+// by the export-backup command.
 type BackupExporter struct {
 	fileHandler
 }

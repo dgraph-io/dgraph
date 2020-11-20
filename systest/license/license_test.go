@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -90,9 +91,8 @@ type responseStruct struct {
 }
 
 func TestEnterpriseLicense(t *testing.T) {
-
-	stateURL := "http://localhost:6180/state"
-	enterpriseLicenseURL := "http://localhost:6180/enterpriseLicense"
+	stateURL := "http://" + testutil.SockAddrZeroHttp + "/state"
+	enterpriseLicenseURL := "http://" + testutil.SockAddrZeroHttp + "/enterpriseLicense"
 
 	var tests = []struct {
 		name       string

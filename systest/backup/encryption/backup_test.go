@@ -50,11 +50,15 @@ var (
 
 	mc             *minio.Client
 	bucketName     = "dgraph-backup"
-	backupDst      = "minio://minio1:9001/dgraph-backup?secure=false"
-	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
+	backupDst      string
+	localBackupDst string
 )
 
-func TestBackupMinio(t *testing.T) {
+func TestBackupMinioE(t *testing.T) {
+	backupDst = "minio://minio:9001/dgraph-backup?secure=false"
+	addr := testutil.ContainerAddr("minio", 9001)
+	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
+
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -259,7 +263,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 		}
 	}`
 
-	adminUrl := "http://localhost:8180/admin"
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
@@ -305,7 +309,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	t.Logf("--- Restoring from: %q", localBackupDst)
 	testutil.KeyFile = "../../../ee/enc/test-fixtures/enc-key"
 	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-		"--encryption_key_file", testutil.KeyFile, "--force_zero=false"}
+		"--encryption-key-file", testutil.KeyFile, "--force-zero=false"}
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
@@ -346,7 +350,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 
 	// Get key.
 	config := getEncConfig()
-	config.Set("encryption_key_file", "../../../ee/enc/test-fixtures/enc-key")
+	config.Set("encryption-key-file", "../../../ee/enc/test-fixtures/enc-key")
 	k, err := enc.ReadKey(config)
 	require.NotNil(t, k)
 	require.NoError(t, err)

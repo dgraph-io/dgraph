@@ -46,7 +46,7 @@ var (
 
 	mc                *minio.Client
 	bucketName        = "dgraph-backup"
-	backupDestination = "minio://minio1:9001/dgraph-backup?secure=false"
+	backupDestination = "minio://minio:9001/dgraph-backup?secure=false"
 	uidCounter        = 0
 	batchSize         = 100
 	totalTriples      = 20000
@@ -77,9 +77,9 @@ func getHttpClient(t *testing.T) *http.Client {
 // Test to add a large database and verify backup and restore work as expected.
 func TestBackupMinioLarge(t *testing.T) {
 	conf := viper.GetViper()
-	conf.Set("tls_cacert", "../../tls/live/ca.crt")
-	conf.Set("tls_internal_port_enabled", true)
-	conf.Set("tls_server_name", "alpha1")
+	conf.Set("tls-cacert", "../../tls/live/ca.crt")
+	conf.Set("tls-internal-port-enabled", true)
+	conf.Set("tls-server-name", "alpha1")
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 	ctx := context.Background()
@@ -168,7 +168,7 @@ func addTriples(t *testing.T, dg *dgo.Dgraph, numTriples int) {
 func runBackup(t *testing.T) {
 	// Using the old /admin/backup endpoint to ensure it works. Change back to using
 	// the GraphQL endpoint at /admin once this endpoint is deprecated.
-	resp, err := getHttpClient(t).PostForm("https://localhost:8180/admin/backup", url.Values{
+	resp, err := getHttpClient(t).PostForm("https://" + testutil.SockAddrHttp + "/admin/backup", url.Values{
 		"destination": []string{backupDestination},
 	})
 	require.NoError(t, err)

@@ -183,10 +183,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -267,12 +268,23 @@ input StringHashFilter {
 #######################
 
 type AddAtypePayload {
-	atype(order: AtypeOrder, first: Int, offset: Int): [Atype]
+	atype(filter: AtypeFilter, order: AtypeOrder, first: Int, offset: Int): [Atype]
 	numUids: Int
 }
 
 type AtypeAggregateResult {
 	count: Int
+}
+
+type DeleteAtypePayload {
+	atype(filter: AtypeFilter, order: AtypeOrder, first: Int, offset: Int): [Atype]
+	msg: String
+	numUids: Int
+}
+
+type UpdateAtypePayload {
+	atype(filter: AtypeFilter, order: AtypeOrder, first: Int, offset: Int): [Atype]
+	numUids: Int
 }
 
 #######################
@@ -311,9 +323,20 @@ input AtypeOrder {
 	then: AtypeOrder
 }
 
+input AtypePatch {
+	iamDeprecated: String
+	soAmI: String
+}
+
 input AtypeRef {
 	iamDeprecated: String
 	soAmI: String
+}
+
+input UpdateAtypeInput {
+	filter: AtypeFilter!
+	set: AtypePatch
+	remove: AtypePatch
 }
 
 #######################
@@ -321,8 +344,8 @@ input AtypeRef {
 #######################
 
 type Query {
-	queryAtype(order: AtypeOrder, first: Int, offset: Int): [Atype]
-	aggregateAtype: AtypeAggregateResult
+	queryAtype(filter: AtypeFilter, order: AtypeOrder, first: Int, offset: Int): [Atype]
+	aggregateAtype(filter: AtypeFilter): AtypeAggregateResult
 }
 
 #######################
@@ -331,5 +354,7 @@ type Query {
 
 type Mutation {
 	addAtype(input: [AddAtypeInput!]!): AddAtypePayload
+	updateAtype(input: UpdateAtypeInput!): UpdateAtypePayload
+	deleteAtype(filter: AtypeFilter!): DeleteAtypePayload
 }
 

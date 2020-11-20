@@ -81,18 +81,19 @@ var subcommands = []*x.SubCommand{
 }
 
 func initCmds() {
+	RootCmd.SetGlobalNormalizationFunc(x.NormalizeFlags)
 	RootCmd.PersistentFlags().String("cwd", "",
 		"Change working directory to the path specified. The parent must exist.")
-	RootCmd.PersistentFlags().String("profile_mode", "",
+	RootCmd.PersistentFlags().String("profile-mode", "",
 		"Enable profiling mode, one of [cpu, mem, mutex, block]")
-	RootCmd.PersistentFlags().Int("block_rate", 0,
-		"Block profiling rate. Must be used along with block profile_mode")
+	RootCmd.PersistentFlags().Int("block-rate", 0,
+		"Block profiling rate. Must be used along with block profile-mode")
 	RootCmd.PersistentFlags().String("config", "",
 		"Configuration file. Takes precedence over default values, but is "+
 			"overridden to values set with environment variables and flags.")
 	RootCmd.PersistentFlags().Bool("bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	RootCmd.PersistentFlags().Bool("expose_trace", false,
+	RootCmd.PersistentFlags().Bool("expose-trace", false,
 		"Allow trace endpoint to be accessible from remote")
 	x.Check(rootConf.BindPFlags(RootCmd.PersistentFlags()))
 
@@ -154,19 +155,19 @@ func setGlogFlags(conf *viper.Viper) {
 	// https://github.com/golang/glog/blob/master/glog.go#L399
 	// and https://github.com/golang/glog/blob/master/glog_file.go#L41
 	glogFlags := [...]string{
-		"log_dir", "logtostderr", "alsologtostderr", "v",
-		"stderrthreshold", "vmodule", "log_backtrace_at",
+		"log-dir", "logtostderr", "alsologtostderr", "v",
+		"stderrthreshold", "vmodule", "log-backtrace-at",
 	}
 	for _, gflag := range glogFlags {
 		// Set value of flag to the value in config
 		stringValue := conf.GetString(gflag)
-		// Special handling for log_backtrace_at flag because the flag is of
+		// Special handling for log-backtrace-at flag because the flag is of
 		// type tracelocation. The nil value for tracelocation type is
 		// ":0"(See https://github.com/golang/glog/blob/master/glog.go#L322).
 		// But we can't set nil value for the flag because of
 		// https://github.com/golang/glog/blob/master/glog.go#L374
-		// Skip setting value if log_backstrace_at is nil in config.
-		if gflag == "log_backtrace_at" && (stringValue == "0" || stringValue == ":0") {
+		// Skip setting value if log-backstrace-at is nil in config.
+		if gflag == "log-backtrace-at" && (stringValue == "0" || stringValue == ":0") {
 			continue
 		}
 		x.Check(flag.Lookup(gflag).Value.Set(stringValue))

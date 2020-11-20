@@ -1672,3 +1672,202 @@
       A1 as var(func: type(A))
       B1 as var(func: type(B))
     }
+
+-
+  name: "Password Query with no rule applied for password"
+  gqlquery: |
+    query {
+      checkUserPassword(username: "user", password: "Password") {
+        username
+      }
+    }
+  dgquery: |-
+    query {
+      checkUserPassword(func: eq(User.username, "user")) @filter((eq(val(pwd), 1) AND type(User))) {
+        username : User.username
+        dgraph.uid : uid
+      }
+      checkPwd(func: eq(User.username, "user")) @filter(type(User)) {
+        pwd as checkpwd(User.password, "Password")
+      }
+    }
+
+-
+  name: "Password Query with RBAC rule true"
+  gqlquery: |
+    query {
+      checkLogPassword(id: "0x123", pwd: "something") {
+        id
+        logs
+        random
+      }
+    }
+  jwtvar:
+    ROLE: "Admin"
+  dgquery: |-
+    query {
+      checkLogPassword(func: uid(LogRoot)) @filter((eq(val(pwd), 1) AND type(Log))) {
+        id : uid
+        logs : Log.logs
+        random : Log.random
+      }
+      LogRoot as var(func: uid(Log1))
+      Log1 as var(func: uid(0x123))
+      checkPwd(func: uid(LogRoot)) @filter(type(Log)) {
+        pwd as checkpwd(Log.pwd, "something")
+      }
+    }
+
+-
+  name: "Password Query with RBAC rule false"
+  gqlquery: |
+    query {
+      checkLogPassword(id: "0x123", pwd: "something") {
+        logs
+        random
+      }
+    }
+  jwtvar:
+    ROLE: "User"
+  dgquery: |-
+    query {
+      checkLogPassword()
+    }
+
+-
+  name: "Password Query with auth rules"
+  gqlquery: |
+    query {
+      checkProjectPassword(projID: "0x123", pwd: "something") {
+        name
+        projID
+        columns {
+          name
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  dgquery: |-
+    query {
+      checkProjectPassword(func: uid(ProjectRoot)) @filter((eq(val(pwd), 1) AND type(Project))) {
+        name : Project.name
+        projID : uid
+        columns : Project.columns @filter(uid(Column3)) {
+          name : Column.name
+          colID : uid
+        }
+      }
+      ProjectRoot as var(func: uid(Project4)) @filter(uid(ProjectAuth5))
+      Project4 as var(func: uid(0x123))
+      ProjectAuth5 as var(func: uid(Project4)) @cascade {
+        roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      var(func: uid(ProjectRoot)) {
+        Column1 as Project.columns
+      }
+      Column3 as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      checkPwd(func: uid(ProjectRoot)) @filter(type(Project)) {
+        pwd as checkpwd(Project.pwd, "something")
+      }
+    }
+
+- name: "Type with password query should apply Interface's password rules and along with its own auth rules"
+  gqlquery: |
+    query {
+      checkQuestionPassword(id: "0x123", pwd: "something") {
+        id
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "Admin"
+    ANS: "true"
+    USER: "ADMIN"
+  dgquery: |-
+    query {
+      checkQuestionPassword(func: uid(QuestionRoot)) @filter((eq(val(pwd), 1) AND type(Question))) {
+        id : uid
+        text : Post.text
+      }
+      QuestionRoot as var(func: uid(Question1)) @filter(uid(QuestionAuth2))
+      Question1 as var(func: uid(0x123))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+        text : Post.text
+      }
+      checkPwd(func: uid(QuestionRoot)) @filter(type(Question)) {
+        pwd as checkpwd(Question.pwd, "something")
+      }
+    }
+
+- name: "Type which inherits password auth rules from interfaces returns no results when auth rules fail"
+  gqlquery: |
+    query {
+      checkQuestionPassword(id: "0x123", pwd: "something") {
+        id
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "NotAdmin"
+    ANS: "true"
+    USER: "ADMIN"
+  dgquery: |-
+    query {
+      checkQuestionPassword()
+    }
+
+- name: "Password Auth rules of All the implementing types should Apply to the interface also"
+  gqlquery: |
+    query {
+      checkPostPassword(id: "0x123", pwd: "something") {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "Admin"
+    ANS: "true"
+    USER: "ADMIN"
+  dgquery: |-
+    query {
+      checkPostPassword(func: uid(PostRoot)) @filter((eq(val(pwd), 1) AND type(Post))) {
+        dgraph.type
+        text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post1)) @filter((uid(QuestionAuth2) OR uid(FbPostAuth3) OR uid(Answer1)))
+      Post1 as var(func: uid(0x123))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+        text : Post.text
+      }
+      FbPost1 as var(func: type(FbPost))
+      FbPostAuth3 as var(func: uid(FbPost1)) @cascade {
+        author : Post.author @filter(eq(Author.name, "ADMIN")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Answer1 as var(func: type(Answer))
+      checkPwd(func: uid(PostRoot)) @filter(type(Post)) {
+        pwd as checkpwd(Post.pwd, "something")
+      }
+    }
