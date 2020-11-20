@@ -9,7 +9,8 @@
 
 set -e
 
-if [ ! -z "${NETLIFY_BUILD_BASE}" ]; then
+# Important for clean builds on Netlify
+if ! git remote | grep -q origin ; then
     git remote add origin https://github.com/dgraph-io/dgraph.git
     git fetch --all
 fi
