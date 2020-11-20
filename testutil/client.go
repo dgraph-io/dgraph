@@ -97,7 +97,6 @@ func ContainerAddr(name string, privatePort uint16) string {
 // This allows running (most) tests against dgraph running on the default ports, for example.
 // Only the GRPC ports are needed and the others are deduced.
 func init() {
-	os.Setenv("TEST_DOCKER_PREFIX", "dgraph")
 	DockerPrefix = os.Getenv("TEST_DOCKER_PREFIX")
 
 	MinioInstance = ContainerAddr("minio", 9001)
@@ -234,6 +233,8 @@ func RetryAlterSchema(dg *dgo.Dgraph, op *api.Operation) error {
 		}
 		if strings.Contains(err.Error(), "opIndexing is already running") {
 			time.Sleep(time.Second)
+		} else {
+			return err
 		}
 	}
 	return fmt.Errorf("not able to successfully alter the schema")
