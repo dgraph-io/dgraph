@@ -21,8 +21,8 @@ func TestAccessOverPlaintext(t *testing.T) {
 
 func TestAccessWithCaCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls_cacert", "../tls/ca.crt")
-	conf.Set("tls_server_name", "node")
+	conf.Set("tls-cacert", "../tls/ca.crt")
+	conf.Set("tls-server-name", "node")
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)

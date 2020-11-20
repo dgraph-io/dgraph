@@ -21,7 +21,7 @@ Dgraph Live Loader (run with `dgraph live`) is a small helper program which read
 
 Dgraph Live Loader correctly handles assigning unique IDs to blank nodes across multiple files, and can optionally persist them to disk to save memory, in case the loader was re-run.
 
-{{% notice "note" %}} Dgraph Live Loader can optionally write the xid->uid mapping to a directory specified using the `--xidmap` flag, which can reused
+{{% notice "note" %}} Dgraph Live Loader can optionally write the `xid`->`uid` mapping to a directory specified using the `--xidmap` flag, which can reused
 given that live loader completed successfully in the previous run.{{% /notice %}}
 
 ```sh
@@ -53,11 +53,31 @@ If the live Alpha instance has encryption turned on, the `p` directory will be e
 {{% /notice %}}
 
 #### Encrypted RDF/JSON file and schema via Live Loader
-`dgraph live -f <path-to-encrypted-gzipped-RDF-or-JSON-file> -s <path-to-encrypted-schema> --encryption_keyfile <path-to-keyfile-to-decrypt-files>`
+
+```sh
+dgraph live -f <path-to-encrypted-gzipped-RDF-or-JSON-file> -s <path-to-encrypted-schema> --encryption_keyfile <path-to-keyfile-to-decrypt-files>
+```
+
+### Batch Upserts in Live Loader
+
+With batch upserts in Live Loader, you can insert big data-sets (multiple files) into an existing cluster that might contain nodes that already exist in the graph.
+Live Loader generates an `upsertPredicate` query for each of the ids found in the request, while
+adding the corresponding `xid` to that `uid`. The added mutation is only useful if the `uid` doesn't exists.
+
+The `-U, --upsertPredicate` flag runs the Live Loader in upsertPredicate mode. The provided predicate needs to be indexed, and the Loader will use it to store blank nodes as a `xid`.
+
+{{% notice "note" %}}
+When the `upsertPredicate` already exists in the data, the existing node with this `xid` is modified and no new node is added.
+{{% /notice %}}
+
+For example:
+```sh
+dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -U <xid>
+```
 
 ### Other Live Loader options
 
-`--new_uids` (default: false): Assign new UIDs instead of using the existing
+`--new_uids` (default: `false`): Assign new UIDs instead of using the existing
 UIDs in data files. This is useful to avoid overriding the data in a DB already
 in operation.
 
@@ -65,22 +85,24 @@ in operation.
 load multiple files in a given path. If the path is a directory, then all files
 ending in .rdf, .rdf.gz, .json, and .json.gz will be loaded.
 
-`--format`: Specify file format (rdf or json) instead of getting it from
+`--format`: Specify file format (`rdf` or `json`) instead of getting it from
 filenames. This is useful if you need to define a strict format manually.
 
-`-b, --batch` (default: 1000): Number of N-Quads to send as part of a mutation.
+`-b, --batch` (default: `1000`): Number of N-Quads to send as part of a mutation.
 
-`-c, --conc` (default: 10): Number of concurrent requests to make to Dgraph.
+`-c, --conc` (default: `10`): Number of concurrent requests to make to Dgraph.
 Do not confuse with `-C`.
 
-`-C, --use_compression` (default: false): Enable compression for connections to and from the
+`-C, --use_compression` (default: `false`): Enable compression for connections to and from the
 Alpha server.
 
 `-a, --alpha` (default: `localhost:9080`): Dgraph Alpha gRPC server address to connect for live loading. This can be a comma-separated list of Alphas addresses in the same cluster to distribute the load, e.g.,  `"alpha:grpc_port,alpha2:grpc_port,alpha3:grpc_port"`.
 
-`-x, --xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
+`-x, --xidmap` (default: disabled. Need a path): Store `xid` to `uid` mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific `uid`.
 
-`--ludicrous_mode` (default: false): Live Loader, by default, does smart batching to ingest data faster. This behavior is not required in ludicrous mode and ends up taking more time and memory. This option allows the user to notify Live Loader that the Alpha server is running in ludicrous mode. This mode disables smart batching, increasing speed, and memory. This option should only be used if Dgraph is running in ludicrous mode.
+`--ludicrous_mode` (default: `false`): Live Loader, by default, does smart batching to ingest data faster. This behavior is not required in ludicrous mode and ends up taking more time and memory. This option allows the user to notify Live Loader that the Alpha server is running in ludicrous mode. This mode disables smart batching, increasing speed, and memory. This option should only be used if Dgraph is running in ludicrous mode.
+
+`-U, --upsertPredicate` (default: disabled): Runs Live Loader in `upsertPredicate` mode. The provided value will be used to store blank nodes as a `xid`.
 
 `--vault_*` flags specifies the Vault server address, role id, secret id and 
 field that contains the encryption key that can be used to decrypt the encrypted export. 

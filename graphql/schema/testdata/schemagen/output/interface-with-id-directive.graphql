@@ -193,10 +193,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -282,7 +283,7 @@ type AddBookPayload {
 }
 
 type AddLibraryPayload {
-	library(first: Int, offset: Int): [Library]
+	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
 	numUids: Int
 }
 
@@ -302,6 +303,12 @@ type DeleteLibraryItemPayload {
 	numUids: Int
 }
 
+type DeleteLibraryPayload {
+	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
+	msg: String
+	numUids: Int
+}
+
 type LibraryAggregateResult {
 	count: Int
 }
@@ -312,6 +319,11 @@ type LibraryItemAggregateResult {
 
 type UpdateBookPayload {
 	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	numUids: Int
+}
+
+type UpdateLibraryPayload {
+	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
 	numUids: Int
 }
 
@@ -407,6 +419,10 @@ input LibraryItemRef {
 	refID: String! @id
 }
 
+input LibraryPatch {
+	items: [LibraryItemRef]
+}
+
 input LibraryRef {
 	items: [LibraryItemRef]
 }
@@ -415,6 +431,12 @@ input UpdateBookInput {
 	filter: BookFilter!
 	set: BookPatch
 	remove: BookPatch
+}
+
+input UpdateLibraryInput {
+	filter: LibraryFilter!
+	set: LibraryPatch
+	remove: LibraryPatch
 }
 
 #######################
@@ -428,8 +450,8 @@ type Query {
 	getBook(refID: String!): Book
 	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
 	aggregateBook(filter: BookFilter): BookAggregateResult
-	queryLibrary(first: Int, offset: Int): [Library]
-	aggregateLibrary: LibraryAggregateResult
+	queryLibrary(filter: LibraryFilter, first: Int, offset: Int): [Library]
+	aggregateLibrary(filter: LibraryFilter): LibraryAggregateResult
 }
 
 #######################
@@ -442,5 +464,7 @@ type Mutation {
 	updateBook(input: UpdateBookInput!): UpdateBookPayload
 	deleteBook(filter: BookFilter!): DeleteBookPayload
 	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
+	updateLibrary(input: UpdateLibraryInput!): UpdateLibraryPayload
+	deleteLibrary(filter: LibraryFilter!): DeleteLibraryPayload
 }
 

@@ -52,8 +52,6 @@ var (
 )
 
 func TestBackupMinio(t *testing.T) {
-	t.Skipf("TODO: This test is failing for some reason. FIX IT.")
-
 	backupDst = "minio://minio:9001/dgraph-backup?secure=false"
 
 	addr := testutil.ContainerAddr("minio", 9001)
@@ -334,7 +332,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
 	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-		"--force_zero=false"}
+		"--force-zero=false"}
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})

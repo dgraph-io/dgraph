@@ -5,6 +5,8 @@ services:
   alpha1:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha1
+    env_file:
+      - ../../backup.env
     labels:
       cluster: test
     ports:
@@ -20,6 +22,8 @@ services:
   alpha2:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha2
+    env_file:
+      - ../../backup.env
     labels:
       cluster: test
     ports:
@@ -35,6 +39,8 @@ services:
   alpha3:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha3
+    env_file:
+      - ../../backup.env
     labels:
       cluster: test
     ports:

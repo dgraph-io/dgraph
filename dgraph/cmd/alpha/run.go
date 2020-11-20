@@ -112,11 +112,11 @@ they form a Raft group and provide synchronous replication.
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
-	flag.Int("snapshot_after", 10000,
+	flag.Int("snapshot-after", 10000,
 		"Create a new Raft snapshot after this many number of Raft entries. The"+
 			" lower this number, the more frequent snapshot creation would be."+
 			" Also determines how often Rollups would happen.")
-	flag.String("abort_older_than", "5m",
+	flag.String("abort-older-than", "5m",
 		"Abort any pending transactions older than this duration. The liveness of a"+
 			" transaction is determined by its last mutation.")
 
@@ -126,64 +126,64 @@ they form a Raft group and provide synchronous replication.
 			"wish to whitelist for performing admin actions (i.e., --whitelist 144.142.126.254,"+
 			"127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal)")
 	flag.String("export", "export", "Folder in which to store exports.")
-	flag.Int("pending_proposals", 256,
+	flag.Int("pending-proposals", 256,
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph zero addresses of the form IP_ADDRESS:PORT.")
 	flag.Uint64("idx", 0,
 		"Optional Raft ID that this Dgraph Alpha will use to join RAFT groups.")
-	flag.Int("max_retries", -1,
+	flag.Int("max-retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
-	flag.String("auth_token", "",
+	flag.String("auth-token", "",
 		"If set, all Admin requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
 
-	flag.String("acl_secret_file", "", "The file that stores the HMAC secret, "+
+	flag.String("acl-secret-file", "", "The file that stores the HMAC secret, "+
 		"which is used for signing the JWT and should have at least 32 ASCII characters. "+
 		"Enterprise feature.")
-	flag.Duration("acl_access_ttl", 6*time.Hour, "The TTL for the access jwt. "+
+	flag.Duration("acl-access-ttl", 6*time.Hour, "The TTL for the access jwt. "+
 		"Enterprise feature.")
-	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
+	flag.Duration("acl-refresh-ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
 
 	// Useful for running multiple servers on the same machine.
-	flag.IntP("port_offset", "o", 0,
+	flag.IntP("port-offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	flag.Uint64("query_edge_limit", 1e6,
+	flag.Uint64("query-edge-limit", 1e6,
 		"Limit for the maximum number of edges that can be returned in a query."+
 			" This applies to shortest path and recursive queries.")
-	flag.Uint64("normalize_node_limit", 1e4,
+	flag.Uint64("normalize-node-limit", 1e4,
 		"Limit for the maximum number of nodes that can be returned in a query that uses the "+
 			"normalize directive.")
-	flag.Uint64("mutations_nquad_limit", 1e6,
+	flag.Uint64("mutations-nquad-limit", 1e6,
 		"Limit for the maximum number of nquads that can be inserted in a mutation request")
 
 	//Custom plugins.
-	flag.String("custom_tokenizers", "",
+	flag.String("custom-tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 
-	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
-	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. This returns auth errors to clients. We do not recommend turning it on for production.")
+	flag.Bool("graphql-introspection", true, "Set to false for no GraphQL schema introspection")
+	flag.Bool("graphql-debug", false, "Enable debug mode in GraphQL. This returns auth errors to clients. We do not recommend turning it on for production.")
 
 	// Ludicrous mode
-	flag.Bool("ludicrous_mode", false, "Run Dgraph in ludicrous mode.")
-	flag.Int("ludicrous_concurrency", 2000, "Number of concurrent threads in ludicrous mode")
+	flag.Bool("ludicrous-mode", false, "Run Dgraph in ludicrous mode.")
+	flag.Int("ludicrous-concurrency", 2000, "Number of concurrent threads in ludicrous mode")
 
-	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
-	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
-	flag.String("graphql_lambda_url", "",
+	flag.Bool("graphql-extensions", true, "Set to false if extensions not required in GraphQL response body")
+	flag.Duration("graphql-poll-interval", time.Second, "polling interval for graphql subscription.")
+	flag.String("graphql-lambda-url", "",
 		"URL of lambda server that implements custom GraphQL JavaScript resolvers")
 
 	// Cache flags
-	flag.String("cache_percentage", "0,65,35,0",
+	flag.String("cache-percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
 
@@ -192,7 +192,7 @@ they form a Raft group and provide synchronous replication.
 }
 
 func setupCustomTokenizers() {
-	customTokenizers := Alpha.Conf.GetString("custom_tokenizers")
+	customTokenizers := Alpha.Conf.GetString("custom-tokenizers")
 	if customTokenizers == "" {
 		return
 	}
@@ -425,7 +425,7 @@ func setupServer(closer *z.Closer) {
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
-	introspection := Alpha.Conf.GetBool("graphql_introspection")
+	introspection := Alpha.Conf.GetBool("graphql-introspection")
 
 	// Global Epoch is a lockless synchronization mechanism for graphql service.
 	// It's is just an atomic counter used by the graphql subscription to update its state.
@@ -551,7 +551,7 @@ func setupServer(closer *z.Closer) {
 
 func run() {
 	var err error
-	if Alpha.Conf.GetBool("enable_sentry") {
+	if Alpha.Conf.GetBool("enable-sentry") {
 		x.InitSentry(enc.EeBuild)
 		defer x.FlushSentry()
 		x.ConfigureSentryScope("alpha")
@@ -560,10 +560,10 @@ func run() {
 	}
 	bindall = Alpha.Conf.GetBool("bindall")
 
-	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
+	totalCache := int64(Alpha.Conf.GetInt("cache-mb"))
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
 
-	cachePercentage := Alpha.Conf.GetString("cache_percentage")
+	cachePercentage := Alpha.Conf.GetString("cache-percentage")
 	cachePercent, err := x.GetCachePercentages(cachePercentage, 4)
 	x.Check(err)
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
@@ -583,10 +583,10 @@ func run() {
 		WalCache:                   walCache,
 
 		MutationsMode: worker.AllowMutations,
-		AuthToken:     Alpha.Conf.GetString("auth_token"),
+		AuthToken:     Alpha.Conf.GetString("auth-token"),
 	}
 
-	secretFile := Alpha.Conf.GetString("acl_secret_file")
+	secretFile := Alpha.Conf.GetString("acl-secret-file")
 	if secretFile != "" {
 		hmacSecret, err := ioutil.ReadFile(secretFile)
 		if err != nil {
@@ -597,8 +597,8 @@ func run() {
 		}
 
 		opts.HmacSecret = hmacSecret
-		opts.AccessJwtTtl = Alpha.Conf.GetDuration("acl_access_ttl")
-		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("acl_refresh_ttl")
+		opts.AccessJwtTtl = Alpha.Conf.GetDuration("acl-access-ttl")
+		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("acl-refresh-ttl")
 
 		glog.Info("HMAC secret loaded successfully.")
 	}
@@ -620,7 +620,7 @@ func run() {
 	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
 
-	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
+	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort-older-than"))
 	x.Check(err)
 
 	tlsClientConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
@@ -630,18 +630,18 @@ func run() {
 
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:           Alpha.Conf.GetString("export"),
-		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
+		NumPendingProposals:  Alpha.Conf.GetInt("pending-proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
 		RaftId:               cast.ToUint64(Alpha.Conf.GetString("idx")),
 		WhiteListedIPRanges:  ips,
-		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
+		MaxRetries:           Alpha.Conf.GetInt("max-retries"),
 		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
 		AclEnabled:           secretFile != "",
-		SnapshotAfter:        Alpha.Conf.GetInt("snapshot_after"),
+		SnapshotAfter:        Alpha.Conf.GetInt("snapshot-after"),
 		AbortOlderThan:       abortDur,
 		StartTime:            startTime,
-		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
-		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
+		LudicrousMode:        Alpha.Conf.GetBool("ludicrous-mode"),
+		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous-concurrency"),
 		TLSClientConfig:      tlsClientConf,
 		TLSServerConfig:      tlsServerConf,
 	}
@@ -654,22 +654,22 @@ func run() {
 
 	setupCustomTokenizers()
 	x.Init()
-	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
-	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
-	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
-	x.Config.MutationsNQuadLimit = cast.ToInt(Alpha.Conf.GetString("mutations_nquad_limit"))
-	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
-	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
-	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
-	x.Config.GraphqlLambdaUrl = Alpha.Conf.GetString("graphql_lambda_url")
+	x.Config.PortOffset = Alpha.Conf.GetInt("port-offset")
+	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query-edge-limit"))
+	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize-node-limit"))
+	x.Config.MutationsNQuadLimit = cast.ToInt(Alpha.Conf.GetString("mutations-nquad-limit"))
+	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql-poll-interval")
+	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql-extensions")
+	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql-debug")
+	x.Config.GraphqlLambdaUrl = Alpha.Conf.GetString("graphql-lambda-url")
 	if x.Config.GraphqlLambdaUrl != "" {
 		graphqlLambdaUrl, err := url.Parse(x.Config.GraphqlLambdaUrl)
 		if err != nil {
-			glog.Errorf("unable to parse graphql_lambda_url: %v", err)
+			glog.Errorf("unable to parse graphql-lambda-url: %v", err)
 			return
 		}
 		if !graphqlLambdaUrl.IsAbs() {
-			glog.Errorf("expecting graphql_lambda_url to be an absolute URL, got: %s",
+			glog.Errorf("expecting graphql-lambda-url to be an absolute URL, got: %s",
 				graphqlLambdaUrl.String())
 			return
 		}
@@ -682,7 +682,7 @@ func run() {
 
 	worker.InitServerState()
 
-	if Alpha.Conf.GetBool("expose_trace") {
+	if Alpha.Conf.GetBool("expose-trace") {
 		// TODO: Remove this once we get rid of event logs.
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true

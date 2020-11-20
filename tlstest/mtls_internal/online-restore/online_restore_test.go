@@ -58,7 +58,7 @@ func sendRestoreRequest(t *testing.T, backupId string, backupNum int) int {
 		},
 	}
 
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: restoreRequest,
 	}
@@ -93,7 +93,7 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 		},
 	}
 
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: query,
 	}
@@ -161,7 +161,7 @@ func disableDraining(t *testing.T) {
 			TLSClientConfig: tlsConf,
 		},
 	}
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: drainRequest,
 	}
@@ -295,7 +295,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 		},
 	}
 	// Send a request with a backupNum greater than the number of manifests.
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
 	restoreRequest := fmt.Sprintf(`mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
@@ -399,7 +399,7 @@ func TestInvalidBackupId(t *testing.T) {
 			TLSClientConfig: tlsConf,
 		},
 	}
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: restoreRequest,
 	}
@@ -436,7 +436,7 @@ func TestListBackups(t *testing.T) {
 			TLSClientConfig: tlsConf,
 		},
 	}
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: query,
 	}

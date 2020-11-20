@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -35,7 +37,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -522,12 +523,13 @@ const (
 )
 
 func admin(t *testing.T) {
-	d, err := grpc.Dial(alphaAdminTestgRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	testutil.DropAll(t, client)
 
-	hasSchema, err := hasCurrentGraphQLSchema(graphqlAdminTestAdminURL)
+	hasSchema, err := hasCurrentGraphQLSchema(GraphqlAdminURL)
 	require.NoError(t, err)
 	require.False(t, hasSchema)
 
@@ -536,6 +538,23 @@ func admin(t *testing.T) {
 	updateSchema(t, client)
 	updateSchemaThroughAdminSchemaEndpt(t, client)
 	gqlSchemaNodeHasXid(t, client)
+
+	// restore the state to the initial schema and data.
+	testutil.DropAll(t, client)
+
+	schemaFile := "schema.graphql"
+	schema, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		panic(err)
+	}
+
+	jsonFile := "test_data.json"
+	data, err := ioutil.ReadFile(jsonFile)
+	if err != nil {
+		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
+	}
+
+	addSchemaAndData(schema, data, client)
 }
 
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
@@ -545,7 +564,7 @@ func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
 }
 
 func addGQLSchema(t *testing.T, client *dgo.Dgraph) {
-	err := addSchema(graphqlAdminTestAdminURL, firstTypes)
+	err := addSchema(GraphqlAdminURL, firstTypes)
 	require.NoError(t, err)
 
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
@@ -557,7 +576,7 @@ func addGQLSchema(t *testing.T, client *dgo.Dgraph) {
 }
 
 func updateSchema(t *testing.T, client *dgo.Dgraph) {
-	err := addSchema(graphqlAdminTestAdminURL, updatedTypes)
+	err := addSchema(GraphqlAdminURL, updatedTypes)
 	require.NoError(t, err)
 
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
@@ -607,7 +626,7 @@ func introspect(t *testing.T, expected string) {
 		}`,
 	}
 
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, expected, string(gqlResponse.Data))
@@ -629,7 +648,7 @@ func health(t *testing.T) {
         }
       }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -652,6 +671,7 @@ func health(t *testing.T) {
 	opts := []cmp.Option{
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "Uptime"),
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "LastEcho"),
+		cmpopts.IgnoreFields(pb.HealthInfo{}, "Ongoing"),
 		cmpopts.EquateEmpty(),
 	}
 	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
@@ -669,7 +689,7 @@ func partialHealth(t *testing.T) {
             }
         }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t, `{
         "health": [
@@ -698,7 +718,7 @@ func adminAlias(t *testing.T) {
             }
         }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t, `{
         "dgraphHealth": [
@@ -777,7 +797,7 @@ func adminState(t *testing.T) {
 			}
 		}`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -863,7 +883,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "getAllowedCORSOrigins": {
@@ -882,7 +902,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "replaceAllowedCORSOrigins": {
@@ -901,7 +921,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "getAllowedCORSOrigins": {
@@ -944,7 +964,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "replaceAllowedCORSOrigins": {
