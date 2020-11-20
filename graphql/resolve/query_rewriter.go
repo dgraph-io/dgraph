@@ -984,7 +984,7 @@ func generateUniqueDgraphAlias(f schema.Field, fieldSeenCount map[string]int) st
 	return alias + strconv.Itoa(fieldSeenCount[alias])
 }
 
-// TODO(GRAPHQL-874), Optimise Query rewriting  in case of multiple alias with same filter.
+// TODO(GRAPHQL-874), Optimise Query rewriting in case of multiple alias with same filter.
 // addSelectionSetFrom adds all the selections from field into q, and returns a list
 // of extra queries needed to satisfy auth requirements
 func addSelectionSetFrom(
