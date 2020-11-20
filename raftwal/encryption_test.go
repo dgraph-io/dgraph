@@ -18,6 +18,8 @@ package raftwal
 
 import (
 	"io/ioutil"
+	"log"
+	"math"
 	"math/rand"
 	"os"
 	"testing"
@@ -64,4 +66,91 @@ func TestEntryReadWrite(t *testing.T) {
 	x.WorkerConfig.EncryptionKey = nil
 	_, err = openWal(dir)
 	require.EqualError(t, err, "Logfile is encrypted but encryption key is nil")
+}
+
+// TestLogRotate writes enough log file entries to cause 1 file rotation.
+func TestLogRotate(t *testing.T) {
+	dir, err := ioutil.TempDir("", "raftwal")
+	require.NoError(t, err)
+	el, err := openWal(dir)
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	// Generate deterministic entries using a seed.
+	const SEED = 1
+	rand.Seed(SEED)
+	makeEntry := func(i int) raftpb.Entry {
+		// Be careful when changing this value, as it could easily end up filling up
+		// the entire tmpfs. Currently, this writes ~1.5GB.
+		data := make([]byte, rand.Intn(1<<16))
+		rand.Read(data)
+		return raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}
+	}
+
+	// Write enough entries to fill ~1.5x logfiles, causing a rotation.
+	const totalEntries = (maxNumEntries * 3) / 2
+	totalBytes := 0
+	for i := 0; i < totalEntries; i++ {
+		entry := makeEntry(i)
+		err = el.AddEntries([]raftpb.Entry{entry})
+		require.NoError(t, err)
+		totalBytes += len(entry.Data)
+	}
+	log.Printf("Wrote %d bytes", totalBytes)
+
+	// Reopen the file and retrieve all entries.
+	el, err = openWal(dir)
+	require.NoError(t, err)
+	entries := el.allEntries(0, math.MaxInt64, math.MaxInt64)
+	require.Equal(t, totalEntries, len(entries))
+
+	// Use the previous seed to verify the written entries.
+	rand.Seed(SEED)
+	for i, gotEntry := range entries {
+		expEntry := makeEntry(i)
+		require.Equal(t, len(expEntry.Data), len(gotEntry.Data))
+		if len(expEntry.Data) > 0 {
+			require.Equal(t, expEntry.Data, gotEntry.Data)
+		}
+		require.Equal(t, expEntry.Index, gotEntry.Index)
+		require.Equal(t, expEntry.Term, gotEntry.Term)
+		require.Equal(t, expEntry.Type, gotEntry.Type)
+	}
+}
+
+// TestLogGrow writes data of sufficient size to grow the log file.
+func TestLogGrow(t *testing.T) {
+	dir, err := ioutil.TempDir("", "raftwal")
+	require.NoError(t, err)
+	el, err := openWal(dir)
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	var entries []raftpb.Entry
+
+	const numEntries = (maxNumEntries * 3) / 2
+
+	// 5KB * 30000 is ~ 150MB, this will cause the log file to grow.
+	for i := 0; i < numEntries; i++ {
+		data := make([]byte, 5<<10)
+		rand.Read(data)
+		entry := raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}
+		entries = append(entries, entry)
+	}
+	err = el.AddEntries(entries)
+	require.NoError(t, err)
+
+	// Reopen the file and retrieve all entries.
+	el, err = openWal(dir)
+	require.NoError(t, err)
+	readEntries := el.allEntries(0, math.MaxInt64, math.MaxInt64)
+	require.Equal(t, numEntries, len(readEntries))
+
+	for i, gotEntry := range readEntries {
+		expEntry := entries[i]
+		require.Equal(t, expEntry.Data, gotEntry.Data)
+		require.Equal(t, expEntry.Index, gotEntry.Index)
+		require.Equal(t, expEntry.Term, gotEntry.Term)
+		require.Equal(t, expEntry.Type, gotEntry.Type)
+	}
 }
