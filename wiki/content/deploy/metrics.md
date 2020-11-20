@@ -70,8 +70,7 @@ Health metrics let you check the health of a Dgraph Alpha server node.
 
 ## Go Metrics
 
-Go's built-in metrics may also be useful to measure memory usage and garbage
-collection time.
+Go's built-in metrics may also be useful to measure memory usage and garbage collection time.
 
  Metrics                        | Description
  -------                        | -----------
