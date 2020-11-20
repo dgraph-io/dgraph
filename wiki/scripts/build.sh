@@ -9,6 +9,7 @@
 
 set -e
 
+git remote add origin https://github.com/dgraph-io/dgraph.git
 git remote -vvv
 git fetch --all
 
