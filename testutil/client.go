@@ -225,9 +225,7 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 
 func RetryAlterSchema(dg *dgo.Dgraph, op *api.Operation) error {
 	for i := 0; i < 10; i++ {
-		err := dg.Alter(context.Background(), &api.Operation{
-			DropAll: true,
-		})
+		err := dg.Alter(context.Background(), op)
 		if err == nil {
 			return nil
 		}
