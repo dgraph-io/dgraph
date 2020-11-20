@@ -75,7 +75,7 @@ In general, an auth rule should select a field that's expected to exist at the i
 
 ## `@auth` on Interfaces
 
-The `@auth` directive works just like it works for types which are to provide authorization to perform `query`, `update`, and `delete` on interfaces.
+The `@auth` directive works just like it does for types, and provides authorization to perform `query`, `update`, and `delete` on interfaces.
 
 ### Implementing types
 
