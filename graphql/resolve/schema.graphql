@@ -86,15 +86,17 @@ type Human implements Character & Employee {
         female: Boolean
 }
 
-# just for testing IN filter on enum types
+# just for testing filters on enum types
 
 type Verification {
   name: String @search(by: [exact])
-  status: Status @search
+  status: [Status!]! @search(by: [exact])
+  prevStatus: Status! @search
 }
 
 enum Status {
   ACTIVE
+  INACTIVE
   DEACTIVATED
 }
 

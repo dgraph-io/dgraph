@@ -28,11 +28,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	subscriptionEndpoint = "ws://"+ testutil.ContainerAddr("alpha1", 8080) +"/graphql"
+)
 const (
-	graphQLEndpoint      = "http://localhost:8180/graphql"
-	subscriptionEndpoint = "ws://localhost:8180/graphql"
-	adminEndpoint        = "http://localhost:8180/admin"
-	groupOnegRPC         = "localhost:9180"
 	sch                  = `
 	type Product @withSubscription {
 		productID: ID!
@@ -75,7 +74,7 @@ var subExp = 3 * time.Second
 var subscriptionResp common.GraphQLResponse
 
 func TestSubscription(t *testing.T) {
-	dg, err := testutil.DgraphClient(groupOnegRPC)
+	dg, err := testutil.DgraphClient(common.AlphagRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -89,7 +88,7 @@ func TestSubscription(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{"sch": sch},
 	}
-	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	addResult := add.ExecuteAsPost(t, common.GraphqlAdminURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second * 2)
 
@@ -105,7 +104,7 @@ func TestSubscription(t *testing.T) {
 			}
 		  }`,
 	}
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -140,7 +139,7 @@ func TestSubscription(t *testing.T) {
 		  }
 		  `,
 	}
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -163,7 +162,7 @@ func TestSubscription(t *testing.T) {
 }
 
 func TestSubscriptionAuth(t *testing.T) {
-	dg, err := testutil.DgraphClient(groupOnegRPC)
+	dg, err := testutil.DgraphClient(common.AlphagRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -177,7 +176,7 @@ func TestSubscriptionAuth(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{"sch": schAuth},
 	}
-	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	addResult := add.ExecuteAsPost(t, common.GraphqlAdminURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second * 2)
 
@@ -207,7 +206,7 @@ func TestSubscriptionAuth(t *testing.T) {
          }`,
 	}
 
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -252,7 +251,7 @@ func TestSubscriptionAuth(t *testing.T) {
 			  }
 			}`,
 	}
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 
 	// Add another TODO for jatin which we should get in the latest update.
@@ -271,7 +270,7 @@ func TestSubscriptionAuth(t *testing.T) {
 	    }`,
 	}
 
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -296,7 +295,7 @@ func TestSubscriptionAuth(t *testing.T) {
 }
 
 func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
-	dg, err := testutil.DgraphClient(groupOnegRPC)
+	dg, err := testutil.DgraphClient(common.AlphagRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -310,7 +309,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{"sch": schAuth},
 	}
-	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	addResult := add.ExecuteAsPost(t, common.GraphqlAdminURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second * 2)
 
@@ -340,7 +339,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
          }`,
 	}
 
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -390,7 +389,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
          }`,
 	}
 
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -402,7 +401,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 }
 
 func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
-	dg, err := testutil.DgraphClient(groupOnegRPC)
+	dg, err := testutil.DgraphClient(common.AlphagRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -416,7 +415,7 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{"sch": schAuth},
 	}
-	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	addResult := add.ExecuteAsPost(t, common.GraphqlAdminURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second * 2)
 
@@ -446,7 +445,7 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
          }`,
 	}
 
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 
 	jwtToken, err := metaInfo.GetSignedToken("secret", -1)
@@ -478,7 +477,7 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 }
 
 func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndependently(t *testing.T) {
-	dg, err := testutil.DgraphClient(groupOnegRPC)
+	dg, err := testutil.DgraphClient(common.AlphagRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -492,7 +491,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 		}`,
 		Variables: map[string]interface{}{"sch": schAuth},
 	}
-	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	addResult := add.ExecuteAsPost(t, common.GraphqlAdminURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second * 2)
 
@@ -522,7 +521,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
          }`,
 	}
 
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -592,7 +591,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	      }
 	    }`,
 	}
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -628,7 +627,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	      }
 	    }`,
 	}
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -639,7 +638,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 }
 
 func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndependently(t *testing.T) {
-	dg, err := testutil.DgraphClient(groupOnegRPC)
+	dg, err := testutil.DgraphClient(common.AlphagRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -653,7 +652,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 		}`,
 		Variables: map[string]interface{}{"sch": schAuth},
 	}
-	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	addResult := add.ExecuteAsPost(t, common.GraphqlAdminURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second * 2)
 
@@ -683,7 +682,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
          }`,
 	}
 
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -729,7 +728,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
          }`,
 	}
 
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -777,7 +776,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	      }
 	    }`,
 	}
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 	// 1st subscription should get the empty response as subscription has expired
@@ -800,7 +799,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	      }
 	    }`,
 	}
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -841,7 +840,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	    }`,
 	}
 
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 
@@ -852,7 +851,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 }
 
 func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
-	dg, err := testutil.DgraphClient(groupOnegRPC)
+	dg, err := testutil.DgraphClient(common.AlphagRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -866,7 +865,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{"sch": schAuth},
 	}
-	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	addResult := add.ExecuteAsPost(t, common.GraphqlAdminURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second * 2)
 
@@ -896,7 +895,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
          }`,
 	}
 
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 
 	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
@@ -928,7 +927,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 }
 
 func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
-	dg, err := testutil.DgraphClient(groupOnegRPC)
+	dg, err := testutil.DgraphClient(common.AlphagRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 	// Upload schema
@@ -942,7 +941,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{"sch": schAuth},
 	}
-	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	addResult := add.ExecuteAsPost(t, common.GraphqlAdminURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second * 2)
 
@@ -1027,7 +1026,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
          }`,
 	}
 
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 	time.Sleep(time.Second)
 

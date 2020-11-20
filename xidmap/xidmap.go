@@ -19,7 +19,6 @@ package xidmap
 import (
 	"context"
 	"encoding/binary"
-	"math"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -28,11 +27,10 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/skl"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
@@ -47,17 +45,25 @@ type XidMap struct {
 
 	// Optionally, these can be set to persist the mappings.
 	writer *badger.WriteBatch
+	wg     sync.WaitGroup
+
+	kvBuf  []kv
+	kvChan chan []kv
 }
 
 type shard struct {
 	sync.RWMutex
 	block
 
-	skiplist *skl.Skiplist
+	tree *z.Tree
 }
 
 type block struct {
 	start, end uint64
+}
+
+type kv struct {
+	key, value []byte
 }
 
 // assign assumes the write lock is already acquired.
@@ -81,17 +87,22 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
+		kvChan:    make(chan []kv, 64),
 	}
 	for i := range xm.shards {
-		buf, err := z.NewBufferWithDir(math.MaxUint32, math.MaxUint32, z.UseMmap, dir)
-		x.Check(err)
 		xm.shards[i] = &shard{
-			skiplist: skl.NewSkiplistWithBuffer(buf, false),
+			tree: z.NewTree("", 100<<20),
 		}
 	}
+
 	if db != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
 		xm.writer = db.NewWriteBatch()
+
+		for i := 0; i < 16; i++ {
+			xm.wg.Add(1)
+			go xm.dbWriter()
+		}
 
 		err := db.View(func(txn *badger.Txn) error {
 			var count int
@@ -106,7 +117,7 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 				err := item.Value(func(val []byte) error {
 					uid := binary.BigEndian.Uint64(val)
 					// No need to acquire a lock. This is all serial access.
-					sh.skiplist.PutUint64([]byte(key), uid)
+					sh.tree.Set(farm.Fingerprint64([]byte(key)), uid)
 					return nil
 				})
 				if err != nil {
@@ -157,7 +168,7 @@ func (m *XidMap) CheckUid(xid string) bool {
 	sh := m.shardFor(xid)
 	sh.RLock()
 	defer sh.RUnlock()
-	uid, _ := sh.skiplist.GetUint64([]byte(xid))
+	uid := sh.tree.Get(farm.Fingerprint64([]byte(xid)))
 	return uid != 0
 }
 
@@ -165,7 +176,16 @@ func (m *XidMap) SetUid(xid string, uid uint64) {
 	sh := m.shardFor(xid)
 	sh.Lock()
 	defer sh.Unlock()
-	sh.skiplist.PutUint64([]byte(xid), uid)
+	sh.tree.Set(farm.Fingerprint64([]byte(xid)), uid)
+}
+
+func (m *XidMap) dbWriter() {
+	defer m.wg.Done()
+	for buf := range m.kvChan {
+		for _, kv := range buf {
+			x.Panic(m.writer.Set(kv.key, kv.value))
+		}
+	}
 }
 
 // AssignUid creates new or looks up existing XID to UID mappings. It also returns if
@@ -173,7 +193,8 @@ func (m *XidMap) SetUid(xid string, uid uint64) {
 func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh := m.shardFor(xid)
 	sh.RLock()
-	uid, _ := sh.skiplist.GetUint64([]byte(xid))
+
+	uid := sh.tree.Get(farm.Fingerprint64([]byte(xid)))
 	sh.RUnlock()
 	if uid > 0 {
 		return uid, false
@@ -182,13 +203,24 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid, _ = sh.skiplist.GetUint64([]byte(xid))
+	uid = sh.tree.Get(farm.Fingerprint64([]byte(xid)))
 	if uid > 0 {
 		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
-	sh.skiplist.PutUint64([]byte(xid), newUid)
+	sh.tree.Set(farm.Fingerprint64([]byte(xid)), newUid)
+
+	if m.writer != nil {
+		var uidBuf [8]byte
+		binary.BigEndian.PutUint64(uidBuf[:], newUid)
+		m.kvBuf = append(m.kvBuf, kv{key: []byte(xid), value: uidBuf[:]})
+
+		if len(m.kvBuf) == 64 {
+			m.kvChan <- m.kvBuf
+			m.kvBuf = make([]kv, 0, 64)
+		}
+	}
 
 	return newUid, true
 }
@@ -249,27 +281,13 @@ func (m *XidMap) Flush() error {
 		glog.Infof("Finished writing xid map to DB")
 	}()
 
+	if m.writer != nil && len(m.kvBuf) > 0 {
+		m.kvChan <- m.kvBuf
+	}
+	close(m.kvChan)
+	m.wg.Wait()
 	for _, shard := range m.shards {
-		var err error
-		if m.writer != nil {
-			shard.Lock()
-			it := shard.skiplist.NewIterator()
-			var uidBuf [8]byte
-			for it.SeekToFirst(); it.Valid(); it.Next() {
-				curKey := it.Key()
-				key := make([]byte, len(curKey))
-				copy(key, curKey)
-				binary.BigEndian.PutUint64(uidBuf[:], it.ValueUint64())
-				err = m.writer.Set(key, uidBuf[:])
-				y.Check(err)
-			}
-			it.Close()
-			shard.Unlock()
-		}
-		shard.skiplist.DecrRef()
-		if err != nil {
-			return err
-		}
+		shard.tree.Release()
 	}
 
 	if m.writer == nil {

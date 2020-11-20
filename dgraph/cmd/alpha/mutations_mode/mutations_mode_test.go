@@ -23,18 +23,13 @@ import (
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 
 	"google.golang.org/grpc"
 )
 
 // Tests in this file require a cluster running with the --mutations=<mode> option.
-
-// Since this requires three alphas they will likely always be run with docker-compose,
-// so no point in trying to use testutil.TestSockAddr here.
-const disallowModeAlpha = "localhost:9180"
-const strictModeAlphaGroup1 = "localhost:9182"
-const strictModeAlphaGroup2 = "localhost:9183"
 
 func runOn(conn *grpc.ClientConn, fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 	return func(t *testing.T) {
@@ -159,7 +154,8 @@ func mutateExistingAllowed2(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func TestMutationsDisallow(t *testing.T) {
-	conn, err := grpc.Dial(disallowModeAlpha, grpc.WithInsecure())
+	a := testutil.ContainerAddr("alpha1", 9080)
+	conn, err := grpc.Dial(a, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Cannot perform drop all op: %s", err.Error())
 	}
@@ -176,13 +172,15 @@ func TestMutationsDisallow(t *testing.T) {
 }
 
 func TestMutationsStrict(t *testing.T) {
-	conn1, err := grpc.Dial(strictModeAlphaGroup1, grpc.WithInsecure())
+	a1 := testutil.ContainerAddr("alpha2", 9080)
+	conn1, err := grpc.Dial(a1, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Cannot perform drop all op: %s", err.Error())
 	}
 	defer conn1.Close()
 
-	conn2, err := grpc.Dial(strictModeAlphaGroup2, grpc.WithInsecure())
+	a2 := testutil.ContainerAddr("alpha3", 9080)
+	conn2, err := grpc.Dial(a2, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Cannot perform drop all op: %s", err.Error())
 	}

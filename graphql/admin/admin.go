@@ -260,7 +260,7 @@ const (
 		"""
 		Estimated memory the caches can take. Actual usage by the process would be
 		more than specified here. The caches will be updated according to the
-		cache_percentage flag.
+		cache-percentage flag.
 		"""
 		cacheMb: Float
 
@@ -320,7 +320,7 @@ const (
 		Alter the node's config.
 		"""
 		config(input: ConfigInput!): ConfigPayload
-		
+
 		replaceAllowedCORSOrigins(origins: [String]): Cors
 
 		` + adminMutations + `

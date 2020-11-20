@@ -267,10 +267,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -892,39 +893,52 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 	}
 	def.Fields = def.Fields[:i]
 
-	if len(def.Fields) == 0 {
+	// In case of UpdateTypeInput, if TypePatch gets cleaned up then it becomes
+	// input UpdateTypeInput {
+	//		filter: TypeFilter!
+	// }
+	// In this case, UpdateTypeInput should also be deleted.
+	if len(def.Fields) == 0 || (strings.HasPrefix(def.Name, "Update") && len(def.Fields) == 1) {
 		delete(sch.Types, def.Name)
 	}
 }
 
 func cleanSchema(sch *ast.Schema) {
-	// Let's go over inputs of the type TRef, TPatch and AddTInput and delete the ones which
+	// Let's go over inputs of the type TRef, TPatch AddTInput, UpdateTInput and delete the ones which
 	// don't have field inside them.
 	for k := range sch.Types {
 		if strings.HasSuffix(k, "Ref") || strings.HasSuffix(k, "Patch") ||
-			(strings.HasPrefix(k, "Add") && strings.HasSuffix(k, "Input")) {
+			((strings.HasPrefix(k, "Add") || strings.HasPrefix(k, "Update")) && strings.HasSuffix(k, "Input")) {
 			cleanupInput(sch, sch.Types[k], map[string]bool{})
 		}
 	}
 
-	// Let's go over mutations and cleanup those which don't have AddTInput defined in the schema
+	// Let's go over mutations and cleanup those which don't have AddTInput/UpdateTInput defined in the schema
 	// anymore.
 	i := 0 // helps us overwrite the array with valid entries.
 	for _, field := range sch.Mutation.Fields {
 		custom := field.Directives.ForName("custom")
-		// We would only modify add type queries.
-		if custom != nil || !strings.HasPrefix(field.Name, "add") {
+		// We would only modify add/update
+		if custom != nil || !(strings.HasPrefix(field.Name, "add") || strings.HasPrefix(field.Name, "update")) {
 			sch.Mutation.Fields[i] = field
 			i++
 			continue
 		}
 
-		// addT type mutations have an input which is AddTInput so if that doesn't exist anymore,
-		// we can delete the AddTPayload and also skip this mutation.
-		typ := field.Name[3:]
-		input := sch.Types["Add"+typ+"Input"]
-		if input == nil {
-			delete(sch.Types, "Add"+typ+"Payload")
+		// addT / updateT type mutations have an input which is AddTInput / UpdateTInput so if that doesn't exist anymore,
+		// we can delete the AddTPayload / UpdateTPayload and also skip this mutation.
+
+		var typeName, input string
+		if strings.HasPrefix(field.Name, "add") {
+			typeName = field.Name[3:]
+			input = "Add" + typeName + "Input"
+		} else if strings.HasPrefix(field.Name, "update") {
+			typeName = field.Name[6:]
+			input = "Update" + typeName + "Input"
+		}
+
+		if sch.Types[input] == nil {
+			delete(sch.Types, input)
 			continue
 		}
 		sch.Mutation.Fields[i] = field
@@ -1113,8 +1127,8 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 		addFilterArgument(schema, fld)
 
 		// Ordering and pagination, however, only makes sense for fields of
-		// list types (not scalar lists).
-		if isTypeList(fld) {
+		// list types (not scalar lists or enum lists).
+		if isTypeList(fld) && !isEnumList(fld, schema) {
 			addOrderArgument(schema, fld)
 
 			// Pagination even makes sense when there's no orderables because
@@ -1155,6 +1169,11 @@ func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
 }
 
 func addFilterArgumentForField(schema *ast.Schema, fld *ast.FieldDefinition, fldTypeName string) {
+	// Don't add filters for inbuilt types like String, Point, Polygon ...
+	if _, ok := inbuiltTypeToDgraph[fldTypeName]; ok {
+		return
+	}
+
 	fldType := schema.Types[fldTypeName]
 	if fldType.Kind == ast.Union || hasFilterable(fldType) {
 		fld.Arguments = append(fld.Arguments,
@@ -1220,16 +1239,25 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 	for i, search := range searchArgs {
 		filterNames[i] = builtInFilters[search]
 
+		// For enum type, if the index is "hash" or "exact", we construct filter named
+		// enumTypeName_hash/ enumTypeName_exact from StringHashFilter/StringExactFilter
+		// by replacing the Argument type.
 		if (search == "hash" || search == "exact") && schema.Types[fld.Type.Name()].Kind == ast.Enum {
 			stringFilterName := fmt.Sprintf("String%sFilter", strings.Title(search))
 			var l ast.FieldList
 
 			for _, i := range schema.Types[stringFilterName].Fields {
-				typ := fld.Type
+				enumTypeName := fld.Type.Name()
+				var typ *ast.Type
 
-				// In case of IN filter we need to construct List of enums as Input Type.
-				if i.Type.Elem != nil && fld.Type.Elem == nil {
-					typ = &ast.Type{Elem: &ast.Type{NamedType: fld.Type.NamedType, NonNull: fld.Type.NonNull}}
+				if i.Type.Elem == nil {
+					typ = &ast.Type{
+						NamedType: enumTypeName,
+					}
+				} else {
+					typ = &ast.Type{
+						Elem: &ast.Type{NamedType: enumTypeName},
+					}
 				}
 
 				l = append(l, &ast.FieldDefinition{
@@ -1342,10 +1370,13 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types[filterName] = filter
 }
 
+// hasFilterable Returns whether TypeFilter for a defn will be generated or not.
+// It returns true if any field have search arguments or it is an `ID` field or
+// there is atleast one non-custom filter which would be the part of the has filter.
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool {
-			return len(getSearchArgs(fld)) != 0 || isID(fld)
+			return len(getSearchArgs(fld)) != 0 || isID(fld) || !hasCustomOrLambda(fld)
 		})
 }
 
@@ -1354,6 +1385,12 @@ func hasFilterable(defn *ast.Definition) bool {
 func isTypeList(fld *ast.FieldDefinition) bool {
 	_, scalar := inbuiltTypeToDgraph[fld.Type.Name()]
 	return !scalar && fld.Type.Elem != nil
+}
+
+// Returns true if given field is a list of enum
+func isEnumList(fld *ast.FieldDefinition, sch *ast.Schema) bool {
+	typeDefn := sch.Types[fld.Type.Name()]
+	return typeDefn.Kind == "ENUM" && fld.Type.Elem != nil
 }
 
 func hasOrderables(defn *ast.Definition) bool {

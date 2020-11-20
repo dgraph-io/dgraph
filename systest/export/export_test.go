@@ -36,7 +36,7 @@ import (
 var (
 	mc             *minio.Client
 	bucketName     = "dgraph-backup"
-	destination    = "minio://minio1:9001/dgraph-backup?secure=false"
+	destination    = "minio://minio:9001/dgraph-backup?secure=false"
 	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
 )
 
@@ -142,7 +142,7 @@ func requestExport(t *testing.T) map[string]interface{} {
 		}
 	}`
 
-	adminUrl := "http://localhost:8180/admin"
+	adminUrl := "http://"+ testutil.SockAddrHttp+ "/admin"
 	params := testutil.GraphQLParams{
 		Query: exportRequest,
 		Variables: map[string]interface{}{

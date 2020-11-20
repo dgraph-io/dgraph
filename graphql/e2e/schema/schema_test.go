@@ -36,14 +36,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	groupOneServer        = "http://localhost:8180/graphql"
-	groupOneAdminServer   = "http://localhost:8180/admin"
-	groupOnegRPC          = "localhost:9180"
-	groupTwoServer        = "http://localhost:8182/graphql"
-	groupTwoAdminServer   = "http://localhost:8182/admin"
-	groupThreeServer      = "http://localhost:8183/graphql"
-	groupThreeAdminServer = "http://localhost:8183/admin"
+var (
+	groupOneServer        = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/graphql"
+	groupOneAdminServer   = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/admin"
+	groupOnegRPC          = testutil.SockAddr
+	groupTwoServer        = "http://"+ testutil.ContainerAddr("alpha2", 8080) +"/graphql"
+	groupTwoAdminServer   = "http://"+ testutil.ContainerAddr("alpha2", 8080) +"/admin"
+	groupThreeServer      = "http://"+ testutil.ContainerAddr("alpha3", 8080) +"/graphql"
+	groupThreeAdminServer = "http://"+ testutil.ContainerAddr("alpha3", 8080) +"/admin"
 )
 
 // This test is supposed to test the graphql schema subscribe feature. Whenever schema is updated

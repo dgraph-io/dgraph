@@ -32,12 +32,12 @@ import (
 
 // Configuration options of Vault.
 const (
-	vaultAddr         = "vault_addr"
-	vaultRoleIDFile   = "vault_roleid_file"
-	vaultSecretIDFile = "vault_secretid_file"
-	vaultPath         = "vault_path"
-	vaultField        = "vault_field"
-	vaultFormat       = "vault_format"
+	vaultAddr         = "vault-addr"
+	vaultRoleIDFile   = "vault-roleid-file"
+	vaultSecretIDFile = "vault-secretid-file"
+	vaultPath         = "vault-path"
+	vaultField        = "vault-field"
+	vaultFormat       = "vault-format"
 )
 
 // RegisterVaultFlags registers the required flags to integrate with Vault.

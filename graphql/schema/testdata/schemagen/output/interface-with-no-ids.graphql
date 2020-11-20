@@ -8,13 +8,13 @@ interface Message {
 
 type Question implements Message {
 	text: String
-	askedBy: User
+	askedBy(filter: UserFilter): User
 }
 
 type User {
 	name: String
-	messages(order: MessageOrder, first: Int, offset: Int): [Message]
-	messagesAggregate: MessageAggregateResult
+	messages(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	messagesAggregate(filter: MessageFilter): MessageAggregateResult
 }
 
 #######################
@@ -193,10 +193,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -277,12 +278,30 @@ input StringHashFilter {
 #######################
 
 type AddQuestionPayload {
-	question(order: QuestionOrder, first: Int, offset: Int): [Question]
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
 	numUids: Int
 }
 
 type AddUserPayload {
-	user(order: UserOrder, first: Int, offset: Int): [User]
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type DeleteMessagePayload {
+	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	msg: String
+	numUids: Int
+}
+
+type DeleteQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	msg: String
+	numUids: Int
+}
+
+type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	msg: String
 	numUids: Int
 }
 
@@ -292,6 +311,21 @@ type MessageAggregateResult {
 
 type QuestionAggregateResult {
 	count: Int
+}
+
+type UpdateMessagePayload {
+	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	numUids: Int
+}
+
+type UpdateQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	numUids: Int
+}
+
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
 }
 
 type UserAggregateResult {
@@ -354,6 +388,10 @@ input MessageOrder {
 	then: MessageOrder
 }
 
+input MessagePatch {
+	text: String
+}
+
 input QuestionFilter {
 	has: QuestionHasFilter
 	and: [QuestionFilter]
@@ -367,9 +405,32 @@ input QuestionOrder {
 	then: QuestionOrder
 }
 
+input QuestionPatch {
+	text: String
+	askedBy: UserRef
+}
+
 input QuestionRef {
 	text: String
 	askedBy: UserRef
+}
+
+input UpdateMessageInput {
+	filter: MessageFilter!
+	set: MessagePatch
+	remove: MessagePatch
+}
+
+input UpdateQuestionInput {
+	filter: QuestionFilter!
+	set: QuestionPatch
+	remove: QuestionPatch
+}
+
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
 }
 
 input UserFilter {
@@ -385,6 +446,10 @@ input UserOrder {
 	then: UserOrder
 }
 
+input UserPatch {
+	name: String
+}
+
 input UserRef {
 	name: String
 }
@@ -394,12 +459,12 @@ input UserRef {
 #######################
 
 type Query {
-	queryMessage(order: MessageOrder, first: Int, offset: Int): [Message]
-	aggregateMessage: MessageAggregateResult
-	queryQuestion(order: QuestionOrder, first: Int, offset: Int): [Question]
-	aggregateQuestion: QuestionAggregateResult
-	queryUser(order: UserOrder, first: Int, offset: Int): [User]
-	aggregateUser: UserAggregateResult
+	queryMessage(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	aggregateMessage(filter: MessageFilter): MessageAggregateResult
+	queryQuestion(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	aggregateQuestion(filter: QuestionFilter): QuestionAggregateResult
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################
@@ -407,7 +472,13 @@ type Query {
 #######################
 
 type Mutation {
+	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
+	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
 	addQuestion(input: [AddQuestionInput!]!): AddQuestionPayload
+	updateQuestion(input: UpdateQuestionInput!): UpdateQuestionPayload
+	deleteQuestion(filter: QuestionFilter!): DeleteQuestionPayload
 	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 

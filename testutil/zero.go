@@ -20,10 +20,8 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -136,16 +134,9 @@ func GetClientToGroup(gid string) (*dgo.Dgraph, error) {
 	if len(parts) != 2 {
 		return nil, errors.Errorf("the member has an invalid address: %v", member.Addr)
 	}
-	// internalPort is used for communication between alpha nodes
-	internalPort, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return nil, errors.Errorf("unable to parse the port number from %s", parts[1])
-	}
 
-	// externalPort is for handling connections from clients
-	externalPort := internalPort + 2000
-
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", externalPort), grpc.WithInsecure())
+	addr := ContainerAddr(parts[0], 9080)
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
