@@ -53,7 +53,7 @@ const (
 	// and baseIV (remaining 8 bytes) are stored.
 	encOffset = logFileOffset - 16 // 1MB - 16B
 	// logFileSize is the initial size of the log file.
-	logFileSize = 1 << 30 // 1GB
+	logFileSize = 64 << 20 // 64MB
 	// entrySize is the size in bytes of a single entry.
 	entrySize = 32
 	// logSuffix is the suffix for log files.
@@ -171,7 +171,8 @@ func (lf *logFile) GetRaftEntry(idx int) raftpb.Entry {
 		Index: entry.Index(),
 		Type:  raftpb.EntryType(int32(entry.Type())),
 	}
-	if entry.DataOffset() > 0 && entry.DataOffset() < logFileSize {
+	if entry.DataOffset() > 0 {
+		x.AssertTrue(entry.DataOffset() < uint64(len(lf.Data)))
 		data := lf.Slice(int(entry.DataOffset()))
 		if len(data) > 0 {
 			// Copy the data over to allow the mmaped file to be deleted later.
