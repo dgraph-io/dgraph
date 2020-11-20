@@ -1,5 +1,3 @@
-// +build systest
-
 /*
  * Copyright 2020 Dgraph Labs, Inc. and Contributors
  *
@@ -9262,7 +9260,7 @@ var tc = []struct {
 }
 
 func Test1Million(t *testing.T) {
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}

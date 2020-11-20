@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -38,6 +39,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -97,19 +99,21 @@ func runFatal(cmd *exec.Cmd) {
 			strings.Join(cmd.Args, " "), err)
 	}
 }
-func startCluster(composeFile, prefix string) {
-	cmd := command(
-		"docker-compose", "-f", composeFile, "-p", prefix,
-		"up", "--force-recreate", "--remove-orphans", "--detach")
-	cmd.Stderr = nil
-	fmt.Printf("Bringing up cluster %s...\n", prefix)
-	runFatal(cmd)
-	fmt.Printf("CLUSTER UP: %s\n", prefix)
+
+// containers are space separated containers
+func startCluster(composeFile, prefix string, containers string) {
+	q := fmt.Sprintf("docker-compose -f %s -p %s up --force-recreate --remove-orphans --detach %s",
+		composeFile, prefix, containers)
+
+	runFatal(q)
 
 	// Let it stabilize.
 	time.Sleep(3 * time.Second)
 }
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
+
+	q := fmt.Sprintf("docker-compose -f %s -p %s down",
+		composeFile, prefix)
 	go func() {
 		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down")
 		cmd.Stderr = nil
@@ -121,6 +125,96 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 		}
 		wg.Done()
 	}()
+}
+
+func bulkLoad(prefix, benchmarksDir, dataDir, schemaFile, dataFile string) {
+	bulkLoadCmd := fmt.Sprintf(`docker-compose -f ../systest/1million/docker-compose.yml -p %s run -v %s:%s --name bulk_load zero1 bash -s <<EOF
+	mkdir -p /data/alpha1
+	mkdir -p /data/alpha2
+	mkdir -p /data/alpha3
+	/gobin/dgraph bulk --schema=%s --files=%s \
+                            --format=rdf --zero=zero1:5080 --out=/data/zero1/bulk \
+                            --reduce_shards 3 --map_shards 9 > /data/logs.txt
+        mv /data/zero1/bulk/0/p /data/alpha1
+        mv /data/zero1/bulk/1/p /data/alpha2
+		mv /data/zero1/bulk/2/p /data/alpha3
+	EOF`, prefix, benchmarksDir, benchmarksDir, schemaFile, dataFile)
+
+	runFatal(bulkLoadCmd)
+}
+
+func downloadFile(url string, filepath string) error {
+	println("downloading file")
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, resp.Body)
+	return err
+}
+
+func handleSpecificPackages(ctx context.Context, task task, prefix string) bool {
+	// TODO(rahul): may be use a common path across tests
+	currentDir, err := os.Getwd()
+	x.Check(err)
+	benchmarksDir := fmt.Sprintf("%s/benchmarks", currentDir)
+	dataDir := fmt.Sprintf("%s/data", benchmarksDir)
+	runFatal("rm -rf " + benchmarksDir)
+	runFatal("mkdir -p " + dataDir)
+
+	if strings.Contains(task.pkg.ID, "systest/1million") {
+		// test-reindex.sh
+		composeFile := composeFileFor(task.pkg.ID)
+
+		// download data
+		oneMillionNoIndexSchema := "1million-noindex.schema"
+		oneMillionSchema := "1million.schema"
+		oneMillionRdf := "1million.rdf.gz"
+		benchmarksURL := "https://github.com/dgraph-io/benchmarks/blob/master/data/%s?raw=true"
+		files := [3]string{oneMillionNoIndexSchema, oneMillionRdf, oneMillionSchema}
+		for _, file := range files {
+			filePath := path.Join(dataDir, file)
+			url := fmt.Sprintf(benchmarksURL, file)
+			println(url)
+			// TODO: make this concurrent
+			err := downloadFile(url, filePath)
+			x.Check(err)
+		}
+
+		startCluster(composeFile, prefix, "zero1")
+		// TODO: test healthiness of zero
+		bulkLoad(prefix, benchmarksDir, dataDir, oneMillionNoIndexSchema, oneMillionRdf)
+
+		startCluster(composeFile, prefix, "alpha1 alpha2 alpha3")
+
+		alpha1 := getInstance(prefix, "alpha1")
+		alpha1.loginFatal()
+
+		// update the schema
+		client, err := testutil.DgraphClientWithGroot("localhost:" + alpha1.publicPort(9080))
+		x.Check(err)
+		dat, err := ioutil.ReadFile(path.Join(dataDir, oneMillionSchema))
+		x.Check(err)
+		err = client.Alter(ctx, &api.Operation{
+			Schema: string(dat),
+		})
+
+		x.Check(err)
+		runTestsFor(ctx, task.pkg.ID, prefix)
+		return true
+	}
+	if strings.Contains(task.pkg.Name, "systest/21million") {
+
+	}
+
+	return false
 }
 
 type instance struct {
@@ -289,11 +383,13 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if started {
 			return
 		}
-		startCluster(defaultCompose, prefix)
+
+		startCluster(defaultCompose, prefix, "")
 		started = true
 
 		// Wait for cluster to be healthy.
 		getInstance(prefix, "alpha1").loginFatal()
+		// call init_test.go here
 	}
 
 	stop := func() {
@@ -316,7 +412,13 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if !hasTestFiles(task.pkg.ID) {
 			continue
 		}
-
+		if !strings.Contains(task.pkg.ID, "systest/1million") {
+			continue
+		}
+		fmt.Println(task.pkg.ID)
+		if handleSpecificPackages(ctx, task, prefix) {
+			continue
+		}
 		if task.isCommon {
 			if *runCustom {
 				// If we only need to run custom cluster tests, then skip this one.
@@ -332,6 +434,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -346,7 +449,7 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 	compose := composeFileFor(pkg)
 	prefix := getPrefix()
 
-	startCluster(compose, prefix)
+	startCluster(compose, prefix, "")
 	if !*keepCluster {
 		wg.Add(1)
 		defer stopCluster(compose, prefix, wg)

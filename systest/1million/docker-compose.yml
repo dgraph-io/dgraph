@@ -1,4 +1,4 @@
-# Auto-generated with: [./compose -a 3 -z 1 -r 1 --port_offset=0 --expose_ports=false --alpha_volume data:/data --zero_volume data:/data -w --mem= --names=false -O ../systest/1million/docker-compose.yml]
+# Auto-generated with: [./compose -a 3 -z 1 -r 1 --port_offset=0 --expose_ports=false --acl_secret ../../ee/acl/hmac-secret --extra_alpha_flags=--acl_access_ttl=300s -w --mem= --names=false --data_vol true -O ../../systest/1million/docker-compose.yml]
 #
 version: "3.5"
 services:
@@ -14,51 +14,66 @@ services:
     - type: bind
       source: $GOPATH/bin
       target: /gobin
-      read_only: true
+      read_only: false
     - type: volume
       source: data
       target: /data
       read_only: false
-    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
-      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    - type: bind
+      source: ../../ee/acl/hmac-secret
+      target: /secret/hmac
+      read_only: false
+    command: /gobin/dgraph alpha -o 0 --my=alpha1:7080 --zero=zero1:5080 --logtostderr
+      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file=/secret/hmac
+      --acl_access_ttl 3s --acl_access_ttl=300s
   alpha2:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha2
     labels:
       cluster: test
     ports:
-    - "8080"
-    - "9080"
+    - "8082"
+    - "9082"
     volumes:
     - type: bind
       source: $GOPATH/bin
       target: /gobin
-      read_only: true
+      read_only: false
     - type: volume
       source: data
       target: /data
       read_only: false
-    command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr
-      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    - type: bind
+      source: ../../ee/acl/hmac-secret
+      target: /secret/hmac
+      read_only: false
+    command: /gobin/dgraph alpha -o 2 --my=alpha2:7082 --zero=zero1:5080 --logtostderr
+      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file=/secret/hmac
+      --acl_access_ttl 3s --acl_access_ttl=300s
   alpha3:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha3
     labels:
       cluster: test
     ports:
-    - "8080"
-    - "9080"
+    - "8083"
+    - "9083"
     volumes:
     - type: bind
       source: $GOPATH/bin
       target: /gobin
-      read_only: true
+      read_only: false
     - type: volume
       source: data
       target: /data
       read_only: false
-    command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr
-      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    - type: bind
+      source: ../../ee/acl/hmac-secret
+      target: /secret/hmac
+      read_only: false
+    command: /gobin/dgraph alpha -o 3 --my=alpha3:7083 --zero=zero1:5080 --logtostderr
+      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file=/secret/hmac
+      --acl_access_ttl 3s --acl_access_ttl=300s
   zero1:
     image: dgraph/dgraph:latest
     working_dir: /data/zero1
@@ -71,12 +86,12 @@ services:
     - type: bind
       source: $GOPATH/bin
       target: /gobin
-      read_only: true
+      read_only: false
     - type: volume
       source: data
       target: /data
       read_only: false
-    command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --replicas=1 --logtostderr
+    command: /gobin/dgraph zero -o 0 --idx=1 --my=zero1:5080 --replicas=1 --logtostderr
       -v=2 --bindall
 volumes:
   data: {}
