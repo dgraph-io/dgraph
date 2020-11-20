@@ -131,6 +131,7 @@ checkAndUpdate()
 	fi
 }
 
+
 firstRun=1
 while true; do
 	# Lets move to the docs directory.
