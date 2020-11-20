@@ -59,6 +59,12 @@ The activity metrics let you track the mutations, queries, and proposals of an D
 Health metrics let you check the health of a Dgraph Alpha server node, or track
 transaction aborts across a Dgraph cluster.
 
+ Metrics                          | Description
+ -------                          | -----------
+ `dgraph_alpha_health_status`     | **Only applicable to Dgraph Alpha**. Value is 1 when the Alpha is ready to accept requests; otherwise 0.
+ `dgraph_max_assigned_ts`         | **Only applicable to Dgraph Alpha**. This will show the latest max assigned timestamp. All alphas (within the same alpha group) should show the same timestamp if they are in sync.
+ `dgraph_txn_aborts_total`        | Shows the total number of transaction aborts that have occurred on the cluster.
+
 ## Go Metrics
 
 Go's built-in metrics may also be useful to measure for memory usage and garbage collection time.
