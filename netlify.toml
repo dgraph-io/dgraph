@@ -1,0 +1,12 @@
+[build]
+  base = "wiki/"
+  command = "./scripts/build.sh"
+  publish = "./public"
+
+[context.production.environment]
+  HUGO_VERSION = "0.74.3"
+  LOOP = "false"
+
+[context.deploy-preview.environment]
+  HUGO_VERSION = "0.74.3"
+  LOOP = "false"

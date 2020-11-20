@@ -8,6 +8,12 @@
 
 set -e
 
+# Important for clean builds on Netlify
+if ! git remote | grep -q origin ; then
+    git remote add origin https://github.com/dgraph-io/dgraph.git
+    git fetch --all
+fi
+
 GREEN='\033[32;1m'
 RESET='\033[0m'
 HOST="${HOST:-https://dgraph.io/docs}"
