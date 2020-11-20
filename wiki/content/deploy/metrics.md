@@ -46,7 +46,8 @@ holding from the operating system and how much is actively in use.
 
 ## Activity Metrics
 
-Activity metrics let you track the mutations, queries, and proposals of a Dgraph instance.
+Activity metrics let you track the mutations, queries, and proposals of a Dgraph
+instance.
 
  Metrics                                            | Description
  -------                                            | -----------
