@@ -554,7 +554,7 @@ func newAdminResolver(
 		server.schema = newSchema
 		server.resetSchema(gqlSchema)
 
-		glog.Infof("Successfully updated GraphQL schema. Serving New GraphQL API.")
+		glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
 	}, 1, closer)
 
 	go server.initServer()
