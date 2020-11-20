@@ -895,9 +895,11 @@ func buildCommonAuthQueries(
 // buildAggregateFields builds DQL queries for aggregate fields like count, avg, max etc.
 // It returns related DQL fields and Auth Queries which are then added to the final DQL query
 // by the caller.
+// fieldAlias is being passed along with the fileld as it depends on the number of times we have
+// encountered that field till now.
 func buildAggregateFields(
 	f schema.Field,
-	fieldSeenCount map[string]int,
+	fieldAlias string,
 	auth *authRewriter) ([]*gql.GraphQuery, []*gql.GraphQuery) {
 	constructedForType := f.ConstructedFor()
 	constructedForDgraphPredicate := f.ConstructedForDgraphPredicate()
@@ -912,7 +914,7 @@ func buildAggregateFields(
 		}
 		if aggregateField.DgraphAlias() == "count" {
 			aggregateChild := &gql.GraphQuery{
-				Alias: "count_" + generateUniqueDgraphAlias(f, fieldSeenCount),
+				Alias: "count_" + fieldAlias,
 				Attr:  "count(" + constructedForDgraphPredicate + ")",
 			}
 			filter, _ := f.ArgValue("filter").(map[string]interface{})
@@ -1041,8 +1043,8 @@ func addSelectionSetFrom(
 
 		// Handle aggregation queries
 		if f.IsAggregateField() {
-
-			aggregateChildren, aggregateAuthQueries := buildAggregateFields(f, fieldSeenCount, auth)
+			fieldAlias := generateUniqueDgraphAlias(f, fieldSeenCount)
+			aggregateChildren, aggregateAuthQueries := buildAggregateFields(f, fieldAlias, auth)
 
 			authQueries = append(authQueries, aggregateAuthQueries...)
 			q.Children = append(q.Children, aggregateChildren...)

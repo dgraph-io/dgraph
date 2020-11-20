@@ -2465,7 +2465,7 @@
       }
     }
 
-- name: "querying an Enum tupe field multiple times with different aliases adds it only once in rewrting"
+- name: "querying an Enum type field multiple times with different aliases adds it only once in rewrting"
   gqlquery: |-
     query {
       queryPost {
@@ -2516,6 +2516,39 @@
       }
     }
 
+- 
+  name: "querying  field multiple times with different aliases and same filters"
+  gqlquery: |-
+    query {
+      queryAuthor {
+        name
+        p1: posts(filter: {isPublished: true}){
+          title
+          text
+        }
+        p2: posts(filter: {isPublished: true}){
+          title
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter(eq(Post.isPublished, true)) {
+          title : Post.title
+          text : Post.text
+          dgraph.uid : uid
+        }
+        posts1 : Author.posts @filter(eq(Post.isPublished, true)) {
+          title : Post.title
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
 -
   name: "Query with Same Alias"
   gqlquery: |-

@@ -1916,25 +1916,26 @@ func queryWithMultipleAliasOfSameField(t *testing.T) {
 	testutil.CompareJSON(t,
 		`{
 		"queryAuthor": [
-      {
-        "name": "Ann Other Author",
-        "p1": [
-          {
-            "title": "Learning GraphQL in Dgraph",
-            "numLikes": 87
-          }
-        ],
-        "p2": [
-          {
-            "title": "Random post",
-            "numLikes": 0
-          }
-        ]
-      }
-    ]
+			{
+				"name": "Ann Other Author",
+				"p1": [
+					{
+						"title": "Learning GraphQL in Dgraph",
+						"numLikes": 87
+					}
+				],
+				"p2": [
+					{
+						"title": "Random post",
+						"numLikes": 0
+					}
+				]
+			}
+		]
 	}`,
 		string(gqlResponse.Data))
 }
+
 func DgraphDirectiveWithSpecialCharacters(t *testing.T) {
 	mutation := &GraphQLParams{
 		Query: `
@@ -2930,7 +2931,7 @@ func queryCountAtChildLevelWithMultipleAlias(t *testing.T) {
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
 				ag1: statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
-						count
+					count
 				}
 				ag2: statesAggregate(filter: {xcode: {in: ["ka", "mh", "gj", "xyz"]}}) {
 					count
