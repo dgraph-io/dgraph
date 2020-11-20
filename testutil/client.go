@@ -97,6 +97,7 @@ func ContainerAddr(name string, privatePort uint16) string {
 // This allows running (most) tests against dgraph running on the default ports, for example.
 // Only the GRPC ports are needed and the others are deduced.
 func init() {
+	os.Setenv("TEST_DOCKER_PREFIX", "dgraph")
 	DockerPrefix = os.Getenv("TEST_DOCKER_PREFIX")
 
 	MinioInstance = ContainerAddr("minio", 9001)
@@ -221,6 +222,21 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 
 		return resp, err
 	}
+}
+
+func RetryAlterSchema(dg *dgo.Dgraph, op *api.Operation) error {
+	for i := 0; i < 10; i++ {
+		err := dg.Alter(context.Background(), &api.Operation{
+			DropAll: true,
+		})
+		if err == nil {
+			return nil
+		}
+		if strings.Contains(err.Error(), "opIndexing is already running") {
+			time.Sleep(time.Second)
+		}
+	}
+	return fmt.Errorf("not able to successfully alter the schema")
 }
 
 // RetryBadQuery will retry a query until it failse with a non-retryable error.
@@ -426,3 +442,69 @@ func AssignUids(num uint64) error {
 	_, err := http.Get(fmt.Sprintf("http://"+SockAddrZeroHttp+"/assign?what=uids&num=%d", num))
 	return err
 }
+
+func CheckForGraphQLEndpointToReady(url string) error {
+	var err error
+	retries := 6
+	sleep := 10 * time.Second
+
+	// Because of how GraphQL starts (it needs to read the schema from Dgraph),
+	// there's no guarantee that GraphQL is available by now.  So we
+	// need to try and connect and potentially retry a few times.
+	for retries > 0 {
+		retries--
+
+		_, err = hasAdminGraphQLSchema(url)
+		if err == nil {
+			return nil
+		}
+		time.Sleep(sleep)
+	}
+	return err
+}
+
+func hasAdminGraphQLSchema(url string) (bool, error) {
+	schemaQry := &GraphQLParams{
+		Query: `query { getGQLSchema { schema } }`,
+	}
+
+	b, err := json.Marshal(schemaQry)
+	if err != nil {
+		return false, errors.Wrap(err, "error marshaling GraphQL query")
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(b))
+	if err != nil {
+		return false, errors.Wrap(err, "error running GraphQL query")
+	}
+
+	var result *GraphQLResponse
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return false, errors.Wrap(err, "error unmarshalling result")
+	}
+
+	if len(result.Errors) > 0 {
+		return false, result.Errors
+	}
+
+	var sch struct {
+		GetGQLSchema struct {
+			Schema string
+		}
+	}
+
+	err = json.Unmarshal(result.Data, &sch)
+	if err != nil {
+		return false, errors.Wrap(err, "error trying to unmarshal GraphQL query result")
+	}
+
+	if sch.GetGQLSchema.Schema == "" {
+		return false, nil
+	}
+
+	return true, nil
+}
+

@@ -20,17 +20,14 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"io/ioutil"
-	"net/http"
-	"strings"
-	"testing"
-	"time"
-
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	minio "github.com/minio/minio-go/v6"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"io/ioutil"
+	"net/http"
+	"testing"
 
 	"github.com/dgraph-io/dgraph/testutil"
 )
@@ -111,27 +108,15 @@ func setupDgraph(t *testing.T) {
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
 	ctx := context.Background()
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	require.NoError(t, testutil.RetryAlterSchema(dg, &api.Operation{DropAll: true}))
 
 	// Add schema and types.
 	// this is because Alters are always blocked until the indexing is finished.
-	for i := 0; i < 10; i++ {
-		err = dg.Alter(ctx, &api.Operation{Schema: `movie: string .
+	require.NoError(t, testutil.RetryAlterSchema(dg, &api.Operation{Schema: `movie: string .
 		type Node {
 			movie
-		}`})
+		}`}))
 
-		if err == nil {
-			break
-		}
-
-		if strings.Contains(err.Error(), "operation opIndexing is already running") {
-			time.Sleep(time.Second)
-			continue
-		}
-	}
-
-	require.NoError(t, err)
 	// Add initial data.
 	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,

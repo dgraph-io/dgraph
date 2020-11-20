@@ -326,13 +326,9 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				continue
 			}
 			start()
-			wg.Add(1)
-			for i := 0; i < 10; i++ {
-				if err := runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
-					return err
-				}
+			if err := runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
+				return err
 			}
-
 		} else {
 			if err := runCustomClusterTest(ctx, task.pkg.ID, wg); err != nil {
 				return err

@@ -32,8 +32,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
@@ -389,7 +387,7 @@ func TestExportFormat(t *testing.T) {
 	defer os.RemoveAll(tmpdir)
 
 	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
-	err = checkGraphQLStarted(adminUrl)
+	err = testutil.CheckForGraphQLEndpointToReady(adminUrl)
 	require.NoError(t, err)
 
 	params := testutil.GraphQLParams{
@@ -548,69 +546,4 @@ func TestToSchema(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, testCase.expected, string(list.Kv[0].Value))
 	}
-}
-
-func checkGraphQLStarted(url string) error {
-	var err error
-	retries := 6
-	sleep := 10 * time.Second
-
-	// Because of how GraphQL starts (it needs to read the schema from Dgraph),
-	// there's no guarantee that GraphQL is available by now.  So we
-	// need to try and connect and potentially retry a few times.
-	for retries > 0 {
-		retries--
-
-		_, err = hasAdminGraphQLSchema(url)
-		if err == nil {
-			return nil
-		}
-		time.Sleep(sleep)
-	}
-	return err
-}
-
-func hasAdminGraphQLSchema(url string) (bool, error) {
-	schemaQry := &testutil.GraphQLParams{
-		Query: `query { getGQLSchema { schema } }`,
-	}
-
-	b, err := json.Marshal(schemaQry)
-	if err != nil {
-		return false, errors.Wrap(err, "error marshaling GraphQL query")
-	}
-
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(b))
-	if err != nil {
-		return false, errors.Wrap(err, "error running GraphQL query")
-	}
-
-	var result *testutil.GraphQLResponse
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return false, errors.Wrap(err, "error unmarshalling result")
-	}
-
-	if len(result.Errors) > 0 {
-		return false, result.Errors
-	}
-
-	var sch struct {
-		GetGQLSchema struct {
-			Schema string
-		}
-	}
-
-	err = json.Unmarshal(result.Data, &sch)
-	if err != nil {
-		return false, errors.Wrap(err, "error trying to unmarshal GraphQL query result")
-	}
-
-	if sch.GetGQLSchema.Schema == "" {
-		return false, nil
-	}
-
-	return true, nil
 }
