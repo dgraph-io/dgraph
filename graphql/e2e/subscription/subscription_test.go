@@ -29,10 +29,11 @@ import (
 )
 
 var (
-	subscriptionEndpoint = "ws://"+ testutil.ContainerAddr("alpha1", 8080) +"/graphql"
+	subscriptionEndpoint = "ws://" + testutil.ContainerAddr("alpha1", 8080) + "/graphql"
 )
+
 const (
-	sch                  = `
+	sch = `
 	type Product @withSubscription {
 		productID: ID!
 		name: String @search(by: [term])
