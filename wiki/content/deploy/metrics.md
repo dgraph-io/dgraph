@@ -33,7 +33,7 @@ not interact directly with the filesystem. Instead it relies on
 Memory metrics let you track the memory usage of the Dgraph process. The idle
 and `inuse` metrics give you a better sense of the active memory usage of the
 Dgraph process. The process memory metric shows the memory usage as measured by
-the operating system.
+the operating system. 
 
 By looking at all three metrics you can see how much memory a Dgraph process is
 holding from the operating system and how much is actively in use.
