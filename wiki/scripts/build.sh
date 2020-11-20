@@ -9,6 +9,7 @@
 
 set -e
 
+git remote -vvv
 git fetch --all
 
 GREEN='\033[32;1m'
