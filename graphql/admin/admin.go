@@ -533,7 +533,7 @@ func newAdminResolver(
 		}
 		server.mux.Lock()
 		if newSchema.Schema == server.schema.Schema {
-			glog.Infof("Skipping Schema Update: Already have this schema")
+			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
 			server.mux.Unlock()
 			return
 		}
@@ -554,7 +554,7 @@ func newAdminResolver(
 		server.schema = newSchema
 		server.resetSchema(gqlSchema)
 
-		glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
+		glog.Infof("Successfully updated GraphQL schema. Serving New GraphQL API.")
 	}, 1, closer)
 
 	go server.initServer()
