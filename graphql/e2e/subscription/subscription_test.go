@@ -306,24 +306,8 @@ func TestSubscriptionAuth(t *testing.T) {
 	   "text" : "Dgraph is awesome!!"
 	}]}`, string(resp.Data))
 
-	// Change schema to terminate subscription..
-	add = &common.GraphQLParams{
-		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					schema
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"sch": sch},
-	}
-	addResult = add.ExecuteAsPost(t, common.GraphqlAdminURL)
-	require.Nil(t, addResult.Errors)
-	time.Sleep(time.Second)
-
-	res, err = subscriptionClient.RecvMsg()
-	require.NoError(t, err)
-	require.Nil(t, res)
+	// Terminate Subscription
+	subscriptionClient.Terminate()
 }
 
 func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
@@ -929,7 +913,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, addResult.Errors)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
+	jwtToken, err := metaInfo.GetSignedToken("secret", -1)
 	require.NoError(t, err)
 
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
@@ -953,6 +937,9 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 	require.Nil(t, resp.Errors)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
+
+	// Terminate Subscriptions
+	subscriptionClient.Terminate()
 }
 
 func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
