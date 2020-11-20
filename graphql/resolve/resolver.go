@@ -1326,9 +1326,9 @@ func completeObject(
 
 	x.Check2(buf.WriteRune('{'))
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
-	fieldCount := make(map[string]int)
+	fieldSeenCount := make(map[string]int)
 	for _, f := range fields {
-		fieldCount[f.DgraphAlias()] = 0
+		fieldSeenCount[f.DgraphAlias()] = 0
 	}
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
@@ -1356,7 +1356,7 @@ func completeObject(
 		completeAlias(f, &buf)
 
 		seenField[f.ResponseName()] = true
-		name := generateUniqueDgraphAlias(f.DgraphAlias(), fieldCount)
+		name := generateUniqueDgraphAlias(f, fieldSeenCount)
 		val := res[name]
 		// Handle aggregate queries:
 		// Aggregate Fields in DQL response don't follow the same response as other queries.
@@ -1367,7 +1367,7 @@ func completeObject(
 			aggregateVal := make(map[string]interface{})
 			for _, aggregateField := range f.SelectionSet() {
 				if aggregateField.DgraphAlias() == "count" {
-					aggregateVal["count"] = res["count_"+generateUniqueDgraphAlias(f.DgraphAlias(), fieldCount)]
+					aggregateVal["count"] = res["count_"+generateUniqueDgraphAlias(f, fieldSeenCount)]
 				}
 			}
 			val = aggregateVal
@@ -1413,7 +1413,7 @@ func completeObject(
 		}
 		x.Check2(buf.Write(completed))
 		comma = ", "
-		fieldCount[f.DgraphAlias()]++
+		fieldSeenCount[f.DgraphAlias()]++
 	}
 	x.Check2(buf.WriteRune('}'))
 
