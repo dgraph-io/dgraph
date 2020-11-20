@@ -1326,6 +1326,10 @@ func completeObject(
 
 	x.Check2(buf.WriteRune('{'))
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
+
+	// fieldSeenCount is to keep track the number of times a specific field
+	// has been seen till now. It is used in generating Unique Dgraph Alias
+	// to extract out the corresponding value of field from the response.
 	fieldSeenCount := make(map[string]int)
 	for _, f := range fields {
 		fieldSeenCount[f.DgraphAlias()] = 0
@@ -1356,8 +1360,8 @@ func completeObject(
 		completeAlias(f, &buf)
 
 		seenField[f.ResponseName()] = true
-		name := generateUniqueDgraphAlias(f, fieldSeenCount)
-		val := res[name]
+		uniqueDgraphAlias := generateUniqueDgraphAlias(f, fieldSeenCount)
+		val := res[uniqueDgraphAlias]
 		// Handle aggregate queries:
 		// Aggregate Fields in DQL response don't follow the same response as other queries.
 		// Create a map aggregateVal and store response of aggregate fields in a way which
