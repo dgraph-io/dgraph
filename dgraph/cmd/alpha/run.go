@@ -183,6 +183,7 @@ they form a Raft group and provide synchronous replication.
 		"URL of lambda server that implements custom GraphQL JavaScript resolvers")
 
 	// Cache flags
+	flag.Int64("cache-mb", 1024, "Total size of cache (in MB) to be used in Dgraph.")
 	flag.String("cache-percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
