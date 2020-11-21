@@ -8,7 +8,7 @@ weight = 1
 
 Lambda provides a way to write your custom logic in JavaScript, integrate it with your GraphQL schema, and execute it using the GraphQL API in a few easy steps:
 
-- Setup a Dgraph cluster with a working lambda server (not required for [Slash GraphQL](dgraph.io/slash-graphql) users)
+- Setup a Dgraph cluster with a working lambda server (not required for [Slash GraphQL](https://dgraph.io/slash-graphql) users)
 - Declare lambda queries, mutations, and fields in your GraphQL schema as needed
 - Define lambda resolvers for them in a JavaScript file
 
