@@ -1134,8 +1134,8 @@ func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList),
 
 	for {
 		if err := listen(); err != nil {
-			glog.Errorf("Error during SubscribeForUpdates for prefix %q: %v. closer err: %v\n",
-				prefix, err, closer.Ctx().Err())
+			// glog.Errorf("Error during SubscribeForUpdates for prefix %q: %v. closer err: %v\n",
+			// prefix, err, closer.Ctx().Err())
 		}
 		if closer.Ctx().Err() != nil {
 			return

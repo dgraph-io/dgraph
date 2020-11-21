@@ -102,7 +102,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Conf
 			Storage:                  store,
 			MaxInflightMsgs:          256,
 			MaxSizePerMsg:            256 << 10, // 256 KB should allow more batching.
-			MaxCommittedSizePerReady: 64 << 20,  // Avoid loading entire Raft log into memory.
+			MaxCommittedSizePerReady: 1 << 30,  // Avoid loading entire Raft log into memory.
 			// We don't need lease based reads. They cause issues because they
 			// require CheckQuorum to be true, and that causes a lot of issues
 			// for us during cluster bootstrapping and later. A seemingly

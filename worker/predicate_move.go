@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -167,6 +168,7 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 			return err
 		}
 	}
+	fmt.Println("[Receive Predicate] done", time.Now())
 	close(kvs)
 	err := <-che
 	glog.Infof("Proposed %d keys. Error: %v\n", count, err)
@@ -301,12 +303,27 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(list *bpb.KVList) error {
-		return s.Send(&pb.KVS{Kv: list.Kv})
+		x := &pb.KVS{Kv: list.Kv}
+		sz := x.Size()
+		lsize := list.Size()
+		if sz > 1<<20 || sz <= 0 {
+			if sz < 0 {
+				for i, kv := range list.Kv {
+					fmt.Printf("i: %d, kv: %+v, keyLen: %d, valueLen: %d, metaLen: %d, userMetaLen: %d\n", i, kv, len(kv.Key), len(kv.Value), len(kv.Meta), len(kv.UserMeta))
+				}
+			}
+			fmt.Printf("[Sending KV]: numKvs: %d, KvsSize: %d, listSize: %d\n", len(x.Kv), sz, lsize)
+			b, err := x.Marshal()
+			fmt.Printf("  [Sending KV]: numKvs: %d, KvsSize: %d, KvsMarshalSize: %d, err: %v\n", len(x.Kv), sz, len(b), err)
+		}
+		return s.Send(x)
 	}
+
 	span.Annotatef(nil, "Starting stream list orchestrate")
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
+	fmt.Println("[Move Predicate] Sending done ", time.Now())
 
 	payload, err := s.CloseAndRecv()
 	if err != nil {

@@ -821,7 +821,7 @@ func run() {
 
 		start, last := printBasic(store)
 		for start < last-1 {
-			entries, err := store.Entries(start, last+1, 64<<20)
+			entries, err := store.Entries(start, last+1, 1<<30)
 			x.Check(err)
 			for _, e := range entries {
 				printEntry(e, pending)

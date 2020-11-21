@@ -330,6 +330,12 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		if deltaCount > 0 {
 			IncrRollup.addKeyToBatch(key)
 		}
+		// sz := l.plist.Size()
+		// if sz > 1<<20 || sz < 0 {
+		// 	fmt.Println("[Posting]", sz)
+		// 	b, err := l.plist.Marshal()
+		// 	fmt.Println("  [Posting]", len(b), err)
+		// }
 	}()
 
 	// Iterates from highest Ts to lowest Ts
