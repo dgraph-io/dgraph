@@ -10,7 +10,8 @@ weight = 15
 Dgraph database provides metrics on disk activity, memory usage, Dgraph instance
 activity and server node health; along with built-in metrics provided by Go.
 Dgraph metrics follow the
-[metric and label conventions for Prometheus](https://prometheus.io/docs/practices/naming/).
+[metric and label conventions for the Prometheus](https://prometheus.io/docs/practices/naming/)
+monitoring and alerting toolkit.
 
 ## Disk metrics
 
