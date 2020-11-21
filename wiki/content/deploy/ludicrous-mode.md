@@ -38,3 +38,10 @@ Yes, ludicrous mode works with the cluster set up in a highly-available (HA) con
 ## Can the cluster run with multiple data shards?
 
 Yes, ludicrous mode works with the cluster set up with multiple data shards.
+
+## How does Ludicrous mode handle concurrency?
+
+Ludicrous mode can now run mutations concurrently per predicate. This is enabled
+with a default setting of 2000 concurrent threads, but you can adjust the number
+of concurrent threads allowed using the `--ludicrous_concurrency` configuration
+setting on all of the Alpha and Zero instances in the cluster. 
