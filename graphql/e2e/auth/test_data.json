@@ -1,0 +1,293 @@
+[
+	{
+		"uid": "_:user1",
+		"dgraph.type": "User",
+		"User.age": 10,
+		"User.username": "user1",
+		"User.isPublic": true,
+		"User.disabled": false,
+		"User.issues": [{"uid": "_:issue1"}]
+	},
+	{
+		"uid": "_:user2",
+		"dgraph.type": "User",
+		"User.age": 11,
+		"User.username": "user2",
+		"User.isPublic": true,
+		"User.disabled": true,
+		"User.issues": [{"uid": "_:issue2"}]
+	},
+	{
+		"uid": "_:user3",
+		"dgraph.type": "User",
+		"User.age": 12,
+		"User.username": "user3",
+		"User.isPublic": false,
+		"User.disabled": false
+	},
+	{
+		"uid": "_:user4",
+		"dgraph.type": "User",
+		"User.age": 13,
+		"User.username": "user4",
+		"User.isPublic": false,
+		"User.disabled": true
+	},
+	{
+		"uid": "_:user5",
+		"dgraph.type": "User",
+		"User.age": 99,
+		"User.username": "user5",
+		"User.isPublic": true,
+		"User.disabled": false
+	},
+	{
+		"uid": "_:region1",
+		"dgraph.type": "Region",
+		"Region.name": "Region1",
+		"Region.users": [{"uid": "_:user1"}, {"uid": "_:user2"}]
+	},
+	{
+		"uid": "_:region2",
+		"dgraph.type": "Region",
+		"Region.name": "Region2",
+		"Region.users": [{"uid": "_:user2"}, {"uid": "_:user3"}]
+	},
+	{
+		"uid": "_:region3",
+		"dgraph.type": "Region",
+		"Region.name": "Region3",
+		"Region.users": [{"uid": "_:user3"}, {"uid": "_:user4"}]
+	},
+	{
+		"uid": "_:region4",
+		"dgraph.type": "Region",
+		"Region.name": "Region4",
+		"Region.users": [{"uid": "_:user4"}, {"uid": "_:user1"}]
+	},
+	{
+		"uid": "_:region5",
+		"dgraph.type": "Region",
+		"Region.name": "Region5",
+		"Region.global": true
+	},
+	{
+		"uid": "_:movie1",
+		"dgraph.type": "Movie",
+		"Movie.content": "Movie1",
+		"Movie.regionsAvailable": [{"uid": "_:region2"}, {"uid": "_:region3"}],
+		"Movie.disabled": false
+	}, {
+		"uid": "_:movie2",
+		"dgraph.type": "Movie",
+		"Movie.content": "Movie2",
+		"Movie.regionsAvailable": [{"uid": "_:region1"}],
+		"Movie.disabled": false
+	},
+	{
+		"uid": "_:movie3",
+		"dgraph.type": "Movie",
+		"Movie.content": "Movie3",
+		"Movie.regionsAvailable": [{"uid": "_:region1"}, {"uid": "_:region4"}],
+		"Movie.disabled": true
+	},
+	{
+		"uid": "_:movie4",
+		"dgraph.type": "Movie",
+		"Movie.content": "Movie4",
+		"Movie.regionsAvailable": [{"uid": "_:region5"}],
+		"Movie.reviews" : [{"uid": "_:review1"}]
+	},
+	{
+		"uid": "_:review1",
+		"dgraph.type": "Review",
+		"Review.comment": "Nice movie"
+	},
+	{
+		"uid": "_:issue1",
+		"dgraph.type": "Issue",
+		"Issue.msg": "Issue1",
+		"Issue.owner": {"uid": "_:user1"}
+	},
+	{
+		"uid": "_:issue2",
+		"dgraph.type": "Issue",
+		"Issue.msg": "Issue2",
+		"Issue.owner": {"uid": "_:user2"}
+	},
+	{
+		"uid": "_:log1",
+		"dgraph.type": "Log",
+		"Log.random": "test",
+		"Log.logs": "Log1"
+	},
+	{
+		"uid": "_:log2",
+		"dgraph.type": "Log",
+		"Log.random": "test",
+		"Log.logs": "Log2"
+	},
+	{
+		"uid": "_:complexlog1",
+		"dgraph.type": "ComplexLog",
+		"ComplexLog.logs": "ComplexLog1",
+		"ComplexLog.visible": true
+	},
+	{
+		"uid": "_:complexlog2",
+		"dgraph.type": "ComplexLog",
+		"ComplexLog.logs": "ComplexLog2"
+	},
+	{
+		"uid": "_:role1",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user2"}],
+		"Role.permission": "VIEW"
+	},
+	{
+		"uid": "_:role2",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user3"}, {"uid": "_:user2"}],
+		"Role.permission": "VIEW"
+	},
+	{
+		"uid": "_:role3",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user4"}],
+		"Role.permission": "VIEW"
+	},
+	{
+		"uid": "_:role4",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user5"}],
+		"Role.permission": "EDIT"
+	},
+	{
+		"uid": "_:role5",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user2"}],
+		"Role.permission": "ADMIN"
+	},
+	{
+		"uid": "_:role6",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user3"}, {"uid": "_:user2"}],
+		"Role.permission": "ADMIN"
+	},
+	{
+		"uid": "_:role7",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user4"}],
+		"Role.permission": "ADMIN"
+	},
+	{
+		"uid": "_:project1",
+		"dgraph.type": "Project",
+		"Project.name": "Project1",
+		"Project.roles": [{"uid": "_:role1"}, {"uid": "_:role2"}, {"uid": "_:role4"}, {"uid": "_:role5"}, {"uid": "_:role6"}],
+		"Project.columns": [{"uid": "_:column1"}]
+	},
+	{
+		"uid": "_:project2",
+		"dgraph.type": "Project",
+		"Project.name": "Project2",
+		"Project.roles": [{"uid": "_:role3"}, {"uid": "_:role2"}, {"uid": "_:role7"}, {"uid": "_:role6"}],
+		"Project.columns": [{"uid": "_:column2"}, {"uid": "_:column3"}]
+	},
+	{
+		"uid": "_:column1",
+		"dgraph.type": "Column",
+		"Column.inProject": {"uid": "_:project1"},
+		"Column.name": "Column1",
+		"ticket.tickets": [{"uid": "_:ticket1"}, {"uid": "_:ticket2"}]
+	},
+	{
+		"uid": "_:column2",
+		"dgraph.type": "Column",
+		"Column.inProject": {"uid": "_:project2"},
+		"Column.name": "Column2",
+		"ticket.tickets": [{"uid": "_:ticket3"}]
+	},
+	{
+		"uid": "_:column3",
+		"dgraph.type": "Column",
+		"Column.inProject": {"uid": "_:project2"},
+		"Column.name": "Column3",
+		"ticket.tickets": [{"uid": "_:ticket4"}]
+	},
+	{
+		"uid": "_:ticket2",
+		"dgraph.type": "Ticket",
+		"Ticket.onColumn": {"uid": "_:column1"},
+		"Ticket.title": "Ticket2",
+		"ticket.assignedTo": [{"uid": "_:user3"}]
+	},
+	{
+		"uid": "_:ticket3",
+		"dgraph.type": "Ticket",
+		"Ticket.onColumn": {"uid": "_:column2"},
+		"Ticket.title": "Ticket3",
+		"ticket.assignedTo": [{"uid": "_:user2"}]
+	},
+	{
+		"uid": "_:ticket4",
+		"dgraph.type": "Ticket",
+		"Ticket.onColumn": {"uid": "_:column3"},
+		"Ticket.title": "Ticket4",
+		"ticket.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user4"}]
+	},
+	{
+		"uid": "_:usersecret2",
+		"dgraph.type": "UserSecret",
+		"UserSecret.aSecret": "Sensitive information",
+		"UserSecret.ownedBy": "user1"
+	},
+	{"uid":"_:Question1","Post.text":"A Question"},
+	{"uid":"_:Question2","Post.text":"B Question"},
+	{"uid":"_:Question3","Post.text":"C Question"},
+	{"uid":"_:FbPost2","Post.text":"B FbPost"},
+	{"uid":"_:FbPost1","Post.text":"A FbPost"},
+	{"uid":"_:Answer1","Post.text":"A Answer"},
+	{"uid":"_:Answer2","Post.text":"B Answer"},
+	{"uid":"_:Author1","Author.name":"user1@dgraph.io"},
+	{"uid":"_:Author2","Author.name":"user2@dgraph.io"},
+	{"uid":"_:Question1","Post.author":[{"uid":"_:Author1"}]},
+	{"uid":"_:Question2","Post.author":[{"uid":"_:Author2"}]},
+	{"uid":"_:Question3","Post.author":[{"uid":"_:Author1"}]},
+	{"uid":"_:FbPost2","Post.author":[{"uid":"_:Author2"}]},
+	{"uid":"_:FbPost1","Post.author":[{"uid":"_:Author1"}]},
+	{"uid":"_:Answer1","Post.author":[{"uid":"_:Author1"}]},
+	{"uid":"_:Answer2","Post.author":[{"uid":"_:Author2"}]},
+	{"uid":"_:Author1","dgraph.type":"Author"},
+	{"uid":"_:Author2","dgraph.type":"Author"},
+	{"uid":"_:Question1","dgraph.type":"Post"},
+	{"uid":"_:Question1","dgraph.type":"Question"},
+	{"uid":"_:Question2","dgraph.type":"Post"},
+	{"uid":"_:Question2","dgraph.type":"Question"},
+	{"uid":"_:Question3","dgraph.type":"Post"},
+	{"uid":"_:Question3","dgraph.type":"Question"},
+	{"uid":"_:FbPost2","dgraph.type":"Post"},
+	{"uid":"_:FbPost2","dgraph.type":"FbPost"},
+	{"uid":"_:FbPost2","dgraph.type":"MsgPost"},
+	{"uid":"_:FbPost1","dgraph.type":"Post"},
+	{"uid":"_:FbPost1","dgraph.type":"FbPost"},
+	{"uid":"_:FbPost1","dgraph.type":"MsgPost"},
+	{"uid":"_:Answer1","dgraph.type":"Answer"},
+	{"uid":"_:Answer1","dgraph.type":"Post"},
+	{"uid":"_:Answer2","dgraph.type":"Answer"},
+	{"uid":"_:Answer2","dgraph.type":"Post"},
+	{"uid":"_:Author1","Author.posts":[{"uid":"_:Question1"}]},
+	{"uid":"_:Author1","Author.posts":[{"uid":"_:Question3"}]},
+	{"uid":"_:Author2","Author.posts":[{"uid":"_:Question2"}]},
+	{"uid":"_:FbPost2","MsgPost.sender":[{"uid":"_:Author2"}]},
+	{"uid":"_:FbPost1","MsgPost.sender":[{"uid":"_:Author1"}]},
+	{"uid":"_:FbPost2","FbPost.postCount":2},
+	{"uid":"_:FbPost1","FbPost.postCount":1},
+	{"uid":"_:FbPost2","MsgPost.receiver":[{"uid":"_:Author1"}]},
+	{"uid":"_:FbPost1","MsgPost.receiver":[{"uid":"_:Author2"}]},
+	{"uid":"_:Question1","Question.answered":"true"},
+	{"uid":"_:Question2","Question.answered":"true"},
+	{"uid":"_:Question3","Question.answered":"false"},
+	{"uid":"_:Answer1","Answer.markedUseful":"true"},
+	{"uid":"_:Answer2","Answer.markedUseful":"true"}
+]

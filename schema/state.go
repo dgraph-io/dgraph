@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package schema
@@ -23,9 +32,9 @@ const (
 	itemComma
 	itemNewLine
 	itemDot
-	itemUnderscore
 	itemLeftSquare
 	itemRightSquare
+	itemExclamationMark
 )
 
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -39,14 +48,16 @@ Loop:
 			return lexWord
 		case isSpace(r):
 			l.Ignore()
-		case isEndOfLine(r):
+		case lex.IsEndOfLine(r):
 			l.Emit(itemNewLine)
 		case r == '.':
 			l.Emit(itemDot)
+		case r == '#':
+			return lexTextComment
 		case r == ',':
 			l.Emit(itemComma)
 		case r == '<':
-			if err := lex.LexIRIRef(l, itemText); err != nil {
+			if err := lex.IRIRef(l, itemText); err != nil {
 				return l.Errorf("Invalid schema: %v", err)
 			}
 		case r == '{':
@@ -65,6 +76,8 @@ Loop:
 			l.Emit(itemLeftSquare)
 		case r == ']':
 			l.Emit(itemRightSquare)
+		case r == '!':
+			l.Emit(itemExclamationMark)
 		case r == '_':
 			// Predicates can start with _.
 			return lexWord
@@ -88,6 +101,25 @@ func lexWord(l *lex.Lexer) lex.StateFn {
 		}
 		l.Backup()
 		l.Emit(itemText)
+		break
+	}
+	return lexText
+}
+
+// lexTextComment lexes a comment text inside a schema.
+func lexTextComment(l *lex.Lexer) lex.StateFn {
+	for {
+		r := l.Next()
+		if r == lex.EOF {
+			l.Ignore()
+			l.Emit(lex.ItemEOF)
+			break
+		}
+		if !lex.IsEndOfLine(r) {
+			continue
+		}
+		l.Ignore()
+		l.Emit(itemNewLine)
 		break
 	}
 	return lexText
@@ -121,9 +153,4 @@ func isNameSuffix(r rune) bool {
 // isSpace returns true if the rune is a tab or space.
 func isSpace(r rune) bool {
 	return r == '\u0009' || r == '\u0020'
-}
-
-// isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
-func isEndOfLine(r rune) bool {
-	return r == '\n' || r == '\u000D'
 }

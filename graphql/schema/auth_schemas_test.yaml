@@ -1,0 +1,330 @@
+invalid_schemas:
+
+  - name: "GraphQL parsing errors should be reported"
+    input: |
+      type X @auth(
+        query: { rule: "query { " }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      {"message": "Type X: @auth: failed to parse GraphQL rule
+      [reason : Expected Name, found <EOF>]"}
+    ]
+
+  - name: "GraphQL validation errors should be reported"
+    input: |
+      type X @auth(
+        query: {rule: "query { queryX(filter: { userRle: { eq: \"ADMIN\" } }) { __typename } }"}
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      {"message": "Type X: @auth: failed to validate GraphQL rule
+      [reason : Field \"userRle\" is not defined by type XFilter.
+      Did you mean userRole or username?]"}
+    ]
+
+  - name: "RBAC rule invalid variable"
+    input: |
+      type X @auth(
+        query: {rule: "{ X_MyApp_Role : { eq : \"ADMIN\"}}"
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [{"message": "Type X: @auth: `X_MyApp_Role` is not a valid GraphQL variable."}]
+
+  - name: "RBAC rule invalid operator"
+    input: |
+      type X @auth(
+        query: {rule: "{ $X_MyApp_Role : { xyz : \"ADMIN\"}}"
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [{"message": "Type X: @auth: `xyz` operator is not supported in this rule."}]
+
+  - name: "Invalid RBAC rule"
+    input: |
+      type X @auth(
+        query: {rule: "{ \"ADMIN\" }"
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [{"message": "Type X: @auth: `{ \"ADMIN\" }` is not a valid rule."}]
+
+  - name: "Empty rule"
+    input: |
+      type X @auth(
+        query: { rule: ""
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      {"message": "Type X: @auth: a rule should be exactly one query,
+      found 0 GraphQL operations"}
+    ]
+
+  - name: "Invalid auth syntax"
+    input: |
+      type X @auth(
+        query: { xyz: ""
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "Type X: @auth: there should be only one of \"and\", \"or\",
+    \"not\" and \"rule\""}
+    ]
+
+  - name: "Single or rule"
+    input: |
+      type X @auth(
+        query: {
+            or: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" }
+          ]
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [{"message": "Type X: @auth: 'OR' should contain at least two rules"}]
+
+  - name: "Multiple logical operation at same level"
+    input: |
+      type X @auth(
+        query: {
+            or: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+            ],
+            and: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+            ]
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "Type X: @auth: there should be only one of \"and\", \"or\",
+    \"not\" and \"rule\""}
+    ]
+
+  - name: "Same logical operation at same level"
+    input: |
+      type X @auth(
+        query: {
+            or: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+            ],
+            or: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+            ]
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "Type X: @auth: there should be only one of \"and\", \"or\",
+    \"not\" and \"rule\""}
+    ]
+
+  - name:  "Rules with null value"
+    input: |
+      type X @auth(
+        query: { and: [ null, null ] }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "Type X: @auth: no arguments - there should be only one of \"and\", \"or\",
+    \"not\" and \"rule\""},
+    {"message": "Type X: @auth: no arguments - there should be only one of \"and\", \"or\",
+    \"not\" and \"rule\""}
+    ]
+
+valid_schemas:
+
+  - name: "GraphQL Should Parse"
+    input: |
+      type X @auth(
+        query: {rule: """
+          query { 
+            queryX(filter: { userRole: { eq: "ADMIN" } }) { 
+              __typename 
+            } 
+          }"""
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+
+  - name: "GraphQL auth RBAC rule"
+    input: |
+      type X @auth(
+        query: { rule: "{ $X_MyApp_Role: { eq: \"ADMIN\" }}"
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+
+  - name: "GraphQL With Variable Should Parse"
+    input: |
+      type X @auth(
+        query: { rule: """
+          query($usr: String!) { 
+            queryX(filter: { username: { eq: $usr } }) { 
+              __typename 
+            } 
+          }"""
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+
+  - name: "Complex GraphQL Should Parse"
+    input: |
+      type Proj @auth(
+        update: { rule: """
+          query($usr: String!) { 
+            queryProj {
+              roles(filter: { perm: { ge: 4 }}) {
+                users(filter: { username: { eq: $usr } }) { 
+                  __typename 
+                } 
+              }
+            }
+          }""" }
+      ) {
+        projID: ID!
+        roles: [Role]
+      }
+      type Role {
+        perm: Int! @search
+        users: [User]
+      }
+      type User {
+        username: String! @id
+      }
+
+  - name: "Rule using logical `or` operation"
+    input: |
+      type X @auth(
+        query: {
+            or: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+          ]
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+
+  - name: "Rule using logical `and` operation"
+    input: |
+      type X @auth(
+        query: {
+            and: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+          ]
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+
+  - name: "Rule using logical `not` operation"
+    input: |
+      type X @auth(
+        query: { not: { rule: """
+          query {
+            queryX(filter: { userRole: { eq: "ADMIN" } }) {
+              __typename
+            }
+          }"""
+        } }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }

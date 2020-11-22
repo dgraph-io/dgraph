@@ -1,94 +1,142 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package bulk
 
 import (
-	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
 	"fmt"
+	"hash/adler32"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
+	"strconv"
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	bo "github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"google.golang.org/grpc/credentials"
+
+	"github.com/dgraph-io/badger/v2"
+	bo "github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v2/y"
+
+	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+
 	"google.golang.org/grpc"
 )
 
 type options struct {
-	RDFDir        string
-	SchemaFile    string
-	DgraphsDir    string
-	TmpDir        string
-	NumGoroutines int
-	MapBufSize    int64
-	ExpandEdges   bool
-	SkipMapPhase  bool
-	CleanupTmp    bool
-	NumShufflers  int
-	Version       bool
-	StoreXids     bool
-	ZeroAddr      string
-	HttpAddr      string
+	DataFiles        string
+	DataFormat       string
+	SchemaFile       string
+	GqlSchemaFile    string
+	OutDir           string
+	ReplaceOutDir    bool
+	TmpDir           string
+	NumGoroutines    int
+	MapBufSize       uint64
+	PartitionBufSize int64
+	SkipMapPhase     bool
+	CleanupTmp       bool
+	NumReducers      int
+	Version          bool
+	StoreXids        bool
+	ZeroAddr         string
+	HttpAddr         string
+	IgnoreErrors     bool
+	CustomTokenizers string
+	NewUids          bool
+	ClientDir        string
+	Encrypted        bool
+	EncryptedOut     bool
 
 	MapShards    int
 	ReduceShards int
 
 	shardOutputDirs []string
+
+	// ........... Badger options ..........
+	// EncryptionKey is the key used for encryption. Enterprise only feature.
+	EncryptionKey x.SensitiveByteSlice
+	// BadgerCompression is the compression algorithm to use while writing to badger.
+	BadgerCompression bo.CompressionType
+	// BadgerCompressionlevel is the compression level to use while writing to badger.
+	BadgerCompressionLevel int
+	BlockCacheSize         int64
+	IndexCacheSize         int64
 }
 
 type state struct {
-	opt        options
-	prog       *progress
-	xids       *xidmap.XidMap
-	schema     *schemaStore
-	shards     *shardMap
-	rdfChunkCh chan *bytes.Buffer
-	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	dbs        []*badger.ManagedDB
-	writeTs    uint64 // All badger writes use this timestamp
+	opt           *options
+	prog          *progress
+	xids          *xidmap.XidMap
+	schema        *schemaStore
+	shards        *shardMap
+	readerChunkCh chan *bytes.Buffer
+	mapFileId     uint32 // Used atomically to name the output files of the mappers.
+	dbs           []*badger.DB
+	tmpDbs        []*badger.DB // Temporary DB to write the split lists to avoid ordering issues.
+	writeTs       uint64       // All badger writes use this timestamp
 }
 
 type loader struct {
 	*state
 	mappers []*mapper
-	xidDB   *badger.DB
 	zero    *grpc.ClientConn
 }
 
-func newLoader(opt options) *loader {
-	x.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
-	zero, err := grpc.Dial(opt.ZeroAddr,
+func newLoader(opt *options) *loader {
+	if opt == nil {
+		log.Fatalf("Cannot create loader with nil options.")
+	}
+
+	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
+	x.Check(err)
+	dialOpts := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithInsecure(),
-		grpc.WithTimeout(time.Minute))
+	}
+	if tlsConf != nil {
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	} else {
+		dialOpts = append(dialOpts, grpc.WithInsecure())
+	}
+	zero, err := grpc.DialContext(ctx, opt.ZeroAddr, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	st := &state{
 		opt:    opt,
 		prog:   newProgress(),
 		shards: newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
-		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
-		writeTs:    getWriteTimestamp(zero),
+		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
+		writeTs:       getWriteTimestamp(zero),
 	}
-	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
+	st.schema = newSchemaStore(readSchema(opt), opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
@@ -102,122 +150,68 @@ func newLoader(opt options) *loader {
 }
 
 func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
-	client := intern.NewZeroClient(zero)
+	client := pb.NewZeroClient(zero)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		ts, err := client.Timestamps(ctx, &intern.Num{Val: 1})
+		ts, err := client.Timestamps(ctx, &pb.Num{Val: 1})
 		cancel()
 		if err == nil {
 			return ts.GetStartId()
 		}
-		x.Printf("error communicating with dgraph zero, retrying: %v", err)
+		fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
 		time.Sleep(time.Second)
 	}
 }
 
-func readSchema(filename string) []*intern.SchemaUpdate {
-	f, err := os.Open(filename)
+func readSchema(opt *options) *schema.ParsedSchema {
+	f, err := os.Open(opt.SchemaFile)
 	x.Check(err)
 	defer f.Close()
-	var r io.Reader = f
-	if filepath.Ext(filename) == ".gz" {
-		r, err = gzip.NewReader(f)
+
+	key := opt.EncryptionKey
+	if !opt.Encrypted {
+		key = nil
+	}
+	r, err := enc.GetReader(key, f)
+	x.Check(err)
+	if filepath.Ext(opt.SchemaFile) == ".gz" {
+		r, err = gzip.NewReader(r)
 		x.Check(err)
 	}
 
 	buf, err := ioutil.ReadAll(r)
 	x.Check(err)
 
-	initialSchema, err := schema.Parse(string(buf))
+	result, err := schema.Parse(string(buf))
 	x.Check(err)
-	return initialSchema
-}
-
-func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
-	batch := new(bytes.Buffer)
-	batch.Grow(10 << 20)
-	for lineCount := 0; lineCount < 1e5; lineCount++ {
-		slc, err := r.ReadSlice('\n')
-		if err == io.EOF {
-			batch.Write(slc)
-			return batch, err
-		}
-		if err == bufio.ErrBufferFull {
-			// This should only happen infrequently.
-			batch.Write(slc)
-			var str string
-			str, err = r.ReadString('\n')
-			if err == io.EOF {
-				batch.WriteString(str)
-				return batch, err
-			}
-			if err != nil {
-				return nil, err
-			}
-			batch.WriteString(str)
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		batch.Write(slc)
-	}
-	return batch, nil
-}
-
-func findRDFFiles(dir string) []string {
-	var files []string
-	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if strings.HasSuffix(path, ".rdf") || strings.HasSuffix(path, ".rdf.gz") {
-			files = append(files, path)
-		}
-		return nil
-	}))
-	return files
-}
-
-type uidRangeResponse struct {
-	uids *api.AssignedIds
-	err  error
+	return result
 }
 
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
+	var db *badger.DB
+	if len(ld.opt.ClientDir) > 0 {
+		x.Check(os.MkdirAll(ld.opt.ClientDir, 0700))
 
-	xidDir := filepath.Join(ld.opt.TmpDir, "xids")
-	x.Check(os.Mkdir(xidDir, 0755))
-	opt := badger.DefaultOptions
-	opt.SyncWrites = false
-	opt.TableLoadingMode = bo.MemoryMap
-	opt.Dir = xidDir
-	opt.ValueDir = xidDir
-	var err error
-	ld.xidDB, err = badger.Open(opt)
-	x.Check(err)
-	ld.xids = xidmap.New(ld.xidDB, ld.zero, xidmap.Options{
-		NumShards: 1 << 10,
-		LRUSize:   1 << 19,
-	})
+		var err error
+		db, err = badger.Open(badger.DefaultOptions(ld.opt.ClientDir))
+		x.Checkf(err, "Error while creating badger KV posting store")
+	}
+	ld.xids = xidmap.New(ld.zero, db, filepath.Join(ld.opt.TmpDir, bufferDir))
 
-	var readers []*bufio.Reader
-	for _, rdfFile := range findRDFFiles(ld.opt.RDFDir) {
-		f, err := os.Open(rdfFile)
-		x.Check(err)
-		defer f.Close()
-		if !strings.HasSuffix(rdfFile, ".gz") {
-			readers = append(readers, bufio.NewReaderSize(f, 1<<20))
-		} else {
-			gzr, err := gzip.NewReader(f)
-			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
-			readers = append(readers, bufio.NewReader(gzr))
-		}
+	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
+	if len(files) == 0 {
+		fmt.Printf("No data files found in %s.\n", ld.opt.DataFiles)
+		os.Exit(1)
 	}
 
-	if len(readers) == 0 {
-		fmt.Println("No rdf files found.")
+	// Because mappers must handle chunks that may be from different input files, they must all
+	// assume the same data format, either RDF or JSON. Use the one specified by the user or by
+	// the first load file.
+	loadType := chunker.DataFormat(files[0], ld.opt.DataFormat)
+	if loadType == chunker.UnknownFormat {
+		// Dont't try to detect JSON input in bulk loader.
+		fmt.Printf("Need --format=rdf or --format=json to load %s", files[0])
 		os.Exit(1)
 	}
 
@@ -225,76 +219,151 @@ func (ld *loader) mapStage() {
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
 		go func(m *mapper) {
-			m.run()
+			m.run(loadType)
 			mapperWg.Done()
 		}(m)
 	}
 
 	// This is the main map loop.
-	thr := x.NewThrottle(ld.opt.NumGoroutines)
-	for _, r := range readers {
-		thr.Start()
-		go func(r *bufio.Reader) {
-			defer thr.Done()
-			for {
-				chunkBuf, err := readChunk(r)
-				if err == io.EOF {
-					if chunkBuf.Len() != 0 {
-						ld.rdfChunkCh <- chunkBuf
-					}
-					break
-				}
-				x.Check(err)
-				ld.rdfChunkCh <- chunkBuf
-			}
-		}(r)
-	}
-	thr.Wait()
+	thr := y.NewThrottle(ld.opt.NumGoroutines)
+	for i, file := range files {
+		x.Check(thr.Do())
+		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
 
-	close(ld.rdfChunkCh)
+		go func(file string) {
+			defer thr.Done(nil)
+
+			key := ld.opt.EncryptionKey
+			if !ld.opt.Encrypted {
+				key = nil
+			}
+			r, cleanup := chunker.FileReader(file, key)
+			defer cleanup()
+
+			chunk := chunker.NewChunker(loadType, 1000)
+			for {
+				chunkBuf, err := chunk.Chunk(r)
+				if chunkBuf != nil && chunkBuf.Len() > 0 {
+					ld.readerChunkCh <- chunkBuf
+				}
+				if err == io.EOF {
+					break
+				} else if err != nil {
+					x.Check(err)
+				}
+			}
+		}(file)
+	}
+	x.Check(thr.Finish())
+
+	// Send the graphql triples
+	ld.processGqlSchema(loadType)
+
+	close(ld.readerChunkCh)
 	mapperWg.Wait()
 
 	// Allow memory to GC before the reduce phase.
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
 	}
-	ld.xids.EvictAll()
-	x.Check(ld.xidDB.Close())
+	x.Check(ld.xids.Flush())
+	if db != nil {
+		x.Check(db.Close())
+	}
 	ld.xids = nil
-	runtime.GC()
 }
 
-type shuffleOutput struct {
-	db         *badger.ManagedDB
-	mapEntries []*intern.MapEntry
+func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
+	if ld.opt.GqlSchemaFile == "" {
+		return
+	}
+
+	f, err := os.Open(ld.opt.GqlSchemaFile)
+	x.Check(err)
+	defer f.Close()
+
+	key := ld.opt.EncryptionKey
+	if !ld.opt.Encrypted {
+		key = nil
+	}
+	r, err := enc.GetReader(key, f)
+	x.Check(err)
+	if filepath.Ext(ld.opt.GqlSchemaFile) == ".gz" {
+		r, err = gzip.NewReader(r)
+		x.Check(err)
+	}
+
+	buf, err := ioutil.ReadAll(r)
+	x.Check(err)
+
+	rdfSchema := `_:gqlschema <dgraph.type> "dgraph.graphql" .
+	_:gqlschema <dgraph.graphql.xid> "dgraph.graphql.schema" .
+	_:gqlschema <dgraph.graphql.schema> %s .
+	`
+
+	jsonSchema := `{
+		"dgraph.type": "dgraph.graphql",
+		"dgraph.graphql.xid": "dgraph.graphql.schema",
+		"dgraph.graphql.schema": %s
+	}`
+
+	gqlBuf := &bytes.Buffer{}
+	schema := strconv.Quote(string(buf))
+	switch loadType {
+	case chunker.RdfFormat:
+		x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(rdfSchema, schema))))
+	case chunker.JsonFormat:
+		x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(jsonSchema, schema))))
+	}
+	ld.readerChunkCh <- gqlBuf
 }
 
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	shuffleOutputCh := make(chan shuffleOutput, 100)
-	go func() {
-		shuf := shuffler{state: ld.state, output: shuffleOutputCh}
-		shuf.run()
-	}()
-
-	redu := reducer{
+	r := reducer{
 		state:     ld.state,
-		input:     shuffleOutputCh,
-		writesThr: x.NewThrottle(100),
+		streamIds: make(map[string]uint32),
 	}
-	redu.run()
+	x.Check(r.run())
 }
 
 func (ld *loader) writeSchema() {
-	for _, db := range ld.dbs {
-		ld.schema.write(db)
+	numDBs := uint32(len(ld.dbs))
+	preds := make([][]string, numDBs)
+
+	// Get all predicates that have data in some DB.
+	m := make(map[string]struct{})
+	for i, db := range ld.dbs {
+		preds[i] = ld.schema.getPredicates(db)
+		for _, p := range preds[i] {
+			m[p] = struct{}{}
+		}
+	}
+
+	// Find any predicates that don't have data in any DB
+	// and distribute them among all the DBs.
+	for p := range ld.schema.schemaMap {
+		if _, ok := m[p]; !ok {
+			i := adler32.Checksum([]byte(p)) % numDBs
+			preds[i] = append(preds[i], p)
+		}
+	}
+
+	// Write out each DB's final predicate list.
+	for i, db := range ld.dbs {
+		ld.schema.write(db, preds[i])
 	}
 }
 
 func (ld *loader) cleanup() {
 	for _, db := range ld.dbs {
 		x.Check(db.Close())
+	}
+	for _, db := range ld.tmpDbs {
+		opts := db.Opts()
+		x.Check(db.Close())
+		x.Check(os.RemoveAll(opts.Dir))
 	}
 	ld.prog.endSummary()
 }

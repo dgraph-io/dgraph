@@ -1,10 +1,19 @@
 // +build linux
 
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package main
@@ -20,20 +29,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestPlugins(t *testing.T) {
+	t.Skipf("TODO: Needs to be converted to use Docker.")
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
 	}
 
 	var soFiles []string
 	for i, src := range []string{
-		"./customtok/anagram/main.go",
-		"./customtok/cidr/main.go",
-		"./customtok/factor/main.go",
-		"./customtok/rune/main.go",
+		"./_customtok/anagram/main.go",
+		"./_customtok/cidr/main.go",
+		"./_customtok/factor/main.go",
+		"./_customtok/rune/main.go",
 	} {
 		so := strconv.Itoa(i) + ".so"
 		t.Logf("compiling plugin: src=%q so=%q", src, so)
@@ -80,7 +91,7 @@ func TestPlugins(t *testing.T) {
 			txn := cluster.client.NewTxn()
 			reply, err := txn.Query(ctx, test.query)
 			check(t, err)
-			CompareJSON(t, test.wantResult, string(reply.GetJson()))
+			testutil.CompareJSON(t, test.wantResult, string(reply.GetJson()))
 		}
 	}
 
@@ -120,6 +131,24 @@ func TestPlugins(t *testing.T) {
 				{ "q": [
 					{ "word": "beta" },
 					{ "word": "beat" }
+				]}`,
+			},
+		},
+	)
+
+	suite(
+		"word: string @index(anagram) @lang .",
+		`[
+			{ "word@en": "airmen", "word@fr": "no match" },
+			{ "word@en": "no match", "word@fr": "marine" }
+		]`,
+		[]testCase{
+			{`
+				{ q(func: allof(word@en, anagram, "remain")) {
+					word: word@en
+				}}`, `
+				{ "q": [
+					{ "word": "airmen" }
 				]}`,
 			},
 		},

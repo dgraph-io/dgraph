@@ -1,18 +1,29 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package bulk
 
 import (
 	"fmt"
+	"runtime"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type phase int32
@@ -24,10 +35,12 @@ const (
 )
 
 type progress struct {
-	rdfCount        int64
+	nquadCount      int64
+	errCount        int64
 	mapEdgeCount    int64
 	reduceEdgeCount int64
 	reduceKeyCount  int64
+	numEncoding     int64
 
 	start       time.Time
 	startReduce time.Time
@@ -53,9 +66,13 @@ func (p *progress) setPhase(ph phase) {
 }
 
 func (p *progress) report() {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+
+	z.StatsPrint() // Just print once.
 	for {
 		select {
-		case <-time.After(time.Second):
+		case <-t.C:
 			p.reportOnce()
 		case <-p.shutdown:
 			p.shutdown <- struct{}{}
@@ -66,17 +83,29 @@ func (p *progress) report() {
 
 func (p *progress) reportOnce() {
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
+	timestamp := time.Now().Format("15:04:05Z0700")
+
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	gomem := int64(ms.HeapInuse / (1 << 20))
+
 	switch phase(atomic.LoadInt32((*int32)(&p.phase))) {
 	case nothing:
 	case mapPhase:
-		rdfCount := atomic.LoadInt64(&p.rdfCount)
+		rdfCount := atomic.LoadInt64(&p.nquadCount)
+		errCount := atomic.LoadInt64(&p.errCount)
 		elapsed := time.Since(p.start)
-		fmt.Printf("MAP %s rdf_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec\n",
+		fmt.Printf("[%s] MAP %s nquad_count:%s err_count:%s nquad_speed:%s/sec "+
+			"edge_count:%s edge_speed:%s/sec GoMem MB: %d CMem MB: %d \n",
+			timestamp,
 			x.FixedDuration(elapsed),
 			niceFloat(float64(rdfCount)),
+			niceFloat(float64(errCount)),
 			niceFloat(float64(rdfCount)/elapsed.Seconds()),
 			niceFloat(float64(mapEdgeCount)),
 			niceFloat(float64(mapEdgeCount)/elapsed.Seconds()),
+			gomem,
+			z.NumAllocBytes()/(1<<20),
 		)
 	case reducePhase:
 		now := time.Now()
@@ -89,16 +118,20 @@ func (p *progress) reportOnce() {
 		reduceEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
 		pct := ""
 		if mapEdgeCount != 0 {
-			pct = fmt.Sprintf("[%.2f%%] ", 100*float64(reduceEdgeCount)/float64(mapEdgeCount))
+			pct = fmt.Sprintf("%.2f%% ", 100*float64(reduceEdgeCount)/float64(mapEdgeCount))
 		}
-		fmt.Printf("REDUCE %s %sedge_count:%s edge_speed:%s/sec "+
-			"plist_count:%s plist_speed:%s/sec\n",
+		fmt.Printf("[%s] REDUCE %s %sedge_count:%s edge_speed:%s/sec "+
+			"plist_count:%s plist_speed:%s/sec. Num Encoding MBs: %d. GoMem MB: %d CMem MB: %d \n",
+			timestamp,
 			x.FixedDuration(now.Sub(p.start)),
 			pct,
 			niceFloat(float64(reduceEdgeCount)),
 			niceFloat(float64(reduceEdgeCount)/elapsed.Seconds()),
 			niceFloat(float64(reduceKeyCount)),
 			niceFloat(float64(reduceKeyCount)/elapsed.Seconds()),
+			atomic.LoadInt64(&p.numEncoding)/(1<<20),
+			gomem,
+			z.NumAllocBytes()/(1<<20),
 		)
 	default:
 		x.AssertTruef(false, "invalid phase")

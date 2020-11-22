@@ -1,29 +1,44 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package bulk
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
-	_ "net/http/pprof"
+	_ "net/http/pprof" // http profiler
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 )
 
+// Bulk is the sub-command invoked when running "dgraph bulk".
 var Bulk x.SubCommand
+
+var defaultOutDir = "./out"
 
 func init() {
 	Bulk.Cmd = &cobra.Command{
@@ -37,86 +52,191 @@ func init() {
 	Bulk.EnvPrefix = "DGRAPH_BULK"
 
 	flag := Bulk.Cmd.Flags()
-	flag.StringP("rdfs", "r", "",
-		"Directory containing *.rdf or *.rdf.gz files to load.")
-	flag.StringP("schema_file", "s", "",
-		"Location of schema file to load.")
-	flag.String("out", "out",
+	flag.StringP("files", "f", "",
+		"Location of *.rdf(.gz) or *.json(.gz) file(s) to load.")
+	flag.StringP("schema", "s", "",
+		"Location of schema file.")
+	flag.StringP("graphql-schema", "g", "", "Location of the GraphQL schema file.")
+	flag.String("format", "",
+		"Specify file format (rdf or json) instead of getting it from filename.")
+	flag.Bool("encrypted", false,
+		"Flag to indicate whether schema and data files are encrypted. "+
+			"Must be specified with --encryption-key-file or vault option(s).")
+	flag.Bool("encrypted-out", false,
+		"Flag to indicate whether to encrypt the output. "+
+			"Must be specified with --encryption-key-file or vault option(s).")
+	flag.String("out", defaultOutDir,
 		"Location to write the final dgraph data directories.")
+	flag.Bool("replace-out", false,
+		"Replace out directory and its contents if it exists.")
 	flag.String("tmp", "tmp",
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")
-	flag.IntP("num_go_routines", "j", runtime.NumCPU(),
-		"Number of worker threads to use (defaults to the number of logical CPUs)")
-	flag.Int64("mapoutput_mb", 64,
+
+	flag.IntP("num-go-routines", "j", int(math.Ceil(float64(runtime.NumCPU())/4.0)),
+		"Number of worker threads to use. MORE THREADS LEAD TO HIGHER RAM USAGE.")
+	flag.Int64("mapoutput-mb", 2048,
 		"The estimated size of each map file output. Increasing this increases memory usage.")
-	flag.Bool("expand_edges", true,
-		"Generate edges that allow nodes to be expanded using _predicate_ or expand(...). "+
-			"Disable to increase loading speed.")
-	flag.Bool("skip_map_phase", false,
+	flag.Int64("partition-mb", 4, "Pick a partition key every N megabytes of data.")
+	flag.Bool("skip-map-phase", false,
 		"Skip the map phase (assumes that map output files already exist).")
-	flag.Bool("cleanup_tmp", true,
+	flag.Bool("cleanup-tmp", true,
 		"Clean up the tmp directory after the loader finishes. Setting this to false allows the"+
 			" bulk loader can be re-run while skipping the map phase.")
-	flag.Int("shufflers", 1,
-		"Number of shufflers to run concurrently. Increasing this can improve performance, and "+
+	flag.Int("reducers", 1,
+		"Number of reducers to run concurrently. Increasing this can improve performance, and "+
 			"must be less than or equal to the number of reduce shards.")
-	flag.Bool("version", false, "Prints the version of dgraph-bulk-loader.")
-	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
+	flag.Bool("version", false, "Prints the version of Dgraph Bulk Loader.")
+	flag.Bool("store-xids", false, "Generate an xid edge for each node.")
 	flag.StringP("zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
+	flag.String("xidmap", "", "Directory to store xid to uid mapping")
 	// TODO: Potentially move http server to main.
 	flag.String("http", "localhost:8080",
 		"Address to serve http (pprof).")
-	flag.Int("map_shards", 1,
+	flag.Bool("ignore-errors", false, "ignore line parsing errors in rdf files")
+	flag.Int("map-shards", 1,
 		"Number of map output shards. Must be greater than or equal to the number of reduce "+
 			"shards. Increasing allows more evenly sized reduce shards, at the expense of "+
 			"increased memory usage.")
-	flag.Int("reduce_shards", 1,
+	flag.Int("reduce-shards", 1,
 		"Number of reduce shards. This determines the number of dgraph instances in the final "+
 			"cluster. Increasing this potentially decreases the reduce stage runtime by using "+
 			"more parallelism, but increases memory usage.")
+	flag.String("custom-tokenizers", "",
+		"Comma separated list of tokenizer plugins")
+	flag.Bool("new-uids", false,
+		"Ignore UIDs in load files and assign new ones.")
+
+	// Options around how to set up Badger.
+	flag.String("badger.compression", "snappy",
+		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
+			"level (if applicable) for the postings directory. none would disable compression,"+
+			" while zstd:1 would set zstd compression at level 1.")
+	flag.Int64("badger.cache-mb", 64, "Total size of cache (in MB) per shard in reducer.")
+	flag.String("badger.cache-percentage", "70,30",
+		"Cache percentages summing up to 100 for various caches"+
+			" (FORMAT: BlockCacheSize, IndexCacheSize).")
+	x.RegisterClientTLSFlags(flag)
+	// Encryption and Vault options
+	enc.RegisterFlags(flag)
 }
 
 func run() {
+	ctype, clevel := x.ParseCompression(Bulk.Conf.GetString("badger.compression"))
 	opt := options{
-		RDFDir:        Bulk.Conf.GetString("rdfs"),
-		SchemaFile:    Bulk.Conf.GetString("schema_file"),
-		DgraphsDir:    Bulk.Conf.GetString("out"),
-		TmpDir:        Bulk.Conf.GetString("tmp"),
-		NumGoroutines: Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:    int64(Bulk.Conf.GetInt("mapoutput_mb")),
-		ExpandEdges:   Bulk.Conf.GetBool("expand_edges"),
-		SkipMapPhase:  Bulk.Conf.GetBool("skip_map_phase"),
-		CleanupTmp:    Bulk.Conf.GetBool("cleanup_tmp"),
-		NumShufflers:  Bulk.Conf.GetInt("shufflers"),
-		Version:       Bulk.Conf.GetBool("version"),
-		StoreXids:     Bulk.Conf.GetBool("store_xids"),
-		ZeroAddr:      Bulk.Conf.GetString("zero"),
-		HttpAddr:      Bulk.Conf.GetString("http"),
-		MapShards:     Bulk.Conf.GetInt("map_shards"),
-		ReduceShards:  Bulk.Conf.GetInt("reduce_shards"),
+		DataFiles:        Bulk.Conf.GetString("files"),
+		DataFormat:       Bulk.Conf.GetString("format"),
+		SchemaFile:       Bulk.Conf.GetString("schema"),
+		GqlSchemaFile:    Bulk.Conf.GetString("graphql-schema"),
+		Encrypted:        Bulk.Conf.GetBool("encrypted"),
+		EncryptedOut:     Bulk.Conf.GetBool("encrypted-out"),
+		OutDir:           Bulk.Conf.GetString("out"),
+		ReplaceOutDir:    Bulk.Conf.GetBool("replace-out"),
+		TmpDir:           Bulk.Conf.GetString("tmp"),
+		NumGoroutines:    Bulk.Conf.GetInt("num-go-routines"),
+		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput-mb")),
+		PartitionBufSize: int64(Bulk.Conf.GetInt("partition-mb")),
+		SkipMapPhase:     Bulk.Conf.GetBool("skip-map-phase"),
+		CleanupTmp:       Bulk.Conf.GetBool("cleanup-tmp"),
+		NumReducers:      Bulk.Conf.GetInt("reducers"),
+		Version:          Bulk.Conf.GetBool("version"),
+		StoreXids:        Bulk.Conf.GetBool("store-xids"),
+		ZeroAddr:         Bulk.Conf.GetString("zero"),
+		HttpAddr:         Bulk.Conf.GetString("http"),
+		IgnoreErrors:     Bulk.Conf.GetBool("ignore-errors"),
+		MapShards:        Bulk.Conf.GetInt("map-shards"),
+		ReduceShards:     Bulk.Conf.GetInt("reduce-shards"),
+		CustomTokenizers: Bulk.Conf.GetString("custom-tokenizers"),
+		NewUids:          Bulk.Conf.GetBool("new-uids"),
+		ClientDir:        Bulk.Conf.GetString("xidmap"),
+		// Badger options
+		BadgerCompression:      ctype,
+		BadgerCompressionLevel: clevel,
 	}
 
+	x.PrintVersion()
 	if opt.Version {
-		x.PrintVersionOnly()
+		os.Exit(0)
 	}
-	if opt.RDFDir == "" || opt.SchemaFile == "" {
-		flag.Usage()
-		fmt.Fprint(os.Stderr, "RDF and schema file(s) must be specified.\n")
+	if opt.BadgerCompressionLevel < 0 {
+		fmt.Printf("Invalid compression level: %d. It should be non-negative",
+			opt.BadgerCompressionLevel)
+	}
+
+	totalCache := int64(Bulk.Conf.GetInt("badger.cache-mb"))
+	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
+	cachePercent, err := x.GetCachePercentages(Bulk.Conf.GetString("badger.cache-percentage"), 2)
+	x.Check(err)
+	totalCache <<= 20 // Convert to MB.
+	opt.BlockCacheSize = (cachePercent[0] * totalCache) / 100
+	opt.IndexCacheSize = (cachePercent[1] * totalCache) / 100
+
+	if opt.EncryptionKey, err = enc.ReadKey(Bulk.Conf); err != nil {
+		fmt.Printf("unable to read key %v", err)
+		return
+	}
+	if len(opt.EncryptionKey) == 0 {
+		if opt.Encrypted || opt.EncryptedOut {
+			fmt.Fprint(os.Stderr, "Must use --encryption-key-file or vault option(s).\n")
+			os.Exit(1)
+		}
+	} else {
+		requiredFlags := Bulk.Cmd.Flags().Changed("encrypted") &&
+			Bulk.Cmd.Flags().Changed("encrypted-out")
+		if !requiredFlags {
+			fmt.Fprint(os.Stderr, "Must specify --encrypted and --encrypted-out when providing encryption key.\n")
+			os.Exit(1)
+		}
+		if !opt.Encrypted && !opt.EncryptedOut {
+			fmt.Fprint(os.Stderr, "Must set --encrypted and/or --encrypted-out to true when providing encryption key.\n")
+			os.Exit(1)
+		}
+	}
+	fmt.Printf("Encrypted input: %v; Encrypted output: %v\n", opt.Encrypted, opt.EncryptedOut)
+
+	if opt.SchemaFile == "" {
+		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
+		os.Exit(1)
+	} else if _, err := os.Stat(opt.SchemaFile); err != nil && os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
 		os.Exit(1)
 	}
+	if opt.DataFiles == "" {
+		fmt.Fprint(os.Stderr, "RDF or JSON file(s) location must be specified.\n")
+		os.Exit(1)
+	} else {
+		fileList := strings.Split(opt.DataFiles, ",")
+		for _, file := range fileList {
+			if _, err := os.Stat(file); err != nil && os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", file)
+				os.Exit(1)
+			}
+		}
+	}
+
 	if opt.ReduceShards > opt.MapShards {
-		fmt.Fprintf(os.Stderr, "Invalid flags: reduce_shards(%d) should be <= map_shards(%d)\n",
+		fmt.Fprintf(os.Stderr, "Invalid flags: reduce-shards(%d) should be <= map-shards(%d)\n",
 			opt.ReduceShards, opt.MapShards)
 		os.Exit(1)
 	}
-	if opt.NumShufflers > opt.ReduceShards {
-		fmt.Fprintf(os.Stderr, "Invalid flags: shufflers(%d) should be <= reduce_shards(%d)\n",
-			opt.NumShufflers, opt.ReduceShards)
+	if opt.NumReducers > opt.ReduceShards {
+		fmt.Fprintf(os.Stderr, "Invalid flags: shufflers(%d) should be <= reduce-shards(%d)\n",
+			opt.NumReducers, opt.ReduceShards)
+		os.Exit(1)
+	}
+	if opt.CustomTokenizers != "" {
+		for _, soFile := range strings.Split(opt.CustomTokenizers, ",") {
+			tok.LoadCustomTokenizer(soFile)
+		}
+	}
+	if opt.MapBufSize <= 0 || opt.PartitionBufSize <= 0 {
+		fmt.Fprintf(os.Stderr, "mapoutput-mb: %d and partition-mb: %d must be greater than zero\n",
+			opt.MapBufSize, opt.PartitionBufSize)
 		os.Exit(1)
 	}
 
-	opt.MapBufSize = opt.MapBufSize << 20 // Convert from MB to B.
+	opt.MapBufSize <<= 20       // Convert from MB to B.
+	opt.PartitionBufSize <<= 20 // Convert from MB to B.
 
 	optBuf, err := json.MarshalIndent(&opt, "", "\t")
 	x.Check(err)
@@ -128,12 +248,27 @@ func run() {
 		log.Fatal(http.ListenAndServe(opt.HttpAddr, nil))
 	}()
 
+	// Make sure it's OK to create or replace the directory specified with the --out option.
+	// It is always OK to create or replace the default output directory.
+	if opt.OutDir != defaultOutDir && !opt.ReplaceOutDir {
+		err := x.IsMissingOrEmptyDir(opt.OutDir)
+		if err == nil {
+			fmt.Fprintf(os.Stderr, "Output directory exists and is not empty."+
+				" Use --replace-out to overwrite it.\n")
+			os.Exit(1)
+		} else if err != x.ErrMissingDir {
+			x.CheckfNoTrace(err)
+		}
+	}
+
 	// Delete and recreate the output dirs to ensure they are empty.
-	x.Check(os.RemoveAll(opt.DgraphsDir))
+	x.Check(os.RemoveAll(opt.OutDir))
 	for i := 0; i < opt.ReduceShards; i++ {
-		dir := filepath.Join(opt.DgraphsDir, strconv.Itoa(i), "p")
+		dir := filepath.Join(opt.OutDir, strconv.Itoa(i), "p")
 		x.Check(os.MkdirAll(dir, 0700))
 		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
+
+		x.Check(x.WriteGroupIdFile(dir, uint32(i+1)))
 	}
 
 	// Create a directory just for bulk loader's usage.
@@ -145,10 +280,16 @@ func run() {
 		defer os.RemoveAll(opt.TmpDir)
 	}
 
-	loader := newLoader(opt)
+	// Create directory for temporary buffers used in map-reduce phase
+	bufDir := filepath.Join(opt.TmpDir, bufferDir)
+	x.Check(os.RemoveAll(bufDir))
+	x.Check(os.MkdirAll(bufDir, 0700))
+	defer os.RemoveAll(bufDir)
+
+	loader := newLoader(&opt)
 	if !opt.SkipMapPhase {
 		loader.mapStage()
-		mergeMapShardsIntoReduceShards(opt)
+		mergeMapShardsIntoReduceShards(&opt)
 	}
 	loader.reduceStage()
 	loader.writeSchema()
@@ -156,26 +297,23 @@ func run() {
 }
 
 func maxOpenFilesWarning() {
-	maxOpenFiles, err := queryMaxOpenFiles()
 	const (
 		red    = "\x1b[31m"
 		green  = "\x1b[32m"
 		yellow = "\x1b[33m"
 		reset  = "\x1b[0m"
 	)
-	if err != nil {
-		fmt.Printf(red+"Nonfatal error: max open file limit could not be detected: %v\n"+reset, err)
+	maxOpenFiles, err := queryMaxOpenFiles()
+	if err != nil || maxOpenFiles < 1e6 {
+		fmt.Println(green + "\nThe bulk loader needs to open many files at once. This number depends" +
+			" on the size of the data set loaded, the map file output size, and the level" +
+			" of indexing. 100,000 is adequate for most data set sizes. See `man ulimit` for" +
+			" details of how to change the limit.")
+		if err != nil {
+			fmt.Printf(red+"Nonfatal error: max open file limit could not be detected: %v\n"+reset, err)
+		} else {
+			fmt.Printf(yellow+"Current max open files limit: %d\n"+reset, maxOpenFiles)
+		}
+		fmt.Println()
 	}
-	fmt.Println("The bulk loader needs to open many files at once. This number depends" +
-		" on the size of the data set loaded, the map file output size, and the level " +
-		"of indexing. 100,000 is adequate for most data set sizes. See `man ulimit` for" +
-		" details of how to change the limit.")
-	if err != nil {
-		return
-	}
-	colour := green
-	if maxOpenFiles < 1e5 {
-		colour = yellow
-	}
-	fmt.Printf(colour+"Current max open files limit: %d\n"+reset, maxOpenFiles)
 }

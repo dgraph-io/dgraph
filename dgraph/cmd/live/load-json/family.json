@@ -1,0 +1,100 @@
+[
+  {
+    "uid":"_:h",
+    "name":"Homer",
+    "age":"38",
+    "role":"father",
+    "role|gender":"male",
+    "role@es":"padre",
+    "role@fr":"père",
+    "role@hi":"पिता",
+    "dgraph.type": "FamilyMember",
+    "parent_to":[
+      { "uid":"_:b" },
+      { "uid":"_:l" },
+      { "uid":"_:m2" }
+    ]
+  },
+  {
+    "uid":"_:m1",
+    "name":"Marge",
+    "age":"34",
+    "role":"mother",
+    "role|gender":"female",
+    "role@es":"madre",
+    "role@fr":"mère",
+    "role@hi":"मां",
+    "aka":"Midge",
+    "dgraph.type": "FamilyMember",
+    "parent_to":[
+      { "uid":"_:b" },
+      { "uid":"_:l" },
+      { "uid":"_:m2" }
+    ]
+  },
+  {
+    "uid":"_:b",
+    "name":"Bart",
+    "age":"10",
+    "role":"son",
+    "role|gender":"male",
+    "role@es":"hijo",
+    "role@fr":"fils",
+    "role@hi":"बेटा",
+    "aka":"El Barto",
+    "carries":"slingshot",
+    "dgraph.type": "FamilyMember",
+    "sibling_of":[
+      { "uid":"_:l" },
+      { "uid":"_:m2" }
+    ]
+  },
+  {
+    "uid":"_:l",
+    "name":"Lisa",
+    "age":"8",
+    "role":"daughter",
+    "role|gender":"female",
+    "role@es":"hija",
+    "role@fr":"fille",
+    "role@hi":"बेटी",
+    "carries":"saxomophone",
+    "dgraph.type": "FamilyMember",
+    "sibling_of":[
+      { "uid":"_:b" },
+      { "uid":"_:m2" }
+    ]
+  },
+  {
+    "uid":"_:m2",
+    "name":"Maggie",
+    "age":"1",
+    "role":"daughter",
+    "role|gender":"female",
+    "role|generation":3,
+    "role@es":"hija",
+    "role@fr":"fille",
+    "role@hi":"बेटी",
+    "carries":"pacifier",
+    "dgraph.type": "FamilyMember",
+    "sibling_of":[
+      { "uid":"_:b" },
+      { "uid":"_:l" }
+    ]
+  },
+  {
+    "uid":"_:a",
+    "name":"Abraham",
+    "age":"83",
+    "role":"grandfather",
+    "role|gender":"male",
+    "role@es":"abuelo",
+    "role@fr":"grand-père",
+    "role@hi":"दादा",
+    "aka":"Grampa",
+    "dgraph.type": "FamilyMember",
+    "parent_to":[
+      { "uid":"_:h" }
+    ]
+  }
+]

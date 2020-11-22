@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package main
@@ -14,14 +23,13 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
 
-const targetAddr = "localhost:9081"
-
+var alpha = flag.String("alpha", "localhost:9080", "Dgraph alpha addr")
 var insert = flag.Bool("add", false, "Insert")
 
 func main() {
@@ -29,22 +37,24 @@ func main() {
 
 	// Setup dgraph client
 	ctx := context.Background()
-	conn, err := grpc.Dial(targetAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(*alpha, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
 	pc := api.NewDgraphClient(conn)
 	c := dgo.NewDgraphClient(pc)
+	err = c.Login(ctx, "groot", "password")
+	x.Check(err)
 
 	// Ingest
 	if *insert {
-		TestInsert3Quads(ctx, c)
+		testInsert3Quads(ctx, c)
 	} else {
-		TestQuery3Quads(ctx, c)
+		testQuery3Quads(ctx, c)
 	}
 }
 
-func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
+func testInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	// Set schema
 	op := &api.Operation{}
 	op.Schema = `name: string @index(fulltext) .`
@@ -56,7 +66,7 @@ func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	quad := &api.NQuad{
 		Subject:     "200",
 		Predicate:   "name",
-		ObjectValue: &api.Value{&api.Value_StrVal{"ok 200"}},
+		ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "ok 200"}},
 	}
 	mu.Set = []*api.NQuad{quad}
 	_, err := txn.Mutate(ctx, mu)
@@ -68,7 +78,7 @@ func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	quad = &api.NQuad{
 		Subject:     "300",
 		Predicate:   "name",
-		ObjectValue: &api.Value{&api.Value_StrVal{"ok 300"}},
+		ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "ok 300"}},
 	}
 	mu.Set = []*api.NQuad{quad}
 	// mu.SetNquads = []byte(`<300> <name> "ok 300" .`)
@@ -81,7 +91,7 @@ func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	quad = &api.NQuad{
 		Subject:     "400",
 		Predicate:   "name",
-		ObjectValue: &api.Value{&api.Value_StrVal{"ok 400"}},
+		ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "ok 400"}},
 	}
 	mu.Set = []*api.NQuad{quad}
 	// mu.SetNquads = []byte(`<400> <name> "ok 400" .`)
@@ -94,7 +104,7 @@ func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	fmt.Println("Commit OK")
 }
 
-func TestQuery3Quads(ctx context.Context, c *dgo.Dgraph) {
+func testQuery3Quads(ctx context.Context, c *dgo.Dgraph) {
 	txn := c.NewTxn()
 	q := fmt.Sprint(`{ me(func: uid(200, 300, 400)) { name }}`)
 	resp, err := txn.Query(ctx, q)
@@ -102,7 +112,8 @@ func TestQuery3Quads(ctx context.Context, c *dgo.Dgraph) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	fmt.Printf("Response JSON: %q\n", resp.Json)
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"ok 200\"},{\"name\":\"ok 300\"},{\"name\":\"ok 400\"}]}")))
+	x.AssertTrue(bytes.Equal(resp.Json, []byte(
+		"{\"me\":[{\"name\":\"ok 200\"},{\"name\":\"ok 300\"},{\"name\":\"ok 400\"}]}")))
 	x.AssertTrue(resp.Txn.StartTs > 0)
 	x.Check(txn.Commit(ctx))
 }

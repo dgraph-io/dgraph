@@ -1,18 +1,28 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package types
 
 import (
 	"encoding/binary"
+	"math/rand"
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/wkb"
@@ -25,7 +35,7 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Geo
 	src.Value = []byte(geoData)
 	gc, err := Convert(src, GeoID)
 	if err != nil {
-		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
+		return nil, nil, errors.Wrapf(err, "Cannot decode given geoJson input")
 	}
 	g := gc.Value.(geom.T)
 
@@ -111,11 +121,12 @@ func TestQueryTokensPoint(t *testing.T) {
 		toks, qd, err := queryTokens(qt, data, 0.0)
 		require.NoError(t, err)
 
-		if qt == QueryTypeWithin {
+		switch qt {
+		case QueryTypeWithin:
 			require.Len(t, toks, 1)
-		} else if qt == QueryTypeContains {
+		case QueryTypeContains:
 			require.Len(t, toks, MaxCellLevel-MinCellLevel+1)
-		} else {
+		default:
 			require.Len(t, toks, MaxCellLevel-MinCellLevel+2)
 		}
 		require.NotNil(t, qd)
@@ -236,6 +247,16 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
 	require.NoError(t, err)
 	require.False(t, qd.MatchesFilter(us))
+
+	// Test with a different polygon (Sudan)
+	sudan, err := loadPolygon("testdata/sudan.json")
+	require.NoError(t, err)
+
+	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{0, 0})
+	data = formDataPoint(t, p)
+	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
+	require.NoError(t, err)
+	require.False(t, qd.MatchesFilter(sudan))
 }
 
 /*
@@ -319,6 +340,7 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 	data = formDataPolygon(t, polyOut)
 	_, qd, err = queryTokens(QueryTypeIntersects, data, 0.0)
 	require.False(t, qd.MatchesFilter(poly2))
+	require.NoError(t, err)
 
 	// Multipolygon intersects
 	us, err := loadPolygon("testdata/us.json")
@@ -386,4 +408,23 @@ func TestMatchesFilterNearPoint(t *testing.T) {
 		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
 	})
 	require.True(t, qd.MatchesFilter(poly))
+}
+
+func BenchmarkMatchesFilterContainsPoint(b *testing.B) {
+	us, _ := loadPolygon("testdata/us.json")
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{
+			(rand.Float64() * 360) - 180,
+			(rand.Float64() * 180) - 90})
+
+		d, _ := wkb.Marshal(p, binary.LittleEndian)
+		src := ValueForType(GeoID)
+		src.Value = []byte(d)
+		gd, _ := Convert(src, StringID)
+		gb := gd.Value.(string)
+		_, qd, _ := queryTokens(QueryTypeContains, gb, 0.0)
+		qd.contains(us)
+	}
 }

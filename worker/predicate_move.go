@@ -1,174 +1,105 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
 
 import (
+	"context"
 	"fmt"
 	"io"
-	"math"
 	"strconv"
-	"sync"
-	"sync/atomic"
 
-	"golang.org/x/net/context"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/badger/v2"
+	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
-	errEmptyPredicate = x.Errorf("Predicate not specified")
-	errNotLeader      = x.Errorf("Server is not leader of this group")
-	errUnableToAbort  = x.Errorf("Unable to abort pending transactions")
+	errEmptyPredicate = errors.Errorf("Predicate not specified")
+	errNotLeader      = errors.Errorf("Server is not leader of this group")
 	emptyPayload      = api.Payload{}
 )
 
 // size of kvs won't be too big, we would take care before proposing.
-func populateKeyValues(ctx context.Context, kvs []*intern.KV) error {
-	// No new deletion/background cleanup would start after we start streaming tablet,
-	// so all the proposals for a particular tablet would atmost wait for deletion of
-	// single tablet.
-	groups().waitForBackgroundDeletion()
-	x.Printf("Writing %d keys\n", len(kvs))
-
-	var hasError uint32
-	var wg sync.WaitGroup
-	wg.Add(len(kvs))
-	first := true
-	var predicate string
-	for _, kv := range kvs {
-		if first {
-			pk := x.Parse(kv.Key)
-			predicate = pk.Attr
-			first = false
-		}
-		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		if err := txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]); err != nil {
-			return err
-		}
-		err := txn.CommitAt(kv.Version, func(err error) {
-			if err != nil {
-				atomic.StoreUint32(&hasError, 1)
-			}
-			wg.Done()
-		})
-		if err != nil {
-			return err
-		}
-		txn.Discard()
+func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
+	glog.Infof("Writing %d keys\n", len(kvs))
+	if len(kvs) == 0 {
+		return nil
 	}
-	if hasError > 0 {
-		return x.Errorf("Error while writing to badger")
+	writer := posting.NewTxnWriter(pstore)
+	if err := writer.Write(&bpb.KVList{Kv: kvs}); err != nil {
+		return err
 	}
-	wg.Wait()
-	return schema.Load(predicate)
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	pk, err := x.Parse(kvs[0].Key)
+	if err != nil {
+		return err
+	}
+	return schema.Load(pk.Attr)
 }
 
-func movePredicateHelper(ctx context.Context, predicate string, gid uint32) error {
-	pl := groups().Leader(gid)
-	if pl == nil {
-		return x.Errorf("Unable to find a connection for group: %d\n", gid)
-	}
-	c := intern.NewWorkerClient(pl.Get())
-	stream, err := c.ReceivePredicate(ctx)
-	if err != nil {
-		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
-	}
-
-	// sends all data except schema, schema key has different prefix
-	// Read the predicate keys and stream to keysCh.
-	sl := streamLists{stream: stream, predicate: predicate, db: pstore}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
-		l, err := posting.ReadPostingList(key, itr)
-		if err != nil {
-			return nil, err
-		}
-		return l.MarshalToKv()
-	}
-
-	prefix := fmt.Sprintf("Sending predicate: [%s]", predicate)
-	if err := sl.orchestrate(ctx, prefix, math.MaxUint64); err != nil {
-		return err
-	}
-
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-	// Send schema (if present) now after all keys have been transferred over.
-	schemaKey := x.SchemaKey(predicate)
-	item, err := txn.Get(schemaKey)
-	if err == badger.ErrKeyNotFound {
-		// The predicate along with the schema could have been deleted. In that case badger would
-		// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
-	} else if err != nil {
-		return err
-	} else {
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		kvs := &intern.KVS{}
-		kv := &intern.KV{}
-		kv.Key = schemaKey
-		kv.Val = val
-		kv.Version = 1
-		kv.UserMeta = []byte{item.UserMeta()}
-		kvs.Kv = append(kvs.Kv, kv)
-		if err := stream.Send(kvs); err != nil {
-			return err
-		}
-	}
-
-	payload, err := stream.CloseAndRecv()
-	if err != nil {
-		return err
-	}
-	recvCount, err := strconv.Atoi(string(payload.Data))
-	if err != nil {
-		return err
-	}
-	x.Printf("Received %d keys\n", recvCount)
-	return nil
-}
-
-func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
-	x.Println("Receiving predicate. Batching and proposing key values")
+func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
+	glog.Infoln("Receiving predicate. Batching and proposing key values")
 	n := groups().Node
-	proposal := &intern.Proposal{}
+	proposal := &pb.Proposal{}
 	size := 0
-	var pk *x.ParsedKey
+	var pk x.ParsedKey
 
 	for kvBatch := range kvs {
 		for _, kv := range kvBatch.Kv {
+			if len(pk.Attr) == 0 {
+				// This only happens once.
+				var err error
+				pk, err = x.Parse(kv.Key)
+				if err != nil {
+					return err
+				}
+
+				if !pk.IsSchema() {
+					return errors.Errorf("Expecting first key to be schema key: %+v", kv)
+				}
+
+				// Delete on all nodes.
+				p := &pb.Proposal{CleanPredicate: pk.Attr}
+				glog.Infof("Predicate being received: %v", pk.Attr)
+				if err := n.proposeAndWait(ctx, p); err != nil {
+					glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+					return err
+				}
+			}
+
+			proposal.Kv = append(proposal.Kv, kv)
+			size += len(kv.Key) + len(kv.Value)
 			if size >= 32<<20 { // 32 MB
 				if err := n.proposeAndWait(ctx, proposal); err != nil {
 					return err
 				}
-				proposal.Kv = proposal.Kv[:0]
+				proposal = &pb.Proposal{}
 				size = 0
 			}
-
-			if pk == nil {
-				pk = x.Parse(kv.Key)
-				// Delete on all nodes.
-				p := &intern.Proposal{CleanPredicate: pk.Attr}
-				x.Printf("Predicate being received: %v", pk.Attr)
-				err := groups().Node.proposeAndWait(ctx, p)
-				if err != nil {
-					x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
-					return err
-				}
-			}
-			proposal.Kv = append(proposal.Kv, kv)
-			size += len(kv.Key) + len(kv.Val)
 		}
 	}
 	if size > 0 {
@@ -182,16 +113,26 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
 
 // Returns count which can be used to verify whether we have moved all keys
 // for a predicate or not.
-func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServer) error {
+func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) error {
+	if !groups().Node.AmLeader() {
+		return errors.Errorf("ReceivePredicate failed: Not the leader of group")
+	}
+	// No new deletion/background cleanup would start after we start streaming tablet,
+	// so all the proposals for a particular tablet would atmost wait for deletion of
+	// single tablet. Only leader needs to do this.
+	mu := groups().blockDeletes
+	mu.Lock()
+	defer mu.Unlock()
+
 	// Values can be pretty big so having less buffer is safer.
-	kvs := make(chan *intern.KVS, 10)
+	kvs := make(chan *pb.KVS, 3)
 	che := make(chan error, 1)
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
 	ctx := stream.Context()
 	payload := &api.Payload{}
 
-	x.Printf("Got ReceivePredicate. Group: %d. Am leader: %v",
+	glog.Infof("Got ReceivePredicate. Group: %d. Am leader: %v",
 		groups().groupId(), groups().Node.AmLeader())
 
 	go func() {
@@ -202,11 +143,14 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 		kvBatch, err := stream.Recv()
 		if err == io.EOF {
 			payload.Data = []byte(fmt.Sprintf("%d", count))
-			stream.SendAndClose(payload)
+			if err := stream.SendAndClose(payload); err != nil {
+				glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
+				return err
+			}
 			break
 		}
 		if err != nil {
-			x.Printf("Received %d keys. Error in loop: %v\n", count, err)
+			glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
 			return err
 		}
 		count += len(kvBatch.Kv)
@@ -216,64 +160,165 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 		case <-ctx.Done():
 			close(kvs)
 			<-che
-			x.Printf("Received %d keys. Context deadline\n", count)
+			glog.Infof("Received %d keys. Context deadline\n", count)
 			return ctx.Err()
 		case err := <-che:
-			x.Printf("Received %d keys. Error via channel: %v\n", count, err)
+			glog.Infof("Received %d keys. Error via channel: %v\n", count, err)
 			return err
 		}
 	}
 	close(kvs)
 	err := <-che
-	x.Printf("Proposed %d keys. Error: %v\n", count, err)
+	glog.Infof("Proposed %d keys. Error: %v\n", count, err)
 	return err
 }
 
 func (w *grpcWorker) MovePredicate(ctx context.Context,
-	in *intern.MovePredicatePayload) (*api.Payload, error) {
-	if groups().gid != in.SourceGroupId {
-		return &emptyPayload,
-			x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
-				in.SourceGroupId, groups().gid)
-	}
-	if len(in.Predicate) == 0 {
-		return &emptyPayload, errEmptyPredicate
-	}
-	if !groups().ServesTablet(in.Predicate) {
-		return &emptyPayload, errUnservedTablet
-	}
+	in *pb.MovePredicatePayload) (*api.Payload, error) {
+	ctx, span := otrace.StartSpan(ctx, "worker.MovePredicate")
+	defer span.End()
+
 	n := groups().Node
 	if !n.AmLeader() {
 		return &emptyPayload, errNotLeader
 	}
+	if groups().groupId() != in.SourceGid {
+		return &emptyPayload,
+			errors.Errorf("Group id doesn't match, received request for %d, my gid: %d",
+				in.SourceGid, groups().groupId())
+	}
+	if len(in.Predicate) == 0 {
+		return &emptyPayload, errEmptyPredicate
+	}
 
-	x.Printf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
-		in.SourceGroupId, in.DestGroupId)
+	if in.DestGid == 0 {
+		glog.Infof("Was instructed to delete tablet: %v", in.Predicate)
+		// Expected Checksum ensures that all the members of this group would block until they get
+		// the latest membership status where this predicate now belongs to another group. So they
+		// know that they are no longer serving this predicate, before they delete it from their
+		// state. Without this checksum, the members could end up deleting the predicate and then
+		// serve a request asking for that predicate, causing Jepsen failures.
+		p := &pb.Proposal{CleanPredicate: in.Predicate, ExpectedChecksum: in.ExpectedChecksum}
+		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
+	}
+	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
+		return &emptyPayload, errors.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
+	}
 
-	// Ensures that all future mutations beyond this point are rejected.
-	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
+	gid, err := groups().BelongsTo(in.Predicate)
+	switch {
+	case err != nil:
 		return &emptyPayload, err
+	case gid == 0:
+		return &emptyPayload, errNonExistentTablet
+	case gid != groups().groupId():
+		return &emptyPayload, errUnservedTablet
 	}
-	aborted := false
-	for i := 0; i < 12; i++ {
-		// Try a dozen times, then give up.
-		x.Printf("Trying to abort pending mutations. Loop: %d", i)
-		tctxs := posting.Txns().Iterate(func(key []byte) bool {
-			pk := x.Parse(key)
-			return pk.Attr == in.Predicate
-		})
-		if len(tctxs) == 0 {
-			aborted = true
-			break
-		}
-		tryAbortTransactions(tctxs)
-	}
-	if !aborted {
-		return &emptyPayload, errUnableToAbort
-	}
-	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
-	n.applyAllMarks(ctx)
 
-	err := movePredicateHelper(ctx, in.Predicate, in.DestGroupId)
+	msg := fmt.Sprintf("Move predicate request: %+v", in)
+	glog.Info(msg)
+	span.Annotate(nil, msg)
+
+	err = movePredicateHelper(ctx, in)
+	if err != nil {
+		span.Annotatef(nil, "Error while movePredicateHelper: %v", err)
+	}
 	return &emptyPayload, err
+}
+
+func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error {
+	// Note: Manish thinks it *should* be OK for a predicate receiver to not have to stop other
+	// operations like snapshots and rollups. Note that this is the sender. This should stop other
+	// operations.
+	closer, err := groups().Node.startTask(opPredMove)
+	if err != nil {
+		return errors.Wrapf(err, "unable to start task opPredMove")
+	}
+	defer closer.Done()
+
+	span := otrace.FromContext(ctx)
+
+	pl := groups().Leader(in.DestGid)
+	if pl == nil {
+		return errors.Errorf("Unable to find a connection for group: %d\n", in.DestGid)
+	}
+	c := pb.NewWorkerClient(pl.Get())
+	s, err := c.ReceivePredicate(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "while calling ReceivePredicate")
+	}
+
+	// This txn is only reading the schema. Doesn't really matter what read timestamp we use,
+	// because schema keys are always set at ts=1.
+	txn := pstore.NewTransactionAt(in.TxnTs, false)
+	defer txn.Discard()
+
+	// Send schema first.
+	schemaKey := x.SchemaKey(in.Predicate)
+	item, err := txn.Get(schemaKey)
+	switch {
+	case err == badger.ErrKeyNotFound:
+		// The predicate along with the schema could have been deleted. In that case badger would
+		// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
+	case err != nil:
+		return err
+	default:
+		val, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		kvs := &pb.KVS{}
+		kv := &bpb.KV{}
+		kv.Key = schemaKey
+		kv.Value = val
+		kv.Version = 1
+		kv.UserMeta = []byte{item.UserMeta()}
+		kvs.Kv = append(kvs.Kv, kv)
+		if err := s.Send(kvs); err != nil {
+			return err
+		}
+	}
+
+	// sends all data except schema, schema key has different prefix
+	// Read the predicate keys and stream to keysCh.
+	stream := pstore.NewStreamAt(in.TxnTs)
+	stream.LogPrefix = fmt.Sprintf("Sending predicate: [%s]", in.Predicate)
+	stream.Prefix = x.PredicatePrefix(in.Predicate)
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+		// For now, just send out full posting lists, because we use delete markers to delete older
+		// data in the prefix range. So, by sending only one version per key, and writing it at a
+		// provided timestamp, we can ensure that these writes are above all the delete markers.
+		l, err := posting.ReadPostingList(key, itr)
+		if err != nil {
+			return nil, err
+		}
+		alloc := stream.Allocator(itr.ThreadId)
+		kvs, err := l.Rollup(alloc)
+		for _, kv := range kvs {
+			// Let's set all of them at this move timestamp.
+			kv.Version = in.TxnTs
+		}
+		return &bpb.KVList{Kv: kvs}, err
+	}
+	stream.Send = func(list *bpb.KVList) error {
+		return s.Send(&pb.KVS{Kv: list.Kv})
+	}
+	span.Annotatef(nil, "Starting stream list orchestrate")
+	if err := stream.Orchestrate(ctx); err != nil {
+		return err
+	}
+
+	payload, err := s.CloseAndRecv()
+	if err != nil {
+		return err
+	}
+	recvCount, err := strconv.Atoi(string(payload.Data))
+	if err != nil {
+		return err
+	}
+
+	msg := fmt.Sprintf("Receiver %s says it got %d keys.\n", pl.Addr, recvCount)
+	span.Annotate(nil, msg)
+	glog.Infof(msg)
+	return nil
 }

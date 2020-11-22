@@ -1,0 +1,50 @@
+{
+  me(func: allofterms(name@en, "Steven Spielberg")) {
+    director.film (orderasc: name@en) (first: 2) {
+      name@en
+      initial_release_date
+      genre (orderasc: name@en) (first: 3) {
+          name@en
+      }
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "director.film": [
+        {
+          "name@en": "1941",
+          "initial_release_date": "1979-12-13T00:00:00Z",
+          "genre": [
+            {
+              "name@en": "Action Comedy"
+            },
+            {
+              "name@en": "Action Film"
+            },
+            {
+              "name@en": "Action/Adventure"
+            }
+          ]
+        },
+        {
+          "name@en": "A.I. Artificial Intelligence",
+          "initial_release_date": "2001-06-26T00:00:00Z",
+          "genre": [
+            {
+              "name@en": "Adventure Film"
+            },
+            {
+              "name@en": "Drama"
+            },
+            {
+              "name@en": "Future noir"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

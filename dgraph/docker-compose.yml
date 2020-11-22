@@ -1,73 +1,218 @@
-# Docker compose file for testing. Use it with:
-# docker-compose up --force-recreate
-# This would pick up dgraph binary from $GOPATH.
-
 version: "3.5"
 services:
   zero1:
-    image: debian:latest
-    container_name: bank-dg0.1
+    image: dgraph/dgraph:latest
+    working_dir: /data/zero1
     ports:
-      - 5080:5080
-      - 6080:6080
-    command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --idx 1 --bindall
+      - 5080
+      - 6080
+    labels:
+      cluster: test
+      service: zero
     volumes:
       - type: bind
-        source: $HOME/go/bin
+        source: $GOPATH/bin
         target: /gobin
         read_only: true
-  # zero2:
-  #   image: debian:latest
-  #   container_name: bank-dg0.2
-  #   command: /gobin/dgraph zero --my=zero2:5080 --replicas 3 --peer=zero1:5080 --idx 2
-  #   volumes:
-  #     - type: bind
-  #       source: $HOME/go/bin
-  #       target: /gobin
-  #       read_only: true
-  # zero3:
-  #   image: debian:latest
-  #   container_name: bank-dg0.3
-  #   command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --peer=zero1:5080 --idx 3
-  #   volumes:
-  #     - type: bind
-  #       source: $HOME/go/bin
-  #       target: /gobin
-  #       read_only: true
-  dg1:
-    image: debian:latest
-    container_name: bank-dg1
-    volumes:
-      - type: bind
-        source: $HOME/go/bin
-        target: /gobin
-        read_only: true
-    ports:
-      - 8180:8180
-      - 9180:9180
-    command: /gobin/dgraph server --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace # --trace 1.0
-  dg2:
-    image: debian:latest
-    container_name: bank-dg2
-    volumes:
-      - type: bind
-        source: $HOME/go/bin
-        target: /gobin
-        read_only: true
-    ports:
-      - 8181:8181
-      - 9181:9181
-    command: /gobin/dgraph server --my=dg2:7181 --lru_mb=1024 --zero=zero1:5080 -o 101 --expose_trace # --trace 1.0
-  dg3:
-    image: debian:latest
-    container_name: bank-dg3
-    volumes:
-      - type: bind
-        source: $HOME/go/bin
-        target: /gobin
-        read_only: true
-    ports:
-      - 8182:8182
-      - 9182:9182
-    command: /gobin/dgraph server --my=dg3:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  # --trace 1.0
+    command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --idx 1 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10
 
+  zero2:
+    image: dgraph/dgraph:latest
+    working_dir: /data/zero2
+    depends_on:
+      - zero1
+    ports:
+      - 5080
+      - 6080
+    labels:
+      cluster: test
+      service: zero
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    command: /gobin/dgraph zero --my=zero2:5080 --replicas 3 --idx 2 --logtostderr -v=2 --peer=zero1:5080
+
+  zero3:
+    image: dgraph/dgraph:latest
+    working_dir: /data/zero3
+    depends_on:
+      - zero2
+    ports:
+      - 5080
+      - 6080
+    labels:
+      cluster: test
+      service: zero
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --idx 3 --logtostderr -v=2 --peer=zero1:5080
+
+  alpha1:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha1
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ../ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
+        read_only: true
+      - type: bind
+        source: ../ee/enc/test-fixtures/enc-key
+        target: /dgraph-enc/enc-key
+        read_only: true
+    ports:
+      - 8080
+      - 9080
+    labels:
+      cluster: test
+      service: alpha
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha1:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+
+  alpha2:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha2
+    depends_on:
+      - alpha1
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ../ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
+        read_only: true
+      - type: bind
+        source: ../ee/enc/test-fixtures/enc-key
+        target: /dgraph-enc/enc-key
+        read_only: true
+    ports:
+      - 8080
+      - 9080
+    labels:
+      cluster: test
+      service: alpha
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha2:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+
+  alpha3:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha3
+    depends_on:
+      - alpha2
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ../ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
+        read_only: true
+      - type: bind
+        source: ../ee/enc/test-fixtures/enc-key
+        target: /dgraph-enc/enc-key
+        read_only: true
+    ports:
+      - 8080
+      - 9080
+    labels:
+      cluster: test
+      service: alpha
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha3:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+
+  alpha4:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha4
+    depends_on:
+      - alpha3
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ../ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
+        read_only: true
+      - type: bind
+        source: ../ee/enc/test-fixtures/enc-key
+        target: /dgraph-enc/enc-key
+        read_only: true
+    ports:
+      - 8080
+      - 9080
+    labels:
+      cluster: test
+      service: alpha
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha4:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+
+  alpha5:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha5
+    depends_on:
+      - alpha4
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ../ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
+        read_only: true
+      - type: bind
+        source: ../ee/enc/test-fixtures/enc-key
+        target: /dgraph-enc/enc-key
+        read_only: true
+    ports:
+      - 8080
+      - 9080
+    labels:
+      cluster: test
+      service: alpha
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha5:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+
+  alpha6:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha6
+    depends_on:
+      - alpha5
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ../ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
+        read_only: true
+      - type: bind
+        source: ../ee/enc/test-fixtures/enc-key
+        target: /dgraph-enc/enc-key
+        read_only: true
+    ports:
+      - 8080
+      - 9080
+    labels:
+      cluster: test
+      service: alpha
+    command: /gobin/dgraph alpha --encryption_key_file "/dgraph-enc/enc-key" --my=alpha6:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --acl_access_ttl 3s
+
+  minio:
+    image: minio/minio:latest
+    env_file:
+      - ./minio.env
+    working_dir: /data/minio
+    ports:
+      - 9001
+    labels:
+      cluster: test
+    command: minio server /data/minio --address :9001

@@ -15,6 +15,7 @@
 package x
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -41,7 +42,8 @@ type slidingHistogram struct {
 // details.
 func newSlidingHistogram(duration time.Duration, maxVal int64, sigFigs int) *slidingHistogram {
 	if duration <= 0 {
-		panic("cannot create a sliding histogram with nonpositive duration")
+		Panic(errors.New(
+			"cannot create a sliding histogram with nonpositive duration"))
 	}
 	return &slidingHistogram{
 		nextT:    time.Now(),
@@ -71,7 +73,7 @@ func (h *slidingHistogram) RecordValue(v int64) error {
 }
 
 // A Histogram collects observed values by keeping bucketed counts. For
-// convenience, intern.y two sets of buckets are kept: A cumulative set (i.e.
+// convenience, pb.y two sets of buckets are kept: A cumulative set (i.e.
 // data is never evicted) and a windowed set (which keeps only recently
 // collected samples).
 //
@@ -110,8 +112,4 @@ func (h *Histogram) RecordValue(v int64) {
 	if h.cumulative.RecordValue(v) != nil {
 		_ = h.cumulative.RecordValue(h.maxVal)
 	}
-}
-
-func (h *Histogram) Stats() {
-
 }

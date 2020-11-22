@@ -1,5 +1,8 @@
 +++
 title = "Dgraph compared to other databases"
+[menu.main]
+  identifier = "dgraph-compared-to-other-databases"
+  weight = 13
 +++
 
 This page attempts to draw a comparison between Dgraph and other popular graph databases/datastores. The summaries that follow are brief descriptions that may help a person decide if Dgraph will suit their needs.
@@ -22,15 +25,11 @@ Graph databases optimize internal data representation to be able to do graph ope
 
 ### Language
 
-Neo4j supports Cypher and Gremlin query language. Dgraph supports
-[GraphQL+-]({{< relref "query-language/index.md#graphql">}}), a variation of
-[GraphQL](https://facebook.github.io/graphql/), a query language created by
-Facebook. As opposed to Cypher or Gremlin, which produce results in simple list
-format, GraphQL allows results to be produced in a subgraph format, which has
-richer semantics. Also, GraphQL supports schema validation which is useful to
-ensure data correctness during both input and output.
-
-While GraphQL is modern, Gremlin and Cypher are a lot more popular. Dgraph plans to support them after v1.0.
+Dgraph supports [DQL]({{< relref "query-language/graphql-fundamentals.md">}}),
+a variation of [GraphQL](https://graphql.org/), a query language created by
+Facebook. 
+DQL, as GraphQL itself, allows results to be produced as subgraph rather than lists.
+Schema validation is also useful to ensure data correctness during both input and output.
 
 ### Scalability
 

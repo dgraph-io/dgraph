@@ -1,55 +1,105 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 
-	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var raftIndex uint64
 var ts uint64
+
+func commitTs(startTs uint64) uint64 {
+	commit := timestamp()
+	od := &pb.OracleDelta{
+		MaxAssigned: atomic.LoadUint64(&ts),
+	}
+	od.Txns = append(od.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commit})
+	posting.Oracle().ProcessDelta(od)
+	return commit
+}
+
+func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
+	startTs := timestamp()
+	txn := posting.Oracle().RegisterStartTs(startTs)
+	l = txn.Store(l)
+	err := l.AddMutationWithIndex(context.Background(), edge, txn)
+	require.NoError(t, err)
+
+	commit := commitTs(startTs)
+
+	txn.Update()
+	writer := posting.NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, commit))
+	require.NoError(t, writer.Flush())
+}
 
 func timestamp() uint64 {
 	return atomic.AddUint64(&ts, 1)
 }
 
-func addEdge(t *testing.T, edge *intern.DirectedEdge, l *posting.List) {
-	edge.Op = intern.DirectedEdge_SET
+func addEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
+	edge.Op = pb.DirectedEdge_SET
 	commitTransaction(t, edge, l)
 }
 
-func delEdge(t *testing.T, edge *intern.DirectedEdge, l *posting.List) {
-	edge.Op = intern.DirectedEdge_DEL
+func delEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
+	edge.Op = pb.DirectedEdge_DEL
 	commitTransaction(t, edge, l)
 }
 
+func setClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
+	mu := &api.Mutation{SetNquads: []byte(rdf), CommitNow: true}
+	err := testutil.RetryMutation(dg, mu)
+	require.NoError(t, err)
+}
+
+func delClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
+	mu := &api.Mutation{DelNquads: []byte(rdf), CommitNow: true}
+	err := testutil.RetryMutation(dg, mu)
+	require.NoError(t, err)
+}
 func getOrCreate(key []byte) *posting.List {
-	l, err := posting.Get(key)
+	l, err := posting.GetNoStore(key, math.MaxUint64)
 	x.Checkf(err, "While calling posting.Get")
 	return l
 }
 
 func populateGraph(t *testing.T) {
 	// Add uid edges : predicate neightbour.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		ValueId: 23,
 		Label:   "author0",
 		Attr:    "neighbour",
@@ -87,12 +137,18 @@ func populateGraph(t *testing.T) {
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
 }
 
-func taskValues(t *testing.T, v []*intern.TaskValue) []string {
-	out := make([]string, len(v))
-	for i, tv := range v {
-		out[i] = string(tv.Val)
+func populateClusterGraph(t *testing.T, dg *dgo.Dgraph) {
+	data1 := [][]int{{10, 23}, {11, 23}, {12, 23}, {12, 25}, {12, 26}, {10, 31}, {12, 31}}
+	for _, pair := range data1 {
+		rdf := fmt.Sprintf(`<0x%x> <neighbour> <0x%x> .`, pair[0], pair[1])
+		setClusterEdge(t, dg, rdf)
 	}
-	return out
+
+	data2 := map[int]string{12: "photon", 10: "photon"}
+	for key, val := range data2 {
+		rdf := fmt.Sprintf(`<0x%x> <friend> %q .`, key, val)
+		setClusterEdge(t, dg, rdf)
+	}
 }
 
 func initTest(t *testing.T, schemaStr string) {
@@ -101,517 +157,237 @@ func initTest(t *testing.T, schemaStr string) {
 	populateGraph(t)
 }
 
-func TestProcessTask(t *testing.T) {
-	initTest(t, `neighbour: uid .`)
+func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+	testutil.DropAll(t, dg)
 
-	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
-	r, err := helpProcessTask(context.Background(), query, 1)
+	err = dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
 	require.NoError(t, err)
-	require.EqualValues(t,
-		[][]uint64{
-			{23, 31},
-			{23},
-			{23, 25, 26, 31},
-		}, algo.ToUintsListForTest(r.UidMatrix))
+	populateClusterGraph(t, dg)
+
+	return dg
 }
 
-// newQuery creates a Query task and returns it.
-func newQuery(attr string, uids []uint64, srcFunc []string) *intern.Query {
+func TestProcessTask(t *testing.T) {
+	dg := initClusterTest(t, `neighbour: [uid] .`)
+
+	resp, err := runQuery(dg, "neighbour", []uint64{10, 11, 12}, nil)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		  "q": [
+		    {
+		      "neighbour": [
+		        { "uid": "0x17" },
+		        { "uid": "0x1f" }
+		      ]
+		    },
+		    {
+		      "neighbour": [
+		        { "uid": "0x17" }
+		      ]
+		    },
+		    {
+		      "neighbour": [
+		        { "uid": "0x17" },
+		        { "uid": "0x19" },
+		        { "uid": "0x1a" },
+		        { "uid": "0x1f" }
+		      ]
+		    }
+		  ]
+		}`,
+		string(resp.Json),
+	)
+}
+
+func runQuery(dg *dgo.Dgraph, attr string, uids []uint64, srcFunc []string) (*api.Response, error) {
 	x.AssertTrue(uids == nil || srcFunc == nil)
-	// TODO: Change later, hacky way to make the tests work
-	var srcFun *intern.SrcFunction
-	if len(srcFunc) > 0 {
-		srcFun = new(intern.SrcFunction)
-		srcFun.Name = srcFunc[0]
-		srcFun.Args = append(srcFun.Args, srcFunc[2:]...)
+
+	var query string
+	if uids != nil {
+		var uidv []string
+		for _, uid := range uids {
+			uidv = append(uidv, fmt.Sprintf("0x%x", uid))
+		}
+		query = fmt.Sprintf(`
+			{
+				q(func: uid(%s)) {
+					%s { uid }
+				}
+			}`, strings.Join(uidv, ","), attr,
+		)
+	} else {
+		var langs, args string
+		if srcFunc[1] != "" {
+			langs = "@" + srcFunc[1]
+		}
+		args = strings.Join(srcFunc[2:], " ")
+		query = fmt.Sprintf(`
+			{
+				q(func: %s(%s%s, %q)) {
+					uid
+				}
+			}`, srcFunc[0], attr, langs, args)
 	}
-	q := &intern.Query{
-		UidList: &intern.List{uids},
-		SrcFunc: srcFun,
-		Attr:    attr,
-		ReadTs:  timestamp(),
-	}
-	// It will have either nothing or attr, lang
-	if len(srcFunc) > 0 && srcFunc[1] != "" {
-		q.Langs = []string{srcFunc[1]}
-	}
-	return q
+
+	resp, err := testutil.RetryQuery(dg, query)
+
+	return resp, err
 }
 
 // Index-related test. Similar to TestProcessTaskIndex but we call MergeLists only
 // at the end. In other words, everything is happening only in mutation layers,
 // and not committed to BadgerDB until near the end.
 func TestProcessTaskIndexMLayer(t *testing.T) {
-	initTest(t, `friend:string @index(term) .`)
+	dg := initClusterTest(t, `friend:string @index(term) .`)
 
-	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
-	r, err := helpProcessTask(context.Background(), query, 1)
+	resp, err := runQuery(dg, "friend", nil, []string{"anyofterms", "", "hey photon"})
 	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		nil,
-		{10, 12},
-	}, algo.ToUintsListForTest(r.UidMatrix))
+	require.JSONEq(t, `{
+		  "q": [
+		    { "uid": "0xa" },
+		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := &intern.DirectedEdge{
-		Value:  []byte("notphotonExtra"),
-		Label:  "author0",
-		Attr:   "friend",
-		Entity: 12,
-	}
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
-	edge.Value = []byte("notphoton")
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphotonExtra"))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
-	r, err = helpProcessTask(context.Background(), query, 1)
+	resp, err = runQuery(dg, "friend", nil,
+		[]string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
 	require.NoError(t, err)
+	require.JSONEq(t, `{
+		  "q": [
+		    { "uid": "0xa" },
+		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
 
-	require.EqualValues(t, [][]uint64{
-		nil,
-		{12},
-		nil,
-		{10},
-	}, algo.ToUintsListForTest(r.UidMatrix))
-
-	// Try deleting.
-	edge = &intern.DirectedEdge{
-		Value:  []byte("photon"),
-		Label:  "author0",
-		Attr:   "friend",
-		Entity: 10,
-	}
-	// Redundant deletes.
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
+	// Try redundant deletes.
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
 
 	// Delete followed by set.
-	edge.Entity = 12
-	edge.Value = []byte("notphoton")
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
-	edge.Value = []byte("ignored")
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "ignored"))
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = helpProcessTask(context.Background(), query, 1)
+	resp, err = runQuery(dg, "friend", nil,
+		[]string{"anyofterms", "", "photon notphoton ignored"})
 	require.NoError(t, err)
+	require.JSONEq(t, `{
+		  "q": [
+		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
 
-	require.EqualValues(t, [][]uint64{
-		{12},
-		nil,
-		nil,
-	}, algo.ToUintsListForTest(r.UidMatrix))
-
-	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = helpProcessTask(context.Background(), query, 1)
+	resp, err = runQuery(dg, "friend", nil,
+		[]string{"anyofterms", "", "photon notphoton ignored"})
 	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		{12},
-		nil,
-		nil,
-	}, algo.ToUintsListForTest(r.UidMatrix))
+	require.JSONEq(t, `{
+		  "q": [
+		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
 }
 
 // Index-related test. Similar to TestProcessTaskIndeMLayer except we call
 // MergeLists in between a lot of updates.
 func TestProcessTaskIndex(t *testing.T) {
-	initTest(t, `friend:string @index(term) .`)
+	dg := initClusterTest(t, `friend:string @index(term) .`)
 
-	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
-	r, err := helpProcessTask(context.Background(), query, 1)
+	resp, err := runQuery(dg, "friend", nil, []string{"anyofterms", "", "hey photon"})
 	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		nil,
-		{10, 12},
-	}, algo.ToUintsListForTest(r.UidMatrix))
+	require.JSONEq(t, `{
+		  "q": [
+		    { "uid": "0xa" },
+		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := &intern.DirectedEdge{
-		Value:  []byte("notphotonExtra"),
-		Label:  "author0",
-		Attr:   "friend",
-		Entity: 12,
-	}
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
-	edge.Value = []byte("notphoton")
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphotonExtra"))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
-	r, err = helpProcessTask(context.Background(), query, 1)
+	resp, err = runQuery(dg, "friend", nil,
+		[]string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
 	require.NoError(t, err)
+	require.JSONEq(t, `{
+		  "q": [
+		    { "uid": "0xa" },
+		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
 
-	require.EqualValues(t, [][]uint64{
-		nil,
-		{12},
-		nil,
-		{10},
-	}, algo.ToUintsListForTest(r.UidMatrix))
-
-	// Try deleting.
-	edge = &intern.DirectedEdge{
-		Value:  []byte("photon"),
-		Label:  "author0",
-		Attr:   "friend",
-		Entity: 10,
-	}
-	// Redundant deletes.
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
+	// Try redundant deletes.
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
 
 	// Delete followed by set.
-	edge.Entity = 12
-	edge.Value = []byte("notphoton")
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
-	edge.Value = []byte("ignored")
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "ignored"))
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = helpProcessTask(context.Background(), query, 1)
+	resp, err = runQuery(dg, "friend", nil,
+		[]string{"anyofterms", "", "photon notphoton ignored"})
 	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		{12},
-		nil,
-		nil,
-	}, algo.ToUintsListForTest(r.UidMatrix))
+	require.JSONEq(t, `{
+		  "q": [
+		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
 }
-
-/*
-func populateGraphForSort(t *testing.T, ps store.Store) {
-	edge := &intern.DirectedEdge{
-		Label: "author1",
-		Attr:  "dob",
-	}
-
-	dobs := []string{
-		"1980-05-05", // 10 (1980)
-		"1980-04-05", // 11
-		"1979-05-05", // 12 (1979)
-		"1979-02-05", // 13
-		"1979-03-05", // 14
-		"1965-05-05", // 15 (1965)
-		"1965-04-05", // 16
-		"1965-03-05", // 17
-		"1970-05-05", // 18 (1970)
-		"1970-04-05", // 19
-		"1970-01-05", // 20
-		"1970-02-05", // 21
-	}
-	// The sorted UIDs are: (17 16 15) (20 21 19 18) (13 14 12) (11 10)
-
-	for i, dob := range dobs {
-		edge.Entity = uint64(i + 10)
-		edge.Value = []byte(dob)
-		addEdge(t, edge,
-			getOrCreate(x.DataKey(edge.Attr, edge.Entity)))
-	}
-	time.Sleep(200 * time.Millisecond) // Let indexing finish.
-}
-
-// newSort creates a intern.Sort for sorting.
-func newSort(uids [][]uint64, offset, count int) *intern.Sort {
-	x.AssertTrue(uids != nil)
-	uidMatrix := make([]*intern.List, len(uids))
-	for i, l := range uids {
-		uidMatrix[i] = &intern.List{Uids: l}
-	}
-	return &intern.Sort{
-		Attr:      "dob",
-		Offset:    int32(offset),
-		Count:     int32(count),
-		UidMatrix: uidMatrix,
-	}
-}
-
-func TestProcessSort(t *testing.T) {
-	dir, ps := initTest(t, `dob:date @index .`)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-	populateGraphForSort(t, ps)
-
-	sort := newSort([][]uint64{
-		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
-		{10, 11, 12, 13, 14, 21},
-		{16, 17, 18, 19, 20, 21},
-	}, 0, 1000)
-	r, err := processSort(sort)
-	require.NoError(t, err)
-
-	// The sorted UIDs are: (17 16 15) (20 21 19 18) (13 14 12) (11 10)
-	require.EqualValues(t, [][]uint64{
-		{17, 16, 15, 20, 21, 19, 18, 13, 14, 12, 11, 10},
-		{21, 13, 14, 12, 11, 10},
-		{17, 16, 20, 21, 19, 18}},
-		algo.ToUintsListForTest(r.UidMatrix))
-}
-
-func TestProcessSortOffset(t *testing.T) {
-	dir, ps := initTest(t, `dob:date @index .`)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-	populateGraphForSort(t, ps)
-
-	input := [][]uint64{
-		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
-		{10, 11, 12, 13, 14, 21},
-		{16, 17, 18, 19, 20, 21}}
-
-	// Offset 1.
-	sort := newSort(input, 1, 1000)
-	r, err := processSort(sort)
-	require.NoError(t, err)
-	require.EqualValues(t, [][]uint64{
-		{16, 15, 20, 21, 19, 18, 13, 14, 12, 11, 10},
-		{13, 14, 12, 11, 10},
-		{16, 20, 21, 19, 18}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Offset 2.
-	sort = newSort(input, 2, 1000)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-	require.EqualValues(t, [][]uint64{
-		{15, 20, 21, 19, 18, 13, 14, 12, 11, 10},
-		{14, 12, 11, 10},
-		{20, 21, 19, 18}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Offset 5.
-	sort = newSort(input, 5, 1000)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-	require.EqualValues(t, [][]uint64{
-		{19, 18, 13, 14, 12, 11, 10},
-		{10},
-		{18}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Offset 6.
-	sort = newSort(input, 6, 1000)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-	require.EqualValues(t, [][]uint64{
-		{18, 13, 14, 12, 11, 10},
-		{},
-		{}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Offset 7.
-	sort = newSort(input, 7, 1000)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-	require.EqualValues(t, [][]uint64{
-		{13, 14, 12, 11, 10},
-		{},
-		{}},
-		algo.ToUintsListForTest(r.UidMatrix))
-}
-
-func TestProcessSortCount(t *testing.T) {
-	dir, ps := initTest(t, `dob:date @index .`)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-	populateGraphForSort(t, ps)
-
-	input := [][]uint64{
-		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
-		{10, 11, 12, 13, 14, 21},
-		{16, 17, 18, 19, 20, 21}}
-
-	// Count 1.
-	sort := newSort(input, 0, 1)
-	r, err := processSort(sort)
-	require.NoError(t, err)
-	require.EqualValues(t, [][]uint64{
-		{17},
-		{21},
-		{17}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Count 2.
-	sort = newSort(input, 0, 2)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-
-	require.NotNil(t, r)
-	require.EqualValues(t, [][]uint64{
-		{17, 16},
-		{21, 13},
-		{17, 16}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Count 5.
-	sort = newSort(input, 0, 5)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-
-	require.NotNil(t, r)
-	require.EqualValues(t, [][]uint64{
-		{17, 16, 15, 20, 21},
-		{21, 13, 14, 12, 11},
-		{17, 16, 20, 21, 19}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Count 6.
-	sort = newSort(input, 0, 6)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-
-	require.NotNil(t, r)
-	require.EqualValues(t, [][]uint64{
-		{17, 16, 15, 20, 21, 19},
-		{21, 13, 14, 12, 11, 10},
-		{17, 16, 20, 21, 19, 18}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Count 7.
-	sort = newSort(input, 0, 7)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-
-	require.NotNil(t, r)
-	require.EqualValues(t, [][]uint64{
-		{17, 16, 15, 20, 21, 19, 18},
-		{21, 13, 14, 12, 11, 10},
-		{17, 16, 20, 21, 19, 18}},
-		algo.ToUintsListForTest(r.UidMatrix))
-}
-
-func TestProcessSortOffsetCount(t *testing.T) {
-	dir, ps := initTest(t, `dob:date @index .`)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-	populateGraphForSort(t, ps)
-
-	input := [][]uint64{
-		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
-		{10, 11, 12, 13, 14, 21},
-		{16, 17, 18, 19, 20, 21}}
-
-	// Offset 1. Count 1.
-	sort := newSort(input, 1, 1)
-	r, err := processSort(sort)
-	require.NoError(t, err)
-	require.EqualValues(t, [][]uint64{
-		{16},
-		{13},
-		{16}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Offset 1. Count 2.
-	sort = newSort(input, 1, 2)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		{16, 15},
-		{13, 14},
-		{16, 20}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Offset 1. Count 3.
-	sort = newSort(input, 1, 3)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		{16, 15, 20},
-		{13, 14, 12},
-		{16, 20, 21}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Offset 1. Count 1000.
-	sort = newSort(input, 1, 1000)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		{16, 15, 20, 21, 19, 18, 13, 14, 12, 11, 10},
-		{13, 14, 12, 11, 10},
-		{16, 20, 21, 19, 18}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Offset 5. Count 1.
-	sort = newSort(input, 5, 1)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		{19},
-		{10},
-		{18}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Offset 5. Count 2.
-	sort = newSort(input, 5, 2)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		{19, 18},
-		{10},
-		{18}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Offset 5. Count 3.
-	sort = newSort(input, 5, 3)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		{19, 18, 13},
-		{10},
-		{18}},
-		algo.ToUintsListForTest(r.UidMatrix))
-
-	// Offset 100. Count 100.
-	sort = newSort(input, 100, 100)
-	r, err = processSort(sort)
-	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		{},
-		{},
-		{}},
-		algo.ToUintsListForTest(r.UidMatrix))
-}
-*/
 
 func TestMain(m *testing.M) {
-	x.Init(true)
-	posting.Config.AllottedMemory = 1024.0
+	x.Init()
 	posting.Config.CommitFraction = 0.10
 	gr = new(groupi)
 	gr.gid = 1
-	gr.tablets = make(map[string]*intern.Tablet)
-	gr.tablets["name"] = &intern.Tablet{GroupId: 1}
-	gr.tablets["name2"] = &intern.Tablet{GroupId: 1}
-	gr.tablets["age"] = &intern.Tablet{GroupId: 1}
-	gr.tablets["friend"] = &intern.Tablet{GroupId: 1}
-	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &intern.Tablet{GroupId: 1}
-	gr.tablets["friend_not_served"] = &intern.Tablet{GroupId: 2}
-	gr.tablets[""] = &intern.Tablet{GroupId: 1}
+	gr.tablets = make(map[string]*pb.Tablet)
+	gr.tablets["name"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["name2"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["age"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["friend"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["friend_not_served"] = &pb.Tablet{GroupId: 2}
+	gr.tablets[""] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.type"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.graphql.xid"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.graphql.schema"] = &pb.Tablet{GroupId: 1}
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
 	defer os.RemoveAll(dir)
 
-	opt := badger.DefaultOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
+	opt := badger.DefaultOptions(dir)
 	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
 	pstore = ps
-	posting.Init(ps)
+	// Not using posting list cache
+	posting.Init(ps, 0)
 	Init(ps)
+
 	os.Exit(m.Run())
 }

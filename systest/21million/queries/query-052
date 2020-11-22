@@ -1,0 +1,13 @@
+{
+  q(func: has(dgraph.type)) {
+    count(uid)
+  }
+}
+---
+{
+  "q": [
+    {
+      "count": 3508686
+    }
+  ]
+}

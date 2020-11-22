@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package query
@@ -13,15 +22,14 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 type groupPair struct {
-	key   types.Val
-	attr  string
-	alias string
+	key  types.Val
+	attr string
 }
 
 type groupResult struct {
@@ -34,7 +42,7 @@ func (grp *groupResult) aggregateChild(child *SubGraph) error {
 	fieldName := child.Params.Alias
 	if child.Params.DoCount {
 		if child.Attr != "uid" {
-			return x.Errorf("Only uid predicate is allowed in count within groupby")
+			return errors.Errorf("Only uid predicate is allowed in count within groupby")
 		}
 		if fieldName == "" {
 			fieldName = "count"
@@ -69,7 +77,7 @@ type groupResults struct {
 }
 
 type groupElements struct {
-	entities *intern.List
+	entities *pb.List
 	key      types.Val
 }
 
@@ -110,7 +118,7 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	if value.Tid == types.UidID {
 		strKey = strconv.FormatUint(value.Value.(uint64), 10)
 	} else {
-		valC := types.Val{types.StringID, ""}
+		valC := types.Val{Tid: types.StringID, Value: ""}
 		err := types.Marshal(value, &valC)
 		if err != nil {
 			return
@@ -122,7 +130,7 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 		// If this is the first element of the group.
 		cur.elements[strKey] = groupElements{
 			key:      value,
-			entities: &intern.List{make([]uint64, 0)},
+			entities: &pb.List{Uids: []uint64{}},
 		}
 	}
 	curEntity := cur.elements[strKey].entities
@@ -156,7 +164,7 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 
 // formGroup creates all possible groups with the list of uids that belong to that
 // group.
-func (res *groupResults) formGroups(dedupMap dedup, cur *intern.List, groupVal []groupPair) {
+func (res *groupResults) formGroups(dedupMap dedup, cur *pb.List, groupVal []groupPair) {
 	l := len(groupVal)
 	if len(dedupMap.groups) == 0 || (l != 0 && len(cur.Uids) == 0) {
 		// This group is already empty or no group can be formed. So stop.
@@ -176,7 +184,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *intern.List, groupVal [
 	}
 
 	for _, v := range dedupMap.groups[l].elements {
-		temp := new(intern.List)
+		temp := new(pb.List)
 		groupVal = append(groupVal, groupPair{
 			key:  v.key,
 			attr: dedupMap.groups[l].attr,
@@ -192,12 +200,12 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *intern.List, groupVal [
 	}
 }
 
-func (sg *SubGraph) formResult(ul *intern.List) (*groupResults, error) {
+func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 	var dedupMap dedup
 	res := new(groupResults)
 
 	for _, child := range sg.Children {
-		if !child.Params.ignoreResult {
+		if !child.Params.IgnoreResult {
 			continue
 		}
 
@@ -205,7 +213,7 @@ func (sg *SubGraph) formResult(ul *intern.List) (*groupResults, error) {
 		if attr == "" {
 			attr = child.Attr
 		}
-		if len(child.DestUIDs.Uids) != 0 {
+		if len(child.DestUIDs.GetUids()) > 0 {
 			// It's a UID node.
 			for i := 0; i < len(child.uidMatrix); i++ {
 				srcUid := child.SrcUIDs.Uids[i]
@@ -213,8 +221,9 @@ func (sg *SubGraph) formResult(ul *intern.List) (*groupResults, error) {
 				if algo.IndexOf(ul, srcUid) < 0 {
 					continue
 				}
+
 				ul := child.uidMatrix[i]
-				for _, uid := range ul.Uids {
+				for _, uid := range ul.GetUids() {
 					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
 				}
 			}
@@ -235,11 +244,11 @@ func (sg *SubGraph) formResult(ul *intern.List) (*groupResults, error) {
 	}
 
 	// Create all the groups here.
-	res.formGroups(dedupMap, &intern.List{}, []groupPair{})
+	res.formGroups(dedupMap, &pb.List{}, []groupPair{})
 
 	// Go over the groups and aggregate the values.
 	for _, child := range sg.Children {
-		if child.Params.ignoreResult {
+		if child.Params.IgnoreResult {
 			continue
 		}
 		// This is a aggregation node.
@@ -262,10 +271,11 @@ func (sg *SubGraph) formResult(ul *intern.List) (*groupResults, error) {
 // that it considers the whole uidMatrix to do the grouping before assigning the variable.
 // TODO - Check if we can reduce this duplication.
 func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGraph) error {
-	childHasVar := false
+	var childHasVar bool
 	for _, child := range sg.Children {
 		if child.Params.Var != "" {
 			childHasVar = true
+			break
 		}
 	}
 
@@ -277,7 +287,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 	var dedupMap dedup
 
 	for _, child := range sg.Children {
-		if !child.Params.ignoreResult {
+		if !child.Params.IgnoreResult {
 			continue
 		}
 
@@ -285,7 +295,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 		if attr == "" {
 			attr = child.Attr
 		}
-		if len(child.DestUIDs.Uids) != 0 {
+		if len(child.DestUIDs.GetUids()) > 0 {
 			// It's a UID node.
 			for i := 0; i < len(child.uidMatrix); i++ {
 				srcUid := child.SrcUIDs.Uids[i]
@@ -313,11 +323,11 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 
 	// Create all the groups here.
 	res := new(groupResults)
-	res.formGroups(dedupMap, &intern.List{}, []groupPair{})
+	res.formGroups(dedupMap, &pb.List{}, []groupPair{})
 
 	// Go over the groups and aggregate the values.
 	for _, child := range sg.Children {
-		if child.Params.ignoreResult {
+		if child.Params.IgnoreResult {
 			continue
 		}
 		// This is a aggregation node.
@@ -338,12 +348,12 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 				continue
 			}
 			if len(grp.keys) > 1 {
-				return x.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
+				return errors.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
 			}
 			uidVal := grp.keys[0].key.Value
 			uid, ok := uidVal.(uint64)
 			if !ok {
-				return x.Errorf("Vars can be assigned only when grouped by UID attribute")
+				return errors.Errorf("Vars can be assigned only when grouped by UID attribute")
 			}
 			// grp.aggregates could be empty if schema conversion failed during aggregation
 			if len(grp.aggregates) > 0 {
@@ -381,19 +391,22 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 }
 
 func groupLess(a, b *groupResult) bool {
-	if len(a.uids) < len(b.uids) {
+	switch {
+	case len(a.uids) < len(b.uids):
 		return true
-	} else if len(a.uids) != len(b.uids) {
+	case len(a.uids) != len(b.uids):
 		return false
 	}
-	if len(a.keys) < len(b.keys) {
+	switch {
+	case len(a.keys) < len(b.keys):
 		return true
-	} else if len(a.keys) != len(b.keys) {
+	case len(a.keys) != len(b.keys):
 		return false
 	}
-	if len(a.aggregates) < len(b.aggregates) {
+	switch {
+	case len(a.aggregates) < len(b.aggregates):
 		return true
-	} else if len(a.aggregates) != len(b.aggregates) {
+	case len(a.aggregates) != len(b.aggregates):
 		return false
 	}
 

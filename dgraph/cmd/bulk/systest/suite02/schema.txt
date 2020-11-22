@@ -1,2 +1,2 @@
-friend: uid @count @reverse .
+friend: [uid] @count @reverse .
 name: string @index(exact) .

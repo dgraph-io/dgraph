@@ -1,0 +1,84 @@
+{
+  director(func: allofterms(name@en, "Quentin Tarantino")) {
+    director.film {
+      name@en
+      x as initial_release_date
+    }
+    max(val(x))
+  }
+}
+---
+{
+  "director": [
+    {
+      "director.film": [
+        {
+          "name@en": "Django Unchained",
+          "initial_release_date": "2012-12-25T00:00:00Z"
+        },
+        {
+          "name@en": "Sin City",
+          "initial_release_date": "2005-03-28T00:00:00Z"
+        },
+        {
+          "name@en": "Grindhouse",
+          "initial_release_date": "2007-04-06T00:00:00Z"
+        },
+        {
+          "name@en": "Jackie Brown",
+          "initial_release_date": "1997-12-25T00:00:00Z"
+        },
+        {
+          "name@en": "My Best Friend's Birthday",
+          "initial_release_date": "1987-01-01T00:00:00Z"
+        },
+        {
+          "name@en": "Kill Bill Volume 1",
+          "initial_release_date": "2003-10-10T00:00:00Z"
+        },
+        {
+          "name@en": "Inglourious Basterds",
+          "initial_release_date": "2009-05-20T00:00:00Z"
+        },
+        {
+          "name@en": "Reservoir Dogs",
+          "initial_release_date": "1992-01-21T00:00:00Z"
+        },
+        {
+          "name@en": "Kill Bill Volume 2",
+          "initial_release_date": "2004-04-16T00:00:00Z"
+        },
+        {
+          "name@en": "Death Proof",
+          "initial_release_date": "2007-05-22T00:00:00Z"
+        },
+        {
+          "name@en": "Pulp Fiction",
+          "initial_release_date": "1994-05-12T00:00:00Z"
+        },
+        {
+          "name@en": "Four Rooms",
+          "initial_release_date": "1995-09-16T00:00:00Z"
+        },
+        {
+          "name@en": "Kill Bill: The Whole Bloody Affair"
+        },
+        {
+          "name@en": "The Hateful Eight",
+          "initial_release_date": "2015-12-01T00:00:00Z"
+        },
+        {
+          "name@en": "Kill Bill: Vol. 3",
+          "initial_release_date": "2014-01-01T00:00:00Z"
+        },
+        {
+          "name@en": "The Hateful Eight"
+        },
+        {
+          "name@en": "Love Birds in Bondage"
+        }
+      ],
+      "max(val(x))": "2015-12-01T00:00:00Z"
+    }
+  ]
+}

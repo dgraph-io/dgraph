@@ -1,0 +1,27 @@
+{
+  me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
+    name@en
+    director.film @filter(anyofterms(name@en, "war spies"))  {
+      name@en
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "name@en": "Steven Spielberg",
+      "director.film": [
+        {
+          "name@en": "War Horse"
+        },
+        {
+          "name@en": "War of the Worlds"
+        },
+        {
+          "name@en": "Bridge of Spies"
+        }
+      ]
+    }
+  ]
+}

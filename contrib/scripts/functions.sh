@@ -1,49 +1,59 @@
 #!/bin/bash
+# Containers MUST be labeled with "cluster:test" to be restarted and stopped
+# by these functions.
 
+set -e
 
-sleepTime=11
-
-function quit {
-  echo "Shutting down dgraph server and zero"
-  curl -s localhost:8081/admin/shutdown
-  curl -s localhost:8082/admin/shutdown
-  # Kill Dgraphzero
-  kill -9 $(pgrep -f "dgraph zero") > /dev/null
-
-  if pgrep -x dgraph > /dev/null
-  then
-    while pgrep dgraph;
-    do
-      echo "Sleeping for 5 secs so that Dgraph can shutdown."
-      sleep 5
-    done
+# May be called with an argument which is a docker compose file
+# to use *instead of* the default docker-compose.yml.
+function restartCluster {
+  if [[ -z $1 ]]; then
+    compose_file="docker-compose.yml"
+  else
+    compose_file="$(readlink -f $1)"
   fi
 
-  echo "Clean shutdown done."
-  return $1
+  basedir=$(dirname "${BASH_SOURCE[0]}")/../..
+  pushd $basedir/dgraph >/dev/null
+  echo "Rebuilding dgraph ..."
+
+  docker_compose_gopath="${GOPATH:-$(go env GOPATH)}"
+  make install
+
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    if !(AVAILABLE_RAM=$(cat ~/Library/Group\ Containers/group.com.docker/settings.json | grep memoryMiB | grep -oe "[0-9]\+") && test $AVAILABLE_RAM -ge 6144); then
+      echo -e "\e[33mWarning: You may not have allocated enough memory for Docker on Mac. Please increase the allocated RAM to at least 6GB with a 4GB swap. See https://docs.docker.com/docker-for-mac/#resources \e[0m"
+    fi
+    docker_compose_gopath=`pwd`/../osx-docker-gopath
+
+    # FIXME: read the go version from a constant
+    docker run --rm \
+      -v dgraph_gopath:/go \
+      -v dgraph_gocache:/root/.cache/go-build \
+      -v `pwd`/..:/app \
+      -w /app/dgraph \
+      golang:1.14 \
+      go build -o /app/osx-docker-gopath/bin/dgraph
+  fi
+
+  docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker rm -f
+  GOPATH=$docker_compose_gopath docker-compose -p dgraph -f $compose_file up --force-recreate --build --remove-orphans -d || exit 1
+  popd >/dev/null
+
+  $basedir/contrib/wait-for-it.sh -t 60 localhost:6180 || exit 1
+  $basedir/contrib/wait-for-it.sh -t 60 localhost:9180 || exit 1
+  sleep 10 || exit 1
 }
 
-function start {
-  pushd dgraph &> /dev/null
-  echo -e "Starting first server."
-  ./dgraph server -p $BUILD/p -w $BUILD/w --lru_mb 4096 -o 1 &
-  sleep 5
-  echo -e "Starting second server.\n"
-  ./dgraph server -p $BUILD/p2 -w $BUILD/w2 --lru_mb 4096 -o 2 &
-  # Wait for membership sync to happen.
-  sleep $sleepTime
-  popd &> /dev/null
-  return 0
+function stopCluster {
+  docker ps --filter label="cluster=test" --format "{{.Names}}" \
+  | xargs -r docker stop | sed 's/^/Stopped /'
+  docker ps -a --filter label="cluster=test" --format "{{.Names}}" \
+  | xargs -r docker rm | sed 's/^/Removed /'
 }
 
-function startZero {
-  pushd dgraph &> /dev/null
-  echo -e "\nBuilding Dgraph."
-  go build .
-	echo -e "Starting dgraph zero.\n"
-  ./dgraph zero -w $BUILD/wz &
-  # To ensure dgraph doesn't start before dgraphzero.
-	# It takes time for zero to start on travis(mac).
-	sleep $sleepTime
-  popd &> /dev/null
+function loginWithGroot() {
+  curl -s -XPOST localhost:8180/login -d '{"userid": "groot","password": "password"}' \
+   | python3 -c \
+   "import json; resp = input(); data = json.loads(resp); print(data['data']['accessJWT'])"
 }

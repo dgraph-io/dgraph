@@ -1,0 +1,70 @@
+{
+  ID as var(func: allofterms(name@en, "Steven")) {
+    director.film {
+      num_actors as count(starring)
+    }
+    total as sum(val(num_actors))
+  }
+
+  dirs(func: uid(ID)) @filter(gt(val(total), 100)) {
+    name@en
+    total_actors : val(total)
+  }
+}
+---
+{
+  "dirs": [
+    {
+      "name@en": "Steven Hilliard Stern",
+      "total_actors": 302
+    },
+    {
+      "name@en": "Steven Knight",
+      "total_actors": 102
+    },
+    {
+      "name@en": "Mark Steven Johnson",
+      "total_actors": 219
+    },
+    {
+      "name@en": "Steven Spielberg",
+      "total_actors": 1665
+    },
+    {
+      "name@en": "Steven Conrad",
+      "total_actors": 122
+    },
+    {
+      "name@en": "Steven Zaillian",
+      "total_actors": 123
+    },
+    {
+      "name@en": "Steven Brill",
+      "total_actors": 417
+    },
+    {
+      "name@en": "Steven Soderbergh",
+      "total_actors": 1023
+    },
+    {
+      "name@en": "Steven Scarborough",
+      "total_actors": 1169
+    },
+    {
+      "name@en": "Steven Williford",
+      "total_actors": 125
+    },
+    {
+      "name@en": "Steven Schachter",
+      "total_actors": 167
+    },
+    {
+      "name@en": "Steven R. Monroe",
+      "total_actors": 139
+    },
+    {
+      "name@en": "Steven Lawson",
+      "total_actors": 116
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: 'dgraph'
+    scrape_interval: 15s
+    metrics_path: '/debug/prometheus_metrics'
+    static_configs:
+      - targets:
+        - 'alpha1:8180'
+        - 'alpha2:8182'
+        - 'alpha3:8183'
+        - 'alpha4:8184'
+        - 'alpha5:8185'
+        - 'alpha6:8186'
+        - 'zero1:6180'
+        - 'zero2:6182'
+        - 'zero3:6183'
+  - job_name: 'node-exporter'
+    scrape_interval: 15s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets:
+        - 'node-exporter:9100'

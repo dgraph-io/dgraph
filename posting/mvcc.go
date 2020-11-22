@@ -1,438 +1,390 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package posting
 
 import (
 	"bytes"
-	"context"
-	"encoding/base64"
+	"encoding/hex"
 	"math"
-	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/badger/v2"
+	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
+
+// incrRollupi is used to batch keys for rollup incrementally.
+type incrRollupi struct {
+	// keysCh is populated with batch of 64 keys that needs to be rolled up during reads
+	keysCh chan *[][]byte
+	// keysPool is sync.Pool to share the batched keys to rollup.
+	keysPool *sync.Pool
+	count    uint64
+}
 
 var (
-	ErrTsTooOld = x.Errorf("Transaction is too old")
-	txns        *transactions
-	txnMarks    *x.WaterMark // Used to find out till what RAFT index we can snapshot entries.
+	// ErrTsTooOld is returned when a transaction is too old to be applied.
+	ErrTsTooOld = errors.Errorf("Transaction is too old")
+	// ErrInvalidKey is returned when trying to read a posting list using
+	// an invalid key (e.g the key to a single part of a larger multi-part list).
+	ErrInvalidKey = errors.Errorf("cannot read posting list using multi-part list key")
+
+	// IncrRollup is used to batch keys for rollup incrementally.
+	IncrRollup = &incrRollupi{
+		keysCh: make(chan *[][]byte),
+		keysPool: &sync.Pool{
+			New: func() interface{} {
+				return new([][]byte)
+			},
+		},
+	}
 )
 
-func init() {
-	txns = new(transactions)
-	txns.m = make(map[uint64]*Txn)
-	txnMarks = &x.WaterMark{Name: "Transaction watermark"}
-	txnMarks.Init()
-}
-
-func TxnMarks() *x.WaterMark {
-	return txnMarks
-}
-
-func Txns() *transactions {
-	return txns
-}
-
-type delta struct {
-	key           []byte
-	posting       *intern.Posting
-	checkConflict bool // Check conflict detection.
-}
-type Txn struct {
-	StartTs uint64
-
-	// atomic
-	shouldAbort uint32
-	// Fields which can changed after init
-	sync.Mutex
-	deltas []delta
-	// Stores list of proposal indexes belonging to the transaction, the watermark would
-	// be marked as done only when it's committed.
-	Indices    []uint64
-	nextKeyIdx int
-}
-
-type transactions struct {
-	x.SafeMutex
-	m map[uint64]*Txn
-}
-
-func (t *transactions) MinTs() uint64 {
-	t.Lock()
-	var minTs uint64
-	for ts := range t.m {
-		if ts < minTs || minTs == 0 {
-			minTs = ts
-		}
-	}
-	t.Unlock()
-	maxPending := Oracle().MaxPending()
-	if minTs == 0 {
-		// maxPending gives the guarantee that all commits with timestamp
-		// less than maxPending should have been done and since nothing
-		// is present in map, all transactions with commitTs below maxPending
-		// have been written to disk.
-		return maxPending
-	} else if maxPending < minTs {
-		// Not sure if needed, but just for safety
-		return maxPending
-	}
-	return minTs
-}
-
-func (t *transactions) TxnsSinceSnapshot(pending uint64) []uint64 {
-	lastSnapshotIdx := TxnMarks().DoneUntil()
-	var timestamps []uint64
-	t.Lock()
-	defer t.Unlock()
-	var oldest float64 = 0.2 * float64(pending)
-	for _, txn := range t.m {
-		index := txn.startIdx()
-		// We abort oldest 20% of the transactions.
-		if index-lastSnapshotIdx <= uint64(oldest) {
-			timestamps = append(timestamps, txn.StartTs)
-		}
-	}
-	return timestamps
-}
-
-func (t *transactions) Reset() {
-	t.Lock()
-	defer t.Unlock()
-	for _, txn := range t.m {
-		txn.done()
-	}
-	t.m = make(map[uint64]*Txn)
-}
-
-func (t *transactions) Iterate(ok func(key []byte) bool) []uint64 {
-	t.RLock()
-	defer t.RUnlock()
-	var timestamps []uint64
-	for _, txn := range t.m {
-		if txn.conflicts(ok) {
-			timestamps = append(timestamps, txn.StartTs)
-		}
-	}
-	return timestamps
-}
-
-func (t *Txn) startIdx() uint64 {
-	t.Lock()
-	defer t.Unlock()
-	x.AssertTrue(len(t.Indices) > 0)
-	return t.Indices[0]
-}
-
-func (t *Txn) conflicts(ok func(key []byte) bool) bool {
-	t.Lock()
-	defer t.Unlock()
-	for _, d := range t.deltas {
-		if ok(d.key) {
-			return true
-		}
-	}
-	return false
-}
-
-func (t *transactions) Get(startTs uint64) *Txn {
-	t.RLock()
-	defer t.RUnlock()
-	return t.m[startTs]
-}
-
-func (t *transactions) Done(startTs uint64) {
-	t.Lock()
-	defer t.Unlock()
-	txn, ok := t.m[startTs]
-	if !ok {
-		return
-	}
-	txn.done()
-	delete(t.m, startTs)
-}
-
-func (t *Txn) done() {
-	t.Lock()
-	defer t.Unlock()
-	// All indices should have been added by now.
-	TxnMarks().DoneMany(t.Indices)
-}
-
-// LastIndex returns the index of last prewrite proposal associated with
-// the transaction.
-func (t *Txn) LastIndex() uint64 {
-	t.Lock()
-	defer t.Unlock()
-	if l := len(t.Indices); l > 0 {
-		return t.Indices[l-1]
-	}
-	return 0
-}
-
-func (t *transactions) PutOrMergeIndex(src *Txn) *Txn {
-	t.Lock()
-	defer t.Unlock()
-	dst := t.m[src.StartTs]
-	if dst == nil {
-		t.m[src.StartTs] = src
-		return src
-	}
-	x.AssertTrue(src.StartTs == dst.StartTs)
-	dst.Indices = append(dst.Indices, src.Indices...)
-	return dst
-}
-
-func (t *Txn) SetAbort() {
-	atomic.StoreUint32(&t.shouldAbort, 1)
-}
-
-func (t *Txn) ShouldAbort() bool {
-	return atomic.LoadUint32(&t.shouldAbort) > 0
-}
-
-func (t *Txn) AddDelta(key []byte, p *intern.Posting, checkConflict bool) {
-	t.Lock()
-	defer t.Unlock()
-	t.deltas = append(t.deltas, delta{key: key, posting: p, checkConflict: checkConflict})
-}
-
-func (t *Txn) Fill(ctx *api.TxnContext) {
-	t.Lock()
-	defer t.Unlock()
-	ctx.StartTs = t.StartTs
-	for i := t.nextKeyIdx; i < len(t.deltas); i++ {
-		d := t.deltas[i]
-		if d.checkConflict {
-			// Instead of taking a fingerprint of the keys, send the whole key to Zero. So, Zero can
-			// parse the key and check if that predicate is undergoing a move, hence avoiding #2338.
-			k := base64.StdEncoding.EncodeToString(d.key)
-			ctx.Keys = append(ctx.Keys, k)
-		}
-	}
-	t.nextKeyIdx = len(t.deltas)
-}
-
-// Don't call this for schema mutations. Directly commit them.
-func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
-	tx.Lock()
-	defer tx.Unlock()
-
-	txn := pstore.NewTransactionAt(commitTs, true)
-	defer txn.Discard()
-	// Sort by keys so that we have all postings for same pl side by side.
-	sort.SliceStable(tx.deltas, func(i, j int) bool {
-		return bytes.Compare(tx.deltas[i].key, tx.deltas[j].key) < 0
-	})
-	var prevKey []byte
-	var pl *intern.PostingList
-	var plist *List
-	var err error
-	i := 0
-	for i < len(tx.deltas) {
-		d := tx.deltas[i]
-		if !bytes.Equal(prevKey, d.key) {
-			plist, err = Get(d.key)
-			if err != nil {
-				return err
-			}
-			if plist.AlreadyCommitted(tx.StartTs) {
-				// Delta already exists, so skip the key
-				// There won't be any race from lru eviction, because we don't
-				// commit in memory unless we write delta to disk.
-				i++
-				for i < len(tx.deltas) && bytes.Equal(tx.deltas[i].key, d.key) {
-					i++
-				}
-				continue
-			}
-			pl = new(intern.PostingList)
-		}
-		prevKey = d.key
-		var meta byte
-		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
-			pl.Postings = pl.Postings[:0]
-			// Indicates that this is the full posting list.
-			meta = BitEmptyPosting
-		} else {
-			midx := sort.Search(len(pl.Postings), func(idx int) bool {
-				mp := pl.Postings[idx]
-				return d.posting.Uid <= mp.Uid
-			})
-			if midx >= len(pl.Postings) {
-				pl.Postings = append(pl.Postings, d.posting)
-			} else if pl.Postings[midx].Uid == d.posting.Uid {
-				// Replace
-				pl.Postings[midx] = d.posting
-			} else {
-				pl.Postings = append(pl.Postings, nil)
-				copy(pl.Postings[midx+1:], pl.Postings[midx:])
-				pl.Postings[midx] = d.posting
-			}
-			meta = bitDeltaPosting
-		}
-
-		// delta postings are pointers to the postings present in the Pl present in lru.
-		// commitTs is accessed using RLock & atomics except in marshal so no RLock.
-		// TODO: Fix this hack later
-		plist.Lock()
-		val, err := pl.Marshal()
-		plist.Unlock()
-		x.Check(err)
-		if err = txn.SetWithMeta([]byte(d.key), val, meta); err == badger.ErrTxnTooBig {
-			if err := txn.CommitAt(commitTs, nil); err != nil {
-				return err
-			}
-			txn = pstore.NewTransactionAt(commitTs, true)
-			if err := txn.SetWithMeta([]byte(d.key), val, meta); err != nil {
-				return err
-			}
-		} else if err != nil {
-			return err
-		}
-		i++
-	}
-	if err := txn.CommitAt(commitTs, nil); err != nil {
-		return err
-	}
-	return tx.commitMutationsMemory(ctx, commitTs)
-}
-
-func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error {
-	tx.Lock()
-	defer tx.Unlock()
-	return tx.commitMutationsMemory(ctx, commitTs)
-}
-
-func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
-	for _, d := range tx.deltas {
-		plist, err := Get(d.key)
-		if err != nil {
-			return err
-		}
-		err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
-		for err == ErrRetry {
-			time.Sleep(5 * time.Millisecond)
-			plist, err = Get(d.key)
-			if err != nil {
-				return err
-			}
-			err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (tx *Txn) AbortMutations(ctx context.Context) error {
-	tx.Lock()
-	defer tx.Unlock()
-	for _, d := range tx.deltas {
-		plist, err := Get([]byte(d.key))
-		if err != nil {
-			return err
-		}
-		err = plist.AbortTransaction(ctx, tx.StartTs)
-		for err == ErrRetry {
-			time.Sleep(5 * time.Millisecond)
-			plist, err = Get(d.key)
-			if err != nil {
-				return err
-			}
-			err = plist.AbortTransaction(ctx, tx.StartTs)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	atomic.StoreUint32(&tx.shouldAbort, 1)
-	return nil
-}
-
-func unmarshalOrCopy(plist *intern.PostingList, item *badger.Item) error {
-	// It's delta
-	val, err := item.Value()
+// rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
+func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
+	l, err := GetNoStore(key, math.MaxUint64)
 	if err != nil {
 		return err
 	}
-	if len(val) == 0 {
-		// empty pl
+
+	kvs, err := l.Rollup(nil)
+	if err != nil {
+		return err
+	}
+	// Clear the list from the cache after a rollup.
+	RemoveCacheFor(key)
+
+	const N = uint64(1000)
+	if glog.V(2) {
+		if count := atomic.AddUint64(&ir.count, 1); count%N == 0 {
+			glog.V(2).Infof("Rolled up %d keys", count)
+		}
+	}
+	return writer.Write(&bpb.KVList{Kv: kvs})
+}
+
+func (ir *incrRollupi) addKeyToBatch(key []byte) {
+	batch := ir.keysPool.Get().(*[][]byte)
+	*batch = append(*batch, key)
+	if len(*batch) < 16 {
+		ir.keysPool.Put(batch)
+		return
+	}
+
+	select {
+	case ir.keysCh <- batch:
+	default:
+		// Drop keys and build the batch again. Lossy behavior.
+		*batch = (*batch)[:0]
+		ir.keysPool.Put(batch)
+	}
+}
+
+// Process will rollup batches of 64 keys in a go routine.
+func (ir *incrRollupi) Process(closer *z.Closer) {
+	defer closer.Done()
+
+	writer := NewTxnWriter(pstore)
+	defer writer.Flush()
+
+	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
+	limiter := time.NewTicker(100 * time.Millisecond)
+	defer limiter.Stop()
+	cleanupTick := time.NewTicker(5 * time.Minute)
+	defer cleanupTick.Stop()
+	forceRollupTick := time.NewTicker(500 * time.Millisecond)
+	defer forceRollupTick.Stop()
+
+	var batch *[][]byte
+
+	doRollup := func() {
+		currTs := time.Now().Unix()
+		for _, key := range *batch {
+			hash := z.MemHash(key)
+			if elem := m[hash]; currTs-elem >= 10 {
+				// Key not present or Key present but last roll up was more than 10 sec ago.
+				// Add/Update map and rollup.
+				m[hash] = currTs
+				if err := ir.rollUpKey(writer, key); err != nil {
+					glog.Warningf("Error %v rolling up key %v\n", err, key)
+				}
+			}
+		}
+		// clear the batch and put it back in Sync keysPool
+		*batch = (*batch)[:0]
+		ir.keysPool.Put(batch)
+	}
+
+	for {
+		select {
+		case <-closer.HasBeenClosed():
+			return
+		case <-cleanupTick.C:
+			currTs := time.Now().UnixNano()
+			for hash, ts := range m {
+				// Remove entries from map which have been there for there more than 10 seconds.
+				if currTs-ts >= int64(10*time.Second) {
+					delete(m, hash)
+				}
+			}
+		case <-forceRollupTick.C:
+			batch = ir.keysPool.Get().(*[][]byte)
+			if len(*batch) > 0 {
+				doRollup()
+			} else {
+				ir.keysPool.Put(batch)
+			}
+		case batch = <-ir.keysCh:
+			doRollup()
+			// throttle to 1 batch = 64 rollups per 100 ms.
+			<-limiter.C
+		}
+	}
+}
+
+// ShouldAbort returns whether the transaction should be aborted.
+func (txn *Txn) ShouldAbort() bool {
+	if txn == nil {
+		return false
+	}
+	return atomic.LoadUint32(&txn.shouldAbort) > 0
+}
+
+func (txn *Txn) addConflictKey(conflictKey uint64) {
+	txn.Lock()
+	defer txn.Unlock()
+	if txn.conflicts == nil {
+		txn.conflicts = make(map[uint64]struct{})
+	}
+	if conflictKey > 0 {
+		txn.conflicts[conflictKey] = struct{}{}
+	}
+}
+
+// FillContext updates the given transaction context with data from this transaction.
+func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
+	txn.Lock()
+	ctx.StartTs = txn.StartTs
+
+	for key := range txn.conflicts {
+		// We don'txn need to send the whole conflict key to Zero. Solving #2338
+		// should be done by sending a list of mutating predicates to Zero,
+		// along with the keys to be used for conflict detection.
+		fps := strconv.FormatUint(key, 36)
+		ctx.Keys = append(ctx.Keys, fps)
+	}
+	ctx.Keys = x.Unique(ctx.Keys)
+
+	txn.Unlock()
+	txn.Update()
+	txn.cache.fillPreds(ctx, gid)
+}
+
+// CommitToDisk commits a transaction to disk.
+// This function only stores deltas to the commit timestamps. It does not try to generate a state.
+// State generation is done via rollups, which happen when a snapshot is created.
+// Don't call this for schema mutations. Directly commit them.
+func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
+	if commitTs == 0 {
 		return nil
 	}
-	// Found complete pl, no needn't iterate more
-	if item.UserMeta()&BitUidPosting != 0 {
-		plist.Uids = make([]byte, len(val))
-		copy(plist.Uids, val)
-	} else if len(val) > 0 {
-		x.Check(plist.Unmarshal(val))
+
+	cache := txn.cache
+	cache.Lock()
+	defer cache.Unlock()
+
+	var keys []string
+	for key := range cache.deltas {
+		keys = append(keys, key)
+	}
+
+	var idx int
+	for idx < len(keys) {
+		// writer.update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
+		// that error, writer.update would still commit the transaction and return any error. If
+		// nil, we continue to process the remaining keys.
+		err := writer.update(commitTs, func(btxn *badger.Txn) error {
+			for ; idx < len(keys); idx++ {
+				key := keys[idx]
+				data := cache.deltas[key]
+				if len(data) == 0 {
+					continue
+				}
+				if ts := cache.maxVersions[key]; ts >= commitTs {
+					// Skip write because we already have a write at a higher ts.
+					// Logging here can cause a lot of output when doing Raft log replay. So, let's
+					// not output anything here.
+					continue
+				}
+				err := btxn.SetEntry(&badger.Entry{
+					Key:      []byte(key),
+					Value:    data,
+					UserMeta: BitDeltaPosting,
+				})
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-// constructs the posting list from the disk using the passed iterator.
+// ResetCache will clear all the cached list.
+func ResetCache() {
+	lCache.Clear()
+}
+
+// RemoveCacheFor will delete the list corresponding to the given key.
+func RemoveCacheFor(key []byte) {
+	// TODO: investigate if this can be done by calling Set with a nil value.
+	lCache.Del(key)
+}
+
+// RemoveCachedKeys will delete the cached list by this txn.
+func (txn *Txn) RemoveCachedKeys() {
+	if txn == nil || txn.cache == nil {
+		return
+	}
+	for key := range txn.cache.deltas {
+		lCache.Del(key)
+	}
+}
+
+func WaitForCache() {
+	// TODO Investigate if this is needed and why Jepsen tests fail with the cache enabled.
+	// lCache.Wait()
+}
+
+func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
+	if plist == nil {
+		return errors.Errorf("cannot unmarshal value to a nil posting list of key %s",
+			hex.Dump(item.Key()))
+	}
+
+	return item.Value(func(val []byte) error {
+		if len(val) == 0 {
+			// empty pl
+			return nil
+		}
+		return plist.Unmarshal(val)
+	})
+}
+
+// ReadPostingList constructs the posting list from the disk using the passed iterator.
 // Use forward iterator with allversions enabled in iter options.
-//
-// key would now be owned by the posting list. So, ensure that it isn't reused
-// elsewhere.
+// key would now be owned by the posting list. So, ensure that it isn't reused elsewhere.
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
+	// Previously, ReadPostingList was not checking that a multi-part list could only
+	// be read via the main key. This lead to issues during rollup because multi-part
+	// lists ended up being rolled-up multiple times. This issue was caught by the
+	// uid-set Jepsen test.
+	pk, err := x.Parse(key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
+	}
+	if pk.HasStartUid {
+		// Trying to read a single part of a multi part list. This type of list
+		// should be read using using the main key because the information needed
+		// to access the whole list is stored there.
+		// The function returns a nil list instead. This is safe to do because all
+		// public methods of the List object are no-ops and the list is being already
+		// accessed via the main key in the places where this code is reached (e.g rollups).
+		return nil, ErrInvalidKey
+	}
+
 	l := new(List)
 	l.key = key
-	l.mutationMap = make(map[uint64]*intern.PostingList)
-	l.activeTxns = make(map[uint64]struct{})
-	l.plist = new(intern.PostingList)
+	l.plist = new(pb.PostingList)
+
+	// We use the following block of code to trigger incremental rollup on this key.
+	deltaCount := 0
+	defer func() {
+		if deltaCount > 0 {
+			IncrRollup.addKeyToBatch(key)
+		}
+	}()
 
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
 		item := it.Item()
+		if !bytes.Equal(item.Key(), l.key) {
+			break
+		}
+		l.maxTs = x.Max(l.maxTs, item.Version())
 		if item.IsDeletedOrExpired() {
 			// Don't consider any more versions.
 			break
 		}
-		if !bytes.Equal(item.Key(), l.key) {
-			break
-		}
-		if l.commitTs == 0 {
-			l.commitTs = item.Version()
-		}
 
-		val, err := item.Value()
-		if err != nil {
-			return nil, err
-		}
-		if item.UserMeta()&BitCompletePosting > 0 {
+		switch item.UserMeta() {
+		case BitEmptyPosting:
+			l.minTs = item.Version()
+			return l, nil
+		case BitCompletePosting:
 			if err := unmarshalOrCopy(l.plist, item); err != nil {
 				return nil, err
 			}
 			l.minTs = item.Version()
-			// No need to do Next here. The outer loop can take care of skipping more versions of
-			// the same key.
-			break
-		}
-		if item.UserMeta()&bitDeltaPosting > 0 {
-			pl := &intern.PostingList{}
-			x.Check(pl.Unmarshal(val))
-			pl.Commit = item.Version()
-			for _, mpost := range pl.Postings {
-				// commitTs, startTs are meant to be only in memory, not
-				// stored on disk.
-				mpost.CommitTs = item.Version()
+
+			// No need to do Next here. The outer loop can take care of skipping
+			// more versions of the same key.
+			return l, nil
+		case BitDeltaPosting:
+			err := item.Value(func(val []byte) error {
+				pl := &pb.PostingList{}
+				if err := pl.Unmarshal(val); err != nil {
+					return err
+				}
+				pl.CommitTs = item.Version()
+				for _, mpost := range pl.Postings {
+					// commitTs, startTs are meant to be only in memory, not
+					// stored on disk.
+					mpost.CommitTs = item.Version()
+				}
+				if l.mutationMap == nil {
+					l.mutationMap = make(map[uint64]*pb.PostingList)
+				}
+				l.mutationMap[pl.CommitTs] = pl
+				return nil
+			})
+			if err != nil {
+				return nil, err
 			}
-			l.mutationMap[pl.Commit] = pl
-		} else {
-			x.Fatalf("unexpected meta: %d", item.UserMeta())
+			deltaCount++
+		case BitSchemaPosting:
+			return nil, errors.Errorf(
+				"Trying to read schema in ReadPostingList for key: %s", hex.Dump(key))
+		default:
+			return nil, errors.Errorf(
+				"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
 		}
 		if item.DiscardEarlierVersions() {
 			break
@@ -442,174 +394,46 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
-func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
-	l := new(List)
-	l.key = key
-	l.mutationMap = make(map[uint64]*intern.PostingList)
-	l.activeTxns = make(map[uint64]struct{})
-	l.plist = new(intern.PostingList)
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+	cachedVal, ok := lCache.Get(key)
+	if ok {
+		l, ok := cachedVal.(*List)
+		if ok && l != nil {
+			// No need to clone the immutable layer or the key since mutations will not modify it.
+			lCopy := &List{
+				minTs: l.minTs,
+				maxTs: l.maxTs,
+				key:   key,
+				plist: l.plist,
+			}
+			if l.mutationMap != nil {
+				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+				for ts, pl := range l.mutationMap {
+					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+				}
+			}
+			return lCopy, nil
+		}
+	}
+
+	if pstore.IsClosed() {
+		return nil, badger.ErrDBClosed
+	}
+	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
-	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
-		return l, nil
-	}
+	// When we do rollups, an older version would go to the top of the LSM tree, which can cause
+	// issues during txn.Get. Therefore, always iterate.
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
+	iterOpts.PrefetchValues = false
+	itr := txn.NewKeyIterator(key, iterOpts)
+	defer itr.Close()
+	itr.Seek(key)
+	l, err := ReadPostingList(key, itr)
 	if err != nil {
 		return l, err
 	}
-	if item.UserMeta()&BitCompletePosting > 0 {
-		err = unmarshalOrCopy(l.plist, item)
-		l.minTs = item.Version()
-		l.commitTs = item.Version()
-	} else {
-		iterOpts := badger.DefaultIteratorOptions
-		iterOpts.AllVersions = true
-		it := txn.NewIterator(iterOpts)
-		defer it.Close()
-		it.Seek(key)
-		l, err = ReadPostingList(key, it)
-	}
-
-	if err != nil {
-		return l, err
-	}
-
-	l.onDisk = 1
-	l.Lock()
-	size := l.calculateSize()
-	l.Unlock()
-	x.BytesRead.Add(int64(size))
-	atomic.StoreInt32(&l.estimatedSize, size)
+	lCache.Set(key, l, 0)
 	return l, nil
-}
-
-type bTreeIterator struct {
-	keys    [][]byte
-	idx     int
-	reverse bool
-	prefix  []byte
-}
-
-func (bi *bTreeIterator) Next() {
-	bi.idx++
-}
-
-func (bi *bTreeIterator) Key() []byte {
-	x.AssertTrue(bi.Valid())
-	return bi.keys[bi.idx]
-}
-
-func (bi *bTreeIterator) Valid() bool {
-	return bi.idx < len(bi.keys)
-}
-
-func (bi *bTreeIterator) Seek(key []byte) {
-	cont := func(key []byte) bool {
-		if !bytes.HasPrefix(key, bi.prefix) {
-			return false
-		}
-		bi.keys = append(bi.keys, key)
-		return true
-	}
-	if !bi.reverse {
-		btree.AscendGreaterOrEqual(key, cont)
-	} else {
-		btree.DescendLessOrEqual(key, cont)
-	}
-}
-
-type TxnPrefixIterator struct {
-	btreeIter  *bTreeIterator
-	badgerIter *badger.Iterator
-	prefix     []byte
-	reverse    bool
-	curKey     []byte
-	userMeta   byte // userMeta stored as part of badger item, used to skip empty PL in has query.
-}
-
-func NewTxnPrefixIterator(txn *badger.Txn,
-	iterOpts badger.IteratorOptions, prefix, key []byte) *TxnPrefixIterator {
-	x.AssertTrue(iterOpts.PrefetchValues == false)
-	txnIt := new(TxnPrefixIterator)
-	txnIt.reverse = iterOpts.Reverse
-	txnIt.prefix = prefix
-	txnIt.btreeIter = &bTreeIterator{
-		reverse: iterOpts.Reverse,
-		prefix:  prefix,
-	}
-	txnIt.btreeIter.Seek(key)
-	// Create iterator only after copying the keys from btree, or else there could
-	// be race after creating iterator and before reading btree. Some keys might end up
-	// getting deleted and iterator won't be initialized with new memtbales.
-	txnIt.badgerIter = txn.NewIterator(iterOpts)
-	txnIt.badgerIter.Seek(key)
-	txnIt.Next()
-	return txnIt
-}
-
-func (t *TxnPrefixIterator) Valid() bool {
-	return len(t.curKey) > 0
-}
-
-func (t *TxnPrefixIterator) compare(key1 []byte, key2 []byte) int {
-	if !t.reverse {
-		return bytes.Compare(key1, key2)
-	}
-	return bytes.Compare(key2, key1)
-}
-
-func (t *TxnPrefixIterator) Next() {
-	if len(t.curKey) > 0 {
-		// Avoid duplicate keys during merging.
-		for t.btreeIter.Valid() && t.compare(t.btreeIter.Key(), t.curKey) <= 0 {
-			t.btreeIter.Next()
-		}
-		for t.badgerIter.ValidForPrefix(t.prefix) &&
-			t.compare(t.badgerIter.Item().Key(), t.curKey) <= 0 {
-			t.badgerIter.Next()
-		}
-	}
-
-	t.userMeta = 0 // reset it.
-	if !t.btreeIter.Valid() && !t.badgerIter.ValidForPrefix(t.prefix) {
-		t.curKey = nil
-		return
-	} else if !t.badgerIter.ValidForPrefix(t.prefix) {
-		t.storeKey(t.btreeIter.Key())
-		t.btreeIter.Next()
-	} else if !t.btreeIter.Valid() {
-		t.userMeta = t.badgerIter.Item().UserMeta()
-		t.storeKey(t.badgerIter.Item().Key())
-		t.badgerIter.Next()
-	} else { // Both are valid
-		if t.compare(t.btreeIter.Key(), t.badgerIter.Item().Key()) < 0 {
-			t.storeKey(t.btreeIter.Key())
-			t.btreeIter.Next()
-		} else {
-			t.userMeta = t.badgerIter.Item().UserMeta()
-			t.storeKey(t.badgerIter.Item().Key())
-			t.badgerIter.Next()
-		}
-	}
-}
-
-func (t *TxnPrefixIterator) UserMeta() byte {
-	return t.userMeta
-}
-
-func (t *TxnPrefixIterator) storeKey(key []byte) {
-	if cap(t.curKey) < len(key) {
-		t.curKey = make([]byte, 2*len(key))
-	}
-	t.curKey = t.curKey[:len(key)]
-	copy(t.curKey, key)
-}
-
-func (t *TxnPrefixIterator) Key() []byte {
-	return t.curKey
-}
-
-func (t *TxnPrefixIterator) Close() {
-	t.badgerIter.Close()
 }

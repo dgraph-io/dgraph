@@ -1,0 +1,134 @@
+[
+    {
+        "uid": "_:bangladesh",
+        "dgraph.type": "Country",
+        "Country.name": "Bangladesh"
+    },
+    {
+        "uid": "_:mozambique",
+        "dgraph.type": "Country",
+        "Country.name": "Mozambique"
+    },
+    {
+        "uid": "_:angola",
+        "dgraph.type": "Country",
+        "Country.name": "Angola"
+    },
+    {
+        "uid": "_:author1",
+        "dgraph.type": "test.dgraph.author",
+        "test.dgraph.author.name": "Ann Author",
+        "test.dgraph.author.dob": "2000-01-01",
+        "test.dgraph.author.reputation": 6.6,
+        "test.dgraph.author.country": { "uid": "_:bangladesh" },
+        "test.dgraph.author.posts": [{ "uid": "_:post1" }, { "uid": "_:post3" }]
+    },
+    {
+        "uid": "_:author2",
+        "dgraph.type": "test.dgraph.author",
+        "test.dgraph.author.name": "Ann Other Author",
+        "test.dgraph.author.dob": "1988-01-01",
+        "test.dgraph.author.reputation": 8.9,
+        "test.dgraph.author.country": { "uid": "_:angola" },
+        "test.dgraph.author.posts": [{ "uid": "_:post2" }, { "uid": "_:post4" }]
+    },
+    {
+        "uid": "_:author3",
+        "dgraph.type": "test.dgraph.author",
+        "test.dgraph.author.name": "Three Author",
+        "test.dgraph.author.dob": "2001-01-01",
+        "test.dgraph.author.reputation": 9.1,
+        "test.dgraph.author.country": { "uid": "_:bangladesh" }
+    },
+    {
+        "uid": "_:post1",
+        "dgraph.type": "myPost",
+        "myPost.title": "Introducing GraphQL in Dgraph",
+        "text": "The worlds best graph database, now with the best GraphQL support",
+        "myPost.tags": ["GraphQL", "Dgraph", "Database"],
+        "test.dgraph.topic": "GraphQL",
+        "myPost.numLikes": 100,
+        "myPost.numViews": 280000000000,
+        "is_published": true,
+        "myPost.postType": "Fact",
+        "post.author": { "uid": "_:author1" }
+    },
+    {
+        "uid": "_:post2",
+        "dgraph.type": "myPost",
+        "myPost.title": "Learning GraphQL in Dgraph",
+        "text": "Where do I learn more about GraphQL support in Dgraph?",
+        "myPost.tags": ["GraphQL", "Dgraph"],
+        "test.dgraph.topic": "Learn",
+        "myPost.numLikes": 87,
+        "myPost.numViews": 274877906944,
+        "is_published": true,
+        "myPost.postType": "Question",
+        "post.author": { "uid": "_:author2" }
+    },
+    {
+        "uid": "_:post3",
+        "dgraph.type": "myPost",
+        "myPost.title": "GraphQL doco",
+        "text": "I think the best place to learn GraphQL support in Dgraph is the excellent docs!",
+        "myPost.tags": ["GraphQL", "Dgraph"],
+        "test.dgraph.topic": "Docs",
+        "myPost.numLikes": 77,
+        "myPost.numViews": 2147483648,
+        "is_published": true,
+        "myPost.postType": "Opinion",
+        "post.author": { "uid": "_:author1" }
+    },
+    {
+        "uid": "_:post4",
+        "dgraph.type": "myPost",
+        "myPost.title": "Random post",
+        "text": "this post is not worth publishing",
+        "myPost.tags": ["Random"],
+        "test.dgraph.topic": "Random",
+        "myPost.numLikes": 0,
+        "myPost.numViews": 0,
+        "is_published": false,
+        "myPost.postType": "Fact",
+        "post.author": { "uid": "_:author2" }
+    },
+    {
+        "uid": "_:nsw",
+        "dgraph.type": "State",
+        "State.name": "NSW",
+        "State.xcode": "nsw"
+    },
+    {
+        "uid": "_:nusa",
+        "dgraph.type": "State",
+        "State.name": "Nusa",
+        "State.xcode": "nusa"
+    },
+    {
+        "uid": "_:mh",
+        "dgraph.type": "State",
+        "State.name": "Maharashtra",
+        "State.xcode": "mh",
+        "inCountry": {"uid":  "_:india"}
+    },
+    {
+        "uid": "_:gj",
+        "dgraph.type": "State",
+        "State.name": "Gujarat",
+        "State.xcode": "gj",
+        "inCountry": {"uid":  "_:india"}
+    },
+    {
+        "uid": "_:ka",
+        "dgraph.type": "State",
+        "State.name": "Karnataka",
+        "State.xcode": "ka",
+        "inCountry": {"uid":  "_:india"}
+    },
+    {
+        "uid": "_:india",
+        "dgraph.type": "Country",
+        "Country.name": "India",
+        "hasStates": [{ "uid": "_:mh" }, { "uid": "_:gj" }, { "uid":  "_:ka"}]
+    }
+]

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/tlstest
+dir=$(dirname "${BASH_SOURCE[0]}")
+pushd $dir
 set -e
 make test
 popd

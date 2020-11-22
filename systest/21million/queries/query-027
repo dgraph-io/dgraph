@@ -1,0 +1,34 @@
+{
+  me(func: allofterms(name@en, "Baz Luhrmann")) {
+    name@en
+    director.film (first: 5, orderasc: name@en) {
+      name@en
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "name@en": "Baz Luhrmann",
+      "director.film": [
+        {
+          "name@en": "Australia"
+        },
+        {
+          "name@en": "Moulin Rouge!"
+        },
+        {
+          "name@en": "No. 5 the Film"
+        },
+        {
+          "name@en": "Puccini: La Boheme (Sydney Opera)"
+        },
+        {
+          "name@en": "Romeo + Juliet"
+        }
+      ]
+    }
+  ]
+}
+

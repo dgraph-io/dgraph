@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package main
@@ -12,27 +21,28 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/x"
-	"github.com/dgraph-io/dgo/y"
-	"google.golang.org/grpc"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
-	dgraAddr = flag.String("d", "localhost:9081", "dgraph address")
-	concurr  = flag.Int("c", 5, "number of concurrent upserts per account")
+	alpha   = flag.String("alpha", "localhost:9180", "dgraph alpha address")
+	concurr = flag.Int("c", 3, "number of concurrent upserts per account")
 )
 
 var (
 	firsts = []string{"Paul", "Eric", "Jack", "John", "Martin"}
 	lasts  = []string{"Brown", "Smith", "Robinson", "Waters", "Taylor"}
 	ages   = []int{20, 25, 30, 35}
+	types  = []string{"CEO", "COO", "CTO", "CFO"}
 )
 
 type account struct {
@@ -59,18 +69,13 @@ func init() {
 
 func main() {
 	flag.Parse()
-	c := newClient()
-	setup(c)
-	doUpserts(c)
-	checkIntegrity(c)
-}
-
-func newClient() *dgo.Dgraph {
-	d, err := grpc.Dial(*dgraAddr, grpc.WithInsecure())
+	c, err := testutil.DgraphClientWithGroot(*alpha)
 	x.Check(err)
-	return dgo.NewDgraphClient(
-		api.NewDgraphClient(d),
-	)
+	setup(c)
+	fmt.Println("Doing upserts")
+	doUpserts(c)
+	fmt.Println("Checking integrity")
+	checkIntegrity(c)
 }
 
 func setup(c *dgo.Dgraph) {
@@ -78,14 +83,15 @@ func setup(c *dgo.Dgraph) {
 	x.Check(c.Alter(ctx, &api.Operation{
 		DropAll: true,
 	}))
-	x.Check(c.Alter(ctx, &api.Operation{
+	op := &api.Operation{
 		Schema: `
 			first:  string   @index(term) @upsert .
 			last:   string   @index(hash) @upsert .
 			age:    int      @index(int)  @upsert .
 			when:   int                   .
 		`,
-	}))
+	}
+	x.Check(c.Alter(ctx, op))
 }
 
 func doUpserts(c *dgo.Dgraph) {
@@ -111,17 +117,19 @@ var (
 func upsert(c *dgo.Dgraph, acc account) {
 	for {
 		if time.Since(lastStatus) > 100*time.Millisecond {
-			fmt.Printf("Success: %d Retries: %d\n",
+			fmt.Printf("[%s] Success: %d Retries: %d\n", time.Now().Format(time.Stamp),
 				atomic.LoadUint64(&successCount), atomic.LoadUint64(&retryCount))
 			lastStatus = time.Now()
 		}
 		err := tryUpsert(c, acc)
-		if err == nil {
+		switch err {
+		case nil:
 			atomic.AddUint64(&successCount, 1)
 			return
-		}
-		if err != y.ErrAborted {
-			x.Check(err)
+		case dgo.ErrAborted:
+			// pass
+		default:
+			fmt.Printf("ERROR: %v", err)
 		}
 		atomic.AddUint64(&retryCount, 1)
 	}
@@ -131,17 +139,22 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 	ctx := context.Background()
 
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { _ = txn.Discard(ctx) }()
 	q := fmt.Sprintf(`
 		{
 			get(func: eq(first, %q)) @filter(eq(last, %q) AND eq(age, %d)) {
 				uid
+				expand(_all_) {uid}
 			}
 		}
 	`, acc.first, acc.last, acc.age)
 	resp, err := txn.Query(ctx, q)
+	if err != nil &&
+		(strings.Contains(err.Error(), "Transaction is too old") ||
+			strings.Contains(err.Error(), "less than minTs")) {
+		return err
+	}
 	x.Check(err)
-
 	decode := struct {
 		Get []struct {
 			Uid *string
@@ -150,6 +163,8 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 	x.Check(json.Unmarshal(resp.GetJson(), &decode))
 
 	x.AssertTrue(len(decode.Get) <= 1)
+	t := rand.Intn(len(types))
+
 	var uid string
 	if len(decode.Get) == 1 {
 		x.AssertTrue(decode.Get[0].Uid != nil)
@@ -159,8 +174,9 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 			_:acct <first> %q .
 			_:acct <last>  %q .
 			_:acct <age>   "%d"^^<xs:int> .
-		`,
-			acc.first, acc.last, acc.age,
+			_:acct <%s> "" .
+		 `,
+			acc.first, acc.last, acc.age, types[t],
 		)
 		mu := &api.Mutation{SetNquads: []byte(nqs)}
 		assigned, err := txn.Mutate(ctx, mu)
@@ -169,7 +185,6 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 		}
 		uid = assigned.GetUids()["acct"]
 		x.AssertTrue(uid != "")
-
 	}
 
 	nq := fmt.Sprintf(`

@@ -1,15 +1,25 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package query
 
 import (
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 type mathTree struct {
@@ -22,7 +32,7 @@ type mathTree struct {
 
 // processBinary handles the binary operands like
 // +, -, *, /, %, max, min, logbase
-func processBinary(mNode *mathTree) (err error) {
+func processBinary(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
 
@@ -45,7 +55,7 @@ func processBinary(mNode *mathTree) (err error) {
 			// Use the constant value that was supplied.
 			rVal = cr
 		}
-		err = ag.ApplyVal(lVal)
+		err := ag.ApplyVal(lVal)
 		if err != nil {
 			return err
 		}
@@ -60,13 +70,12 @@ func processBinary(mNode *mathTree) (err error) {
 		return nil
 	}
 
-	if mpl != nil || mpr != nil {
+	if len(mpl) != 0 || len(mpr) != 0 {
 		for k := range mpr {
 			if err := f(k); err != nil {
 				return err
 			}
 		}
-
 		for k := range mpl {
 			if _, ok := mpr[k]; ok {
 				continue
@@ -76,7 +85,7 @@ func processBinary(mNode *mathTree) (err error) {
 			}
 		}
 		mNode.Val = destMap
-		return
+		return nil
 	}
 
 	if cl.Value != nil && cr.Value != nil {
@@ -84,7 +93,7 @@ func processBinary(mNode *mathTree) (err error) {
 		ag := aggregator{
 			name: aggName,
 		}
-		err = ag.ApplyVal(cl)
+		err := ag.ApplyVal(cl)
 		if err != nil {
 			return err
 		}
@@ -95,13 +104,12 @@ func processBinary(mNode *mathTree) (err error) {
 		mNode.Const, err = ag.Value()
 		return err
 	}
-	x.Fatalf("Empty maps and constant")
 	return nil
 }
 
 // processUnary handles the unary operands like
 // u-, log, exp, since, floor, ceil
-func processUnary(mNode *mathTree) (err error) {
+func processUnary(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
 	aggName := mNode.Fn
@@ -111,7 +119,7 @@ func processUnary(mNode *mathTree) (err error) {
 	}
 	if ch.Const.Value != nil {
 		// Use the constant value that was supplied.
-		err = ag.ApplyVal(ch.Const)
+		err := ag.ApplyVal(ch.Const)
 		if err != nil {
 			return err
 		}
@@ -120,7 +128,7 @@ func processUnary(mNode *mathTree) (err error) {
 	}
 
 	for k, val := range srcMap {
-		err = ag.ApplyVal(val)
+		err := ag.ApplyVal(val)
 		if err != nil {
 			return err
 		}
@@ -137,7 +145,7 @@ func processUnary(mNode *mathTree) (err error) {
 // processBinaryBoolean handles the binary operands which
 // return a boolean value.
 // All the inequality operators (<, >, <=, >=, !=, ==)
-func processBinaryBoolean(mNode *mathTree) (err error) {
+func processBinaryBoolean(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
 	aggName := mNode.Fn
@@ -152,7 +160,7 @@ func processBinaryBoolean(mNode *mathTree) (err error) {
 		}
 		res, err := compareValues(aggName, val, curVal)
 		if err != nil {
-			return x.Wrapf(err, "Wrong values in comaprison function.")
+			return errors.Wrapf(err, "Wrong values in comparison function.")
 		}
 		destMap[k] = types.Val{
 			Tid:   types.BoolID,
@@ -164,12 +172,12 @@ func processBinaryBoolean(mNode *mathTree) (err error) {
 }
 
 // processTernary handles the ternary operand cond()
-func processTernary(mNode *mathTree) (err error) {
+func processTernary(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
 	condMap := mNode.Child[0].Val
-	if condMap == nil {
-		return x.Errorf("Expected a value variable in %v but missing.", aggName)
+	if len(condMap) == 0 {
+		return errors.Errorf("Expected a value variable in %v but missing.", aggName)
 	}
 	varOne := mNode.Child[1].Val
 	varTwo := mNode.Child[2].Val
@@ -179,7 +187,7 @@ func processTernary(mNode *mathTree) (err error) {
 		var res types.Val
 		v, ok := val.Value.(bool)
 		if !ok {
-			return x.Errorf("First variable of conditional function not a bool value")
+			return errors.Errorf("First variable of conditional function not a bool value")
 		}
 		if v {
 			// Pick the value of first map.
@@ -202,13 +210,13 @@ func processTernary(mNode *mathTree) (err error) {
 	return nil
 }
 
-func evalMathTree(mNode *mathTree) (err error) {
+func evalMathTree(mNode *mathTree) error {
 	if mNode.Const.Value != nil {
 		return nil
 	}
 	if mNode.Var != "" {
-		if mNode.Val == nil {
-			return x.Errorf("Variable %v not yet populated or missing.", mNode.Var)
+		if len(mNode.Val) == 0 {
+			glog.V(2).Infof("Variable %v not yet populated or missing.", mNode.Var)
 		}
 		// This is a leaf node whose value is already populated. So return.
 		return nil
@@ -225,7 +233,7 @@ func evalMathTree(mNode *mathTree) (err error) {
 	aggName := mNode.Fn
 	if isUnary(aggName) {
 		if len(mNode.Child) != 1 {
-			return x.Errorf("Function %v expects 1 argument. But got: %v", aggName,
+			return errors.Errorf("Function %v expects 1 argument. But got: %v", aggName,
 				len(mNode.Child))
 		}
 		return processUnary(mNode)
@@ -233,7 +241,7 @@ func evalMathTree(mNode *mathTree) (err error) {
 
 	if isBinary(aggName) {
 		if len(mNode.Child) != 2 {
-			return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
+			return errors.Errorf("Function %v expects 2 argument. But got: %v", aggName,
 				len(mNode.Child))
 		}
 		return processBinary(mNode)
@@ -241,7 +249,7 @@ func evalMathTree(mNode *mathTree) (err error) {
 
 	if isBinaryBoolean(aggName) {
 		if len(mNode.Child) != 2 {
-			return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
+			return errors.Errorf("Function %v expects 2 argument. But got: %v", aggName,
 				len(mNode.Child))
 		}
 		return processBinaryBoolean(mNode)
@@ -249,11 +257,11 @@ func evalMathTree(mNode *mathTree) (err error) {
 
 	if isTernary(aggName) {
 		if len(mNode.Child) != 3 {
-			return x.Errorf("Function %v expects 3 argument. But got: %v", aggName,
+			return errors.Errorf("Function %v expects 3 argument. But got: %v", aggName,
 				len(mNode.Child))
 		}
 		return processTernary(mNode)
 	}
 
-	return x.Errorf("Unhandled Math operator: %v", aggName)
+	return errors.Errorf("Unhandled Math operator: %v", aggName)
 }

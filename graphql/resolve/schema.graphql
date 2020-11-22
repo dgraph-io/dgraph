@@ -1,0 +1,381 @@
+# Test schema that contains an example of everything that's useful to
+# test for query rewriting.
+
+type Hotel {
+    id: ID!
+    name: String!
+    location: Point @search
+    area: Polygon @search
+    branches: MultiPolygon @search
+}
+
+type Country {
+        id: ID!
+        name: String! @search(by: [trigram, exact])
+        states: [State] @hasInverse(field: country)
+}
+
+type State {
+        code: String! @id
+        country: Country
+        name: String!
+        capital: String
+}
+
+type Author {
+        id: ID!
+        name: String! @search(by: [hash])
+        dob: DateTime @search
+        reputation: Float @search
+        country: Country
+        posts: [Post!] @hasInverse(field: author)
+}
+
+type Editor {
+        id: ID!
+        code: String! @id
+        name: String! @search(by: [hash])
+}
+
+type Post {
+        postID: ID!
+        title: String! @search(by: [term])
+        text: String @search(by: [fulltext])
+        tags: [String] @search(by: [exact])
+        numLikes: Int @search
+        isPublished: Boolean @search
+        postType: [PostType] @search
+        author: Author!
+	category: Category @hasInverse(field: posts)
+	comments: [Comment]
+        ps: PostSecret
+}
+
+type PostSecret {
+       title: String! @id
+}
+
+type Category {
+        id: ID
+        name: String
+        posts: [Post]
+        iAmDeprecated: String @deprecated(reason: "because")
+}
+
+enum PostType {
+        Fact
+        Question
+        Opinion
+}
+
+interface Character {
+        id: ID!
+        name: String! @search
+}
+
+interface Employee {
+        ename: String!
+}
+
+type Director implements Character {
+        movies: [String!]
+}
+
+type Human implements Character & Employee {
+        dob: DateTime
+        female: Boolean
+}
+
+# just for testing filters on enum types
+
+type Verification {
+  name: String @search(by: [exact])
+  status: [Status!]! @search(by: [exact])
+  prevStatus: Status! @search
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  DEACTIVATED
+}
+
+# just for testing singluar (non-list) edges in both directions
+
+type House {
+        id: ID!
+        owner: Owner @hasInverse(field: house)
+}
+
+type Owner {
+        id: ID!
+        house: House
+}
+
+# for testing ~reverse predicate in @dgraph directive
+type Movie {
+        id: ID!
+        name: String!
+        director: [MovieDirector] @dgraph(pred: "~directed.movies")
+}
+
+type MovieDirector {
+        id: ID!
+        name: String!
+        directed: [Movie] @dgraph(pred: "directed.movies")
+}
+
+type Lab {
+        name: String! @id
+        computers: [Computer]
+}
+
+# just for testing XID remove in list
+type Computer {
+	owners: [ComputerOwner!]
+	name: String! @id
+}
+
+type ComputerOwner {
+	name: String! @id
+	nickName: String
+	computers: Computer! @hasInverse(field: owners)
+}
+
+type User @secret(field: "pwd") {
+	name: String! @id
+}
+
+# For testing duplicate XID in single mutation
+type District {
+	code: String! @id
+	name: String!
+	cities: [City] @hasInverse(field: district)
+}
+
+type City {
+	id: ID!
+	name: String!
+	district: District
+}
+
+# For testing duplicate XID in single mutation for interface
+interface People {
+	id: ID!
+	xid: String! @id
+	name: String!
+}
+
+type Teacher implements People {
+	subject: String
+	teaches: [Student]
+}
+
+type Student implements People {
+        taughtBy: [Teacher] @hasInverse(field: "teaches")
+}
+
+type Comment {
+    id: ID!
+    author: String!
+    title: String
+    content: String @custom(http: {
+              url: "http://api-gateway.com/post/",
+              method: "GET",
+              operation: "batch",
+              body: "{ myId: $id, theAuthor: $author}",
+              forwardHeaders: ["X-App-Token"]})
+
+    url: String! @id
+    ups: Int!
+    downs: Int
+    relatedUsers: [User] @custom(http: {
+              url: "http://api-gateway.com/relatedPosts",
+              method: "POST",
+              operation: "single",
+              body: "{ myId: $url }"})
+}
+
+type Query {
+	myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+		url: "http://myapi.com/favMovies/$id?name=$name&num=$num",
+		method: "GET"
+	})
+
+	myFavoriteMoviesPart2(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+		url: "http://myapi.com/favMovies/$id?name=$name&num=$num",
+		method: "POST",
+                body: "{ id: $id, name: $name, director: { number: $num }}",
+                forwardHeaders: ["X-App-Token", "Auth0-token"]
+        })
+}
+
+input MovieDirectorInput {
+        id: ID
+        name: String
+        directed: [MovieInput]
+}
+
+input MovieInput {
+        id: ID
+        name: String
+        director: [MovieDirectorInput]
+}
+
+type Mutation {
+        createMyFavouriteMovies(input: [MovieInput!]): [Movie] @custom(http: {
+                url: "http://myapi.com/favMovies",
+                method: "POST",
+                body: "{ movies: $input}",
+                forwardHeaders: ["X-App-Token", "Auth0-token"]
+        })
+        updateMyFavouriteMovie(id: ID!, input: MovieInput!): Movie @custom(http: {
+                url: "http://myapi.com/favMovies/$id",
+                method: "PATCH",
+                body: "{ movie: $input}"
+        })
+        deleteMyFavouriteMovie(id: ID!): Movie @custom(http: {
+                url: "http://myapi.com/favMovies/$id",
+                method: "DELETE"
+        })
+}
+
+type Message {
+    content: String! @dgraph(pred: "post")
+    author: String @dgraph(pred: "<职业>")
+}
+
+interface X {
+    id: ID!
+    username: String! @id
+    age: Int
+}
+type Y implements X @auth(
+    query: { rule: """
+      query($USER: String!) {
+        queryY(filter: { username: { eq: $USER } }) {
+          __typename
+        }
+      }
+    """ }
+){
+  userRole: String @search(by: [hash])
+}
+
+type Post1 {
+  id: String! @id
+  content: String
+  comments: [Comment1]
+}
+
+type Person1 {
+  id: String! @id
+  name: String
+}
+
+type Comment1 {
+  id: String! @id
+  message: String
+  replies: [Comment1]
+}
+
+type Tweets {
+    id: String! @id
+    score: Int
+}
+
+"""
+This is used for fragment related testing
+"""
+interface Thing {
+    name: String # field to act as a common inherited field for both ThingOne and ThingTwo
+}
+
+type ThingOne implements Thing {
+    id: ID! # ID field with same name as the ID field in ThingTwo
+    color: String # field with same name as a field in ThingTwo
+    prop: String @dgraph(pred: "prop") # field with same name and same dgraph predicate as a field in ThingTwo
+    usedBy: String # field with different name than any field in ThingTwo
+}
+
+type ThingTwo implements Thing {
+    id: ID!
+    color: String
+    prop: String @dgraph(pred: "prop")
+    owner: String
+}
+
+type Person {
+    id: ID!
+    name: String @search(by: [hash])
+    friends: [Person] @hasInverse(field: friends)
+}
+
+interface A {
+    name: String! @id
+}
+
+type B implements A {
+    id: ID!
+}
+
+# union testing - start
+enum AnimalCategory {
+    Fish
+    Amphibian
+    Reptile
+    Bird
+    Mammal
+    InVertebrate
+}
+
+interface Animal {
+    id: ID!
+    category: AnimalCategory @search
+}
+
+type Dog implements Animal {
+    breed: String @search
+}
+
+type Parrot implements Animal {
+    repeatsWords: [String]
+}
+
+type Cheetah implements Animal {
+    speed: Float
+}
+
+"""
+This type specifically doesn't implement any interface.
+We need this to test out all cases with union.
+"""
+type Plant {
+    id: ID!
+    breed: String # field with same name as a field in type Dog
+}
+
+union HomeMember = Dog | Parrot | Human | Plant
+
+type Zoo {
+    id: ID!
+    animals: [Animal]
+    city: String
+}
+
+type Home {
+    id: ID!
+    address: String
+    members: [HomeMember]
+    favouriteMember: HomeMember
+}
+# union testing - end
+
+type Workflow {
+    id: ID!
+    nodes: [Node!]
+}
+
+type Node {
+    name: String!
+}

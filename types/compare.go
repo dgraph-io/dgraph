@@ -1,14 +1,24 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package types
 
 import "github.com/dgraph-io/dgraph/x"
 
+// CompareVals compares two values using the given comparison type.
 // Should be used only in filtering arg1 by comparing with arg2.
 // arg2 is reference Val to which arg1 is compared.
 func CompareVals(op string, arg1, arg2 Val) bool {
@@ -34,4 +44,11 @@ func CompareVals(op string, arg1, arg2 Val) bool {
 		x.Fatalf("Unknown ineqType %v", op)
 	}
 	return false
+}
+
+// CompareBetween compares if the dst value lie between
+// two values val1 and val2(both inclusive).
+func CompareBetween(dst, val1, val2 Val) bool {
+	return CompareVals("ge", dst, val1) &&
+		CompareVals("le", dst, val2)
 }

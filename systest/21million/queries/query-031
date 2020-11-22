@@ -1,0 +1,80 @@
+{
+  me(func: allofterms(name@en, "Jean-Pierre Jeunet")) {
+    name@fr
+    director.film(orderasc: initial_release_date) {
+      name@fr
+      name@en
+      initial_release_date
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "name@fr": "Jean-Pierre Jeunet",
+      "director.film": [
+        {
+          "name@fr": "L'Évasion",
+          "name@en": "L'évasion",
+          "initial_release_date": "1978-01-01T00:00:00Z"
+        },
+        {
+          "name@fr": "Le Manège",
+          "name@en": "Le manège",
+          "initial_release_date": "1980-01-01T00:00:00Z"
+        },
+        {
+          "name@fr": "Le Bunker de la dernière rafale",
+          "name@en": "The Bunker of the Last Gunshots",
+          "initial_release_date": "1981-01-01T00:00:00Z"
+        },
+        {
+          "name@fr": "Pas de repos pour Billy Brakko",
+          "name@en": "Pas de repos pour Billy Brakko",
+          "initial_release_date": "1984-01-01T00:00:00Z"
+        },
+        {
+          "name@fr": "Foutaises",
+          "name@en": "Things I Like, Things I Don't Like",
+          "initial_release_date": "1989-01-01T00:00:00Z"
+        },
+        {
+          "name@fr": "Delicatessen",
+          "name@en": "Delicatessen",
+          "initial_release_date": "1991-04-17T00:00:00Z"
+        },
+        {
+          "name@fr": "La Cité des enfants perdus",
+          "name@en": "The City of Lost Children",
+          "initial_release_date": "1995-05-01T00:00:00Z"
+        },
+        {
+          "name@fr": "Alien, la résurrection",
+          "name@en": "Alien: Resurrection",
+          "initial_release_date": "1997-11-06T00:00:00Z"
+        },
+        {
+          "name@fr": "Le Fabuleux Destin d'Amélie Poulain",
+          "name@en": "Amélie",
+          "initial_release_date": "2001-04-25T00:00:00Z"
+        },
+        {
+          "name@fr": "Un long dimanche de fiançailles",
+          "name@en": "A Very Long Engagement",
+          "initial_release_date": "2004-10-27T00:00:00Z"
+        },
+        {
+          "name@fr": "Micmacs à tire-larigot",
+          "name@en": "Micmacs",
+          "initial_release_date": "2009-09-15T00:00:00Z"
+        },
+        {
+          "name@fr": "L'Extravagant Voyage du jeune et prodigieux T. S. Spivet",
+          "name@en": "The Young and Prodigious Spivet",
+          "initial_release_date": "2013-09-28T00:00:00Z"
+        }
+      ]
+    }
+  ]
+}

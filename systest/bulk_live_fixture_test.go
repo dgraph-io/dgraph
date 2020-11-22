@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package main
@@ -11,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -21,50 +29,93 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/pkg/errors"
 )
-
-func init() {
-	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
-	cmd.Env = os.Environ()
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
-	}
-}
 
 var rootDir = filepath.Join(os.TempDir(), "dgraph_systest")
 
 type suite struct {
-	t *testing.T
-
-	liveCluster *DgraphCluster
+	t           *testing.T
 	bulkCluster *DgraphCluster
+	opts        suiteOpts
+}
+
+type suiteOpts struct {
+	schema         string
+	gqlSchema      string
+	rdfs           string
+	skipBulkLoader bool
+	skipLiveLoader bool
+}
+
+func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
+	t.Skip("TODO: Switch this to use Docker container")
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+
+	err = dg.Alter(context.Background(), &api.Operation{
+		DropAll: true,
+	})
+	if err != nil {
+		t.Fatalf("Could not drop old data: %v", err)
+	}
+
+	if testing.Short() {
+		t.Skip("Skipping system test with long runtime.")
+	}
+
+	s := &suite{
+		t:    t,
+		opts: opts,
+	}
+
+	s.checkFatal(makeDirEmpty(rootDir))
+	rdfFile := filepath.Join(rootDir, "rdfs.rdf")
+	s.checkFatal(ioutil.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
+	schemaFile := filepath.Join(rootDir, "schema.txt")
+	s.checkFatal(ioutil.WriteFile(schemaFile, []byte(opts.schema), 0644))
+	gqlSchemaFile := filepath.Join(rootDir, "gql_schema.txt")
+	s.checkFatal(ioutil.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
+	s.setup(schemaFile, rdfFile, gqlSchemaFile)
+	return s
 }
 
 func newSuite(t *testing.T, schema, rdfs string) *suite {
+	opts := suiteOpts{
+		schema: schema,
+		rdfs:   rdfs,
+	}
+	return newSuiteInternal(t, opts)
+}
+
+func newBulkOnlySuite(t *testing.T, schema, rdfs, gqlSchema string) *suite {
+	opts := suiteOpts{
+		schema:         schema,
+		gqlSchema:      gqlSchema,
+		rdfs:           rdfs,
+		skipLiveLoader: true,
+	}
+	return newSuiteInternal(t, opts)
+}
+
+func newSuiteFromFile(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) *suite {
 	if testing.Short() {
 		t.Skip("Skipping system test with long runtime.")
 	}
 	s := &suite{t: t}
-	s.checkFatal(makeDirEmpty(rootDir))
-	rdfFile := filepath.Join(rootDir, "rdfs.rdf")
-	s.checkFatal(ioutil.WriteFile(rdfFile, []byte(rdfs), 0644))
-	schemaFile := filepath.Join(rootDir, "schema.txt")
-	s.checkFatal(ioutil.WriteFile(schemaFile, []byte(schema), 0644))
-	s.setup(schemaFile, rdfFile)
+
+	s.setup(schemaFile, rdfFile, gqlSchemaFile)
 	return s
 }
 
-func newSuiteFromFile(t *testing.T, schemaFile, rdfFile string) *suite {
-	if testing.Short() {
-		t.Skip("Skipping system test with long runtime.")
-	}
-	s := &suite{t: t}
-	s.setup(schemaFile, rdfFile)
-	return s
-}
+func (s *suite) setup(schemaFile, rdfFile, gqlSchemaFile string) {
+	s.t.Skip("TODO: Switch this to use Docker container")
 
-func (s *suite) setup(schemaFile, rdfFile string) {
 	var (
 		bulkDir = filepath.Join(rootDir, "bulk")
 		liveDir = filepath.Join(rootDir, "live")
@@ -72,49 +123,52 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	s.checkFatal(
 		makeDirEmpty(bulkDir),
 		makeDirEmpty(liveDir),
+		makeDirEmpty(filepath.Join(bulkDir, "out", "0")),
 	)
 
-	s.bulkCluster = NewDgraphCluster(bulkDir)
-	s.checkFatal(s.bulkCluster.StartZeroOnly())
+	if !s.opts.skipBulkLoader {
+		s.bulkCluster = NewDgraphCluster(filepath.Join(bulkDir, "out", "0"))
+		if err := s.bulkCluster.StartZeroOnly(); err != nil {
+			s.cleanup()
+			s.t.Fatalf("Couldn't start zero in Dgraph cluster: %v\n", err)
+		}
 
-	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
-		"-r", rdfFile,
-		"-s", schemaFile,
-		"--http", ":"+strconv.Itoa(freePort(0)),
-		"-z", ":"+s.bulkCluster.zeroPort,
-		"-j=1",
-		"-x=true",
-	)
-	bulkCmd.Stdout = os.Stdout
-	bulkCmd.Stderr = os.Stdout
-	bulkCmd.Dir = bulkDir
-	if err := bulkCmd.Run(); err != nil {
-		s.cleanup()
-		s.t.Fatalf("Bulkloader didn't run: %v\n", err)
+		bulkCmd := exec.Command(testutil.DgraphBinaryPath(), "bulk",
+			"-f", rdfFile,
+			"-s", schemaFile,
+			"-g", gqlSchemaFile,
+			"--http", "localhost:"+strconv.Itoa(freePort(0)),
+			"-j=1",
+			"--store-xids=true",
+			"-z", "localhost:"+s.bulkCluster.zeroPort,
+		)
+		bulkCmd.Dir = bulkDir
+		if out, err := bulkCmd.Output(); err != nil {
+			s.cleanup()
+			s.t.Logf("%s", out)
+			s.t.Fatalf("Bulkloader didn't run: %v\n", err)
+		}
+
+		if err := s.bulkCluster.StartAlphaOnly(); err != nil {
+			s.cleanup()
+			s.t.Fatalf("Couldn't start alpha in Dgraph cluster: %v\n", err)
+		}
 	}
-	s.bulkCluster.zero.Process.Kill()
-	s.bulkCluster.zero.Wait()
-	s.checkFatal(os.Rename(
-		filepath.Join(bulkDir, "out", "0", "p"),
-		filepath.Join(bulkDir, "p"),
-	))
 
-	s.liveCluster = NewDgraphCluster(liveDir)
-	s.checkFatal(s.liveCluster.Start())
-	s.checkFatal(s.bulkCluster.Start())
-
-	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-		"--rdfs", rdfFile,
-		"--schema", schemaFile,
-		"--dgraph", ":"+s.liveCluster.dgraphPort,
-		"--zero", ":"+s.liveCluster.zeroPort,
-	)
-	liveCmd.Dir = liveDir
-	liveCmd.Stdout = os.Stdout
-	liveCmd.Stderr = os.Stdout
-	if err := liveCmd.Run(); err != nil {
-		s.cleanup()
-		s.t.Fatalf("Live Loader didn't run: %v\n", err)
+	if !s.opts.skipLiveLoader {
+		liveCmd := exec.Command(testutil.DgraphBinaryPath(), "live",
+			"--files", rdfFile,
+			"--schema", schemaFile,
+			"--alpha", testutil.SockAddr,
+			"--zero", testutil.SockAddrZero,
+			"-u", "groot", "-p", "password",
+		)
+		liveCmd.Dir = liveDir
+		if out, err := liveCmd.Output(); err != nil {
+			s.cleanup()
+			s.t.Logf("%s", out)
+			s.t.Fatalf("Live Loader didn't run: %v\n", err)
+		}
 	}
 }
 
@@ -128,26 +182,44 @@ func makeDirEmpty(dir string) error {
 func (s *suite) cleanup() {
 	// NOTE: Shouldn't raise any errors here or fail a test, since this is
 	// called when we detect an error (don't want to mask the original problem).
-	if s.liveCluster != nil {
-		s.liveCluster.Close()
-	}
-	if s.bulkCluster != nil {
-		s.bulkCluster.Close()
-	}
 	_ = os.RemoveAll(rootDir)
+	s.bulkCluster.Close()
 }
 
 func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
-		for _, cluster := range []*DgraphCluster{s.bulkCluster, s.liveCluster} {
+		if !s.opts.skipLiveLoader {
+			// Check results of the live loader.
+			dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+			if err != nil {
+				t.Fatalf("Error while getting a dgraph client: %v", err)
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
-			txn := cluster.client.NewTxn()
+
+			txn := dg.NewTxn()
 			resp, err := txn.Query(ctx, query)
 			if err != nil {
 				t.Fatalf("Could not query: %v", err)
 			}
-			CompareJSON(t, wantResult, string(resp.GetJson()))
+			testutil.CompareJSON(t, wantResult, string(resp.GetJson()))
+		}
+
+		if !s.opts.skipBulkLoader {
+			// Check results of the bulk loader.
+			dg, err := testutil.DgraphClient("localhost:" + s.bulkCluster.alphaPort)
+			if err != nil {
+				t.Fatalf("Error while getting a dgraph client: %v", err)
+			}
+			ctx2, cancel2 := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel2()
+
+			txn := dg.NewTxn()
+			resp, err := txn.Query(ctx2, query)
+			if err != nil {
+				t.Fatalf("Could not query: %v", err)
+			}
+			testutil.CompareJSON(t, wantResult, string(resp.GetJson()))
 		}
 	}
 }

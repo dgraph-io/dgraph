@@ -1,0 +1,54 @@
+{
+  directors(func: regexp(name@en, /^Steven Sp.*$/)) {
+    name@en
+    director.film @filter(regexp(name@en, /ryan/i)) {
+      name@en
+    }
+  }
+}
+---
+{
+  "directors": [
+    {
+      "name@en": "Steven Spencer"
+    },
+    {
+      "name@en": "Steven Spielberg",
+      "director.film": [
+        {
+          "name@en": "Saving Private Ryan"
+        }
+      ]
+    },
+    {
+      "name@en": "Steven Spielberg And The Return To Film School"
+    },
+    {
+      "name@en": "Steven Spohn"
+    },
+    {
+      "name@en": "Steven Spieldal"
+    },
+    {
+      "name@en": "Steven Spielberg"
+    },
+    {
+      "name@en": "Steven Sperling"
+    },
+    {
+      "name@en": "Steven Spielberg"
+    },
+    {
+      "name@en": "Steven Spurrier"
+    },
+    {
+      "name@en": "Steven Spencer"
+    },
+    {
+      "name@en": "Steven Spielberg"
+    },
+    {
+      "name@en": "Steven Spurrier"
+    }
+  ]
+}

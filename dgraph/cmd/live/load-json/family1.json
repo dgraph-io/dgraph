@@ -1,0 +1,29 @@
+[
+  {
+    "uid":"_:h",
+    "name":"Homer",
+    "age":"38",
+    "role":"father",
+    "role|gender":"male",
+    "role@es":"padre",
+    "dgraph.type": "FamilyMember",
+    "parent_to": [
+      { "uid":"_:b" },
+      { "uid":"_:l" },
+      { "uid":"_:m2" }
+    ]
+  },
+  {
+    "uid":"_:m1",
+    "name":"Marge",
+    "age":"34",
+    "role":"mother",
+    "aka":"Midge",
+    "dgraph.type": "FamilyMember",
+    "parent_to": [
+      { "uid":"_:b" },
+      { "uid":"_:l" },
+      { "uid":"_:m2" }
+    ]
+  }
+]

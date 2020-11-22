@@ -1,13 +1,26 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package bulk
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/dgraph-io/dgraph/x"
+)
 
 type shardMap struct {
 	sync.RWMutex
@@ -24,6 +37,11 @@ func newShardMap(numShards int) *shardMap {
 }
 
 func (m *shardMap) shardFor(pred string) int {
+	// Always assign NQuads with reserved predicates to the first map shard.
+	if x.IsReservedPredicate(pred) {
+		return 0
+	}
+
 	m.RLock()
 	shard, ok := m.predToShard[pred]
 	m.RUnlock()

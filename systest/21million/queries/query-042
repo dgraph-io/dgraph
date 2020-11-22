@@ -1,0 +1,16 @@
+{
+  var(func: allofterms(name@en, "Harry Potter")) {
+    d as initial_release_date
+  }
+  me() {
+    max(val(d))
+  }
+}
+---
+{
+  "me": [
+    {
+      "max(val(d))": "2011-07-27T00:00:00Z"
+    }
+  ]
+}

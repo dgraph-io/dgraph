@@ -1,0 +1,893 @@
+{
+  me(func: eq(count(genre), 13)) {
+    name@en
+    genre {
+    	name@en
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "name@en": "Scooby-Doo 2: Monsters Unleashed",
+      "genre": [
+        {
+          "name@en": "Family-Oriented Adventure"
+        },
+        {
+          "name@en": "Horror"
+        },
+        {
+          "name@en": "Slapstick"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Family"
+        },
+        {
+          "name@en": "Teen film"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Action Film"
+        },
+        {
+          "name@en": "Children's/Family"
+        },
+        {
+          "name@en": "Horror comedy"
+        },
+        {
+          "name@en": "Fantasy Comedy"
+        },
+        {
+          "name@en": "Mystery"
+        }
+      ]
+    },
+    {
+      "name@en": "Stay Tuned",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Black comedy"
+        },
+        {
+          "name@en": "Horror"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Family"
+        },
+        {
+          "name@en": "Parody"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Backstage Musical"
+        },
+        {
+          "name@en": "Musical comedy"
+        },
+        {
+          "name@en": "Satire"
+        },
+        {
+          "name@en": "Horror comedy"
+        },
+        {
+          "name@en": "Science Fiction"
+        }
+      ]
+    },
+    {
+      "name@en": "South Park: Bigger, Longer & Uncut",
+      "genre": [
+        {
+          "name@en": "Black comedy"
+        },
+        {
+          "name@en": "Animation"
+        },
+        {
+          "name@en": "Parody"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Backstage Musical"
+        },
+        {
+          "name@en": "Musical comedy"
+        },
+        {
+          "name@en": "Political cinema"
+        },
+        {
+          "name@en": "Satire"
+        },
+        {
+          "name@en": "War film"
+        },
+        {
+          "name@en": "Gross out"
+        },
+        {
+          "name@en": "Political satire"
+        },
+        {
+          "name@en": "Absurdism"
+        },
+        {
+          "name@en": "Animated Musical"
+        }
+      ]
+    },
+    {
+      "name@en": "Shanghai Noon",
+      "genre": [
+        {
+          "name@en": "Chinese Movies"
+        },
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Action/Adventure"
+        },
+        {
+          "name@en": "Action Comedy"
+        },
+        {
+          "name@en": "Western"
+        },
+        {
+          "name@en": "Martial Arts Film"
+        },
+        {
+          "name@en": "Costume drama"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Comedy Western"
+        },
+        {
+          "name@en": "Hybrid Western"
+        },
+        {
+          "name@en": "Action Film"
+        },
+        {
+          "name@en": "Buddy film"
+        }
+      ]
+    },
+    {
+      "name@en": "Viva",
+      "genre": [
+        {
+          "name@en": "Sex comedy"
+        },
+        {
+          "name@en": "Comedy-drama"
+        },
+        {
+          "name@en": "Erotica"
+        },
+        {
+          "name@en": "Indie film"
+        },
+        {
+          "name@en": "Sexploitation film"
+        },
+        {
+          "name@en": "Musical Drama"
+        },
+        {
+          "name@en": "Historical period drama"
+        },
+        {
+          "name@en": "Parody"
+        },
+        {
+          "name@en": "Pornographic film"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Backstage Musical"
+        },
+        {
+          "name@en": "Musical comedy"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Baron Munchausen",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Action/Adventure"
+        },
+        {
+          "name@en": "Family"
+        },
+        {
+          "name@en": "Costume drama"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Costume Adventure"
+        },
+        {
+          "name@en": "Action Film"
+        },
+        {
+          "name@en": "Fantasy Comedy"
+        },
+        {
+          "name@en": "Fantasy Adventure"
+        },
+        {
+          "name@en": "Science Fiction"
+        },
+        {
+          "name@en": "Steampunk"
+        }
+      ]
+    },
+    {
+      "name@en": "The Amazing Screw-On Head",
+      "genre": [
+        {
+          "name@en": "Superhero movie"
+        },
+        {
+          "name@en": "Black comedy"
+        },
+        {
+          "name@en": "Horror"
+        },
+        {
+          "name@en": "Television film"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Action/Adventure"
+        },
+        {
+          "name@en": "Anime"
+        },
+        {
+          "name@en": "Animation"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Horror comedy"
+        },
+        {
+          "name@en": "Short Film"
+        },
+        {
+          "name@en": "Science Fiction"
+        }
+      ]
+    },
+    {
+      "name@en": "The Great Muppet Caper",
+      "genre": [
+        {
+          "name@en": "Family-Oriented Adventure"
+        },
+        {
+          "name@en": "Crime Fiction"
+        },
+        {
+          "name@en": "Adventure Comedy"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Musical Drama"
+        },
+        {
+          "name@en": "Music"
+        },
+        {
+          "name@en": "Family"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Backstage Musical"
+        },
+        {
+          "name@en": "Musical comedy"
+        },
+        {
+          "name@en": "Children's/Family"
+        },
+        {
+          "name@en": "Mystery"
+        }
+      ]
+    },
+    {
+      "name@en": "Kiss Kiss Bang Bang",
+      "genre": [
+        {
+          "name@en": "Crime Thriller"
+        },
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Black comedy"
+        },
+        {
+          "name@en": "Film noir"
+        },
+        {
+          "name@en": "Detective fiction"
+        },
+        {
+          "name@en": "Crime Fiction"
+        },
+        {
+          "name@en": "LGBT"
+        },
+        {
+          "name@en": "Action/Adventure"
+        },
+        {
+          "name@en": "Parody"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Action Film"
+        },
+        {
+          "name@en": "Mystery"
+        },
+        {
+          "name@en": "Neo-noir"
+        }
+      ]
+    },
+    {
+      "name@en": "Sinbad and the Eye of the Tiger",
+      "genre": [
+        {
+          "name@en": "Stop motion"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Action/Adventure"
+        },
+        {
+          "name@en": "Family"
+        },
+        {
+          "name@en": "Children's Fantasy"
+        },
+        {
+          "name@en": "Costume drama"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Action Film"
+        },
+        {
+          "name@en": "Fantasy Adventure"
+        },
+        {
+          "name@en": "Swashbuckler film"
+        },
+        {
+          "name@en": "Science Fiction"
+        },
+        {
+          "name@en": "Mythological Fantasy"
+        }
+      ]
+    },
+    {
+      "name@en": "An American Tail",
+      "genre": [
+        {
+          "name@en": "Family-Oriented Adventure"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "Musical Drama"
+        },
+        {
+          "name@en": "Family"
+        },
+        {
+          "name@en": "Animation"
+        },
+        {
+          "name@en": "Children's Fantasy"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Backstage Musical"
+        },
+        {
+          "name@en": "Musical comedy"
+        },
+        {
+          "name@en": "Children's/Family"
+        },
+        {
+          "name@en": "Animated Musical"
+        }
+      ]
+    },
+    {
+      "name@en": "Mr. India",
+      "genre": [
+        {
+          "name@en": "Superhero movie"
+        },
+        {
+          "name@en": "World cinema"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "Musical Drama"
+        },
+        {
+          "name@en": "Bollywood"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Backstage Musical"
+        },
+        {
+          "name@en": "Musical comedy"
+        },
+        {
+          "name@en": "Action Film"
+        },
+        {
+          "name@en": "Science Fiction"
+        }
+      ]
+    },
+    {
+      "name@en": "Trollhunters",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "World cinema"
+        },
+        {
+          "name@en": "Horror"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Action/Adventure"
+        },
+        {
+          "name@en": "Mockumentary"
+        },
+        {
+          "name@en": "Family"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Action Film"
+        },
+        {
+          "name@en": "Horror comedy"
+        },
+        {
+          "name@en": "Science Fiction"
+        }
+      ]
+    },
+    {
+      "name@en": "The Great Race",
+      "genre": [
+        {
+          "name@en": "Ensemble Film"
+        },
+        {
+          "name@en": "Adventure Comedy"
+        },
+        {
+          "name@en": "Sports films"
+        },
+        {
+          "name@en": "Slapstick"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "Family"
+        },
+        {
+          "name@en": "Parody"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Backstage Musical"
+        },
+        {
+          "name@en": "Musical comedy"
+        },
+        {
+          "name@en": "Costume Adventure"
+        },
+        {
+          "name@en": "Action Film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Man Who Loved Yngve",
+      "genre": [
+        {
+          "name@en": "World cinema"
+        },
+        {
+          "name@en": "Coming of age"
+        },
+        {
+          "name@en": "Gay Themed"
+        },
+        {
+          "name@en": "Gay Interest"
+        },
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "LGBT"
+        },
+        {
+          "name@en": "Musical Drama"
+        },
+        {
+          "name@en": "Teen film"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Gay"
+        },
+        {
+          "name@en": "Backstage Musical"
+        },
+        {
+          "name@en": "Musical comedy"
+        }
+      ]
+    },
+    {
+      "name@en": "Even Cowgirls Get the Blues",
+      "genre": [
+        {
+          "name@en": "Comedy-drama"
+        },
+        {
+          "name@en": "Road movie"
+        },
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "LGBT"
+        },
+        {
+          "name@en": "Western"
+        },
+        {
+          "name@en": "Feminist Film"
+        },
+        {
+          "name@en": "Romantic comedy"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Comedy Western"
+        },
+        {
+          "name@en": "Film adaptation"
+        },
+        {
+          "name@en": "Absurdism"
+        }
+      ]
+    },
+    {
+      "name@en": "The Chaperone 3D",
+      "genre": [
+        {
+          "name@en": "Experimental film"
+        },
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Documentary film"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Biographical film"
+        },
+        {
+          "name@en": "Animation"
+        },
+        {
+          "name@en": "Martial Arts Film"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Action Film"
+        },
+        {
+          "name@en": "Short Film"
+        },
+        {
+          "name@en": "Crime film"
+        }
+      ]
+    },
+    {
+      "name@en": "Sholay",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "World cinema"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "Musical Drama"
+        },
+        {
+          "name@en": "Western"
+        },
+        {
+          "name@en": "Bollywood"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Comedy Western"
+        },
+        {
+          "name@en": "Backstage Musical"
+        },
+        {
+          "name@en": "Musical comedy"
+        },
+        {
+          "name@en": "Action Film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Sum of Us",
+      "genre": [
+        {
+          "name@en": "Comedy-drama"
+        },
+        {
+          "name@en": "World cinema"
+        },
+        {
+          "name@en": "Gay Themed"
+        },
+        {
+          "name@en": "Indie film"
+        },
+        {
+          "name@en": "Gay Interest"
+        },
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "LGBT"
+        },
+        {
+          "name@en": "Romantic comedy"
+        },
+        {
+          "name@en": "Family Drama"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Gay"
+        },
+        {
+          "name@en": "Film adaptation"
+        }
+      ]
+    },
+    {
+      "name@en": "Super Mario Bros.",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Superhero movie"
+        },
+        {
+          "name@en": "Indie film"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Family"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Action Film"
+        },
+        {
+          "name@en": "Doomsday film"
+        },
+        {
+          "name@en": "Buddy film"
+        },
+        {
+          "name@en": "Fantasy Adventure"
+        },
+        {
+          "name@en": "Science Fiction"
+        },
+        {
+          "name@en": "Dystopia"
+        }
+      ]
+    }
+  ]
+}

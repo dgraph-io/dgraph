@@ -1,59 +1,120 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package live
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math"
 	"math/rand"
 	"net/http"
-	_ "net/http/pprof"
+	_ "net/http/pprof" // http profiler
 	"os"
-	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/badger"
-	bopt "github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/badger/v2"
+	bopt "github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgryski/go-farm"
+
+	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 type options struct {
-	files               string
-	schemaFile          string
-	dgraph              string
-	zero                string
-	concurrent          int
-	numRdf              int
-	clientDir           string
-	ignoreIndexConflict bool
+	dataFiles       string
+	dataFormat      string
+	schemaFile      string
+	zero            string
+	concurrent      int
+	batchSize       int
+	clientDir       string
+	authToken       string
+	useCompression  bool
+	newUids         bool
+	verbose         bool
+	httpAddr        string
+	bufferSize      int
+	ludicrousMode   bool
+	upsertPredicate string
+	key             x.SensitiveByteSlice
 }
 
-var opt options
-var tlsConf x.TLSHelperConfig
+type predicate struct {
+	Predicate  string   `json:"predicate,omitempty"`
+	Type       string   `json:"type,omitempty"`
+	Tokenizer  []string `json:"tokenizer,omitempty"`
+	Count      bool     `json:"count,omitempty"`
+	List       bool     `json:"list,omitempty"`
+	Lang       bool     `json:"lang,omitempty"`
+	Index      bool     `json:"index,omitempty"`
+	Upsert     bool     `json:"upsert,omitempty"`
+	Reverse    bool     `json:"reverse,omitempty"`
+	NoConflict bool     `json:"no_conflict,omitempty"`
+	ValueType  types.TypeID
+}
 
-var Live x.SubCommand
+type schema struct {
+	Predicates []*predicate `json:"schema,omitempty"`
+	preds      map[string]*predicate
+}
+
+type request struct {
+	*api.Mutation
+	conflicts []uint64
+}
+
+func (l *schema) init() {
+	l.preds = make(map[string]*predicate)
+	for _, i := range l.Predicates {
+		i.ValueType, _ = types.TypeForName(i.Type)
+		l.preds[i.Predicate] = i
+	}
+}
+
+var (
+	opt options
+	sch schema
+
+	// Live is the sub-command invoked when running "dgraph live".
+	Live x.SubCommand
+)
 
 func init() {
 	Live.Cmd = &cobra.Command{
@@ -61,64 +122,88 @@ func init() {
 		Short: "Run Dgraph live loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Live.Conf).Stop()
-			run()
+			if err := run(); err != nil {
+				x.Check2(fmt.Fprintf(os.Stderr, "%s", err.Error()))
+				os.Exit(1)
+			}
 		},
 	}
 	Live.EnvPrefix = "DGRAPH_LIVE"
 
 	flag := Live.Cmd.Flags()
-	flag.StringP("rdfs", "r", "", "Location of rdf files to load")
+	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
-	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
-	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraphzero gRPC server address")
-	flag.IntP("conc", "c", 100,
+	flag.String("format", "", "Specify file format (rdf or json) instead of getting it "+
+		"from filename")
+	flag.StringP("alpha", "a", "127.0.0.1:9080",
+		"Comma-separated list of Dgraph alpha gRPC server addresses")
+	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
+	flag.IntP("conc", "c", 10,
 		"Number of concurrent requests to make to Dgraph")
 	flag.IntP("batch", "b", 1000,
-		"Number of RDF N-Quads to send as part of a mutation.")
+		"Number of N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
-	flag.BoolP("ignore_index_conflict", "i", true,
-		"Ignores conflicts on index keys during transaction")
+	flag.StringP("auth-token", "t", "",
+		"The auth token passed to the server for Alter operation of the schema file. If used with --slash-grpc-endpoint, then this "+
+			"should be set to the API token issued by Slash GraphQL")
+	flag.String("slash-grpc-endpoint", "", "Path to Slash GraphQL GRPC endpoint. If --slash-grpc-endpoint is set, "+
+		"all other TLS options and connection options will be ignored")
+	flag.BoolP("use-compression", "C", false,
+		"Enable compression on connection to alpha server")
+	flag.Bool("new-uids", false,
+		"Ignore UIDs in load files and assign new ones.")
+	flag.String("http", "localhost:6060", "Address to serve http (pprof).")
+	flag.Bool("verbose", false, "Run the live loader in verbose mode")
+	flag.StringP("user", "u", "", "Username if login is required.")
+	flag.StringP("password", "p", "", "Password of the user.")
+	flag.StringP("buffer-size", "m", "100", "Buffer for each thread")
+	flag.Bool("ludicrous-mode", false, "Run live loader in ludicrous mode (Should "+
+		"only be done when alpha is under ludicrous mode)")
+	flag.StringP("upsert-predicate", "U", "", "run in upsert-predicate mode. the value would "+
+		"be used to store blank nodes as an xid")
 
+	// Encryption and Vault options
+	enc.RegisterFlags(flag)
 	// TLS configuration
-	x.RegisterTLSFlags(flag)
-	flag.Bool("tls_insecure", false, "Skip certificate validation (insecure)")
-	flag.String("tls_ca_certs", "", "CA Certs file path.")
-	flag.String("tls_server_name", "", "Server name.")
+	x.RegisterClientTLSFlags(flag)
 }
 
-// Reads a single line from a buffered reader. The line is read into the
-// passed in buffer to minimize allocations. This is the preferred
-// method for loading long lines which could be longer than the buffer
-// size of bufio.Scanner.
-func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
-	isPrefix := true
-	var err error
-	for isPrefix && err == nil {
-		var line []byte
-		// The returned line is an intern.buffer in bufio and is only
-		// valid until the next call to ReadLine. It needs to be copied
-		// over to our own buffer.
-		line, isPrefix, err = r.ReadLine()
-		if err == nil {
-			buf.Write(line)
-		}
+func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Query(ctx, "schema {}")
+	if err != nil {
+		return nil, err
 	}
-	return err
+
+	err = json.Unmarshal(res.GetJson(), &sch)
+	if err != nil {
+		return nil, err
+	}
+	sch.init()
+	return &sch, nil
 }
 
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) error {
-	fmt.Printf("\nProcessing %s\n", file)
+func processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlice,
+	dgraphClient *dgo.Dgraph) error {
+	fmt.Printf("\nProcessing schema file %q\n", file)
+	if len(opt.authToken) > 0 {
+		md := metadata.New(nil)
+		md.Append("auth-token", opt.authToken)
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
+
 	f, err := os.Open(file)
-	x.Check(err)
+	x.CheckfNoTrace(err)
 	defer f.Close()
 
-	var reader io.Reader
+	reader, err := enc.GetReader(key, f)
+	x.Check(err)
 	if strings.HasSuffix(strings.ToLower(file), ".gz") {
-		reader, err = gzip.NewReader(f)
+		reader, err = gzip.NewReader(reader)
 		x.Check(err)
-	} else {
-		reader = f
 	}
 
 	b, err := ioutil.ReadAll(reader)
@@ -137,150 +222,346 @@ func (l *loader) uid(val string) string {
 	// to be an existing node in the graph. There is limited protection against
 	// a user selecting an unassigned UID in this way - it may be assigned
 	// later to another node. It is up to the user to avoid this.
-	if strings.HasPrefix(val, "0x") {
-		if _, err := strconv.ParseUint(val[2:], 16, 64); err == nil {
-			return val
+	if !opt.newUids {
+		if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
+			return fmt.Sprintf("%#x", uid)
 		}
 	}
 
-	uid, _ := l.alloc.AssignUid(val)
+	sb := strings.Builder{}
+	x.Check2(sb.WriteString(val))
+	uid, _ := l.alloc.AssignUid(sb.String())
+
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
-func fileReader(file string) (io.Reader, *os.File) {
-	f, err := os.Open(file)
-	x.Check(err)
+func generateBlankNode(val string) string {
+	// generates "u_hash(val)"
 
-	var r io.Reader
-	if filepath.Ext(file) == ".gz" {
-		r, err = gzip.NewReader(f)
-		x.Check(err)
-	} else {
-		r = bufio.NewReader(f)
-	}
-	return r, f
+	sb := strings.Builder{}
+	x.Check2(sb.WriteString("u_"))
+	x.Check2(sb.WriteString(strconv.FormatUint(farm.Fingerprint64([]byte(val)), 10)))
+	return sb.String()
 }
 
-// processFile sends mutations for a given gz file.
-func (l *loader) processFile(ctx context.Context, file string) error {
-	fmt.Printf("\nProcessing %s\n", file)
-	gr, f := fileReader(file)
-	var buf bytes.Buffer
-	bufReader := bufio.NewReader(gr)
-	defer f.Close()
+func generateUidFunc(val string) string {
+	// generates "uid(val)"
 
-	var line uint64
-	mu := api.Mutation{}
-	var batchSize int
+	sb := strings.Builder{}
+	sb.WriteString("uid(")
+	sb.WriteString(val)
+	sb.WriteRune(')')
+	return sb.String()
+}
+
+func generateQuery(node, predicate, xid string) string {
+	// generates "node as node(func: eq(predicate, xid)) {uid}"
+
+	sb := strings.Builder{}
+	sb.WriteString(node)
+	sb.WriteString(" as ")
+	sb.WriteString(node)
+	sb.WriteString("(func: eq(")
+	sb.WriteString(predicate)
+	sb.WriteString(`, "`)
+	sb.WriteString(xid)
+	sb.WriteString(`")) {uid}`)
+	return sb.String()
+}
+
+func (l *loader) upsertUids(nqs []*api.NQuad) {
+	// We form upsertPredicate query for each of the ids we saw in the request, along with
+	// adding the corresponding xid to that uid. The mutation we added is only useful if the
+	// uid doesn't exists.
+	//
+	// Example upsertPredicate mutation:
+	//
+	// query {
+	//     u_1 as var(func: eq(xid, "m.1234"))
+	// }
+	//
+	// mutation {
+	//     set {
+	//          uid(u_1) xid m.1234 .
+	//     }
+	// }
+	l.upsertLock.Lock()
+	defer l.upsertLock.Unlock()
+
+	ids := make(map[string]string)
+
+	for _, i := range nqs {
+		// taking hash as the value might contain invalid symbols
+		ids[i.Subject] = generateBlankNode(i.Subject)
+
+		if len(i.ObjectId) > 0 {
+			// taking hash as the value might contain invalid symbols
+			ids[i.ObjectId] = generateBlankNode(i.ObjectId)
+		}
+	}
+
+	mutations := make([]*api.NQuad, 0, len(ids))
+	query := strings.Builder{}
+	query.WriteString("query {")
+	query.WriteRune('\n')
+
+	for xid, idx := range ids {
+		if l.alloc.CheckUid(xid) {
+			continue
+		}
+
+		query.WriteString(generateQuery(idx, opt.upsertPredicate, xid))
+		query.WriteRune('\n')
+		mutations = append(mutations, &api.NQuad{
+			Subject:     generateUidFunc(idx),
+			Predicate:   opt.upsertPredicate,
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: xid}},
+		})
+	}
+
+	if len(mutations) == 0 {
+		return
+	}
+
+	query.WriteRune('}')
+
+	// allocate all the new xids
+	resp, err := l.dc.NewTxn().Do(l.opts.Ctx, &api.Request{
+		CommitNow: true,
+		Query:     query.String(),
+		Mutations: []*api.Mutation{{Set: mutations}},
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	type dResult struct {
+		Uid string
+	}
+
+	var result map[string][]dResult
+	err = json.Unmarshal(resp.GetJson(), &result)
+	if err != nil {
+		panic(err)
+	}
+
+	for xid, idx := range ids {
+		// xid already exist in dgraph
+		if val, ok := result[idx]; ok && len(val) > 0 {
+			uid, err := strconv.ParseUint(val[0].Uid, 0, 64)
+			if err != nil {
+				panic(err)
+			}
+
+			l.alloc.SetUid(xid, uid)
+			continue
+		}
+
+		// new uid created in draph
+		if val, ok := resp.GetUids()[generateUidFunc(idx)]; ok {
+			uid, err := strconv.ParseUint(val, 0, 64)
+			if err != nil {
+				panic(err)
+			}
+
+			l.alloc.SetUid(xid, uid)
+			continue
+		}
+	}
+}
+
+// allocateUids looks for the maximum uid value in the given NQuads and bumps the
+// maximum seen uid to that value.
+func (l *loader) allocateUids(nqs []*api.NQuad) {
+	if opt.newUids {
+		return
+	}
+
+	var maxUid uint64
+	for _, nq := range nqs {
+		sUid, err := strconv.ParseUint(nq.Subject, 0, 64)
+		if err != nil {
+			continue
+		}
+		if sUid > maxUid {
+			maxUid = sUid
+		}
+
+		oUid, err := strconv.ParseUint(nq.ObjectId, 0, 64)
+		if err != nil {
+			continue
+		}
+		if oUid > maxUid {
+			maxUid = oUid
+		}
+	}
+	l.alloc.BumpTo(maxUid)
+}
+
+// processFile forwards a file to the RDF or JSON processor as appropriate
+func (l *loader) processFile(ctx context.Context, filename string, key x.SensitiveByteSlice) error {
+	fmt.Printf("Processing data file %q\n", filename)
+
+	rd, cleanup := chunker.FileReader(filename, key)
+	defer cleanup()
+
+	loadType := chunker.DataFormat(filename, opt.dataFormat)
+	if loadType == chunker.UnknownFormat {
+		if isJson, err := chunker.IsJSONData(rd); err == nil {
+			if isJson {
+				loadType = chunker.JsonFormat
+			} else {
+				return errors.Errorf("need --format=rdf or --format=json to load %s", filename)
+			}
+		}
+	}
+
+	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType, opt.batchSize))
+}
+
+func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	nqbuf := ck.NQuads()
+	// Spin a goroutine to push NQuads to mutation channel.
+	go func() {
+		defer wg.Done()
+		buffer := make([]*api.NQuad, 0, opt.bufferSize*opt.batchSize)
+
+		drain := func() {
+			// We collect opt.bufferSize requests and preprocess them. For the requests
+			// to not confict between themself, we sort them on the basis of their predicates.
+			// Predicates with count index will conflict among themselves, so we keep them at
+			// end, making room for other predicates to load quickly.
+			sort.Slice(buffer, func(i, j int) bool {
+				iPred := sch.preds[buffer[i].Predicate]
+				jPred := sch.preds[buffer[j].Predicate]
+				t := func(a *predicate) int {
+					if a != nil && a.Count {
+						return 1
+					}
+					return 0
+				}
+
+				// Sorts the nquads on basis of their predicates, while keeping the
+				// predicates with count index later than those without it.
+				if t(iPred) != t(jPred) {
+					return t(iPred) < t(jPred)
+				}
+				return buffer[i].Predicate < buffer[j].Predicate
+			})
+			for len(buffer) > 0 {
+				sz := opt.batchSize
+				if len(buffer) < opt.batchSize {
+					sz = len(buffer)
+				}
+				mu := &request{Mutation: &api.Mutation{Set: buffer[:sz]}}
+				l.reqs <- mu
+				buffer = buffer[sz:]
+			}
+		}
+
+		for nqs := range nqbuf.Ch() {
+			if len(nqs) == 0 {
+				continue
+			}
+
+			if opt.upsertPredicate == "" {
+				l.allocateUids(nqs)
+			} else {
+				l.upsertUids(nqs)
+			}
+
+			for _, nq := range nqs {
+				nq.Subject = l.uid(nq.Subject)
+				if len(nq.ObjectId) > 0 {
+					nq.ObjectId = l.uid(nq.ObjectId)
+				}
+			}
+
+			buffer = append(buffer, nqs...)
+			if len(buffer) < opt.bufferSize*opt.batchSize {
+				continue
+			}
+
+			drain()
+		}
+		drain()
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
-		err := readLine(bufReader, &buf)
-		if err != nil {
-			if err != io.EOF {
-				return err
-			}
+
+		chunkBuf, err := ck.Chunk(rd)
+		// Parses the rdf entries from the chunk, groups them into batches (each one
+		// containing opt.batchSize entries) and sends the batches to the loader.reqs channel (see
+		// above).
+		if oerr := ck.Parse(chunkBuf); oerr != nil {
+			return errors.Wrap(oerr, "During parsing chunk in processLoadFile")
+		}
+		if err == io.EOF {
 			break
-		}
-		line++
-
-		nq, err := rdf.Parse(buf.String())
-		if err == rdf.ErrEmpty { // special case: comment/empty line
-			buf.Reset()
-			continue
-		} else if err != nil {
-			return fmt.Errorf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
-		}
-		batchSize++
-		buf.Reset()
-
-		nq.Subject = l.uid(nq.Subject)
-		if len(nq.ObjectId) > 0 {
-			nq.ObjectId = l.uid(nq.ObjectId)
-		}
-		mu.Set = append(mu.Set, &nq)
-
-		if batchSize >= opt.numRdf {
-			l.reqs <- mu
-			batchSize = 0
-			mu = api.Mutation{}
+		} else {
+			x.Check(err)
 		}
 	}
-	if batchSize > 0 {
-		l.reqs <- mu
-		mu = api.Mutation{}
-	}
+	nqbuf.Flush()
+	wg.Wait()
+
 	return nil
 }
 
-func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
-	if insecure {
-		return grpc.Dial(host,
-			grpc.WithDefaultCallOptions(
-				grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
-				grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
-			grpc.WithInsecure(),
-			grpc.WithBlock(),
-			grpc.WithTimeout(10*time.Second))
+func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader {
+	var db *badger.DB
+	if len(opt.clientDir) > 0 {
+		x.Check(os.MkdirAll(opt.clientDir, 0700))
+
+		var err error
+		db, err = badger.Open(badger.DefaultOptions(opt.clientDir).
+			WithCompression(bopt.ZSTD).
+			WithSyncWrites(false).
+			WithBlockCacheSize(100 * (1 << 20)).
+			WithIndexCacheSize(100 * (1 << 20)).
+			WithZSTDCompressionLevel(3))
+		x.Checkf(err, "Error while creating badger KV posting store")
+
 	}
 
-	tlsConf.ConfigType = x.TLSClientConfig
-	tlsConf.CertRequired = false
-	tlsCfg, _, err := x.GenerateTLSConfig(tlsConf)
-	if err != nil {
-		return nil, err
+	dialOpts := []grpc.DialOption{}
+	if conf.GetString("slash-grpc-endpoint") != "" && conf.IsSet("auth-token") {
+		dialOpts = append(dialOpts, x.WithAuthorizationCredentials(conf.GetString("auth-token")))
 	}
 
-	return grpc.Dial(host,
-		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
-			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
-		grpc.WithBlock(),
-		grpc.WithTimeout(10*time.Second))
-}
-
-func fileList(files string) []string {
-	if len(files) == 0 {
-		return []string{}
+	var tlsConfig *tls.Config = nil
+	if conf.GetString("slash-grpc-endpoint") != "" {
+		var tlsErr error
+		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash-grpc-endpoint"))
+		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
+	} else {
+		var tlsErr error
+		tlsConfig, tlsErr = x.LoadClientTLSConfigForInternalPort(conf)
+		x.Check(tlsErr)
 	}
-	return strings.Split(files, ",")
-}
 
-func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
-	x.Check(os.MkdirAll(opt.clientDir, 0700))
-	o := badger.DefaultOptions
-	o.SyncWrites = true // So that checkpoints are persisted immediately.
-	o.TableLoadingMode = bopt.MemoryMap
-	o.Dir = opt.clientDir
-	o.ValueDir = opt.clientDir
-
-	kv, err := badger.Open(o)
-	x.Checkf(err, "Error while creating badger KV posting store")
-
-	connzero, err := setupConnection(opt.zero, true)
+	// compression with zero server actually makes things worse
+	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(
-		kv,
-		connzero,
-		xidmap.Options{
-			NumShards: 100,
-			LRUSize:   1e5,
-		},
-	)
-
+	alloc := xidmap.New(connzero, db, "")
 	l := &loader{
-		opts:     opts,
-		dc:       dc,
-		start:    time.Now(),
-		reqs:     make(chan api.Mutation, opts.Pending*2),
-		alloc:    alloc,
-		kv:       kv,
-		zeroconn: connzero,
+		opts:      opts,
+		dc:        dc,
+		start:     time.Now(),
+		reqs:      make(chan *request, opts.Pending*2),
+		conflicts: make(map[uint64]struct{}),
+		alloc:     alloc,
+		db:        db,
+		zeroconn:  connzero,
 	}
 
 	l.requestsWg.Add(opts.Pending)
@@ -292,80 +573,94 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	return l
 }
 
-func run() {
-	opt = options{
-		files:               Live.Conf.GetString("rdfs"),
-		schemaFile:          Live.Conf.GetString("schema"),
-		dgraph:              Live.Conf.GetString("dgraph"),
-		zero:                Live.Conf.GetString("zero"),
-		concurrent:          Live.Conf.GetInt("conc"),
-		numRdf:              Live.Conf.GetInt("batch"),
-		clientDir:           Live.Conf.GetString("xidmap"),
-		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
+func run() error {
+	var zero string
+	if Live.Conf.GetString("slash-grpc-endpoint") != "" {
+		zero = Live.Conf.GetString("slash-grpc-endpoint")
+	} else {
+		zero = Live.Conf.GetString("zero")
 	}
-	x.LoadTLSConfig(&tlsConf, Live.Conf)
-	tlsConf.Insecure = Live.Conf.GetBool("tls_insecure")
-	tlsConf.RootCACerts = Live.Conf.GetString("tls_ca_certs")
-	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
 
-	go http.ListenAndServe("localhost:6060", nil)
+	var err error
+	x.PrintVersion()
+	opt = options{
+		dataFiles:       Live.Conf.GetString("files"),
+		dataFormat:      Live.Conf.GetString("format"),
+		schemaFile:      Live.Conf.GetString("schema"),
+		zero:            zero,
+		concurrent:      Live.Conf.GetInt("conc"),
+		batchSize:       Live.Conf.GetInt("batch"),
+		clientDir:       Live.Conf.GetString("xidmap"),
+		authToken:       Live.Conf.GetString("auth-token"),
+		useCompression:  Live.Conf.GetBool("use-compression"),
+		newUids:         Live.Conf.GetBool("new-uids"),
+		verbose:         Live.Conf.GetBool("verbose"),
+		httpAddr:        Live.Conf.GetString("http"),
+		bufferSize:      Live.Conf.GetInt("buffer-size"),
+		ludicrousMode:   Live.Conf.GetBool("ludicrous-mode"),
+		upsertPredicate: Live.Conf.GetString("upsert-predicate"),
+	}
+	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
+		fmt.Printf("unable to read key %v", err)
+		return err
+	}
+	go func() {
+		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
+			glog.Errorf("Error while starting HTTP server: %+v", err)
+		}
+	}()
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
-		Size:          opt.numRdf,
+		Size:          opt.batchSize,
 		Pending:       opt.concurrent,
 		PrintCounters: true,
 		Ctx:           ctx,
 		MaxRetries:    math.MaxUint32,
+		bufferSize:    opt.bufferSize,
 	}
 
-	ds := strings.Split(opt.dgraph, ",")
-	var clients []api.DgraphClient
-	for _, d := range ds {
-		conn, err := setupConnection(d, !tlsConf.CertRequired)
-		x.Checkf(err, "While trying to setup connection to Dgraph server.")
-		defer conn.Close()
+	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
+	defer closeFunc()
 
-		dc := api.NewDgraphClient(conn)
-		clients = append(clients, dc)
-	}
-	dgraphClient := dgo.NewDgraphClient(clients...)
-
-	if len(opt.clientDir) == 0 {
-		var err error
-		opt.clientDir, err = ioutil.TempDir("", "x")
-		x.Checkf(err, "Error while trying to create temporary client directory.")
-		x.Printf("Creating temp client directory at %s\n", opt.clientDir)
-		defer os.RemoveAll(opt.clientDir)
-	}
-	l := setup(bmOpts, dgraphClient)
+	l := setup(bmOpts, dg, Live.Conf)
 	defer l.zeroconn.Close()
-	defer l.kv.Close()
-	defer l.alloc.EvictAll()
 
 	if len(opt.schemaFile) > 0 {
-		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
+		err := processSchemaFile(ctx, opt.schemaFile, opt.key, dg)
+		if err != nil {
 			if err == context.Canceled {
-				log.Println("Interrupted while processing schema file")
-			} else {
-				log.Println(err)
+				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
+				return nil
 			}
-			return
+			fmt.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
+			return err
 		}
-		x.Printf("Processed schema file")
+		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
-	filesList := fileList(opt.files)
+	l.schema, err = getSchema(ctx, dg)
+	if err != nil {
+		fmt.Printf("Error while loading schema from alpha %s\n", err)
+		return err
+	}
+
+	if opt.dataFiles == "" {
+		return errors.New("RDF or JSON file(s) location must be specified")
+	}
+
+	filesList := x.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
-		os.Exit(0)
+		return errors.Errorf("No data files found in %s", opt.dataFiles)
 	}
+	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {
-			errCh <- l.processFile(ctx, file)
+			errCh <- errors.Wrapf(l.processFile(ctx, file, opt.key), file)
 		}(file)
 	}
 
@@ -376,7 +671,8 @@ func run() {
 
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			log.Fatal("While processing file ", err)
+			fmt.Printf("Error while processing data file %s\n", err)
+			return err
 		}
 	}
 
@@ -389,17 +685,25 @@ func run() {
 	c := l.Counter()
 	var rate uint64
 	if c.Elapsed.Seconds() < 1 {
-		rate = c.Rdfs
+		rate = c.Nquads
 	} else {
-		rate = c.Rdfs / uint64(c.Elapsed.Seconds())
+		rate = c.Nquads / uint64(c.Elapsed.Seconds())
 	}
 	// Lets print an empty line, otherwise Interrupted or Number of Mutations overwrites the
 	// previous printed line.
 	fmt.Printf("%100s\r", "")
+	fmt.Printf("Number of TXs run            : %d\n", c.TxnsDone)
+	fmt.Printf("Number of N-Quads processed  : %d\n", c.Nquads)
+	fmt.Printf("Time spent                   : %v\n", c.Elapsed)
+	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
-	fmt.Printf("Number of TXs run         : %d\n", c.TxnsDone)
-	fmt.Printf("Number of RDFs processed  : %d\n", c.Rdfs)
-	fmt.Printf("Time spent                : %v\n", c.Elapsed)
-
-	fmt.Printf("RDFs processed per second : %d\n", rate)
+	if l.db != nil {
+		if err := l.alloc.Flush(); err != nil {
+			return err
+		}
+		if err := l.db.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -1,15 +1,32 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package x
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
+	"regexp"
+	"runtime"
+	"strings"
+
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
 )
 
 var (
@@ -18,15 +35,19 @@ var (
 
 	// These variables are set using -ldflags
 	dgraphVersion  string
+	dgraphCodename string
 	gitBranch      string
 	lastCommitSHA  string
 	lastCommitTime string
 )
 
+// SetTestRun sets a variable to indicate that the current execution is a test.
 func SetTestRun() {
 	isTest = true
 }
 
+// IsTestRun indicates whether a test is being executed. Useful to handle special
+// conditions during tests that differ from normal execution.
 func IsTestRun() bool {
 	return isTest
 }
@@ -38,8 +59,7 @@ func AddInit(f func()) {
 }
 
 // Init initializes flags and run all functions in initFunc.
-func Init(debug bool) {
-	Config.DebugMode = debug
+func Init() {
 	// Default value, would be overwritten by flag.
 	Config.QueryEdgeLimit = 1e6
 
@@ -49,29 +69,77 @@ func Init(debug bool) {
 	}
 }
 
+// BuildDetails returns a string containing details about the Dgraph binary.
 func BuildDetails() string {
+	licenseInfo := `Licensed under the Apache Public License 2.0`
+	if !strings.HasSuffix(dgraphVersion, "-oss") {
+		licenseInfo = "Licensed variously under the Apache Public License 2.0 and Dgraph " +
+			"Community License"
+	}
+
+	buf := z.CallocNoRef(1)
+	jem := len(buf) > 0
+	z.Free(buf)
+
 	return fmt.Sprintf(`
 Dgraph version   : %v
+Dgraph codename  : %v
+Dgraph SHA-256   : %x
 Commit SHA-1     : %v
 Commit timestamp : %v
 Branch           : %v
+Go version       : %v
+jemalloc enabled : %v
 
-For Dgraph official documentation, visit https://docs.dgraph.io.
+For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
-To say hi to the community       , visit https://dgraph.slack.com.
 
-Licensed under Apache 2.0 + Commons Clause. Copyright 2015-2018 Dgraph Labs, Inc.
+%s.
+Copyright 2015-2020 Dgraph Labs, Inc.
 
 `,
-		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch)
+		dgraphVersion, dgraphCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
+		runtime.Version(), jem, licenseInfo)
 }
 
-// PrintVersionOnly prints version and other helpful information if --version.
-func PrintVersionOnly() {
-	fmt.Println(BuildDetails())
-	os.Exit(0)
+// PrintVersion prints version and other helpful information if --version.
+func PrintVersion() {
+	glog.Infof("\n%s\n", BuildDetails())
 }
 
+// Version returns a string containing the dgraphVersion.
 func Version() string {
 	return dgraphVersion
+}
+
+// pattern for  dev version = min. 7 hex digits of commit-hash.
+var versionRe *regexp.Regexp = regexp.MustCompile(`-g[[:xdigit:]]{7,}`)
+
+// DevVersion returns true if the version string contains the above pattern
+// e.g.
+//  1. v2.0.0-rc1-127-gd20a768b3 => dev version
+//  2. v2.0.0 => prod version
+func DevVersion() (matched bool) {
+	return (versionRe.MatchString(dgraphVersion))
+}
+
+// ExecutableChecksum returns a byte slice containing the SHA256 checksum of the executable.
+// It returns a nil slice if there's an error trying to calculate the checksum.
+func ExecutableChecksum() []byte {
+	execPath, err := os.Executable()
+	if err != nil {
+		return nil
+	}
+	execFile, err := os.Open(execPath)
+	if err != nil {
+		return nil
+	}
+	defer execFile.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, execFile); err != nil {
+		return nil
+	}
+
+	return h.Sum(nil)
 }

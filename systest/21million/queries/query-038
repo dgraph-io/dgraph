@@ -1,0 +1,70 @@
+{
+	num_roles(func: eq(name@en, "Warwick Davis")) @cascade @normalize {
+
+    paths as math(1)  # records number of paths to each character
+
+    actor : name@en
+
+    actor.film {
+      performance.film @filter(allofterms(name@en, "Harry Potter")) {
+        film_name : name@en
+        characters : math(paths)  # how many paths (i.e. characters) reach this film
+      }
+    }
+  }
+}
+---
+{
+  "num_roles": [
+    {
+      "actor": "Warwick Davis",
+      "characters": 1,
+      "film_name": "Harry Potter and the Half-Blood Prince"
+    },
+    {
+      "actor": "Warwick Davis",
+      "characters": 1,
+      "film_name": "Harry Potter and the Prisoner of Azkaban"
+    },
+    {
+      "actor": "Warwick Davis",
+      "characters": 1,
+      "film_name": "Harry Potter and the Goblet of Fire"
+    },
+    {
+      "actor": "Warwick Davis",
+      "characters": 1,
+      "film_name": "Harry Potter and the Deathly Hallows - Part I"
+    },
+    {
+      "actor": "Warwick Davis",
+      "characters": 2,
+      "film_name": "Harry Potter and the Deathly Hallows – Part 2"
+    },
+    {
+      "actor": "Warwick Davis",
+      "characters": 2,
+      "film_name": "Harry Potter and the Deathly Hallows – Part 2"
+    },
+    {
+      "actor": "Warwick Davis",
+      "characters": 1,
+      "film_name": "Harry Potter and the Order of the Phoenix"
+    },
+    {
+      "actor": "Warwick Davis",
+      "characters": 2,
+      "film_name": "Harry Potter and the Philosopher's Stone"
+    },
+    {
+      "actor": "Warwick Davis",
+      "characters": 2,
+      "film_name": "Harry Potter and the Philosopher's Stone"
+    },
+    {
+      "actor": "Warwick Davis",
+      "characters": 1,
+      "film_name": "Harry Potter and the Chamber of Secrets"
+    }
+  ]
+}

@@ -1,45 +1,59 @@
 #!/bin/bash
-# This script runs in a loop, checks for updates to the Hugo docs theme or
-# to the docs on certain branches and rebuilds the public folder for them.
-# It has be made more generalized, so that we don't have to hardcode versions.
+# This script runs in a loop (configurable with LOOP), checks for updates to the
+# Hugo docs theme or to the docs on certain branches and rebuilds the public
+# folder for them. It has be made more generalized, so that we don't have to
+# hardcode versions.
 
 # Warning - Changes should not be made on the server on which this script is running
 # becauses this script does git checkout and merge.
 
 set -e
 
+# Important for clean builds on Netlify
+if ! git remote | grep -q origin ; then
+    git remote add origin https://github.com/dgraph-io/dgraph.git
+    git fetch --all
+fi
+
 GREEN='\033[32;1m'
 RESET='\033[0m'
-HOST=https://docs.dgraph.io
+HOST="${HOST:-https://dgraph.io/docs}"
+# Name of output public directory
+PUBLIC="${PUBLIC:-public}"
+# LOOP true makes this script run in a loop to check for updates
+LOOP="${LOOP:-true}"
+# Binary of hugo command to run.
+HUGO="${HUGO:-hugo}"
+OLD_THEME="${OLD_THEME:-old-theme}"
+NEW_THEME="${NEW_THEME:-master}"
 
 # TODO - Maybe get list of released versions from Github API and filter
 # those which have docs.
 
 # Place the latest version at the beginning so that version selector can
-# append '(latest)' to the version string, and build script can place the
-# artifact in an appropriate location
-VERSIONS_ARRAY=(
-'v1.0.5'
-'master'
-'v1.0.4'
-'v1.0.3'
-'v1.0.2'
-'v1.0.1'
-'v1.0.0'
-'v0.9.4'
-'v0.9.3'
-'v0.9.2'
-'v0.9.1'
-'v0.9.0'
-'v0.8.3'
-'v0.8.2'
-'v0.8.1'
-'v0.8.0'
+# append '(latest)' to the version string, followed by the master version,
+# and then the older versions in descending order, such that the
+# build script can place the artifact in an appropriate location.
+
+# these versions use new theme
+NEW_VERSIONS=(
+        'v20.07'
+	'master'
 )
+
+# these versions use old theme
+OLD_VERSIONS=(
+	'v20.03.4'
+	'v1.2.2'
+	'v1.1.1'
+	'v1.0.18'
+)
+
+VERSIONS_ARRAY=("${NEW_VERSIONS[@]}" "${OLD_VERSIONS[@]}")
 
 joinVersions() {
 	versions=$(printf ",%s" "${VERSIONS_ARRAY[@]}")
-	echo ${versions:1}
+	echo "${versions:1}"
 }
 
 function version { echo "$@" | gawk -F. '{ printf("%03d%03d%03d\n", $1,$2,$3); }'; }
@@ -59,20 +73,15 @@ rebuild() {
 	export CURRENT_BRANCH=${1}
 	export CURRENT_VERSION=${2}
 	export VERSIONS=${VERSION_STRING}
-
-	cmd=hugo_0.19
-	# Hugo broke backward compatibility, so files for version > 1.0.5 can use newer hugo (v0.38 onwards) but files in
-	# older versions have to use hugo v0.19
-	# If branch is master or version is >= 1.0.5 then use newer hugo
-	if [ "$CURRENT_VERSION" = "master" ] || [ "$(version "${CURRENT_VERSION:1}")" -ge "$(version "1.0.5")" ]; then
-		cmd=hugo
-	fi
+	export DGRAPH_ENDPOINT=${DGRAPH_ENDPOINT:-"https://play.dgraph.io/query?latency=true"}
+        export CANONICAL_PATH="$HOST"
 
 	HUGO_TITLE="Dgraph Doc ${2}"\
+		CANONICAL_PATH=${HOST}\
 		VERSIONS=${VERSION_STRING}\
 		CURRENT_BRANCH=${1}\
-		CURRENT_VERSION=${2} $cmd\
-		--destination=public/"$dir"\
+		CURRENT_VERSION=${2} ${HUGO} \
+		--destination="${PUBLIC}"/"$dir"\
 		--baseURL="$HOST"/"$dir" 1> /dev/null
 }
 
@@ -95,9 +104,9 @@ publicFolder()
 {
 	dir=''
 	if [[ $1 == "${VERSIONS_ARRAY[0]}" ]]; then
-		echo "public"
+		echo "${PUBLIC}"
 	else
-		echo "public/$1"
+		echo "${PUBLIC}/$1"
 	fi
 }
 
@@ -117,8 +126,8 @@ checkAndUpdate()
 		rebuild "$branch" "$version"
 	fi
 
-	folder=$(publicFolder $version)
-	if [ "$firstRun" = 1 ] || [ "$themeUpdated" = 0 ] || [ ! -d $folder ] ; then
+	folder=$(publicFolder "$version")
+	if [ "$firstRun" = 1 ] || [ "$themeUpdated" = 0 ] || [ ! -d "$folder" ] ; then
 		rebuild "$branch" "$version"
 	fi
 }
@@ -127,25 +136,46 @@ checkAndUpdate()
 firstRun=1
 while true; do
 	# Lets move to the docs directory.
-	pushd /home/ubuntu/dgraph/wiki > /dev/null
+	pushd "$(dirname "$0")/.." > /dev/null
 
 	currentBranch=$(git rev-parse --abbrev-ref HEAD)
 
-	# Lets check if the theme was updated.
+	if [ "$firstRun" = 1 ];
+	then
+		# clone the hugo-docs theme if not already there
+		[ ! -d 'themes/hugo-docs' ] && git clone https://github.com/dgraph-io/hugo-docs themes/hugo-docs
+	fi
+
+	# Lets check if the new theme was updated.
 	pushd themes/hugo-docs > /dev/null
 	git remote update > /dev/null
 	themeUpdated=1
-	if branchUpdated "master" ; then
+	if branchUpdated "${NEW_THEME}" ; then
 		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
 		themeUpdated=0
 	fi
 	popd > /dev/null
 
-	# Now lets check the theme.
 	echo -e "$(date)  Starting to check branches."
 	git remote update > /dev/null
 
-	for version in "${VERSIONS_ARRAY[@]}"
+	for version in "${NEW_VERSIONS[@]}"
+	do
+		checkAndUpdate "$version"
+	done
+
+	# Lets check if the old theme was updated.
+	pushd themes/hugo-docs > /dev/null
+	themeUpdated=1
+	if branchUpdated "${OLD_THEME}" ; then
+		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
+		themeUpdated=0
+	fi
+	popd > /dev/null
+
+	git remote update > /dev/null
+
+	for version in "${OLD_VERSIONS[@]}"
 	do
 		checkAndUpdate "$version"
 	done
@@ -156,5 +186,8 @@ while true; do
 	popd > /dev/null
 
 	firstRun=0
+        if ! $LOOP; then
+            exit
+        fi
 	sleep 60
 done

@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package main
@@ -19,14 +28,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/x"
-	"google.golang.org/grpc"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 var (
-	dgraAddr  = flag.String("d", "localhost:9081", "dgraph address")
+	alpha     = flag.String("alpha", "localhost:9180", "Dgraph alpha address")
 	timeout   = flag.Int("timeout", 60, "query/mutation timeout")
 	numSents  = flag.Int("sentences", 100, "number of sentences")
 	numSwaps  = flag.Int("swaps", 1000, "number of swaps to attempt")
@@ -49,7 +59,7 @@ func main() {
 	for _, s := range sents {
 		words := strings.Split(s, " ")
 		for _, w := range words {
-			wordCount[w] += 1
+			wordCount[w]++
 		}
 	}
 	type wc struct {
@@ -69,7 +79,8 @@ func main() {
 		fmt.Printf("%15s: %3d\n", w.word, w.count)
 	}
 
-	c := newClient()
+	c, err := testutil.DgraphClientWithGroot(*alpha)
+	x.Check(err)
 	uids := setup(c, sents)
 
 	// Check invariants before doing any mutations as a sanity check.
@@ -157,14 +168,6 @@ func createSentences(n int) []string {
 	}
 }
 
-func newClient() *dgo.Dgraph {
-	d, err := grpc.Dial(*dgraAddr, grpc.WithInsecure())
-	x.Check(err)
-	return dgo.NewDgraphClient(
-		api.NewDgraphClient(d),
-	)
-}
-
 func setup(c *dgo.Dgraph, sentences []string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
@@ -180,7 +183,12 @@ func setup(c *dgo.Dgraph, sentences []string) []string {
 		rdfs += fmt.Sprintf("_:s%d <sentence> %q .\n", i, s)
 	}
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			fmt.Printf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
+
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(rdfs),
 	})
@@ -199,7 +207,12 @@ func swapSentences(c *dgo.Dgraph, node1, node2 string) {
 	defer cancel()
 
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			fmt.Printf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
+
 	resp, err := txn.Query(ctx, fmt.Sprintf(`
 	{
 		node1(func: uid(%s)) {
@@ -220,7 +233,8 @@ func swapSentences(c *dgo.Dgraph, node1, node2 string) {
 			Sentence *string
 		}
 	}{}
-	json.Unmarshal(resp.GetJson(), &decode)
+	err = json.Unmarshal(resp.GetJson(), &decode)
+	x.Check(err)
 	x.AssertTrue(len(decode.Node1) == 1)
 	x.AssertTrue(len(decode.Node2) == 1)
 	x.AssertTrue(decode.Node1[0].Sentence != nil)
@@ -354,7 +368,7 @@ func checkInvariants(c *dgo.Dgraph, uids []string, sentences []string) error {
 		sort.Strings(gotUids)
 		sort.Strings(uids)
 		if !reflect.DeepEqual(gotUids, uids) {
-			panic(fmt.Sprintf(`query: %s\n
+			x.Panic(errors.Errorf(`query: %s\n
 			Uids in index for %q didn't match
 			calculated: %v. Len: %d
 				got:        %v

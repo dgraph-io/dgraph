@@ -1,0 +1,86 @@
+{
+  var(func:allofterms(name@en, "The Princess Bride")) {
+    starring {
+      performance.actor {
+        roles as count(actor.film)
+      }
+    }
+  }
+  totalRoles(func: uid(roles), orderasc: val(roles)) {
+    name@en
+    numRoles : val(roles)
+  }
+}
+---
+{
+  "totalRoles": [
+    {
+      "name@en": "Mark Knopfler",
+      "numRoles": 1
+    },
+    {
+      "name@en": "Annie Dyson",
+      "numRoles": 2
+    },
+    {
+      "name@en": "André the Giant",
+      "numRoles": 7
+    },
+    {
+      "name@en": "Malcolm Storry",
+      "numRoles": 11
+    },
+    {
+      "name@en": "Margery Mason",
+      "numRoles": 12
+    },
+    {
+      "name@en": "Mel Smith",
+      "numRoles": 16
+    },
+    {
+      "name@en": "Fred Savage",
+      "numRoles": 19
+    },
+    {
+      "name@en": "Peter Cook",
+      "numRoles": 22
+    },
+    {
+      "name@en": "Christopher Guest",
+      "numRoles": 32
+    },
+    {
+      "name@en": "Mandy Patinkin",
+      "numRoles": 33
+    },
+    {
+      "name@en": "Billy Crystal",
+      "numRoles": 37
+    },
+    {
+      "name@en": "Chris Sarandon",
+      "numRoles": 44
+    },
+    {
+      "name@en": "Robin Wright",
+      "numRoles": 47
+    },
+    {
+      "name@en": "Peter Falk",
+      "numRoles": 69
+    },
+    {
+      "name@en": "Cary Elwes",
+      "numRoles": 72
+    },
+    {
+      "name@en": "Carol Kane",
+      "numRoles": 74
+    },
+    {
+      "name@en": "Wallace Shawn",
+      "numRoles": 98
+    }
+  ]
+}

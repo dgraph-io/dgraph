@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package types
@@ -13,10 +22,12 @@ import (
 	"strings"
 
 	"github.com/golang/geo/s2"
-	"github.com/twpayne/go-geom"
+	geom "github.com/twpayne/go-geom"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
+	"github.com/twpayne/go-geom/xy"
 )
 
 // QueryType indicates the type of geo query.
@@ -33,7 +44,7 @@ const (
 	QueryTypeNear
 )
 
-// GeoQueryData is intern.data used by the geo query filter to additionally filter the geometries.
+// GeoQueryData is pb.data used by the geo query filter to additionally filter the geometries.
 type GeoQueryData struct {
 	pt    *s2.Point  // If not nil, the input data was a point
 	loops []*s2.Loop // If not empty, the input data was a polygon/multipolygon or it was a near query.
@@ -52,21 +63,21 @@ func IsGeoFunc(str string) bool {
 
 // GetGeoTokens returns the corresponding index keys based on the type
 // of function.
-func GetGeoTokens(srcFunc *intern.SrcFunction) ([]string, *GeoQueryData, error) {
+func GetGeoTokens(srcFunc *pb.SrcFunction) ([]string, *GeoQueryData, error) {
 	x.AssertTruef(len(srcFunc.Name) > 0, "Invalid function")
 	funcName := strings.ToLower(srcFunc.Name)
 	switch funcName {
 	case "near":
 		if len(srcFunc.Args) != 2 {
-			return nil, nil, x.Errorf("near function requires 2 arguments, but got %d",
+			return nil, nil, errors.Errorf("near function requires 2 arguments, but got %d",
 				len(srcFunc.Args))
 		}
 		maxDist, err := strconv.ParseFloat(srcFunc.Args[1], 64)
 		if err != nil {
-			return nil, nil, x.Wrapf(err, "Error while converting distance to float")
+			return nil, nil, errors.Wrapf(err, "Error while converting distance to float")
 		}
 		if maxDist < 0 {
-			return nil, nil, x.Errorf("Distance cannot be negative")
+			return nil, nil, errors.Errorf("Distance cannot be negative")
 		}
 		g, err := convertToGeom(srcFunc.Args[0])
 		if err != nil {
@@ -75,7 +86,7 @@ func GetGeoTokens(srcFunc *intern.SrcFunction) ([]string, *GeoQueryData, error) 
 		return queryTokensGeo(QueryTypeNear, g, maxDist)
 	case "within":
 		if len(srcFunc.Args) != 1 {
-			return nil, nil, x.Errorf("within function requires 1 arguments, but got %d",
+			return nil, nil, errors.Errorf("within function requires 1 arguments, but got %d",
 				len(srcFunc.Args))
 		}
 		g, err := convertToGeom(srcFunc.Args[0])
@@ -85,7 +96,7 @@ func GetGeoTokens(srcFunc *intern.SrcFunction) ([]string, *GeoQueryData, error) 
 		return queryTokensGeo(QueryTypeWithin, g, 0.0)
 	case "contains":
 		if len(srcFunc.Args) != 1 {
-			return nil, nil, x.Errorf("contains function requires 1 arguments, but got %d",
+			return nil, nil, errors.Errorf("contains function requires 1 arguments, but got %d",
 				len(srcFunc.Args))
 		}
 		g, err := convertToGeom(srcFunc.Args[0])
@@ -95,7 +106,7 @@ func GetGeoTokens(srcFunc *intern.SrcFunction) ([]string, *GeoQueryData, error) 
 		return queryTokensGeo(QueryTypeContains, g, 0.0)
 	case "intersects":
 		if len(srcFunc.Args) != 1 {
-			return nil, nil, x.Errorf("intersects function requires 1 arguments, but got %d",
+			return nil, nil, errors.Errorf("intersects function requires 1 arguments, but got %d",
 				len(srcFunc.Args))
 		}
 		g, err := convertToGeom(srcFunc.Args[0])
@@ -104,7 +115,7 @@ func GetGeoTokens(srcFunc *intern.SrcFunction) ([]string, *GeoQueryData, error) 
 		}
 		return queryTokensGeo(QueryTypeIntersects, g, 0.0)
 	default:
-		return nil, nil, x.Errorf("Invalid geo function")
+		return nil, nil, errors.Errorf("Invalid geo function")
 	}
 }
 
@@ -126,7 +137,7 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 			// We use the point and make a loop with radius maxDistance. Then we can use this for
 			// the rest of the query.
 			if maxDistance <= 0 {
-				return nil, nil, x.Errorf("Invalid max distance specified for a near query")
+				return nil, nil, errors.Errorf("Invalid max distance specified for a near query")
 			}
 			a := EarthAngle(maxDistance)
 			l := s2.RegularLoop(*pt, a, 100)
@@ -150,7 +161,7 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		}
 
 	default:
-		return nil, nil, x.Errorf("Cannot query using a geometry of type %T", v)
+		return nil, nil, errors.Errorf("Cannot query using a geometry of type %T", v)
 	}
 
 	x.AssertTruef(len(loops) > 0 || pt != nil, "We should have a point or a loop.")
@@ -158,7 +169,7 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 	var cover, parents s2.CellUnion
 	if qt == QueryTypeNear {
 		if len(loops) == 0 {
-			return nil, nil, x.Errorf("Internal error while processing near query.")
+			return nil, nil, errors.Errorf("Internal error while processing near query.")
 		}
 		cover = coverLoop(loops[0], MinCellLevel, MaxCellLevel, MaxCells)
 		parents = getParentCells(cover, MinCellLevel)
@@ -174,7 +185,7 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		// For a within query we only need to look at the objects whose parents match our cover.
 		// So we take our cover and prefix with the parentPrefix to look in the index.
 		if len(loops) == 0 {
-			return nil, nil, x.Errorf("Require a polygon for within query")
+			return nil, nil, errors.Errorf("Require a polygon for within query")
 		}
 		toks := createTokens(cover, parentPrefix)
 		return toks, &GeoQueryData{loops: loops, qtype: qt}, nil
@@ -186,7 +197,7 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 
 	case QueryTypeNear:
 		if pt == nil {
-			return []string{}, nil, x.Errorf("Require a point for a within query.")
+			return []string{}, nil, errors.Errorf("Require a point for a within query.")
 		}
 		// A near query is the same as the intersects query. We form a loop with the given point and
 		// the radius and then see what all does it intersect with.
@@ -198,13 +209,13 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		// given region. So we look at all the objects whose parents match our cover as well as
 		// all the objects whose cover matches our parents.
 		if len(loops) == 0 {
-			return nil, nil, x.Errorf("Require a polygon for intersects query")
+			return nil, nil, errors.Errorf("Require a polygon for intersects query")
 		}
 		toks := parentCoverTokens(parents, cover)
 		return toks, &GeoQueryData{loops: loops, qtype: qt}, nil
 
 	default:
-		return nil, nil, x.Errorf("Unknown query type")
+		return nil, nil, errors.Errorf("Unknown query type")
 	}
 }
 
@@ -301,12 +312,13 @@ func (q GeoQueryData) contains(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || len(q.loops) > 0, "At least a point or loop should be defined.")
 	switch v := g.(type) {
 	case *geom.Polygon:
+		if q.pt != nil {
+			return polygonContainsCoord(v, q.pt)
+		}
+
 		s2loop, err := loopFromPolygon(v)
 		if err != nil {
 			return false
-		}
-		if q.pt != nil {
-			return s2loop.ContainsPoint(*q.pt)
 		}
 
 		// Input could be a multipolygon, in which q.loops would have more than 1 loop. Each loop
@@ -319,16 +331,13 @@ func (q GeoQueryData) contains(g geom.T) bool {
 		return true
 	case *geom.MultiPolygon:
 		if q.pt != nil {
-			for i := 0; i < v.NumPolygons(); i++ {
-				p := v.Polygon(i)
-				s2loop, err := loopFromPolygon(p)
-				if err != nil {
-					return false
-				}
-				if s2loop.ContainsPoint(*q.pt) {
+			for j := 0; j < v.NumPolygons(); j++ {
+				if polygonContainsCoord(v.Polygon(j), q.pt) {
 					return true
 				}
 			}
+
+			return false
 		}
 
 		if len(q.loops) > 0 {
@@ -346,6 +355,19 @@ func (q GeoQueryData) contains(g geom.T) bool {
 		// We will only consider polygons for contains queries.
 		return false
 	}
+}
+
+func polygonContainsCoord(v *geom.Polygon, pt *s2.Point) bool {
+	for i := 0; i < v.NumLinearRings(); i++ {
+		r := v.LinearRing(i)
+		ll := s2.LatLngFromPoint(*pt)
+		p := []float64{ll.Lng.Degrees(), ll.Lat.Degrees()}
+		if xy.IsPointInRing(r.Layout(), p, r.FlatCoords()) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // returns true if the geometry represented by uid/attr intersects the given loop or point
@@ -395,7 +417,7 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 
 // MatchGeo matches values and GeoQueryData and ensures that the value actually
 // matches the query criteria.
-func MatchGeo(value *intern.TaskValue, q *GeoQueryData) bool {
+func MatchGeo(value *pb.TaskValue, q *GeoQueryData) bool {
 	valBytes := value.Val
 	if bytes.Equal(valBytes, nil) {
 		return false

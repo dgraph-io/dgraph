@@ -1,28 +1,35 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package facets
 
 import (
-	"bytes"
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
 	"unicode"
 
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
-// Sorts And validates the facets.
+// SortAndValidate sorts And validates the facets.
 func SortAndValidate(fs []*api.Facet) error {
 	if len(fs) == 0 {
 		return nil
@@ -32,7 +39,7 @@ func SortAndValidate(fs []*api.Facet) error {
 	})
 	for i := 1; i < len(fs); i++ {
 		if fs[i-1].Key == fs[i].Key {
-			return x.Errorf("Repeated keys are not allowed in facets. But got %s",
+			return errors.Errorf("Repeated keys are not allowed in facets. But got %s",
 				fs[i].Key)
 		}
 	}
@@ -40,7 +47,7 @@ func SortAndValidate(fs []*api.Facet) error {
 }
 
 // CopyFacets makes a copy of facets of the posting which are requested in param.Keys.
-func CopyFacets(fcs []*api.Facet, param *intern.FacetParams) (fs []*api.Facet) {
+func CopyFacets(fcs []*api.Facet, param *pb.FacetParams) (fs []*api.Facet) {
 	if param == nil || fcs == nil {
 		return nil
 	}
@@ -50,7 +57,8 @@ func CopyFacets(fcs []*api.Facet, param *intern.FacetParams) (fs []*api.Facet) {
 	numFacets := len(fcs)
 	for kidx, fidx := 0, 0; (param.AllKeys || kidx < numKeys) && fidx < numFacets; {
 		f := fcs[fidx]
-		if param.AllKeys || param.Param[kidx].Key == f.Key {
+		switch {
+		case param.AllKeys || param.Param[kidx].Key == f.Key:
 			fcopy := &api.Facet{
 				Key:     f.Key,
 				Value:   nil,
@@ -64,9 +72,9 @@ func CopyFacets(fcs []*api.Facet, param *intern.FacetParams) (fs []*api.Facet) {
 			fs = append(fs, fcopy)
 			kidx++
 			fidx++
-		} else if f.Key > param.Param[kidx].Key {
+		case f.Key > param.Param[kidx].Key:
 			kidx++
-		} else {
+		default:
 			fidx++
 		}
 	}
@@ -81,7 +89,7 @@ func valAndValType(val string) (interface{}, api.Facet_ValType, error) {
 	// strings should be in quotes.
 	if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
 		uq, err := strconv.Unquote(val)
-		return uq, api.Facet_STRING, x.Wrapf(err, "could not unquote %q:", val)
+		return uq, api.Facet_STRING, errors.Wrapf(err, "could not unquote %q:", val)
 	}
 	if intVal, err := strconv.ParseInt(val, 0, 64); err == nil {
 		return int64(intVal), api.Facet_INT, nil
@@ -102,7 +110,7 @@ func valAndValType(val string) (interface{}, api.Facet_ValType, error) {
 	if floatVal, err := strconv.ParseFloat(val, 64); err == nil {
 		// We can't store NaN as it is because it serializes into invalid JSON.
 		if math.IsNaN(floatVal) {
-			return nil, api.Facet_FLOAT, fmt.Errorf("Got invalid value: NaN.")
+			return nil, api.Facet_FLOAT, errors.Errorf("Got invalid value: NaN")
 		}
 
 		return floatVal, api.Facet_FLOAT, nil
@@ -115,7 +123,7 @@ func valAndValType(val string) (interface{}, api.Facet_ValType, error) {
 	if t, err := types.ParseTime(val); err == nil {
 		return t, api.Facet_DATETIME, nil
 	}
-	return nil, api.Facet_STRING, x.Errorf("Could not parse the facet value : [%s]", val)
+	return nil, api.Facet_STRING, errors.Errorf("Could not parse the facet value : [%s]", val)
 }
 
 // FacetFor returns Facet for given key and val.
@@ -125,78 +133,63 @@ func FacetFor(key, val string) (*api.Facet, error) {
 		return nil, err
 	}
 
-	// convert facet val interface{} to binary
-	tid := TypeIDFor(&api.Facet{ValType: vt})
-	fVal := &types.Val{Tid: types.BinaryID}
-	if err = types.Marshal(types.Val{Tid: tid, Value: v}, fVal); err != nil {
+	facet, err := ToBinary(key, v, vt)
+	if err != nil {
 		return nil, err
 	}
 
-	fval, ok := fVal.Value.([]byte)
-	if !ok {
-		return nil, x.Errorf("Error while marshalling types.Val into binary.")
-	}
-	res := &api.Facet{Key: key, Value: fval, ValType: vt}
 	if vt == api.Facet_STRING {
 		// tokenize val.
-		res.Tokens, err = tok.GetTokens([]string{v.(string)})
+		facet.Tokens, err = tok.GetTermTokens([]string{v.(string)})
 		if err == nil {
-			sort.Strings(res.Tokens)
+			sort.Strings(facet.Tokens)
 		}
 	}
-	return res, err
+	return facet, err
 }
 
-// SameFacets returns whether two facets are same or not.
-// both should be sorted by key.
-func SameFacets(a []*api.Facet, b []*api.Facet) bool {
-	if len(a) != len(b) {
-		return false
+// ToBinary converts the given value into a binary value.
+func ToBinary(key string, value interface{}, sourceType api.Facet_ValType) (
+	*api.Facet, error) {
+	// convert facet val interface{} to binary
+	sourceTid, err := TypeIDFor(&api.Facet{ValType: sourceType})
+	if err != nil {
+		return nil, err
 	}
-	la := len(a)
-	for i := 0; i < la; i++ {
-		if (a[i].ValType != b[i].ValType) ||
-			(a[i].Key != b[i].Key) ||
-			!bytes.Equal(a[i].Value, b[i].Value) {
-			return false
-		}
+
+	targetVal := &types.Val{Tid: types.BinaryID}
+	if err = types.Marshal(types.Val{Tid: sourceTid, Value: value}, targetVal); err != nil {
+		return nil, err
 	}
-	return true
+
+	return &api.Facet{Key: key, Value: targetVal.Value.([]byte), ValType: sourceType}, nil
 }
 
 // TypeIDFor gives TypeID for facet.
-func TypeIDFor(f *api.Facet) types.TypeID {
-	switch TypeIDForValType(f.ValType) {
-	case IntID:
-		return types.IntID
-	case StringID:
-		return types.StringID
-	case BoolID:
-		return types.BoolID
-	case DateTimeID:
-		return types.DateTimeID
-	case FloatID:
-		return types.FloatID
+func TypeIDFor(f *api.Facet) (types.TypeID, error) {
+	switch f.ValType {
+	case api.Facet_INT:
+		return types.IntID, nil
+	case api.Facet_FLOAT:
+		return types.FloatID, nil
+	case api.Facet_BOOL:
+		return types.BoolID, nil
+	case api.Facet_DATETIME:
+		return types.DateTimeID, nil
+	case api.Facet_STRING:
+		return types.StringID, nil
 	default:
-		panic("unhandled case in facetValToTypeVal")
+		return types.DefaultID, errors.Errorf("Unrecognized facet type: %v", f.ValType)
 	}
 }
 
-// TryValFor tries to convert the facet to the its type from binary format. We use it to validate
-// the facets set directly by the user during mutation.
-func TryValFor(f *api.Facet) error {
-	val := types.Val{Tid: types.BinaryID, Value: f.Value}
-	typId := TypeIDFor(f)
-	_, err := types.Convert(val, typId)
-	return x.Wrapf(err, "Error while parsing facet: [%v]", f)
-}
-
 // ValFor converts Facet into types.Val.
-func ValFor(f *api.Facet) types.Val {
+func ValFor(f *api.Facet) (types.Val, error) {
 	val := types.Val{Tid: types.BinaryID, Value: f.Value}
-	typId := TypeIDFor(f)
-	v, err := types.Convert(val, typId)
-	x.AssertTruef(err == nil,
-		"We should always be able to covert facet into val. %v %v", f.Value, typId)
-	return v
+	facetTid, err := TypeIDFor(f)
+	if err != nil {
+		return types.Val{}, err
+	}
+
+	return types.Convert(val, facetTid)
 }

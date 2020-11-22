@@ -1,0 +1,75 @@
+[
+  {
+    "uid":"0x2001",
+    "name":"Homer",
+    "age":"38",
+    "role":"father",
+    "dgraph.type": "FamilyMember",
+    "parent_to": [
+      { "uid":"0x3001" },
+      { "uid":"0x3002" },
+      { "uid":"0x3003" }
+    ]
+  },
+  {
+    "uid":"0x2101",
+    "name":"Marge",
+    "age":"34",
+    "role":"mother",
+    "aka":"Midge",
+    "dgraph.type": "FamilyMember",
+    "parent_to": [
+      { "uid":"0x3001" },
+      { "uid":"0x3002" },
+      { "uid":"0x3003" }
+    ]
+  },
+  {
+    "uid":"0x3001",
+    "name":"Bart",
+    "age":"10",
+    "role":"son",
+    "aka":"El Barto",
+    "carries":"slingshot",
+    "dgraph.type": "FamilyMember",
+    "sibling_of": [
+      { "uid":"0x3002" },
+      { "uid":"0x3003" }
+    ]
+  },
+  {
+    "uid":"0x3002",
+    "name":"Lisa",
+    "age":"8",
+    "role":"daughter",
+    "carries":"saxomophone",
+    "dgraph.type": "FamilyMember",
+    "sibling_of": [
+      { "uid":"0x3001" },
+      { "uid":"0x3003" }
+    ]
+  },
+  {
+    "uid":"0x3003",
+    "name":"Maggie",
+    "age":"1",
+    "role":"daughter",
+    "carries":"pacifier",
+    "dgraph.type": "FamilyMember",
+    "sibling_of": [
+      { "uid":"0x3001" },
+      { "uid":"0x3002" }
+    ]
+  },
+  {
+    "uid":"0x1001",
+    "name":"Abraham",
+    "age":"83",
+    "role":"father",
+    "aka":"Grampa",
+    "dgraph.type": "FamilyMember",
+    "parent_to": [
+      { "uid":"0x2001" }
+    ]
+  }
+]

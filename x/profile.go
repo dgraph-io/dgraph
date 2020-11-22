@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package x
@@ -16,12 +25,14 @@ import (
 	"github.com/spf13/viper"
 )
 
-type stopper interface {
+// Stopper is an interface tasked with stopping the profiling process.
+type Stopper interface {
 	Stop()
 }
 
-func StartProfile(conf *viper.Viper) stopper {
-	profileMode := conf.GetString("profile_mode")
+// StartProfile starts a new mode for profiling.
+func StartProfile(conf *viper.Viper) Stopper {
+	profileMode := conf.GetString("profile-mode")
 	switch profileMode {
 	case "cpu":
 		return profile.Start(profile.CPUProfile)
@@ -30,7 +41,7 @@ func StartProfile(conf *viper.Viper) stopper {
 	case "mutex":
 		return profile.Start(profile.MutexProfile)
 	case "block":
-		blockRate := conf.GetInt("block_rate")
+		blockRate := conf.GetInt("block-rate")
 		runtime.SetBlockProfileRate(blockRate)
 		return profile.Start(profile.BlockProfile)
 	case "":

@@ -1,0 +1,13 @@
+[
+  {
+    "uid":"_:a",
+    "name":"Abraham",
+    "age":"83",
+    "role":"father",
+    "aka":"Grampa",
+    "dgraph.type": "FamilyMember",
+    "parent_to": [
+      { "uid":"_:h" }
+    ]
+  }
+]

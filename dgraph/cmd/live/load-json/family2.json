@@ -1,0 +1,42 @@
+[
+  {
+    "uid":"_:b",
+    "name":"Bart",
+    "age":"10",
+    "role":"son",
+    "aka":"El Barto",
+    "carries":"slingshot",
+    "dgraph.type": "FamilyMember",
+    "sibling_of": [
+      { "uid":"_:l" },
+      { "uid":"_:m2" }
+    ]
+  },
+  {
+    "uid":"_:l",
+    "name":"Lisa",
+    "age":"8",
+    "role":"daughter",
+    "carries":"saxomophone",
+    "dgraph.type": "FamilyMember",
+    "sibling_of": [
+      { "uid":"_:b" },
+      { "uid":"_:m2" }
+    ]
+  },
+  {
+    "uid":"_:m2",
+    "name":"Maggie",
+    "age":"1",
+    "role":"daughter",
+    "role|gender":"female",
+    "role|generation":3,
+    "role@es":"hija",
+    "carries":"pacifier",
+    "dgraph.type": "FamilyMember",
+    "sibling_of": [
+      { "uid":"_:b" },
+      { "uid":"_:l" }
+    ]
+  }
+]

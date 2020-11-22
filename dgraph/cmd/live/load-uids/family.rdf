@@ -1,0 +1,48 @@
+<0x1001> <age> "83"^^<xs:int> .
+<0x1001> <aka> "Grampa"^^<xs:string> .
+<0x1001> <dgraph.type> "FamilyMember" .
+<0x1001> <name> "Abraham"^^<xs:string> .
+<0x1001> <parent_to> <0x2001> .
+<0x1001> <role> "father"^^<xs:string> .
+#
+<0x2001> <age> "38"^^<xs:int> .
+<0x2001> <name> "Homer"^^<xs:string> .
+<0x2001> <dgraph.type> "FamilyMember" .
+<0x2001> <parent_to> <0x3001> .
+<0x2001> <parent_to> <0x3002> .
+<0x2001> <parent_to> <0x3003> .
+<0x2001> <role> "father"^^<xs:string> .
+#
+<0x2101> <age> "34"^^<xs:int> .
+<0x2101> <aka> "Midge"^^<xs:string> .
+<0x2101> <name> "Marge"^^<xs:string> .
+<0x2101> <dgraph.type> "FamilyMember" .
+<0x2101> <parent_to> <0x3001> .
+<0x2101> <parent_to> <0x3002> .
+<0x2101> <parent_to> <0x3003> .
+<0x2101> <role> "mother"^^<xs:string> .
+#
+<0x3001> <age> "10"^^<xs:int> .
+<0x3001> <aka> "El Barto"^^<xs:string> .
+<0x3001> <carries> "slingshot"^^<xs:string> .
+<0x3001> <name> "Bart"^^<xs:string> .
+<0x3001> <dgraph.type> "FamilyMember" .
+<0x3001> <role> "son"^^<xs:string> .
+<0x3001> <sibling_of> <0x3002> .
+<0x3001> <sibling_of> <0x3003> .
+#
+<0x3002> <age> "8"^^<xs:int> .
+<0x3002> <carries> "saxomophone"^^<xs:string> .
+<0x3002> <name> "Lisa"^^<xs:string> .
+<0x3002> <dgraph.type> "FamilyMember" .
+<0x3002> <role> "daughter"^^<xs:string> .
+<0x3002> <sibling_of> <0x3001> .
+<0x3002> <sibling_of> <0x3003> .
+#
+<0x3003> <age> "1"^^<xs:int> .
+<0x3003> <carries> "pacifier"^^<xs:string> .
+<0x3003> <name> "Maggie"^^<xs:string> .
+<0x3003> <dgraph.type> "FamilyMember" .
+<0x3003> <role> "daughter"^^<xs:string> .
+<0x3003> <sibling_of> <0x3001> .
+<0x3003> <sibling_of> <0x3002> .

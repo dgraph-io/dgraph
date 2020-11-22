@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package x
@@ -10,61 +19,169 @@ package x
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
-	"fmt"
 	"io/ioutil"
 	"strings"
-	"sync"
-	"time"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
-type tlsConfigType int8
-
-const (
-	TLSClientConfig tlsConfigType = iota
-	TLSServerConfig
-)
-
 // TLSHelperConfig define params used to create a tls.Config
 type TLSHelperConfig struct {
-	ConfigType             tlsConfigType
-	CertRequired           bool
-	Cert                   string
-	Key                    string
-	KeyPassphrase          string
-	ServerName             string
-	Insecure               bool
-	RootCACerts            string
-	UseSystemRootCACerts   bool
-	ClientAuth             string
-	ClientCACerts          string
-	UseSystemClientCACerts bool
-	MinVersion             string
-	MaxVersion             string
+	CertRequired     bool
+	Cert             string
+	Key              string
+	ServerName       string
+	RootCACert       string
+	ClientAuth       string
+	UseSystemCACerts bool
 }
 
-func RegisterTLSFlags(flag *pflag.FlagSet) {
-	// TODO: Why is the naming of the flags inconsistent here?
-	flag.Bool("tls_on", false, "Use TLS connections with clients.")
-	flag.String("tls_cert", "", "Certificate file path.")
-	flag.String("tls_cert_key", "", "Certificate key file path.")
-	flag.String("tls_cert_key_passphrase", "", "Certificate key passphrase.")
-	flag.Bool("tls_use_system_ca", false, "Include System CA into CA Certs.")
-	flag.String("tls_min_version", "TLS11", "TLS min version.")
-	flag.String("tls_max_version", "TLS12", "TLS max version.")
+// RegisterServerTLSFlags registers the required flags to set up a TLS server.
+func RegisterServerTLSFlags(flag *pflag.FlagSet) {
+	flag.String("tls-cacert", "",
+		"The CA Cert file used to initiate server certificates. Required for enabling TLS.")
+	flag.Bool("tls-use-system-ca", true, "Include System CA into CA Certs.")
+	flag.String("tls-client-auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
+	flag.String("tls-node-cert", "", "The node Cert file which is needed to "+
+		"initiate server in the cluster.")
+	flag.String("tls-node-key", "", "The node key file "+
+		"which is needed to initiate server in the cluster.")
+	flag.Bool("tls-internal-port-enabled", false,
+		"(optional) enable inter node TLS encryption between cluster nodes.")
+	flag.String("tls-cert", "", "(optional) The client Cert file which is needed to "+
+		"connect as a client with the other nodes in the cluster.")
+	flag.String("tls-key", "", "(optional) The private client key file "+
+		"which is needed to connect as a client with the other nodes in the cluster.")
 }
 
-func LoadTLSConfig(conf *TLSHelperConfig, v *viper.Viper) {
-	conf.CertRequired = v.GetBool("tls_on")
-	conf.Cert = v.GetString("tls_cert")
-	conf.Key = v.GetString("tls_cert_key")
-	conf.KeyPassphrase = v.GetString("tls_cert_key_passphrase")
-	conf.UseSystemClientCACerts = v.GetBool("tls_use_system_ca")
-	conf.MinVersion = v.GetString("tls_min_version")
-	conf.MaxVersion = v.GetString("tls_max_version")
+// RegisterClientTLSFlags registers the required flags to set up a TLS client.
+func RegisterClientTLSFlags(flag *pflag.FlagSet) {
+	flag.String("tls-cacert", "",
+		"The CA Cert file used to verify server certificates. Required for enabling TLS.")
+	flag.Bool("tls-use-system-ca", true, "Include System CA into CA Certs.")
+	flag.String("tls-server-name", "", "Used to verify the server hostname.")
+	flag.String("tls-cert", "", "(optional) The Cert file provided by the client to the server.")
+	flag.String("tls-key", "", "(optional) The private key file "+
+		"provided by the client to the server.")
+	flag.Bool("tls-internal-port-enabled", false, "enable inter node TLS encryption between cluster nodes.")
+}
+
+// LoadClientTLSConfigForInternalPort loads tls config for connecting to internal ports of cluster
+func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
+	if !v.GetBool("tls-internal-port-enabled") {
+		return nil, nil
+	}
+	if v.GetString("tls-cert") == "" || v.GetString("tls-key") == "" {
+		return nil, errors.Errorf("inter node tls is enabled but client certs are not provided. " +
+			"Intern Node TLS is always client authenticated. Please provide --tls_cert and --tls_key")
+	}
+
+	conf := &TLSHelperConfig{}
+	conf.UseSystemCACerts = v.GetBool("tls-use-system-ca")
+	conf.RootCACert = v.GetString("tls-cacert")
+	conf.CertRequired = true
+	conf.Cert = v.GetString("tls-cert")
+	conf.Key = v.GetString("tls-key")
+	return GenerateClientTLSConfig(conf)
+}
+
+// LoadServerTLSConfigForInternalPort loads the TLS config for the internal ports of the cluster
+func LoadServerTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
+	if !v.GetBool("tls-internal-port-enabled") {
+		return nil, nil
+	}
+	if v.GetString("tls-node-cert") == "" || v.GetString("tls-node-key") == "" {
+		return nil, errors.Errorf("inter node tls is enabled but server node certs are not provided. " +
+			"Please provide --tls_node_cert and --tls_node_key")
+	}
+	conf := TLSHelperConfig{}
+	conf.UseSystemCACerts = v.GetBool("tls-use-system-ca")
+	conf.RootCACert = v.GetString("tls-cacert")
+	conf.CertRequired = true
+	conf.Cert = v.GetString("tls-node-cert")
+	conf.Key = v.GetString("tls-node-key")
+	conf.ClientAuth = "REQUIREANDVERIFY"
+	return GenerateServerTLSConfig(&conf)
+
+}
+
+// LoadServerTLSConfig loads the TLS config into the server with the given parameters.
+func LoadServerTLSConfig(v *viper.Viper) (*tls.Config, error) {
+	if v.GetString("tls-node-cert") == "" && v.GetString("tls-node-key") == "" {
+		return nil, nil
+	}
+
+	conf := TLSHelperConfig{}
+	conf.RootCACert = v.GetString("tls-cacert")
+	conf.CertRequired = true
+	conf.Cert = v.GetString("tls-node-cert")
+	conf.Key = v.GetString("tls-node-key")
+	conf.ClientAuth = v.GetString("tls-client-auth")
+	conf.UseSystemCACerts = v.GetBool("tls-use-system-ca")
+	return GenerateServerTLSConfig(&conf)
+}
+
+// SlashTLSConfig returns the TLS config appropriate for SlashGraphQL
+// This assumes that endpoint is not empty, and in the format "domain.grpc.cloud.dg.io:443"
+func SlashTLSConfig(endpoint string) (*tls.Config, error) {
+	pool, err := generateCertPool("", true)
+	if err != nil {
+		return nil, err
+	}
+	hostWithoutPort := strings.Split(endpoint, ":")[0]
+	return &tls.Config{
+		RootCAs:    pool,
+		ServerName: hostWithoutPort,
+	}, nil
+}
+
+// LoadClientTLSConfig loads the TLS config into the client with the given parameters.
+func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
+	if v.GetString("slash-grpc-endpoint") != "" {
+		return SlashTLSConfig(v.GetString("slash-grpc-endpoint"))
+	}
+
+	// When the --tls-cacert option is pecified, the connection will be set up using TLS instead of
+	// plaintext. However the client cert files are optional, depending on whether the server
+	// requires a client certificate.
+	caCert := v.GetString("tls-cacert")
+	if caCert != "" {
+		tlsCfg := tls.Config{}
+
+		// 1. set up the root CA
+		pool, err := generateCertPool(caCert, v.GetBool("tls-use-system-ca"))
+		if err != nil {
+			return nil, err
+		}
+		tlsCfg.RootCAs = pool
+
+		// 2. set up the server name for verification
+		tlsCfg.ServerName = v.GetString("tls-server-name")
+
+		// 3. optionally load the client cert files
+		certFile := v.GetString("tls-cert")
+		keyFile := v.GetString("tls-key")
+		if certFile != "" && keyFile != "" {
+			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+			if err != nil {
+				return nil, err
+			}
+			tlsCfg.Certificates = []tls.Certificate{cert}
+		}
+
+		return &tlsCfg, nil
+	} else
+	// Attempt to determine if user specified *any* TLS option. Unfortunately and contrary to
+	// Viper's own documentation, there's no way to tell whether an option value came from a
+	// command-line option or a built-it default.
+	if v.GetString("tls-server-name") != "" ||
+		v.GetString("tls-cert") != "" ||
+		v.GetString("tls-key") != "" {
+		return nil, errors.Errorf("--tls-cacert is required for enabling TLS")
+	}
+	return nil, nil
 }
 
 func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error) {
@@ -84,92 +201,11 @@ func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error)
 			return nil, err
 		}
 		if !pool.AppendCertsFromPEM(caFile) {
-			return nil, fmt.Errorf("Error reading CA file '%s'.\n%s", certPath, err)
+			return nil, errors.Errorf("error reading CA file %q", certPath)
 		}
 	}
 
 	return pool, nil
-}
-
-func parseCertificate(required bool, certPath string, certKeyPath string, certKeyPass string) (*tls.Certificate, error) {
-	if len(certKeyPath) > 0 || len(certPath) > 0 || required {
-		// Load key
-		keyFile, err := ioutil.ReadFile(certKeyPath)
-		if err != nil {
-			return nil, err
-		}
-
-		var certKey []byte
-		if block, _ := pem.Decode(keyFile); block != nil {
-			if x509.IsEncryptedPEMBlock(block) {
-				decryptKey, err := x509.DecryptPEMBlock(block, []byte(certKeyPass))
-				if err != nil {
-					return nil, err
-				}
-
-				privKey, err := x509.ParsePKCS1PrivateKey(decryptKey)
-				if err != nil {
-					return nil, err
-				}
-
-				certKey = pem.EncodeToMemory(&pem.Block{
-					Type:  "RSA PRIVATE KEY",
-					Bytes: x509.MarshalPKCS1PrivateKey(privKey),
-				})
-			} else {
-				certKey = pem.EncodeToMemory(block)
-			}
-		} else {
-			return nil, fmt.Errorf("Invalid Cert Key")
-		}
-
-		// Load cert
-		certFile, err := ioutil.ReadFile(certPath)
-		if err != nil {
-			return nil, err
-		}
-
-		// Load certificate, pair cert/key
-		certificate, err := tls.X509KeyPair(certFile, certKey)
-		if err != nil {
-			return nil, fmt.Errorf("Error reading certificate {cert: '%s', key: '%s'}\n%s", certPath, certKeyPath, err)
-		}
-
-		return &certificate, nil
-	}
-	return nil, nil
-}
-
-func setupVersion(cfg *tls.Config, minVersion string, maxVersion string) error {
-	// Configure TLS version
-	tlsVersion := map[string]uint16{
-		"TLS11": tls.VersionTLS11,
-		"TLS12": tls.VersionTLS12,
-	}
-
-	if len(minVersion) > 0 {
-		if val, has := tlsVersion[strings.ToUpper(minVersion)]; has {
-			cfg.MinVersion = val
-		} else {
-			return fmt.Errorf("Invalid min_version '%s'. Valid values [TLS11, TLS12]", minVersion)
-		}
-	} else {
-		cfg.MinVersion = tls.VersionTLS11
-	}
-
-	if len(maxVersion) > 0 {
-		if val, has := tlsVersion[strings.ToUpper(maxVersion)]; has && val >= cfg.MinVersion {
-			cfg.MaxVersion = val
-		} else {
-			if has {
-				return fmt.Errorf("Cannot use '%s' as max_version, it's lower than '%s'", maxVersion, minVersion)
-			}
-			return fmt.Errorf("Invalid max_version '%s'. Valid values [TLS11, TLS12]", maxVersion)
-		}
-	} else {
-		cfg.MaxVersion = tls.VersionTLS12
-	}
-	return nil
 }
 
 func setupClientAuth(authType string) (tls.ClientAuthType, error) {
@@ -184,193 +220,86 @@ func setupClientAuth(authType string) (tls.ClientAuthType, error) {
 		if v, has := auth[strings.ToUpper(authType)]; has {
 			return v, nil
 		}
-		return tls.NoClientCert, fmt.Errorf("Invalid client auth. Valid values [REQUEST, REQUIREANY, VERIFYIFGIVEN, REQUIREANDVERIFY]")
+		return tls.NoClientCert, errors.Errorf("Invalid client auth. Valid values " +
+			"[REQUEST, REQUIREANY, VERIFYIFGIVEN, REQUIREANDVERIFY]")
 	}
 
 	return tls.NoClientCert, nil
 }
 
-// GenerateTLSConfig creates and returns a new *tls.Config with the
-// configuration provided. If the ConfigType provided in TLSHelperConfig is
-// TLSServerConfig, it's return a reload function. If any problem is found, an
-// error is returned
-func GenerateTLSConfig(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig func(), err error) {
-	wrapper := new(wrapperTLSConfig)
-	tlsCfg = new(tls.Config)
-	wrapper.config = tlsCfg
-
-	cert, err := parseCertificate(config.CertRequired, config.Cert, config.Key, config.KeyPassphrase)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if cert != nil {
-		switch config.ConfigType {
-		case TLSClientConfig:
-			tlsCfg.Certificates = []tls.Certificate{*cert}
-			tlsCfg.BuildNameToCertificate()
-		case TLSServerConfig:
-			wrapper.cert = &wrapperCert{cert: cert}
-			tlsCfg.GetCertificate = wrapper.getCertificate
-			tlsCfg.VerifyPeerCertificate = wrapper.verifyPeerCertificate
-		}
-	}
-
-	auth, err := setupClientAuth(config.ClientAuth)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// If the client cert is required to be checked with the CAs
-	if auth >= tls.VerifyClientCertIfGiven {
-		// A custom cert validation is set because the current implementation is
-		// not thread safe, it's needed bypass that validation and manually
-		// manage the different cases, for that reason, the wrapper is
-		// configured with the real auth level and the tlsCfg is only set with a
-		// auth level who are a simile but without the use of any CA
-		if auth == tls.VerifyClientCertIfGiven {
-			tlsCfg.ClientAuth = tls.RequestClientCert
-		} else {
-			tlsCfg.ClientAuth = tls.RequireAnyClientCert
-		}
-		wrapper.clientAuth = auth
-	} else {
-		// it's not necessary a external validation with the CAs, so the wrapper
-		// is not used
-		tlsCfg.ClientAuth = auth
-	}
-
-	// Configure Root CAs
-	if len(config.RootCACerts) > 0 || config.UseSystemRootCACerts {
-		pool, err := generateCertPool(config.RootCACerts, config.UseSystemRootCACerts)
+// GenerateServerTLSConfig creates and returns a new *tls.Config with the
+// configuration provided.
+func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err error) {
+	if config.CertRequired {
+		tlsCfg = new(tls.Config)
+		cert, err := tls.LoadX509KeyPair(config.Cert, config.Key)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
+		}
+		tlsCfg.Certificates = []tls.Certificate{cert}
+
+		pool, err := generateCertPool(config.RootCACert, config.UseSystemCACerts)
+		if err != nil {
+			return nil, err
+		}
+		tlsCfg.ClientCAs = pool
+
+		auth, err := setupClientAuth(config.ClientAuth)
+		if err != nil {
+			return nil, err
+		}
+		tlsCfg.ClientAuth = auth
+
+		tlsCfg.MinVersion = tls.VersionTLS12
+		tlsCfg.CipherSuites = []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+		}
+
+		return tlsCfg, nil
+	}
+	return nil, nil
+}
+
+// GenerateClientTLSConfig creates and returns a new client side *tls.Config with the
+// configuration provided.
+func GenerateClientTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err error) {
+	if config.CertRequired {
+		tlsCfg := tls.Config{}
+		// 1. set up the root CA
+		pool, err := generateCertPool(config.RootCACert, config.UseSystemCACerts)
+		if err != nil {
+			return nil, err
 		}
 		tlsCfg.RootCAs = pool
-	}
 
-	// Configure Client CAs
-	if len(config.ClientCACerts) > 0 || config.UseSystemClientCACerts {
-		pool, err := generateCertPool(config.ClientCACerts, config.UseSystemClientCACerts)
-		if err != nil {
-			return nil, nil, err
-		}
-		tlsCfg.ClientCAs = x509.NewCertPool()
-		wrapper.clientCAPool = &wrapperCAPool{pool: pool}
-	}
+		// 2. set up the server name for verification
+		tlsCfg.ServerName = config.ServerName
 
-	err = setupVersion(tlsCfg, config.MinVersion, config.MaxVersion)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tlsCfg.InsecureSkipVerify = config.Insecure
-	tlsCfg.ServerName = config.ServerName
-
-	if config.ConfigType == TLSClientConfig {
-		return tlsCfg, nil, nil
-	}
-
-	wrapper.helperConfig = &config
-	return tlsCfg, wrapper.reloadConfig, nil
-}
-
-type wrapperCert struct {
-	sync.RWMutex
-	cert *tls.Certificate
-}
-
-type wrapperCAPool struct {
-	sync.RWMutex
-	pool *x509.CertPool
-}
-
-type wrapperTLSConfig struct {
-	mutex        sync.Mutex
-	cert         *wrapperCert
-	clientCert   *wrapperCert
-	clientCAPool *wrapperCAPool
-	clientAuth   tls.ClientAuthType
-	config       *tls.Config
-	helperConfig *TLSHelperConfig
-}
-
-func (c *wrapperTLSConfig) getCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
-	c.cert.RLock()
-	cert := c.cert.cert
-	c.cert.RUnlock()
-	return cert, nil
-}
-
-func (c *wrapperTLSConfig) getClientCertificate(_ *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-	c.clientCert.RLock()
-	cert := c.clientCert.cert
-	c.clientCert.RUnlock()
-	return cert, nil
-}
-
-func (c *wrapperTLSConfig) verifyPeerCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	if c.clientAuth >= tls.VerifyClientCertIfGiven && len(rawCerts) > 0 {
-		if len(rawCerts) > 0 {
-			pool := x509.NewCertPool()
-			for _, raw := range rawCerts[1:] {
-				if cert, err := x509.ParseCertificate(raw); err == nil {
-					pool.AddCert(cert)
-				} else {
-					return Errorf("Invalid certificate")
-				}
-			}
-
-			c.clientCAPool.RLock()
-			clientCAs := c.clientCAPool.pool
-			c.clientCAPool.RUnlock()
-			opts := x509.VerifyOptions{
-				Intermediates: pool,
-				Roots:         clientCAs,
-				CurrentTime:   time.Now(),
-				KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-			}
-
-			cert, err := x509.ParseCertificate(rawCerts[0])
+		// 3. optionally load the client cert files
+		certFile := config.Cert
+		keyFile := config.Key
+		if certFile != "" && keyFile != "" {
+			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			_, err = cert.Verify(opts)
-			if err != nil {
-				return Errorf("Failed to verify certificate")
-			}
-		} else {
-			return Errorf("Invalid certificate")
+			tlsCfg.Certificates = []tls.Certificate{cert}
 		}
-	}
-	return nil
-}
 
-func (c *wrapperTLSConfig) reloadConfig() {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	// Loading new certificate
-	cert, err := parseCertificate(c.helperConfig.CertRequired, c.helperConfig.Cert, c.helperConfig.Key, c.helperConfig.KeyPassphrase)
-	if err != nil {
-		Printf("Error reloading certificate. %s\nUsing current certificate\n", err.Error())
-	} else if cert != nil {
-		if c.helperConfig.ConfigType == TLSServerConfig {
-			c.cert.Lock()
-			c.cert.cert = cert
-			c.cert.Unlock()
-		}
+		return &tlsCfg, nil
 	}
 
-	// Configure Client CAs
-	if len(c.helperConfig.ClientCACerts) > 0 || c.helperConfig.UseSystemClientCACerts {
-		pool, err := generateCertPool(c.helperConfig.ClientCACerts, c.helperConfig.UseSystemClientCACerts)
-		if err != nil {
-			Printf("Error reloading CAs. %s\nUsing current Client CAs\n", err.Error())
-		} else {
-			c.clientCAPool.Lock()
-			c.clientCAPool.pool = pool
-			c.clientCAPool.Unlock()
-		}
-	}
+	return nil, nil
 }

@@ -1,0 +1,277 @@
+# **Don't delete** Comments at top of schemas should work
+# See: https://github.com/dgraph-io/dgraph/issues/4227
+
+type Hotel {
+        id: ID!
+        name: String! @search(by: [exact])
+        location: Point @search
+        area: Polygon @search
+        branches: MultiPolygon @search
+}
+
+type Country {
+        # **Don't delete** Comments in types should work
+        id: ID! # **Don't delete** Comments in in lines should work
+        name: String! @search(by: [trigram, hash])
+        states: [State] @hasInverse(field: country)
+}
+
+type State {
+        id: ID!
+        xcode: String! @id @search(by: [regexp])
+        name: String!
+        capital: String
+        country: Country
+}
+
+# **Don't delete** Comments in the middle of schemas should work
+# Comments in input schemas should _not_ make it through to the
+# generated schema.
+
+"""
+GraphQL descriptions look like this.  They should work in the input
+schema and should make their way into the generated schema.
+"""
+type Author {
+        id: ID!
+
+        """
+        GraphQL descriptions can be on fields.  They should work in the input
+        schema and should make their way into the generated schema.
+        """
+        name: String! @search(by: [hash, trigram])
+
+        dob: DateTime @search
+        reputation: Float @search
+        qualification: String @search(by: [hash, trigram])
+        country: Country
+        posts: [Post!] @hasInverse(field: author)
+        bio: String @lambda
+        rank: Int @lambda
+}
+
+type Post {
+        postID: ID!
+        title: String! @search(by: [term, fulltext])
+        text: String @search(by: [fulltext])
+        tags: [String] @search(by: [exact])
+        topic: String @search(by: [exact])
+        numLikes: Int @search
+        numViews: Int64 @search
+        isPublished: Boolean @search
+        postType: PostType @search(by: [hash, trigram])
+        author: Author! @hasInverse(field: posts)
+        category: Category @hasInverse(field: posts)
+}
+
+type Category {
+        id: ID
+        name: String
+        posts: [Post]
+}
+
+type User @secret(field: "password") {
+	name: String! @id
+}
+
+"""
+GraphQL descriptions can be on enums.  They should work in the input
+schema and should make their way into the generated schema.
+"""
+enum PostType {
+        Fact
+
+        """
+        GraphQL descriptions can be on enum values.  They should work in the input
+        schema and should make their way into the generated schema.
+        """
+        Question
+        Opinion
+}
+
+"""
+GraphQL descriptions can be on interfaces.  They should work in the input
+schema and should make their way into the generated schema.
+"""
+interface Employee {
+        ename: String!
+}
+
+interface Character {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
+}
+
+type Human implements Character & Employee {
+        starships: [Starship]
+        totalCredits: Float
+}
+
+type Droid implements Character {
+        primaryFunction: String
+}
+
+enum Episode {
+        NEWHOPE
+        EMPIRE
+        JEDI
+}
+
+type Starship {
+        id: ID!
+        name: String! @search(by: [term])
+        length: Float
+}
+
+type Movie {
+        id: ID!
+	name: String!
+	director: [MovieDirector] @hasInverse(field: directed)
+}
+
+type MovieDirector {
+	id: ID!
+	name: String!
+	directed: [Movie]
+}
+
+interface People {
+	id: ID!
+	xid: String! @id
+	name: String!
+}
+
+type Teacher implements People {
+	subject: String
+	teaches: [Student]
+}
+
+type Student implements People {
+        taughtBy: [Teacher] @hasInverse(field: teaches)
+}
+
+type Person @withSubscription{
+    id: ID!
+    name: String!
+}
+
+"""
+This is used for fragment related testing
+"""
+interface Thing {
+        name: String # field to act as a common inherited field for both ThingOne and ThingTwo
+}
+
+type ThingOne implements Thing {
+        id: ID! # ID field with same name as the ID field in ThingTwo
+        color: String # field with same name as a field in ThingTwo
+        usedBy: String # field with different name than any field in ThingTwo
+}
+
+type ThingTwo implements Thing {
+        id: ID!
+        color: String
+        owner: String
+}
+
+type Post1 {
+       id: String! @id
+       comments: [Comment1]
+}
+
+type Comment1 {
+      id: String! @id
+      replies: [Comment1]
+}
+
+type post1{
+        id: ID
+        title: String! @id @search(by: [regexp])
+        numLikes: Int64 @search
+        commentsByMonth: [Int]
+        likesByMonth: [Int64]
+}
+
+type Person1 {
+    id: ID!
+    name: String!
+    friends: [Person1] @hasInverse(field: friends)
+}
+
+# union testing - start
+enum AnimalCategory {
+        Fish
+        Amphibian
+        Reptile
+        Bird
+        Mammal
+        InVertebrate
+}
+
+interface Animal {
+        id: ID!
+        category: AnimalCategory @search
+}
+
+type Dog implements Animal {
+        breed: String @search
+}
+
+type Parrot implements Animal {
+        repeatsWords: [String]
+}
+
+type Cheetah implements Animal {
+        speed: Float
+}
+
+"""
+This type specifically doesn't implement any interface.
+We need this to test out all cases with union.
+"""
+type Plant {
+        id: ID!
+        breed: String # field with same name as a field in type Dog
+}
+
+union HomeMember = Dog | Parrot | Human | Plant
+
+type Zoo {
+        id: ID!
+        animals: [Animal]
+        city: String
+}
+
+type Home {
+        id: ID!
+        address: String
+        members: [HomeMember]
+        favouriteMember: HomeMember
+}
+# union testing - end
+
+type Query {
+        authorsByName(name: String!): [Author] @lambda
+}
+
+type Mutation {
+        newAuthor(name: String!): ID! @lambda
+}
+
+# generate directive testing
+type University @generate(
+        query: {
+                query: false
+        },
+        mutation: {
+                add: true,
+                update: true,
+                delete: false
+        }
+){
+        id: ID!
+        name: String!
+        numStudents: Int
+}

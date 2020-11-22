@@ -1,0 +1,10 @@
+interface Abstract {
+    id: ID!
+    name(random: Int!, size: String): String!
+}
+
+type Message implements Abstract {
+    content(pick: Int!, name: String): String!
+    author: String
+    datePosted: DateTime
+}

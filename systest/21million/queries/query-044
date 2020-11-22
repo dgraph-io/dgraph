@@ -1,0 +1,202 @@
+{
+  movies as var(func: gt(count(~genre), 30000), orderasc: name@en) {
+    name@en
+    ~genre (orderasc: name@en, first: 2) @filter(gt(count(starring), 2)) {
+      starring {
+        performance.actor {
+          ActorName as name@en
+        }
+        Stars as min(val(ActorName))
+      }
+    }
+  }
+
+  movies(func: uid(movies)) {
+    name@en
+    director.film: ~genre (orderasc: name@en, first: 2) @filter(gt(count(starring), 2)) {
+      name@en
+      starring (orderasc: val(Stars), first: 2) {
+        performance.actor {
+          name@en
+        }
+      }
+    }
+  }
+}
+---
+{
+  "movies": [
+    {
+      "director.film": [
+        {
+          "name@en": "¡Ay Carmela!",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Alfonso Guirao"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Andrés Pajares"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name@en": "-30-",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Jack Webb"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Whitney Blake"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "name@en": "Drama"
+    },
+    {
+      "director.film": [
+        {
+          "name@en": "!Women Art Revolution",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Barbara Kruger"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "B. Ruby Rich"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name@en": "...But Film is My Mistress",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Lars von Trier"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Bernardo Bertolucci"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "name@en": "Documentary film"
+    },
+    {
+      "director.film": [
+        {
+          "name@en": "¡Aquí están los aguilares!",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Antonio Aguilar"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Luis Aguilar"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name@en": "¡Mis abuelitas... nomás!",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Antonio Espino"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Alejandro Parodi"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "name@en": "Comedy"
+    },
+    {
+      "director.film": [
+        {
+          "name@en": "?E?anx (The Cave)",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Elaina William"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Edmond Lulua"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name@en": "¡Destápalo!",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Eitaro Tanimoto"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name@en": "Erika de la Llave"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "name@en": "Short Film"
+    }
+  ]
+}

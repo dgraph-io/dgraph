@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package types
@@ -11,9 +20,10 @@ import (
 	"log"
 
 	"github.com/golang/geo/s2"
-	"github.com/twpayne/go-geom"
+	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {
@@ -28,8 +38,8 @@ func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {
 	return tokens
 }
 
-// IndexTokens returns the tokens to be used in a geospatial index for the given geometry. If the
-// geometry is not supported it returns an error.
+// IndexGeoTokens returns the tokens to be used in a geospatial index for the
+// given geometry. If the geometry is not supported it returns an error.
 func IndexGeoTokens(g geom.T) ([]string, error) {
 	parents, cover, err := indexCells(g)
 	if err != nil {
@@ -39,6 +49,7 @@ func IndexGeoTokens(g geom.T) ([]string, error) {
 }
 
 // IndexKeysForCap returns the keys to be used in a geospatial index for a Cap.
+/*
 func indexCellsForCap(c s2.Cap) s2.CellUnion {
 	rc := &s2.RegionCoverer{
 		MinLevel: MinCellLevel,
@@ -48,6 +59,7 @@ func indexCellsForCap(c s2.Cap) s2.CellUnion {
 	}
 	return rc.Covering(c)
 }
+*/
 
 const (
 	parentPrefix = "p/"
@@ -61,7 +73,7 @@ const (
 // query.
 func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 	if g.Stride() != 2 {
-		return nil, nil, x.Errorf("Covering only available for 2D co-ordinates.")
+		return nil, nil, errors.Errorf("Covering only available for 2D co-ordinates.")
 	}
 	switch v := g.(type) {
 	case *geom.Point:
@@ -90,7 +102,7 @@ func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 		parents := getParentCells(cover, MinCellLevel)
 		return parents, cover, nil
 	default:
-		return nil, nil, x.Errorf("Cannot index geometry of type %T", v)
+		return nil, nil, errors.Errorf("Cannot index geometry of type %T", v)
 	}
 }
 
@@ -123,10 +135,10 @@ func loopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
 	r := p.LinearRing(0)
 	n := r.NumCoords()
 	if n < 4 {
-		return nil, x.Errorf("Can't convert ring with less than 4 pts")
+		return nil, errors.Errorf("Can't convert ring with less than 4 pts")
 	}
 	if !r.Coord(0).Equal(geom.XY, r.Coord(n-1)) {
-		return nil, x.Errorf("Last coordinate not same as first for polygon: %+v\n", p)
+		return nil, errors.Errorf("Last coordinate not same as first for polygon: %+v\n", p)
 	}
 	// S2 specifies that the orientation of the polygons should be CCW. However there is no
 	// restriction on the orientation in WKB (or geojson). To get the correct orientation we assume
@@ -137,7 +149,7 @@ func loopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
 
 	// Since our clockwise check was approximate, we check the cap and reverse if needed.
 	if l.CapBound().Radius().Degrees() > 90 {
-		l = loopFromRing(r, !reverse)
+		l.Invert()
 	}
 	return l, nil
 }
