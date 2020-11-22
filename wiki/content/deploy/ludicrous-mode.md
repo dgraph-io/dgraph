@@ -8,7 +8,7 @@ weight = 13
 
 Ludicrous mode is available in Dgraph v20.03.1 or later.
 
-Ludicrous mode allows Dgraph database to ingest data at an incredibly fast speed. It differs from the normal mode as it provides fewer guarantees. In normal mode, Dgraph provides strong consistency. In ludicrous mode, Dgraph provides eventual consistency. In Ludicrous mode, any mutation which succeeds **might be available eventually**. **Eventually** means the changes will be applied later and might not be reflected in queries away. If Dgraph crashes unexpectedly, there **might** be unapplied mutations which **will not** be picked up when Dgraph restarts. Dgraph with ludicrous mode enabled behaves as an eventually consistent system.
+Ludicrous mode allows Dgraph database to ingest data at an incredibly fast speed. It differs from the normal mode as it provides fewer guarantees. In normal mode, Dgraph provides strong consistency. In ludicrous mode, Dgraph provides eventual consistency. In Ludicrous mode, any mutation which succeeds **might be available eventually**. **Eventually** means the changes will be applied later and might not be reflected in query results during data ingestion. If Dgraph crashes unexpectedly, there **might** be unapplied mutations which **will not** be picked up when Dgraph restarts. Dgraph with ludicrous mode enabled behaves as an eventually consistent system.
 
 
 ## How do I enable it?
