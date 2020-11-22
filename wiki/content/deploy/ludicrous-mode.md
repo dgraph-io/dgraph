@@ -15,7 +15,7 @@ Because Dgraph with Ludicrous mode enabled is eventually consistent, it is a goo
 
 ## How do I enable it?
 
-You can enable Ludicrous mode by setting the `--Ludicrous_mode` config option on all Dgraph Zero and Dgraph Alpha nodes in a cluster.
+You can enable Ludicrous mode by setting the `--ludicrous_mode` config option on all Dgraph Zero and Dgraph Alpha nodes in a cluster.
 
 
 ## What does it do?
@@ -45,4 +45,4 @@ Yes, Ludicrous mode works with the cluster set up with multiple data shards.
 
 Ludicrous mode now runs mutations concurrently per predicate. This is enabled
 by default with 2000 concurrent threads available, but you can adjust the number
-of concurrent threads available using the `--Ludicrous_concurrency` configuration setting on the Alpha and Zero nodes in a cluster.
+of concurrent threads available using the `--ludicrous_concurrency` configuration setting on the Alpha and Zero nodes in a cluster.
