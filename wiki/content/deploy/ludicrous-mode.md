@@ -45,4 +45,5 @@ Yes, Ludicrous mode works with the cluster set up with multiple data shards.
 
 Ludicrous mode now runs mutations concurrently per predicate. This is enabled
 by default with 2000 concurrent threads available, but you can adjust the number
-of concurrent threads available using the `--ludicrous_concurrency` configuration setting on the Alpha and Zero nodes in a cluster.
+of concurrent threads available using the `--ludicrous_concurrency`
+configuration setting on the Alpha nodes in a cluster.
