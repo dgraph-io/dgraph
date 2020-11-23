@@ -563,6 +563,7 @@ func run() error {
 		removeAllTestContainers()
 		return nil
 	}
+	fmt.Printf("Proc ID is %d\n", procId)
 
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)

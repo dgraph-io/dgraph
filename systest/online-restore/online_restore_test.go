@@ -435,9 +435,16 @@ func TestRestoreWithDropOperations(t *testing.T) {
 	require.NoError(t, err)
 
 	// setup backup directories
-	backupDir := "/data/backup/tmp"
-	localFsDirs := []string{"./backup/tmp"}
+	backupDir := "/data/backup"
+	tmpdir, err := ioutil.TempDir("./backup/", "tmp")
+	require.NoError(t, err)
+	backupDir = path.Join(backupDir, path.Base(tmpdir))
+	t.Logf("Creating tmp dir at: %s using docker dir: %s\n", tmpdir, backupDir)
+
+	localFsDirs := []string{tmpdir}
 	setupDirs(t, localFsDirs)
+	// remove backup directories to make sure this test doesn't leave anything behind.
+	defer cleanupDirs(t, localFsDirs)
 
 	// create a full backup in backupDir
 	backup(t, backupDir)
@@ -576,10 +583,6 @@ func TestRestoreWithDropOperations(t *testing.T) {
 				"name": "Flower"
 			}`,
 		})
-
-	// remove backup directories to make sure this test doesn't leave anything behind
-	// TODO: This is having some problem on TeamCity
-	//cleanupDirs(t, localFsDirs)
 }
 
 func setupDirs(t *testing.T, dirs []string) {
@@ -594,7 +597,7 @@ func setupDirs(t *testing.T, dirs []string) {
 
 func cleanupDirs(t *testing.T, dirs []string) {
 	for _, dir := range dirs {
-		require.NoError(t, os.RemoveAll(dir))
+		os.RemoveAll(dir)
 	}
 }
 

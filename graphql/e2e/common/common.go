@@ -237,12 +237,19 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 }
 
 func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
-	err := addSchema(GraphqlAdminURL, string(schema))
-	if err != nil {
-		x.Panic(err)
+	for {
+		err := addSchema(GraphqlAdminURL, string(schema))
+		if err == nil {
+			break
+		} else if strings.Contains(err.Error(), "errIndexingInProgress") {
+			time.Sleep(time.Second)
+			continue
+		} else if err != nil {
+			x.Panic(err)
+		}
 	}
 
-	err = maybePopulateData(client, data)
+	err := maybePopulateData(client, data)
 	if err != nil {
 		x.Panic(err)
 	}
