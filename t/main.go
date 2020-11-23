@@ -50,6 +50,15 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+const oneMillionNoIndexSchema = "1million-noindex.schema"
+const oneMillionSchema = "1million.schema"
+const oneMillionRdf = "1million.rdf.gz"
+const benchmarksURL = "https://github.com/dgraph-io/benchmarks/blob/master/data/%s?raw=true"
+
+const twentyOneMillionNoIndexSchema = "1million-noindex.schema"
+const twentyOneMillionSchema = "1million.schema"
+const twentyOneMillionRdf = "1million.rdf.gz"
+
 var (
 	ctxb       = context.Background()
 	oc         = &outputCatcher{}
@@ -160,7 +169,7 @@ func downloadFile(url string, filepath string) error {
 	return err
 }
 
-func handleSpecificPackages(ctx context.Context, task task, prefix string) bool {
+func handleSpecificPackages(ctx context.Context, task task, prefix string) (bool, error) {
 	// TODO(rahul): may be use a common path across tests
 	currentDir, err := os.Getwd()
 	x.Check(err)
@@ -174,10 +183,6 @@ func handleSpecificPackages(ctx context.Context, task task, prefix string) bool 
 		composeFile := composeFileFor(task.pkg.ID)
 
 		// download data
-		oneMillionNoIndexSchema := "1million-noindex.schema"
-		oneMillionSchema := "1million.schema"
-		oneMillionRdf := "1million.rdf.gz"
-		benchmarksURL := "https://github.com/dgraph-io/benchmarks/blob/master/data/%s?raw=true"
 		files := [3]string{oneMillionNoIndexSchema, oneMillionRdf, oneMillionSchema}
 		for _, file := range files {
 			filePath := path.Join(dataDir, file)
@@ -190,7 +195,7 @@ func handleSpecificPackages(ctx context.Context, task task, prefix string) bool 
 
 		startCluster(composeFile, prefix, "zero1")
 		// TODO: test healthiness of zero
-		bulkLoad(prefix, benchmarksDir, dataDir, path.Join(dataDir, oneMillionNoIndexSchema), path.Join(dataDir, oneMillionRdf))
+		bulkLoad(prefix, benchmarksDir, path.Join(dataDir, oneMillionNoIndexSchema), path.Join(dataDir, oneMillionRdf))
 
 		startCluster(composeFile, prefix, "alpha1 alpha2 alpha3")
 
@@ -206,15 +211,36 @@ func handleSpecificPackages(ctx context.Context, task task, prefix string) bool 
 			Schema: string(dat),
 		})
 
-		x.Check(err)
-		runTestsFor(ctx, task.pkg.ID, prefix)
-		return true
+		if err != nil {
+			return true, err
+		}
+		err = runTestsFor(ctx, task.pkg.ID, prefix)
+
+		return true, err
 	}
 	if strings.Contains(task.pkg.Name, "systest/21million") {
+		composeFile := composeFileFor(task.pkg.ID)
+		// download data
+		files := [3]string{twentyOneMillionNoIndexSchema, twentyOneMillionRdf, twentyOneMillionSchema}
+		for _, file := range files {
+			filePath := path.Join(dataDir, file)
+			url := fmt.Sprintf(benchmarksURL, file)
+			println(url)
+			// TODO: make this concurrent
+			err := downloadFile(url, filePath)
+			x.Check(err)
+		}
 
+		startCluster(composeFile, prefix, "zero1")
+		bulkLoad(prefix, benchmarksDir, twentyOneMillionSchema, twentyOneMillionRdf)
+		startCluster(composeFile, prefix, "alpha1 alpha2 alpha3")
+		getInstance(prefix, "alpha1").loginFatal()
+		err = runTestsFor(ctx, task.pkg.ID, prefix)
+
+		return true, err
 	}
 
-	return false
+	return false, nil
 }
 
 type instance struct {
@@ -416,7 +442,11 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			continue
 		}
 		fmt.Println(task.pkg.ID)
-		if handleSpecificPackages(ctx, task, prefix) {
+		specific, err := handleSpecificPackages(ctx, task, prefix)
+		if specific {
+			if err != nil {
+				return err
+			}
 			continue
 		}
 		if task.isCommon {
@@ -662,6 +692,12 @@ func removeAllTestContainers() {
 }
 
 func run() error {
+	teamcityVersion := os.Getenv("TEAMCITY_VERSION")
+	if len(teamcityVersion) > 0 {
+		os.Setenv("GOFLAGS", "-json")
+	}
+	start := time.Now()
+
 	if *clear {
 		removeAllTestContainers()
 		return nil

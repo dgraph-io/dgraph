@@ -1,5 +1,3 @@
-// +build standalone
-
 /*
  * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
