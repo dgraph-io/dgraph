@@ -130,7 +130,7 @@ func TestLiveLoadCanUseAlphaForAssigningUids(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", alphaService, "-u", "groot", "-p", "password"},
 	}
-	_, err := testutil.Pipeline(pipeline)
+	err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t)

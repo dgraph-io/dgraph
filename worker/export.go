@@ -657,6 +657,8 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			// Ignore this predicate.
 		case pk.Attr == "dgraph.cors":
 			// Ignore this predicate.
+		case pk.Attr == "dgraph.drop.op":
+			// Ignore this predicate.
 
 		case pk.IsData() && pk.Attr == "dgraph.graphql.schema":
 			// Export the graphql schema.

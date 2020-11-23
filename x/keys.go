@@ -18,6 +18,7 @@ package x
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"math"
 	"strings"
 
@@ -526,6 +527,18 @@ func Parse(key []byte) (ParsedKey, error) {
 	return p, nil
 }
 
+func IsDropOpKey(key []byte) (bool, error) {
+	pk, err := Parse(key)
+	if err != nil {
+		return false, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
+	}
+
+	if pk.IsData() && pk.Attr == "dgraph.drop.op" {
+		return true, nil
+	}
+	return false, nil
+}
+
 // These predicates appear for queries that have * as predicate in them.
 var starAllPredicateMap = map[string]struct{}{
 	"dgraph.type": {},
@@ -544,6 +557,7 @@ var aclPredicateMap = map[string]struct{}{
 var graphqlReservedPredicate = map[string]struct{}{
 	"dgraph.graphql.xid":    {},
 	"dgraph.graphql.schema": {},
+	"dgraph.drop.op":        {},
 }
 
 // internalPredicateMap stores a set of Dgraph's internal predicate. An internal
