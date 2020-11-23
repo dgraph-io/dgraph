@@ -9,7 +9,7 @@ weight = 4
 
 To set up a lambda mutation, first you need to define it on your GraphQL schema by using the `@lambda` directive.
 
-For example, to define a lambda mutation for `Author` that creates a new author with a default reputation of `3.0` given just the name:
+For example, to define a lambda mutation for `Author` that creates a new author with a default `reputation` of `3.0` given just the `name`:
 
 ```graphql
 type Author {
