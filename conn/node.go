@@ -708,7 +708,7 @@ func (n *Node) RunReadIndexLoop(closer *z.Closer, readStateCh <-chan raft.ReadSt
 			// call, causing more unique traffic and further delays in request processing.
 			activeRctx := make([]byte, 8)
 			x.Check2(n.Rand.Read(activeRctx))
-			glog.V(3).Infof("Request readctx: %#x", activeRctx)
+			glog.V(4).Infof("Request readctx: %#x", activeRctx)
 			for {
 				index, err := readIndex(activeRctx)
 				if err == errInternalRetry {
