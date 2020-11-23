@@ -1076,7 +1076,7 @@ func addSelectionSetFrom(
 	// These fields might not have been requested by the user directly as part of the query but
 	// are required in the body template for other fields requested within the query. We must
 	// fetch them from Dgraph.
-	requiredFields := make(map[string]schema.FieldDefinition)
+	requiredFields := make(map[string]bool)
 	// fieldSeenCount is a map from field's dgraph alias to integer.
 	// It stores the number of times a field was encountered
 	// in the query till now.
@@ -1229,9 +1229,9 @@ func addSelectionSetFrom(
 
 	// Add fields required by other custom fields which haven't already been added as a
 	// child to be fetched from Dgraph.
-	for _, dgAlias := range rfset {
-		if fieldSeenCount[dgAlias] == 0 {
-			f := requiredFields[dgAlias]
+	for _, fname := range rfset {
+		if fieldSeenCount[fname] == 0 {
+			f := field.Type().Field(fname)
 			child := &gql.GraphQuery{
 				Alias: f.DgraphAlias(),
 			}
