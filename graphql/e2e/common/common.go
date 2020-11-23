@@ -249,7 +249,7 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
 }
 
 func BootstrapServer(schema, data []byte) {
-	err := checkGraphQLStarted(GraphqlAdminURL)
+	err := CheckGraphQLStarted(GraphqlAdminURL)
 	if err != nil {
 		x.Panic(errors.Errorf(
 			"Waited for GraphQL test server to become available, but it never did.\n"+
@@ -760,7 +760,7 @@ func allCountriesAdded() ([]*country, error) {
 	return result.Data.QueryCountry, nil
 }
 
-func checkGraphQLStarted(url string) error {
+func CheckGraphQLStarted(url string) error {
 	var err error
 	retries := 6
 	sleep := 10 * time.Second

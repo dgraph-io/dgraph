@@ -387,6 +387,9 @@ func TestExportFormat(t *testing.T) {
 	defer os.RemoveAll(tmpdir)
 
 	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	err = testutil.CheckForGraphQLEndpointToReady(t)
+	require.NoError(t, err)
+
 	params := testutil.GraphQLParams{
 		Query:     exportRequest,
 		Variables: map[string]interface{}{"format": "json"},
