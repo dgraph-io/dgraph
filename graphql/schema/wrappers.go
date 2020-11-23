@@ -190,6 +190,7 @@ type Type interface {
 	FieldOriginatedFrom(fieldName string) string
 	AuthRules() *TypeAuth
 	IsGeo() bool
+	IsInbuiltOrEnumType() bool
 	fmt.Stringer
 }
 
@@ -1113,6 +1114,11 @@ func (f *field) AbstractType() bool {
 
 func (f *field) GetObjectName() string {
 	return f.field.ObjectDefinition.Name
+}
+
+func (t *astType) IsInbuiltOrEnumType() bool {
+	_, ok := inbuiltTypeToDgraph[t.Name()]
+	return ok || (t.inSchema.schema.Types[t.Name()].Kind == ast.Enum)
 }
 
 func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, error) {

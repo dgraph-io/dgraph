@@ -75,22 +75,21 @@ var (
 		"Just show how the packages would be executed, without running tests.")
 )
 
-func commandWithContext(ctx context.Context, q string) *exec.Cmd {
-	splits := strings.Split(q, " ")
-	sane := splits[:0]
-	for _, s := range splits {
-		if s != "" {
-			sane = append(sane, s)
-		}
-	}
-	cmd := exec.CommandContext(ctx, sane[0], sane[1:]...)
+func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 	return cmd
 }
-func command(cmd string) *exec.Cmd {
-	return commandWithContext(ctxb, cmd)
+
+// command takes a list of args and executes them as a program.
+// Example:
+//   docker-compose up -f "./my docker compose.yml"
+// would become:
+//   command("docker-compose", "up", "-f", "./my docker compose.yml")
+func command(args ...string) *exec.Cmd {
+	return commandWithContext(ctxb, args...)
 }
 func runFatal(cmd *exec.Cmd) {
 	if err := cmd.Run(); err != nil {
@@ -99,9 +98,9 @@ func runFatal(cmd *exec.Cmd) {
 	}
 }
 func startCluster(composeFile, prefix string) {
-	q := fmt.Sprintf("docker-compose -f %s -p %s up --force-recreate --remove-orphans --detach",
-		composeFile, prefix)
-	cmd := command(q)
+	cmd := command(
+		"docker-compose", "-f", composeFile, "-p", prefix,
+		"up", "--force-recreate", "--remove-orphans", "--detach")
 	cmd.Stderr = nil
 	fmt.Printf("Bringing up cluster %s...\n", prefix)
 	runFatal(cmd)
@@ -111,10 +110,8 @@ func startCluster(composeFile, prefix string) {
 	time.Sleep(3 * time.Second)
 }
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
-	q := fmt.Sprintf("docker-compose -f %s -p %s down",
-		composeFile, prefix)
 	go func() {
-		cmd := command(q)
+		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down")
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
@@ -213,18 +210,18 @@ func (in instance) loginFatal() {
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var opts []string
+	var args = []string{"go", "test", "-failfast", "-v"}
 	if *count > 0 {
-		opts = append(opts, "-count="+strconv.Itoa(*count))
+		args = append(args, "-count="+strconv.Itoa(*count))
 	}
 	if len(*runTest) > 0 {
-		opts = append(opts, "-run="+*runTest)
+		args = append(args, "-run="+*runTest)
 	}
 	if isTeamcity {
-		opts = append(opts, "-json")
+		args = append(args, "-json")
 	}
-	q := fmt.Sprintf("go test -failfast -v %s %s", strings.Join(opts, " "), pkg)
-	cmd := commandWithContext(ctx, q)
+	args = append(args, pkg)
+	cmd := commandWithContext(ctx, args...)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
 
 	// Use failureCatcher.
@@ -237,7 +234,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 		time.Sleep(time.Second)
 	} else {
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("While running command: %q Error: %v", q, err)
+			return fmt.Errorf("While running command: %v Error: %v", args, err)
 		}
 	}
 
@@ -384,7 +381,7 @@ func findPackagesFor(testName string) []string {
 		return []string{}
 	}
 
-	cmd := command(fmt.Sprintf("ack %s %s -l", testName, *baseDir))
+	cmd := command("ack", testName, *baseDir, "-l")
 	var b bytes.Buffer
 	cmd.Stdout = &b
 	if err := cmd.Run(); err != nil {
@@ -570,7 +567,7 @@ func run() error {
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
 
-	cmd := command("make install")
+	cmd := command("make", "install")
 	cmd.Dir = *baseDir
 	if err := cmd.Run(); err != nil {
 		return err

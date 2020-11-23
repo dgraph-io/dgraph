@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -34,10 +35,11 @@ import (
 )
 
 var (
-	subscriptionEndpoint = "ws://"+ testutil.ContainerAddr("alpha1", 8080) +"/graphql"
+	subscriptionEndpoint = "ws://" + testutil.ContainerAddr("alpha1", 8080) + "/graphql"
 )
+
 const (
-	customTypes          = `type MovieDirector @remote {
+	customTypes = `type MovieDirector @remote {
 		 id: ID!
 		 name: String!
 		 directed: [Movie]
@@ -3053,4 +3055,13 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 	common.DeleteGqlType(t, "Character", map[string]interface{}{"id": []interface{}{addResp.
 		AddHuman.Human[0].ID}},
 		1, nil)
+}
+
+func TestMain(m *testing.M) {
+	err := common.CheckGraphQLStarted(common.GraphqlAdminURL)
+	if err != nil {
+		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
 }

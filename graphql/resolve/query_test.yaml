@@ -2326,6 +2326,7 @@
       }
     }
 
+
 - name: "Rewrite without custom fields"
   gqlquery: |
     query {
@@ -2445,7 +2446,7 @@
       }
     }
 
-- name: "querying a field multiple times with different aliases adds it only once in rewriting"
+- name: "querying a inbuiltType field multiple times with different aliases adds it only once in rewriting"
   gqlquery: |-
     query {
       queryThingOne {
@@ -2461,6 +2462,144 @@
       queryThingOne(func: type(ThingOne)) {
         id : uid
         name : Thing.name
+      }
+    }
+
+- name: "querying an Enum type field multiple times with different aliases adds it only once in rewrting"
+  gqlquery: |-
+    query {
+      queryPost {
+        title
+        p1: postType
+        p2: postType
+      }
+    }
+  dgquery: |-
+    query {
+      queryPost(func: type(Post)) {
+        title : Post.title
+        postType : Post.postType
+        dgraph.uid : uid
+      }
+    }
+- 
+  name: "querying a non-inbuiltType field multiple times with different aliases should reflect in rewriting"
+  gqlquery: |-
+    query {
+      queryAuthor {
+        name
+        p1: posts(filter: {isPublished: true}){
+          title
+          text
+        }
+        p2: posts(filter: {isPublished: false}){
+          title
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter(eq(Post.isPublished, true)) {
+          title : Post.title
+          text : Post.text
+          dgraph.uid : uid
+        }
+        posts1 : Author.posts @filter(eq(Post.isPublished, false)) {
+          title : Post.title
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- 
+  name: "querying  field multiple times with different aliases and same filters"
+  gqlquery: |-
+    query {
+      queryAuthor {
+        name
+        p1: posts(filter: {isPublished: true}){
+          title
+          text
+        }
+        p2: posts(filter: {isPublished: true}){
+          title
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter(eq(Post.isPublished, true)) {
+          title : Post.title
+          text : Post.text
+          dgraph.uid : uid
+        }
+        posts1 : Author.posts @filter(eq(Post.isPublished, true)) {
+          title : Post.title
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+-
+  name: "Query with Same Alias"
+  gqlquery: |-
+    query {
+      queryAuthor {
+        name
+        p1: posts(filter: {isPublished: true}){
+          title
+          text
+        }
+        p1: posts(filter: {isPublished: false}){
+          title
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter(eq(Post.isPublished, true)) {
+          title : Post.title
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+- 
+  name: "Aggregate Query with multiple aliases"
+  gqlquery: |
+    query{
+      queryAuthor{
+        postsAggregate{
+          count
+        }
+        p1: postsAggregate(filter: {tags: {gt: "abc"}}){
+          count
+        }
+        p2: postsAggregate(filter: {tags: {le: "xyz"}}){
+          count
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        count_postsAggregate : count(Author.posts)
+        count_postsAggregate1 : count(Author.posts) @filter(gt(Post.tags, "abc"))
+        count_postsAggregate2 : count(Author.posts) @filter(le(Post.tags, "xyz"))
+        dgraph.uid : uid
       }
     }
 
