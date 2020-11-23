@@ -133,11 +133,11 @@ func BlockingStop() {
 	workerServer.Stop()
 }
 
-// UpdateCacheMb updates the value of cache_mb and updates the corresponding cache sizes.
+// UpdateCacheMb updates the value of cache-mb and updates the corresponding cache sizes.
 func UpdateCacheMb(memoryMB int64) error {
 	glog.Infof("Updating cacheMb to %d", memoryMB)
 	if memoryMB < 0 {
-		return errors.Errorf("cache_mb must be non-negative")
+		return errors.Errorf("cache-mb must be non-negative")
 	}
 
 	cachePercent, err := x.GetCachePercentages(Config.CachePercentage, 4)

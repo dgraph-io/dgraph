@@ -25,10 +25,6 @@ import (
 	"testing"
 )
 
-const (
-	graphqlURL = "http://localhost:8180/graphql"
-)
-
 type TestCase struct {
 	name      string
 	query     string
@@ -77,7 +73,7 @@ func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 			Query:     tcase.query,
 			Variables: tcase.variables,
 		}
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
 			"a valid JWT is required but was not provided")
@@ -111,7 +107,7 @@ func TestAuthRulesQueryWithClosedByDefaultFlag(t *testing.T) {
 		queryParams := &common.GraphQLParams{
 			Query: tcase.query,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
 		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
 			"a valid JWT is required but was not provided")
@@ -153,7 +149,7 @@ func TestAuthRulesUpdateWithClosedByDefaultFlag(t *testing.T) {
 			Variables: map[string]interface{}{"ids": []string{"0x1"}},
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
 			"a valid JWT is required but was not provided")
@@ -189,7 +185,7 @@ func TestDeleteOrRBACFilter(t *testing.T) {
 			Query:     tcase.query,
 			Variables: map[string]interface{}{"ids": []string{"0x1"}},
 		}
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		require.Equal(t, len(gqlResponse.Errors), 1)
 		require.Contains(t, gqlResponse.Errors[0].Error(),
 			"a valid JWT is required but was not provided")

@@ -38,7 +38,7 @@ func (p *Project) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"ids": []string{p.ProjID}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -54,7 +54,7 @@ func (c *Column) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"colids": []string{c.ColID}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -70,7 +70,7 @@ func (i *Issue) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"ids": []string{i.Id}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -86,7 +86,7 @@ func (l *Log) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"ids": []string{l.Id}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -102,7 +102,7 @@ func (m *Movie) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"ids": []string{m.Id}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -117,7 +117,7 @@ func (a *Author) delete(t *testing.T) {
 		`,
 		Variables: map[string]interface{}{"ids": []string{a.Id}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -133,7 +133,7 @@ func (q *Question) delete(t *testing.T, user string) {
 		`,
 		Variables: map[string]interface{}{"ids": []string{q.Id}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -149,7 +149,7 @@ func (f *FbPost) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"ids": []string{f.Id}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -230,7 +230,7 @@ func TestAuth_AddOnTypeWithRBACRuleOnInterface(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.expectedError {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
@@ -328,7 +328,7 @@ func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.expectedError {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
@@ -441,7 +441,7 @@ func TestAddDeepFilter(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
@@ -544,7 +544,7 @@ func TestAddOrRBACFilter(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
@@ -623,7 +623,7 @@ func TestAddAndRBACFilterMultiple(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
@@ -698,7 +698,7 @@ func TestAddAndRBACFilter(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
@@ -802,7 +802,7 @@ func TestAddComplexFilter(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
@@ -870,7 +870,7 @@ func TestAddRBACFilter(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
@@ -934,7 +934,7 @@ func TestAddGQLOnly(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")

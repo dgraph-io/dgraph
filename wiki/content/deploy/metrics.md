@@ -7,14 +7,17 @@ weight = 15
 +++
 
 
-Dgraph metrics follow the [metric and label conventions for
-Prometheus](https://prometheus.io/docs/practices/naming/).
+Dgraph database provides metrics on disk activity, memory usage, Dgraph instance
+activity and server node health; along with built-in metrics provided by Go.
+Dgraph metrics follow the
+[metric and label conventions for the Prometheus](https://prometheus.io/docs/practices/naming/)
+monitoring and alerting toolkit.
 
-## Disk Metrics
+## Disk metrics
 
-The disk metrics let you track the disk activity of the Dgraph process. Dgraph does not interact
-directly with the filesystem. Instead it relies on [Badger](https://github.com/dgraph-io/badger) to
-read from and write to disk.
+Disk metrics let you track the disk activity of the Dgraph process. Dgraph does
+not interact directly with the filesystem. Instead it relies on
+[Badger](https://github.com/dgraph-io/badger) to read from and write to disk.
 
  Metrics                          	 | Description
  -------                          	 | -----------
@@ -26,14 +29,15 @@ read from and write to disk.
  `badger_v2_read_bytes`              | Total bytes read from Badger.
  `badger_v2_written_bytes`           | Total bytes written to Badger.
 
-## Memory Metrics
+## Memory metrics
 
-The memory metrics let you track the memory usage of the Dgraph process. The idle and inuse metrics
-gives you a better sense of the active memory usage of the Dgraph process. The process memory metric
-shows the memory usage as measured by the operating system.
+Memory metrics let you track the memory usage of the Dgraph process. The `idle`
+and `inuse` metrics give you a better sense of the active memory usage of the
+Dgraph process. The process memory metric shows the memory usage as measured by
+the operating system.
 
-By looking at all three metrics you can see how much memory a Dgraph process is holding from the
-operating system and how much is actively in use.
+By looking at all three metrics you can see how much memory a Dgraph process is
+holding from the operating system and how much is actively in use.
 
  Metrics                          | Description
  -------                          | -----------
@@ -43,7 +47,8 @@ operating system and how much is actively in use.
 
 ## Activity Metrics
 
-The activity metrics let you track the mutations, queries, and proposals of an Dgraph instance.
+Activity metrics let you track the mutations, queries, and proposals of a Dgraph
+instance.
 
  Metrics                                            | Description
  -------                                            | -----------
@@ -56,16 +61,18 @@ The activity metrics let you track the mutations, queries, and proposals of an D
 
 ## Health Metrics
 
-The health metrics let you track to check the availability of an Dgraph Alpha instance.
+Health metrics let you check the health of a Dgraph Alpha server node.
 
  Metrics                          | Description
  -------                          | -----------
- `dgraph_alpha_health_status`     | **Only applicable to Dgraph Alpha**. Value is 1 when the Alpha is ready to accept requests; otherwise 0.
- `dgraph_max_assigned_ts`         | **Only applicable to Dgraph Alpha**. This will show the latest max assigned timestamp. All alphas (within the same alpha group) should show the same timestamp if they are in sync.
+ `dgraph_alpha_health_status`     | **Only applicable to Dgraph Alpha**. Value is 1 when the Alpha node is ready to accept requests; otherwise 0.
+ `dgraph_max_assigned_ts`         | **Only applicable to Dgraph Alpha**. This shows the latest max assigned timestamp. All Alpha nodes within the same Alpha group should show the same timestamp if they are in sync.
+ `dgraph_txn_aborts_total`        | **Only applicable to Dgraph Alpha**. Shows the total number of transaction aborts that have occurred on the Alpha node.
 
 ## Go Metrics
 
-Go's built-in metrics may also be useful to measure for memory usage and garbage collection time.
+Go's built-in metrics may also be useful to measure memory usage and garbage
+collection time.
 
  Metrics                        | Description
  -------                        | -----------

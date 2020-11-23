@@ -716,7 +716,8 @@ func completeDgraphResult(
 			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result"))
 	}
 
-	switch val := valToComplete[field.DgraphAlias()].(type) {
+	alias := field.DgraphAlias()
+	switch val := valToComplete[alias].(type) {
 	case []interface{}:
 		if field.Type().ListType() == nil {
 			// Turn Dgraph list result to single object
@@ -1325,6 +1326,11 @@ func completeObject(
 
 	x.Check2(buf.WriteRune('{'))
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
+
+	// fieldSeenCount is to keep track the number of times a specific field
+	// has been seen till now. It is used in generating Unique Dgraph Alias
+	// to extract out the corresponding value of field from the response.
+	fieldSeenCount := make(map[string]int)
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
 			continue
@@ -1352,7 +1358,15 @@ func completeObject(
 
 		seenField[f.ResponseName()] = true
 
-		val := res[f.DgraphAlias()]
+		var uniqueDgraphAlias string
+		// In case of InbuiltType or Enums, only one alias was passed into the dgraph query.
+		// So just map its value to all of its occurences.
+		if f.Type().IsInbuiltOrEnumType() {
+			uniqueDgraphAlias = f.DgraphAlias()
+		} else {
+			uniqueDgraphAlias = generateUniqueDgraphAlias(f, fieldSeenCount)
+		}
+		val := res[uniqueDgraphAlias]
 		// Handle aggregate queries:
 		// Aggregate Fields in DQL response don't follow the same response as other queries.
 		// Create a map aggregateVal and store response of aggregate fields in a way which
@@ -1362,7 +1376,7 @@ func completeObject(
 			aggregateVal := make(map[string]interface{})
 			for _, aggregateField := range f.SelectionSet() {
 				if aggregateField.DgraphAlias() == "count" {
-					aggregateVal["count"] = res["count_"+f.DgraphAlias()]
+					aggregateVal["count"] = res["count_"+generateUniqueDgraphAlias(f, fieldSeenCount)]
 				}
 			}
 			val = aggregateVal
@@ -1408,6 +1422,7 @@ func completeObject(
 		}
 		x.Check2(buf.Write(completed))
 		comma = ", "
+		fieldSeenCount[f.DgraphAlias()]++
 	}
 	x.Check2(buf.WriteRune('}'))
 

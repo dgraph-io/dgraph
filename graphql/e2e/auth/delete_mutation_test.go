@@ -21,7 +21,7 @@ func (c *Column) add(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"column": c},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -37,7 +37,7 @@ func (l *Log) add(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"pwd": "password", "logs": l.Logs, "random": l.Random},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -53,7 +53,7 @@ func (i *Issue) add(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"issue": i},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -69,7 +69,7 @@ func (m *Movie) add(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"movie": m},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -85,7 +85,7 @@ func (cl *ComplexLog) add(t *testing.T, role string) {
 		`,
 		Variables: map[string]interface{}{"complexlog": cl},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -101,7 +101,7 @@ func (q *Question) add(t *testing.T, user string, ans bool) {
 		`,
 		Variables: map[string]interface{}{"text": q.Text, "ans": q.Answered, "id": q.Author.Id, "pwd": "password"},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -117,7 +117,7 @@ func (a *Answer) add(t *testing.T, user string) {
 		`,
 		Variables: map[string]interface{}{"text": a.Text, "id": a.Author.Id, "pwd": "password"},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -133,7 +133,7 @@ func (f *FbPost) add(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"text": f.Text, "id1": f.Author.Id, "id2": f.Sender.Id, "id3": f.Receiver.Id, "postCount": f.PostCount, "pwd": "password"},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
@@ -151,7 +151,7 @@ func getComplexLog(t *testing.T, role string) ([]*ComplexLog, []string) {
 	}
 
 	getParams.Headers = common.GetJWT(t, "", role, metaInfo)
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
 	var result struct {
@@ -218,7 +218,7 @@ func TestAuth_DeleteOnInterfaceWithAuthRules(t *testing.T) {
 			Variables: map[string]interface{}{"posts": allPostsIds},
 		}
 
-		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
 		require.Nil(t, gqlResponse.Errors)
 		require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 
@@ -274,7 +274,7 @@ func TestAuth_DeleteTypeWithRBACFilteronInterface(t *testing.T) {
 			Variables: map[string]interface{}{"questions": allFbPostsIds},
 		}
 
-		gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
 		require.Nil(t, gqlResponse.Errors)
 		require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 
@@ -330,7 +330,7 @@ func TestAuth_DeleteOnTypeWithGraphTraversalAuthRuleOnInterface(t *testing.T) {
 				Variables: map[string]interface{}{"questions": allQuestionsIds},
 			}
 
-			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 
@@ -380,7 +380,7 @@ func TestDeleteRootFilter(t *testing.T) {
 				Variables: map[string]interface{}{"cols": allColumnIds},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 
@@ -425,7 +425,7 @@ func TestDeleteRBACFilter(t *testing.T) {
 				Variables: map[string]interface{}{"logs": allLogIds},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 
@@ -465,7 +465,7 @@ func TestDeleteOrRBACFilter(t *testing.T) {
 				Query:     query,
 				Variables: map[string]interface{}{"ids": allComplexLogIds},
 			}
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 
@@ -518,7 +518,7 @@ func TestDeleteAndRBACFilter(t *testing.T) {
 				Variables: map[string]interface{}{"ids": ids},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 
@@ -571,7 +571,7 @@ func TestDeleteNestedFilter(t *testing.T) {
 				Variables: map[string]interface{}{"ids": ids},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 
@@ -605,7 +605,7 @@ func TestDeleteRBACRuleInverseField(t *testing.T) {
 		}},
 	}
 
-	gqlResponse := addTweetsParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
 	testCases := []TestCase{
@@ -642,7 +642,7 @@ func TestDeleteRBACRuleInverseField(t *testing.T) {
 				Query:   mutation,
 			}
 
-			gqlResponse := deleteTweetsParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := deleteTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})

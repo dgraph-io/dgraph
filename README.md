@@ -107,7 +107,7 @@ makes it easy to build applications with it.
   play.dgraph.io](http://play.dgraph.io/).
 - Please see [releases tab](https://github.com/dgraph-io/dgraph/releases) to
   find the latest release and corresponding release notes.
-- [See the Roadmap](https://github.com/dgraph-io/dgraph/issues/4724) for list of
+- [See the Roadmap](https://discuss.dgraph.io/t/product-roadmap-2020/8479) for list of
   working and planned features.
 - Read about the latest updates from Dgraph team [on our
   blog](https://open.dgraph.io/).
@@ -123,5 +123,5 @@ The Dgraph team maintain a number of [officially supported client libraries](htt
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
-- Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) for filing bugs or feature requests.
+- Please use [discuss.dgraph.io](https://discuss.dgraph.io/c/issues/dgraph/38) for filing bugs or feature requests.
 - Follow us on Twitter [@dgraphlabs](https://twitter.com/dgraphlabs).

@@ -205,6 +205,7 @@ func TestUpsertExampleJSON(t *testing.T) {
 
 func TestUpsertExample0JSON(t *testing.T) {
 	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`email: string .`))
 	require.NoError(t, alterSchema(`email: string @index(exact) .`))
 
 	// Mutation with wrong name
@@ -2168,7 +2169,7 @@ upsert {
 
 func TestEmptyRequest(t *testing.T) {
 	// We are using the dgo client in this test here to test the grpc interface
-	dg, err := testutil.DgraphClientWithGroot("localhost:9180")
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err, "error while getting a dgraph client")
 
 	require.NoError(t, dg.Alter(context.Background(), &api.Operation{

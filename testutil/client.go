@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -33,6 +34,8 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -42,7 +45,10 @@ import (
 
 // socket addr = IP address and port number
 var (
-
+	// Instance is the instance name of the Alpha.
+	DockerPrefix  string
+	Instance      string
+	MinioInstance string
 	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
 	SockAddr string
 	// SockAddrHttp is the address to the HTTP of alpha used during tests.
@@ -53,27 +59,55 @@ var (
 	SockAddrZeroHttp string
 )
 
+func AdminUrl() string {
+	return "http://" + SockAddrHttp + "/admin"
+}
+
+func getContainer(name string) types.Container {
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+
+	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
+	if err != nil {
+		log.Fatalf("While listing container: %v\n", err)
+	}
+
+	q := fmt.Sprintf("/%s_%s_", DockerPrefix, name)
+	for _, c := range containers {
+		for _, n := range c.Names {
+			if !strings.HasPrefix(n, q) {
+				continue
+			}
+			return c
+		}
+	}
+	return types.Container{}
+}
+
+func ContainerAddr(name string, privatePort uint16) string {
+	c := getContainer(name)
+	for _, p := range c.Ports {
+		if p.PrivatePort == privatePort {
+			return "localhost:" + strconv.Itoa(int(p.PublicPort))
+		}
+	}
+	return "localhost:" + strconv.Itoa(int(privatePort))
+}
+
 // This allows running (most) tests against dgraph running on the default ports, for example.
 // Only the GRPC ports are needed and the others are deduced.
 func init() {
-	var grpcPort int
+	DockerPrefix = os.Getenv("TEST_DOCKER_PREFIX")
 
-	getPort := func(envVar string, dfault int) int {
-		p := os.Getenv(envVar)
-		if p == "" {
-			return dfault
-		}
-		port, _ := strconv.Atoi(p)
-		return port
-	}
+	MinioInstance = ContainerAddr("minio", 9001)
+	Instance = fmt.Sprintf("%s_%s_1", DockerPrefix, "alpha1")
+	SockAddr = ContainerAddr("alpha1", 9080)
+	SockAddrHttp = ContainerAddr("alpha1", 8080)
 
-	grpcPort = getPort("TEST_PORT_ALPHA", 9180)
-	SockAddr = fmt.Sprintf("localhost:%d", grpcPort)
-	SockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
+	SockAddrZero = ContainerAddr("zero1", 5080)
+	SockAddrZeroHttp = ContainerAddr("zero1", 6080)
 
-	grpcPort = getPort("TEST_PORT_ZERO", 5180)
-	SockAddrZero = fmt.Sprintf("localhost:%d", grpcPort)
-	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", grpcPort+1000)
+	fmt.Printf("testutil: %q %s %s\n", DockerPrefix, SockAddr, SockAddrZero)
 }
 
 // DgraphClientDropAll creates a Dgraph client and drops all existing data.
@@ -187,6 +221,21 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 
 		return resp, err
 	}
+}
+
+func RetryAlter(dg *dgo.Dgraph, op *api.Operation) error {
+	for i := 0; i < 10; i++ {
+		err := dg.Alter(context.Background(), op)
+		if err == nil {
+			return nil
+		}
+		if strings.Contains(err.Error(), "opIndexing is already running") {
+			time.Sleep(time.Second)
+		} else {
+			return err
+		}
+	}
+	return fmt.Errorf("not able to successfully alter the schema")
 }
 
 // RetryBadQuery will retry a query until it failse with a non-retryable error.
@@ -371,8 +420,6 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) 
 
 // VerifyCurlCmd executes the curl command with the given arguments and verifies
 // the result against the expected output.
-// VerifyCurlCmd executes the curl command with the given arguments and verifies
-// the result against the expected output.
 func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig) {
 	queryCmd := exec.Command("curl", args...)
 	output, err := queryCmd.Output()
@@ -393,4 +440,49 @@ func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig
 func AssignUids(num uint64) error {
 	_, err := http.Get(fmt.Sprintf("http://"+SockAddrZeroHttp+"/assign?what=uids&num=%d", num))
 	return err
+}
+
+func CheckForGraphQLEndpointToReady(t *testing.T) error {
+	var err error
+	retries := 6
+	sleep := 10 * time.Second
+
+	// Because of how GraphQL starts (it needs to read the schema from Dgraph),
+	// there's no guarantee that GraphQL is available by now.  So we
+	// need to try and connect and potentially retry a few times.
+	for retries > 0 {
+		retries--
+
+		_, err = hasAdminGraphQLSchema(t)
+		if err == nil {
+			return nil
+		}
+		time.Sleep(sleep)
+	}
+	return err
+}
+
+func hasAdminGraphQLSchema(t *testing.T) (bool, error) {
+	schemaQry := &GraphQLParams{
+		Query: `query { getGQLSchema { schema } }`,
+	}
+
+	result := MakeGQLRequest(t, schemaQry)
+	result.RequireNoGraphQLErrors(t)
+	var sch struct {
+		GetGQLSchema struct {
+			Schema string
+		}
+	}
+
+	err := json.Unmarshal(result.Data, &sch)
+	if err != nil {
+		return false, errors.Wrap(err, "error trying to unmarshal GraphQL query result")
+	}
+
+	if sch.GetGQLSchema.Schema == "" {
+		return false, nil
+	}
+
+	return true, nil
 }

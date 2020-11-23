@@ -123,8 +123,9 @@ var (
 	replicas  = pflag.Int("replicas", 3, "How many replicas of data should dgraph store?")
 	skew      = pflag.String("skew", "", "Skew clock amount. (tiny, small, big, huge)")
 	testCount = pflag.IntP("test-count", "c", 1, "Test count per Jepsen test.")
-	jaeger    = pflag.StringP("jaeger", "j", "http://jaeger:14268",
-		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger.")
+	jaeger    = pflag.StringP("jaeger", "j", "",
+		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger."+
+			" Otherwise set to http://jaeger:14268.")
 	jaegerSaveTraces = pflag.Bool("jaeger-save-traces", true, "Save Jaeger traces on test error.")
 	deferDbTeardown  = pflag.Bool("defer-db-teardown", false,
 		"Wait until user input to tear down DB nodes")

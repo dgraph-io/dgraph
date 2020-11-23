@@ -266,22 +266,22 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	}
 
 	// Copy from the request.
-	config.Set("encryption_key_file", req.EncryptionKeyFile)
-	config.Set("vault_roleid_file", req.VaultRoleidFile)
-	config.Set("vault_secretid_file", req.VaultSecretidFile)
+	config.Set("encryption-key-file", req.EncryptionKeyFile)
+	config.Set("vault-roleid-file", req.VaultRoleidFile)
+	config.Set("vault-secretid-file", req.VaultSecretidFile)
 
 	// Override only if non-nil
 	if req.VaultAddr != "" {
-		config.Set("vault_addr", req.VaultAddr)
+		config.Set("vault-addr", req.VaultAddr)
 	}
 	if req.VaultPath != "" {
-		config.Set("vault_path", req.VaultPath)
+		config.Set("vault-path", req.VaultPath)
 	}
 	if req.VaultField != "" {
-		config.Set("vault_field", req.VaultField)
+		config.Set("vault-field", req.VaultField)
 	}
 	if req.VaultFormat != "" {
-		config.Set("vault_format", req.VaultField)
+		config.Set("vault-format", req.VaultField)
 	}
 	return config, nil
 }
