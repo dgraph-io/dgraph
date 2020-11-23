@@ -76,7 +76,7 @@ restart successfully.
 
 ## Turn off Encryption
 
-If you wish to turn off encryption from an existing Dgraph Cluster, then you can export your data and import it using [live loader](https://dgraph.io/docs/deploy/fast-data-loading/#live-loader into a new Dgraph instance without encryption enabled. You will have to use the `--encryption_key_file` flag while importing.
+If you wish to turn off encryption from an existing Dgraph cluster, then you can export your data and import it using [live loader](https://dgraph.io/docs/deploy/fast-data-loading/#live-loader into a new Dgraph instance without encryption enabled. You will have to use the `--encryption_key_file` flag while importing.
 
 ```
 dgraph live -f <path-to-gzipped-RDF-or-JSON-file> -s <path-to-schema> --encryption_key_file <path-to-enc_key_file> -a <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
