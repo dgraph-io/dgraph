@@ -1151,10 +1151,7 @@ func addSelectionSetFrom(
 			auth.varName = parentQryName
 		}
 
-		// skip if we have already added a query for this field in DQL. It helps make sure that if
-		// a field is being asked twice or more, each time with a new alias, then we only add it
-		// once in DQL query.
-		if _, ok := fieldAdded[f.DgraphAlias()]; ok {
+		if f.Type().IsInbuiltOrEnumType() && (fieldSeenCount[f.DgraphAlias()] > 0) {
 			continue
 		}
 		fieldSeenCount[f.DgraphAlias()]++
