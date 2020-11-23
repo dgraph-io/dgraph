@@ -1191,7 +1191,6 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
 		string(resp.GetJson()))
 
-
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
 	time.Sleep(6 * time.Second)
@@ -1202,7 +1201,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	// Query via user when user has no permissions
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{}`,string(resp.GetJson()))
+	testutil.CompareJSON(t, `{}`, string(resp.GetJson()))
 
 	// Login to groot to modify accesses (1)
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -2081,6 +2080,10 @@ func TestSchemaQueryWithACL(t *testing.T) {
       "type": "uid",
       "list": true
     },
+	{
+		"predicate": "dgraph.drop.op",
+		"type": "string"
+	},
     {
       "predicate": "dgraph.graphql.schema",
       "type": "string"

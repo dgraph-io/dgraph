@@ -60,6 +60,9 @@ type Manifest struct {
 	Path string `json:"-"`
 	// Encrypted indicates whether this backup was encrypted or not.
 	Encrypted bool `json:"encrypted"`
+	// DropOperations lists the various DROP operations that took place since the last backup.
+	// These are used during restore to redo those operations before applying the backup.
+	DropOperations []*pb.DropOperation `json:"drop_operations"`
 }
 
 func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
