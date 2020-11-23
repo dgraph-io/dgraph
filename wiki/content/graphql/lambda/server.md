@@ -18,8 +18,7 @@ You can [download the latest version](https://github.com/dgraph-io/dgraph-lambda
 To run a Dgraph Lambda server with Docker:
 
 ```bash
-# host.docker.internal may not work on old versions of Docker
-docker run -it --rm -p 8686:8686 -v /path/to/script.js:/app/script.js -e DGRAPH_URL=http://host.docker.internal:8080 dgraph/dgraph-lambda
+docker run -it --rm -p 8686:8686 -v /path/to/script.js:/app/script/script.js -e DGRAPH_URL=http://host.docker.internal:8080 dgraph/dgraph-lambda
 ```
 
 {{% notice "note" %}}
@@ -43,7 +42,7 @@ To set up Dgraph Alpha, you need to define the `--graphql_lambda_url` flag, whic
 For example:
 
 ```bash
-dgraph alpha --graphql_lambda_url=http://lambda:8686/graphql-worker
+dgraph alpha --graphql_lambda_url=http://localhost:8686/graphql-worker
 ```
 
 Then test it out with the following `curl` command:
@@ -62,7 +61,7 @@ If you're using Docker, you need to add the `--graphql_lambda_url` to your Alpha
       --graphql_lambda_url=http://lambda:8686/graphql-worker
 ```
 
-Next, you need to add the Dgraph Lambda server configuration. Remember to set the `DGRAPH_URL` environment variable to your Alpha server.
+Next, you need to add the Dgraph Lambda server configuration, and map the JavaScript file that contains the code for lambda functions to the `/app/script/script.js` file. Remember to set the `DGRAPH_URL` environment variable to your Alpha server.
 
 For example:
 
@@ -130,40 +129,6 @@ services:
       --profile_mode block --block_rate 10 --logtostderr -v=2
       --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --my=alpha1:7180
       --graphql_lambda_url=http://lambda:8686/graphql-worker
-
-  zeroAdmin:
-    image: dgraph/dgraph:latest
-    container_name: zeroAdmin
-    working_dir: /data/zeroAdmin
-    ports:
-      - 5280:5280
-      - 6280:6280
-    labels:
-      cluster: admintest
-      service: zeroAdmin
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    command: /gobin/dgraph zero -o 200 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10 --my=zeroAdmin:5280
-
-  alphaAdmin:
-    image: dgraph/dgraph:latest
-    container_name: alphaAdmin
-    working_dir: /data/alphaAdmin
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    ports:
-      - 8280:8280
-      - 9280:9280
-    labels:
-      cluster: admintest
-      service: alphaAdmin
-    command: /gobin/dgraph alpha --zero=zeroAdmin:5280 -o 200 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --my=alphaAdmin:7280
 
   lambda:
     image: dgraph/dgraph-lambda:latest
