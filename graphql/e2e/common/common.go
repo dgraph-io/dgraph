@@ -345,6 +345,7 @@ func RunAll(t *testing.T) {
 	t.Run("query post with author", queryPostWithAuthor)
 	t.Run("queries have extensions", queriesHaveExtensions)
 	t.Run("alias works for queries", queryWithAlias)
+	t.Run("multiple aliases for same field in query", queryWithMultipleAliasOfSameField)
 	t.Run("cascade directive", queryWithCascade)
 	t.Run("filter in queries with array for AND/OR", filterInQueriesWithArrayForAndOr)
 	t.Run("query geo near filter", queryGeoNearFilter)
@@ -354,6 +355,8 @@ func RunAll(t *testing.T) {
 	t.Run("query count with alias", queryCountWithAlias)
 	t.Run("query count at child level", queryCountAtChildLevel)
 	t.Run("query count at child level with filter", queryCountAtChildLevelWithFilter)
+	t.Run("query count at child level with multiple alias", queryCountAtChildLevelWithMultipleAlias)
+	t.Run("query count at child level with multiple alias on scalar field", queryCountAtChildLevelWithMultipleAliasOnScalarField)
 	t.Run("query count and other fields at child level", queryCountAndOtherFieldsAtChildLevel)
 	t.Run("checkUserPassword query", passwordTest)
 
