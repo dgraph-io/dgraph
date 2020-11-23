@@ -278,10 +278,20 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	case ast.Interface:
 		// expand fragments on types which implement this interface
 		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[typeName])
+		var interfaceFragsToExpand []*ast.Definition
+		for Type := range additionalTypes {
+			interfaceFragsToExpand = append(interfaceFragsToExpand,
+				op.inSchema.schema.Implements[Type]...)
+		}
+		additionalInterfaces := getTypeNamesAsMap(interfaceFragsToExpand)
 		// if there is any fragment in the selection set of this field, need to store a mapping from
 		// fields in that fragment to the fragment's type condition, to be used later in completion.
-		for _, f := range field.SelectionSet {
-			addSelectionToInterfaceImplFragFields(typeName, f, additionalTypes, op)
+		for interfaceName := range additionalInterfaces {
+			additionalTypes[interfaceName] = true
+			for _, f := range field.SelectionSet {
+				addSelectionToInterfaceImplFragFields(interfaceName, f,
+					getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[interfaceName]), op)
+			}
 		}
 	case ast.Union:
 		// expand fragments on member types of this union
