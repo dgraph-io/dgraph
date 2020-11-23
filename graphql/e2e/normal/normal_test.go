@@ -203,6 +203,9 @@ func TestSchema_Normal(t *testing.T) {
 			"predicate": "User.password",
 			"type": "password"
 		}, {
+			"predicate": "dgraph.drop.op",
+			"type": "string"
+		}, {
 			"predicate": "dgraph.graphql.schema",
 			"type": "string"
 		}, {

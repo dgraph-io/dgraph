@@ -191,7 +191,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, err := fn(fp, gid, predSet)
+			groupMaxUid, err := fn(fp, gid, predSet, manifest.DropOperations)
 			if err != nil {
 				return LoadResult{0, 0, err}
 			}
@@ -305,7 +305,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 			return 0, errors.Wrapf(err, "cannot open DB at %s", dir)
 		}
 		defer db.Close()
-		_, err = loadFromBackup(db, gzReader, preds)
+		_, err = loadFromBackup(db, gzReader, preds, nil)
 		if err != nil {
 			return 0, errors.Wrapf(err, "cannot load backup")
 		}
@@ -361,10 +361,10 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 			defer db.Close()
 
 			req := &pb.ExportRequest{
-				GroupId:     group,
-				ReadTs:      manifest.Since,
-				UnixTs:      time.Now().Unix(),
-				Format:      format,
+				GroupId: group,
+				ReadTs:  manifest.Since,
+				UnixTs:  time.Now().Unix(),
+				Format:  format,
 			}
 
 			err = exportInternal(context.Background(), req, db, true)
