@@ -9,13 +9,18 @@ weight = 3
 
 To set up a lambda query, first you need to define it on your GraphQL schema by using the `@lambda` directive.
 
-For example, to define a lambda query for `Author`: 
+For example, to define a lambda query for `Author` that finds out authors given an author's `name`:
 
 ```graphql
-type Author { ... }
+type Author {
+    id: ID!
+    name: String! @search(by: [hash, trigram])
+    dob: DateTime
+    reputation: Float
+}
 
 type Query {
-        authorsByName(name: String!): [Author] @lambda
+    authorsByName(name: String!): [Author] @lambda
 }
 ```
 
