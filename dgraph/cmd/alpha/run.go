@@ -147,6 +147,9 @@ they form a Raft group and provide synchronous replication.
 		"Enterprise feature.")
 	flag.Duration("acl-refresh-ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
+	flag.Float64P("lru-mb", "l", 0, // TODO: Remove this flag in the next release.
+		"[Deprecated] Estimated memory the LRU cache can take. "+
+			"Actual usage by the process would be more than specified here.")
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
 
@@ -562,6 +565,12 @@ func run() {
 
 	totalCache := int64(Alpha.Conf.GetInt("cache-mb"))
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
+	if Alpha.Conf.IsSet("lru-mb") {
+		glog.Warningln("--lru-mb is deprecated, use --cache-mb instead")
+		if !Alpha.Conf.IsSet("cache-mb") {
+			totalCache = int64(Alpha.Conf.GetFloat64("lru-mb"))
+		}
+	}
 
 	cachePercentage := Alpha.Conf.GetString("cache-percentage")
 	cachePercent, err := x.GetCachePercentages(cachePercentage, 4)
