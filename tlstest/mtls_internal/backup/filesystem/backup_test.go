@@ -77,9 +77,9 @@ func getHttpClient(t *testing.T) *http.Client {
 
 func TestBackupFilesystem(t *testing.T) {
 	conf := viper.GetViper()
-	conf.Set("tls_cacert", "../../tls/live/ca.crt")
-	conf.Set("tls_internal_port_enabled", true)
-	conf.Set("tls_server_name", "alpha1")
+	conf.Set("tls-cacert", "../../tls/live/ca.crt")
+	conf.Set("tls-internal-port-enabled", true)
+	conf.Set("tls-server-name", "alpha1")
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 
@@ -299,7 +299,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 			}
 		}`
 
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp +  "/admin"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
@@ -411,7 +411,7 @@ func copyToLocalFs(t *testing.T) {
 	if err := os.RemoveAll(copyBackupDir); err != nil {
 		t.Fatalf("Error removing directory: %s", err.Error())
 	}
-	srcPath := "alpha1:/data/backups"
+	srcPath := testutil.DockerPrefix + "_alpha1_1:/data/backups"
 	if err := testutil.DockerCp(srcPath, copyBackupDir); err != nil {
 		t.Fatalf("Error copying files from docker container: %s", err.Error())
 	}

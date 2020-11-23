@@ -1653,7 +1653,7 @@ func TestGeoValidWkbData(t *testing.T) {
 	require.Contains(t, string(resp.Json), `{"type":"Point","coordinates":[1,2]}`)
 }
 
-var addr = "http://localhost:8180"
+var addr string
 
 // the grootAccessJWT stores the access JWT extracted from the response
 // of http login
@@ -1661,6 +1661,7 @@ var grootAccessJwt string
 var grootRefreshJwt string
 
 func TestMain(m *testing.M) {
+	addr = "http://" + testutil.SockAddrHttp
 	// Increment lease, so that mutations work.
 	conn, err := grpc.Dial(testutil.SockAddrZero, grpc.WithInsecure())
 	if err != nil {

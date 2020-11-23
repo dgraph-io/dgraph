@@ -80,8 +80,9 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 
 // New creates an XidMap. zero conn must be valid for UID allocations to happen. Optionally, a
 // badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
-// assignment operations.
-func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
+// assignment operations. XidMap creates the temporary buffers inside dir directory. The caller must
+// ensure that the dir exists.
+func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 	numShards := 32
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),

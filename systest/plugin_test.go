@@ -34,6 +34,7 @@ import (
 )
 
 func TestPlugins(t *testing.T) {
+	t.Skipf("TODO: Needs to be converted to use Docker.")
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
 	}

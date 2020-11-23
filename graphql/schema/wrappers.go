@@ -126,7 +126,7 @@ type Field interface {
 	Skip() bool
 	Include() bool
 	Cascade() []string
-	HasCustomDirective() (bool, map[string]bool)
+	HasCustomDirective() (bool, map[string]FieldDefinition)
 	HasLambdaDirective() bool
 	Type() Type
 	SelectionSet() []Field
@@ -190,6 +190,7 @@ type Type interface {
 	FieldOriginatedFrom(fieldName string) string
 	AuthRules() *TypeAuth
 	IsGeo() bool
+	IsInbuiltOrEnumType() bool
 	fmt.Stringer
 }
 
@@ -945,7 +946,21 @@ func (f *field) Cascade() []string {
 	return fields
 }
 
-func (f *field) HasCustomDirective() (bool, map[string]bool) {
+func toRequiredFieldDefs(requiredFieldNames map[string]bool, sibling *field) map[string]FieldDefinition {
+	res := make(map[string]FieldDefinition, len(requiredFieldNames))
+	parentType := &astType{
+		typ:             &ast.Type{NamedType: sibling.field.ObjectDefinition.Name},
+		inSchema:        sibling.op.inSchema,
+		dgraphPredicate: sibling.op.inSchema.dgraphPredicate,
+	}
+	for rfName := range requiredFieldNames {
+		fieldDef := parentType.Field(rfName)
+		res[fieldDef.DgraphAlias()] = fieldDef
+	}
+	return res
+}
+
+func (f *field) HasCustomDirective() (bool, map[string]FieldDefinition) {
 	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	if custom == nil {
 		return false, nil
@@ -983,7 +998,7 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	}
 
 	if graphqlArg == nil {
-		return true, rf
+		return true, toRequiredFieldDefs(rf, f)
 	}
 	modeVal := ""
 	modeArg := httpArg.Value.Children.ForName(mode)
@@ -1001,7 +1016,7 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 			return true, nil
 		}
 	}
-	return true, rf
+	return true, toRequiredFieldDefs(rf, f)
 }
 
 func (f *field) HasLambdaDirective() bool {
@@ -1099,6 +1114,11 @@ func (f *field) AbstractType() bool {
 
 func (f *field) GetObjectName() string {
 	return f.field.ObjectDefinition.Name
+}
+
+func (t *astType) IsInbuiltOrEnumType() bool {
+	_, ok := inbuiltTypeToDgraph[t.Name()]
+	return ok || (t.inSchema.schema.Types[t.Name()].Kind == ast.Enum)
 }
 
 func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, error) {
@@ -1372,7 +1392,7 @@ func (q *query) Cascade() []string {
 	return (*field)(q).Cascade()
 }
 
-func (q *query) HasCustomDirective() (bool, map[string]bool) {
+func (q *query) HasCustomDirective() (bool, map[string]FieldDefinition) {
 	return (*field)(q).HasCustomDirective()
 }
 
@@ -1570,7 +1590,7 @@ func (m *mutation) Cascade() []string {
 	return (*field)(m).Cascade()
 }
 
-func (m *mutation) HasCustomDirective() (bool, map[string]bool) {
+func (m *mutation) HasCustomDirective() (bool, map[string]FieldDefinition) {
 	return (*field)(m).HasCustomDirective()
 }
 

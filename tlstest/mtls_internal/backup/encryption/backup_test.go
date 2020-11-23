@@ -48,8 +48,8 @@ var (
 
 	mc             *minio.Client
 	bucketName     = "dgraph-backup"
-	backupDst      = "minio://minio1:9001/dgraph-backup?secure=false"
-	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
+	backupDst      string
+	localBackupDst string
 )
 
 func getTlsConf(t *testing.T) *tls.Config {
@@ -74,17 +74,23 @@ func getHttpClient(t *testing.T) *http.Client {
 	}
 }
 
-func TestBackupMinio(t *testing.T) {
+func TestBackupMinioEncrypted(t *testing.T) {
 	conf := viper.GetViper()
-	conf.Set("tls_cacert", "../../tls/live/ca.crt")
-	conf.Set("tls_internal_port_enabled", true)
-	conf.Set("tls_server_name", "alpha1")
+	conf.Set("tls-cacert", "../../tls/live/ca.crt")
+	conf.Set("tls-internal-port-enabled", true)
+	conf.Set("tls-server-name", "alpha1")
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 
+	// TODO: Fix this.
+	backupDst = "minio://minio:9001/dgraph-backup?secure=false"
+
+	addr := testutil.ContainerAddr("minio", 9001)
+	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
 	mc, err = testutil.NewMinioClient()
 	require.NoError(t, err)
 	require.NoError(t, mc.MakeBucket(bucketName, ""))
+	t.Logf("Bucket created\n")
 
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
@@ -253,7 +259,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 		}
 	}`
 
-	adminUrl := "https://localhost:8180/admin"
+	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
@@ -299,7 +305,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	t.Logf("--- Restoring from: %q", localBackupDst)
 	testutil.KeyFile = "../../../../ee/enc/test-fixtures/enc-key"
 	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-		"--encryption_key_file", testutil.KeyFile, "--force_zero=false"}
+		"--encryption-key-file", testutil.KeyFile, "--force-zero=false"}
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
@@ -340,7 +346,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 
 	// Get key.
 	config := getEncConfig()
-	config.Set("encryption_key_file", "../../../../ee/enc/test-fixtures/enc-key")
+	config.Set("encryption-key-file", "../../../../ee/enc/test-fixtures/enc-key")
 	k, err := enc.ReadKey(config)
 	require.NotNil(t, k)
 	require.NoError(t, err)

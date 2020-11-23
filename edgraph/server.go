@@ -447,7 +447,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	result, err := parseSchemaFromAlterOperation(op)
-	if err != nil {
+	if err == errIndexingInProgress {
+		// Make the client wait a bit.
+		time.Sleep(time.Second)
+		return nil, err
+
+	} else if err != nil {
 		return nil, err
 	}
 

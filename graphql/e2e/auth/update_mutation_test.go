@@ -43,7 +43,7 @@ func getAllProjects(t *testing.T, users, roles []string) []string {
 	for _, user := range users {
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
-			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -89,7 +89,7 @@ func getAllColumns(t *testing.T, users, roles []string) ([]*Column, []string) {
 	for _, user := range users {
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
-			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
@@ -139,7 +139,7 @@ func getAllQuestions(t *testing.T, users []string, answers []bool) ([]*Question,
 	for _, user := range users {
 		for _, ans := range answers {
 			getParams.Headers = common.GetJWTForInterfaceAuth(t, user, "", ans, metaInfo)
-			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
@@ -209,7 +209,7 @@ func getAllFbPosts(t *testing.T, users []string, roles []string) ([]*FbPost, []s
 	for _, user := range users {
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
-			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
@@ -257,7 +257,7 @@ func getAllAnswers(t *testing.T, users []string) ([]*Answer, []string) {
 	var answers []*Answer
 	for _, user := range users {
 		getParams.Headers = common.GetJWT(t, user, "", metaInfo)
-		gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 		require.Nil(t, gqlResponse.Errors)
 
 		err := json.Unmarshal(gqlResponse.Data, &result)
@@ -305,7 +305,7 @@ func getAllIssues(t *testing.T, users, roles []string) ([]*Issue, []string) {
 	for _, user := range users {
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
-			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
@@ -354,7 +354,7 @@ func getAllMovies(t *testing.T, users, roles []string) ([]*Movie, []string) {
 	for _, user := range users {
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
-			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
@@ -400,7 +400,7 @@ func getAllLogs(t *testing.T, users, roles []string) ([]*Log, []string) {
 	for _, user := range users {
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
-			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
@@ -467,7 +467,7 @@ func TestAuth_UpdateOnInterfaceWithAuthRules(t *testing.T) {
 				Variables: map[string]interface{}{"ids": ids},
 			}
 
-			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
@@ -514,7 +514,7 @@ func TestAuth_UpdateOnTypeWithGraphFilterOnInterface(t *testing.T) {
 				Variables: map[string]interface{}{"ids": ids},
 			}
 
-			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -560,7 +560,7 @@ func TestAuth_UpdateOnTypeWithRBACAuthRuleOnInterface(t *testing.T) {
 				Variables: map[string]interface{}{"ids": ids},
 			}
 
-			gqlResponse := params.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -603,7 +603,7 @@ func TestUpdateOrRBACFilter(t *testing.T) {
 				Variables: map[string]interface{}{"projs": ids},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -645,7 +645,7 @@ func TestUpdateRootFilter(t *testing.T) {
 				Variables: map[string]interface{}{"cols": ids},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
@@ -678,7 +678,7 @@ func TestUpdateRBACFilter(t *testing.T) {
 				Variables: map[string]interface{}{"ids": ids},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
@@ -721,7 +721,7 @@ func TestUpdateAndRBACFilter(t *testing.T) {
 				Variables: map[string]interface{}{"ids": ids},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
@@ -760,7 +760,7 @@ func TestUpdateNestedFilter(t *testing.T) {
 				Variables: map[string]interface{}{"ids": ids},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)

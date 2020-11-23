@@ -80,7 +80,6 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 			errors
 		}
 	}`, restoreId)
-	adminUrl := "http://localhost:8180/admin"
 	params := testutil.GraphQLParams{
 		Query: query,
 	}
@@ -89,7 +88,7 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 
 	restoreDone := false
 	for i := 0; i < 15; i++ {
-		resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+		resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)
@@ -141,13 +140,12 @@ func disableDraining(t *testing.T) {
   		}
 	}`
 
-	adminUrl := "http://localhost:8180/admin"
 	params := testutil.GraphQLParams{
 		Query: drainRequest,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -270,7 +268,6 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	runQueries(t, dg, true)
 
 	// Send a request with a backupNum greater than the number of manifests.
-	adminUrl := "http://localhost:8180/admin"
 	restoreRequest := fmt.Sprintf(`mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
@@ -286,7 +283,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	bufString := string(buf)
@@ -309,7 +306,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	b, err = json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err = http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err = ioutil.ReadAll(resp.Body)
 	bufString = string(buf)
@@ -367,14 +364,13 @@ func TestInvalidBackupId(t *testing.T) {
 		}
 	}`
 
-	adminUrl := "http://localhost:8180/admin"
 	params := testutil.GraphQLParams{
 		Query: restoreRequest,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -397,14 +393,13 @@ func TestListBackups(t *testing.T) {
 		}
 	}`
 
-	adminUrl := "http://localhost:8180/admin"
 	params := testutil.GraphQLParams{
 		Query: query,
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
