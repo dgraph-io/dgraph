@@ -347,6 +347,7 @@ function test::manual_start_tls() {
   done
 }
 
+# Test manual start with both internal and external TLS enabled.
 function test::manual_start_tls2() {
   dgraph::generate_tls
 
