@@ -589,9 +589,40 @@ func addToGroup(t *testing.T, accessToken, userId, group string) {
 		},
 	}
 	b := makeRequest(t, accessToken, params)
-	expectedOutput := fmt.Sprintf(`{"data":{"updateUser":{"user":[{"name":"%s","groups":[{"name":"%s"}]}]}}}`,
-		userId, group)
-	require.JSONEq(t, expectedOutput, string(b))
+
+	var result struct {
+		Errors interface{}
+		Data   struct {
+			UpdateUser struct {
+				User []struct {
+					Name   string
+					Groups []struct {
+						Name string
+					}
+				}
+			}
+		}
+	}
+	err := json.Unmarshal(b, &result)
+	require.NoError(t, err)
+
+	// there should not be any error in updating the user
+	require.Nilf(t, result.Errors, "%v", result.Errors)
+	// There should be a user in response.
+	require.Len(t, result.Data.UpdateUser.User, 1)
+	// User's name must be <userId>
+	require.Equal(t, userId, result.Data.UpdateUser.User[0].Name)
+
+	var foundGroup bool
+	for _, usr := range result.Data.UpdateUser.User {
+		for _, grp := range usr.Groups {
+			if grp.Name == group {
+				foundGroup = true
+				break
+			}
+		}
+	}
+	require.True(t, foundGroup)
 }
 
 type rule struct {
