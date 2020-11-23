@@ -9,7 +9,7 @@ weight = 13
 Ludicrous mode is available in Dgraph v20.03.1 or later.
 
 Ludicrous mode allows Dgraph database to ingest data at an incredibly fast speed, but with fewer guarantees. In normal mode, Dgraph provides strong consistency.
-In Ludicrous mode, Dgraph provides eventual consistency (or *optimistic replication*), so any mutation that succeeds should be available eventually. This means changes are applied more slowly during periods of peak data ingestion, and might not be immediately reflected in query results. If Dgraph crashes unexpectedly, there could be unapplied mutations which **will not** be picked up when Dgraph restarts.
+In Ludicrous mode, Dgraph provides eventual consistency, so any mutation that succeeds should be available eventually. This means changes are applied more slowly during periods of peak data ingestion, and might not be immediately reflected in query results. If Dgraph crashes unexpectedly, there could be unapplied mutations which **will not** be picked up when Dgraph restarts.
 
 Because Dgraph with Ludicrous mode enabled is eventually consistent, it is a good fit for any application where maximum performance is more important than strong real-time consistency and transactional guarantees (such as a social media app or game app).
 
@@ -20,9 +20,9 @@ You can enable Ludicrous mode by setting the `--ludicrous_mode` config option on
 
 ## What does it do?
 
-In this mode, Dgraph doesn't wait for mutations to be applied. When a mutation comes, it proposes the mutation to the cluster and as soon as the proposal reaches the other nodes, it returns the response right away. You don't need to send a commit request for mutations. It's equivalent of having `CommitNow` set automatically for all mutations. All the mutations are then sent to background workers which apply them repeatedly.
+In this mode, Dgraph doesn't wait for mutations to be applied. When a mutation comes, it proposes the mutation to the cluster and as soon as the proposal reaches the other nodes, it returns the response right away. You don't need to send a commit request for mutations. It's equivalent of having `CommitNow` set automatically for all mutations. All the mutations are then sent to background workers which apply them continuously.
 
-Also, Dgraph does not sync writes to disk. This increases throughput but may result in loss of un-synced writes in the event of hardware failure.
+Also, Dgraph does not sync writes to disk. If Dgraph crashes unexpectedly, there could be unapplied mutations which **will not** be picked up when Dgraph restarts.
 
 
 ## What is the trade-off?
@@ -43,7 +43,8 @@ Yes, Ludicrous mode works with the cluster set up with multiple data shards.
 
 ## How does Ludicrous mode handle concurrency?
 
-Ludicrous mode now runs mutations concurrently per predicate. This is enabled
-by default with 2000 concurrent threads available, but you can adjust the number
-of concurrent threads available using the `--ludicrous_concurrency`
-configuration setting on the Alpha nodes in a cluster.
+Ludicrous mode now runs mutations concurrently to increase the speed of data
+ingestion. This is enabled by default with 2000 total concurrent threads
+available, but you can adjust the number of concurrent threads available using
+the `--ludicrous_concurrency` configuration setting on the Alpha nodes in a
+cluster.
