@@ -428,6 +428,7 @@ func Load(predicate string) error {
 	if len(predicate) == 0 {
 		return errors.Errorf("Empty predicate")
 	}
+	delete(State().mutSchema, predicate)
 	key := x.SchemaKey(predicate)
 	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
@@ -448,7 +449,6 @@ func Load(predicate string) error {
 	}
 	State().Set(predicate, &s)
 	State().elog.Printf(logUpdate(&s, predicate))
-	delete(State().mutSchema, predicate)
 	glog.Infoln(logUpdate(&s, predicate))
 	return nil
 }
