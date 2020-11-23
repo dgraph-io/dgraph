@@ -356,7 +356,7 @@ func RunAll(t *testing.T) {
 	t.Run("query count at child level", queryCountAtChildLevel)
 	t.Run("query count at child level with filter", queryCountAtChildLevelWithFilter)
 	t.Run("query count at child level with multiple alias", queryCountAtChildLevelWithMultipleAlias)
-	t.Run("query count at child level with multiple alias on scalar field", queryCountAtChildLevelWithMultipleAliasOnScalarField)
+	t.Run("query at child level with multiple alias on scalar field", queryChildLevelWithMultipleAliasOnScalarField)
 	t.Run("query count and other fields at child level", queryCountAndOtherFieldsAtChildLevel)
 	t.Run("checkUserPassword query", passwordTest)
 

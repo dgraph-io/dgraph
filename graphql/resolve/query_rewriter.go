@@ -1107,6 +1107,7 @@ func addSelectionSetFrom(
 			authQueries = append(authQueries, aggregateAuthQueries...)
 			q.Children = append(q.Children, aggregateChildren...)
 			// As all child fields inside aggregate have been looked at. We can continue
+			fieldSeenCount[f.DgraphAlias()]++
 			continue
 		}
 
