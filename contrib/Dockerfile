@@ -19,4 +19,5 @@ EXPOSE 9080
 RUN mkdir /dgraph
 WORKDIR /dgraph
 
+ENV GODEBUG=madvdontneed=1
 CMD ["dgraph"] # Shows the dgraph version and commands available.
