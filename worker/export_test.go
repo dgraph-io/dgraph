@@ -387,7 +387,7 @@ func TestExportFormat(t *testing.T) {
 	defer os.RemoveAll(tmpdir)
 
 	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
-	err = testutil.CheckForGraphQLEndpointToReady(adminUrl)
+	err = testutil.CheckForGraphQLEndpointToReady(t)
 	require.NoError(t, err)
 
 	params := testutil.GraphQLParams{

@@ -3063,9 +3063,5 @@ func TestMain(m *testing.M) {
 		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
 		os.Exit(1)
 	}
-	exitCode := m.Run()
-	if exitCode != 0 {
-		os.Exit(exitCode)
-	}
-	os.Exit(0)
+	os.Exit(m.Run())
 }

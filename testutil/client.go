@@ -442,7 +442,7 @@ func AssignUids(num uint64) error {
 	return err
 }
 
-func CheckForGraphQLEndpointToReady(url string) error {
+func CheckForGraphQLEndpointToReady(t *testing.T) error {
 	var err error
 	retries := 6
 	sleep := 10 * time.Second
@@ -453,7 +453,7 @@ func CheckForGraphQLEndpointToReady(url string) error {
 	for retries > 0 {
 		retries--
 
-		_, err = hasAdminGraphQLSchema(url)
+		_, err = hasAdminGraphQLSchema(t)
 		if err == nil {
 			return nil
 		}
@@ -462,40 +462,20 @@ func CheckForGraphQLEndpointToReady(url string) error {
 	return err
 }
 
-func hasAdminGraphQLSchema(url string) (bool, error) {
+func hasAdminGraphQLSchema(t *testing.T) (bool, error) {
 	schemaQry := &GraphQLParams{
 		Query: `query { getGQLSchema { schema } }`,
 	}
 
-	b, err := json.Marshal(schemaQry)
-	if err != nil {
-		return false, errors.Wrap(err, "error marshaling GraphQL query")
-	}
-
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(b))
-	if err != nil {
-		return false, errors.Wrap(err, "error running GraphQL query")
-	}
-
-	var result *GraphQLResponse
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return false, errors.Wrap(err, "error unmarshalling result")
-	}
-
-	if len(result.Errors) > 0 {
-		return false, result.Errors
-	}
-
+	result := MakeGQLRequest(t, schemaQry)
+	result.RequireNoGraphQLErrors(t)
 	var sch struct {
 		GetGQLSchema struct {
 			Schema string
 		}
 	}
 
-	err = json.Unmarshal(result.Data, &sch)
+	err := json.Unmarshal(result.Data, &sch)
 	if err != nil {
 		return false, errors.Wrap(err, "error trying to unmarshal GraphQL query result")
 	}
