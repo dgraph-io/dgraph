@@ -140,3 +140,29 @@ You should see a response such as
 	]
 }
 ```
+
+Note that the `Human` and `Droid` types will inherit the `bio` lambda field from the `Character` interface. 
+
+For example, if you execute a `queryHuman` query with a selection set containing `bio`, then the lambda function registered for `Human.bio` will be executed:
+
+```graphql
+query {
+  queryHuman {
+    name
+    bio
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "queryHuman": [
+    {
+      "name": "Han",
+      "bio": "My name is Han. I have 10 credits."
+    }
+  ]
+}
+```
