@@ -229,18 +229,15 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 }
 
 func RetryAlter(dg *dgo.Dgraph, op *api.Operation) error {
+	var err error
 	for i := 0; i < 10; i++ {
-		err := dg.Alter(context.Background(), op)
-		if err == nil {
-			return nil
-		}
-		if strings.Contains(err.Error(), "opIndexing is already running") {
-			time.Sleep(time.Second)
-		} else {
+		err = dg.Alter(context.Background(), op)
+		if err == nil || !strings.Contains(err.Error(), "opIndexing is already running") {
 			return err
 		}
+		time.Sleep(time.Second)
 	}
-	return fmt.Errorf("not able to successfully alter the schema")
+	return err
 }
 
 // RetryBadQuery will retry a query until it failse with a non-retryable error.
