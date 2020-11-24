@@ -74,6 +74,8 @@ var (
 		"Clear all the test clusters.")
 	dry = pflag.BoolP("dry", "", false,
 		"Just show how the packages would be executed, without running tests.")
+	rebuildBinary = pflag.BoolP("rebuild-binary", "", true,
+		"Build Dgraph before running tests.")
 	useExisting = pflag.String("prefix", "",
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 )
@@ -590,13 +592,15 @@ func run() error {
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
 
-	// cmd := command("make", "BUILD_RACE=y", "install")
-	cmd := command("make", "install")
-	cmd.Dir = *baseDir
-	if err := cmd.Run(); err != nil {
-		return err
+	if *rebuildBinary {
+		// cmd := command("make", "BUILD_RACE=y", "install")
+		cmd := command("make", "install")
+		cmd.Dir = *baseDir
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+		oc.Took(0, "COMPILE", time.Since(start))
 	}
-	oc.Took(0, "COMPILE", time.Since(start))
 
 	if len(*runPkg) > 0 && len(*runTest) > 0 {
 		log.Fatalf("Both pkg and test can't be set.\n")
