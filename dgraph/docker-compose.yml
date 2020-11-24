@@ -68,6 +68,10 @@ services:
         source: ../ee/enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
         read_only: true
+      - type: bind
+        source: /tmp
+        target: /tmp
+        read_only: true
     ports:
       - 8080
       - 9080
@@ -93,6 +97,10 @@ services:
       - type: bind
         source: ../ee/enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
+        read_only: true
+      - type: bind
+        source: /tmp
+        target: /tmp
         read_only: true
     ports:
       - 8080
@@ -120,6 +128,10 @@ services:
         source: ../ee/enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
         read_only: true
+      - type: bind
+        source: /tmp
+        target: /tmp
+        read_only: true
     ports:
       - 8080
       - 9080
@@ -145,6 +157,10 @@ services:
       - type: bind
         source: ../ee/enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
+        read_only: true
+      - type: bind
+        source: /tmp
+        target: /tmp
         read_only: true
     ports:
       - 8080
@@ -172,6 +188,10 @@ services:
         source: ../ee/enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
         read_only: true
+      - type: bind
+        source: /tmp
+        target: /tmp
+        read_only: true
     ports:
       - 8080
       - 9080
@@ -197,6 +217,10 @@ services:
       - type: bind
         source: ../ee/enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
+        read_only: true
+      - type: bind
+        source: /tmp
+        target: /tmp
         read_only: true
     ports:
       - 8080
