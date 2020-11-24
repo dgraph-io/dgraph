@@ -40,7 +40,7 @@ import (
 
 func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) int {
 	if location == "" {
-		location = "/data/backup"
+		location = "/data/backup2"
 	}
 	params := testutil.GraphQLParams{
 		Query: `mutation restore($location: String!, $backupId: String, $backupNum: Int) {
@@ -269,7 +269,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	// Send a request with a backupNum greater than the number of manifests.
 	restoreRequest := fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
+		 restore(input: {location: "/data/backup2", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
@@ -292,7 +292,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	// Send a request with a negative backupNum value.
 	restoreRequest = fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
+		 restore(input: {location: "/data/backup2", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
@@ -379,7 +379,7 @@ func TestInvalidBackupId(t *testing.T) {
 
 func TestListBackups(t *testing.T) {
 	query := `query backup() {
-		listBackups(input: {location: "/data/backup"}) {
+		listBackups(input: {location: "/data/backup2"}) {
 			backupId
 			backupNum
 			encrypted
