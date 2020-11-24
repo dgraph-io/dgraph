@@ -720,8 +720,8 @@ func TestHttpCompressionSupport(t *testing.T) {
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	// query with timeout
-	data, _, err = queryWithGz(q1, "application/dql", "", "1ms", false, false)
-	require.EqualError(t, err, ": context deadline exceeded")
+	data, _, err = queryWithGz(q1, "application/dql", "", "1us", false, false)
+	require.EqualError(t, err, "context deadline exceeded")
 	require.Equal(t, "", data)
 
 	data, resp, err = queryWithGz(q1, "application/dql", "", "1s", false, false)
