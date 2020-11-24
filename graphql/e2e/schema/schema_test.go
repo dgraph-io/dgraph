@@ -86,15 +86,15 @@ func TestSchemaSubscribe(t *testing.T) {
 			}
 		}`
 
-	introspectionResult := retryIntrospectQuery(t, introspect, groupOneServer)
+	introspectionResult := runIntrospectWithRetryIfNecessary(t, introspect, groupOneServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
-	introspectionResult = retryIntrospectQuery(t, introspect, groupTwoServer)
+	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupTwoServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
-	introspectionResult = retryIntrospectQuery(t, introspect, groupThreeServer)
+	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupThreeServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
@@ -131,15 +131,15 @@ func TestSchemaSubscribe(t *testing.T) {
 				]
 			}
 		}`
-	introspectionResult = retryIntrospectQuery(t, introspect, groupOneServer)
+	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupOneServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
-	introspectionResult = retryIntrospectQuery(t, introspect, groupTwoServer)
+	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupTwoServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
-	introspectionResult = retryIntrospectQuery(t, introspect, groupThreeServer)
+	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupThreeServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 }
@@ -808,7 +808,7 @@ func getDgraphSchema(t *testing.T, dg *dgo.Dgraph) string {
 	return string(resp.GetJson())
 }
 
-func retryIntrospectQuery(t *testing.T, query *common.GraphQLParams, url string) *common.GraphQLResponse {
+func runIntrospectWithRetryIfNecessary(t *testing.T, query *common.GraphQLParams, url string) *common.GraphQLResponse {
 	var response *common.GraphQLResponse
 	for i := 0; i < 10; i++ {
 		response = query.ExecuteAsPost(t, url)
