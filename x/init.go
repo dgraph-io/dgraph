@@ -84,7 +84,6 @@ Go version       : %v
 
 For Dgraph official documentation, visit https://docs.dgraph.io.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
-To say hi to the community       , visit https://dgraph.slack.com.
 
 %s.
 Copyright 2015-2020 Dgraph Labs, Inc.
