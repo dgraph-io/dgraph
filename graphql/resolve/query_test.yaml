@@ -1936,6 +1936,33 @@
     }
 
 -
+  name: "queryCharacter with fragment on interface and type"
+  gqlquery: |
+    query {
+      queryCharacter {
+        id
+        name
+        ... on Employee {
+            ename
+        }
+        ... on Human {
+            ename
+            female
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCharacter(func: type(Character)) {
+        dgraph.type
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        female : Human.female
+      }
+    }
+
+-
   name: "Filter with id uses uid func at root."
   gqlquery: |
     query {
