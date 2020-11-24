@@ -109,10 +109,11 @@ func runFatal(cmd *exec.Cmd) {
 	}
 }
 
-func startCluster(composeFile, prefix string) {
-	cmd := command(
-		"docker-compose", "-f", composeFile, "-p", prefix,
-		"up", "--force-recreate", "--remove-orphans", "--detach")
+func startCluster(composeFile, prefix string, containers ...string) {
+	commandString := []string{"docker-compose", "-f", composeFile, "-p", prefix,
+		"up", "--force-recreate", "--remove-orphans", "--detach"}
+	commandString = append(commandString, containers...)
+	cmd := command(commandString...)
 	cmd.Stderr = nil
 
 	fmt.Printf("Bringing up cluster %s...\n", prefix)
@@ -180,8 +181,8 @@ func handleSpecificPackages(ctx context.Context, task task, prefix string) (bool
 	x.Check(err)
 	benchmarksDir := fmt.Sprintf("%s/benchmarks", currentDir)
 	dataDir := fmt.Sprintf("%s/data", benchmarksDir)
-	runFatal("rm -rf " + benchmarksDir)
-	runFatal("mkdir -p " + dataDir)
+	runFatal(exec.CommandContext(ctxb, "rm", "-rf", benchmarksDir))
+	runFatal(exec.CommandContext(ctxb, "mkdir", "-p", dataDir))
 
 	if strings.Contains(task.pkg.ID, "systest/1million") {
 		// test-reindex.sh
@@ -415,7 +416,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			return
 		}
 
-		startCluster(defaultCompose, prefix, "")
+		startCluster(defaultCompose, prefix)
 		started = true
 
 		// Wait for cluster to be healthy.
@@ -485,7 +486,7 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 	compose := composeFileFor(pkg)
 	prefix := getPrefix()
 
-	startCluster(compose, prefix, "")
+	startCluster(compose, prefix)
 	if !*keepCluster {
 		wg.Add(1)
 		defer stopCluster(compose, prefix, wg)
