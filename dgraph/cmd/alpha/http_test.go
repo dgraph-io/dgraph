@@ -721,10 +721,7 @@ func TestHttpCompressionSupport(t *testing.T) {
 
 	// query with timeout
 	data, _, err = queryWithGz(q1, "application/dql", "", "100us", false, false)
-	if !strings.Contains(err.Error(), "context deadline exceeded") {
-		t.Logf("Got error: %v when expecting context deadline exceeded", err)
-		t.Fail()
-	}
+	requireDeadline(t, err)
 	require.Equal(t, "", data)
 
 	data, resp, err = queryWithGz(q1, "application/dql", "", "1s", false, false)
@@ -750,6 +747,13 @@ func TestHttpCompressionSupport(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"names":[{"name":"Alice"}]}}`, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
+}
+
+func requireDeadline(t *testing.T, err error) {
+	if !strings.Contains(err.Error(), "context deadline exceeded") {
+		t.Logf("Got error: %v when expecting context deadline exceeded", err)
+		t.Fail()
+	}
 }
 
 func TestDebugSupport(t *testing.T) {
@@ -824,18 +828,18 @@ func TestDebugSupport(t *testing.T) {
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	// query with timeout
-	data, _, err = queryWithGz(q1, "application/dql", "true", "1ms", false, false)
-	require.EqualError(t, err, ": context deadline exceeded")
+	data, _, err = queryWithGz(q1, "application/dql", "true", "100us", false, false)
+	requireDeadline(t, err)
 	require.Equal(t, "", data)
 
-	data, resp, err = queryWithGz(q1, "application/dql", "true", "1s", false, false)
+	data, resp, err = queryWithGz(q1, "application/dql", "true", "3s", false, false)
 	require.NoError(t, err)
 	requireEqual(t, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
 	d1, err := json.Marshal(params{Query: q1})
 	require.NoError(t, err)
-	data, resp, err = queryWithGz(string(d1), "application/json", "true", "1s", false, false)
+	data, resp, err = queryWithGz(string(d1), "application/json", "true", "3s", false, false)
 	require.NoError(t, err)
 	requireEqual(t, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
