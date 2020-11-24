@@ -20,6 +20,10 @@ Dgraph doesn't execute your custom logic itself. It makes external HTTP requests
 If you want to deploy your own lambda server, you can find the implementation of Dgraph Lambda in our [open-source repository](https://github.com/dgraph-io/dgraph-lambda). Please refer to the documentation on [setting up a lambda server](/graphql/lambda/server) for more details.
 {{% /notice %}}
 
+{{% notice "note" %}}
+If you're using [Slash GraphQL](https://dgraph.io/slash-graphql), the final compiled script file must be under 500Kb
+{{% /notice %}}
+
 ## Declaring lambda in a GraphQL schema
 
 There are three places where you can use the `@lambda` directive and thus tell Dgraph where to apply custom JavaScript logic.
