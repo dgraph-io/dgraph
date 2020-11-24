@@ -24,7 +24,6 @@ import (
 	"unsafe"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-groupvarint"
@@ -406,7 +405,7 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 // DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
 // calloc'ed and can be SHOULD be freed up by calling buffer.Release().
 func DecodeToBuffer(pack *pb.UidPack, seek uint64) *z.Buffer {
-	buf, err := z.NewBufferWithDir(256<<20, 32<<30, z.UseCalloc, worker.Config.TmpDir)
+	buf, err := z.NewBufferWithDir(256<<20, 32<<30, z.UseCalloc, x.WorkerConfig.TmpDir)
 	x.Check(err)
 	buf.AutoMmapAfter(1 << 30)
 

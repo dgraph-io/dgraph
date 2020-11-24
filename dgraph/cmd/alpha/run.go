@@ -585,7 +585,6 @@ func run() {
 	opts := worker.Options{
 		PostingDir:                 Alpha.Conf.GetString("postings"),
 		WALDir:                     Alpha.Conf.GetString("wal"),
-		TmpDir:                     Alpha.Conf.GetString("tmp"),
 		PostingDirCompression:      ctype,
 		PostingDirCompressionLevel: clevel,
 		CachePercentage:            cachePercentage,
@@ -640,6 +639,7 @@ func run() {
 	x.Check(err)
 
 	x.WorkerConfig = x.WorkerOptions{
+		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending-proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
