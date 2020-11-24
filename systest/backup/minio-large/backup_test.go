@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -54,7 +55,7 @@ var (
 // Test to add a large database and verify backup and restore work as expected.
 func TestBackupMinioLarge(t *testing.T) {
 	// backupDestination = "minio://" + testutil.DockerPrefix + "_minio_1:9001/dgraph-backup?secure=false"
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	ctx := context.Background()
@@ -94,13 +95,14 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 		Schema: `name1: string .
 				 name2: string .
 				 name3: string .`}))
-	_, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name1&group=1")
+	client := testutil.GetHttpsClient(t)
+	_, err := client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name1&group=1")
 	require.NoError(t, err)
 	time.Sleep(time.Second)
-	_, err = http.Get("http://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name2&group=2")
+	_, err = client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name2&group=2")
 	require.NoError(t, err)
 	time.Sleep(time.Second)
-	_, err = http.Get("http://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name3&group=3")
+	_, err = client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name3&group=3")
 	require.NoError(t, err)
 
 	// After the move, we need to pause a bit to give zero a chance to quorum.
@@ -143,7 +145,8 @@ func addTriples(t *testing.T, dg *dgo.Dgraph, numTriples int) {
 func runBackup(t *testing.T) {
 	// Using the old /admin/backup endpoint to ensure it works. Change back to using
 	// the GraphQL endpoint at /admin once this endpoint is deprecated.
-	resp, err := http.PostForm("http://"+testutil.SockAddrHttp+"/admin/backup", url.Values{
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.PostForm("https://"+testutil.SockAddrHttp+"/admin/backup", url.Values{
 		"destination": []string{backupDestination},
 	})
 	require.NoError(t, err)

@@ -19,6 +19,7 @@ package testutil
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -58,6 +59,10 @@ var (
 	// SockAddrZeroHttp is the address to the HTTP endpoint of the zero used during tests.
 	SockAddrZeroHttp string
 )
+
+func AdminUrlHttps() string {
+	return "https://" + SockAddrHttp + "/admin"
+}
 
 func AdminUrl() string {
 	return "http://" + SockAddrHttp + "/admin"
@@ -499,4 +504,29 @@ func hasAdminGraphQLSchema(t *testing.T) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func GetHttpsClient(t *testing.T) http.Client {
+	tlsConf := GetAlphaClientConfig(t)
+	client := http.Client{
+		Timeout: time.Second * 3,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConf,
+		},
+	}
+	return client
+}
+
+func GetAlphaClientConfig(t *testing.T) *tls.Config {
+	c := &x.TLSHelperConfig{
+		CertRequired:     true,
+		Cert:             "../tlstest/mtls_internal/tls/live/client.liveclient.crt",
+		Key:              "../tlstest/mtls_internal/tls/live/client.liveclient.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../tlstest/mtls_internal/tls/live/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	return tlsConf
 }
