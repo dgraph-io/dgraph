@@ -36,8 +36,8 @@ var errNotFound = errors.New("Unable to find raft entry")
 // DiskStorage, which has a lock protecting the calls to this object.
 type wal struct {
 	// files is the list of all log files ordered in ascending order by the first
-	// index in the file. The current file being written should always be accessible
-	// by looking at the last element of this slice.
+	// index in the file. current is the file currently being written to, and is
+	// added to files only after it is full.
 	files   []*logFile
 	current *logFile
 	// nextEntryIdx is the index of the next entry to write to. When this value exceeds
