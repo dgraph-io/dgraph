@@ -73,6 +73,7 @@ type options struct {
 	bufferSize      int
 	ludicrousMode   bool
 	upsertPredicate string
+	tmpDir          string
 	key             x.SensitiveByteSlice
 }
 
@@ -161,6 +162,7 @@ func init() {
 		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsert-predicate", "U", "", "run in upsert-predicate mode. the value would "+
 		"be used to store blank nodes as an xid")
+	flag.String("tmp", "t", "Direcotry for temporary buffers.")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -552,7 +554,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(connzero, db, "")
+	alloc := xidmap.New(connzero, db, opt.tmpDir)
 	l := &loader{
 		opts:      opts,
 		dc:        dc,
@@ -599,6 +601,7 @@ func run() error {
 		bufferSize:      Live.Conf.GetInt("buffer-size"),
 		ludicrousMode:   Live.Conf.GetBool("ludicrous-mode"),
 		upsertPredicate: Live.Conf.GetString("upsert-predicate"),
+		tmpDir:          Live.Conf.GetString("tmp"),
 	}
 	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
 		fmt.Printf("unable to read key %v", err)
