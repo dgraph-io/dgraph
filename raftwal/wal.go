@@ -162,7 +162,7 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 	}
 
 	for _, re := range entries {
-		if l.nextEntryIdx >= maxNumEntries {
+		if l.nextEntryIdx >= maxNumEntries || offset+4+len(re.Data) > logFileSize {
 			if err := l.rotate(re.Index); err != nil {
 				return err
 			}
