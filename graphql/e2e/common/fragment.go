@@ -169,19 +169,19 @@ func fragmentInQueryOnInterface(t *testing.T) {
 					n: name
 				}
 			}
-            qc3: queryCharacter {
-                ... on Droid{
-						__typename
-						primaryFunction
-                }
+			qc3: queryCharacter {
+				... on Droid{
+					__typename
+					primaryFunction
+				}
 				... on Employee {
-						__typename	
-						ename
-                }
-                ... on Human {
-						__typename
-						name
-                }
+					__typename
+					ename
+				}
+				... on Human {
+					__typename
+					name
+				}
 			}
 			qcRep1: queryCharacter {
 				name
@@ -330,15 +330,15 @@ func fragmentInQueryOnInterface(t *testing.T) {
 			{
 			}
 		],
-        "qc3":[
+		"qc3":[
 			{
 				"__typename":"Human",
 				"ename":"Han_employee",
-				 "name":"Han"
+				"name":"Han"
 			},
 			{
-                 "__typename":"Droid",
-				 "primaryFunction":"Robot"	
+				"__typename":"Droid",
+				"primaryFunction":"Robot"
 			}
 		],
 		"qcRep1": [
