@@ -43,7 +43,7 @@ func TestQueries(t *testing.T) {
 	queryDir := path.Join(path.Dir(thisFile), "queries")
 
 	// For this test we DON'T want to start with an empty database.
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}

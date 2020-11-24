@@ -55,9 +55,9 @@ const oneMillionSchema = "1million.schema"
 const oneMillionRdf = "1million.rdf.gz"
 const benchmarksURL = "https://github.com/dgraph-io/benchmarks/blob/master/data/%s?raw=true"
 
-const twentyOneMillionNoIndexSchema = "1million-noindex.schema"
-const twentyOneMillionSchema = "1million.schema"
-const twentyOneMillionRdf = "1million.rdf.gz"
+const twentyOneMillionNoIndexSchema = "21million-noindex.schema"
+const twentyOneMillionSchema = "21million.schema"
+const twentyOneMillionRdf = "21million.rdf.gz"
 
 var (
 	ctxb       = context.Background()
@@ -109,22 +109,22 @@ func runFatal(cmd *exec.Cmd) {
 	}
 }
 
-// containers are space separated containers
-func startCluster(composeFile, prefix string, containers string) {
-	q := fmt.Sprintf("docker-compose -f %s -p %s up --force-recreate --remove-orphans --detach %s",
-		composeFile, prefix, containers)
-	println(q)
-	runFatal(q)
+func startCluster(composeFile, prefix string) {
+	cmd := command(
+		"docker-compose", "-f", composeFile, "-p", prefix,
+		"up", "--force-recreate", "--remove-orphans", "--detach")
+	cmd.Stderr = nil
+
+	fmt.Printf("Bringing up cluster %s...\n", prefix)
+	runFatal(cmd)
+	fmt.Printf("CLUSTER UP: %s\n", prefix)
 
 	// Let it stabilize.
 	time.Sleep(3 * time.Second)
 }
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
-
-	q := fmt.Sprintf("docker-compose -f %s -p %s down",
-		composeFile, prefix)
 	go func() {
-		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down")
+		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
@@ -136,20 +136,25 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	}()
 }
 
-func bulkLoad(prefix, benchmarksDir, dataDir, schemaFile, dataFile string) {
-	bulkLoadCmd := fmt.Sprintf(`docker-compose -f ../systest/1million/docker-compose.yml -p %s run -v %s:%s --name bulk_load zero1 bash -s <<EOF
-	mkdir -p /data/alpha1
+func bulkLoad(prefix, benchmarksDir, schemaFile, dataFile string) {
+	cmd := exec.CommandContext(ctxb, "docker-compose", "-f", "../systest/1million/docker-compose.yml",
+		"-p", prefix, "run", "--rm", "-v", benchmarksDir+":"+benchmarksDir, "--name", "bulk_load",
+		"zero1", "bash", "-c", fmt.Sprintf(`mkdir -p /data/alpha1
 	mkdir -p /data/alpha2
 	mkdir -p /data/alpha3
 	/gobin/dgraph bulk --schema=%s --files=%s \
-                            --format=rdf --zero=zero1:5080 --out=/data/zero1/bulk \
-                            --reduce_shards 3 --map_shards 9 > /data/logs.txt
+                        --format=rdf --zero=zero1:5080 --out=/data/zero1/bulk \
+                        --reduce_shards 3 --map_shards 9 &> /data/logs.txt
         mv /data/zero1/bulk/0/p /data/alpha1
         mv /data/zero1/bulk/1/p /data/alpha2
-		mv /data/zero1/bulk/2/p /data/alpha3
-	EOF`, prefix, benchmarksDir, benchmarksDir, schemaFile, dataFile)
-	println(bulkLoadCmd)
-	runFatal(bulkLoadCmd)
+		mv /data/zero1/bulk/2/p /data/alpha3`, schemaFile, dataFile))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("Error while bulk loading : %v\n",
+			err)
+	}
 }
 
 func downloadFile(url string, filepath string) error {
@@ -218,7 +223,7 @@ func handleSpecificPackages(ctx context.Context, task task, prefix string) (bool
 
 		return true, err
 	}
-	if strings.Contains(task.pkg.Name, "systest/21million") {
+	if strings.Contains(task.pkg.ID, "systest/21million") {
 		composeFile := composeFileFor(task.pkg.ID)
 		// download data
 		files := [3]string{twentyOneMillionNoIndexSchema, twentyOneMillionRdf, twentyOneMillionSchema}
@@ -232,7 +237,7 @@ func handleSpecificPackages(ctx context.Context, task task, prefix string) (bool
 		}
 
 		startCluster(composeFile, prefix, "zero1")
-		bulkLoad(prefix, benchmarksDir, twentyOneMillionSchema, twentyOneMillionRdf)
+		bulkLoad(prefix, benchmarksDir, path.Join(dataDir, twentyOneMillionSchema), path.Join(dataDir, twentyOneMillionRdf))
 		startCluster(composeFile, prefix, "alpha1 alpha2 alpha3")
 		getInstance(prefix, "alpha1").loginFatal()
 		err = runTestsFor(ctx, task.pkg.ID, prefix)
@@ -438,9 +443,10 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if !hasTestFiles(task.pkg.ID) {
 			continue
 		}
-		if !strings.Contains(task.pkg.ID, "systest/1million") {
+		if !strings.Contains(task.pkg.ID, "systest/21million") {
 			continue
 		}
+
 		fmt.Println(task.pkg.ID)
 		specific, err := handleSpecificPackages(ctx, task, prefix)
 		if specific {
