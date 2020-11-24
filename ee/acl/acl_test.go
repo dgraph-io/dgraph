@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -2659,8 +2660,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			respIsArray:        true,
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
-				Message: "resolving listBackups failed because Error: cannot read manfiests at " +
-					"location : The path \"\" does not exist or it is inaccessible.",
+				Message:   "The path \"\" does not exist or it is inaccessible.",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"listBackups": []}`,
@@ -2750,8 +2750,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "restore",
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
-				Message: "resolving restore failed because failed to verify backup: while retrieving" +
-					" manifests: The path \"\" does not exist or it is inaccessible.",
+				Message:   "The path \"\" does not exist or it is inaccessible.",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"restore": {"code": "Failure"}}`,
@@ -2817,7 +2816,13 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 				if tcase.guardianErrs == nil {
 					resp.RequireNoGraphQLErrors(t)
 				} else {
-					require.Equal(t, tcase.guardianErrs, resp.Errors)
+					require.Equal(t, len(tcase.guardianErrs), len(resp.Errors))
+					for i, e := range tcase.guardianErrs {
+						if !strings.Contains(resp.Errors[i].Message, e.Message) {
+							t.Logf("Expected: %s. Got: %s\n", e.Message, resp.Errors[i].Message)
+							t.Fail()
+						}
+					}
 				}
 
 				if tcase.guardianData != "" {

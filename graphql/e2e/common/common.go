@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -237,12 +238,23 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 }
 
 func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
-	err := addSchema(GraphqlAdminURL, string(schema))
-	if err != nil {
-		x.Panic(err)
+	for {
+		err := addSchema(GraphqlAdminURL, string(schema))
+		if err == nil {
+			break
+		}
+		if strings.Contains(err.Error(), "errIndexingInProgress") ||
+			strings.Contains(err.Error(), "is already running") {
+			glog.V(2).Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
+			time.Sleep(time.Second)
+			continue
+		}
+		if err != nil {
+			x.Panic(err)
+		}
 	}
 
-	err = maybePopulateData(client, data)
+	err := maybePopulateData(client, data)
 	if err != nil {
 		x.Panic(err)
 	}

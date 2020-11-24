@@ -40,7 +40,7 @@ import (
 
 func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) int {
 	if location == "" {
-		location = "/data/backup"
+		location = "/data/backup2"
 	}
 	params := testutil.GraphQLParams{
 		Query: `mutation restore($location: String!, $backupId: String, $backupNum: Int) {
@@ -269,7 +269,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	// Send a request with a backupNum greater than the number of manifests.
 	restoreRequest := fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
+		 restore(input: {location: "/data/backup2", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
@@ -292,7 +292,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	// Send a request with a negative backupNum value.
 	restoreRequest = fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
+		 restore(input: {location: "/data/backup2", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
@@ -379,7 +379,7 @@ func TestInvalidBackupId(t *testing.T) {
 
 func TestListBackups(t *testing.T) {
 	query := `query backup() {
-		listBackups(input: {location: "/data/backup"}) {
+		listBackups(input: {location: "/data/backup2"}) {
 			backupId
 			backupNum
 			encrypted
@@ -434,11 +434,7 @@ func TestRestoreWithDropOperations(t *testing.T) {
 		CommitNow: true})
 	require.NoError(t, err)
 
-	// setup backup directories
-	backupDir := "/data/backup/tmp"
-	localFsDirs := []string{"./backup/tmp"}
-	setupDirs(t, localFsDirs)
-
+	backupDir := "/data/backup"
 	// create a full backup in backupDir
 	backup(t, backupDir)
 
@@ -576,10 +572,6 @@ func TestRestoreWithDropOperations(t *testing.T) {
 				"name": "Flower"
 			}`,
 		})
-
-	// remove backup directories to make sure this test doesn't leave anything behind
-	// TODO: This is having some problem on TeamCity
-	//cleanupDirs(t, localFsDirs)
 }
 
 func setupDirs(t *testing.T, dirs []string) {
@@ -594,7 +586,9 @@ func setupDirs(t *testing.T, dirs []string) {
 
 func cleanupDirs(t *testing.T, dirs []string) {
 	for _, dir := range dirs {
-		require.NoError(t, os.RemoveAll(dir))
+		if err := os.RemoveAll(dir); err != nil {
+			t.Logf("Got error while removing: %s: %v\n", dir, err)
+		}
 	}
 }
 

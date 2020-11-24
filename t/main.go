@@ -42,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
@@ -73,6 +74,8 @@ var (
 		"Clear all the test clusters.")
 	dry = pflag.BoolP("dry", "", false,
 		"Just show how the packages would be executed, without running tests.")
+	useExisting = pflag.String("prefix", "",
+		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -102,6 +105,7 @@ func startCluster(composeFile, prefix string) {
 		"docker-compose", "-f", composeFile, "-p", prefix,
 		"up", "--force-recreate", "--remove-orphans", "--detach")
 	cmd.Stderr = nil
+
 	fmt.Printf("Bringing up cluster %s...\n", prefix)
 	runFatal(cmd)
 	fmt.Printf("CLUSTER UP: %s\n", prefix)
@@ -111,7 +115,7 @@ func startCluster(composeFile, prefix string) {
 }
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	go func() {
-		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down")
+		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
@@ -286,7 +290,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 
 	var started, stopped bool
 	start := func() {
-		if started {
+		if len(*useExisting) > 0 || started {
 			return
 		}
 		startCluster(defaultCompose, prefix)
@@ -336,6 +340,9 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 }
 
 func getPrefix() string {
+	if len(*useExisting) > 0 {
+		return *useExisting
+	}
 	id := atomic.AddInt32(&testId, 1)
 	return fmt.Sprintf("test-%03d-%d", procId, id)
 }
@@ -556,6 +563,18 @@ func removeAllTestContainers() {
 			}
 		}
 	}
+
+	volumes, err := cli.VolumeList(ctxb, filters.Args{})
+	x.Check(err)
+	for _, v := range volumes.Volumes {
+		if strings.HasPrefix(v.Name, "test-") {
+			if err := cli.VolumeRemove(ctxb, v.Name, true); err != nil {
+				fmt.Printf("Error: %v while removing volume: %+v\n", err, v)
+			} else {
+				fmt.Printf("Removed volume: %s\n", v.Name)
+			}
+		}
+	}
 }
 
 func run() error {
@@ -563,10 +582,12 @@ func run() error {
 		removeAllTestContainers()
 		return nil
 	}
+	fmt.Printf("Proc ID is %d\n", procId)
 
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
 
+	// cmd := command("make", "BUILD_RACE=y", "install")
 	cmd := command("make", "install")
 	cmd.Dir = *baseDir
 	if err := cmd.Run(); err != nil {
