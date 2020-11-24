@@ -267,7 +267,7 @@ So, with the above two options we have 4 cases:
 
 Error: If the input is encrypted, a key file must be provided.
 
-2. `--encrypted=true` and `encryption_key_file`=`path` to key.
+2. `--encrypted=true` and `encryption_key_file=path-to-key`.
 
 Input is encrypted and output `p` dir is encrypted as well.
 
