@@ -399,10 +399,16 @@ type curlOutput struct {
 	Errors []curlErrorEntry       `json:"errors"`
 }
 
-func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) {
+func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) error {
 	output := curlOutput{}
 	require.NoError(t, json.Unmarshal(bytes, &output),
 		"unable to unmarshal the curl output")
+	for _, e := range output.Errors {
+		if strings.Contains(e.Message, "is already running") ||
+			strings.Contains(e.Message, "errIndexingInProgress") {
+			return errRetryCurl
+		}
+	}
 
 	if failureConfig.ShouldFail {
 		require.True(t, len(output.Errors) > 0, "no error entry found")
@@ -416,11 +422,15 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) 
 		require.True(t, output.Data != nil,
 			fmt.Sprintf("no data entry found in the output:%+v", output))
 	}
+	return nil
 }
+
+var errRetryCurl = errors.New("retry the curl command")
 
 // VerifyCurlCmd executes the curl command with the given arguments and verifies
 // the result against the expected output.
 func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig) {
+top:
 	queryCmd := exec.Command("curl", args...)
 	output, err := queryCmd.Output()
 	if len(failureConfig.CurlErrMsg) > 0 {
@@ -432,7 +442,11 @@ func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig
 		}
 	} else {
 		require.NoError(t, err, "the curl command should have succeeded")
-		verifyOutput(t, output, failureConfig)
+		if err := verifyOutput(t, output, failureConfig); err == errRetryCurl {
+			goto top
+		} else {
+			require.NoError(t, err)
+		}
 	}
 }
 
