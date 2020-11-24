@@ -19,7 +19,6 @@ package xidmap
 import (
 	"context"
 	"encoding/binary"
-	"io/ioutil"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -91,13 +90,8 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 		kvChan:    make(chan []kv, 64),
 	}
 	for i := range xm.shards {
-		// Create a temporary buffer file for each b+ tree.
-		f, err := ioutil.TempFile(dir, "btree")
-		x.Check(err)
-		fname := f.Name()
-
 		xm.shards[i] = &shard{
-			tree: z.NewTree(fname, 100<<20),
+			tree: z.NewTree(dir, 100<<20),
 		}
 	}
 

@@ -43,6 +43,7 @@ import (
 	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/chunker"
@@ -554,7 +555,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(connzero, db, opt.tmpDir)
+	alloc := xidmap.New(connzero, db, "")
 	l := &loader{
 		opts:      opts,
 		dc:        dc,
@@ -603,6 +604,9 @@ func run() error {
 		upsertPredicate: Live.Conf.GetString("upsert-predicate"),
 		tmpDir:          Live.Conf.GetString("tmp"),
 	}
+
+	z.SetTmpDir(opt.tmpDir)
+
 	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
 		fmt.Printf("unable to read key %v", err)
 		return err

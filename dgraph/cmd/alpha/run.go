@@ -658,6 +658,9 @@ func run() {
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
+	// Set the directory for temporary buffers.
+	z.SetTmpDir(x.WorkerConfig.TmpDir)
+
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
 		return
