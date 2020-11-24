@@ -304,6 +304,14 @@ type DeleteUserPayload {
 
 type TodoAggregateResult {
 	count: Int
+	titleMin: String
+	titleMax: String
+	textMin: String
+	textMax: String
+	dateCompletedMin: String
+	dateCompletedMax: String
+	somethingPrivateMin: String
+	somethingPrivateMax: String
 }
 
 type UpdateTodoPayload {
@@ -318,6 +326,8 @@ type UpdateUserPayload {
 
 type UserAggregateResult {
 	count: Int
+	usernameMin: String
+	usernameMax: String
 }
 
 #######################

@@ -735,20 +735,38 @@ func completeDgraphResult(
 			}
 
 			if len(val) > 1 {
-				// If we get here, then we got a list result for a query that expected
-				// a single item.  That probably indicates a schema error, or maybe
-				// a bug in GraphQL processing or some data corruption.
-				//
-				// We'll continue and just try the first item to return some data.
+				// This case may occur during handling of aggregate Queries. So, we don't throw an error
+				// and combine all items into one single item.
 
-				glog.Errorf("Got a list of length %v from Dgraph when expecting a "+
-					"one-item list.\n", len(val))
+				if strings.HasSuffix(field.Type().String(), "AggregateResult") {
+					for i := 1; i < len(val); i++ {
+						var internalValMap interface{}
+						var ok bool
+						if internalValMap, ok = val[i].(map[string]interface{}); !ok {
+							return dgraphError()
+						}
+						for key, val := range internalValMap.(map[string]interface{}) {
+							internalVal.(map[string]interface{})[key] = val
+						}
+					}
+				} else {
 
-				errs = append(errs,
-					x.GqlErrorf(
-						"Dgraph returned a list, but %s (type %s) was expecting just one item.  "+
-							"The first item in the list was used to produce the result.",
-						field.Name(), field.Type().String()).WithLocations(field.Location()))
+					// If we get here, then we got a list result for a query that expected
+					// a single item.  That probably indicates a schema error, or maybe
+					// a bug in GraphQL processing or some data corruption.
+					//
+					// We'll continue and just try the first item to return some data.
+
+					glog.Errorf("Got a list of length %v from Dgraph when expecting a "+
+						"one-item list.\n", len(val))
+
+					errs = append(errs,
+						x.GqlErrorf(
+							"Dgraph returned a list, but %s (type %s) was expecting just one item.  "+
+								"The first item in the list was used to produce the result.",
+							field.Name(), field.Type().String()).WithLocations(field.Location()))
+
+				}
 			}
 
 			valToComplete[field.DgraphAlias()] = internalVal
