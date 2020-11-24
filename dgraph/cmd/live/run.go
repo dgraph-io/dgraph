@@ -622,6 +622,9 @@ func run() error {
 		bufferSize:    opt.bufferSize,
 	}
 
+	// Create directory for temporary buffers
+	x.Check(os.MkdirAll(opt.tmpDir, 0700))
+
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
 
@@ -700,10 +703,14 @@ func run() error {
 	fmt.Printf("Time spent                   : %v\n", c.Elapsed)
 	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
+	if err := l.alloc.Flush(); err != nil {
+		return err
+	}
+
+	// Remove the temporary buffer directory.
+	x.Check(os.RemoveAll(opt.tmpDir))
+
 	if l.db != nil {
-		if err := l.alloc.Flush(); err != nil {
-			return err
-		}
 		if err := l.db.Close(); err != nil {
 			return err
 		}
