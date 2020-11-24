@@ -706,10 +706,6 @@ func run() error {
 	if err := l.alloc.Flush(); err != nil {
 		return err
 	}
-
-	// Remove the temporary buffer directory.
-	x.Check(os.RemoveAll(opt.tmpDir))
-
 	if l.db != nil {
 		if err := l.db.Close(); err != nil {
 			return err

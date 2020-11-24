@@ -103,6 +103,7 @@ they form a Raft group and provide synchronous replication.
 	x.FillCommonFlags(flag)
 
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
+	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
 	// Options around how to set up Badger.
 	flag.String("badger.compression", "snappy",
@@ -584,6 +585,7 @@ func run() {
 	opts := worker.Options{
 		PostingDir:                 Alpha.Conf.GetString("postings"),
 		WALDir:                     Alpha.Conf.GetString("wal"),
+		TmpDir:                     Alpha.Conf.GetString("tmp"),
 		PostingDirCompression:      ctype,
 		PostingDirCompressionLevel: clevel,
 		CachePercentage:            cachePercentage,

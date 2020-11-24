@@ -36,8 +36,10 @@ const (
 
 // Options contains options for the Dgraph server.
 type Options struct {
-	// PostingDir is the path to the directory storing the postings..
+	// PostingDir is the path to the directory storing the postings.
 	PostingDir string
+	// TmpDir is the path to the directory storing the temporary buffers.
+	TmpDir string
 
 	// PostingDirCompression is the compression algorithem used to compression Postings directory.
 	PostingDirCompression bo.CompressionType
@@ -93,5 +95,9 @@ func (opt *Options) validate() {
 	x.Check(err)
 	wd, err := filepath.Abs(opt.WALDir)
 	x.Check(err)
+	td, err := filepath.Abs(opt.TmpDir)
+	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
+	x.AssertTruef(pd != td, "Posting and Tmp directory cannot be the same ('%s').", opt.PostingDir)
+	x.AssertTruef(wd != td, "WAL and Tmp directory cannot be the same ('%s').", opt.WALDir)
 }
