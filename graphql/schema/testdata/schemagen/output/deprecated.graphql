@@ -274,6 +274,10 @@ type AddAtypePayload {
 
 type AtypeAggregateResult {
 	count: Int
+	iamDeprecatedMin: String
+	iamDeprecatedMax: String
+	soAmIMin: String
+	soAmIMax: String
 }
 
 type DeleteAtypePayload {

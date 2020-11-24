@@ -279,6 +279,8 @@ type AddCarPayload {
 
 type CarAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteCarPayload {

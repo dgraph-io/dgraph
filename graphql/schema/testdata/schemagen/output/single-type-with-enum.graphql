@@ -288,6 +288,10 @@ type DeletePostPayload {
 
 type PostAggregateResult {
 	count: Int
+	titleMin: String
+	titleMax: String
+	textMin: String
+	textMax: String
 }
 
 type UpdatePostPayload {

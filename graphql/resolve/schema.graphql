@@ -46,8 +46,8 @@ type Post {
         isPublished: Boolean @search
         postType: [PostType] @search
         author: Author!
-	category: Category @hasInverse(field: posts)
-	comments: [Comment]
+        category: Category @hasInverse(field: posts)
+        comments: [Comment]
         ps: PostSecret
 }
 

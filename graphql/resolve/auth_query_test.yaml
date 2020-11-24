@@ -340,19 +340,27 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
-- name: "Auth with count"
+- name: "Auth with Aggregate Root Query"
   gqlquery: |
     query {
       aggregateUserSecret {
         count
+        aSecretMax
+        aSecretMin
       }
     }
   jwtvar:
     USER: "user1"
   dgquery: |-
     query {
-      aggregateUserSecret(func: uid(UserSecretRoot)) {
-        count : count(uid)
+      aggregateUserSecret() {
+        count : max(val(countVar))
+        aSecretMax : max(val(aSecretVar))
+        aSecretMin : min(val(aSecretVar))
+      }
+      var(func: uid(UserSecretRoot)) {
+        countVar as count(uid)
+        aSecretVar as UserSecret.aSecret
       }
       UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
       UserSecret1 as var(func: type(UserSecret))
@@ -565,10 +573,11 @@
        queryIssue()
      }
 
-- name: "Count on Auth with top level AND rbac false"
+- name: "Aggregate Query on Auth with top level AND rbac false"
   gqlquery: |
     query {
       aggregateIssue {
+        randomMin
         count
       }
     }
@@ -600,11 +609,13 @@
        Project1 as var(func: type(Project))
      }
 
-- name: "Count on Auth with top level OR rbac true"
+- name: "Aggregate on Auth with top level OR rbac true"
   gqlquery: |
     query {
       aggregateProject {
+        nameMin
         count
+        randomMin
       }
     }
   jwtvar:
@@ -612,8 +623,15 @@
     USER: "user1"
   dgquery: |-
     query {
-      aggregateProject(func: uid(ProjectRoot)) {
-        count : count(uid)
+      aggregateProject() {
+        nameMin : min(val(nameVar))
+        count : max(val(countVar))
+        randomMin : min(val(randomVar))
+      }
+      var(func: uid(ProjectRoot)) {
+        nameVar as Project.name
+        countVar as count(uid)
+        randomVar as Project.random
       }
       ProjectRoot as var(func: uid(Project1))
       Project1 as var(func: type(Project))
@@ -993,19 +1011,25 @@
       }
     }
 
-- name: "Count with complex auth filter"
+- name: "Aggregate Query with complex auth filter"
   gqlquery: |
     query {
       aggregateMovie {
         count
+        contentMin
       }
     }
   jwtvar:
     USER: "user1"
   dgquery: |-
     query {
-      aggregateMovie(func: uid(MovieRoot)) {
-        count : count(uid)
+      aggregateMovie() {
+        count : max(val(countVar))
+        contentMin : min(val(contentVar))
+      }
+      var(func: uid(MovieRoot)) {
+        countVar as count(uid)
+        contentVar as Movie.content
       }
       MovieRoot as var(func: uid(Movie1)) @filter((NOT (uid(MovieAuth2)) AND (uid(MovieAuth3) OR uid(MovieAuth4))))
       Movie1 as var(func: type(Movie))

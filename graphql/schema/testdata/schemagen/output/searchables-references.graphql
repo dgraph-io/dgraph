@@ -289,6 +289,10 @@ type AddPostPayload {
 
 type AuthorAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
+	dobMin: DateTime
+	dobMax: DateTime
 }
 
 type DeleteAuthorPayload {
@@ -305,6 +309,12 @@ type DeletePostPayload {
 
 type PostAggregateResult {
 	count: Int
+	titleMin: String
+	titleMax: String
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
 }
 
 type UpdateAuthorPayload {
