@@ -74,6 +74,8 @@ var (
 		"Clear all the test clusters.")
 	dry = pflag.BoolP("dry", "", false,
 		"Just show how the packages would be executed, without running tests.")
+	useExisting = pflag.String("prefix", "",
+		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -288,7 +290,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 
 	var started, stopped bool
 	start := func() {
-		if started {
+		if len(*useExisting) > 0 || started {
 			return
 		}
 		startCluster(defaultCompose, prefix)
@@ -338,6 +340,9 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 }
 
 func getPrefix() string {
+	if len(*useExisting) > 0 {
+		return *useExisting
+	}
 	id := atomic.AddInt32(&testId, 1)
 	return fmt.Sprintf("test-%03d-%d", procId, id)
 }
@@ -582,6 +587,7 @@ func run() error {
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
 
+	// cmd := command("make", "BUILD_RACE=y", "install")
 	cmd := command("make", "install")
 	cmd.Dir = *baseDir
 	if err := cmd.Run(); err != nil {
