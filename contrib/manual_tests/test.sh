@@ -234,8 +234,8 @@ function cleanup() {
 }
 
 function test::manual_start() {
-  local -r n_zeros=2
-  local -r n_alphas=4
+  local -r n_zeros=3
+  local -r n_alphas=3
 
   dgraph::start_zeros "$n_zeros"
   dgraph::start_alphas "$n_alphas"
@@ -263,8 +263,8 @@ function test::manual_start() {
 function test::manual_start_encryption() {
   dgraph::generate_encryption_key
 
-  local -r n_zeros=2
-  local -r n_alphas=4
+  local -r n_zeros=3
+  local -r n_alphas=3
 
   dgraph::start_zeros "$n_zeros"
   dgraph::start_alphas "$n_alphas" --encryption_key_file "$ENCRYPTION_KEY_PATH"
@@ -292,8 +292,8 @@ function test::manual_start_encryption() {
 function test::manual_start_acl() {
   dgraph::generate_acl_secret
 
-  local -r n_zeros=2
-  local -r n_alphas=4
+  local -r n_zeros=3
+  local -r n_alphas=3
 
   dgraph::start_zeros "$n_zeros"
   dgraph::start_alphas "$n_alphas" --acl_secret_file "$ACL_SECRET_PATH"
@@ -318,11 +318,12 @@ function test::manual_start_acl() {
   done
 }
 
+# Test manual start with external TLS enabled.
 function test::manual_start_tls() {
   dgraph::generate_tls
 
-  local -r n_zeros=2
-  local -r n_alphas=4
+  local -r n_zeros=3
+  local -r n_alphas=3
 
   dgraph::start_zeros "$n_zeros"
   dgraph::start_alphas "$n_alphas" --tls_cacert "$TLS_PATH"/ca.crt --tls_node_cert "$TLS_PATH"/node.crt --tls_node_key "$TLS_PATH"/node.key
@@ -351,8 +352,8 @@ function test::manual_start_tls() {
 function test::manual_start_tls2() {
   dgraph::generate_tls
 
-  local -r n_zeros=2
-  local -r n_alphas=4
+  local -r n_zeros=3
+  local -r n_alphas=3
 
   for i in $(seq "$n_zeros"); do
     "$DGRAPH_BIN" cert --client "zero$i" --cwd "$DGRAPH_PATH"
@@ -401,8 +402,8 @@ function test::manual_start_encryption_acl_tls() {
   dgraph::generate_acl_secret
   dgraph::generate_tls
 
-  local -r n_zeros=2
-  local -r n_alphas=4
+  local -r n_zeros=3
+  local -r n_alphas=3
 
   dgraph::start_zeros "$n_zeros"
   dgraph::start_alphas "$n_alphas" \
