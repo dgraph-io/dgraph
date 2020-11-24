@@ -162,7 +162,7 @@ func init() {
 		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsert-predicate", "U", "", "run in upsert-predicate mode. the value would "+
 		"be used to store blank nodes as an xid")
-	flag.String("tmp", "t", "Direcotry for temporary buffers.")
+	flag.String("tmp", "t", "Directory for temporary buffers.")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -622,7 +622,7 @@ func run() error {
 		bufferSize:    opt.bufferSize,
 	}
 
-	// Create directory for temporary buffers
+	// Create directory for temporary buffers.
 	x.Check(os.MkdirAll(opt.tmpDir, 0700))
 
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
