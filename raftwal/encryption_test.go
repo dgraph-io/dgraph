@@ -120,37 +120,42 @@ func TestLogRotate(t *testing.T) {
 
 // TestLogGrow writes data of sufficient size to grow the log file.
 func TestLogGrow(t *testing.T) {
-	dir, err := ioutil.TempDir("", "raftwal")
-	require.NoError(t, err)
-	el, err := openWal(dir)
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
+	test := func(t *testing.T, key []byte) {
+		x.WorkerConfig.EncryptionKey = key
+		dir, err := ioutil.TempDir("", "raftwal")
+		require.NoError(t, err)
+		el, err := openWal(dir)
+		require.NoError(t, err)
+		defer os.RemoveAll(dir)
 
-	var entries []raftpb.Entry
+		var entries []raftpb.Entry
 
-	const numEntries = (maxNumEntries * 3) / 2
+		const numEntries = (maxNumEntries * 3) / 2
 
-	// 5KB * 30000 is ~ 150MB, this will cause the log file to grow.
-	for i := 0; i < numEntries; i++ {
-		data := make([]byte, 5<<10)
-		rand.Read(data)
-		entry := raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}
-		entries = append(entries, entry)
+		// 5KB * 30000 is ~ 150MB, this will cause the log file to grow.
+		for i := 0; i < numEntries; i++ {
+			data := make([]byte, 5<<10)
+			rand.Read(data)
+			entry := raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}
+			entries = append(entries, entry)
+		}
+		err = el.AddEntries(entries)
+		require.NoError(t, err)
+
+		// Reopen the file and retrieve all entries.
+		el, err = openWal(dir)
+		require.NoError(t, err)
+		readEntries := el.allEntries(0, math.MaxInt64, math.MaxInt64)
+		require.Equal(t, numEntries, len(readEntries))
+
+		for i, gotEntry := range readEntries {
+			expEntry := entries[i]
+			require.Equal(t, expEntry.Data, gotEntry.Data)
+			require.Equal(t, expEntry.Index, gotEntry.Index)
+			require.Equal(t, expEntry.Term, gotEntry.Term)
+			require.Equal(t, expEntry.Type, gotEntry.Type)
+		}
 	}
-	err = el.AddEntries(entries)
-	require.NoError(t, err)
-
-	// Reopen the file and retrieve all entries.
-	el, err = openWal(dir)
-	require.NoError(t, err)
-	readEntries := el.allEntries(0, math.MaxInt64, math.MaxInt64)
-	require.Equal(t, numEntries, len(readEntries))
-
-	for i, gotEntry := range readEntries {
-		expEntry := entries[i]
-		require.Equal(t, expEntry.Data, gotEntry.Data)
-		require.Equal(t, expEntry.Index, gotEntry.Index)
-		require.Equal(t, expEntry.Term, gotEntry.Term)
-		require.Equal(t, expEntry.Type, gotEntry.Type)
-	}
+	t.Run("without encryption", func(t *testing.T) { test(t, nil) })
+	t.Run("with encryption", func(t *testing.T) { test(t, []byte("badger16byteskey")) })
 }
