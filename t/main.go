@@ -444,7 +444,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if !hasTestFiles(task.pkg.ID) {
 			continue
 		}
-		if !strings.Contains(task.pkg.ID, "systest/21million") {
+		if !strings.Contains(task.pkg.ID, "systest/bgindex") {
 			continue
 		}
 
@@ -699,18 +699,17 @@ func removeAllTestContainers() {
 }
 
 func run() error {
+	start := time.Now()
+
 	teamcityVersion := os.Getenv("TEAMCITY_VERSION")
 	if len(teamcityVersion) > 0 {
 		os.Setenv("GOFLAGS", "-json")
 	}
-	start := time.Now()
 
 	if *clear {
 		removeAllTestContainers()
 		return nil
 	}
-
-	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
 
 	cmd := command("make", "install")
