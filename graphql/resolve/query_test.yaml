@@ -1936,6 +1936,32 @@
     }
 
 -
+  name: "fragment on interface implemented by type which implements multiple interfaces in query on some other interface"
+  gqlquery: |
+    query {
+      queryCharacter {
+        id
+        name
+        ... on Employee {
+            ename
+        }
+        ... on Human {
+            female
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCharacter(func: type(Character)) {
+        dgraph.type
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        female : Human.female
+      }
+    }
+
+-
   name: "Filter with id uses uid func at root."
   gqlquery: |
     query {
