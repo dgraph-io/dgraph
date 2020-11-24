@@ -1936,7 +1936,7 @@
     }
 
 -
-  name: "queryCharacter with fragment on interface and type"
+  name: "fragment on interface implemented by type which implements multiple interfaces in query on some other interface"
   gqlquery: |
     query {
       queryCharacter {
