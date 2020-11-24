@@ -12,7 +12,7 @@ Lambda provides a way to write your custom logic in JavaScript, integrate it wit
 - Declare lambda queries, mutations, and fields in your GraphQL schema as needed
 - Define lambda resolvers for them in a JavaScript file
 
-This also simplifies the job of UI developers, allowing them to work in JavaScript, without knowing any other backend language.
+This also simplifies the job of developers, as they can build a complex backend that is rich with business logic, without setting up multiple different services. Also, you can build your backend in JavaScript, which means you can build both your frontend and backend using the same language.
 
 Dgraph doesn't execute your custom logic itself. It makes external HTTP requests to a user-defined lambda server. That means, you can deploy your lambda logic into the same Kubernetes cluster as your Dgraph instance. 
 
