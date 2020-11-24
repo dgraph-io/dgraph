@@ -331,6 +331,7 @@ func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {
 }
 
 const defaultTimeToSleep = 500 * time.Millisecond
+const expireJwtSleep = 11 * time.Second
 
 func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	createAccountAndData(t, dg)
@@ -365,11 +366,11 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	queryPredicateWithUserAccount(t, dg, false)
 	// sleep long enough (10s per the docker-compose.yml)
 	// for the accessJwt to expire in order to test auto login through refresh jwt
-	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
-	time.Sleep(4 * time.Second)
+	glog.Infof("Sleeping for accessJwt to expire")
+	time.Sleep(expireJwtSleep)
 	mutatePredicateWithUserAccount(t, dg, false)
-	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
-	time.Sleep(4 * time.Second)
+	glog.Infof("Sleeping for accessJwt to expire")
+	time.Sleep(expireJwtSleep)
 	alterPredicateWithUserAccount(t, dg, false)
 }
 
@@ -2972,7 +2973,7 @@ func TestAddNewPredicate(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 	addToGroup(t, accessJwt, userid, "guardians")
-	time.Sleep(4 * time.Second)
+	time.Sleep(expireJwtSleep)
 
 	// Alice is a guardian now, it can create new predicate.
 	err = userClient.Alter(ctx, &api.Operation{

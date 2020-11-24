@@ -110,8 +110,11 @@ func startCluster(composeFile, prefix string) {
 	runFatal(cmd)
 	fmt.Printf("CLUSTER UP: %s\n", prefix)
 
-	// Let it stabilize.
-	time.Sleep(3 * time.Second)
+	// Wait for cluster to be healthy.
+	for i := 1; i <= 6; i++ {
+		in := getInstance(prefix, "alpha"+strconv.Itoa(i))
+		in.bestEffortWaitForHealthy(8080)
+	}
 }
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	go func() {
@@ -139,24 +142,25 @@ func (in instance) String() string {
 	return fmt.Sprintf("%s_%s_1", in.Prefix, in.Name)
 }
 
-func allContainers(prefix string) []types.Container {
-	cli, err := client.NewEnvClient()
-	x.Check(err)
-
-	containers, err := cli.ContainerList(ctxb, types.ContainerListOptions{All: true})
-	if err != nil {
-		log.Fatalf("While listing container: %v\n", err)
+func (in instance) bestEffortWaitForHealthy(privatePort uint16) {
+	port := in.publicPort(privatePort)
+	if len(port) == 0 {
+		return
 	}
-
-	var out []types.Container
-	for _, c := range containers {
-		for _, name := range c.Names {
-			if strings.HasPrefix(name, "/"+prefix) {
-				out = append(out, c)
-			}
+	for i := 0; i < 30; i++ {
+		resp, err := http.Get("http://localhost:" + port + "/health")
+		if err == nil && resp.StatusCode == http.StatusOK {
+			return
 		}
+		var body []byte
+		if resp != nil && resp.Body != nil {
+			body, _ = ioutil.ReadAll(resp.Body)
+			resp.Body.Close()
+		}
+		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
+		time.Sleep(time.Second)
 	}
-	return out
+	return
 }
 
 func (in instance) getContainer() types.Container {
@@ -211,6 +215,26 @@ func (in instance) loginFatal() {
 		time.Sleep(time.Second)
 	}
 	glog.Fatalf("Unable to login to %s\n", in)
+}
+
+func allContainers(prefix string) []types.Container {
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+
+	containers, err := cli.ContainerList(ctxb, types.ContainerListOptions{All: true})
+	if err != nil {
+		log.Fatalf("While listing container: %v\n", err)
+	}
+
+	var out []types.Container
+	for _, c := range containers {
+		for _, name := range c.Names {
+			if strings.HasPrefix(name, "/"+prefix) {
+				out = append(out, c)
+			}
+		}
+	}
+	return out
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
@@ -358,27 +382,6 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 		wg.Add(1)
 		defer stopCluster(compose, prefix, wg)
 	}
-
-	port := getInstance(prefix, "alpha1").publicPort(8080)
-	if len(port) > 0 {
-		for i := 0; i < 30; i++ {
-			resp, err := http.Get("http://localhost:" + port + "/health")
-			if err == nil && resp.StatusCode == http.StatusOK {
-				fmt.Printf("Health check: OK for %s. Status: %s\n", prefix, resp.Status)
-				break
-			}
-			var body []byte
-			if resp != nil && resp.Body != nil {
-				body, _ = ioutil.ReadAll(resp.Body)
-				resp.Body.Close()
-			}
-			fmt.Printf("Health failed: %v. Response: %q. Retrying...\n", err, body)
-			time.Sleep(time.Second)
-		}
-	}
-
-	// Wait for cluster to be healthy.
-	// getInstance(prefix, "alpha1").loginFatal()
 
 	return runTestsFor(ctx, pkg, prefix)
 }
