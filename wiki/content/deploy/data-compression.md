@@ -17,11 +17,11 @@ option used in earlier Dgraph versions. {{% /notice %}}
 
 The following disk compression settings are available:
 
-| Setting | Notes                                                                   |
+| Setting    | Notes                                                                |
 |------------|----------------------------------------------------------------------|
 |`none`      | Data on disk will not be compressed.                                 |
 |`zstd:level`| Use Zstandard compression, with a compression level specified (1-3). |
-|`snappy`    | Use Snappy compression (this is the default value)                   |
+|`snappy`    | Use Snappy compression (this is the default value).                  |
 
 For example, you could choose to use Zstandard compression with the highest
 compression level using the following command:
@@ -40,4 +40,4 @@ dgraph alpha --badger.compression=snappy
 ```
 
 Using this compression setting (Snappy) provides a good compromise between the
-need for a high compression ratio and efficient use of CPU resources.
+need for a high compression ratio and efficient CPU usage.
