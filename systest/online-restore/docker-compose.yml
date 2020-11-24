@@ -25,8 +25,14 @@ services:
       source: backup
       target: /data/backup
       read_only: false
+    - type: bind
+      source: ../../tlstest/mtls_internal/tls/alpha1
+      target: /dgraph-tls
+      read_only: true
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=1 --encryption_key_file /data/keys/enc_key
+      --tls_cacert /dgraph-tls/ca.crt --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key
+      --tls_internal_port_enabled=true --tls_cert /dgraph-tls/client.alpha1.crt --tls_key /dgraph-tls/client.alpha1.key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha2:
     image: dgraph/dgraph:latest
@@ -55,8 +61,14 @@ services:
       source: backup
       target: /data/backup
       read_only: false
+    - type: bind
+      source: ../../tlstest/mtls_internal/tls/alpha2
+      target: /dgraph-tls
+      read_only: true
     command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=2 --encryption_key_file /data/keys/enc_key
+      --tls_cacert /dgraph-tls/ca.crt --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key
+      --tls_internal_port_enabled=true --tls_cert /dgraph-tls/client.alpha2.crt --tls_key /dgraph-tls/client.alpha2.key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha3:
     image: dgraph/dgraph:latest
@@ -85,8 +97,14 @@ services:
       source: backup
       target: /data/backup
       read_only: false
+    - type: bind
+      source: ../../tlstest/mtls_internal/tls/alpha3
+      target: /dgraph-tls
+      read_only: true
     command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=3 --encryption_key_file /data/keys/enc_key
+      --tls_cacert /dgraph-tls/ca.crt --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key
+      --tls_internal_port_enabled=true --tls_cert /dgraph-tls/client.alpha3.crt --tls_key /dgraph-tls/client.alpha3.key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha4:
     image: dgraph/dgraph:latest
@@ -115,8 +133,14 @@ services:
       source: backup
       target: /data/backup
       read_only: false
+    - type: bind
+      source: ../../tlstest/mtls_internal/tls/alpha4
+      target: /dgraph-tls
+      read_only: true
     command: /gobin/dgraph alpha --my=alpha4:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=4 --encryption_key_file /data/keys/enc_key
+      --tls_cacert /dgraph-tls/ca.crt --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key
+      --tls_internal_port_enabled=true --tls_cert /dgraph-tls/client.alpha4.crt --tls_key /dgraph-tls/client.alpha4.key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha5:
     image: dgraph/dgraph:latest
@@ -145,8 +169,14 @@ services:
       source: backup
       target: /data/backup
       read_only: false
+    - type: bind
+      source: ../../tlstest/mtls_internal/tls/alpha5
+      target: /dgraph-tls
+      read_only: true
     command: /gobin/dgraph alpha --my=alpha5:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=5 --encryption_key_file /data/keys/enc_key
+      --tls_cacert /dgraph-tls/ca.crt --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key
+      --tls_internal_port_enabled=true --tls_cert /dgraph-tls/client.alpha5.crt --tls_key /dgraph-tls/client.alpha5.key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   alpha6:
     image: dgraph/dgraph:latest
@@ -176,12 +206,12 @@ services:
       target: /data/backup
       read_only: false
     - type: bind
-      source: ../../tlstest/mtls_internal/tls/alpha1
+      source: ../../tlstest/mtls_internal/tls/alpha6
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha --my=alpha6:7080 --zero=zero1:5080
       --tls_cacert /dgraph-tls/ca.crt --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key
-      --tls_internal_port_enabled=true --tls_cert /dgraph-tls/client.alpha1.crt --tls_key /dgraph-tls/client.alpha1.key
+      --tls_internal_port_enabled=true --tls_cert /dgraph-tls/client.alpha6.crt --tls_key /dgraph-tls/client.alpha6.key
       --logtostderr -v=2 --idx=6 --encryption_key_file /data/keys/enc_key
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   ratel:
