@@ -275,28 +275,20 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	satisfies := []string{typeName, ""}
 	var additionalTypes map[string]bool
 	switch typeKind {
-	case ast.Interface:
-		// expand fragments on types which implement this interface
+	case ast.Interface, ast.Union:
+		// expand fragments on types which implement this interface (for interface case)
+		// expand fragments on member types of this union (for Union case)
 		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[typeName])
-		// if there is any fragment in the selection set of this field, need to store a mapping from
-		// fields in that fragment to the fragment's type condition, to be used later in completion.
-		for _, f := range field.SelectionSet {
-			addSelectionToInterfaceImplFragFields(typeName, f, additionalTypes, op)
-		}
-	case ast.Union:
-		// expand fragments on member types of this union
-		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[typeName])
-		// also, expand fragments on interfaces which are implemented by the member types of this
-		// union
+		// also, expand fragments on interfaces which are implemented by the member types of this union
+		// And also on additional interfaces which also implement the same type
 		var interfaceFragsToExpand []*ast.Definition
-		for memberType := range additionalTypes {
+		for typ := range additionalTypes {
 			interfaceFragsToExpand = append(interfaceFragsToExpand,
-				op.inSchema.schema.Implements[memberType]...)
+				op.inSchema.schema.Implements[typ]...)
 		}
 		additionalInterfaces := getTypeNamesAsMap(interfaceFragsToExpand)
-		// for fragments in the selection set of this union field, need to store a mapping from
-		// fields in that fragment to the fragment's type condition, for each of the additional
-		// interfaces, to be used later in completion.
+		// if there is any fragment in the selection set of this field, need to store a mapping from
+		// fields in that fragment to the fragment's type condition, to be used later in completion.
 		for interfaceName := range additionalInterfaces {
 			additionalTypes[interfaceName] = true
 			for _, f := range field.SelectionSet {
