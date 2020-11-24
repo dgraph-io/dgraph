@@ -74,8 +74,8 @@ var (
 		"Clear all the test clusters.")
 	dry = pflag.BoolP("dry", "", false,
 		"Just show how the packages would be executed, without running tests.")
-	noBuild = pflag.BoolP("no-build", "", false,
-		"Run tests without building Dgraph.")
+	rebuildBinary = pflag.BoolP("rebuild-binary", "", true,
+		"Build Dgraph before running tests.")
 	useExisting = pflag.String("prefix", "",
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 )
@@ -589,7 +589,7 @@ func run() error {
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
 
-	if !*noBuild {
+	if *rebuildBinary {
 		// cmd := command("make", "BUILD_RACE=y", "install")
 		cmd := command("make", "install")
 		cmd.Dir = *baseDir
