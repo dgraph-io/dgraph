@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -84,15 +85,16 @@ func TestSchemaSubscribe(t *testing.T) {
 				]
 			}
 		}`
-	introspectionResult := introspect.ExecuteAsPost(t, groupOneServer)
+
+	introspectionResult := runIntrospectWithRetryIfNecessary(t, introspect, groupOneServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
-	introspectionResult = introspect.ExecuteAsPost(t, groupTwoServer)
+	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupTwoServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
-	introspectionResult = introspect.ExecuteAsPost(t, groupThreeServer)
+	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupThreeServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
@@ -129,15 +131,15 @@ func TestSchemaSubscribe(t *testing.T) {
 				]
 			}
 		}`
-	introspectionResult = introspect.ExecuteAsPost(t, groupOneServer)
+	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupOneServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
-	introspectionResult = introspect.ExecuteAsPost(t, groupTwoServer)
+	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupTwoServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
-	introspectionResult = introspect.ExecuteAsPost(t, groupThreeServer)
+	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupThreeServer)
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 }
@@ -804,4 +806,17 @@ func getDgraphSchema(t *testing.T, dg *dgo.Dgraph) string {
 	require.NoError(t, err)
 
 	return string(resp.GetJson())
+}
+
+func runIntrospectWithRetryIfNecessary(t *testing.T, query *common.GraphQLParams, url string) *common.GraphQLResponse {
+	var response *common.GraphQLResponse
+	for i := 0; i < 10; i++ {
+		response = query.ExecuteAsPost(t, url)
+		if response.Errors == nil || !strings.Contains(response.Errors.Error(), "There's no GraphQL schema in Dgraph.") {
+			return response
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	return response
 }
