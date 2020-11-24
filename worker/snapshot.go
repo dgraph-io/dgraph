@@ -201,6 +201,7 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 
 	var num int
 	stream := pstore.NewStreamAt(snap.ReadTs)
+	stream.NumGo = 4
 	stream.LogPrefix = "Sending Snapshot"
 	// Use the default implementation. We no longer try to generate a rolled up posting list here.
 	// Instead, we just stream out all the versions as they are.
