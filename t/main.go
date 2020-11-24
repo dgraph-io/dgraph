@@ -42,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
@@ -102,6 +103,7 @@ func startCluster(composeFile, prefix string) {
 		"docker-compose", "-f", composeFile, "-p", prefix,
 		"up", "--force-recreate", "--remove-orphans", "--detach")
 	cmd.Stderr = nil
+
 	fmt.Printf("Bringing up cluster %s...\n", prefix)
 	runFatal(cmd)
 	fmt.Printf("CLUSTER UP: %s\n", prefix)
@@ -111,7 +113,7 @@ func startCluster(composeFile, prefix string) {
 }
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	go func() {
-		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down")
+		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
@@ -553,6 +555,18 @@ func removeAllTestContainers() {
 				fmt.Printf("Error: %v while removing network: %+v\n", err, n)
 			} else {
 				fmt.Printf("Removed network: %s\n", n.Name)
+			}
+		}
+	}
+
+	volumes, err := cli.VolumeList(ctxb, filters.Args{})
+	x.Check(err)
+	for _, v := range volumes.Volumes {
+		if strings.HasPrefix(v.Name, "test-") {
+			if err := cli.VolumeRemove(ctxb, v.Name, true); err != nil {
+				fmt.Printf("Error: %v while removing volume: %+v\n", err, v)
+			} else {
+				fmt.Printf("Removed volume: %s\n", v.Name)
 			}
 		}
 	}

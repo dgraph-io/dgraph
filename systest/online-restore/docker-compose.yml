@@ -17,8 +17,8 @@ services:
       source: ./keys
       target: /data/keys
       read_only: true
-    - type: bind
-      source: ./backup
+    - type: volume
+      source: backup
       target: /data/backup
       read_only: false
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080
@@ -43,8 +43,8 @@ services:
       source: ./keys
       target: /data/keys
       read_only: true
-    - type: bind
-      source: ./backup
+    - type: volume
+      source: backup
       target: /data/backup
       read_only: false
     command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080
@@ -69,8 +69,8 @@ services:
       source: ./keys
       target: /data/keys
       read_only: true
-    - type: bind
-      source: ./backup
+    - type: volume
+      source: backup
       target: /data/backup
       read_only: false
     command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080
@@ -95,8 +95,8 @@ services:
       source: ./keys
       target: /data/keys
       read_only: true
-    - type: bind
-      source: ./backup
+    - type: volume
+      source: backup
       target: /data/backup
       read_only: false
     command: /gobin/dgraph alpha --my=alpha4:7080 --zero=zero1:5080
@@ -121,8 +121,8 @@ services:
       source: ./keys
       target: /data/keys
       read_only: true
-    - type: bind
-      source: ./backup
+    - type: volume
+      source: backup
       target: /data/backup
       read_only: false
     command: /gobin/dgraph alpha --my=alpha5:7080 --zero=zero1:5080
@@ -147,8 +147,8 @@ services:
       source: ./keys
       target: /data/keys
       read_only: true
-    - type: bind
-      source: ./backup
+    - type: volume
+      source: backup
       target: /data/backup
       read_only: false
     command: /gobin/dgraph alpha --my=alpha6:7080 --zero=zero1:5080
@@ -174,4 +174,5 @@ services:
       read_only: true
     command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --replicas=3 --logtostderr
       -v=2 --bindall
-volumes: {}
+volumes:
+  backup: {}
