@@ -110,7 +110,7 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
 		time.Sleep(3 * time.Second)
-		state, err := testutil.GetState()
+		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
 		_, ok1 := state.Groups["1"].Tablets["name1"]
 		_, ok2 := state.Groups["2"].Tablets["name2"]

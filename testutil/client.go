@@ -27,6 +27,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -505,22 +507,24 @@ func hasAdminGraphQLSchema(t *testing.T) (bool, error) {
 
 func GetHttpsClient(t *testing.T) http.Client {
 	tlsConf := GetAlphaClientConfig(t)
-	client := http.Client{
+	return http.Client{
 		Timeout: time.Second * 3,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConf,
 		},
 	}
-	return client
 }
 
 func GetAlphaClientConfig(t *testing.T) *tls.Config {
+	_, filename, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	tlsDir := path.Join(path.Dir(filename), "../tlstest/mtls_internal/tls/live")
 	c := &x.TLSHelperConfig{
 		CertRequired:     true,
-		Cert:             "../tlstest/mtls_internal/tls/live/client.liveclient.crt",
-		Key:              "../tlstest/mtls_internal/tls/live/client.liveclient.key",
+		Cert:             tlsDir + "/client.liveclient.crt",
+		Key:              tlsDir + "/client.liveclient.key",
 		ServerName:       "alpha1",
-		RootCACert:       "../tlstest/mtls_internal/tls/live/ca.crt",
+		RootCACert:       tlsDir + "/ca.crt",
 		UseSystemCACerts: true,
 	}
 	tlsConf, err := x.GenerateClientTLSConfig(c)
