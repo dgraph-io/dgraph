@@ -212,7 +212,7 @@ func TestLiveLoadJsonUidDiscard(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
-		{testutil.DgraphBinaryPath(), "live", "--new-uids",
+		{testutil.DgraphBinaryPath(), "live", "--new_uids",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
@@ -240,7 +240,7 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
-		{testutil.DgraphBinaryPath(), "live", "--new-uids",
+		{testutil.DgraphBinaryPath(), "live", "--new_uids",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
@@ -280,7 +280,7 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 		{testutil.DgraphBinaryPath(), "live",
 			"--schema", localExportPath + "/" + exportId + "/" + groupId + ".schema.gz",
 			"--files", localExportPath + "/" + exportId + "/" + groupId + ".rdf.gz",
-			"--encryption-key-file", testDataDir + "/../../../../ee/enc/test-fixtures/enc-key",
+			"--encryption_key_file", testDataDir + "/../../../../ee/enc/test-fixtures/enc-key",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
 	_, err := testutil.Pipeline(pipeline)

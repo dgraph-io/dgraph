@@ -91,7 +91,7 @@ type updateTypeNameInfo struct {
 }
 
 func upgradeAclTypeNames() error {
-	deleteOld := Upgrade.Conf.GetBool("delete-old")
+	deleteOld := Upgrade.Conf.GetBool("deleteOld")
 	// prepare upgrade info for ACL type names
 	aclTypeNameInfo := []*updateTypeNameInfo{
 		{
