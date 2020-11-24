@@ -5,7 +5,7 @@ weight = 2
     parent = "authorization"
 +++
 
-Given an authentication mechanism and signed JWT, it's the `@auth` directive that tells Dgraph how to apply authorization.  The directive can be used on any type except `union` (that isn't a `@remote` type) and specifies the authorization for `query` as well as the `add`, `update` and `delete` mutations.
+Given an authentication mechanism and signed JWT, it's the `@auth` directive that tells Dgraph how to apply authorization.  The directive can be used on any type except `union` (that isn't a `@remote` type) and specifies the authorization for `query` as well as the `add`, `update` and `delete` mutations. Additionally, this directive can also be used with [`@secret`](/graphql/schema/types.md#password-type) directive. A `password` auth rule can be specified which is then used for authorization of `check<Type>Password` query.
 
 {{% notice "note" %}}
 The [Union type](/graphql/schema/types#union-type) does not support the `@auth` directive 
