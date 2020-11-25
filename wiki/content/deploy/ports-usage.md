@@ -73,14 +73,14 @@ configure it to listen on any other port.
 
 In a HA cluster configuration, you should run three or five
 replicas for the Zero node, and three or five replicas for the Alpha node. A
-Dgraph cluster is divided into RAFT groups, where Dgraph Zero is group 0 and
+Dgraph cluster is divided into Raft groups, where Dgraph Zero is group 0 and
 each shard of Dgraph Alpha is a subsequent numbered group (group 1, group 2, etc.).
-The number of replicas in each RAFT group must be an odd number for the group
+The number of replicas in each Raft group must be an odd number for the group
 to have consensus, which will exist when the majority of nodes in a group are
 available.
 
 {{% notice "tip" %}}
-If the number of replicas in a RAFT group is **2N + 1**, up to **N** nodes can
+If the number of replicas in a Raft group is **2N + 1**, up to **N** nodes can
 go offline without any impact on reads or writes. So, if there are five
 replicas, three must be online to avoid an impact to reads or writes.
 {{% /notice %}}
