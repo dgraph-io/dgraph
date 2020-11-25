@@ -690,8 +690,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	tmpStream.Send = func(buf *z.Buffer) error {
-		kv := &bpb.KV{}
 		return buf.SliceIterate(func(slice []byte) error {
+			kv := &bpb.KV{}
 			if err := kv.Unmarshal(slice); err != nil {
 				return err
 			}

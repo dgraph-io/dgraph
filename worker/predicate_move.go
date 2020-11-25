@@ -70,22 +70,12 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 	size := 0
 	var pk x.ParsedKey
 
-	buf := z.NewBuffer(1 << 20)
-	defer buf.Release()
-
 	for kvPayload := range kvs {
-		buf.Reset()
-		// TODO: We can avoid doing this copy of data by instead creating a
-		// buffer which references kvPayload.Data instead. That can be a
-		// read-only buffer, which would panic in case we write to it.
-		x.Check2(buf.Write(kvPayload.GetData()))
-
+		buf := z.BufferFrom(kvPayload.GetData())
 		kv := &bpb.KV{}
 		err := buf.SliceIterate(func(s []byte) error {
+			kv.Reset()
 			x.Check(kv.Unmarshal(s))
-			// if err := kv.Unmarshal(s); err != nil {
-			// 	return err
-			// }
 			if len(pk.Attr) == 0 {
 				// This only happens once.
 				var err error
@@ -298,8 +288,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		kv.Value = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
-		slice := buf.SliceAllocate(kv.Size())
-		x.Check2(kv.MarshalToSizedBuffer(slice))
+		badger.KVToBuffer(kv, buf)
 
 		kvs := &pb.KVS{
 			Data: buf.Bytes(),

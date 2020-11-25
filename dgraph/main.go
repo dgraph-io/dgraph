@@ -60,9 +60,10 @@ func main() {
 		for range ticker.C {
 			// Read Jemalloc stats first. Print if there's a big difference.
 			z.ReadMemStats(&js)
-			glog.V(2).Infof("jemalloc: Active %s Allocated: %s Resident: %s Retained: %s\n",
+			glog.V(2).Infof("jemalloc: Active %s Allocated: %s Resident: %s Retained: %s NumBytesAlloc: %s\n",
 				humanize.IBytes(js.Active), humanize.IBytes(js.Allocated),
-				humanize.IBytes(js.Resident), humanize.IBytes(js.Retained))
+				humanize.IBytes(js.Resident), humanize.IBytes(js.Retained),
+				humanize.IBytes(uint64(z.NumAllocBytes())))
 
 			if diff := absDiff(js.Active, lastJs.Active); diff > 256<<20 {
 				glog.V(2).Infof("jemalloc: Active %s Allocated: %s Resident: %s Retained: %s\n",
