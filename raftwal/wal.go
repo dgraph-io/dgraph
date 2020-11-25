@@ -36,8 +36,8 @@ var errNotFound = errors.New("Unable to find raft entry")
 // DiskStorage, which has a lock protecting the calls to this object.
 type wal struct {
 	// files is the list of all log files ordered in ascending order by the first
-	// index in the file. The current file being written should always be accessible
-	// by looking at the last element of this slice.
+	// index in the file. current is the file currently being written to, and is
+	// added to files only after it is full.
 	files   []*logFile
 	current *logFile
 	// nextEntryIdx is the index of the next entry to write to. When this value exceeds
@@ -162,8 +162,9 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 	}
 
 	for _, re := range entries {
-		if l.nextEntryIdx >= maxNumEntries {
-			if err := l.rotate(re.Index); err != nil {
+		// Write upto maxNumEntries or 1GB, whatever happens first.
+		if l.nextEntryIdx >= maxNumEntries || offset+4+len(re.Data) > 1<<30 {
+			if err := l.rotate(re.Index, offset); err != nil {
 				return err
 			}
 			l.nextEntryIdx, offset = 0, logFileOffset
@@ -355,7 +356,7 @@ func (l *wal) reset() error {
 }
 
 // Moves the current logFile into l.files and creates a new logFile.
-func (l *wal) rotate(firstIndex uint64) error {
+func (l *wal) rotate(firstIndex uint64, offset int) error {
 	// Select the name for the new file based on the names of the existing files.
 	nextFid := l.current.fid
 	x.AssertTrue(nextFid > 0)
@@ -364,8 +365,12 @@ func (l *wal) rotate(firstIndex uint64) error {
 			nextFid = ef.fid
 		}
 	}
-	nextFid += 1
-	go l.current.Sync() // Trigger a sync in the background.
+	nextFid++
+
+	err := l.current.Truncate(int64(offset))
+	if err != nil {
+		return errors.Wrapf(err, "while truncating entry file")
+	}
 
 	ef, err := openLogFile(l.dir, nextFid)
 	if err != nil {

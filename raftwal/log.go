@@ -53,7 +53,7 @@ const (
 	// and baseIV (remaining 8 bytes) are stored.
 	encOffset = logFileOffset - 16 // 1MB - 16B
 	// logFileSize is the initial size of the log file.
-	logFileSize = 64 << 20 // 64MB
+	logFileSize = 256 << 20 // 256MB
 	// entrySize is the size in bytes of a single entry.
 	entrySize = 32
 	// logSuffix is the suffix for log files.

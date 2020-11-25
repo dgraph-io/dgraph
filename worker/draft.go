@@ -967,7 +967,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					glog.Errorf("While retrieving snapshot from Store: %v\n", err)
 					continue
 				}
-				calculate := raft.IsEmptySnap(snap) // If no snapshot, then calculate one immediately.
+
+				// If we don't have a snapshot, or if there are too many log files in Raft,
+				// calculate a new snapshot.
+				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
 
 				if chk, err := n.Store.Checkpoint(); err == nil {
 					if first, err := n.Store.FirstIndex(); err == nil {
