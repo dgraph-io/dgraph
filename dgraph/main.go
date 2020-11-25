@@ -55,22 +55,17 @@ func main() {
 		var lastNumGC uint32
 
 		var js z.MemStats
-		var lastJs z.MemStats
+		var lastAlloc uint64
 
 		for range ticker.C {
 			// Read Jemalloc stats first. Print if there's a big difference.
 			z.ReadMemStats(&js)
-			glog.V(2).Infof("jemalloc: Active %s Allocated: %s Resident: %s Retained: %s NumBytesAlloc: %s\n",
-				humanize.IBytes(js.Active), humanize.IBytes(js.Allocated),
-				humanize.IBytes(js.Resident), humanize.IBytes(js.Retained),
-				humanize.IBytes(uint64(z.NumAllocBytes())))
-
-			if diff := absDiff(js.Active, lastJs.Active); diff > 256<<20 {
-				glog.V(2).Infof("jemalloc: Active %s Allocated: %s Resident: %s Retained: %s\n",
+			if diff := absDiff(uint64(z.NumAllocBytes()), lastAlloc); diff > 256<<20 {
+				glog.V(2).Infof("NumAllocBytes: %s jemalloc: Active %s Allocated: %s Resident: %s Retained: %s\n",
+					humanize.IBytes(uint64(z.NumAllocBytes())),
 					humanize.IBytes(js.Active), humanize.IBytes(js.Allocated),
 					humanize.IBytes(js.Resident), humanize.IBytes(js.Retained))
-				lastJs = js
-				z.PrintAllocators()
+				lastAlloc = uint64(z.NumAllocBytes())
 			} else {
 				// Don't update the lastJs here.
 			}

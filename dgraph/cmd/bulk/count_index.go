@@ -148,8 +148,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		kv.Key = append([]byte{}, lastCe.Key()...)
 		kv.Version = c.state.writeTs
 		kv.StreamId = streamId
-		out := outBuf.SliceAllocate(kv.Size())
-		x.Check2(kv.MarshalToSizedBuffer(out))
+		badger.KVToBuffer(kv, outBuf)
 
 		encoder = codec.Encoder{BlockSize: 256}
 		pl.Reset()

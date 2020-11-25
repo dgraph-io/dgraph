@@ -370,7 +370,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 						StreamDone: true,
 					}
 
-					buf := z.NewBuffer(1024)
+					buf := z.NewBuffer(512)
 					defer buf.Release()
 					badger.KVToBuffer(doneKV, buf)
 
