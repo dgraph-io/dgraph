@@ -512,6 +512,12 @@ func getPackages() []task {
 
 	pkgs, err := packages.Load(nil, *baseDir+"/...")
 	x.Check(err)
+	for _, pkg := range pkgs {
+		if len(pkg.Errors) > 0 {
+			fmt.Printf("Got errors while reading pkg: %s. Error: %+v", pkg.ID, pkg.Errors)
+			os.Exit(1)
+		}
+	}
 	limitTo := findPackagesFor(*runTest)
 
 	var valid []task
