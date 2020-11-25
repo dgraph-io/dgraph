@@ -27,6 +27,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -229,18 +231,15 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 }
 
 func RetryAlter(dg *dgo.Dgraph, op *api.Operation) error {
+	var err error
 	for i := 0; i < 10; i++ {
-		err := dg.Alter(context.Background(), op)
-		if err == nil {
-			return nil
-		}
-		if strings.Contains(err.Error(), "opIndexing is already running") {
-			time.Sleep(time.Second)
-		} else {
+		err = dg.Alter(context.Background(), op)
+		if err == nil || !strings.Contains(err.Error(), "opIndexing is already running") {
 			return err
 		}
+		time.Sleep(time.Second)
 	}
-	return fmt.Errorf("not able to successfully alter the schema")
+	return err
 }
 
 // RetryBadQuery will retry a query until it failse with a non-retryable error.
@@ -508,22 +507,24 @@ func hasAdminGraphQLSchema(t *testing.T) (bool, error) {
 
 func GetHttpsClient(t *testing.T) http.Client {
 	tlsConf := GetAlphaClientConfig(t)
-	client := http.Client{
+	return http.Client{
 		Timeout: time.Second * 3,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConf,
 		},
 	}
-	return client
 }
 
 func GetAlphaClientConfig(t *testing.T) *tls.Config {
+	_, filename, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	tlsDir := path.Join(path.Dir(filename), "../tlstest/mtls_internal/tls/live")
 	c := &x.TLSHelperConfig{
 		CertRequired:     true,
-		Cert:             "../tlstest/mtls_internal/tls/live/client.liveclient.crt",
-		Key:              "../tlstest/mtls_internal/tls/live/client.liveclient.key",
+		Cert:             tlsDir + "/client.liveclient.crt",
+		Key:              tlsDir + "/client.liveclient.key",
 		ServerName:       "alpha1",
-		RootCACert:       "../tlstest/mtls_internal/tls/live/ca.crt",
+		RootCACert:       tlsDir + "/ca.crt",
 		UseSystemCACerts: true,
 	}
 	tlsConf, err := x.GenerateClientTLSConfig(c)

@@ -346,6 +346,7 @@ func (lf *logFile) bootstrap() error {
 		return y.Wrapf(err, "Error while creating base IV, while creating logfile")
 	}
 	// Initialize base IV.
-	lf.baseIV = buf[8:]
+	lf.baseIV = make([]byte, 8)
+	y.AssertTrue(8 == copy(lf.baseIV, buf[8:]))
 	return nil
 }
