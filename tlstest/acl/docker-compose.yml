@@ -18,7 +18,7 @@ services:
       target: /dgraph-acl/hmac-secret
       read_only: true
     - type: bind
-      source: mtls_internal/tls/alpha1
+      source: ../mtls_internal/tls/alpha1
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080
@@ -40,7 +40,7 @@ services:
       target: /gobin
       read_only: true
     - type: bind
-      source: mtls_internal/tls/zero1
+      source: ../mtls_internal/tls/zero1
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --logtostderr
