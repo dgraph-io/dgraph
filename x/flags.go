@@ -24,7 +24,7 @@ import (
 
 // FillCommonFlags stores flags common to Alpha and Zero.
 func FillCommonFlags(flag *pflag.FlagSet) {
-	flag.String("my", "",
+	flag.String("mY", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 
 	// OpenCensus flags.
