@@ -312,7 +312,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	}()
 
 	defaultCompose := path.Join(*baseDir, "dgraph/docker-compose.yml")
-	prefix := getPrefix()
+	prefix := getClusterPrefix()
 
 	var started, stopped bool
 	start := func() {
@@ -365,19 +365,27 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	return nil
 }
 
-func getPrefix() string {
+func getGlobalPrefix() string {
+	var tc string
+	if isTeamcity {
+		tc = "tc-"
+	}
+	return "test-" + tc
+}
+
+func getClusterPrefix() string {
 	if len(*useExisting) > 0 {
 		return *useExisting
 	}
 	id := atomic.AddInt32(&testId, 1)
-	return fmt.Sprintf("test-%03d-%d", procId, id)
+	return fmt.Sprintf("%s%03d-%d", getGlobalPrefix(), procId, id)
 }
 
 func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
 
 	compose := composeFileFor(pkg)
-	prefix := getPrefix()
+	prefix := getClusterPrefix()
 
 	startCluster(compose, prefix)
 	if !*keepCluster {
@@ -537,7 +545,7 @@ func getPackages() []task {
 }
 
 func removeAllTestContainers() {
-	containers := allContainers("test-")
+	containers := allContainers(getGlobalPrefix())
 
 	cli, err := client.NewEnvClient()
 	x.Check(err)
@@ -560,7 +568,7 @@ func removeAllTestContainers() {
 	networks, err := cli.NetworkList(ctxb, types.NetworkListOptions{})
 	x.Check(err)
 	for _, n := range networks {
-		if strings.HasPrefix(n.Name, "test-") {
+		if strings.HasPrefix(n.Name, getGlobalPrefix()) {
 			if err := cli.NetworkRemove(ctxb, n.ID); err != nil {
 				fmt.Printf("Error: %v while removing network: %+v\n", err, n)
 			} else {
@@ -572,7 +580,7 @@ func removeAllTestContainers() {
 	volumes, err := cli.VolumeList(ctxb, filters.Args{})
 	x.Check(err)
 	for _, v := range volumes.Volumes {
-		if strings.HasPrefix(v.Name, "test-") {
+		if strings.HasPrefix(v.Name, getGlobalPrefix()) {
 			if err := cli.VolumeRemove(ctxb, v.Name, true); err != nil {
 				fmt.Printf("Error: %v while removing volume: %+v\n", err, v)
 			} else {

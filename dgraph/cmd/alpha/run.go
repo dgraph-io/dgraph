@@ -761,6 +761,7 @@ func run() {
 			origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
 			if err != nil {
 				glog.Errorf("Error while retrieving cors origins: %s", err.Error())
+				time.Sleep(time.Second)
 				continue
 			}
 			x.UpdateCorsOrigins(origins)

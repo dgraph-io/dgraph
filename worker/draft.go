@@ -874,7 +874,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// commits up until then have already been written to pstore. And the way we take snapshots, we
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
-	if _, err := n.populateSnapshot(snap, pool); err != nil {
+	if err := n.populateSnapshot(snap, pool); err != nil {
 		return errors.Wrapf(err, "cannot retrieve snapshot from peer")
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -897,7 +897,7 @@ func (n *node) proposeSnapshot(discardN int) error {
 	proposal := &pb.Proposal{
 		Snapshot: snap,
 	}
-	n.elog.Printf("Proposing snapshot: %+v\n", snap)
+	glog.V(2).Infof("Proposing snapshot: %+v\n", snap)
 	data, err := proposal.Marshal()
 	x.Check(err)
 	return n.Raft().Propose(n.ctx, data)
@@ -1219,7 +1219,8 @@ func (n *node) Run() {
 				default:
 					proposal := &pb.Proposal{}
 					if err := proposal.Unmarshal(entry.Data); err != nil {
-						x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
+						glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
+						break
 					}
 					if pctx := n.Proposals.Get(proposal.Key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
@@ -1526,12 +1527,11 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// all entries at once, retrieve it in batches of 64MB.
 	var lastEntry raftpb.Entry
 	for batchFirst := first; batchFirst <= last; {
-		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
+		entries, err := n.Store.Entries(batchFirst, last+1, 256<<20)
 		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
 		}
-
 		// Exit early from the loop if no entries were found.
 		if len(entries) == 0 {
 			break
@@ -1599,6 +1599,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 		Index:   snapshotIdx,
 		ReadTs:  maxCommitTs,
 	}
+	glog.V(2).Infof("Calculated snapshot: %+v\n", result)
 	span.Annotatef(nil, "Got snapshot: %+v", result)
 	return result, nil
 }

@@ -263,7 +263,7 @@ type encodeRequest struct {
 	cbuf     *z.Buffer
 	countBuf *z.Buffer
 	wg       *sync.WaitGroup
-	listCh   chan *bpb.KVList
+	listCh   chan *z.Buffer
 	splitCh  chan *bpb.KVList
 }
 
@@ -320,7 +320,7 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 				batch.Kv = kvs.Kv[i : i+maxSplitBatchLen]
 			}
 			splitBatchLen += len(batch.Kv)
-			x.Check(ci.splitWriter.Write(batch))
+			x.Check(ci.splitWriter.WriteList(batch))
 		}
 	}
 	x.Check(ci.splitWriter.Flush())
@@ -353,24 +353,34 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 
 	var lastStreamId uint32
 	write := func(req *encodeRequest) {
-		for kvlist := range req.listCh {
-			x.Check(ci.writer.Write(kvlist))
+		for kvBuf := range req.listCh {
+			x.Check(ci.writer.Write(kvBuf))
 
-			for _, kv := range kvlist.GetKv() {
+			kv := &bpb.KV{}
+			err := kvBuf.SliceIterate(func(s []byte) error {
+				kv.Reset()
+				x.Check(kv.Unmarshal(s))
 				if lastStreamId == kv.StreamId {
-					continue
+					return nil
 				}
 				if lastStreamId > 0 {
 					fmt.Printf("Finishing stream id: %d\n", lastStreamId)
-					list := &bpb.KVList{}
-					list.Kv = append(list.Kv, &bpb.KV{
+					doneKV := &bpb.KV{
 						StreamId:   lastStreamId,
 						StreamDone: true,
-					})
-					ci.writer.Write(list)
+					}
+
+					buf := z.NewBuffer(512)
+					defer buf.Release()
+					badger.KVToBuffer(doneKV, buf)
+
+					ci.writer.Write(buf)
 				}
 				lastStreamId = kv.StreamId
-			}
+				return nil
+
+			})
+			x.Check(err)
 		}
 	}
 
@@ -391,11 +401,16 @@ func (r *reducer) writeSplitLists(db, tmpDb *badger.DB, writer *badger.StreamWri
 	baseStreamId := atomic.AddUint32(&r.streamId, 1)
 	stream := tmpDb.NewStreamAt(math.MaxUint64)
 	stream.LogPrefix = "copying split keys to main DB"
-	stream.Send = func(kvs *bpb.KVList) error {
+	stream.Send = func(buf *z.Buffer) error {
+		kvs, err := badger.BufferToKVList(buf)
+		x.Check(err)
+
+		buf.Reset()
 		for _, kv := range kvs.Kv {
 			kv.StreamId += baseStreamId
+			badger.KVToBuffer(kv, buf)
 		}
-		x.Check(writer.Write(kvs))
+		x.Check(writer.Write(buf))
 		return nil
 	}
 	x.Check(stream.Orchestrate(context.Background()))
@@ -461,7 +476,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		req := &encodeRequest{
 			cbuf:     zbuf,
 			wg:       wg,
-			listCh:   make(chan *bpb.KVList, 3),
+			listCh:   make(chan *z.Buffer, 3),
 			splitCh:  ci.splitCh,
 			countBuf: getBuf(r.opt.TmpDir),
 		}
@@ -547,7 +562,7 @@ func (r *reducer) toList(req *encodeRequest) {
 	pl := new(pb.PostingList)
 	writeVersionTs := r.state.writeTs
 
-	kvList := &bpb.KVList{}
+	kvBuf := z.NewBuffer(260 << 20)
 	trackCountIndex := make(map[string]bool)
 
 	var freePostings []*pb.Posting
@@ -657,7 +672,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			for _, kv := range kvs {
 				kv.StreamId = r.streamIdFor(pk.Attr)
 			}
-			kvList.Kv = append(kvList.Kv, kvs[0])
+			badger.KVToBuffer(kvs[0], kvBuf)
 			if splits := kvs[1:]; len(splits) > 0 {
 				req.splitCh <- &bpb.KVList{Kv: splits}
 			}
@@ -668,7 +683,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			kv.Key = y.Copy(currentKey)
 			kv.Version = writeVersionTs
 			kv.StreamId = r.streamIdFor(pk.Attr)
-			kvList.Kv = append(kvList.Kv, kv)
+			badger.KVToBuffer(kv, kvBuf)
 		}
 
 		for _, p := range pl.Postings {
@@ -677,7 +692,6 @@ func (r *reducer) toList(req *encodeRequest) {
 		pl.Reset()
 	}
 
-	var sz int
 	for end != 0 {
 		slice, next := cbuf.Slice(end)
 		entry := MapEntry(slice)
@@ -687,11 +701,9 @@ func (r *reducer) toList(req *encodeRequest) {
 			appendToList()
 			start, num = end, 0 // Start would start from current one.
 
-			sz += kvList.Kv[len(kvList.Kv)-1].Size()
-			if sz > 256<<20 {
-				req.listCh <- kvList
-				kvList = &bpb.KVList{}
-				sz = 0
+			if kvBuf.LenNoPadding() > 256<<20 {
+				req.listCh <- kvBuf
+				kvBuf = z.NewBuffer(260 << 20)
 			}
 		}
 		end = next
@@ -700,8 +712,10 @@ func (r *reducer) toList(req *encodeRequest) {
 	}
 
 	appendToList()
-	if len(kvList.Kv) > 0 {
-		req.listCh <- kvList
+	if kvBuf.LenNoPadding() > 0 {
+		req.listCh <- kvBuf
+	} else {
+		kvBuf.Release()
 	}
 	close(req.listCh)
 
