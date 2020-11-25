@@ -2459,7 +2459,6 @@ func (m *Proposal) GetRestore() *RestoreRequest {
 }
 
 type KVS struct {
-	// repeated badgerpb2.KV kv = 1 [deprecated=true];
 	Data []byte `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
 	// done used to indicate if the stream of KVS is over.
 	Done bool `protobuf:"varint,2,opt,name=done,proto3" json:"done,omitempty"`
