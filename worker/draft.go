@@ -887,7 +887,6 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 }
 
 func (n *node) proposeSnapshot(discardN int) error {
-	glog.V(2).Infof("Calculating snapshot with discardN: %d\n", discardN)
 	snap, err := n.calculateSnapshot(0, discardN)
 	if err != nil {
 		return err

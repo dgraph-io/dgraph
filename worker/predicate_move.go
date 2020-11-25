@@ -291,7 +291,6 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
 		badger.KVToBuffer(kv, buf)
-		glog.Infof("Sending KV: %+v. Buf size: %d\n", kv, buf.LenNoPadding())
 
 		kvs := &pb.KVS{
 			Data: buf.Bytes(),
