@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -42,10 +43,10 @@ import (
 )
 
 var (
-	copyBackupDir = "./data/backups_copy"
-	restoreDir    = "./data/restore"
-	testDirs      = []string{restoreDir}
-
+	copyBackupDir  = "./data/backups_copy"
+	restoreDir     = "./data/restore"
+	testDirs       = []string{restoreDir, exporterDir}
+	exporterDir    = "data/exporter"
 	alphaBackupDir = "/data/backups"
 
 	alphaContainers = []string{
@@ -54,6 +55,90 @@ var (
 		"alpha3",
 	}
 )
+
+func sendRestoreRequest(t *testing.T, location string) int {
+	if location == "" {
+		location = "/data/backup"
+	}
+	params := testutil.GraphQLParams{
+		Query: `mutation restore($location: String!) {
+			restore(input: {location: $location}) {
+				code
+				message
+				restoreId
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"location": location,
+		},
+	}
+	resp := testutil.MakeGQLRequest(t, &params)
+	resp.RequireNoGraphQLErrors(t)
+
+	var restoreResp struct {
+		Restore struct {
+			Code      string
+			Message   string
+			RestoreId int
+		}
+	}
+
+	require.NoError(t, json.Unmarshal(resp.Data, &restoreResp))
+	require.Equal(t, restoreResp.Restore.Code, "Success")
+	require.Greater(t, restoreResp.Restore.RestoreId, 0)
+	return restoreResp.Restore.RestoreId
+}
+
+func TestBackupOfOldRestore(t *testing.T) {
+
+	dirSetup(t)
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	ctx := context.Background()
+
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	time.Sleep(2 * time.Second)
+
+	dirs1 := runBackup(t, 3, 1)
+
+	oldBackupDir := "/data/backups/to_restore"
+	_ = sendRestoreRequest(t, oldBackupDir)
+
+	time.Sleep(10 * time.Second)
+
+	// TODO: Check the response of the following query
+	_, err = dg.NewTxn().Query(context.Background(), `authors(func: has(Author.name)) { count(uid) } `)
+	//require.True(t, strings.Contains(string(resp.Json), "1"))
+
+	dirs2 := runBackupInternal(t, false, 6, 2)
+	var recentDir string
+	for _, dir := range dirs2 {
+		if dir == dirs1[0] {
+			continue
+		}
+		recentDir = dir
+	}
+
+	exporter := worker.BackupExporter{}
+	err = exporter.ExportBackup(recentDir, exporterDir, "rdf", nil)
+	x.Check(err)
+	backupExportDirs := x.WalkPathFunc(exporterDir, func(path string, isdir bool) bool {
+		return isdir && strings.HasPrefix(path, exporterDir+"/dgraph.r")
+	})
+	fmt.Printf("Dirs found %v \n", backupExportDirs)
+	foundAuthor := false
+	for i := 1; i < 4; i++ {
+		out, err := exec.CommandContext(context.Background(),
+			"zcat", filepath.Join(backupExportDirs[0], fmt.Sprintf("g0%d.rdf.gz", i))).Output()
+		x.Check(err)
+		if strings.Contains(string(out), "myname") {
+			foundAuthor = true
+		}
+	}
+	require.True(t, foundAuthor)
+}
 
 func TestBackupFilesystem(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
@@ -334,7 +419,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	copyToLocalFs(t)
 
 	files := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
-		return !isdir && strings.HasSuffix(path, ".backup")
+		return !isdir && strings.HasSuffix(path, ".backup") && strings.HasPrefix(path, "data/backups_copy/dgraph.")
 	})
 	require.Equal(t, numExpectedFiles, len(files))
 
@@ -344,7 +429,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.Equal(t, numExpectedDirs, len(dirs))
 
 	manifests := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
-		return !isdir && strings.Contains(path, "manifest.json")
+		return !isdir && strings.Contains(path, "manifest.json") && strings.HasPrefix(path, "data/backups_copy/dgraph.")
 	})
 	require.Equal(t, numExpectedDirs, len(manifests))
 
@@ -404,7 +489,11 @@ func dirSetup(t *testing.T) {
 }
 
 func dirCleanup(t *testing.T) {
+
 	if err := os.RemoveAll(restoreDir); err != nil {
+		t.Fatalf("Error removing directory: %s", err.Error())
+	}
+	if err := os.RemoveAll(exporterDir); err != nil {
 		t.Fatalf("Error removing directory: %s", err.Error())
 	}
 	if err := os.RemoveAll(copyBackupDir); err != nil {
