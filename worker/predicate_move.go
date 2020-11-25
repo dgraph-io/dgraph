@@ -82,9 +82,10 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 
 		kv := &bpb.KV{}
 		err := buf.SliceIterate(func(s []byte) error {
-			if err := kv.Unmarshal(s); err != nil {
-				return err
-			}
+			x.Check(kv.Unmarshal(s))
+			// if err := kv.Unmarshal(s); err != nil {
+			// 	return err
+			// }
 			if len(pk.Attr) == 0 {
 				// This only happens once.
 				var err error
