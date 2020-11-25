@@ -58,7 +58,7 @@ func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
 	}
 	pk, err := x.Parse(kvs[0].Key)
 	if err != nil {
-		return err
+		return errors.Errorf("while parsing KV: %+v, got error: %v", kvs[0], err)
 	}
 	return schema.Load(pk.Attr)
 }
@@ -72,16 +72,18 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 
 	for kvPayload := range kvs {
 		buf := z.BufferFrom(kvPayload.GetData())
-		kv := &bpb.KV{}
 		err := buf.SliceIterate(func(s []byte) error {
-			kv.Reset()
+			if len(s) == 0 {
+				glog.Infof("Length of slice received = %d\n", len(s))
+			}
+			kv := &bpb.KV{}
 			x.Check(kv.Unmarshal(s))
 			if len(pk.Attr) == 0 {
 				// This only happens once.
 				var err error
 				pk, err = x.Parse(kv.Key)
 				if err != nil {
-					return err
+					return errors.Errorf("while parsing kv: %+v in batchAndProposeKeyValues, got error: %v", kv, err)
 				}
 
 				if !pk.IsSchema() {
@@ -289,12 +291,13 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
 		badger.KVToBuffer(kv, buf)
+		glog.Infof("Sending KV: %+v. Buf size: %d\n", kv, buf.LenNoPadding())
 
 		kvs := &pb.KVS{
 			Data: buf.Bytes(),
 		}
 		if err := out.Send(kvs); err != nil {
-			return err
+			return errors.Errorf("while sending: %v", err)
 		}
 	}
 

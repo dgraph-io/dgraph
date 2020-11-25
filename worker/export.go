@@ -754,6 +754,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	stream.Send = func(buf *z.Buffer) error {
 		kv := &bpb.KV{}
 		return buf.SliceIterate(func(s []byte) error {
+			kv.Reset()
 			if err := kv.Unmarshal(s); err != nil {
 				return err
 			}

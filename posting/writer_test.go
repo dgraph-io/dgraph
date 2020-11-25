@@ -46,7 +46,7 @@ func BenchmarkWriter(b *testing.B) {
 	writeInBadgerMThreadsB := func(db *badger.DB, KVList *bpb.KVList, wg *sync.WaitGroup) {
 		defer wg.Done()
 		wb := db.NewManagedWriteBatch()
-		if err := wb.Write(KVList); err != nil {
+		if err := wb.WriteList(KVList); err != nil {
 			panic(err)
 		}
 		require.NoError(b, wb.Flush())
@@ -57,7 +57,7 @@ func BenchmarkWriter(b *testing.B) {
 	writeInBadgerMThreadsW := func(wb *badger.WriteBatch, KVList *bpb.KVList, wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		if err := wb.Write(KVList); err != nil {
+		if err := wb.WriteList(KVList); err != nil {
 			panic(err)
 		}
 
@@ -65,7 +65,7 @@ func BenchmarkWriter(b *testing.B) {
 	// Creates separate writer for each thread
 	writeInBadgerSingleThreadB := func(db *badger.DB, KVList *bpb.KVList) {
 		wb := db.NewManagedWriteBatch()
-		if err := wb.Write(KVList); err != nil {
+		if err := wb.WriteList(KVList); err != nil {
 			panic(err)
 		}
 		require.NoError(b, wb.Flush())
@@ -73,7 +73,7 @@ func BenchmarkWriter(b *testing.B) {
 	}
 	// Resuses one writer for all threads
 	writeInBadgerSingleThreadW := func(wb *badger.WriteBatch, KVList *bpb.KVList) {
-		if err := wb.Write(KVList); err != nil {
+		if err := wb.WriteList(KVList); err != nil {
 			panic(err)
 		}
 
@@ -129,7 +129,7 @@ func BenchmarkWriter(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			wb := db.NewManagedWriteBatch()
-			if err := wb.Write(&KVList); err != nil {
+			if err := wb.WriteList(&KVList); err != nil {
 				panic(err)
 			}
 			require.NoError(b, wb.Flush())

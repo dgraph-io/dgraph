@@ -358,6 +358,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 
 			kv := &bpb.KV{}
 			err := kvBuf.SliceIterate(func(s []byte) error {
+				kv.Reset()
 				x.Check(kv.Unmarshal(s))
 				if lastStreamId == kv.StreamId {
 					return nil
@@ -370,6 +371,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 					}
 
 					buf := z.NewBuffer(1024)
+					defer buf.Release()
 					badger.KVToBuffer(doneKV, buf)
 
 					ci.writer.Write(buf)
