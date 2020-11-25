@@ -354,6 +354,10 @@ func (w *DiskStorage) addEntries(entries []raftpb.Entry) error {
 	return nil
 }
 
+func (w *DiskStorage) NumLogFiles() int {
+	return len(w.wal.files)
+}
+
 // Sync calls the Sync method in the underlying badger instance to write all the contents to disk.
 func (w *DiskStorage) Sync() error {
 	if err := w.meta.Sync(); err != nil {
