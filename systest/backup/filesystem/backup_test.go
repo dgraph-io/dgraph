@@ -30,6 +30,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
+	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/stretchr/testify/require"
@@ -356,7 +357,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil))
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
@@ -379,7 +380,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil))
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }
