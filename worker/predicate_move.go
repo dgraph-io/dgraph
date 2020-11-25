@@ -22,6 +22,7 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
@@ -108,6 +109,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 			proposal.Kv = append(proposal.Kv, kv)
 			size += len(kv.Key) + len(kv.Value)
 			if size >= 32<<20 { // 32 MB
+				glog.V(2).Infof("Proposal size: %s\n", humanize.IBytes(uint64(size)))
 				if err := n.proposeAndWait(ctx, proposal); err != nil {
 					return err
 				}
@@ -171,6 +173,7 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 			glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
 			return err
 		}
+		glog.V(2).Infof("Received batch of size: %s\n", humanize.IBytes(uint64(len(kvBuf.Data))))
 		// TODO: Fix this.
 		// count += len(kvBuf.Kv)
 

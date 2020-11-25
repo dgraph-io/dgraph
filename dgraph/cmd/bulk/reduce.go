@@ -370,7 +370,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 					}
 
 					buf := z.NewBuffer(1024)
-					badger.KVToBuffer(buf, doneKV)
+					badger.KVToBuffer(doneKV, buf)
 
 					ci.writer.Write(buf)
 				}
@@ -406,7 +406,7 @@ func (r *reducer) writeSplitLists(db, tmpDb *badger.DB, writer *badger.StreamWri
 		buf.Reset()
 		for _, kv := range kvs.Kv {
 			kv.StreamId += baseStreamId
-			badger.KVToBuffer(buf, kv)
+			badger.KVToBuffer(kv, buf)
 		}
 		x.Check(writer.Write(buf))
 		return nil
@@ -670,7 +670,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			for _, kv := range kvs {
 				kv.StreamId = r.streamIdFor(pk.Attr)
 			}
-			badger.KVToBuffer(kvBuf, kvs[0])
+			badger.KVToBuffer(kvs[0], kvBuf)
 			if splits := kvs[1:]; len(splits) > 0 {
 				req.splitCh <- &bpb.KVList{Kv: splits}
 			}
@@ -681,7 +681,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			kv.Key = y.Copy(currentKey)
 			kv.Version = writeVersionTs
 			kv.StreamId = r.streamIdFor(pk.Attr)
-			badger.KVToBuffer(kvBuf, kv)
+			badger.KVToBuffer(kv, kvBuf)
 		}
 
 		for _, p := range pl.Postings {
