@@ -103,6 +103,7 @@ they form a Raft group and provide synchronous replication.
 	x.FillCommonFlags(flag)
 
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
+	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
 	// Options around how to set up Badger.
 	flag.String("badger.compression", "snappy",
@@ -638,6 +639,7 @@ func run() {
 	x.Check(err)
 
 	x.WorkerConfig = x.WorkerOptions{
+		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending-proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
@@ -655,6 +657,9 @@ func run() {
 		TLSServerConfig:      tlsServerConf,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
+
+	// Set the directory for temporary buffers.
+	z.SetTmpDir(x.WorkerConfig.TmpDir)
 
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)

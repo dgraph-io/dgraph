@@ -43,6 +43,7 @@ import (
 	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/chunker"
@@ -73,6 +74,7 @@ type options struct {
 	bufferSize      int
 	ludicrousMode   bool
 	upsertPredicate string
+	tmpDir          string
 	key             x.SensitiveByteSlice
 }
 
@@ -161,6 +163,7 @@ func init() {
 		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsert-predicate", "U", "", "run in upsert-predicate mode. the value would "+
 		"be used to store blank nodes as an xid")
+	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -599,7 +602,11 @@ func run() error {
 		bufferSize:      Live.Conf.GetInt("buffer-size"),
 		ludicrousMode:   Live.Conf.GetBool("ludicrous-mode"),
 		upsertPredicate: Live.Conf.GetString("upsert-predicate"),
+		tmpDir:          Live.Conf.GetString("tmp"),
 	}
+
+	z.SetTmpDir(opt.tmpDir)
+
 	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
 		fmt.Printf("unable to read key %v", err)
 		return err
@@ -618,6 +625,9 @@ func run() error {
 		MaxRetries:    math.MaxUint32,
 		bufferSize:    opt.bufferSize,
 	}
+
+	// Create directory for temporary buffers.
+	x.Check(os.MkdirAll(opt.tmpDir, 0700))
 
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
@@ -697,10 +707,10 @@ func run() error {
 	fmt.Printf("Time spent                   : %v\n", c.Elapsed)
 	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
+	if err := l.alloc.Flush(); err != nil {
+		return err
+	}
 	if l.db != nil {
-		if err := l.alloc.Flush(); err != nil {
-			return err
-		}
 		if err := l.db.Close(); err != nil {
 			return err
 		}
