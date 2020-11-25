@@ -42,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
@@ -73,24 +74,27 @@ var (
 		"Clear all the test clusters.")
 	dry = pflag.BoolP("dry", "", false,
 		"Just show how the packages would be executed, without running tests.")
+	rebuildBinary = pflag.BoolP("rebuild-binary", "", true,
+		"Build Dgraph before running tests.")
+	useExisting = pflag.String("prefix", "",
+		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 )
 
-func commandWithContext(ctx context.Context, q string) *exec.Cmd {
-	splits := strings.Split(q, " ")
-	sane := splits[:0]
-	for _, s := range splits {
-		if s != "" {
-			sane = append(sane, s)
-		}
-	}
-	cmd := exec.CommandContext(ctx, sane[0], sane[1:]...)
+func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 	return cmd
 }
-func command(cmd string) *exec.Cmd {
-	return commandWithContext(ctxb, cmd)
+
+// command takes a list of args and executes them as a program.
+// Example:
+//   docker-compose up -f "./my docker compose.yml"
+// would become:
+//   command("docker-compose", "up", "-f", "./my docker compose.yml")
+func command(args ...string) *exec.Cmd {
+	return commandWithContext(ctxb, args...)
 }
 func runFatal(cmd *exec.Cmd) {
 	if err := cmd.Run(); err != nil {
@@ -99,22 +103,24 @@ func runFatal(cmd *exec.Cmd) {
 	}
 }
 func startCluster(composeFile, prefix string) {
-	q := fmt.Sprintf("docker-compose -f %s -p %s up --force-recreate --remove-orphans --detach",
-		composeFile, prefix)
-	cmd := command(q)
+	cmd := command(
+		"docker-compose", "-f", composeFile, "-p", prefix,
+		"up", "--force-recreate", "--remove-orphans", "--detach")
 	cmd.Stderr = nil
+
 	fmt.Printf("Bringing up cluster %s...\n", prefix)
 	runFatal(cmd)
 	fmt.Printf("CLUSTER UP: %s\n", prefix)
 
-	// Let it stabilize.
-	time.Sleep(3 * time.Second)
+	// Wait for cluster to be healthy.
+	for i := 1; i <= 6; i++ {
+		in := getInstance(prefix, "alpha"+strconv.Itoa(i))
+		in.bestEffortWaitForHealthy(8080)
+	}
 }
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
-	q := fmt.Sprintf("docker-compose -f %s -p %s down",
-		composeFile, prefix)
 	go func() {
-		cmd := command(q)
+		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
@@ -138,24 +144,25 @@ func (in instance) String() string {
 	return fmt.Sprintf("%s_%s_1", in.Prefix, in.Name)
 }
 
-func allContainers(prefix string) []types.Container {
-	cli, err := client.NewEnvClient()
-	x.Check(err)
-
-	containers, err := cli.ContainerList(ctxb, types.ContainerListOptions{All: true})
-	if err != nil {
-		log.Fatalf("While listing container: %v\n", err)
+func (in instance) bestEffortWaitForHealthy(privatePort uint16) {
+	port := in.publicPort(privatePort)
+	if len(port) == 0 {
+		return
 	}
-
-	var out []types.Container
-	for _, c := range containers {
-		for _, name := range c.Names {
-			if strings.HasPrefix(name, "/"+prefix) {
-				out = append(out, c)
-			}
+	for i := 0; i < 30; i++ {
+		resp, err := http.Get("http://localhost:" + port + "/health")
+		if err == nil && resp.StatusCode == http.StatusOK {
+			return
 		}
+		var body []byte
+		if resp != nil && resp.Body != nil {
+			body, _ = ioutil.ReadAll(resp.Body)
+			resp.Body.Close()
+		}
+		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
+		time.Sleep(time.Second)
 	}
-	return out
+	return
 }
 
 func (in instance) getContainer() types.Container {
@@ -212,19 +219,39 @@ func (in instance) loginFatal() {
 	glog.Fatalf("Unable to login to %s\n", in)
 }
 
+func allContainers(prefix string) []types.Container {
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+
+	containers, err := cli.ContainerList(ctxb, types.ContainerListOptions{All: true})
+	if err != nil {
+		log.Fatalf("While listing container: %v\n", err)
+	}
+
+	var out []types.Container
+	for _, c := range containers {
+		for _, name := range c.Names {
+			if strings.HasPrefix(name, "/"+prefix) {
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
+
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var opts []string
+	var args = []string{"go", "test", "-failfast", "-v"}
 	if *count > 0 {
-		opts = append(opts, "-count="+strconv.Itoa(*count))
+		args = append(args, "-count="+strconv.Itoa(*count))
 	}
 	if len(*runTest) > 0 {
-		opts = append(opts, "-run="+*runTest)
+		args = append(args, "-run="+*runTest)
 	}
 	if isTeamcity {
-		opts = append(opts, "-json")
+		args = append(args, "-json")
 	}
-	q := fmt.Sprintf("go test -failfast -v %s %s", strings.Join(opts, " "), pkg)
-	cmd := commandWithContext(ctx, q)
+	args = append(args, pkg)
+	cmd := commandWithContext(ctx, args...)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
 
 	// Use failureCatcher.
@@ -237,7 +264,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 		time.Sleep(time.Second)
 	} else {
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("While running command: %q Error: %v", q, err)
+			return fmt.Errorf("While running command: %v Error: %v", args, err)
 		}
 	}
 
@@ -289,7 +316,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 
 	var started, stopped bool
 	start := func() {
-		if started {
+		if len(*useExisting) > 0 || started {
 			return
 		}
 		startCluster(defaultCompose, prefix)
@@ -339,6 +366,9 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 }
 
 func getPrefix() string {
+	if len(*useExisting) > 0 {
+		return *useExisting
+	}
 	id := atomic.AddInt32(&testId, 1)
 	return fmt.Sprintf("test-%03d-%d", procId, id)
 }
@@ -355,27 +385,6 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 		defer stopCluster(compose, prefix, wg)
 	}
 
-	port := getInstance(prefix, "alpha1").publicPort(8080)
-	if len(port) > 0 {
-		for i := 0; i < 30; i++ {
-			resp, err := http.Get("http://localhost:" + port + "/health")
-			if err == nil && resp.StatusCode == http.StatusOK {
-				fmt.Printf("Health check: OK for %s. Status: %s\n", prefix, resp.Status)
-				break
-			}
-			var body []byte
-			if resp != nil && resp.Body != nil {
-				body, _ = ioutil.ReadAll(resp.Body)
-				resp.Body.Close()
-			}
-			fmt.Printf("Health failed: %v. Response: %q. Retrying...\n", err, body)
-			time.Sleep(time.Second)
-		}
-	}
-
-	// Wait for cluster to be healthy.
-	// getInstance(prefix, "alpha1").loginFatal()
-
 	return runTestsFor(ctx, pkg, prefix)
 }
 
@@ -384,7 +393,7 @@ func findPackagesFor(testName string) []string {
 		return []string{}
 	}
 
-	cmd := command(fmt.Sprintf("ack %s %s -l", testName, *baseDir))
+	cmd := command("ack", testName, *baseDir, "-l")
 	var b bytes.Buffer
 	cmd.Stdout = &b
 	if err := cmd.Run(); err != nil {
@@ -559,6 +568,18 @@ func removeAllTestContainers() {
 			}
 		}
 	}
+
+	volumes, err := cli.VolumeList(ctxb, filters.Args{})
+	x.Check(err)
+	for _, v := range volumes.Volumes {
+		if strings.HasPrefix(v.Name, "test-") {
+			if err := cli.VolumeRemove(ctxb, v.Name, true); err != nil {
+				fmt.Printf("Error: %v while removing volume: %+v\n", err, v)
+			} else {
+				fmt.Printf("Removed volume: %s\n", v.Name)
+			}
+		}
+	}
 }
 
 func run() error {
@@ -566,16 +587,20 @@ func run() error {
 		removeAllTestContainers()
 		return nil
 	}
+	fmt.Printf("Proc ID is %d\n", procId)
 
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
 
-	cmd := command("make install")
-	cmd.Dir = *baseDir
-	if err := cmd.Run(); err != nil {
-		return err
+	if *rebuildBinary {
+		// cmd := command("make", "BUILD_RACE=y", "install")
+		cmd := command("make", "install")
+		cmd.Dir = *baseDir
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+		oc.Took(0, "COMPILE", time.Since(start))
 	}
-	oc.Took(0, "COMPILE", time.Since(start))
 
 	if len(*runPkg) > 0 && len(*runTest) > 0 {
 		log.Fatalf("Both pkg and test can't be set.\n")

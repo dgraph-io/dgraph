@@ -175,6 +175,10 @@ func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 }
 
 func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
+	if ctx.Err() != nil {
+		return resultWithError(ctx.Err())
+	}
+
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithIndex")
 
@@ -453,6 +457,8 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 
 	// We're not using any txn local cache here. So, no need to deal with that yet.
 	cctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	resCh := make(chan *sortresult, 2)
 	go func() {
 		select {

@@ -330,6 +330,7 @@ func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {
 }
 
 const defaultTimeToSleep = 500 * time.Millisecond
+const expireJwtSleep = 11 * time.Second
 
 func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	createAccountAndData(t, dg)
@@ -364,11 +365,11 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	queryPredicateWithUserAccount(t, dg, false)
 	// sleep long enough (10s per the docker-compose.yml)
 	// for the accessJwt to expire in order to test auto login through refresh jwt
-	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
-	time.Sleep(4 * time.Second)
+	glog.Infof("Sleeping for accessJwt to expire")
+	time.Sleep(expireJwtSleep)
 	mutatePredicateWithUserAccount(t, dg, false)
-	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
-	time.Sleep(4 * time.Second)
+	glog.Infof("Sleeping for accessJwt to expire")
+	time.Sleep(expireJwtSleep)
 	alterPredicateWithUserAccount(t, dg, false)
 }
 
@@ -2621,7 +2622,7 @@ type graphQLAdminEndpointTestCase struct {
 	queryName          string
 	respIsArray        bool
 	testGuardianAccess bool
-	guardianErrs       x.GqlErrorList
+	guardianErr        string
 	// specifying this as empty string means it won't be compared with response data
 	guardianData string
 }
@@ -2641,11 +2642,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "backup",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message:   "resolving backup failed because you must specify a 'destination' value",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"backup": null}`,
+			guardianErr:        "you must specify a 'destination' value",
+			guardianData:       `{"backup": null}`,
 		},
 		{
 			name: "listBackups has guardian auth",
@@ -2658,12 +2656,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "listBackups",
 			respIsArray:        true,
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message: "resolving listBackups failed because Error: cannot read manfiests at " +
-					"location : The path \"\" does not exist or it is inaccessible.",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"listBackups": []}`,
+			guardianErr:        "The path \"\" does not exist or it is inaccessible.",
+			guardianData:       `{"listBackups": []}`,
 		},
 		{
 			name: "config update has guardian auth",
@@ -2678,11 +2672,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "config",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message:   "resolving config failed because cache-mb must be non-negative",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"config": null}`,
+			guardianErr:        "cache-mb must be non-negative",
+			guardianData:       `{"config": null}`,
 		},
 		{
 			name: "config get has guardian auth",
@@ -2694,7 +2685,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "config",
 			testGuardianAccess: true,
-			guardianErrs:       nil,
+			guardianErr:        "",
 			guardianData:       "",
 		},
 		{
@@ -2710,7 +2701,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "draining",
 			testGuardianAccess: true,
-			guardianErrs:       nil,
+			guardianErr:        "",
 			guardianData: `{
 								"draining": {
 									"response": {
@@ -2733,11 +2724,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "export",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message:   "resolving export failed because invalid export format: invalid",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"export": null}`,
+			guardianErr:        "invalid export format: invalid",
+			guardianData:       `{"export": null}`,
 		},
 		{
 			name: "restore has guardian auth",
@@ -2749,12 +2737,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "restore",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message: "resolving restore failed because failed to verify backup: while retrieving" +
-					" manifests: The path \"\" does not exist or it is inaccessible.",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"restore": {"code": "Failure"}}`,
+			guardianErr:        "The path \"\" does not exist or it is inaccessible.",
+			guardianData:       `{"restore": {"code": "Failure"}}`,
 		},
 		{
 			name: "getGQLSchema has guardian auth",
@@ -2766,7 +2750,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "getGQLSchema",
 			testGuardianAccess: true,
-			guardianErrs:       nil,
+			guardianErr:        "",
 			guardianData:       "",
 		},
 		{
@@ -2781,7 +2765,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "updateGQLSchema",
 			testGuardianAccess: false,
-			guardianErrs:       nil,
+			guardianErr:        "",
 			guardianData:       "",
 		},
 		{
@@ -2797,7 +2781,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "shutdown",
 			testGuardianAccess: false,
-			guardianErrs:       nil,
+			guardianErr:        "",
 			guardianData:       "",
 		},
 	}
@@ -2814,10 +2798,11 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 				accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 				resp := makeRequest(t, accessJwt, params)
 
-				if tcase.guardianErrs == nil {
+				if tcase.guardianErr == "" {
 					resp.RequireNoGraphQLErrors(t)
 				} else {
-					require.Equal(t, tcase.guardianErrs, resp.Errors)
+					require.Len(t, resp.Errors, 1)
+					require.Contains(t, resp.Errors[0].Message, tcase.guardianErr)
 				}
 
 				if tcase.guardianData != "" {
@@ -2967,7 +2952,7 @@ func TestAddNewPredicate(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 	addToGroup(t, accessJwt, userid, "guardians")
-	time.Sleep(4 * time.Second)
+	time.Sleep(expireJwtSleep)
 
 	// Alice is a guardian now, it can create new predicate.
 	err = userClient.Alter(ctx, &api.Operation{

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -237,19 +238,30 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 }
 
 func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
-	err := addSchema(GraphqlAdminURL, string(schema))
-	if err != nil {
-		x.Panic(err)
+	for {
+		err := addSchema(GraphqlAdminURL, string(schema))
+		if err == nil {
+			break
+		}
+		if strings.Contains(err.Error(), "errIndexingInProgress") ||
+			strings.Contains(err.Error(), "is already running") {
+			glog.V(2).Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
+			time.Sleep(time.Second)
+			continue
+		}
+		if err != nil {
+			x.Panic(err)
+		}
 	}
 
-	err = maybePopulateData(client, data)
+	err := maybePopulateData(client, data)
 	if err != nil {
 		x.Panic(err)
 	}
 }
 
 func BootstrapServer(schema, data []byte) {
-	err := checkGraphQLStarted(GraphqlAdminURL)
+	err := CheckGraphQLStarted(GraphqlAdminURL)
 	if err != nil {
 		x.Panic(errors.Errorf(
 			"Waited for GraphQL test server to become available, but it never did.\n"+
@@ -345,6 +357,7 @@ func RunAll(t *testing.T) {
 	t.Run("query post with author", queryPostWithAuthor)
 	t.Run("queries have extensions", queriesHaveExtensions)
 	t.Run("alias works for queries", queryWithAlias)
+	t.Run("multiple aliases for same field in query", queryWithMultipleAliasOfSameField)
 	t.Run("cascade directive", queryWithCascade)
 	t.Run("filter in queries with array for AND/OR", filterInQueriesWithArrayForAndOr)
 	t.Run("query geo near filter", queryGeoNearFilter)
@@ -354,6 +367,8 @@ func RunAll(t *testing.T) {
 	t.Run("query count with alias", queryCountWithAlias)
 	t.Run("query count at child level", queryCountAtChildLevel)
 	t.Run("query count at child level with filter", queryCountAtChildLevelWithFilter)
+	t.Run("query count at child level with multiple alias", queryCountAtChildLevelWithMultipleAlias)
+	t.Run("query at child level with multiple alias on scalar field", queryChildLevelWithMultipleAliasOnScalarField)
 	t.Run("query count and other fields at child level", queryCountAndOtherFieldsAtChildLevel)
 	t.Run("checkUserPassword query", passwordTest)
 
@@ -757,7 +772,7 @@ func allCountriesAdded() ([]*country, error) {
 	return result.Data.QueryCountry, nil
 }
 
-func checkGraphQLStarted(url string) error {
+func CheckGraphQLStarted(url string) error {
 	var err error
 	retries := 6
 	sleep := 10 * time.Second
