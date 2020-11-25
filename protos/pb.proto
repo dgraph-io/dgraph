@@ -305,7 +305,8 @@ message Proposal {
 }
 
 message KVS {
-	repeated badgerpb2.KV kv = 1;
+	/* repeated badgerpb2.KV kv = 1 [deprecated=true]; */
+	bytes data = 5;
 
 	// done used to indicate if the stream of KVS is over.
 	bool done	= 2;

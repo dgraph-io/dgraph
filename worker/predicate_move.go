@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -68,8 +69,21 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 	size := 0
 	var pk x.ParsedKey
 
-	for kvBatch := range kvs {
-		for _, kv := range kvBatch.Kv {
+	buf := z.NewBuffer(1 << 20)
+	defer buf.Release()
+
+	for kvPayload := range kvs {
+		buf.Reset()
+		// TODO: We can avoid doing this copy of data by instead creating a
+		// buffer which references kvPayload.Data instead. That can be a
+		// read-only buffer, which would panic in case we write to it.
+		x.Check2(buf.Write(kvPayload.GetData()))
+
+		kv := &bpb.KV{}
+		err := buf.SliceIterate(func(s []byte) error {
+			if err := kv.Unmarshal(s); err != nil {
+				return err
+			}
 			if len(pk.Attr) == 0 {
 				// This only happens once.
 				var err error
@@ -100,6 +114,10 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				proposal = &pb.Proposal{}
 				size = 0
 			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 	}
 	if size > 0 {
@@ -140,7 +158,7 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 		che <- batchAndProposeKeyValues(ctx, kvs)
 	}()
 	for {
-		kvBatch, err := stream.Recv()
+		kvBuf, err := stream.Recv()
 		if err == io.EOF {
 			payload.Data = []byte(fmt.Sprintf("%d", count))
 			if err := stream.SendAndClose(payload); err != nil {
@@ -153,10 +171,11 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 			glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
 			return err
 		}
-		count += len(kvBatch.Kv)
+		// TODO: Fix this.
+		// count += len(kvBuf.Kv)
 
 		select {
-		case kvs <- kvBatch:
+		case kvs <- kvBuf:
 		case <-ctx.Done():
 			close(kvs)
 			<-che
@@ -267,13 +286,20 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if err != nil {
 			return err
 		}
-		kvs := &pb.KVS{}
+		buf := z.NewBuffer(1024)
+		defer buf.Release()
+
 		kv := &bpb.KV{}
 		kv.Key = schemaKey
 		kv.Value = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
-		kvs.Kv = append(kvs.Kv, kv)
+		out := buf.SliceAllocate(kv.Size())
+		x.Check2(kv.MarshalToSizedBuffer(out))
+
+		kvs := &pb.KVS{
+			Data: buf.Bytes(),
+		}
 		if err := s.Send(kvs); err != nil {
 			return err
 		}
@@ -292,19 +318,21 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if err != nil {
 			return nil, err
 		}
-		alloc := stream.Allocator(itr.ThreadId)
-		kvs, err := l.Rollup(alloc)
+		kvs, err := l.Rollup(nil)
 		for _, kv := range kvs {
 			// Let's set all of them at this move timestamp.
 			kv.Version = in.TxnTs
 		}
 		return &bpb.KVList{Kv: kvs}, err
 	}
-	stream.Send = func(list *bpb.KVList) error {
-		return s.Send(&pb.KVS{Kv: list.Kv})
+	stream.Send = func(buf *z.Buffer) error {
+		kvs := &pb.KVS{
+			Data: buf.Bytes(),
+		}
+		return s.Send(kvs)
 	}
 	span.Annotatef(nil, "Starting stream list orchestrate")
-	if err := stream.Orchestrate(ctx); err != nil {
+	if err := stream.Orchestrate(s.Context()); err != nil {
 		return err
 	}
 
