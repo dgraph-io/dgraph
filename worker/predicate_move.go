@@ -243,7 +243,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		return errors.Errorf("Unable to find a connection for group: %d\n", in.DestGid)
 	}
 	c := pb.NewWorkerClient(pl.Get())
-	s, err := c.ReceivePredicate(ctx)
+	out, err := c.ReceivePredicate(ctx)
 	if err != nil {
 		return errors.Wrapf(err, "while calling ReceivePredicate")
 	}
@@ -274,7 +274,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
 		kvs.Kv = append(kvs.Kv, kv)
-		if err := s.Send(kvs); err != nil {
+		if err := out.Send(kvs); err != nil {
 			return err
 		}
 	}
@@ -301,14 +301,14 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(list *bpb.KVList) error {
-		return s.Send(&pb.KVS{Kv: list.Kv})
+		return out.Send(&pb.KVS{Kv: list.Kv})
 	}
 	span.Annotatef(nil, "Starting stream list orchestrate")
-	if err := stream.Orchestrate(ctx); err != nil {
+	if err := stream.Orchestrate(out.Context()); err != nil {
 		return err
 	}
 
-	payload, err := s.CloseAndRecv()
+	payload, err := out.CloseAndRecv()
 	if err != nil {
 		return err
 	}

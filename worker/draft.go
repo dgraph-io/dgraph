@@ -970,7 +970,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 
 				// If we don't have a snapshot, or if there are too many log files in Raft,
 				// calculate a new snapshot.
-				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 16
+				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
 
 				if chk, err := n.Store.Checkpoint(); err == nil {
 					if first, err := n.Store.FirstIndex(); err == nil {
