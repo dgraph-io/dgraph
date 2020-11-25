@@ -597,9 +597,16 @@ func removeAllTestContainers() {
 }
 
 func run() error {
+	if tc := os.Getenv("TEAMCITY_VERSION"); len(tc) > 0 {
+		fmt.Printf("Found Teamcity: %s\n", tc)
+		isTeamcity = true
+	}
 	if *clear {
 		removeAllTestContainers()
 		return nil
+	}
+	if len(*runPkg) > 0 && len(*runTest) > 0 {
+		log.Fatalf("Both pkg and test can't be set.\n")
 	}
 	fmt.Printf("Proc ID is %d\n", procId)
 
@@ -616,17 +623,9 @@ func run() error {
 		oc.Took(0, "COMPILE", time.Since(start))
 	}
 
-	if len(*runPkg) > 0 && len(*runTest) > 0 {
-		log.Fatalf("Both pkg and test can't be set.\n")
-	}
 	tmpDir, err := ioutil.TempDir("", "dgraph-test")
 	x.Check(err)
 	defer os.RemoveAll(tmpDir)
-
-	if tc := os.Getenv("TEAMCITY_VERSION"); len(tc) > 0 {
-		fmt.Printf("Found Teamcity: %s\n", tc)
-		isTeamcity = true
-	}
 
 	N := *concurrency
 	if len(*runPkg) > 0 || len(*runTest) > 0 {
