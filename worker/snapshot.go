@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
@@ -99,7 +100,8 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 		}
 
 		size += len(kvs.Data)
-		glog.V(1).Infof("Received data of size: %d. Total so far: %d\n", len(kvs.Data), size)
+		glog.V(1).Infof("Received batch of size: %s. Total so far: %s\n",
+			humanize.IBytes(uint64(len(kvs.Data))), humanize.IBytes(uint64(size)))
 
 		buf := z.BufferFrom(kvs.Data)
 		if err := writer.Write(buf); err != nil {
@@ -121,7 +123,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 	}
 
 	x.VerifySnapshot(pstore, snap.ReadTs)
-	glog.Infof("Populated snapshot with data size: %d.\n", size)
+	glog.Infof("Populated snapshot with data size: %s\n", humanize.IBytes(uint64(size)))
 	return nil
 }
 
@@ -201,7 +203,6 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		return err
 	}
 
-	var num int
 	stream := pstore.NewStreamAt(snap.ReadTs)
 	stream.LogPrefix = "Sending Snapshot"
 	// Use the default implementation. We no longer try to generate a rolled up posting list here.
@@ -209,7 +210,6 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 	stream.KeyToList = nil
 	stream.Send = func(buf *z.Buffer) error {
 		kvs := &pb.KVS{Data: buf.Bytes()}
-		// num += len(kvs.Kv)
 		return out.Send(kvs)
 	}
 	stream.ChooseKey = func(item *badger.Item) bool {
@@ -249,7 +249,7 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		return err
 	}
 
-	glog.Infof("Streaming done. Sent %d entries. Waiting for ACK...", num)
+	glog.Infof("Streaming done. Waiting for ACK...")
 	ack, err := out.Recv()
 	if err != nil {
 		return err

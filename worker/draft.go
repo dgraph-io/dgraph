@@ -1219,10 +1219,10 @@ func (n *node) Run() {
 					n.Applied.Done(entry.Index)
 				default:
 					proposal := &pb.Proposal{}
-					x.Check(proposal.Unmarshal(entry.Data))
-					// if err := proposal.Unmarshal(entry.Data); err != nil {
-					// 	x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
-					// }
+					if err := proposal.Unmarshal(entry.Data); err != nil {
+						glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
+						break
+					}
 					if pctx := n.Proposals.Get(proposal.Key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
@@ -1462,11 +1462,6 @@ func (n *node) abortOldTransactions() {
 // This is useful when we already have a previous snapshot checkpoint (all txns have concluded up
 // until that last checkpoint) that we can use as a new start point for the snapshot calculation.
 func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, error) {
-	glog.V(2).Infof("calculating Snapshot: %d %d\n", startIdx, discardN)
-	defer func() {
-		glog.V(2).Infof("calculating snapshot done\n")
-	}()
-
 	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
 		otrace.WithSampler(otrace.AlwaysSample()))
 	defer span.End()
@@ -1534,17 +1529,10 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	var lastEntry raftpb.Entry
 	for batchFirst := first; batchFirst <= last; {
 		entries, err := n.Store.Entries(batchFirst, last+1, 256<<20)
-		glog.V(2).Infof("Got entries for first: %d: %d\n", batchFirst, len(entries))
 		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
 		}
-		sz := 0
-		for _, e := range entries {
-			sz += e.Size()
-		}
-		glog.V(2).Infof("Size of entries: %d\n", sz)
-
 		// Exit early from the loop if no entries were found.
 		if len(entries) == 0 {
 			break
@@ -1612,7 +1600,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 		Index:   snapshotIdx,
 		ReadTs:  maxCommitTs,
 	}
-	glog.V(2).Infof("Got snapshot: %+v\n", result)
+	glog.V(2).Infof("Calculated snapshot: %+v\n", result)
 	span.Annotatef(nil, "Got snapshot: %+v", result)
 	return result, nil
 }

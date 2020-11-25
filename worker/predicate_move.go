@@ -73,9 +73,6 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 	for kvPayload := range kvs {
 		buf := z.BufferFrom(kvPayload.GetData())
 		err := buf.SliceIterate(func(s []byte) error {
-			if len(s) == 0 {
-				glog.Infof("Length of slice received = %d\n", len(s))
-			}
 			kv := &bpb.KV{}
 			x.Check(kv.Unmarshal(s))
 			if len(pk.Attr) == 0 {
@@ -83,7 +80,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				var err error
 				pk, err = x.Parse(kv.Key)
 				if err != nil {
-					return errors.Errorf("while parsing kv: %+v in batchAndProposeKeyValues, got error: %v", kv, err)
+					return errors.Errorf("while parsing kv: %+v, got error: %v", kv, err)
 				}
 
 				if !pk.IsSchema() {
@@ -102,7 +99,6 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 			proposal.Kv = append(proposal.Kv, kv)
 			size += len(kv.Key) + len(kv.Value)
 			if size >= 32<<20 { // 32 MB
-				glog.V(2).Infof("Proposal size: %s\n", humanize.IBytes(uint64(size)))
 				if err := n.proposeAndWait(ctx, proposal); err != nil {
 					return err
 				}
@@ -167,8 +163,12 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 			return err
 		}
 		glog.V(2).Infof("Received batch of size: %s\n", humanize.IBytes(uint64(len(kvBuf.Data))))
-		// TODO: Fix this.
-		// count += len(kvBuf.Kv)
+
+		buf := z.BufferFrom(kvBuf.Data)
+		buf.SliceIterate(func(_ []byte) error {
+			count++
+			return nil
+		})
 
 		select {
 		case kvs <- kvBuf:
