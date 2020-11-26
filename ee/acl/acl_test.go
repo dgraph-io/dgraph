@@ -330,7 +330,7 @@ func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {
 }
 
 const defaultTimeToSleep = 500 * time.Millisecond
-const expireJwtSleep = 11 * time.Second
+const expireJwtSleep = 21 * time.Second
 
 func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	createAccountAndData(t, dg)
@@ -1898,7 +1898,7 @@ func TestNonExistentGroup(t *testing.T) {
 }
 
 func TestQueryUserInfo(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2870,7 +2870,7 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 }
 
 func TestAllowUIDAccess(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2926,7 +2926,7 @@ func TestAllowUIDAccess(t *testing.T) {
 }
 
 func TestAddNewPredicate(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -3176,7 +3176,7 @@ func TestMutationWithValueVar(t *testing.T) {
 }
 
 func TestFailedLogin(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	grootClient, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)

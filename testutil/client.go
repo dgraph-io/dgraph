@@ -486,7 +486,9 @@ func hasAdminGraphQLSchema(t *testing.T) (bool, error) {
 	}
 
 	result := MakeGQLRequest(t, schemaQry)
-	result.RequireNoGraphQLErrors(t)
+	if len(result.Errors) > 0 {
+		return false, result.Errors
+	}
 	var sch struct {
 		GetGQLSchema struct {
 			Schema string
