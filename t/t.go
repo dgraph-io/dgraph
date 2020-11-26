@@ -78,6 +78,8 @@ var (
 		"Build Dgraph before running tests.")
 	useExisting = pflag.String("prefix", "",
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
+	skipSlow = pflag.BoolP("skip-slow", "s", false,
+		"If true, don't run tests on slow packages.")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -498,9 +500,9 @@ func getPackages() []task {
 		return false
 	}
 
-	moveSlowToFront := func(list []task) {
+	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
+	moveSlowToFront := func(list []task) []task {
 		// These packages typically take over a minute to run.
-		slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
 		left := 0
 		for i := 0; i < len(list); i++ {
 			// These packages take time. So, move them to the front.
@@ -509,6 +511,16 @@ func getPackages() []task {
 				left++
 			}
 		}
+		if !*skipSlow {
+			return list
+		}
+		out := list[:0]
+		for _, t := range list {
+			if !has(slowPkgs, t.pkg.ID) {
+				out = append(out, t)
+			}
+		}
+		return out
 	}
 
 	pkgs, err := packages.Load(nil, *baseDir+"/...")
@@ -539,7 +551,7 @@ func getPackages() []task {
 		t := task{pkg: pkg, isCommon: os.IsNotExist(err)}
 		valid = append(valid, t)
 	}
-	moveSlowToFront(valid)
+	valid = moveSlowToFront(valid)
 	if len(valid) == 0 {
 		fmt.Println("Couldn't find any packages. Exiting...")
 		os.Exit(1)
