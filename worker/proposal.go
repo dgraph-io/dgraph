@@ -273,6 +273,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			// below. We should always propose it irrespective of how many pending proposals there
 			// might be.
 		default:
+			span.Annotatef(nil, "incr with %d", i)
 			if err := limiter.incr(ctx, i); err != nil {
 				return err
 			}
