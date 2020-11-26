@@ -381,6 +381,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 
 			})
 			x.Check(err)
+			kvBuf.Release()
 		}
 	}
 
@@ -692,7 +693,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		pl.Reset()
 	}
 
-	for end != 0 {
+	for end != -1 {
 		slice, next := cbuf.Slice(end)
 		entry := MapEntry(slice)
 		entryKey := entry.Key()
