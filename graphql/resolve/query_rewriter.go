@@ -264,6 +264,25 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) *gql.GraphQuery {
 			}
 			finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
 		}
+		if strings.HasSuffix(f.Name(), "Avg") {
+			// constructedForDgraphPredicate stores the field for which Max has been queried.
+			constructedForDgraphPredicate := f.DgraphPredicateForAggregateField()
+			fldName := f.Name()
+			constructedForField := fldName[:len(fldName)-3]
+			if !isAggregateFieldVisited[constructedForField] {
+				child := &gql.GraphQuery{
+					Var:  constructedForField + "Var",
+					Attr: constructedForDgraphPredicate,
+				}
+				mainQuery.Children = append(mainQuery.Children, child)
+				isAggregateFieldVisited[constructedForField] = true
+			}
+			finalQueryChild := &gql.GraphQuery{
+				Alias: f.Name(),
+				Attr:  "avg(val(" + constructedForField + "Var))",
+			}
+			finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
+		}
 	}
 
 	return &gql.GraphQuery{Children: []*gql.GraphQuery{finalMainQuery, dgQuery}}
