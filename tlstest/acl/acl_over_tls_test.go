@@ -13,10 +13,9 @@ import (
 )
 
 func TestLoginOverTLS(t *testing.T) {
-	t.Skipf("TODO(aman): Please fix me.")
 	conf := viper.New()
-	conf.Set("tls-cacert", "../tls/ca.crt")
-	conf.Set("tls-server-name", "node")
+	conf.Set("tls-cacert", "../mtls_internal/tls/live/ca.crt")
+	conf.Set("tls-server-name", "alpha1")
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
