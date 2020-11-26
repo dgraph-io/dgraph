@@ -2870,7 +2870,7 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 }
 
 func TestAllowUIDAccess(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2926,7 +2926,7 @@ func TestAllowUIDAccess(t *testing.T) {
 }
 
 func TestAddNewPredicate(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -3176,7 +3176,7 @@ func TestMutationWithValueVar(t *testing.T) {
 }
 
 func TestFailedLogin(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	grootClient, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
