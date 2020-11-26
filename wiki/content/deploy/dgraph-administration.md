@@ -143,7 +143,7 @@ Each Alpha leader for a group writes output as a gzipped file to the export
 directory specified via the `--export` flag (defaults to a directory called `"export"`). If any of the groups fail, the
 entire export process is considered failed and an error is returned.
 
-Starting from Dgraph v20.11.0, it is possible to provide an absolute path to the directory where you want to export data in the GraphQL mutation request.
+Starting from Dgraph v20.11.0 it is possible to provide, in the GraphQL mutation request, an absolute path to the directory where you want to export data.
 
 ```graphql
 mutation {
