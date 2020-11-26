@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -60,7 +61,6 @@ func requireNoErrors(t *testing.T, resp *common.GraphQLResponse) {
 // in a dgraph alpha for one group, that update should also be propagated to alpha nodes in other
 // groups.
 func TestSchemaSubscribe(t *testing.T) {
-	common.CheckGraphQLStarted(groupOneAdminServer)
 	schema := `
 	type Author {
 		id: ID!
@@ -837,4 +837,13 @@ func runIntrospectWithRetryIfNecessary(t *testing.T, query *common.GraphQLParams
 	}
 
 	return response
+}
+
+func TestMain(m *testing.M) {
+	err := common.CheckGraphQLStarted(common.GraphqlAdminURL)
+	if err != nil {
+		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
 }

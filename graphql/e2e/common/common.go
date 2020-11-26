@@ -243,15 +243,15 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
 		if err == nil {
 			break
 		}
+
 		if strings.Contains(err.Error(), "errIndexingInProgress") ||
 			strings.Contains(err.Error(), "is already running") {
 			glog.V(2).Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
 			time.Sleep(time.Second)
 			continue
 		}
-		if err != nil {
-			x.Panic(err)
-		}
+
+		x.Panic(err)
 	}
 
 	err := maybePopulateData(client, data)
