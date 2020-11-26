@@ -774,20 +774,15 @@ func allCountriesAdded() ([]*country, error) {
 
 func CheckGraphQLStarted(url string) error {
 	var err error
-	retries := 6
-	sleep := 10 * time.Second
-
 	// Because of how GraphQL starts (it needs to read the schema from Dgraph),
 	// there's no guarantee that GraphQL is available by now.  So we
 	// need to try and connect and potentially retry a few times.
-	for retries > 0 {
-		retries--
-
+	for i := 0; i < 60; i++ {
 		_, err = hasCurrentGraphQLSchema(url)
 		if err == nil {
 			return nil
 		}
-		time.Sleep(sleep)
+		time.Sleep(time.Second)
 	}
 	return err
 }

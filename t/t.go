@@ -115,6 +115,10 @@ func startCluster(composeFile, prefix string) {
 	fmt.Printf("CLUSTER UP: %s\n", prefix)
 
 	// Wait for cluster to be healthy.
+	for i := 1; i <= 3; i++ {
+		in := getInstance(prefix, "zero"+strconv.Itoa(i))
+		in.bestEffortWaitForHealthy(6080)
+	}
 	for i := 1; i <= 6; i++ {
 		in := getInstance(prefix, "alpha"+strconv.Itoa(i))
 		in.bestEffortWaitForHealthy(8080)
@@ -145,21 +149,28 @@ func getInstance(prefix, name string) instance {
 func (in instance) String() string {
 	return fmt.Sprintf("%s_%s_1", in.Prefix, in.Name)
 }
-
 func (in instance) bestEffortWaitForHealthy(privatePort uint16) {
 	port := in.publicPort(privatePort)
 	if len(port) == 0 {
 		return
 	}
+	checkACL := func(body []byte) {
+		const acl string = "\"acl\""
+		if bytes.Index(body, []byte(acl)) > 0 {
+			in.loginFatal()
+		}
+	}
+
 	for i := 0; i < 30; i++ {
 		resp, err := http.Get("http://localhost:" + port + "/health")
-		if err == nil && resp.StatusCode == http.StatusOK {
-			return
-		}
 		var body []byte
 		if resp != nil && resp.Body != nil {
 			body, _ = ioutil.ReadAll(resp.Body)
 			resp.Body.Close()
+		}
+		if err == nil && resp.StatusCode == http.StatusOK {
+			checkACL(body)
+			return
 		}
 		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
 		time.Sleep(time.Second)
@@ -215,7 +226,11 @@ func (in instance) loginFatal() {
 		if err == nil {
 			return
 		}
-		fmt.Printf("Login failed: %v. Retrying...\n", err)
+		if strings.Contains(err.Error(), "No Auth Token found") {
+			// This is caused by Poor Man's auth. Return.
+			return
+		}
+		fmt.Printf("Login failed for %s: %v. Retrying...\n", in, err)
 		time.Sleep(time.Second)
 	}
 	glog.Fatalf("Unable to login to %s\n", in)
@@ -323,9 +338,6 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		}
 		startCluster(defaultCompose, prefix)
 		started = true
-
-		// Wait for cluster to be healthy.
-		getInstance(prefix, "alpha1").loginFatal()
 	}
 
 	stop := func() {
