@@ -1929,7 +1929,7 @@ func queryWithMultipleAliasOfSameField(t *testing.T) {
 				"p2": [
 					{
 						"title": "Random post",
-						"numLikes": 0
+						"numLikes": 1
 					}
 				]
 			}
@@ -2810,11 +2810,13 @@ func persistedQuery(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 }
 
-func queryCountWithFilter(t *testing.T) {
+func queryAggregateWithFilter(t *testing.T) {
 	queryPostParams := &GraphQLParams{
 		Query: `query {
 			aggregatePost (filter: {title : { anyofterms : "Introducing" }} ) {
 				count
+				numLikesMax
+				titleMin
 			}
 		}`,
 	}
@@ -2822,13 +2824,22 @@ func queryCountWithFilter(t *testing.T) {
 	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
-		`{"aggregatePost":{"count":1}}`,
+		`{
+					"aggregatePost":
+						{
+							"count":1,
+							"numLikesMax": 100,
+							"titleMin": "Introducing GraphQL in Dgraph"
+						}
+				}`,
 		string(gqlResponse.Data))
 
 	queryPostParams = &GraphQLParams{
 		Query: `query {
 			aggregatePost (filter: {title : { anyofterms : "Nothing" }} ) {
 				count
+				numLikesMax
+				titleMin
 			}
 		}`,
 	}
@@ -2836,14 +2847,27 @@ func queryCountWithFilter(t *testing.T) {
 	gqlResponse = queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
-		`{"aggregatePost":{"count":0}}`,
+		`{
+					"aggregatePost":
+						{
+							"count":0,
+							"numLikesMax": 0,
+							"titleMin": "0.000000"
+						}
+				}`,
 		string(gqlResponse.Data))
 }
 
-func queryCountWithoutFilter(t *testing.T) {
+func queryAggregateWithoutFilter(t *testing.T) {
 	queryPostParams := &GraphQLParams{
 		Query: `query {
 			aggregatePost {
+				titleMax
+				titleMin
+				numLikesSum
+				numLikesAvg
+				numLikesMax
+				numLikesMin
 				count
 			}
 		}`,
@@ -2852,15 +2876,29 @@ func queryCountWithoutFilter(t *testing.T) {
 	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
-		`{"aggregatePost":{"count":4}}`,
+		`{
+					"aggregatePost":
+						{
+							"count":4,
+							"titleMax": "Random post",
+							"titleMin": "GraphQL doco",
+							"numLikesAvg": 66.25,
+							"numLikesMax": 100,
+							"numLikesMin": 1,
+							"numLikesSum": 265
+						}
+				}`,
 		string(gqlResponse.Data))
 }
 
-func queryCountWithAlias(t *testing.T) {
+func queryAggregateWithAlias(t *testing.T) {
 	queryPostParams := &GraphQLParams{
 		Query: `query {
 			aggregatePost {
 				cnt: count
+				tmin : titleMin
+				tmax: titleMax
+				navg : numLikesAvg 
 			}
 		}`,
 	}
@@ -2868,7 +2906,15 @@ func queryCountWithAlias(t *testing.T) {
 	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
-		`{"aggregatePost":{"cnt":4}}`,
+		`{
+					"aggregatePost":
+							{
+								"cnt":4,
+								"tmax": "Random post",
+								"tmin": "GraphQL doco",
+								"navg": 66.25
+							}
+				}`,
 		string(gqlResponse.Data))
 }
 

@@ -290,7 +290,7 @@ type MessageAggregateResult {
 	uniqueIdMin: Int64
 	uniqueIdMax: Int64
 	uniqueIdSum: Int64
-	uniqueIdAvg: Int64
+	uniqueIdAvg: Float
 	datePostedMin: DateTime
 	datePostedMax: DateTime
 }

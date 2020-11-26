@@ -2959,3 +2959,30 @@
         dgraph.uid : uid
       }
     }
+
+-
+  name: "Aggregate Query with Sum and Avg"
+  gqlquery: |
+    query {
+      aggregateTweets() {
+        count
+        scoreMin
+        scoreMax
+        scoreAvg
+        scoreSum
+      }
+    }
+  dgquery: |-
+    query {
+      aggregateTweets() {
+        count : max(val(countVar))
+        scoreMin : min(val(scoreVar))
+        scoreMax : max(val(scoreVar))
+        scoreAvg : avg(val(scoreVar))
+        scoreSum : sum(val(scoreVar))
+      }
+      var(func: type(Tweets)) {
+        countVar as count(uid)
+        scoreVar as Tweets.score
+      }
+    }
