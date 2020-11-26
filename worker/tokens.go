@@ -85,7 +85,7 @@ func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, e
 
 	tokenizers := schema.State().Tokenizer(ctx, attr)
 	for _, t := range tokenizers {
-		// If function is eq and we found a tokenizer thats !Lossy(), lets return it
+		// If function is eq and we found a tokenizer that's !Lossy(), lets return it
 		switch f {
 		case "eq":
 			// For equality, find a non-lossy tokenizer.
@@ -105,7 +105,17 @@ func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, e
 		return nil, errors.Errorf("Attribute:%s does not have proper index for comparison", attr)
 	}
 
-	// We didn't find a sortable or !isLossy() tokenizer, lets return the first one.
+	// If we didn't find a !isLossy() tokenizer for eq function on string type predicates,
+	// then let's see if we can find a non-trigram tokenizer
+	if typ, err := schema.State().TypeOf(attr); err == nil && typ == types.StringID {
+		for _, t := range tokenizers {
+			if t.Identifier() != tok.IdentTrigram {
+				return t, nil
+			}
+		}
+	}
+
+	// otherwise, lets return the first one.
 	return tokenizers[0], nil
 }
 
