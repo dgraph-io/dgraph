@@ -499,7 +499,8 @@ func getPackages() []task {
 	}
 
 	moveSlowToFront := func(list []task) {
-		slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker"}
+		// These packages typically take over a minute to run.
+		slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
 		left := 0
 		for i := 0; i < len(list); i++ {
 			// These packages take time. So, move them to the front.
