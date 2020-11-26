@@ -60,6 +60,7 @@ func requireNoErrors(t *testing.T, resp *common.GraphQLResponse) {
 // in a dgraph alpha for one group, that update should also be propagated to alpha nodes in other
 // groups.
 func TestSchemaSubscribe(t *testing.T) {
+	common.CheckGraphQLStarted(groupOneAdminServer)
 	schema := `
 	type Author {
 		id: ID!
