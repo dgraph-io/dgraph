@@ -327,15 +327,15 @@ type PostAggregateResult {
 	publishTimestampMin: Int64
 	publishTimestampMax: Int64
 	publishTimestampSum: Int64
-	publishTimestampAvg: Int64
+	publishTimestampAvg: Float
 	numViewersMin: Int64
 	numViewersMax: Int64
 	numViewersSum: Int64
-	numViewersAvg: Int64
+	numViewersAvg: Float
 	numLikesMin: Int
 	numLikesMax: Int
 	numLikesSum: Int
-	numLikesAvg: Int
+	numLikesAvg: Float
 	scoreMin: Float
 	scoreMax: Float
 	scoreSum: Float

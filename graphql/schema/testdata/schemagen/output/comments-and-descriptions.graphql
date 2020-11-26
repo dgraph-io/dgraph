@@ -323,7 +323,7 @@ type TAggregateResult {
 	iMin: Int
 	iMax: Int
 	iSum: Int
-	iAvg: Int
+	iAvg: Float
 }
 
 type UpdateIPayload {

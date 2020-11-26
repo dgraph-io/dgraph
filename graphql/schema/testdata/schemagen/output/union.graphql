@@ -387,7 +387,7 @@ type HumanAggregateResult {
 	totalCreditsMin: Int
 	totalCreditsMax: Int
 	totalCreditsSum: Int
-	totalCreditsAvg: Int
+	totalCreditsAvg: Float
 }
 
 type PlanetAggregateResult {

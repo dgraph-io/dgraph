@@ -1663,14 +1663,17 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 		}
 
 		if isSummable(fld) {
-			// TODO: Need to check if int averages are returned as int or not
 			sumField := &ast.FieldDefinition{
 				Name: fld.Name + "Sum",
 				Type: aggregateFieldType,
 			}
 			avgField := &ast.FieldDefinition{
 				Name: fld.Name + "Avg",
-				Type: aggregateFieldType,
+				Type: &ast.Type{
+					// Average should always be of type Float
+					NamedType: "Float",
+					NonNull:   false,
+				},
 			}
 			aggregateFields = append(aggregateFields, sumField)
 			aggregateFields = append(aggregateFields, avgField)
