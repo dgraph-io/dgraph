@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
@@ -38,14 +39,22 @@ import (
 )
 
 var (
-	groupOneServer        = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/graphql"
-	groupOneAdminServer   = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/admin"
+	groupOneServer        = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/graphql"
+	groupOneAdminServer   = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/admin"
 	groupOnegRPC          = testutil.SockAddr
-	groupTwoServer        = "http://"+ testutil.ContainerAddr("alpha2", 8080) +"/graphql"
-	groupTwoAdminServer   = "http://"+ testutil.ContainerAddr("alpha2", 8080) +"/admin"
-	groupThreeServer      = "http://"+ testutil.ContainerAddr("alpha3", 8080) +"/graphql"
-	groupThreeAdminServer = "http://"+ testutil.ContainerAddr("alpha3", 8080) +"/admin"
+	groupTwoServer        = "http://" + testutil.ContainerAddr("alpha2", 8080) + "/graphql"
+	groupTwoAdminServer   = "http://" + testutil.ContainerAddr("alpha2", 8080) + "/admin"
+	groupThreeServer      = "http://" + testutil.ContainerAddr("alpha3", 8080) + "/graphql"
+	groupThreeAdminServer = "http://" + testutil.ContainerAddr("alpha3", 8080) + "/admin"
 )
+
+func requireNoErrors(t *testing.T, resp *common.GraphQLResponse) {
+	if len(resp.Errors) > 0 {
+		t.Logf("Got errors: %s\n", resp.Errors.Error())
+		debug.PrintStack()
+		t.FailNow()
+	}
+}
 
 // This test is supposed to test the graphql schema subscribe feature. Whenever schema is updated
 // in a dgraph alpha for one group, that update should also be propagated to alpha nodes in other
@@ -87,15 +96,15 @@ func TestSchemaSubscribe(t *testing.T) {
 		}`
 
 	introspectionResult := runIntrospectWithRetryIfNecessary(t, introspect, groupOneServer)
-	require.Nil(t, introspectionResult.Errors)
+	requireNoErrors(t, introspectionResult)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
 	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupTwoServer)
-	require.Nil(t, introspectionResult.Errors)
+	requireNoErrors(t, introspectionResult)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
 	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupThreeServer)
-	require.Nil(t, introspectionResult.Errors)
+	requireNoErrors(t, introspectionResult)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
 	// Now update schema on an alpha node for group 3 and see if nodes in group 1 and 2 also get it.
@@ -132,15 +141,15 @@ func TestSchemaSubscribe(t *testing.T) {
 			}
 		}`
 	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupOneServer)
-	require.Nil(t, introspectionResult.Errors)
+	requireNoErrors(t, introspectionResult)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
 	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupTwoServer)
-	require.Nil(t, introspectionResult.Errors)
+	requireNoErrors(t, introspectionResult)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
 	introspectionResult = runIntrospectWithRetryIfNecessary(t, introspect, groupThreeServer)
-	require.Nil(t, introspectionResult.Errors)
+	requireNoErrors(t, introspectionResult)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 }
 
@@ -566,7 +575,7 @@ func TestGQLSchemaValidate(t *testing.T) {
 					name: String!
 					occurrences: [TaskOccurrence] @hasInverse(field: task)
 				}
-				
+
 				type TaskOccurrence @auth(
 					query: { rule: "query { queryTaskOccurrence { task { id } } }" }
 				) {
@@ -669,11 +678,11 @@ func TestIntrospection(t *testing.T) {
 	interface Node {
 		id: ID!
 	}
-	
+
 	type Human implements Node {
 		name: String
 	}
-	
+
 	type Dog implements Node {
 		name: String
 	}`
@@ -728,8 +737,10 @@ func TestDeleteSchemaAndExport(t *testing.T) {
 }
 
 func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {
-	req := &common.GraphQLParams{
-		Query: `mutation updateGQLSchema($sch: String!) {
+	var resp *common.GraphQLResponse
+	for i := 0; i < 10; i++ {
+		req := &common.GraphQLParams{
+			Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
 				gqlSchema {
 					id
@@ -737,15 +748,21 @@ func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"sch": schema},
+			Variables: map[string]interface{}{"sch": schema},
+		}
+		resp = req.ExecuteAsPost(t, url)
+		if resp == nil || strings.Contains(resp.Errors.Error(), "server not ready") {
+			time.Sleep(time.Second)
+			continue
+		}
 	}
-	resp := req.ExecuteAsPost(t, url)
 	require.NotNil(t, resp)
 	return resp
 }
 
 func updateGQLSchemaRequireNoErrors(t *testing.T, schema, url string) {
-	require.Nil(t, updateGQLSchema(t, schema, url).Errors)
+	resp := updateGQLSchema(t, schema, url)
+	requireNoErrors(t, resp)
 }
 
 func updateGQLSchemaReturnSchema(t *testing.T, schema, url string) gqlSchema {

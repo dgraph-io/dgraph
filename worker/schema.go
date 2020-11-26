@@ -26,7 +26,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -188,9 +187,8 @@ func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) (
 	ctx, span := otrace.StartSpan(ctx, "worker.GetSchemaOverNetwork")
 	defer span.End()
 
-	if err := x.HealthCheck(); err != nil {
-		return nil, err
-	}
+	// There was a health check here which is not needed. The health check should be done by the
+	// receiver of the request, not the sender.
 
 	if len(schema.Predicates) == 0 && len(schema.Types) > 0 {
 		return nil, nil

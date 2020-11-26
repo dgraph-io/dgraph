@@ -38,6 +38,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -115,9 +116,14 @@ func startCluster(composeFile, prefix string) {
 	fmt.Printf("CLUSTER UP: %s\n", prefix)
 
 	// Wait for cluster to be healthy.
+	for i := 1; i <= 3; i++ {
+		in := getInstance(prefix, "zero"+strconv.Itoa(i))
+		in.bestEffortWaitForHealthy(6080)
+	}
 	for i := 1; i <= 6; i++ {
 		in := getInstance(prefix, "alpha"+strconv.Itoa(i))
 		in.bestEffortWaitForHealthy(8080)
+		in.bestEffortWaitForGraphQL(8080)
 	}
 }
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
@@ -144,6 +150,17 @@ func getInstance(prefix, name string) instance {
 }
 func (in instance) String() string {
 	return fmt.Sprintf("%s_%s_1", in.Prefix, in.Name)
+}
+
+func (in instance) bestEffortWaitForGraphQL(privatePort uint16) {
+	port := in.publicPort(privatePort)
+	if len(port) == 0 {
+		return
+	}
+	err := common.CheckGraphQLStarted("http://localhost:" + port + "/admin")
+	if err != nil {
+		fmt.Printf("GraphQL for %s failed with error: %v\n", in, err)
+	}
 }
 
 func (in instance) bestEffortWaitForHealthy(privatePort uint16) {
