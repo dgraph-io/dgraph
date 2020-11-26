@@ -611,7 +611,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		enc := codec.Encoder{BlockSize: 256}
 		var lastUid uint64
 		slice, next := []byte{}, start
-		for next != -1 && (next < end || end == 0) {
+		for next >= 0 && (next < end || end == 0) {
 			slice, next = cbuf.Slice(next)
 			me := MapEntry(slice)
 
@@ -693,7 +693,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		pl.Reset()
 	}
 
-	for end != -1 {
+	for end >= 0 {
 		slice, next := cbuf.Slice(end)
 		entry := MapEntry(slice)
 		entryKey := entry.Key()
