@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -38,13 +39,13 @@ import (
 )
 
 var (
-	groupOneServer        = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/graphql"
-	groupOneAdminServer   = "http://"+ testutil.ContainerAddr("alpha1", 8080) +"/admin"
+	groupOneServer        = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/graphql"
+	groupOneAdminServer   = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/admin"
 	groupOnegRPC          = testutil.SockAddr
-	groupTwoServer        = "http://"+ testutil.ContainerAddr("alpha2", 8080) +"/graphql"
-	groupTwoAdminServer   = "http://"+ testutil.ContainerAddr("alpha2", 8080) +"/admin"
-	groupThreeServer      = "http://"+ testutil.ContainerAddr("alpha3", 8080) +"/graphql"
-	groupThreeAdminServer = "http://"+ testutil.ContainerAddr("alpha3", 8080) +"/admin"
+	groupTwoServer        = "http://" + testutil.ContainerAddr("alpha2", 8080) + "/graphql"
+	groupTwoAdminServer   = "http://" + testutil.ContainerAddr("alpha2", 8080) + "/admin"
+	groupThreeServer      = "http://" + testutil.ContainerAddr("alpha3", 8080) + "/graphql"
+	groupThreeAdminServer = "http://" + testutil.ContainerAddr("alpha3", 8080) + "/admin"
 )
 
 // This test is supposed to test the graphql schema subscribe feature. Whenever schema is updated
@@ -819,4 +820,13 @@ func runIntrospectWithRetryIfNecessary(t *testing.T, query *common.GraphQLParams
 	}
 
 	return response
+}
+
+func TestMain(m *testing.M) {
+	err := common.CheckGraphQLStarted(common.GraphqlAdminURL)
+	if err != nil {
+		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
 }

@@ -1898,7 +1898,7 @@ func TestNonExistentGroup(t *testing.T) {
 }
 
 func TestQueryUserInfo(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -3176,7 +3176,7 @@ func TestMutationWithValueVar(t *testing.T) {
 }
 
 func TestFailedLogin(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	grootClient, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)

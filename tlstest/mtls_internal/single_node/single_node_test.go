@@ -23,10 +23,10 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		require.NoError(t, client.Alter(ctx, &api.Operation{
+		require.NoError(t, testutil.RetryAlter(client, &api.Operation{
 			DropAll: true,
 		}))
-		require.NoError(t, client.Alter(ctx, &api.Operation{
+		require.NoError(t, testutil.RetryAlter(client, &api.Operation{
 			Schema: initialSchema,
 		}))
 
