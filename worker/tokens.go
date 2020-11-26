@@ -105,11 +105,13 @@ func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, e
 		return nil, errors.Errorf("Attribute:%s does not have proper index for comparison", attr)
 	}
 
-	// If we didn't find a sortable or !isLossy() tokenizer for eq function,
-	// then let's see if we can find a term or fulltext tokenizer
-	for _, t := range tokenizers {
-		if t.Identifier() == tok.IdentTerm || t.Identifier() == tok.IdentFullText {
-			return t, nil
+	// If we didn't find a !isLossy() tokenizer for eq function on string type predicates,
+	// then let's see if we can find a non-trigram tokenizer
+	if typ, err := schema.State().TypeOf(attr); err == nil && typ == types.StringID {
+		for _, t := range tokenizers {
+			if t.Identifier() != tok.IdentTrigram {
+				return t, nil
+			}
 		}
 	}
 

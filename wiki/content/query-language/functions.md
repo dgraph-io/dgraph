@@ -15,7 +15,7 @@ Comparison functions (`eq`, `ge`, `gt`, `le`, `lt`) in the query root (aka `func
 be applied on [indexed predicates]({{< relref "query-language/schema.md#indexing" >}}). Since v1.2, comparison functions
 can now be used on [@filter]({{<relref "query-language/graphql-fundamentals.md#applying-filters" >}}) directives even on predicates
 that have not been indexed.
-Filtering on non-indexed predicates can be slow for large datasets, as they require
+Filtering on non-in dexed predicates can be slow for large datasets, as they require
 iterating over all of the possible values at the level where the filter is being used.
 
 All other functions, in the query root or in the filter can only be applied to indexed predicates.
@@ -265,7 +265,7 @@ Index Required: An index is required for the `eq(predicate, ...)` forms (see tab
 | `int`      | `int`         |
 | `float`    | `float`       |
 | `bool`     | `bool`        |
-| `string`   | `exact`, `hash` |
+| `string`   | `exact`, `hash`, `term`, `fulltext` |
 | `dateTime` | `dateTime`    |
 
 Test for equality of a predicate or variable to a value or find in a list of values.
