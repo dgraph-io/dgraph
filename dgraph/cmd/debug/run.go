@@ -811,6 +811,8 @@ func run() {
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
 
+	x.WorkerConfig.EncryptionKey = opt.key
+
 	// If this is a new format WAL, print and return.
 	if isWal && !opt.oldWalFormat {
 		store := raftwal.Init(dir)
