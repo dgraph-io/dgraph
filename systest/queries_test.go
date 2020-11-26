@@ -53,6 +53,7 @@ func TestQuery(t *testing.T) {
 	t.Run("hash index queries", wrap(QueryHashIndex))
 	t.Run("fuzzy matching", wrap(FuzzyMatch))
 	t.Run("regexp with toggled trigram index", wrap(RegexpToggleTrigramIndex))
+	t.Run("eq with altering order of trigram and term index", wrap(EqWithAlteredIndexOrder))
 	t.Run("groupby uid that works", wrap(GroupByUidWorks))
 	t.Run("parameterized cascade", wrap(CascadeParams))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
@@ -1344,6 +1345,41 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 	_, err = c.NewTxn().Query(ctx, `{q(func:regexp(name, /art/)) {name}}`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute name does not have trigram index for regex matching.")
+}
+
+func EqWithAlteredIndexOrder(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	// first, let's set the schema with term before trigram
+	op := &api.Operation{Schema: `name: string @index(term, trigram) .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	// fill up some data
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:x1 <name> "Alice" .
+      _:x2 <name> "Bob" .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	// querying with eq should work
+	q := `{q(func: eq(name, "Alice")) {name}}`
+	expectedResult := `{"q":[{"name":"Alice"}]}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, expectedResult, string(resp.Json))
+
+	// now, let's set the schema with trigram before term
+	op = &api.Operation{Schema: `name: string @index(trigram, term) .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	// querying with eq should still work
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, expectedResult, string(resp.Json))
 }
 
 func GroupByUidWorks(t *testing.T, c *dgo.Dgraph) {
