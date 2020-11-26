@@ -475,7 +475,7 @@ Index Required: An index is required for the `eq(predicate, ...)` forms (see tab
 | `int`      | `int`         |
 | `float`    | `float`       |
 | `bool`     | `bool`        |
-| `string`   | `exact`, `hash` |
+| `string`   | `exact`, `hash`, `term`, `fulltext` |
 | `dateTime` | `dateTime`    |
 
 Test for equality of a predicate or variable to a value or find in a list of values.
@@ -1806,7 +1806,7 @@ The `_all_` keyword requires that the nodes have types. Dgraph will look for all
 the types that have been assigned to a node, query the types to check which
 attributes they have, and use those to compute the list of predicates to expand.
 
-For example, consider a node that has types `Animal` and `Pet`, which have 
+For example, consider a node that has types `Animal` and `Pet`, which have
 the following definitions:
 
 ```
@@ -1835,7 +1835,7 @@ veterinarian
 ```
 
 For `string` predicates, `expand` only returns values not tagged with a language
-(see [language preference]({{< relref "#language-support" >}})).  So it's often 
+(see [language preference]({{< relref "#language-support" >}})).  So it's often
 required to add `name@fr` or `name@.` as well to an expand query.
 
 ### Filtering during expand.
