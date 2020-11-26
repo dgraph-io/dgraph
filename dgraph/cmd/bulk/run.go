@@ -102,7 +102,7 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// Options around how to set up Badger.
-	flag.Int("badger.compression_level", 1,
+	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
 	flag.Int64("badger.cache_mb", 0, "Total size of cache (in MB) per shard in reducer.")
 	flag.String("badger.cache_percentage", "0,100",
