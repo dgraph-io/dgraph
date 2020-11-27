@@ -427,7 +427,7 @@ func rewriteAsGet(
 		}
 
 		if !implementingTypesHasFailedRules {
-			return &gql.GraphQuery{Attr: query.ResponseName() + "()"}
+			return &gql.GraphQuery{Attr: query.Name() + "()"}
 		}
 	}
 
