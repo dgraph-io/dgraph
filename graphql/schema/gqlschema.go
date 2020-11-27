@@ -1649,6 +1649,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 			// as input type and the fields may not be always needed.
 		}
 
+		// Adds titleMax, titleMin fields for a field of name title.
 		if isOrderable(fld) {
 			minField := &ast.FieldDefinition{
 				Name: fld.Name + "Min",
@@ -1662,6 +1663,8 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 			aggregateFields = append(aggregateFields, maxField)
 		}
 
+		// Adds scoreSum and scoreAvg field for a field of name score.
+		// The type of scoreAvg is Float irrespective of the type of score.
 		if isSummable(fld) {
 			sumField := &ast.FieldDefinition{
 				Name: fld.Name + "Sum",

@@ -1524,9 +1524,16 @@ func (f *field) DgraphPredicateForAggregateField() string {
 	// it will be of the form <Type>AggregateResult
 	// we need to obtain the type name from <Type> from <Type>AggregateResult
 	aggregateFieldName := f.field.ObjectDefinition.Name
+
+	// If aggregateFieldName is found to not end with AggregateResult, just return DgraphPredicate()
+	if !strings.HasSuffix(aggregateFieldName, "AggregateResult") {
+		// This is an extra precaution and ideally, the code should not reach over here.
+		return f.DgraphPredicate()
+	}
 	mainTypeName := aggregateFieldName[:len(aggregateFieldName)-15]
 	// Remove last 3 characters of the field name.
 	// Eg. to get "FieldName" from "FieldNameMax"
+	// As all Aggregate functions are of length 3, removing last 3 characters from fldName
 	return f.op.inSchema.dgraphPredicate[mainTypeName][fldName[:len(fldName)-3]]
 }
 

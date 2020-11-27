@@ -195,93 +195,59 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) *gql.GraphQuery {
 	// Add selection set to mainQuery and finalMainQuery.
 	isAggregateFieldVisited := make(map[string]bool)
 	for _, f := range query.SelectionSet() {
-		if f.Name() == "count" {
+		fldName := f.Name()
+		if fldName == "count" {
 			child := &gql.GraphQuery{
 				Var:  "countVar",
 				Attr: "count(uid)",
 			}
 			finalQueryChild := &gql.GraphQuery{
-				Alias: f.Name(),
+				Alias: fldName,
 				Attr:  "max(val(countVar))",
 			}
 			mainQuery.Children = append(mainQuery.Children, child)
 			finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
+			continue
 		}
-		if strings.HasSuffix(f.Name(), "Max") {
-			// constructedForDgraphPredicate stores the field for which Max has been queried.
-			constructedForDgraphPredicate := f.DgraphPredicateForAggregateField()
-			fldName := f.Name()
-			constructedForField := fldName[:len(fldName)-3]
-			if !isAggregateFieldVisited[constructedForField] {
-				child := &gql.GraphQuery{
-					Var:  constructedForField + "Var",
-					Attr: constructedForDgraphPredicate,
+
+		// Handle other aggregate functions than count
+		aggregateFunctions := []string{"Max", "Min", "Sum", "Avg"}
+
+		for _, function := range aggregateFunctions {
+			// A field can have at maximum one of the aggregation functions as suffix
+			if strings.HasSuffix(fldName, function) {
+				// constructedForDgraphPredicate stores the Dgraph predicate for which aggregate function has been queried.
+				constructedForDgraphPredicate := f.DgraphPredicateForAggregateField()
+				// constructedForField contains the field for which aggregate function has been queried.
+				// As all aggregate functions have length 3, removing last 3 characters from fldName.
+				constructedForField := fldName[:len(fldName)-3]
+				// isAggregateFieldVisited ensures that a field is added to Var query at maximum once.
+				// If a field has already been added to the var query, don't add it again.
+				// Eg. Even if scoreMax and scoreMin are queried, the query will contain only one expression
+				// of the from, "scoreVar as Tweets.score"
+				if !isAggregateFieldVisited[constructedForField] {
+					child := &gql.GraphQuery{
+						Var:  constructedForField + "Var",
+						Attr: constructedForDgraphPredicate,
+					}
+					// The var field is added to mainQuery. This adds the following DQL query.
+					// var(func: type(Tweets)) {
+					//        scoreVar as Tweets.score
+					// }
+					mainQuery.Children = append(mainQuery.Children, child)
+					isAggregateFieldVisited[constructedForField] = true
 				}
-				mainQuery.Children = append(mainQuery.Children, child)
-				isAggregateFieldVisited[constructedForField] = true
-			}
-			finalQueryChild := &gql.GraphQuery{
-				Alias: f.Name(),
-				Attr:  "max(val(" + constructedForField + "Var))",
-			}
-			finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
-		}
-		if strings.HasSuffix(f.Name(), "Min") {
-			// constructedForDgraphPredicate stores the field for which Max has been queried.
-			constructedForDgraphPredicate := f.DgraphPredicateForAggregateField()
-			fldName := f.Name()
-			constructedForField := fldName[:len(fldName)-3]
-			if !isAggregateFieldVisited[constructedForField] {
-				child := &gql.GraphQuery{
-					Var:  constructedForField + "Var",
-					Attr: constructedForDgraphPredicate,
+				finalQueryChild := &gql.GraphQuery{
+					Alias: fldName,
+					Attr:  strings.ToLower(function) + "(val(" + constructedForField + "Var))",
 				}
-				mainQuery.Children = append(mainQuery.Children, child)
-				isAggregateFieldVisited[constructedForField] = true
+				// This adds the following DQL query
+				// aggregateTweets() {
+				//        scoreMin : min(val(scoreVar))
+				// }
+				finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
+				break
 			}
-			finalQueryChild := &gql.GraphQuery{
-				Alias: f.Name(),
-				Attr:  "min(val(" + constructedForField + "Var))",
-			}
-			finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
-		}
-		if strings.HasSuffix(f.Name(), "Sum") {
-			// constructedForDgraphPredicate stores the field for which Max has been queried.
-			constructedForDgraphPredicate := f.DgraphPredicateForAggregateField()
-			fldName := f.Name()
-			constructedForField := fldName[:len(fldName)-3]
-			if !isAggregateFieldVisited[constructedForField] {
-				child := &gql.GraphQuery{
-					Var:  constructedForField + "Var",
-					Attr: constructedForDgraphPredicate,
-				}
-				mainQuery.Children = append(mainQuery.Children, child)
-				isAggregateFieldVisited[constructedForField] = true
-			}
-			finalQueryChild := &gql.GraphQuery{
-				Alias: f.Name(),
-				Attr:  "sum(val(" + constructedForField + "Var))",
-			}
-			finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
-		}
-		if strings.HasSuffix(f.Name(), "Avg") {
-			// constructedForDgraphPredicate stores the field for which Max has been queried.
-			constructedForDgraphPredicate := f.DgraphPredicateForAggregateField()
-			fldName := f.Name()
-			constructedForField := fldName[:len(fldName)-3]
-			if !isAggregateFieldVisited[constructedForField] {
-				child := &gql.GraphQuery{
-					Var:  constructedForField + "Var",
-					Attr: constructedForDgraphPredicate,
-				}
-				mainQuery.Children = append(mainQuery.Children, child)
-				isAggregateFieldVisited[constructedForField] = true
-			}
-			finalQueryChild := &gql.GraphQuery{
-				Alias: f.Name(),
-				Attr:  "avg(val(" + constructedForField + "Var))",
-			}
-			finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
 		}
 	}
 
