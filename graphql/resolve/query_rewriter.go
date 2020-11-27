@@ -209,7 +209,7 @@ func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error
 	// or dgQuery may be empty and its children may contain check<Type>Password query.
 	// Find the exact dgQuery with the name check<Type>Password query.
 	mainQuery := dgQuery
-	for !strings.HasPrefix(mainQuery.Attr, m.ResponseName()) {
+	for !strings.HasPrefix(mainQuery.Attr, m.Name()) {
 		mainQuery = mainQuery.Children[0]
 	}
 
@@ -412,7 +412,7 @@ func rewriteAsGet(
 	// caught here but in case of interface, we need to check validity on each
 	// implementing type as Rules for the interface are made empty.
 	if rbac == schema.Negative {
-		return &gql.GraphQuery{Attr: query.ResponseName() + "()"}
+		return &gql.GraphQuery{Attr: query.Name() + "()"}
 	}
 
 	// For interface, empty query should be returned if Auth rules are
@@ -427,7 +427,7 @@ func rewriteAsGet(
 		}
 
 		if !implementingTypesHasFailedRules {
-			return &gql.GraphQuery{Attr: query.ResponseName() + "()"}
+			return &gql.GraphQuery{Attr: query.Name() + "()"}
 		}
 	}
 
