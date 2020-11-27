@@ -65,7 +65,7 @@ func TestProposal(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	store, err := raftwal.Init(dir, nil)
-	require.NoError(err)
+	require.NoError(t, err)
 
 	rc := &pb.RaftContext{Id: 1}
 	n := NewNode(rc, store, nil)
