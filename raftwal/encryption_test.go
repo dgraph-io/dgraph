@@ -32,7 +32,7 @@ func TestEntryReadWrite(t *testing.T) {
 	key := []byte("badger16byteskey")
 	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
-	ds, err := Init(dir, key)
+	ds, err := InitEncrypted(dir, key)
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
@@ -48,7 +48,7 @@ func TestEntryReadWrite(t *testing.T) {
 	require.Equal(t, data, entries[0].Data)
 
 	// Open the wal file again.
-	ds2, err := Init(dir, key)
+	ds2, err := InitEncrypted(dir, key)
 	require.NoError(t, err)
 	entries = ds2.wal.allEntries(0, 100, 10000)
 	require.Equal(t, 1, len(entries))
@@ -58,11 +58,11 @@ func TestEntryReadWrite(t *testing.T) {
 
 	// Opening it with a wrong key fails.
 	wrongKey := []byte("other16byteskeys")
-	_, err = Init(dir, wrongKey)
+	_, err = InitEncrypted(dir, wrongKey)
 	require.EqualError(t, err, "Encryption key mismatch")
 
 	// Opening it without encryption key fails.
-	_, err = Init(dir, nil)
+	_, err = InitEncrypted(dir, nil)
 	require.EqualError(t, err, "Logfile is encrypted but encryption key is nil")
 }
 
@@ -70,7 +70,7 @@ func TestEntryReadWrite(t *testing.T) {
 func TestLogRotate(t *testing.T) {
 	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
-	ds, err := Init(dir, nil)
+	el, err := openWal(dir)
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
@@ -90,16 +90,16 @@ func TestLogRotate(t *testing.T) {
 	totalBytes := 0
 	for i := 0; i < totalEntries; i++ {
 		entry := makeEntry(i)
-		err = ds.wal.AddEntries([]raftpb.Entry{entry})
+		err = el.AddEntries([]raftpb.Entry{entry})
 		require.NoError(t, err)
 		totalBytes += len(entry.Data)
 	}
 	log.Printf("Wrote %d bytes", totalBytes)
 
 	// Reopen the file and retrieve all entries.
-	ds, err = Init(dir, nil)
+	el, err = openWal(dir)
 	require.NoError(t, err)
-	entries := ds.wal.allEntries(0, math.MaxInt64, math.MaxInt64)
+	entries := el.allEntries(0, math.MaxInt64, math.MaxInt64)
 	require.Equal(t, totalEntries, len(entries))
 
 	// Use the previous seed to verify the written entries.
@@ -117,8 +117,8 @@ func TestLogRotate(t *testing.T) {
 
 	// 1 filled logfile should be present in files,
 	// and 1 partially filled logfile should be present in current.
-	require.Len(t, ds.wal.files, 1)
-	require.NotNil(t, ds.wal.current)
+	require.Len(t, el.files, 1)
+	require.NotNil(t, el.current)
 }
 
 // TestLogGrow writes data of sufficient size to grow the log file.
@@ -126,7 +126,7 @@ func TestLogGrow(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
 		dir, err := ioutil.TempDir("", "raftwal")
 		require.NoError(t, err)
-		ds, err := Init(dir, key)
+		ds, err := InitEncrypted(dir, key)
 		require.NoError(t, err)
 		defer os.RemoveAll(dir)
 
@@ -145,7 +145,7 @@ func TestLogGrow(t *testing.T) {
 		require.NoError(t, err)
 
 		// Reopen the file and retrieve all entries.
-		ds, err = Init(dir, key)
+		ds, err = InitEncrypted(dir, key)
 		require.NoError(t, err)
 		readEntries := ds.wal.allEntries(0, math.MaxInt64, math.MaxInt64)
 		require.Equal(t, numEntries, len(readEntries))

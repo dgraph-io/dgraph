@@ -52,8 +52,7 @@ func TestStorageTerm(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds, err := Init(dir, nil)
-	require.NoError(t, err)
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
@@ -101,8 +100,7 @@ func TestStorageEntries(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds, err := Init(dir, nil)
-	require.NoError(t, err)
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
 	tests := []struct {
@@ -147,8 +145,7 @@ func TestStorageLastIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds, err := Init(dir, nil)
-	require.NoError(t, err)
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -176,8 +173,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds, err := Init(dir, nil)
-	require.NoError(t, err)
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -192,8 +188,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds, err := Init(dir, nil)
-	require.NoError(t, err)
+	ds := Init(dir)
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
 	data := []byte("data")
@@ -228,8 +223,7 @@ func TestStorageAppend(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds, err := Init(dir, nil)
-	require.NoError(t, err)
+	ds := Init(dir)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
@@ -358,7 +352,7 @@ func TestStorageOnlySnap(t *testing.T) {
 		x.WorkerConfig.EncryptionKey = key
 		dir, err := ioutil.TempDir("", "raftwal")
 		require.NoError(t, err)
-		ds, err := Init(dir, nil)
+		ds, err := InitEncrypted(dir, key)
 		require.NoError(t, err)
 		t.Logf("Creating dir: %s\n", dir)
 
@@ -393,7 +387,7 @@ func TestStorageBig(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
 		dir, err := ioutil.TempDir("", "raftwal")
 		require.NoError(t, err)
-		ds, err := Init(dir, key)
+		ds, err := InitEncrypted(dir, key)
 		require.NoError(t, err)
 		defer os.RemoveAll(dir)
 
@@ -500,7 +494,7 @@ func TestStorageBig(t *testing.T) {
 		}
 		require.NoError(t, ds.Sync())
 
-		ks, err := Init(dir, key)
+		ks, err := InitEncrypted(dir, key)
 		require.NoError(t, err)
 		ents = ks.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
 		require.Equal(t, 51, len(ents))

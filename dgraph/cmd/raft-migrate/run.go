@@ -116,7 +116,7 @@ func run(conf *viper.Viper) error {
 		os.Mkdir(newDir, 0777)
 	}
 
-	newWal, err := raftwal.Init(newDir, encKey)
+	newWal, err := raftwal.InitEncrypted(newDir, encKey)
 	x.Check(err)
 
 	fmt.Printf("Setting raftID to: %+v\n", raftID)

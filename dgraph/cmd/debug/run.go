@@ -813,7 +813,7 @@ func run() {
 
 	// If this is a new format WAL, print and return.
 	if isWal && !opt.oldWalFormat {
-		store, err := raftwal.Init(dir, opt.key)
+		store, err := raftwal.InitEncrypted(dir, opt.key)
 		x.Check(err)
 		fmt.Printf("RaftID: %+v\n", store.Uint(raftwal.RaftId))
 

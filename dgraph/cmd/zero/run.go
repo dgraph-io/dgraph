@@ -229,8 +229,7 @@ func run() {
 
 	// Create and initialize write-ahead log.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	store, err := raftwal.Init(opts.w, nil)
-	x.Check(err)
+	store := raftwal.Init(opts.w)
 	store.SetUint(raftwal.RaftId, opts.nodeId)
 	store.SetUint(raftwal.GroupId, 0) // All zeros have group zero.
 

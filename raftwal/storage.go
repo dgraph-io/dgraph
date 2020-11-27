@@ -85,9 +85,16 @@ type indexRange struct {
 	from, until uint64 // index range for deletion, until index is not deleted.
 }
 
-// Init initializes returns a properly initialized instance of DiskStorage.
+// Init initializes an instance of DiskStorage without encryption.
+func Init(dir string) *DiskStorage {
+	ds, err := InitEncrypted(dir, nil)
+	x.Check(err)
+	return ds
+}
+
+// InitEncrypted initializes returns a properly initialized instance of DiskStorage.
 // To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
-func Init(dir string, encKey x.SensitiveByteSlice) (*DiskStorage, error) {
+func InitEncrypted(dir string, encKey x.SensitiveByteSlice) (*DiskStorage, error) {
 	w := &DiskStorage{
 		dir: dir,
 	}
