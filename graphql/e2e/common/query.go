@@ -3051,6 +3051,33 @@ func checkUser(t *testing.T, userObj, expectedObj *user) {
 	}
 }
 
+func checkUserPasswordWithAlias(t *testing.T, userObj, expectedObj *user) {
+	checkUserParams := &GraphQLParams{
+		Query: `query checkUserPassword($name: String!, $pwd: String!) {
+			verify : checkUserPassword(name: $name, password: $pwd) { name }
+		}`,
+		Variables: map[string]interface{}{
+			"name": userObj.Name,
+			"pwd":  userObj.Password,
+		},
+	}
+
+	gqlResponse := checkUserParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		CheckUserPasword *user `json:"verify,omitempty"`
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.Nil(t, err)
+
+	opt := cmpopts.IgnoreFields(user{}, "Password")
+	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func passwordTest(t *testing.T) {
 	newUser := &user{
 		Name:     "Test User",
@@ -3095,6 +3122,7 @@ func passwordTest(t *testing.T) {
 			string(gqlResponse.Data))
 
 		checkUser(t, newUser, newUser)
+		checkUserPasswordWithAlias(t, newUser, newUser)
 		checkUser(t, &user{Name: "Test User", Password: "Wrong Pass"}, nil)
 
 		gqlResponse = postExecutor(t, GraphqlURL, updateUserParams)

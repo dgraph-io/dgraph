@@ -2352,6 +2352,24 @@
       }
     }
 
+-
+  name: "Password query with alias"
+  gqlquery: |
+    query {
+      verify : checkUserPassword(name: "user1", pwd: "Password") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      checkUserPassword(func: eq(User.name, "user1")) @filter((eq(val(pwd), 1) AND type(User))) {
+        name : User.name
+        dgraph.uid : uid
+      }
+      checkPwd(func: eq(User.name, "user1")) @filter(type(User)) {
+        pwd as checkpwd(User.pwd, "Password")
+      }
+    }
 
 - name: "Rewrite without custom fields"
   gqlquery: |
