@@ -335,7 +335,10 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 	if err != nil {
 		return "", "", errors.Wrapf(err, "unable to read from response")
 	}
-
+	if resp.StatusCode != http.StatusOK {
+		return "", "", errors.New(fmt.Sprintf("got non 200 response from the server with %s ",
+			string(respBody)))
+	}
 	var outputJson map[string]interface{}
 	if err := json.Unmarshal(respBody, &outputJson); err != nil {
 		var errOutputJson map[string]interface{}
