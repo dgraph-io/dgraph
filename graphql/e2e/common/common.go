@@ -364,7 +364,7 @@ func RunAll(t *testing.T) {
 	t.Run("persisted query", persistedQuery)
 	t.Run("query aggregate without filter", queryAggregateWithoutFilter)
 	t.Run("query aggregate with filter", queryAggregateWithFilter)
-	t.Run("query count with alias", queryAggregateWithAlias)
+	t.Run("query aggregate with alias", queryAggregateWithAlias)
 	t.Run("query count at child level", queryCountAtChildLevel)
 	t.Run("query count at child level with filter", queryCountAtChildLevelWithFilter)
 	t.Run("query count at child level with multiple alias", queryCountAtChildLevelWithMultipleAlias)
