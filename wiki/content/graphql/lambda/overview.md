@@ -132,6 +132,8 @@ type Author {
 ```
 
 ```javascript
+import { sortBy } from 'lodash';
+
 /* 
 This function computes the rank of each author based on the reputation of the author relative to other authors.
 */
@@ -145,6 +147,10 @@ self.addMultiParentGraphQLResolvers({
     "Author.rank": rank
 })
 ```
+
+{{% notice "note" %}}
+Webpack is required to use the sample `rank()` function.
+{{% /notice %}}
 
 Another resolver example using a `dql` call:
 
