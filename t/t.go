@@ -202,18 +202,19 @@ func (in instance) publicPort(privatePort uint16) string {
 }
 
 func (in instance) login() error {
-	addr := in.publicPort(9080)
+	addr := in.publicPort(8080)
 	if len(addr) == 0 {
 		return fmt.Errorf("unable to find container: %s", in)
 	}
-	dg, err := testutil.DgraphClientWithGroot("localhost:" + addr)
+
+	_, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: "http://localhost:" + addr + "/admin",
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+
 	if err != nil {
 		return fmt.Errorf("while connecting: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(ctxb, 10*time.Second)
-	defer cancel()
-	if err := dg.Login(ctx, "groot", "password"); err != nil {
-		return fmt.Errorf("while logging in: %v", err)
 	}
 	fmt.Printf("Logged into %s\n", in)
 	return nil
@@ -225,8 +226,12 @@ func (in instance) loginFatal() {
 		if err == nil {
 			return
 		}
-		if strings.Contains(err.Error(), "No Auth Token found") {
+		if strings.Contains(err.Error(), "Invalid X-Dgraph-AuthToken") {
 			// This is caused by Poor Man's auth. Return.
+			return
+		}
+		if strings.Contains(err.Error(), "Client sent an HTTP request to an HTTPS server.") {
+			// This is TLS enabled cluster. We won't be able to login.
 			return
 		}
 		fmt.Printf("Login failed for %s: %v. Retrying...\n", in, err)
