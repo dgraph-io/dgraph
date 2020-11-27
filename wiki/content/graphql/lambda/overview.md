@@ -136,12 +136,8 @@ type Author {
 This function computes the rank of each author based on the reputation of the author relative to other authors.
 */
 async function rank({parents}) {
-    const idRepList = parents.map(function (parent) {
-        return {id: parent.id, rep: parent.reputation}
-    });
     const idRepMap = {};
-    idRepList.sort((a, b) => a.rep > b.rep ? -1 : 1)
-        .forEach((a, i) => idRepMap[a.id] = i + 1)
+    _.sortBy(parents, 'reputation').forEach((parent, i) => idRepMap[parent.id] = parents.length - i)
     return parents.map(p => idRepMap[p.id])
 }
 
