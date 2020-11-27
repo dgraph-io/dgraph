@@ -109,9 +109,12 @@ func TestBackupOfOldRestore(t *testing.T) {
 	time.Sleep(10 * time.Second)
 
 	// TODO: Check the response of the following query
-	_, err = dg.NewTxn().Query(context.Background(), `authors(func: has(Author.name)) { count(uid) } `)
+	resp, err := dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
+	if err != nil {
+		x.Check(err)
+	}
 	//require.True(t, strings.Contains(string(resp.Json), "1"))
-
+	fmt.Printf("Json : %v\n", resp)
 	dirs2 := runBackupInternal(t, false, 6, 2)
 	var recentDir string
 	for _, dir := range dirs2 {
