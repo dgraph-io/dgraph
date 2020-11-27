@@ -50,8 +50,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	ds, err := raftwal.Init(dir, nil)
-	require.NoError(t, err)
+	ds := raftwal.Init(dir)
 	defer ds.Close()
 
 	n := newNode(ds, 1, 1, "")
