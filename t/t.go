@@ -44,7 +44,6 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
-	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
 )
@@ -233,7 +232,8 @@ func (in instance) loginFatal() {
 		fmt.Printf("Login failed for %s: %v. Retrying...\n", in, err)
 		time.Sleep(time.Second)
 	}
-	glog.Fatalf("Unable to login to %s\n", in)
+	fmt.Printf("Unable to login to %s\n", in)
+	os.Exit(1)
 }
 
 func allContainers(prefix string) []types.Container {
