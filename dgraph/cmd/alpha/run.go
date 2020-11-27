@@ -434,6 +434,7 @@ func setupServer(closer *z.Closer) {
 	// Global Epoch is a lockless synchronization mechanism for graphql service.
 	// It's is just an atomic counter used by the graphql subscription to update its state.
 	// It's is used to detect the schema changes and server exit.
+	// It is also reported by /probe/graphql endpoint as the schemaUpdateCounter.
 
 	// Implementation for schema change:
 	// The global epoch is incremented when there is a schema change.
@@ -458,7 +459,8 @@ func setupServer(closer *z.Closer) {
 		}
 		w.WriteHeader(httpStatusCode)
 		w.Header().Set("Content-Type", "application/json")
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s"}`, healthStatus.StatusMsg))))
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
+			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
 	})
 	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
