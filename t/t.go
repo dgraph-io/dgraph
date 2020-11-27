@@ -226,13 +226,12 @@ func (in instance) loginFatal() {
 		if err == nil {
 			return
 		}
-		if strings.Contains(err.Error(), "No Auth Token found") {
+		if strings.Contains(err.Error(), "Invalid X-Dgraph-AuthToken") {
 			// This is caused by Poor Man's auth. Return.
 			return
 		}
 		if strings.Contains(err.Error(), "Client sent an HTTP request to an HTTPS server.") {
 			// This is TLS enabled cluster. We won't be able to login.
-			fmt.Printf("Skipping login becasue TLS is enabled.\n")
 			return
 		}
 		fmt.Printf("Login failed for %s: %v. Retrying...\n", in, err)
