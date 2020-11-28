@@ -120,7 +120,7 @@ const (
 )
 
 func SchemaTest(t *testing.T, expectedDgraphSchema string) {
-	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))

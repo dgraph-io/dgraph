@@ -132,7 +132,7 @@ func GetFullSchemaHTTPResponse(opts SchemaOptions) string {
 // VerifySchema verifies that the full schema generated using user provided predicates and types is
 // same as the response of the schema{} query.
 func VerifySchema(t *testing.T, dg *dgo.Dgraph, opts SchemaOptions) {
-	resp, err := dg.NewTxn().Query(context.Background(), `schema {}`)
+	resp, err := dg.NewReadOnlyTxn().Query(context.Background(), `schema {}`)
 	require.NoError(t, err)
 
 	CompareJSON(t, GetFullSchemaJSON(opts), string(resp.GetJson()))

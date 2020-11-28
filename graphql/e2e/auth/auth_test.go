@@ -1338,7 +1338,7 @@ func TestDeleteAuthRule(t *testing.T) {
 }
 
 func AddDeleteAuthTestData(t *testing.T) {
-	client, err := testutil.DgraphClient(common.AlphagRPC)
+	client, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	data := `[{
 		"uid": "_:usersecret1",
@@ -1352,7 +1352,7 @@ func AddDeleteAuthTestData(t *testing.T) {
 }
 
 func AddDeleteDeepAuthTestData(t *testing.T) {
-	client, err := testutil.DgraphClient(common.AlphagRPC)
+	client, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 
 	userQuery := `{

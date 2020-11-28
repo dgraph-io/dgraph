@@ -41,16 +41,23 @@ import (
 )
 
 var (
-	GraphqlURL      = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/graphql"
-	GraphqlAdminURL = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/admin"
-	AlphagRPC       = testutil.ContainerAddr("alpha1", 9080)
+	Alpha1HTTP = testutil.ContainerAddr("alpha1", 8080)
+	Alpha1gRPC = testutil.ContainerAddr("alpha1", 9080)
 
-	adminDgraphHealthURL           = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/health?all"
-	adminDgraphStateURL            = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/state"
-	graphqlAdminTestAdminSchemaURL = "http://" + testutil.ContainerAddr("alpha1", 8080) + "/admin/schema"
+	GraphqlURL      = "http://" + Alpha1HTTP + "/graphql"
+	GraphqlAdminURL = "http://" + Alpha1HTTP + "/admin"
+
+	dgraphHealthURL = "http://" + Alpha1HTTP + "/health?all"
+	dgraphStateURL  = "http://" + Alpha1HTTP + "/state"
+
+	retryableUpdateGQLSchemaErrors = []string{
+		"errIndexingInProgress",
+		"is already running",
+		"server not ready",
+	}
 )
 
-// GraphQLParams is parameters for the constructing a GraphQL query - that's
+// GraphQLParams is parameters for constructing a GraphQL query - that's
 // http POST with this body, or http GET with this in the query string.
 //
 // https://graphql.org/learn/serving-over-http/ says:
@@ -209,7 +216,7 @@ type ProbeGraphQLResp struct {
 	SchemaUpdateCounter uint64
 }
 
-func ProbeGraphQL(authority string) (*ProbeGraphQLResp, error) {
+func probeGraphQL(authority string) (*ProbeGraphQLResp, error) {
 	resp, err := http.Get("http://" + authority + "/probe/graphql")
 	if err != nil {
 		return nil, err
@@ -230,12 +237,19 @@ func ProbeGraphQL(authority string) (*ProbeGraphQLResp, error) {
 	return &probeResp, nil
 }
 
-func RetryProbeGraphQL(t *testing.T, authority string) *ProbeGraphQLResp {
+func retryProbeGraphQL(authority string) *ProbeGraphQLResp {
 	for i := 0; i < 10; i++ {
-		if resp, err := ProbeGraphQL(authority); err == nil && resp.Healthy {
+		if resp, err := probeGraphQL(authority); err == nil && resp.Healthy {
 			return resp
 		}
 		time.Sleep(time.Second)
+	}
+	return nil
+}
+
+func RetryProbeGraphQL(t *testing.T, authority string) *ProbeGraphQLResp {
+	if resp := retryProbeGraphQL(authority); resp != nil {
+		return resp
 	}
 	t.Fatal("Unable to get healthy response from /probe/graphql after 10 retries")
 	return nil
@@ -256,40 +270,33 @@ func updateGQLSchema(t *testing.T, authority, schema string) *GraphQLResponse {
 	return updateSchemaParams.ExecuteAsPost(t, "http://"+authority+"/admin")
 }
 
-var retryableUpdateGQLSchemaErrors = []string{
-	"errIndexingInProgress",
-	"is already running",
-	"server not ready",
+func containsRetryableUpdateGQLSchemaError(str string) bool {
+	for _, retryableErr := range retryableUpdateGQLSchemaErrors {
+		if strings.Contains(str, retryableErr) {
+			return true
+		}
+	}
+	return false
 }
 
 func RetryUpdateGQLSchema(t *testing.T, authority, schema string) *GraphQLResponse {
 	for {
 		resp := updateGQLSchema(t, authority, schema)
-		if resp.Errors == nil {
-			// return the response if we didn't get any error
+		// return the response if we didn't get any error or get a non-retryable error
+		if resp.Errors == nil || !containsRetryableUpdateGQLSchemaError(resp.Errors.Error()) {
 			return resp
 		}
-		// check if we got a retryable error during schema update
-		foundRetryableErr := false
-		for _, err := range retryableUpdateGQLSchemaErrors {
-			if strings.Contains(resp.Errors.Error(), err) {
-				foundRetryableErr = true
-				break
-			}
-		}
-		// if we get a retryable error, retry schema update
-		if foundRetryableErr {
-			time.Sleep(time.Second)
-			continue
-		}
-		// otherwise we got a response with a non-retryable error, return it
-		return resp
+
+		// otherwise, retry schema update
+		glog.V(2).Infof("Got error while updateGQLSchema: %s. Retrying...\n", resp.Errors.Error())
+		time.Sleep(time.Second)
 	}
 }
 
 type GqlSchema struct {
-	Id     string
-	Schema string
+	Id              string
+	Schema          string
+	GeneratedSchema string
 }
 
 func SafelyUpdateGQLSchema(t *testing.T, authority, schema string) *GqlSchema {
@@ -300,7 +307,7 @@ func SafelyUpdateGQLSchema(t *testing.T, authority, schema string) *GqlSchema {
 	updateResp := RetryUpdateGQLSchema(t, authority, schema)
 	// sanity: we shouldn't get any errors from update
 	RequireNoGQLErrors(t, updateResp)
-	// sanity: update response should reflect a schema
+	// sanity: update response should reflect the new schema
 	var updateResult struct {
 		UpdateGQLSchema struct {
 			GqlSchema GqlSchema
@@ -315,7 +322,7 @@ func SafelyUpdateGQLSchema(t *testing.T, authority, schema string) *GqlSchema {
 	}
 
 	// now, return only after the GraphQL layer has seen the schema update.
-	// This makes sure that one can now make queries as per the new schema.
+	// This makes sure that one can make queries as per the new schema.
 	for i := 0; i < 10; i++ {
 		newProbe := RetryProbeGraphQL(t, authority)
 		if newProbe.SchemaUpdateCounter > oldProbe.SchemaUpdateCounter {
@@ -328,6 +335,58 @@ func SafelyUpdateGQLSchema(t *testing.T, authority, schema string) *GqlSchema {
 	// That indicates something fatal.
 	t.Fatal("GraphQL layer didn't get the updated schema even after 10 retries.")
 	return nil
+}
+
+func SafelyUpdateGqlSchemaOnAlpha1(t *testing.T, schema string) *GqlSchema {
+	return SafelyUpdateGQLSchema(t, Alpha1HTTP, schema)
+}
+
+func updateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) string {
+	resp, err := http.Post("http://"+authority+"/admin/schema", "", strings.NewReader(schema))
+	require.NoError(t, err)
+
+	b, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	return string(b)
+}
+
+func retryUpdateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) string {
+	for {
+		resp := updateGQLSchemaUsingAdminSchemaEndpt(t, authority, schema)
+		// return the response in case of success or a non-retryable error.
+		if !containsRetryableUpdateGQLSchemaError(resp) {
+			return resp
+		}
+
+		// otherwise, retry schema update
+		glog.V(2).Infof("Got error while updateGQLSchemaUsingAdminSchemaEndpt: %s. Retrying...\n",
+			resp)
+		time.Sleep(time.Second)
+	}
+}
+
+func safelyUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) {
+	// first, make an initial probe to get the schema update counter
+	oldProbe := RetryProbeGraphQL(t, authority)
+
+	// update the GraphQL schema and assert success
+	require.JSONEq(t, `{"data":{"code":"Success","message":"Done"}}`,
+		retryUpdateGQLSchemaUsingAdminSchemaEndpt(t, authority, schema))
+
+	// now, return only after the GraphQL layer has seen the schema update.
+	// This makes sure that one can make queries as per the new schema.
+	for i := 0; i < 10; i++ {
+		newProbe := RetryProbeGraphQL(t, authority)
+		if newProbe.SchemaUpdateCounter > oldProbe.SchemaUpdateCounter {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+
+	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
+	// That indicates something fatal.
+	t.Fatal("GraphQL layer didn't get the updated schema even after 10 retries.")
 }
 
 func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.AuthMeta) {
@@ -365,20 +424,40 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 }
 
 func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
+	// first, make an initial probe to get the schema update counter
+	oldProbe := retryProbeGraphQL(Alpha1HTTP)
+
+	// then, add the GraphQL schema
 	for {
 		err := addSchema(GraphqlAdminURL, string(schema))
 		if err == nil {
 			break
 		}
 
-		if strings.Contains(err.Error(), "errIndexingInProgress") ||
-			strings.Contains(err.Error(), "is already running") {
+		if containsRetryableUpdateGQLSchemaError(err.Error()) {
 			glog.V(2).Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
 			time.Sleep(time.Second)
 			continue
 		}
 
+		// panic, if got a non-retryable error
 		x.Panic(err)
+	}
+
+	// now, move forward only after the GraphQL layer has seen the schema update.
+	// This makes sure that one can make queries as per the new schema.
+	i := 0
+	for ; i < 10; i++ {
+		newProbe := retryProbeGraphQL(Alpha1HTTP)
+		if newProbe.SchemaUpdateCounter > oldProbe.SchemaUpdateCounter {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
+	// That indicates something fatal.
+	if i == 10 {
+		x.Panic(errors.New("GraphQL layer didn't get the updated schema even after 10 retries."))
 	}
 
 	err := maybePopulateData(client, data)
@@ -397,7 +476,7 @@ func BootstrapServer(schema, data []byte) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	d, err := grpc.DialContext(ctx, AlphagRPC, grpc.WithInsecure())
+	d, err := grpc.DialContext(ctx, Alpha1gRPC, grpc.WithInsecure())
 	if err != nil {
 		x.Panic(err)
 	}
@@ -999,36 +1078,6 @@ func addSchema(url, schema string) error {
 	}
 
 	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {
-		return errors.New("GraphQL schema mutation failed")
-	}
-
-	return nil
-}
-
-func addSchemaThroughAdminSchemaEndpt(url, schema string) error {
-	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(schema))
-	if err != nil {
-		return errors.Wrap(err, "error running GraphQL query")
-	}
-
-	resp, err := RunGQLRequest(req)
-	if err != nil {
-		return errors.Wrap(err, "error running GraphQL query")
-	}
-
-	var addResult struct {
-		Data struct {
-			Code    string
-			Message string
-		}
-	}
-
-	err = json.Unmarshal(resp, &addResult)
-	if err != nil {
-		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
-	}
-
-	if addResult.Data.Code != "Success" && addResult.Data.Message != "Done" {
 		return errors.New("GraphQL schema mutation failed")
 	}
 

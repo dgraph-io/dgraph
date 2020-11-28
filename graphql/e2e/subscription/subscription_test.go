@@ -76,7 +76,7 @@ const (
 )
 
 func TestSubscription(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 	var subscriptionResp common.GraphQLResponse
@@ -181,7 +181,7 @@ func TestSubscription(t *testing.T) {
 }
 
 func TestSubscriptionAuth(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -314,7 +314,7 @@ func TestSubscriptionAuth(t *testing.T) {
 }
 
 func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -420,7 +420,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 }
 
 func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -494,7 +494,7 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 }
 
 func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndependently(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -659,7 +659,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 }
 
 func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndependently(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -869,7 +869,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 }
 
 func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -946,7 +946,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 }
 
 func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 

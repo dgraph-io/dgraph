@@ -1092,7 +1092,7 @@ func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
 }
 
 func TestCustomFieldsShouldPassBody(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 	schema := `
@@ -2630,7 +2630,7 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 }
 
 func TestCustomDQL(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
