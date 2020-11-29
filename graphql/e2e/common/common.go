@@ -28,11 +28,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/golang/glog"
+	"github.com/prometheus/common/log"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -53,7 +53,8 @@ var (
 	retryableUpdateGQLSchemaErrors = []string{
 		"errIndexingInProgress",
 		"is already running",
-		"server not ready",
+		"retry again, server is not ready", // given by Dgraph while applying the snapshot
+		"Unavailable: Server not ready",    // given by GraphQL layer, during init on admin server
 	}
 )
 
@@ -239,7 +240,8 @@ func probeGraphQL(authority string) (*ProbeGraphQLResp, error) {
 
 func retryProbeGraphQL(authority string) *ProbeGraphQLResp {
 	for i := 0; i < 10; i++ {
-		if resp, err := probeGraphQL(authority); err == nil && resp.Healthy {
+		resp, err := probeGraphQL(authority)
+		if err == nil && resp.Healthy {
 			return resp
 		}
 		time.Sleep(time.Second)
@@ -255,7 +257,7 @@ func RetryProbeGraphQL(t *testing.T, authority string) *ProbeGraphQLResp {
 	return nil
 }
 
-func updateGQLSchema(t *testing.T, authority, schema string) *GraphQLResponse {
+func updateGQLSchema(t *testing.T, authority, schema string, headers http.Header) *GraphQLResponse {
 	updateSchemaParams := &GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -266,6 +268,7 @@ func updateGQLSchema(t *testing.T, authority, schema string) *GraphQLResponse {
 			}
 		}`,
 		Variables: map[string]interface{}{"sch": schema},
+		Headers:   headers,
 	}
 	return updateSchemaParams.ExecuteAsPost(t, "http://"+authority+"/admin")
 }
@@ -279,16 +282,19 @@ func containsRetryableUpdateGQLSchemaError(str string) bool {
 	return false
 }
 
-func RetryUpdateGQLSchema(t *testing.T, authority, schema string) *GraphQLResponse {
+// RetryUpdateGQLSchema tries to update the GraphQL schema and if it receives a retryable error, it
+// keeps retrying until it either receives no error or a non-retryable error. Then it returns the
+// GraphQLResponse it received as a result of calling updateGQLSchema.
+func RetryUpdateGQLSchema(t *testing.T, authority, schema string, headers http.Header) *GraphQLResponse {
 	for {
-		resp := updateGQLSchema(t, authority, schema)
+		resp := updateGQLSchema(t, authority, schema, headers)
 		// return the response if we didn't get any error or get a non-retryable error
 		if resp.Errors == nil || !containsRetryableUpdateGQLSchemaError(resp.Errors.Error()) {
 			return resp
 		}
 
 		// otherwise, retry schema update
-		glog.V(2).Infof("Got error while updateGQLSchema: %s. Retrying...\n", resp.Errors.Error())
+		t.Logf("Got error while updateGQLSchema: %s. Retrying...\n", resp.Errors.Error())
 		time.Sleep(time.Second)
 	}
 }
@@ -299,12 +305,17 @@ type GqlSchema struct {
 	GeneratedSchema string
 }
 
-func SafelyUpdateGQLSchema(t *testing.T, authority, schema string) *GqlSchema {
+// AssertUpdateGQLSchema can be safely used in tests to update the GraphQL schema. Once the control
+// returns from it, one can be sure that the newly applied schema is the one being served by the
+// GraphQL layer, and hence it is safe to make any queries as per the new schema. Note that if the
+// schema being provided is same as the current schema in the GraphQL layer, then this function will
+// fail the test with a fatal error.
+func AssertUpdateGQLSchema(t *testing.T, authority, schema string, headers http.Header) *GqlSchema {
 	// first, make an initial probe to get the schema update counter
 	oldProbe := RetryProbeGraphQL(t, authority)
 
 	// update the GraphQL schema
-	updateResp := RetryUpdateGQLSchema(t, authority, schema)
+	updateResp := RetryUpdateGQLSchema(t, authority, schema, headers)
 	// sanity: we shouldn't get any errors from update
 	RequireNoGQLErrors(t, updateResp)
 	// sanity: update response should reflect the new schema
@@ -337,8 +348,9 @@ func SafelyUpdateGQLSchema(t *testing.T, authority, schema string) *GqlSchema {
 	return nil
 }
 
-func SafelyUpdateGqlSchemaOnAlpha1(t *testing.T, schema string) *GqlSchema {
-	return SafelyUpdateGQLSchema(t, Alpha1HTTP, schema)
+// AssertUpdateGQLSchemaOnAlpha1 is same as AssertUpdateGQLSchema for alpha1 test container.
+func AssertUpdateGQLSchemaOnAlpha1(t *testing.T, schema string) *GqlSchema {
+	return AssertUpdateGQLSchema(t, Alpha1HTTP, schema, nil)
 }
 
 func updateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) string {
@@ -360,13 +372,12 @@ func retryUpdateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema s
 		}
 
 		// otherwise, retry schema update
-		glog.V(2).Infof("Got error while updateGQLSchemaUsingAdminSchemaEndpt: %s. Retrying...\n",
-			resp)
+		t.Logf("Got error while updateGQLSchemaUsingAdminSchemaEndpt: %s. Retrying...\n", resp)
 		time.Sleep(time.Second)
 	}
 }
 
-func safelyUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) {
+func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) {
 	// first, make an initial probe to get the schema update counter
 	oldProbe := RetryProbeGraphQL(t, authority)
 
@@ -435,7 +446,7 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
 		}
 
 		if containsRetryableUpdateGQLSchemaError(err.Error()) {
-			glog.V(2).Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
+			log.Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
 			time.Sleep(time.Second)
 			continue
 		}

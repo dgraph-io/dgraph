@@ -53,7 +53,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.2.1
 	github.com/prometheus/client_golang v0.9.3
-	github.com/prometheus/common v0.4.1 // indirect
+	github.com/prometheus/common v0.4.1
 	github.com/prometheus/procfs v0.0.0-20190517135640-51af30a78b0e // indirect
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cast v1.3.0
