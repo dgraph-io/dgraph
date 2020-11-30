@@ -712,3 +712,45 @@ schemas:
       Hotel.branches1: geo @index(geo) .
       Hotel.branches2: geo .
       Hotel.branches3: geo @index(geo) .
+
+  - name: "Int field with @id Directive"
+    input: |
+      type TestingSchema {
+        id : Int! @id
+        value: String
+      }
+    output: |
+      type TestingSchema {
+        TestingSchema.id
+        TestingSchema.value
+      }
+      TestingSchema.id: int @index(int) @upsert .
+      TestingSchema.value: string .
+
+  - name: "Int64 field with @id Directive"
+    input: |
+      type TestingSchema {
+        id : Int64! @id
+        value: String
+      }
+    output: |
+      type TestingSchema {
+        TestingSchema.id
+        TestingSchema.value
+      }
+      TestingSchema.id: int @index(int) @upsert .
+      TestingSchema.value: string .
+
+  - name: "Float field with @id Directive"
+    input: |
+      type TestingSchema {
+        id : Float! @id
+        value: String
+      }
+    output: |
+      type TestingSchema {
+        TestingSchema.id
+        TestingSchema.value
+      }
+      TestingSchema.id: float @index(float) @upsert .
+      TestingSchema.value: string .
