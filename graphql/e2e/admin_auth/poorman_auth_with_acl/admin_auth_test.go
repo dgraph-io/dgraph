@@ -74,7 +74,7 @@ func TestAdminPoorManWithAcl(t *testing.T) {
 	// setting correct value for both tokens should not give errors
 	accessJwt, _ := grootLogin(t)
 	headers.Set(accessJwtHeader, accessJwt)
-	common.RequireNoGQLErrors(t, common.RetryUpdateGQLSchema(t, common.Alpha1HTTP, schema, headers))
+	common.AssertUpdateGQLSchemaSuccess(t, common.Alpha1HTTP, schema, headers)
 }
 
 func assertAuthTokenError(t *testing.T, resp *common.GraphQLResponse) {

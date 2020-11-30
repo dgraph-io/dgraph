@@ -201,7 +201,7 @@ func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
 }
 
 func addGQLSchema(t *testing.T, client *dgo.Dgraph) {
-	AssertUpdateGQLSchemaOnAlpha1(t, firstGqlSchema)
+	SafelyUpdateGQLSchemaOnAlpha1(t, firstGqlSchema)
 
 	testutil.VerifySchema(t, client, testutil.SchemaOptions{
 		UserPreds:        firstPreds,
@@ -213,7 +213,7 @@ func addGQLSchema(t *testing.T, client *dgo.Dgraph) {
 }
 
 func updateSchema(t *testing.T, client *dgo.Dgraph) {
-	AssertUpdateGQLSchemaOnAlpha1(t, updatedGqlSchema)
+	SafelyUpdateGQLSchemaOnAlpha1(t, updatedGqlSchema)
 
 	testutil.VerifySchema(t, client, testutil.SchemaOptions{
 		UserPreds:        updatedPreds,

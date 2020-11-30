@@ -48,7 +48,7 @@ func TestAdminOnlyPoorManAuth(t *testing.T) {
 
 	// setting correct value for the token should successfully update the schema
 	headers.Set(authTokenHeader, authToken)
-	common.AssertUpdateGQLSchema(t, common.Alpha1HTTP, schema, headers)
+	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, headers)
 }
 
 func assertAuthTokenError(t *testing.T, schema string, headers http.Header) {

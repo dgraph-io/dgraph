@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"testing"
@@ -56,6 +57,12 @@ var (
 		"retry again, server is not ready", // given by Dgraph while applying the snapshot
 		"Unavailable: Server not ready",    // given by GraphQL layer, during init on admin server
 	}
+
+	safelyUpdateGQLSchemaErr = errors.New(
+		"Schema update counter didn't increment, " +
+			"indicating that the GraphQL layer didn't get the updated schema even after 10" +
+			" retries. The most probable cause is the new GraphQL schema is same as the old" +
+			" GraphQL schema.")
 )
 
 // GraphQLParams is parameters for constructing a GraphQL query - that's
@@ -217,6 +224,12 @@ type ProbeGraphQLResp struct {
 	SchemaUpdateCounter uint64
 }
 
+type GqlSchema struct {
+	Id              string
+	Schema          string
+	GeneratedSchema string
+}
+
 func probeGraphQL(authority string) (*ProbeGraphQLResp, error) {
 	resp, err := http.Get("http://" + authority + "/probe/graphql")
 	if err != nil {
@@ -257,6 +270,58 @@ func RetryProbeGraphQL(t *testing.T, authority string) *ProbeGraphQLResp {
 	return nil
 }
 
+// AssertSchemaUpdateCounterIncrement asserts that the schemaUpdateCounter is greater than the
+// oldCounter, indicating that the GraphQL schema has been updated.
+// If it can't make the assertion with enough retries, it fails the test.
+func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCounter uint64) {
+	for i := 0; i < 10; i++ {
+		if RetryProbeGraphQL(t, authority).SchemaUpdateCounter == oldCounter+1 {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+
+	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
+	// That indicates something fatal.
+	t.Fatal(safelyUpdateGQLSchemaErr)
+}
+
+func getGQLSchema(t *testing.T, authority string) *GraphQLResponse {
+	getSchemaParams := &GraphQLParams{
+		Query: `query {
+			getGQLSchema {
+				id
+				schema
+				generatedSchema
+			}
+		}`,
+	}
+	return getSchemaParams.ExecuteAsPost(t, "http://"+authority+"/admin")
+}
+
+// AssertGetGQLSchema queries the current GraphQL schema using getGQLSchema query and asserts that
+// the query doesn't give any errors. It returns a *GqlSchema received in response to the query.
+func AssertGetGQLSchema(t *testing.T, authority string) *GqlSchema {
+	resp := getGQLSchema(t, authority)
+	RequireNoGQLErrors(t, resp)
+
+	var getResult struct {
+		GetGQLSchema *GqlSchema
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &getResult))
+
+	return getResult.GetGQLSchema
+}
+
+// In addition to AssertGetGQLSchema, it also asserts that the response returned from the
+// getGQLSchema query isn't nil and the Id in the response is actually a uid.
+func AssertGetGQLSchemaRequireId(t *testing.T, authority string) *GqlSchema {
+	resp := AssertGetGQLSchema(t, authority)
+	require.NotNil(t, resp)
+	testutil.RequireUid(t, resp.Id)
+	return resp
+}
+
 func updateGQLSchema(t *testing.T, authority, schema string, headers http.Header) *GraphQLResponse {
 	updateSchemaParams := &GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
@@ -264,6 +329,7 @@ func updateGQLSchema(t *testing.T, authority, schema string, headers http.Header
 				gqlSchema {
 					id
 					schema
+					generatedSchema
 				}
 			}
 		}`,
@@ -299,58 +365,65 @@ func RetryUpdateGQLSchema(t *testing.T, authority, schema string, headers http.H
 	}
 }
 
-type GqlSchema struct {
-	Id              string
-	Schema          string
-	GeneratedSchema string
-}
-
-// AssertUpdateGQLSchema can be safely used in tests to update the GraphQL schema. Once the control
-// returns from it, one can be sure that the newly applied schema is the one being served by the
-// GraphQL layer, and hence it is safe to make any queries as per the new schema. Note that if the
-// schema being provided is same as the current schema in the GraphQL layer, then this function will
-// fail the test with a fatal error.
-func AssertUpdateGQLSchema(t *testing.T, authority, schema string, headers http.Header) *GqlSchema {
-	// first, make an initial probe to get the schema update counter
-	oldProbe := RetryProbeGraphQL(t, authority)
-
+// AssertUpdateGQLSchemaSuccess updates the GraphQL schema, asserts that the update succeeded and the
+// returned response is correct. It returns a *GqlSchema it received in the response.
+func AssertUpdateGQLSchemaSuccess(t *testing.T, authority, schema string,
+	headers http.Header) *GqlSchema {
 	// update the GraphQL schema
 	updateResp := RetryUpdateGQLSchema(t, authority, schema, headers)
 	// sanity: we shouldn't get any errors from update
 	RequireNoGQLErrors(t, updateResp)
+
 	// sanity: update response should reflect the new schema
 	var updateResult struct {
 		UpdateGQLSchema struct {
-			GqlSchema GqlSchema
+			GqlSchema *GqlSchema
 		}
 	}
 	if err := json.Unmarshal(updateResp.Data, &updateResult); err != nil {
-		t.Fatalf("failed to unmarshal UpdateGQLSchema response: %s", err.Error())
+		t.Fatalf("failed to unmarshal updateGQLSchema response: %s", err.Error())
 	}
-	// TODO: also verify that the id is uid
-	if updateResult.UpdateGQLSchema.GqlSchema.Schema != schema {
-		t.Fatalf("updateGQLSchema response doesn't reflect the updated schema")
+	require.NotNil(t, updateResult.UpdateGQLSchema.GqlSchema)
+	testutil.RequireUid(t, updateResult.UpdateGQLSchema.GqlSchema.Id)
+	require.Equalf(t, updateResult.UpdateGQLSchema.GqlSchema.Schema, schema,
+		"updateGQLSchema response doesn't reflect the updated schema")
+
+	return updateResult.UpdateGQLSchema.GqlSchema
+}
+
+// AssertUpdateGQLSchemaFailure tries to update the GraphQL schema and asserts that the update
+// failed with all of the given errors.
+func AssertUpdateGQLSchemaFailure(t *testing.T, authority, schema string, headers http.Header,
+	expectedErrors []string) {
+	resp := RetryUpdateGQLSchema(t, authority, schema, headers)
+	require.Equal(t, `{"updateGQLSchema":null}`, string(resp.Data))
+	errString := resp.Errors.Error()
+	for _, err := range expectedErrors {
+		require.Contains(t, errString, err)
 	}
+}
+
+// SafelyUpdateGQLSchema can be safely used in tests to update the GraphQL schema. Once the control
+// returns from it, one can be sure that the newly applied schema is the one being served by the
+// GraphQL layer, and hence it is safe to make any queries as per the new schema. Note that if the
+// schema being provided is same as the current schema in the GraphQL layer, then this function will
+// fail the test with a fatal error.
+func SafelyUpdateGQLSchema(t *testing.T, authority, schema string, headers http.Header) *GqlSchema {
+	// first, make an initial probe to get the schema update counter
+	oldCounter := RetryProbeGraphQL(t, authority).SchemaUpdateCounter
+
+	// update the GraphQL schema
+	gqlSchema := AssertUpdateGQLSchemaSuccess(t, authority, schema, headers)
 
 	// now, return only after the GraphQL layer has seen the schema update.
 	// This makes sure that one can make queries as per the new schema.
-	for i := 0; i < 10; i++ {
-		newProbe := RetryProbeGraphQL(t, authority)
-		if newProbe.SchemaUpdateCounter > oldProbe.SchemaUpdateCounter {
-			return &updateResult.UpdateGQLSchema.GqlSchema
-		}
-		time.Sleep(time.Second)
-	}
-
-	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
-	// That indicates something fatal.
-	t.Fatal("GraphQL layer didn't get the updated schema even after 10 retries.")
-	return nil
+	AssertSchemaUpdateCounterIncrement(t, authority, oldCounter)
+	return gqlSchema
 }
 
-// AssertUpdateGQLSchemaOnAlpha1 is same as AssertUpdateGQLSchema for alpha1 test container.
-func AssertUpdateGQLSchemaOnAlpha1(t *testing.T, schema string) *GqlSchema {
-	return AssertUpdateGQLSchema(t, Alpha1HTTP, schema, nil)
+// SafelyUpdateGQLSchemaOnAlpha1 is SafelyUpdateGQLSchema for alpha1 test container.
+func SafelyUpdateGQLSchemaOnAlpha1(t *testing.T, schema string) *GqlSchema {
+	return SafelyUpdateGQLSchema(t, Alpha1HTTP, schema, nil)
 }
 
 func updateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) string {
@@ -379,7 +452,7 @@ func retryUpdateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema s
 
 func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) {
 	// first, make an initial probe to get the schema update counter
-	oldProbe := RetryProbeGraphQL(t, authority)
+	oldCounter := RetryProbeGraphQL(t, authority).SchemaUpdateCounter
 
 	// update the GraphQL schema and assert success
 	require.JSONEq(t, `{"data":{"code":"Success","message":"Done"}}`,
@@ -387,17 +460,7 @@ func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema 
 
 	// now, return only after the GraphQL layer has seen the schema update.
 	// This makes sure that one can make queries as per the new schema.
-	for i := 0; i < 10; i++ {
-		newProbe := RetryProbeGraphQL(t, authority)
-		if newProbe.SchemaUpdateCounter > oldProbe.SchemaUpdateCounter {
-			return
-		}
-		time.Sleep(time.Second)
-	}
-
-	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
-	// That indicates something fatal.
-	t.Fatal("GraphQL layer didn't get the updated schema even after 10 retries.")
+	AssertSchemaUpdateCounterIncrement(t, authority, oldCounter)
 }
 
 func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.AuthMeta) {
@@ -468,7 +531,7 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
 	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
 	// That indicates something fatal.
 	if i == 10 {
-		x.Panic(errors.New("GraphQL layer didn't get the updated schema even after 10 retries."))
+		x.Panic(safelyUpdateGQLSchemaErr)
 	}
 
 	err := maybePopulateData(client, data)
@@ -920,16 +983,12 @@ func requireUID(t *testing.T, uid string) {
 }
 
 func RequireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
-	require.Nil(t, resp.Errors,
-		"required no GraphQL errors, but received :\n%s", serializeOrError(resp.Errors))
-}
-
-func serializeOrError(toSerialize interface{}) string {
-	byts, err := json.Marshal(toSerialize)
-	if err != nil {
-		return "unable to serialize because " + err.Error()
+	require.NotNil(t, resp)
+	if resp.Errors != nil {
+		t.Logf("required no GraphQL errors, but received: %s\n", resp.Errors.Error())
+		debug.PrintStack()
+		t.FailNow()
 	}
-	return string(byts)
 }
 
 func PopulateGraphQLData(client *dgo.Dgraph, data []byte) error {
