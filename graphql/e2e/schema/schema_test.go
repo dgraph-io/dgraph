@@ -394,7 +394,6 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 
 // TestSchemaHistory checks the admin schema history API working properly or not.
 func TestSchemaHistory(t *testing.T) {
-	t.Skip()
 	// Drop all to remove all the previous schema history.
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
@@ -448,6 +447,9 @@ func TestSchemaHistory(t *testing.T) {
 	require.Equal(t, int(1), len(history.QuerySchemaHistory))
 	require.Equal(t, history.QuerySchemaHistory[0].Schema, schema)
 
+	// this wait is necessary to make sure that the new schema is created atleast 1s after the old
+	// schema, ensuring that the new schema is reported first in the query.
+	time.Sleep(time.Second)
 	// Let's update a new schema and check the history.
 	newSchema := `
 	type B {
