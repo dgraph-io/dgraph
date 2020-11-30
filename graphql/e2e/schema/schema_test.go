@@ -44,11 +44,10 @@ var (
 	groupOnegRPC   = testutil.SockAddr
 
 	groupOneGraphQLServer   = "http://" + groupOneHTTP + "/graphql"
-	groupOneAdminServer     = "http://" + groupOneHTTP + "/admin"
 	groupTwoGraphQLServer   = "http://" + groupTwoHTTP + "/graphql"
-	groupTwoAdminServer     = "http://" + groupTwoHTTP + "/admin"
 	groupThreeGraphQLServer = "http://" + groupThreeHTTP + "/graphql"
-	groupThreeAdminServer   = "http://" + groupThreeHTTP + "/admin"
+
+	groupOneAdminServer = "http://" + groupOneHTTP + "/admin"
 )
 
 func requireNoErrors(t *testing.T, resp *common.GraphQLResponse) {
