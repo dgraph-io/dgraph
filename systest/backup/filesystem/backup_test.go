@@ -93,10 +93,9 @@ func sendRestoreRequest(t *testing.T, location string) int {
 func TestBackupOfOldRestore(t *testing.T) {
 	dirSetup(t)
 	copyOldBackupDir(t)
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
-	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	x.Check(err)
 	ctx := context.Background()
 
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
@@ -105,11 +104,11 @@ func TestBackupOfOldRestore(t *testing.T) {
 	_ = runBackup(t, 3, 1)
 
 	_ = sendRestoreRequest(t, oldBackupDir)
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	x.Check(err)
-	require.Equal(t, "{\"authors\":[{\"count\":1}]}", string(resp.Json))
+	require.JSONEq(t, "{\"authors\":[{\"count\":1}]}", string(resp.Json))
 
 	_ = runBackup(t, 6, 2)
 
@@ -117,11 +116,11 @@ func TestBackupOfOldRestore(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	time.Sleep(2 * time.Second)
 	_ = sendRestoreRequest(t, alphaBackupDir)
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	resp, err = dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	x.Check(err)
-	require.Equal(t, "{\"authors\":[{\"count\":1}]}", string(resp.Json))
+	require.JSONEq(t, "{\"authors\":[{\"count\":1}]}", string(resp.Json))
 }
 
 func TestBackupFilesystem(t *testing.T) {
