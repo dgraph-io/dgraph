@@ -186,10 +186,14 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 					// part without rolling the key first. This part is here for backwards
 					// compatibility. New backups are not affected because there was a change
 					// to roll up lists into a single one.
-					kv := posting.MarshalPostingList(pl, nil)
+					newKv := posting.MarshalPostingList(pl, nil)
 					codec.FreePack(pl.Pack)
-					kv.Key = restoreKey
-					if err := loader.Set(kv); err != nil {
+					newKv.Key = restoreKey
+					// Use the version of the KV before we marshalled the
+					// posting list. The MarshalPostingList function returns KV
+					// with a zero version.
+					newKv.Version = kv.Version
+					if err := loader.Set(newKv); err != nil {
 						return 0, err
 					}
 				} else {
