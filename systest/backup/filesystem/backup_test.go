@@ -24,7 +24,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -41,12 +40,12 @@ import (
 )
 
 var (
-	copyBackupDir  = "./data/backups_copy"
-	restoreDir     = "./data/restore"
-	testDirs       = []string{restoreDir, exporterDir}
-	exporterDir    = "data/exporter"
-	alphaBackupDir = "/data/backups"
-
+	copyBackupDir   = "./data/backups_copy"
+	restoreDir      = "./data/restore"
+	testDirs        = []string{restoreDir, exporterDir}
+	exporterDir     = "data/exporter"
+	alphaBackupDir  = "/data/backups"
+	oldBackupDir    = "/data/to_restore"
 	alphaContainers = []string{
 		"alpha1",
 		"alpha2",
@@ -87,9 +86,11 @@ func sendRestoreRequest(t *testing.T, location string) int {
 	return restoreResp.Restore.RestoreId
 }
 
+// This test takes a backup and then restores an old backup in a cluster incrementally.
+// Next, cleans up the cluster and tries restoring the backups above.
 func TestBackupOfOldRestore(t *testing.T) {
-
 	dirSetup(t)
+	copyOldBackupDir(t)
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -99,46 +100,26 @@ func TestBackupOfOldRestore(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	time.Sleep(2 * time.Second)
 
-	dirs1 := runBackup(t, 3, 1)
+	_ = runBackup(t, 3, 1)
 
-	oldBackupDir := "/data/backups/to_restore"
 	_ = sendRestoreRequest(t, oldBackupDir)
+	time.Sleep(5 * time.Second)
 
-	time.Sleep(10 * time.Second)
-
-	// TODO: Check the response of the following query
 	resp, err := dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
-	if err != nil {
-		x.Check(err)
-	}
-	//require.True(t, strings.Contains(string(resp.Json), "1"))
-	fmt.Printf("Json : %v\n", resp)
-	dirs2 := runBackupInternal(t, false, 6, 2)
-	var recentDir string
-	for _, dir := range dirs2 {
-		if dir == dirs1[0] {
-			continue
-		}
-		recentDir = dir
-	}
-
-	exporter := worker.BackupExporter{}
-	err = exporter.ExportBackup(recentDir, exporterDir, "rdf", nil)
 	x.Check(err)
-	backupExportDirs := x.WalkPathFunc(exporterDir, func(path string, isdir bool) bool {
-		return isdir && strings.HasPrefix(path, exporterDir+"/dgraph.r")
-	})
-	fmt.Printf("Dirs found %v \n", backupExportDirs)
-	foundAuthor := false
-	for i := 1; i < 4; i++ {
-		out, err := exec.CommandContext(context.Background(),
-			"zcat", filepath.Join(backupExportDirs[0], fmt.Sprintf("g0%d.rdf.gz", i))).Output()
-		x.Check(err)
-		if strings.Contains(string(out), "myname") {
-			foundAuthor = true
-		}
-	}
-	require.True(t, foundAuthor)
+	require.Equal(t, "{\"authors\":[{\"count\":1}]}", string(resp.Json))
+
+	_ = runBackup(t, 6, 2)
+
+	// Clean the cluster and try restoring the backups created above.
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	time.Sleep(2 * time.Second)
+	_ = sendRestoreRequest(t, alphaBackupDir)
+	time.Sleep(5 * time.Second)
+
+	resp, err = dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
+	x.Check(err)
+	require.Equal(t, "{\"authors\":[{\"count\":1}]}", string(resp.Json))
 }
 
 func TestBackupFilesystem(t *testing.T) {
@@ -441,7 +422,6 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-
 	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil))
 	require.NoError(t, result.Err)
 
@@ -489,7 +469,6 @@ func dirSetup(t *testing.T) {
 }
 
 func dirCleanup(t *testing.T) {
-
 	if err := os.RemoveAll(restoreDir); err != nil {
 		t.Fatalf("Error removing directory: %s", err.Error())
 	}
@@ -503,6 +482,14 @@ func dirCleanup(t *testing.T) {
 	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
 	if err := testutil.DockerExec(alphaContainers[0], cmd...); err != nil {
 		t.Fatalf("Error executing command in docker container: %s", err.Error())
+	}
+}
+
+func copyOldBackupDir(t *testing.T) {
+	destPath := testutil.DockerPrefix + "_alpha1_1:/data"
+	srchPath := "." + oldBackupDir
+	if err := testutil.DockerCp(srchPath, destPath); err != nil {
+		t.Fatalf("Error copying files from docker container: %s", err.Error())
 	}
 }
 
