@@ -1990,7 +1990,10 @@ func idValidation(sch *ast.Schema,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
-	if field.Type.String() == "String!" {
+	if field.Type.String() == "String!" ||
+		field.Type.String() == "Int!" ||
+		field.Type.String() == "Int64!" ||
+		field.Type.String() == "Float!" {
 		return nil
 	}
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
