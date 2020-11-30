@@ -992,7 +992,7 @@ func rewriteObject(
 	xidEncounteredFirstTime := false
 	if xid != nil {
 		if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
-			switch xid.Type().String() {
+			switch xid.Type().Name() {
 			case "Int!":
 				xidString = strconv.FormatInt(xidVal.(int64), 10)
 			case "Int64!":
