@@ -997,16 +997,18 @@ func rewriteObject(
 			switch xid.Type().Name() {
 			case "Int!":
 				xidString = strconv.FormatInt(xidVal.(int64), 10)
-			case "Int64!":
-				fallthrough
-			case "String!":
-				xidString = xidVal.(string)
 			case "Float!":
 				xidString = strconv.FormatFloat(xidVal.(float64), 'f', -1, 64)
+			case "Int64!":
+				fallthrough
 			default:
-				errFrag := newFragment(nil)
-				errFrag.err = errors.New("encountered an XID that isn't a String or Int or Int64 or Float")
-				return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+				xidString, ok = xidVal.(string)
+				if !ok {
+					errFrag := newFragment(nil)
+					errFrag.err = errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't " +
+							"a String or Int! or Int64! or Float!", xid.Name(), xid.Type().Name()))
+					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+				}
 			}
 			// if the object has an xid, the variable name will be formed from the xidValue in order
 			// to handle duplicate object addition/updation

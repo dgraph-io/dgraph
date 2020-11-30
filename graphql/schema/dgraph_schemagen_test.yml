@@ -715,42 +715,42 @@ schemas:
 
   - name: "Int field with @id Directive"
     input: |
-      type TestingSchema {
+      type T {
         id : Int! @id
         value: String
       }
     output: |
-      type TestingSchema {
-        TestingSchema.id
-        TestingSchema.value
+      type T {
+        T.id
+        T.value
       }
-      TestingSchema.id: int @index(int) @upsert .
-      TestingSchema.value: string .
+      T.id: int @index(int) @upsert .
+      T.value: string .
 
   - name: "Int64 field with @id Directive"
     input: |
-      type TestingSchema {
+      type T {
         id : Int64! @id
         value: String
       }
     output: |
-      type TestingSchema {
-        TestingSchema.id
-        TestingSchema.value
+      type T {
+        T.id
+        T.value
       }
-      TestingSchema.id: int @index(int) @upsert .
-      TestingSchema.value: string .
+      T.id: int @index(int) @upsert .
+      T.value: string .
 
   - name: "Float field with @id Directive"
     input: |
-      type TestingSchema {
+      type T {
         id : Float! @id
         value: String
       }
     output: |
-      type TestingSchema {
-        TestingSchema.id
-        TestingSchema.value
+      type T {
+        T.id
+        T.value
       }
-      TestingSchema.id: float @index(float) @upsert .
-      TestingSchema.value: string .
+      T.id: float @index(float) @upsert .
+      T.value: string .
