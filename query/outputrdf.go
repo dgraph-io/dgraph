@@ -154,11 +154,8 @@ func (b *rdfBuilder) rdfForUIDList(subject uint64, list *pb.List, sg *SubGraph) 
 }
 
 // rdfForValueList returns rdf for the value list.
+// Ignore RDF's for the attirbute `uid`.
 func (b *rdfBuilder) rdfForValueList(subject uint64, valueList *pb.ValueList, attr string) {
-	if attr == "uid" {
-		b.writeRDF(subject, []byte(attr), x.ToHex(subject, true))
-		return
-	}
 	for _, destValue := range valueList.Values {
 		val, err := convertWithBestEffort(destValue, attr)
 		if err != nil {
