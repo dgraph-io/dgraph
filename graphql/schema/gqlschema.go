@@ -1471,7 +1471,18 @@ func getSearchArgs(fld *ast.FieldDefinition) []string {
 		}
 		// If search directive wasn't supplied but id was, then hash is the only index
 		// that we apply.
-		return []string{"hash"}
+		switch fld.Type.Name() {
+		case "String":
+			return []string{"hash"}
+		case "Int64":
+			return []string{"int64"}
+		case "Int":
+			return []string{"int"}
+		case "Float":
+			return []string{"float"}
+		default:
+			return nil
+		}
 	}
 	if len(search.Arguments) == 0 ||
 		len(search.Arguments.ForName(searchArgs).Value.Children) == 0 {
@@ -1715,11 +1726,11 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 		})
 	}
 	if hasXIDField {
-		name := xidTypeFor(defn)
+		name, dtype := xidTypeFor(defn)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 			Name: name,
 			Type: &ast.Type{
-				NamedType: "String",
+				NamedType: dtype,
 				NonNull:   !hasIDField,
 			},
 		})
@@ -2328,13 +2339,13 @@ func idTypeFor(defn *ast.Definition) string {
 	return "ID"
 }
 
-func xidTypeFor(defn *ast.Definition) string {
+func xidTypeFor(defn *ast.Definition) (string, string) {
 	for _, fld := range defn.Fields {
 		if hasIDDirective(fld) {
-			return fld.Name
+			return fld.Name, fld.Type.Name()
 		}
 	}
-	return ""
+	return "", ""
 }
 
 func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List {
