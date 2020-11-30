@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"runtime/debug"
 	"sync"
 	"testing"
 	"time"
@@ -49,14 +48,6 @@ var (
 
 	groupOneAdminServer = "http://" + groupOneHTTP + "/admin"
 )
-
-func requireNoErrors(t *testing.T, resp *common.GraphQLResponse) {
-	if len(resp.Errors) > 0 {
-		t.Logf("Got errors: %s\n", resp.Errors.Error())
-		debug.PrintStack()
-		t.FailNow()
-	}
-}
 
 // This test is supposed to test the graphql schema subscribe feature. Whenever schema is updated
 // in a dgraph alpha for one group, that update should also be propagated to alpha nodes in other
