@@ -158,10 +158,6 @@ func run() {
 	if opt.Version {
 		os.Exit(0)
 	}
-	if opt.BadgerCompressionLevel < 0 {
-		fmt.Printf("Invalid compression level: %d. It should be non-negative",
-			opt.BadgerCompressionLevel)
-	}
 
 	totalCache := int64(Bulk.Conf.GetInt("badger.cache-mb"))
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")

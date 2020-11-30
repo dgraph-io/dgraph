@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
+	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	minio "github.com/minio/minio-go/v6"
@@ -166,7 +167,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil))
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	restored1, err := testutil.GetPredicateValues("./data/restore/p1", "name1", commitTs)

@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -354,7 +355,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	require.NotNil(t, k)
 	require.NoError(t, err)
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, k)
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, k, options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }
