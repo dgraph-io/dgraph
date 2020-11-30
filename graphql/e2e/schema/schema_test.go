@@ -410,7 +410,7 @@ func TestSchemaHistory(t *testing.T) {
 		  }`,
 	}
 	getResult := get.ExecuteAsPost(t, groupOneAdminServer)
-	require.Nil(t, getResult.Errors)
+	common.RequireNoGQLErrors(t, getResult)
 
 	require.JSONEq(t, `{
 		"querySchemaHistory": []

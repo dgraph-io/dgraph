@@ -44,7 +44,7 @@ func getAllProjects(t *testing.T, users, roles []string) []string {
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 			require.NoError(t, err)
@@ -90,7 +90,7 @@ func getAllColumns(t *testing.T, users, roles []string) ([]*Column, []string) {
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
 			require.NoError(t, err)
@@ -140,7 +140,7 @@ func getAllQuestions(t *testing.T, users []string, answers []bool) ([]*Question,
 		for _, ans := range answers {
 			getParams.Headers = common.GetJWTForInterfaceAuth(t, user, "", ans, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
 			require.NoError(t, err)
@@ -210,7 +210,7 @@ func getAllFbPosts(t *testing.T, users []string, roles []string) ([]*FbPost, []s
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
 			require.NoError(t, err)
@@ -258,7 +258,7 @@ func getAllAnswers(t *testing.T, users []string) ([]*Answer, []string) {
 	for _, user := range users {
 		getParams.Headers = common.GetJWT(t, user, "", metaInfo)
 		gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal(gqlResponse.Data, &result)
 		require.NoError(t, err)
@@ -306,7 +306,7 @@ func getAllIssues(t *testing.T, users, roles []string) ([]*Issue, []string) {
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
 			require.NoError(t, err)
@@ -355,7 +355,7 @@ func getAllMovies(t *testing.T, users, roles []string) ([]*Movie, []string) {
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
 			require.NoError(t, err)
@@ -401,7 +401,7 @@ func getAllLogs(t *testing.T, users, roles []string) ([]*Log, []string) {
 		for _, role := range roles {
 			getParams.Headers = common.GetJWT(t, user, role, metaInfo)
 			gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			err := json.Unmarshal(gqlResponse.Data, &result)
 			require.NoError(t, err)
@@ -468,7 +468,7 @@ func TestAuth_UpdateOnInterfaceWithAuthRules(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
@@ -515,7 +515,7 @@ func TestAuth_UpdateOnTypeWithGraphFilterOnInterface(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
@@ -561,7 +561,7 @@ func TestAuth_UpdateOnTypeWithRBACAuthRuleOnInterface(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
@@ -604,7 +604,7 @@ func TestUpdateOrRBACFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
@@ -646,7 +646,7 @@ func TestUpdateRootFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -679,7 +679,7 @@ func TestUpdateRBACFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -722,7 +722,7 @@ func TestUpdateAndRBACFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -761,7 +761,7 @@ func TestUpdateNestedFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})

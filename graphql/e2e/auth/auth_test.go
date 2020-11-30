@@ -183,7 +183,7 @@ func (tasks Tasks) add(t *testing.T) {
 		Variables: map[string]interface{}{"tasks": tasks},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (r *Region) add(t *testing.T, user, role string) {
@@ -199,7 +199,7 @@ func (r *Region) add(t *testing.T, user, role string) {
 		Variables: map[string]interface{}{"region": r},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (r *Region) delete(t *testing.T, user, role string) {
@@ -215,7 +215,7 @@ func (r *Region) delete(t *testing.T, user, role string) {
 		Variables: map[string]interface{}{"name": r.Name},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func TestOptimizedNestedAuthQuery(t *testing.T) {
@@ -239,7 +239,7 @@ func TestOptimizedNestedAuthQuery(t *testing.T) {
 	}
 
 	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 	beforeTouchUids := gqlResponse.Extensions["touched_uids"]
 	beforeResult := gqlResponse.Data
 
@@ -257,7 +257,7 @@ func TestOptimizedNestedAuthQuery(t *testing.T) {
 	}
 
 	gqlResponse = getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	afterTouchUids := gqlResponse.Extensions["touched_uids"]
 	require.Equal(t, beforeTouchUids, afterTouchUids)
@@ -283,7 +283,7 @@ func (s Student) deleteByEmail(t *testing.T) {
 		}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (s Student) add(t *testing.T) {
@@ -325,7 +325,7 @@ func TestAddMutationWithXid(t *testing.T) {
 
 	// Add the tweet for the first time.
 	gqlResponse := addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	// Re-adding the tweet should fail.
 	gqlResponse = addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
@@ -487,7 +487,7 @@ func TestAuthOnInterfaces(t *testing.T) {
 				Query:   tcase.query,
 			}
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
@@ -566,7 +566,7 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 			require.Contains(t, gqlResponse.Errors[0].Error(),
 				"couldn't rewrite query queryProject because unable to parse jwt token")
 		} else {
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 		}
 
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
@@ -675,7 +675,7 @@ func TestOrderAndOffset(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -693,7 +693,7 @@ func TestOrderAndOffset(t *testing.T) {
 		Variables: map[string]interface{}{"tasks": tasks},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	// Clean up `TaskOccurrence`
 	getParams = &common.GraphQLParams{
@@ -707,7 +707,7 @@ func TestOrderAndOffset(t *testing.T) {
 		Variables: map[string]interface{}{"tasks": tasks},
 	}
 	gqlResponse = getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func TestOrRBACFilter(t *testing.T) {
@@ -762,7 +762,7 @@ func TestOrRBACFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -790,7 +790,7 @@ func getColID(t *testing.T, tcase TestCase) string {
 	}
 
 	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	err := json.Unmarshal(gqlResponse.Data, &result)
 	require.Nil(t, err)
@@ -842,7 +842,7 @@ func TestRootGetFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -869,7 +869,7 @@ func getProjectID(t *testing.T, tcase TestCase) string {
 	}
 
 	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	err := json.Unmarshal(gqlResponse.Data, &result)
 	require.Nil(t, err)
@@ -924,7 +924,7 @@ func TestRootGetDeepFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -969,7 +969,7 @@ func TestDeepFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
@@ -1004,7 +1004,7 @@ func TestRootFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -1040,7 +1040,7 @@ func TestRootCountQuery(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -1072,7 +1072,7 @@ func TestDeepRBACValue(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -1101,7 +1101,7 @@ func TestRBACFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -1130,7 +1130,7 @@ func TestRBACFilterWithCountQuery(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -1167,7 +1167,7 @@ func TestAndRBACFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -1279,7 +1279,7 @@ func TestNestedFilter(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -1329,7 +1329,7 @@ func TestDeleteAuthRule(t *testing.T) {
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-		require.Nilf(t, gqlResponse.Errors, "%+v", gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)
@@ -1439,7 +1439,7 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)
@@ -1501,7 +1501,7 @@ func TestDeepRBACValueCascade(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -1570,7 +1570,7 @@ func TestChildCountQueryWithDeepRBAC(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -1611,7 +1611,7 @@ func TestChildCountQueryWithOtherFields(t *testing.T) {
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -1649,7 +1649,7 @@ func deleteLog(t *testing.T, logID string) {
 		Headers:   common.GetJWT(t, "SomeUser", "ADMIN", metaInfo),
 	}
 	gqlResponse := deleteLogParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func deleteUser(t *testing.T, username string) {
@@ -1665,7 +1665,7 @@ func deleteUser(t *testing.T, username string) {
 		Variables: map[string]interface{}{"username": username},
 	}
 	gqlResponse := deleteUserParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func TestAuthWithSecretDirective(t *testing.T) {

@@ -478,7 +478,7 @@ func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.Auth
 		}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) {
@@ -494,7 +494,7 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 		Variables: map[string]interface{}{"ids": []string{us.Id}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	RequireNoGQLErrors(t, gqlResponse)
 }
 
 func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
@@ -826,7 +826,7 @@ func getQueryEmptyVariable(t *testing.T) {
 	req.URL.RawQuery = q.Encode()
 
 	res := queryCountry.Execute(t, req)
-	require.Nil(t, res.Errors)
+	RequireNoGQLErrors(t, res)
 }
 
 // Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet

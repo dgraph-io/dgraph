@@ -39,7 +39,7 @@ func (p *Project) delete(t *testing.T, user, role string) {
 		Variables: map[string]interface{}{"ids": []string{p.ProjID}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (c *Column) delete(t *testing.T, user, role string) {
@@ -55,7 +55,7 @@ func (c *Column) delete(t *testing.T, user, role string) {
 		Variables: map[string]interface{}{"colids": []string{c.ColID}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (i *Issue) delete(t *testing.T, user, role string) {
@@ -71,7 +71,7 @@ func (i *Issue) delete(t *testing.T, user, role string) {
 		Variables: map[string]interface{}{"ids": []string{i.Id}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (l *Log) delete(t *testing.T, user, role string) {
@@ -87,7 +87,7 @@ func (l *Log) delete(t *testing.T, user, role string) {
 		Variables: map[string]interface{}{"ids": []string{l.Id}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (m *Movie) delete(t *testing.T, user, role string) {
@@ -103,7 +103,7 @@ func (m *Movie) delete(t *testing.T, user, role string) {
 		Variables: map[string]interface{}{"ids": []string{m.Id}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (a *Author) delete(t *testing.T) {
@@ -118,7 +118,7 @@ func (a *Author) delete(t *testing.T) {
 		Variables: map[string]interface{}{"ids": []string{a.Id}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (q *Question) delete(t *testing.T, user string) {
@@ -134,7 +134,7 @@ func (q *Question) delete(t *testing.T, user string) {
 		Variables: map[string]interface{}{"ids": []string{q.Id}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (f *FbPost) delete(t *testing.T, user, role string) {
@@ -150,7 +150,7 @@ func (f *FbPost) delete(t *testing.T, user, role string) {
 		Variables: map[string]interface{}{"ids": []string{f.Id}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func TestAuth_AddOnTypeWithRBACRuleOnInterface(t *testing.T) {
@@ -237,7 +237,7 @@ func TestAuth_AddOnTypeWithRBACRuleOnInterface(t *testing.T) {
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -335,7 +335,7 @@ func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -448,7 +448,7 @@ func TestAddDeepFilter(t *testing.T) {
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -551,7 +551,7 @@ func TestAddOrRBACFilter(t *testing.T) {
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -630,7 +630,7 @@ func TestAddAndRBACFilterMultiple(t *testing.T) {
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -705,7 +705,7 @@ func TestAddAndRBACFilter(t *testing.T) {
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -809,7 +809,7 @@ func TestAddComplexFilter(t *testing.T) {
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -877,7 +877,7 @@ func TestAddRBACFilter(t *testing.T) {
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -941,7 +941,7 @@ func TestAddGQLOnly(t *testing.T) {
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)

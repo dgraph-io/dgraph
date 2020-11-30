@@ -101,7 +101,7 @@ func TestCustomGetQuery(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%+v", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected := `{"myFavoriteMovies":[{"id":"0x3","name":"Star Wars","director":[{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":[{"id":"0x6","name":"J.J. Abrams"}]}]}`
 	require.JSONEq(t, expected, string(result.Data))
@@ -133,7 +133,7 @@ func TestCustomPostQuery(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected := `{"myFavoriteMoviesPost":[{"id":"0x3","name":"Star Wars","director":[{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":[{"id":"0x6","name":"J.J. Abrams"}]}]}`
 	require.JSONEq(t, expected, string(result.Data))
@@ -166,7 +166,7 @@ func TestCustomPostQueryWithBody(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected := `{"myFavoriteMoviesPost":[{"id":"0x3","name":"Star Wars","director":
     [{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":
@@ -207,7 +207,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%s", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
 }
@@ -245,7 +245,7 @@ func TestCustomNameForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%s", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
 }
@@ -402,7 +402,7 @@ func addPerson(t *testing.T) *user {
 	}
 
 	result := addTeacherParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	var res struct {
 		AddPerson struct {
@@ -1018,7 +1018,7 @@ func TestCustomFieldsShouldForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%+v", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 }
 
 func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
@@ -1058,7 +1058,7 @@ func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%+v", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 }
 
 func TestCustomFieldsShouldPassBody(t *testing.T) {
@@ -1113,7 +1113,7 @@ func TestCustomFieldsShouldPassBody(t *testing.T) {
 	}
 
 	result = params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%+v", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 }
 
 func TestCustomFieldsShouldBeResolved(t *testing.T) {
