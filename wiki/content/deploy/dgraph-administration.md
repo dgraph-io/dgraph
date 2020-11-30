@@ -112,7 +112,7 @@ To fully secure alter operations in the cluster, the auth token must be set for 
 
 ## Exporting Database
 
-An export of all nodes is started by locally executing the following GraphQL mutation on `/admin` endpoint of an Alpha node (e.g. `localhost:8080/admin`) using any compatible client like Insomnia, GraphQL Playground or GraphiQL.
+An export of all nodes is started by locally executing the following GraphQL mutation on the `/admin` endpoint of an Alpha node (e.g. `localhost:8080/admin`) using any compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
 ```graphql
 mutation {
