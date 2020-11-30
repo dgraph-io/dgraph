@@ -64,6 +64,8 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice) LoadR
 			// The badger DB should be opened only after creating the backup
 			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+				WithCompression(options.ZSTD).
+				WithZSTDCompressionLevel(3).
 				WithSyncWrites(false).
 				WithTableLoadingMode(options.MemoryMap).
 				WithValueThreshold(1 << 10).
