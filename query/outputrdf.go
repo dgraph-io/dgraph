@@ -75,6 +75,13 @@ func (b *rdfBuilder) castToRDF(sg *SubGraph) error {
 
 // rdfForSubgraph generates RDF and appends to the output parameter.
 func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
+	// handle the case of recurse queries
+	for _, ch := range sg.Children {
+		if len(ch.uidMatrix) == 0 {
+			return nil
+		}
+	}
+
 	for i, uid := range sg.SrcUIDs.Uids {
 		if sg.Params.IgnoreResult {
 			// Skip ignored values.
