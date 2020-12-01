@@ -105,8 +105,8 @@ Using the `--xidmap` flag is recommended if you have full control over your iden
 {{% /notice %}}
 
 `--ludicrous_mode` (default: `false`): This option allows the user to notify Live Loader that the Alpha server is running in ludicrous mode.
-Live Loader, by default, does smart batching to ingest data faster (taking more time and memory).
-This behavior is disabled in ludicrous mode, increasing speed and available memory. 
+Live Loader, by default, does smart batching of data to avoid transaction conflicts, which improves the performance in normal mode.
+Since there's no conflict detection in ludicrous mode, smart batching is disabled to speed up the data ingestion further.
 
 {{% notice "note" %}}
 The `--ludicrous_mode` option should only be used if Dgraph is also running in [ludicrous mode]({{< relref "ludicrous-mode.md" >}}).
