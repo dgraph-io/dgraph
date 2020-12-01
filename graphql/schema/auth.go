@@ -18,6 +18,7 @@ package schema
 
 import (
 	"encoding/json"
+	"log"
 	"regexp"
 	"strings"
 
@@ -68,7 +69,7 @@ const (
 	Negative
 )
 
-func evaluateFromArray(arr []interface{}, val interface{}) RuleResult {
+func checkIfExistInArray(arr []interface{}, val interface{}) RuleResult {
 	for _, v := range arr {
 		if v == val {
 			return Positive
@@ -77,14 +78,14 @@ func evaluateFromArray(arr []interface{}, val interface{}) RuleResult {
 	return Negative
 }
 
-func evaluateFromValue(val1 interface{}, val2 interface{}) RuleResult {
+func checkIfEqual(val1 interface{}, val2 interface{}) RuleResult {
 	if val1 == val2 {
 		return Positive
 	}
 	return Negative
 }
 
-func evaluateRegexFromArray(arr []interface{}, regex *regexp.Regexp) RuleResult {
+func checkIfRegexMatchExistInArray(regex *regexp.Regexp, arr []interface{}) RuleResult {
 	for _, v := range arr {
 		strv, ok := v.(string)
 		if !ok {
@@ -97,7 +98,7 @@ func evaluateRegexFromArray(arr []interface{}, regex *regexp.Regexp) RuleResult 
 	return Negative
 }
 
-func evaluateRegexFromValue(val1 interface{}, regex *regexp.Regexp) RuleResult {
+func checkIfRegexMatch(regex *regexp.Regexp, val1 interface{}) RuleResult {
 	strv, ok := val1.(string)
 	if !ok {
 		return Negative
@@ -113,33 +114,34 @@ func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 	case "eq":
 		// if eq, auth rule value will be matched completely
 		tokenValues, err := cast.ToSliceE(av[rq.Variable])
-		if err == nil {
-			return evaluateFromArray(tokenValues, rq.Operand)
+		if err != nil {
+			// this means value for variable in token in not an array
+			return checkIfEqual(av[rq.Variable], rq.Operand)
 		}
-
-		return evaluateFromValue(av[rq.Variable], rq.Operand)
+		return checkIfExistInArray(tokenValues, rq.Operand)
 	case "regexp":
 		// if regexp, auth rule value should always be string and so as token values
 		tokenValues, err := cast.ToSliceE(av[rq.Variable])
-		if err == nil {
-			return evaluateRegexFromArray(tokenValues, rq.compiledRegex)
+		if err != nil {
+			// this means value for variable in token in not an array
+			return checkIfRegexMatch(rq.compiledRegex, av[rq.Variable])
 		}
+		return checkIfRegexMatchExistInArray(rq.compiledRegex, tokenValues)
 
-		return evaluateRegexFromValue(av[rq.Variable], rq.compiledRegex)
 	case "in":
 		// if in, auth rule will only have array as the value
 		ruleOperand := cast.ToSlice(rq.Operand)
 		tokenValues, err := cast.ToSliceE(av[rq.Variable])
-		if err == nil {
-			for _, t := range tokenValues {
-				if evaluateFromArray(ruleOperand, t) == Positive {
-					return Positive
-				}
-			}
-			return Negative
+		if err != nil {
+			// this means value for variable in token in not an array
+			return checkIfExistInArray(ruleOperand, av[rq.Variable])
 		}
 
-		return evaluateFromArray(ruleOperand, av[rq.Variable])
+		for _, t := range tokenValues {
+			if checkIfExistInArray(ruleOperand, t) == Positive {
+				return Positive
+			}
+		}
 	}
 	return Negative
 }
@@ -468,6 +470,7 @@ func rbacValidateRule(typ *ast.Definition, rule string) (*RBACQuery, error) {
 		Operand:  op,
 	}
 
+	log.Print("operand is", op)
 	if !strings.HasPrefix(query.Variable, "$") {
 		return nil, gqlerror.Errorf("Type %s: @auth: `%s` is not a valid GraphQL variable.",
 			typ.Name, query.Variable)
@@ -489,19 +492,23 @@ func rbacValidateRule(typ *ast.Definition, rule string) (*RBACQuery, error) {
 }
 
 func validateRBACOperators(typ *ast.Definition, query RBACQuery) error {
-	var ok = true
+	var ok = false
 	switch query.Operator {
+	case "eq": // only check we could have is for primitive but not necessary we will have equal match later
+		ok = true
 	case "regexp":
 		_, ok = query.Operand.(string)
 	case "in":
 		// auth rule value should be of array type
 		_, ok = query.Operand.([]interface{})
-	}
-	if !ok {
+	default:
 		return gqlerror.Errorf("Type %s: @auth: `%s` operator is not supported in "+
 			"this rule.", typ.Name, query.Operator)
 	}
-
+	if !ok {
+		return gqlerror.Errorf("Type %s: @auth: `%s` operator has invalid value in "+
+			"this rule.", typ.Name, query.Operator)
+	}
 	return nil
 }
 
