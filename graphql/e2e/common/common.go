@@ -908,13 +908,13 @@ func addSchemaThroughAdminSchemaEndpt(url, schema string) error {
 	return nil
 }
 
-func GetJWT(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) http.Header {
+func GetJWT(t *testing.T, user, role interface{}, metaInfo *testutil.AuthMeta) http.Header {
 	metaInfo.AuthVars = map[string]interface{}{}
-	if user != "" {
+	if user != nil {
 		metaInfo.AuthVars["USER"] = user
 	}
 
-	if role != "" {
+	if role != nil {
 		metaInfo.AuthVars["ROLE"] = role
 	}
 
