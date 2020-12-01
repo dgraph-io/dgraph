@@ -44,8 +44,7 @@ import (
 var (
 	copyBackupDir   = "./data/backups_copy"
 	restoreDir      = "./data/restore"
-	testDirs        = []string{restoreDir, exporterDir}
-	exporterDir     = "data/exporter"
+	testDirs        = []string{restoreDir}
 	alphaBackupDir  = "/data/backups"
 	oldBackupDir    = "/data/to_restore"
 	alphaContainers = []string{
@@ -96,10 +95,9 @@ func TestBackupOfOldRestore(t *testing.T) {
 	copyOldBackupDir(t)
 
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
-	x.Check(err)
-	ctx := context.Background()
+	require.NoError(t, err)
 
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	testutil.DropAll(t, dg)
 	time.Sleep(2 * time.Second)
 
 	_ = runBackup(t, 3, 1)
@@ -108,19 +106,19 @@ func TestBackupOfOldRestore(t *testing.T) {
 	testutil.WaitForRestore(t, restoreId, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
-	x.Check(err)
+	require.NoError(t, err)
 	require.JSONEq(t, "{\"authors\":[{\"count\":1}]}", string(resp.Json))
 
 	_ = runBackup(t, 6, 2)
 
 	// Clean the cluster and try restoring the backups created above.
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	testutil.DropAll(t, dg)
 	time.Sleep(2 * time.Second)
 	restoreId = sendRestoreRequest(t, alphaBackupDir)
 	testutil.WaitForRestore(t, restoreId, dg)
 
 	resp, err = dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
-	x.Check(err)
+	require.NoError(t, err)
 	require.JSONEq(t, "{\"authors\":[{\"count\":1}]}", string(resp.Json))
 }
 
@@ -476,9 +474,7 @@ func dirCleanup(t *testing.T) {
 	if err := os.RemoveAll(restoreDir); err != nil {
 		t.Fatalf("Error removing directory: %s", err.Error())
 	}
-	if err := os.RemoveAll(exporterDir); err != nil {
-		t.Fatalf("Error removing directory: %s", err.Error())
-	}
+
 	if err := os.RemoveAll(copyBackupDir); err != nil {
 		t.Fatalf("Error removing directory: %s", err.Error())
 	}
