@@ -1165,12 +1165,14 @@
       }
     }
 
-- name: "Count at child with Auth deep filter and field filter"
+- name: "Aggregate Fields at child with Auth deep filter and field filter"
   gqlquery: |
     query {
       queryUser {
         ticketsAggregate(filter: { title: { anyofterms: "graphql" } }) {
           count
+          titleMin
+          titleMax
         }
       }
     }
@@ -1179,7 +1181,13 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
+        ticketsAggregate : User.tickets @filter(uid(Ticket3)) {
+          ticketsAggregate_titleVar as Ticket.title
+          dgraph.uid : uid
+        }
         count_ticketsAggregate : count(User.tickets) @filter(uid(Ticket3))
+        titleMin_ticketsAggregate : min(val(ticketsAggregate_titleVar))
+        titleMax_ticketsAggregate : max(val(ticketsAggregate_titleVar))
         dgraph.uid : uid
       }
       UserRoot as var(func: uid(User4))
@@ -1203,15 +1211,16 @@
       }
     }
 
-- name: "Multiple Count queries at child level and other queries with Auth deep filter"
+- name: "Multiple Aggregate queries at child level and other queries with Auth deep filter"
   gqlquery: |
     query {
       queryUser {
         ticketsAggregate(filter: { title: { anyofterms: "graphql" } }) {
-          count
+          titleMin
         }
         issuesAggregate {
           count
+          msgMax
         }
         tickets(filter: { title: { anyofterms: "graphql2" } }) {
           title
@@ -1224,8 +1233,17 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        count_ticketsAggregate : count(User.tickets) @filter(uid(Ticket3))
+        ticketsAggregate : User.tickets @filter(uid(Ticket3)) {
+          ticketsAggregate_titleVar as Ticket.title
+          dgraph.uid : uid
+        }
+        titleMin_ticketsAggregate : min(val(ticketsAggregate_titleVar))
+        issuesAggregate : User.issues @filter(uid(Issue6)) {
+          issuesAggregate_msgVar as Issue.msg
+          dgraph.uid : uid
+        }
         count_issuesAggregate : count(User.issues) @filter(uid(Issue6))
+        msgMax_issuesAggregate : max(val(issuesAggregate_msgVar))
         tickets : User.tickets @filter(uid(Ticket9)) {
           title : Ticket.title
           dgraph.uid : uid
@@ -1278,12 +1296,13 @@
       }
     }
 
-- name: "count at child with RBAC rules true"
+- name: "Aggregate at child with RBAC rules true"
   gqlquery: |
     query {
       queryUser {
         issuesAggregate {
           count
+          msgMin
         }
       }
     }
@@ -1293,7 +1312,12 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
+        issuesAggregate : User.issues @filter(uid(Issue3)) {
+          issuesAggregate_msgVar as Issue.msg
+          dgraph.uid : uid
+        }
         count_issuesAggregate : count(User.issues) @filter(uid(Issue3))
+        msgMin_issuesAggregate : min(val(issuesAggregate_msgVar))
         dgraph.uid : uid
       }
       UserRoot as var(func: uid(User4))
@@ -1308,13 +1332,14 @@
       }
     }
 
-- name: "count with Deep RBAC rules false"
+- name: "Aggregate Fields with Deep RBAC rules false"
   gqlquery: |
     query {
       queryUser {
         username
         issuesAggregate {
           count
+          msgMin
         }
       }
     }

@@ -1393,9 +1393,9 @@ func completeObject(
 		if f.IsAggregateField() {
 			aggregateVal := make(map[string]interface{})
 			for _, aggregateField := range f.SelectionSet() {
-				if aggregateField.DgraphAlias() == "count" {
-					aggregateVal["count"] = res["count_"+generateUniqueDgraphAlias(f, fieldSeenCount)]
-				}
+				fieldAlias := generateUniqueDgraphAlias(f, fieldSeenCount)
+				aggregateFieldName := aggregateField.Name()
+				aggregateVal[aggregateFieldName] = res[aggregateFieldName+"_"+fieldAlias]
 			}
 			val = aggregateVal
 		}
