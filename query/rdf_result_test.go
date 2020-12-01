@@ -126,6 +126,23 @@ func TestRDFRecurse(t *testing.T) {
 <0x19> <name> "Daryl Dixon" .
 `)
 }
+
+func TestRDFIgnoreUid(t *testing.T) {
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Rick Daryl")) {
+			uid
+			name
+		}
+	}`
+	rdf, err := processQueryRDF(context.Background(), t, query)
+	require.NoError(t, err)
+	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
+<0x17> <name> "Rick Grimes" .
+<0x19> <name> "Daryl Dixon" .
+`)
+}
+
 func TestRDFCheckPwd(t *testing.T) {
 	query := `
     {
