@@ -68,6 +68,33 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 	}
 }
 
+func idDirectiveWithInt(t *testing.T) {
+	query := &GraphQLParams{
+		Query: ``,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, response.Errors)
+}
+
+func idDirectiveWithInt64(t *testing.T) {
+	query := &GraphQLParams{
+		Query: ``,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, response.Errors)
+}
+
+func idDirectiveWithFloat(t *testing.T) {
+	query := &GraphQLParams{
+		Query: ``,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, response.Errors)
+}
+
 func touchedUidsHeader(t *testing.T) {
 	query := &GraphQLParams{
 		Query: `query {
