@@ -84,7 +84,6 @@ func WaitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)
 		sbuf := string(buf)
-		println(sbuf)
 		if strings.Contains(sbuf, "OK") {
 			restoreDone = true
 			break
