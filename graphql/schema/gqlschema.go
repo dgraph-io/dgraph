@@ -1659,8 +1659,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 				Name: fld.Name + "Max",
 				Type: aggregateFieldType,
 			}
-			aggregateFields = append(aggregateFields, minField)
-			aggregateFields = append(aggregateFields, maxField)
+			aggregateFields = append(aggregateFields, minField, maxField)
 		}
 
 		// Adds scoreSum and scoreAvg field for a field of name score.
@@ -1678,8 +1677,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 					NonNull:   false,
 				},
 			}
-			aggregateFields = append(aggregateFields, sumField)
-			aggregateFields = append(aggregateFields, avgField)
+			aggregateFields = append(aggregateFields, sumField, avgField)
 		}
 	}
 

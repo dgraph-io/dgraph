@@ -1594,16 +1594,42 @@ func TestMain(m *testing.M) {
 	os.Exit(0)
 }
 
-func TestChildCountQueryWithDeepRBAC(t *testing.T) {
+func TestChildAggregateQueryWithDeepRBAC(t *testing.T) {
 	testCases := []TestCase{
 		{
-			user:   "user1",
-			role:   "USER",
-			result: `{"queryUser": [{"username": "user1", "issuesAggregate":{"count": null}}]}`},
+			user: "user1",
+			role: "USER",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username": "user1",
+									"issuesAggregate":
+										{
+											"count": null,
+											"msgMax": null,
+											"msgMin": null
+										}
+								}
+							]
+					}`},
 		{
-			user:   "user1",
-			role:   "ADMIN",
-			result: `{"queryUser":[{"username":"user1","issuesAggregate":{"count":1}}]}`},
+			user: "user1",
+			role: "ADMIN",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username":"user1",
+									"issuesAggregate":
+										{
+											"count":1,
+											"msgMax": "Issue1",
+											"msgMin": "Issue1"
+										}
+								}
+							]
+					}`},
 	}
 
 	query := `
@@ -1612,6 +1638,8 @@ func TestChildCountQueryWithDeepRBAC(t *testing.T) {
 		username
 		issuesAggregate {
 		  count
+		  msgMax
+		  msgMin
 		}
 	  }
 	}
@@ -1632,16 +1660,49 @@ func TestChildCountQueryWithDeepRBAC(t *testing.T) {
 	}
 }
 
-func TestChildCountQueryWithOtherFields(t *testing.T) {
+func TestChildAggregateQueryWithOtherFields(t *testing.T) {
 	testCases := []TestCase{
 		{
-			user:   "user1",
-			role:   "USER",
-			result: `{"queryUser": [{"username": "user1","issues":[],"issuesAggregate":{"count": null}}]}`},
+			user: "user1",
+			role: "USER",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username": "user1",
+									"issues":[],
+									"issuesAggregate":
+										{
+											"count": null,
+											"msgMin": null,
+											"msgMax": null
+										}
+								}
+							]
+					}`},
 		{
-			user:   "user1",
-			role:   "ADMIN",
-			result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}],"issuesAggregate":{"count":1}}]}`},
+			user: "user1",
+			role: "ADMIN",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username":"user1",
+									"issues":
+										[
+											{
+												"msg":"Issue1"
+											}
+										],
+									"issuesAggregate":
+										{
+											"count": 1,
+											"msgMin": "Issue1",
+											"msgMax": "Issue1"
+										}
+								}
+							]
+					}`},
 	}
 
 	query := `
@@ -1650,6 +1711,8 @@ func TestChildCountQueryWithOtherFields(t *testing.T) {
 		username
 		issuesAggregate {
 		  count
+		  msgMin
+		  msgMax
 		}
 		issues {
 		  msg

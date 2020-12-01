@@ -2927,6 +2927,47 @@
     }
 
 -
+  name: "Aggregate query at child level with filter and multiple aggregate fields"
+  gqlquery: |
+    query {
+      queryCountry {
+        nm : name
+        ag : statesAggregate {
+          nMin : nameMin
+          nMax : nameMax
+        }
+        statesAggregate(filter: { code: { eq: "state code" } }) {
+          cnt : count
+          nMin : nameMin
+          nMax : nameMax
+          cMin : capitalMin
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCountry(func: type(Country)) {
+        name : Country.name
+        statesAggregate : Country.states {
+          statesAggregate_nameVar as State.name
+          dgraph.uid : uid
+        }
+        nameMin_statesAggregate : min(val(statesAggregate_nameVar))
+        nameMax_statesAggregate : max(val(statesAggregate_nameVar))
+        statesAggregate1 : Country.states @filter(eq(State.code, "state code")) {
+          statesAggregate1_nameVar as State.name
+          statesAggregate1_capitalVar as State.capital
+          dgraph.uid : uid
+        }
+        count_statesAggregate1 : count(Country.states) @filter(eq(State.code, "state code"))
+        nameMin_statesAggregate1 : min(val(statesAggregate1_nameVar))
+        nameMax_statesAggregate1 : max(val(statesAggregate1_nameVar))
+        capitalMin_statesAggregate1 : min(val(statesAggregate1_capitalVar))
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "Count query at child level with filter"
   gqlquery: |
     query {
