@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dgrijalva/jwt-go/v4"
 	"os"
 	"strings"
 	"testing"
@@ -28,7 +29,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
@@ -1889,4 +1889,227 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	gqlResponse = checkLogPassword(t, logID, newLog.Pwd, "USER")
 	require.JSONEq(t, `{"checkLogPassword": null}`, string(gqlResponse.Data))
 	deleteLog(t, logID)
+}
+
+var bookResponse = `{"queryBook":[{"bookId":"book1","name":"Introduction","desc":"Intro book"}]}`
+
+func TestAuthEqFilterWithObjectAsTokenVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, map[string]interface{}{"a":"b"}, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthEqFilterWithFloatTokenVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, 123.12, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthEqFilterWithInt64TokenVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, 1237890123456, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthEqFilterWithIntTokenVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, 1234, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthEqFilterWithBoolTokenVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, true, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthInFilterWithObjectAsTokenVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, map[string]interface{}{"e":"f"}, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthInFilterWithFloatTokenVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, 312.124, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthInFilterWithInt64TokenVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, 1246879976444232435, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthInFilterWithIntTokenVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, 6872, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthEqFilterFromTokenWithArrayVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, []int{456,1234}, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthInFilterFromTokenWithArrayVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, []int{124324, 6872}, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthRegexFilter(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, "xyz@dgraph.io", nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+}
+
+func TestAuthRegexFilterFromTokenWithArrayVal(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, []string{"abc@def.com", "xyz@dgraph.io"}, nil, metaInfo),
+		Query: `query {
+		  queryBook{
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	require.JSONEq(t, string(gqlResponse.Data), bookResponse)
 }

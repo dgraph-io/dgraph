@@ -36,8 +36,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "resolving updateGQLSchema failed because Type X: @auth: `in`
-      operator has invalid value amanbansal@dgraph.io in this rule." }
+      { "message": "Type X: @auth: `in`
+      operator has invalid value in this rule." }
     ]
 
   - name: "Invalid RBAC rule: in filter not array variable 2"
@@ -49,8 +49,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "resolving updateGQLSchema failed because Type X: @auth: `in`
-      operator has invalid value amanbansal@dgraph.io in this rule."}
+      { "message": "Type X: @auth: `in`
+      operator has invalid value in this rule."}
     ]
 
   - name: "Invalid RBAC rule: regexp filter not string variable"
@@ -62,8 +62,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "resolving updateGQLSchema failed because Type X: @auth: `regexp`
-          operator has invalid value amanbansal@dgraph.io in this rule." }
+      { "message": "Type X: @auth: `regexp`
+          operator has invalid value in this rule." }
     ]
 
   - name: "RBAC rule invalid variable"

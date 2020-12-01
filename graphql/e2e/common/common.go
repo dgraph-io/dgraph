@@ -29,7 +29,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prometheus/common/log"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -509,7 +509,7 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
 		}
 
 		if containsRetryableUpdateGQLSchemaError(err.Error()) {
-			log.Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
+			glog.Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
 			time.Sleep(time.Second)
 			continue
 		}
@@ -1158,13 +1158,13 @@ func addSchema(url, schema string) error {
 	return nil
 }
 
-func GetJWT(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) http.Header {
+func GetJWT(t *testing.T, user, role interface{}, metaInfo *testutil.AuthMeta) http.Header {
 	metaInfo.AuthVars = map[string]interface{}{}
-	if user != "" {
+	if user != nil {
 		metaInfo.AuthVars["USER"] = user
 	}
 
-	if role != "" {
+	if role != nil {
 		metaInfo.AuthVars["ROLE"] = role
 	}
 

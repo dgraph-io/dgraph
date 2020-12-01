@@ -242,6 +242,13 @@
 		"UserSecret.aSecret": "Sensitive information",
 		"UserSecret.ownedBy": "user1"
 	},
+	{
+		"uid": "_:book1",
+		"dgraph.type": "Book",
+		"Book.bookId": "book1",
+		"Book.name": "Introduction",
+		"Book.desc": "Intro book"
+	},
 	{"uid":"_:Question1","Post.text":"A Question"},
 	{"uid":"_:Question2","Post.text":"B Question"},
 	{"uid":"_:Question3","Post.text":"C Question"},

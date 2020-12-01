@@ -18,7 +18,7 @@ package schema
 
 import (
 	"encoding/json"
-	"log"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -71,7 +71,7 @@ const (
 
 func checkIfExistInArray(arr []interface{}, val interface{}) RuleResult {
 	for _, v := range arr {
-		if v == val {
+		if reflect.DeepEqual(v, val) {
 			return Positive
 		}
 	}
@@ -79,7 +79,7 @@ func checkIfExistInArray(arr []interface{}, val interface{}) RuleResult {
 }
 
 func checkIfEqual(val1 interface{}, val2 interface{}) RuleResult {
-	if val1 == val2 {
+	if reflect.DeepEqual(val1, val2) {
 		return Positive
 	}
 	return Negative
@@ -470,7 +470,6 @@ func rbacValidateRule(typ *ast.Definition, rule string) (*RBACQuery, error) {
 		Operand:  op,
 	}
 
-	log.Print("operand is", op)
 	if !strings.HasPrefix(query.Variable, "$") {
 		return nil, gqlerror.Errorf("Type %s: @auth: `%s` is not a valid GraphQL variable.",
 			typ.Name, query.Variable)

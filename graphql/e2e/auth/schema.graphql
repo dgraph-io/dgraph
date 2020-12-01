@@ -754,3 +754,24 @@ type Todo {
     owner: String
     text: String
 }
+
+type Book @auth(
+    query: { or: [
+        {rule: "{$USER: { eq: {\"a\": \"b\"} } }"}, # this will be used to test eq with object
+        {rule: "{$USER: { eq: 123.12 } }"}, # this will be used to test eq with float
+        {rule: "{$USER: { eq: 1237890123456 } }"}, # this will be used to test eq with int64
+        {rule: "{$USER: { eq: 1234 } }"}, # this will be used to test eq with int and array too
+        {rule: "{$USER: { eq: true } }"}, # this will be used to test eq with boolean
+
+        {rule: "{$USER: { in: [{\"c\": \"d\"}, {\"e\":\"f\"}] } }"}, # this will be used to test in with object
+        {rule: "{$USER: { in: [456.23, 312.124] } }"}, # this will be used to test in with float
+        {rule: "{$USER: { in: [9876543219876543, 1246879976444232435] } }"}, # this will be used to test in with int64
+        {rule: "{$USER: { in: [5678, 6872] } }"}, # this will be used to test in with int and array too
+
+        {rule: "{$USER: { regexp: \"^(.*)@dgraph.io$\" } }"}
+    ]}
+){
+    bookId: String!
+    name: String!
+    desc: String!
+}
