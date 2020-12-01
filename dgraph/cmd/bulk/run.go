@@ -107,7 +107,7 @@ func init() {
 			" The key size indicates the chosen AES encryption (AES-128/192/256 respectively). "+
 			" This key is used to encrypt the output data directories and to decrypt the input "+
 			" schema and data files (if encrytped). Enterprise feature.")
-	flag.Int("badger.compression_level", 1,
+	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
 	flag.Int64("badger.cache_mb", 0, "Total size of cache (in MB) per shard in reducer.")
 	flag.String("badger.cache_percentage", "0,100",
