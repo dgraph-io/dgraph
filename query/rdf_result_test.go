@@ -122,8 +122,8 @@ func TestRDFRecurse(t *testing.T) {
 	rdf, err := processQueryRDF(context.Background(), t, query)
 	require.NoError(t, err)
 	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
-	<0x17> <name> "Rick Grimes" .
-	<0x19> <name> "Daryl Dixon" .
+<0x17> <name> "Rick Grimes" .
+<0x19> <name> "Daryl Dixon" .
 `)
 }
 func TestRDFCheckPwd(t *testing.T) {
