@@ -1465,28 +1465,23 @@ func getDefaultSearchIndex(fldName string) string {
 func getSearchArgs(fld *ast.FieldDefinition) []string {
 	search := fld.Directives.ForName(searchDirective)
 	id := fld.Directives.ForName(idDirective)
+	fldType := fld.Type.Name()
 	if search == nil {
 		if id == nil {
 			return nil
 		}
+		switch fldType {
 		// If search directive wasn't supplied but id was, then hash is the only index
-		// that we apply.
-		switch fld.Type.Name() {
+		// that we apply for string.
 		case "String":
 			return []string{"hash"}
-		case "Int64":
-			return []string{"int64"}
-		case "Int":
-			return []string{"int"}
-		case "Float":
-			return []string{"float"}
 		default:
-			return nil
+			return []string{getDefaultSearchIndex(fldType)}
 		}
 	}
 	if len(search.Arguments) == 0 ||
 		len(search.Arguments.ForName(searchArgs).Value.Children) == 0 {
-		return []string{getDefaultSearchIndex(fld.Type.Name())}
+		return []string{getDefaultSearchIndex(fldType)}
 	}
 	val := search.Arguments.ForName(searchArgs).Value
 	res := make([]string, len(val.Children))
