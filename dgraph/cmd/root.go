@@ -170,6 +170,11 @@ func setGlogFlags(conf *viper.Viper) {
 		if gflag == "log-backtrace-at" && (stringValue == "0" || stringValue == ":0") {
 			continue
 		}
+
+		// glog uses snake_case flags. Although we use a normalization function,
+		// the actual lookup value for the flags would not change here.
+		// So, we undo any normalization before setting the flags.
+		gflag = strings.ReplaceAll(gflag, "-", "_")
 		x.Check(flag.Lookup(gflag).Value.Set(stringValue))
 	}
 }
