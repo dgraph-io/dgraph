@@ -1411,17 +1411,25 @@
     }
 
 -
-  name: "Count Query"
+  name: "Aggregate Query"
   gqlquery: |
     query {
       aggregateCountry(filter: { name: { regexp: "/.*ust.*/" }}) {
         count
+        nameMin
+        nameMax
       }
     }
   dgquery: |-
     query {
-      aggregateCountry(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
-        count : count(uid)
+      aggregateCountry() {
+        count : max(val(countVar))
+        nameMin : min(val(nameVar))
+        nameMax : max(val(nameVar))
+      }
+      var(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
+        countVar as count(uid)
+        nameVar as Country.name
       }
     }
 
@@ -2967,5 +2975,32 @@
           dgraph.uid : uid
         }
         dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Aggregate Query with Sum and Avg"
+  gqlquery: |
+    query {
+      aggregateTweets() {
+        count
+        scoreMin
+        scoreMax
+        scoreAvg
+        scoreSum
+      }
+    }
+  dgquery: |-
+    query {
+      aggregateTweets() {
+        count : max(val(countVar))
+        scoreMin : min(val(scoreVar))
+        scoreMax : max(val(scoreVar))
+        scoreAvg : avg(val(scoreVar))
+        scoreSum : sum(val(scoreVar))
+      }
+      var(func: type(Tweets)) {
+        countVar as count(uid)
+        scoreVar as Tweets.score
       }
     }

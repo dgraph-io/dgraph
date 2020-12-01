@@ -176,20 +176,83 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) *gql.GraphQuery {
 	filter, _ := query.ArgValue("filter").(map[string]interface{})
 	_ = addFilter(dgQuery, mainType, filter)
 
-	// Add selection set. Currently, it will only be count
+	dgQuery = authRw.addAuthQueries(mainType, dgQuery, rbac)
+
+	// dgQuery may contain the query with aggregate<Type> name
+	// or dgQuery may be empty and its children may contain aggregate<Type> query.
+	// Find the exact query with the name aggregate<Type>.
+	mainQuery := dgQuery
+	for !strings.HasPrefix(mainQuery.Attr, query.Name()) {
+		mainQuery = mainQuery.Children[0]
+	}
+
+	// Changing mainQuery Attr name to var. This is used in the final aggregate<Type> query.
+	mainQuery.Attr = "var"
+
+	finalMainQuery := &gql.GraphQuery{
+		Attr: query.Name() + "()",
+	}
+	// Add selection set to mainQuery and finalMainQuery.
+	isAggregateFieldVisited := make(map[string]bool)
 	for _, f := range query.SelectionSet() {
-		if f.Name() == "count" {
+		fldName := f.Name()
+		if fldName == "count" {
 			child := &gql.GraphQuery{
-				Alias: f.DgraphAlias(),
-				Attr:  "count(uid)",
+				Var:  "countVar",
+				Attr: "count(uid)",
 			}
-			dgQuery.Children = append(dgQuery.Children, child)
+			finalQueryChild := &gql.GraphQuery{
+				Alias: fldName,
+				Attr:  "max(val(countVar))",
+			}
+			mainQuery.Children = append(mainQuery.Children, child)
+			finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
+			continue
+		}
+
+		// Handle other aggregate functions than count
+		aggregateFunctions := []string{"Max", "Min", "Sum", "Avg"}
+
+		// TODO(GRAPHQL-887) :Fix Maximum and Minimum Aggregate DQL functions in case of no data
+		for _, function := range aggregateFunctions {
+			// A field can have at maximum one of the aggregation functions as suffix
+			if strings.HasSuffix(fldName, function) {
+				// constructedForDgraphPredicate stores the Dgraph predicate for which aggregate function has been queried.
+				constructedForDgraphPredicate := f.DgraphPredicateForAggregateField()
+				// constructedForField contains the field for which aggregate function has been queried.
+				// As all aggregate functions have length 3, removing last 3 characters from fldName.
+				constructedForField := fldName[:len(fldName)-3]
+				// isAggregateFieldVisited ensures that a field is added to Var query at maximum once.
+				// If a field has already been added to the var query, don't add it again.
+				// Eg. Even if scoreMax and scoreMin are queried, the query will contain only one expression
+				// of the from, "scoreVar as Tweets.score"
+				if !isAggregateFieldVisited[constructedForField] {
+					child := &gql.GraphQuery{
+						Var:  constructedForField + "Var",
+						Attr: constructedForDgraphPredicate,
+					}
+					// The var field is added to mainQuery. This adds the following DQL query.
+					// var(func: type(Tweets)) {
+					//        scoreVar as Tweets.score
+					// }
+					mainQuery.Children = append(mainQuery.Children, child)
+					isAggregateFieldVisited[constructedForField] = true
+				}
+				finalQueryChild := &gql.GraphQuery{
+					Alias: fldName,
+					Attr:  strings.ToLower(function) + "(val(" + constructedForField + "Var))",
+				}
+				// This adds the following DQL query
+				// aggregateTweets() {
+				//        scoreMin : min(val(scoreVar))
+				// }
+				finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
+				break
+			}
 		}
 	}
 
-	dgQuery = authRw.addAuthQueries(mainType, dgQuery, rbac)
-
-	return dgQuery
+	return &gql.GraphQuery{Children: []*gql.GraphQuery{finalMainQuery, dgQuery}}
 }
 
 func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error) {

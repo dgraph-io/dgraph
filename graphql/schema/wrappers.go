@@ -143,6 +143,7 @@ type Field interface {
 	EnumValues() []string
 	ConstructedFor() Type
 	ConstructedForDgraphPredicate() string
+	DgraphPredicateForAggregateField() string
 	IsAggregateField() bool
 }
 
@@ -1493,6 +1494,47 @@ func (f *field) ConstructedForDgraphPredicate() string {
 	// Eg. to get "FieldName" from "FieldNameAggregate"
 	fldName := f.Name()
 	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][fldName[:len(fldName)-9]]
+}
+
+func (m *mutation) DgraphPredicateForAggregateField() string {
+	return (*field)(m).DgraphPredicateForAggregateField()
+}
+
+func (q *query) DgraphPredicateForAggregateField() string {
+	return (*field)(q).DgraphPredicateForAggregateField()
+}
+
+// In case, the field f is of name <Name>Max / <Name>Min / <Name>Sum / <Name>Avg ,
+// it returns corresponding dgraph predicate name.
+// In all other cases it returns dgraph predicate of the field.
+func (f *field) DgraphPredicateForAggregateField() string {
+	aggregateFunctions := []string{"Max", "Min", "Sum", "Avg"}
+
+	fldName := f.Name()
+	var isAggregateFunction bool = false
+	for _, function := range aggregateFunctions {
+		if strings.HasSuffix(fldName, function) {
+			isAggregateFunction = true
+		}
+	}
+	if !isAggregateFunction {
+		return f.DgraphPredicate()
+	}
+	// aggregateResultTypeName contains name of the type in which the aggregate field is defined,
+	// it will be of the form <Type>AggregateResult
+	// we need to obtain the type name from <Type> from <Type>AggregateResult
+	aggregateResultTypeName := f.field.ObjectDefinition.Name
+
+	// If aggregateResultTypeName is found to not end with AggregateResult, just return DgraphPredicate()
+	if !strings.HasSuffix(aggregateResultTypeName, "AggregateResult") {
+		// This is an extra precaution and ideally, the code should not reach over here.
+		return f.DgraphPredicate()
+	}
+	mainTypeName := aggregateResultTypeName[:len(aggregateResultTypeName)-15]
+	// Remove last 3 characters of the field name.
+	// Eg. to get "FieldName" from "FieldNameMax"
+	// As all Aggregate functions are of length 3, removing last 3 characters from fldName
+	return f.op.inSchema.dgraphPredicate[mainTypeName][fldName[:len(fldName)-3]]
 }
 
 func (q *query) QueryType() QueryType {

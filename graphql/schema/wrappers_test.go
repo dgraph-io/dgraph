@@ -98,16 +98,40 @@ type Starship {
 		"posts":          "Author.posts",
 		"postsAggregate": "Author.postsAggregate",
 	}
+	authorAggregateResult := map[string]string{
+		"count":         "AuthorAggregateResult.count",
+		"dobMax":        "AuthorAggregateResult.dobMax",
+		"dobMin":        "AuthorAggregateResult.dobMin",
+		"nameMax":       "AuthorAggregateResult.nameMax",
+		"nameMin":       "AuthorAggregateResult.nameMin",
+		"reputationAvg": "AuthorAggregateResult.reputationAvg",
+		"reputationMax": "AuthorAggregateResult.reputationMax",
+		"reputationMin": "AuthorAggregateResult.reputationMin",
+		"reputationSum": "AuthorAggregateResult.reputationSum",
+	}
 	post := map[string]string{
 		"postType": "Post.postType",
 		"author":   "Post.author",
+	}
+	postAggregateResult := map[string]string{
+		"count": "PostAggregateResult.count",
 	}
 	character := map[string]string{
 		"name":      "Character.name",
 		"appearsIn": "Character.appearsIn",
 	}
+	characterAggregateResult := map[string]string{
+		"count":   "CharacterAggregateResult.count",
+		"nameMax": "CharacterAggregateResult.nameMax",
+		"nameMin": "CharacterAggregateResult.nameMin",
+	}
 	employee := map[string]string{
 		"ename": "Employee.ename",
+	}
+	employeeAggregateResult := map[string]string{
+		"count":    "EmployeeAggregateResult.count",
+		"enameMax": "EmployeeAggregateResult.enameMax",
+		"enameMin": "EmployeeAggregateResult.enameMin",
 	}
 	human := map[string]string{
 		"ename":              "Employee.ename",
@@ -117,14 +141,41 @@ type Starship {
 		"totalCredits":       "Human.totalCredits",
 		"starshipsAggregate": "Human.starshipsAggregate",
 	}
+	humanAggregateResult := map[string]string{
+		"count":           "HumanAggregateResult.count",
+		"enameMax":        "HumanAggregateResult.enameMax",
+		"enameMin":        "HumanAggregateResult.enameMin",
+		"nameMax":         "HumanAggregateResult.nameMax",
+		"nameMin":         "HumanAggregateResult.nameMin",
+		"totalCreditsAvg": "HumanAggregateResult.totalCreditsAvg",
+		"totalCreditsMax": "HumanAggregateResult.totalCreditsMax",
+		"totalCreditsMin": "HumanAggregateResult.totalCreditsMin",
+		"totalCreditsSum": "HumanAggregateResult.totalCreditsSum",
+	}
 	droid := map[string]string{
 		"name":            "Character.name",
 		"appearsIn":       "Character.appearsIn",
 		"primaryFunction": "Droid.primaryFunction",
 	}
+	droidAggregateResult := map[string]string{
+		"count":              "DroidAggregateResult.count",
+		"nameMax":            "DroidAggregateResult.nameMax",
+		"nameMin":            "DroidAggregateResult.nameMin",
+		"primaryFunctionMax": "DroidAggregateResult.primaryFunctionMax",
+		"primaryFunctionMin": "DroidAggregateResult.primaryFunctionMin",
+	}
 	starship := map[string]string{
 		"name":   "Starship.name",
 		"length": "Starship.length",
+	}
+	starshipAggregateResult := map[string]string{
+		"count":     "StarshipAggregateResult.count",
+		"lengthAvg": "StarshipAggregateResult.lengthAvg",
+		"lengthMax": "StarshipAggregateResult.lengthMax",
+		"lengthMin": "StarshipAggregateResult.lengthMin",
+		"lengthSum": "StarshipAggregateResult.lengthSum",
+		"nameMax":   "StarshipAggregateResult.nameMax",
+		"nameMin":   "StarshipAggregateResult.nameMin",
 	}
 
 	expected := map[string]map[string]string{
@@ -149,13 +200,13 @@ type Starship {
 		"Starship":                 starship,
 		"UpdateStarshipPayload":    starship,
 		"DeleteStarshipPayload":    starship,
-		"AuthorAggregateResult":    {"count": "AuthorAggregateResult.count"},
-		"CharacterAggregateResult": {"count": "CharacterAggregateResult.count"},
-		"DroidAggregateResult":     {"count": "DroidAggregateResult.count"},
-		"EmployeeAggregateResult":  {"count": "EmployeeAggregateResult.count"},
-		"HumanAggregateResult":     {"count": "HumanAggregateResult.count"},
-		"PostAggregateResult":      {"count": "PostAggregateResult.count"},
-		"StarshipAggregateResult":  {"count": "StarshipAggregateResult.count"},
+		"AuthorAggregateResult":    authorAggregateResult,
+		"CharacterAggregateResult": characterAggregateResult,
+		"DroidAggregateResult":     droidAggregateResult,
+		"EmployeeAggregateResult":  employeeAggregateResult,
+		"HumanAggregateResult":     humanAggregateResult,
+		"PostAggregateResult":      postAggregateResult,
+		"StarshipAggregateResult":  starshipAggregateResult,
 	}
 
 	if diff := cmp.Diff(expected, s.dgraphPredicate); diff != "" {
@@ -232,13 +283,32 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 		"posts":          "dgraph.author.posts",
 		"postsAggregate": "dgraph.author.postsAggregate",
 	}
+	authorAggregateResult := map[string]string{
+		"count":         "AuthorAggregateResult.count",
+		"dobMax":        "AuthorAggregateResult.dobMax",
+		"dobMin":        "AuthorAggregateResult.dobMin",
+		"nameMax":       "AuthorAggregateResult.nameMax",
+		"nameMin":       "AuthorAggregateResult.nameMin",
+		"reputationAvg": "AuthorAggregateResult.reputationAvg",
+		"reputationMax": "AuthorAggregateResult.reputationMax",
+		"reputationMin": "AuthorAggregateResult.reputationMin",
+		"reputationSum": "AuthorAggregateResult.reputationSum",
+	}
 	post := map[string]string{
 		"postType": "dgraph.post_type",
 		"author":   "dgraph.post_author",
 	}
+	postAggregateResult := map[string]string{
+		"count": "PostAggregateResult.count",
+	}
 	character := map[string]string{
 		"name":      "performance.character.name",
 		"appearsIn": "appears_in",
+	}
+	characterAggregateResult := map[string]string{
+		"count":   "CharacterAggregateResult.count",
+		"nameMax": "CharacterAggregateResult.nameMax",
+		"nameMin": "CharacterAggregateResult.nameMin",
 	}
 	human := map[string]string{
 		"ename":              "dgraph.employee.en.ename",
@@ -248,17 +318,49 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 		"totalCredits":       "credits",
 		"starshipsAggregate": "Human.starshipsAggregate",
 	}
+	humanAggregateResult := map[string]string{
+		"count":           "HumanAggregateResult.count",
+		"enameMax":        "HumanAggregateResult.enameMax",
+		"enameMin":        "HumanAggregateResult.enameMin",
+		"nameMax":         "HumanAggregateResult.nameMax",
+		"nameMin":         "HumanAggregateResult.nameMin",
+		"totalCreditsAvg": "HumanAggregateResult.totalCreditsAvg",
+		"totalCreditsMax": "HumanAggregateResult.totalCreditsMax",
+		"totalCreditsMin": "HumanAggregateResult.totalCreditsMin",
+		"totalCreditsSum": "HumanAggregateResult.totalCreditsSum",
+	}
 	droid := map[string]string{
 		"name":            "performance.character.name",
 		"appearsIn":       "appears_in",
 		"primaryFunction": "roboDroid.primaryFunction",
 	}
+	droidAggregateResult := map[string]string{
+		"count":              "DroidAggregateResult.count",
+		"nameMax":            "DroidAggregateResult.nameMax",
+		"nameMin":            "DroidAggregateResult.nameMin",
+		"primaryFunctionMax": "DroidAggregateResult.primaryFunctionMax",
+		"primaryFunctionMin": "DroidAggregateResult.primaryFunctionMin",
+	}
 	employee := map[string]string{
 		"ename": "dgraph.employee.en.ename",
+	}
+	employeeAggregateResult := map[string]string{
+		"count":    "EmployeeAggregateResult.count",
+		"enameMax": "EmployeeAggregateResult.enameMax",
+		"enameMin": "EmployeeAggregateResult.enameMin",
 	}
 	starship := map[string]string{
 		"name":   "star.ship.name",
 		"length": "star.ship.length",
+	}
+	starshipAggregateResult := map[string]string{
+		"count":     "StarshipAggregateResult.count",
+		"lengthAvg": "StarshipAggregateResult.lengthAvg",
+		"lengthMax": "StarshipAggregateResult.lengthMax",
+		"lengthMin": "StarshipAggregateResult.lengthMin",
+		"lengthSum": "StarshipAggregateResult.lengthSum",
+		"nameMax":   "StarshipAggregateResult.nameMax",
+		"nameMin":   "StarshipAggregateResult.nameMin",
 	}
 
 	expected := map[string]map[string]string{
@@ -283,13 +385,13 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 		"Starship":                 starship,
 		"UpdateStarshipPayload":    starship,
 		"DeleteStarshipPayload":    starship,
-		"AuthorAggregateResult":    {"count": "AuthorAggregateResult.count"},
-		"CharacterAggregateResult": {"count": "CharacterAggregateResult.count"},
-		"DroidAggregateResult":     {"count": "DroidAggregateResult.count"},
-		"EmployeeAggregateResult":  {"count": "EmployeeAggregateResult.count"},
-		"HumanAggregateResult":     {"count": "HumanAggregateResult.count"},
-		"PostAggregateResult":      {"count": "PostAggregateResult.count"},
-		"StarshipAggregateResult":  {"count": "StarshipAggregateResult.count"},
+		"AuthorAggregateResult":    authorAggregateResult,
+		"CharacterAggregateResult": characterAggregateResult,
+		"DroidAggregateResult":     droidAggregateResult,
+		"EmployeeAggregateResult":  employeeAggregateResult,
+		"HumanAggregateResult":     humanAggregateResult,
+		"PostAggregateResult":      postAggregateResult,
+		"StarshipAggregateResult":  starshipAggregateResult,
 	}
 
 	if diff := cmp.Diff(expected, s.dgraphPredicate); diff != "" {

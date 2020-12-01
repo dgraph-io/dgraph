@@ -439,6 +439,13 @@ var orderable = map[string]bool{
 	"DateTime": true,
 }
 
+// GraphQL types that can be summed. Types that have a well defined addition function.
+var summable = map[string]bool{
+	"Int":   true,
+	"Int64": true,
+	"Float": true,
+}
+
 var enumDirectives = map[string]bool{
 	"trigram": true,
 	"hash":    true,
@@ -1403,6 +1410,11 @@ func isOrderable(fld *ast.FieldDefinition) bool {
 	return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
 }
 
+// Returns true if the field is of type which can be summed. Eg: int, int64, float
+func isSummable(fld *ast.FieldDefinition) bool {
+	return summable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
+}
+
 func hasID(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields, isID)
 }
@@ -1615,15 +1627,66 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 	aggregationResultTypeName := defn.Name + "AggregateResult"
 
+	var aggregateFields []*ast.FieldDefinition
+
 	countField := &ast.FieldDefinition{
 		Name: "count",
 		Type: &ast.Type{NamedType: "Int"},
 	}
 
+	aggregateFields = append(aggregateFields, countField)
+
+	// Add Maximum and Minimum fields for fields which have an ordering defined
+	// Maximum and Minimum fields are added for fields which are of type int, int64,
+	// float, string, datetime .
+	for _, fld := range defn.Fields {
+		// Creating aggregateFieldType to store type of the aggregate fields like
+		// max, min, avg, sum of scalar fields.
+		aggregateFieldType := &ast.Type{
+			NamedType: fld.Type.NamedType,
+			NonNull:   false,
+			// Explicitly setting NonNull to false as AggregateResultType is not used
+			// as input type and the fields may not be always needed.
+		}
+
+		// Adds titleMax, titleMin fields for a field of name title.
+		if isOrderable(fld) {
+			minField := &ast.FieldDefinition{
+				Name: fld.Name + "Min",
+				Type: aggregateFieldType,
+			}
+			maxField := &ast.FieldDefinition{
+				Name: fld.Name + "Max",
+				Type: aggregateFieldType,
+			}
+			aggregateFields = append(aggregateFields, minField)
+			aggregateFields = append(aggregateFields, maxField)
+		}
+
+		// Adds scoreSum and scoreAvg field for a field of name score.
+		// The type of scoreAvg is Float irrespective of the type of score.
+		if isSummable(fld) {
+			sumField := &ast.FieldDefinition{
+				Name: fld.Name + "Sum",
+				Type: aggregateFieldType,
+			}
+			avgField := &ast.FieldDefinition{
+				Name: fld.Name + "Avg",
+				Type: &ast.Type{
+					// Average should always be of type Float
+					NamedType: "Float",
+					NonNull:   false,
+				},
+			}
+			aggregateFields = append(aggregateFields, sumField)
+			aggregateFields = append(aggregateFields, avgField)
+		}
+	}
+
 	schema.Types[aggregationResultTypeName] = &ast.Definition{
 		Kind:   ast.Object,
 		Name:   aggregationResultTypeName,
-		Fields: []*ast.FieldDefinition{countField},
+		Fields: aggregateFields,
 	}
 }
 

@@ -298,6 +298,10 @@ type AddPostPayload {
 
 type AuthorAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
+	pen_nameMin: String
+	pen_nameMax: String
 }
 
 type DeleteAuthorPayload {
@@ -320,10 +324,14 @@ type DeletePostPayload {
 
 type GenreAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type PostAggregateResult {
 	count: Int
+	contentMin: String
+	contentMax: String
 }
 
 type UpdateAuthorPayload {
