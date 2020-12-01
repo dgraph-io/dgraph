@@ -1070,7 +1070,7 @@ func TestRootAggregateQuery(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
@@ -1185,9 +1185,9 @@ func TestRBACFilterWithAggregateQuery(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }

@@ -213,6 +213,7 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) *gql.GraphQuery {
 		// Handle other aggregate functions than count
 		aggregateFunctions := []string{"Max", "Min", "Sum", "Avg"}
 
+		// TODO(GRAPHQL-887) :Fix Maximum and Minimum Aggregate DQL functions in case of no data
 		for _, function := range aggregateFunctions {
 			// A field can have at maximum one of the aggregation functions as suffix
 			if strings.HasSuffix(fldName, function) {
