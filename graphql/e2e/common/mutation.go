@@ -21,9 +21,11 @@ package common
 // dataset and mutating and leaving unexpected data will result in flaky tests.
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"testing"
 
@@ -4595,14 +4597,16 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	require.Nil(t, response.Errors)
 	var expected = `{
-		  "data": {
-			"addBook": {
+		  	"addBook": {
 			  "numUids": 1
 			}
-		  }
 		}`
-	j, _ := response.Data.MarshalJSON()
-	require.Equal(t, string(j), expected)
+	b, _ := response.Data.MarshalJSON()
+	expBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
+	actBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(actBuffer, b))
+	require.Equal(t, expBuffer.String(), actBuffer.String())
 
 	// adding same mutation again should result in error because of duplicate id
 	response = query.ExecuteAsPost(t, GraphqlURL)
@@ -4623,16 +4627,21 @@ func idDirectiveWithIntMutation(t *testing.T) {
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
+	if response.Errors != nil {
+		log.Print("error from servce is", response.Errors.Error())
+	}
 	require.Nil(t, response.Errors)
 	var expected = `{
-		  "data": {
 			"addChapter": {
 			  "numUids": 1
 			}
-		  }
 		}`
-	j, _ := response.Data.MarshalJSON()
-	require.Equal(t, string(j), expected)
+	b, _ := response.Data.MarshalJSON()
+	expBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
+	actBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(actBuffer, b))
+	require.Equal(t, expBuffer.String(), actBuffer.String())
 
 	// adding same mutation again should result in error because of duplicate id
 	response = query.ExecuteAsPost(t, GraphqlURL)
@@ -4660,14 +4669,16 @@ func idDirectiveWithFloatMutation(t *testing.T) {
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	require.Nil(t, response.Errors)
 	var expected = `{
-		  "data": {
 			"addSection": {
 			  "numUids": 2
 			}
-		  }
 		}`
-	j, _ := response.Data.MarshalJSON()
-	require.Equal(t, string(j), expected)
+	b, _ := response.Data.MarshalJSON()
+	expBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
+	actBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(actBuffer, b))
+	require.Equal(t, expBuffer.String(), actBuffer.String())
 
 	// adding same mutation again should result in error because of duplicate id
 	response = query.ExecuteAsPost(t, GraphqlURL)

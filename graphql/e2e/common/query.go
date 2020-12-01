@@ -17,6 +17,7 @@
 package common
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -3211,7 +3212,6 @@ func idDirectiveWithInt64(t *testing.T) {
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	require.Nil(t, response.Errors)
 	var expected = `{
-		  "data": {
 			"queryBook": [
 			  {
 				"bookId": 1234567890,
@@ -3219,10 +3219,13 @@ func idDirectiveWithInt64(t *testing.T) {
 				"desc": "All love between dgraph and graphql"
 			  }
 			]
-		  }
-		}`
-	j, _ := response.Data.MarshalJSON()
-	require.Equal(t, string(j), expected)
+		 }`
+	b, _ := response.Data.MarshalJSON()
+	expBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
+	actBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(actBuffer, b))
+	require.Equal(t, expBuffer.String(), actBuffer.String())
 }
 
 func idDirectiveWithInt(t *testing.T) {
@@ -3243,18 +3246,20 @@ func idDirectiveWithInt(t *testing.T) {
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	require.Nil(t, response.Errors)
 	var expected = `{
-	  "data": {
-		"queryChapter": [
+	  	"queryChapter": [
 		  {
 			"bookId": 1234567890,
 			"chapterId": 1,
 			"name": "How Dgraph Works"
 		  }
 		]
-	  }
 	}`
-	j, _ := response.Data.MarshalJSON()
-	require.Equal(t, string(j), expected)
+	b, _ := response.Data.MarshalJSON()
+	expBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
+	actBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(actBuffer, b))
+	require.Equal(t, expBuffer.String(), actBuffer.String())
 }
 
 func idDirectiveWithFloat(t *testing.T) {
@@ -3275,16 +3280,18 @@ func idDirectiveWithFloat(t *testing.T) {
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	require.Nil(t, response.Errors)
 	var expected = `{
-	  "data": {
-		"querySection": [
+	 	"querySection": [
 		  {
 			"chapterId": 1,
 			"sectionId": 1.1,
 			"name": "How to define dgraph schema"
 		  }
 		]
-	  }
 	}`
-	j, _ := response.Data.MarshalJSON()
-	require.Equal(t, string(j), expected)
+	b, _ := response.Data.MarshalJSON()
+	expBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
+	actBuffer := new(bytes.Buffer)
+	require.NoError(t, json.Compact(actBuffer, b))
+	require.Equal(t, expBuffer.String(), actBuffer.String())
 }
