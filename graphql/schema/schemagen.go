@@ -489,9 +489,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					if id != nil {
 						upsertStr = "@upsert "
 						switch f.Type.Name() {
-						case "Int":
-							fallthrough
-						case "Int64":
+						case "Int", "Int64":
 							indexes = append(indexes, "int")
 						case "Float":
 							indexes = append(indexes, "float")
