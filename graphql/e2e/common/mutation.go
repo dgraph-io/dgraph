@@ -4577,29 +4577,99 @@ func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 
 }
 
-func idDirectiveWithIntMutation(t *testing.T) {
-	query := &GraphQLParams{
-		Query: ``,
-	}
-
-	response := query.ExecuteAsPost(t, GraphqlURL)
-	require.Nil(t, response.Errors)
-}
-
 func idDirectiveWithInt64Mutation(t *testing.T) {
 	query := &GraphQLParams{
-		Query: ``,
+		Query: `mutation {
+		  addBook(input:[
+			{
+			  bookId: 1234567890123
+			  name: "Graphql"
+			  desc: "Graphql is the next big thing"
+			}
+		  ]) {
+			numUids
+		  }
+		}`,
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	require.Nil(t, response.Errors)
+	var expected = `{
+		  "data": {
+			"addBook": {
+			  "numUids": 1
+			}
+		  }
+		}`
+	j, _ := response.Data.MarshalJSON()
+	require.Equal(t, string(j), expected)
+
+	// adding same mutation again should result in error because of duplicate id
+	response = query.ExecuteAsPost(t, GraphqlURL)
+	require.Contains(t, response.Errors.Error(), "already exists")
+}
+
+func idDirectiveWithIntMutation(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `mutation {
+		  addChapter(input:[{
+			chapterId: 2
+			name: "Graphql and more"
+			bookId: 1234567890123
+		  }]) {
+			numUids
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, response.Errors)
+	var expected = `{
+		  "data": {
+			"addChapter": {
+			  "numUids": 1
+			}
+		  }
+		}`
+	j, _ := response.Data.MarshalJSON()
+	require.Equal(t, string(j), expected)
+
+	// adding same mutation again should result in error because of duplicate id
+	response = query.ExecuteAsPost(t, GraphqlURL)
+	require.Contains(t, response.Errors.Error(), "already exists")
 }
 
 func idDirectiveWithFloatMutation(t *testing.T) {
 	query := &GraphQLParams{
-		Query: ``,
+		Query: `mutation {
+		  addSection(input:[{
+			chapterId: 2
+			name: "Graphql: Introduction"
+			sectionId: 2.1
+		  },
+		  {
+			chapterId: 2
+			name: "Graphql Available Data Types"
+			sectionId: 2.2
+		  }]) {
+			numUids
+		  }
+		}`,
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	require.Nil(t, response.Errors)
+	var expected = `{
+		  "data": {
+			"addSection": {
+			  "numUids": 2
+			}
+		  }
+		}`
+	j, _ := response.Data.MarshalJSON()
+	require.Equal(t, string(j), expected)
+
+	// adding same mutation again should result in error because of duplicate id
+	response = query.ExecuteAsPost(t, GraphqlURL)
+	require.Contains(t, response.Errors.Error(), "already exists")
 }

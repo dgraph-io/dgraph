@@ -68,33 +68,6 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 	}
 }
 
-func idDirectiveWithInt(t *testing.T) {
-	query := &GraphQLParams{
-		Query: ``,
-	}
-
-	response := query.ExecuteAsPost(t, GraphqlURL)
-	require.Nil(t, response.Errors)
-}
-
-func idDirectiveWithInt64(t *testing.T) {
-	query := &GraphQLParams{
-		Query: ``,
-	}
-
-	response := query.ExecuteAsPost(t, GraphqlURL)
-	require.Nil(t, response.Errors)
-}
-
-func idDirectiveWithFloat(t *testing.T) {
-	query := &GraphQLParams{
-		Query: ``,
-	}
-
-	response := query.ExecuteAsPost(t, GraphqlURL)
-	require.Nil(t, response.Errors)
-}
-
 func touchedUidsHeader(t *testing.T) {
 	query := &GraphQLParams{
 		Query: `query {
@@ -3218,4 +3191,100 @@ func passwordTest(t *testing.T) {
 	})
 
 	deleteUser(t, *newUser)
+}
+
+func idDirectiveWithInt64(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  queryBook(filter: {
+			bookId: {
+			  eq: 1234567890
+			}
+		  }) {
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, response.Errors)
+	var expected = `{
+		  "data": {
+			"queryBook": [
+			  {
+				"bookId": 1234567890,
+				"name": "Dgraph and Graphql",
+				"desc": "All love between dgraph and graphql"
+			  }
+			]
+		  }
+		}`
+	j, _ := response.Data.MarshalJSON()
+	require.Equal(t, string(j), expected)
+}
+
+func idDirectiveWithInt(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  queryChapter(filter: {
+			chapterId: {
+			  eq: 1
+			}
+		  }) {
+			bookId
+			chapterId
+			name
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, response.Errors)
+	var expected = `{
+	  "data": {
+		"queryChapter": [
+		  {
+			"bookId": 1234567890,
+			"chapterId": 1,
+			"name": "How Dgraph Works"
+		  }
+		]
+	  }
+	}`
+	j, _ := response.Data.MarshalJSON()
+	require.Equal(t, string(j), expected)
+}
+
+func idDirectiveWithFloat(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  querySection(filter: {
+			sectionId: {
+			  eq: 1.1
+			}
+		  }) {
+			chapterId
+			sectionId
+			name
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, response.Errors)
+	var expected = `{
+	  "data": {
+		"querySection": [
+		  {
+			"chapterId": 1,
+			"sectionId": 1.1,
+			"name": "How to define dgraph schema"
+		  }
+		]
+	  }
+	}`
+	j, _ := response.Data.MarshalJSON()
+	require.Equal(t, string(j), expected)
 }
