@@ -27,7 +27,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -71,62 +70,6 @@ func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) 
 	require.Equal(t, restoreResp.Restore.Code, "Success")
 	require.Greater(t, restoreResp.Restore.RestoreId, 0)
 	return restoreResp.Restore.RestoreId
-}
-
-func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
-	query := fmt.Sprintf(`query status() {
-		 restoreStatus(restoreId: %d) {
-			status
-			errors
-		}
-	}`, restoreId)
-	params := testutil.GraphQLParams{
-		Query: query,
-	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	restoreDone := false
-	for i := 0; i < 15; i++ {
-		resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
-		require.NoError(t, err)
-		buf, err := ioutil.ReadAll(resp.Body)
-		require.NoError(t, err)
-		sbuf := string(buf)
-		if strings.Contains(sbuf, "OK") {
-			restoreDone = true
-			break
-		}
-		time.Sleep(4 * time.Second)
-	}
-	require.True(t, restoreDone)
-
-	// Wait for the client to exit draining mode. This is needed because the client might
-	// be connected to a follower and might be behind the leader in applying the restore.
-	// Waiting for three consecutive successful queries is done to prevent a situation in
-	// which the query succeeds at the first attempt because the follower is behind and
-	// has not started to apply the restore proposal.
-	numSuccess := 0
-	for {
-		// This is a dummy query that returns no results.
-		_, err = dg.NewTxn().Query(context.Background(), `{
-		q(func: has(invalid_pred)) {
-			invalid_pred
-		}}`)
-
-		if err == nil {
-			numSuccess += 1
-		} else {
-			require.Contains(t, err.Error(), "the server is in draining mode")
-			numSuccess = 0
-		}
-
-		if numSuccess == 3 {
-			// The server has been responsive three times in a row.
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
 }
 
 // disableDraining disables draining mode before each test for increased reliability.
@@ -234,7 +177,7 @@ func TestBasicRestore(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 	runMutations(t, dg)
 }
@@ -251,7 +194,7 @@ func TestRestoreBackupNum(t *testing.T) {
 	runQueries(t, dg, true)
 
 	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 1)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 	runQueries(t, dg, true)
 	runMutations(t, dg)
 }
@@ -325,13 +268,13 @@ func TestMoveTablets(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
 	restoreId = sendRestoreRequest(t, "", "blissful_hermann1", 0)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
@@ -613,7 +556,7 @@ func backupRestoreAndVerify(t *testing.T, dg *dgo.Dgraph, backupDir, queryToVeri
 	expectedResponse string, schemaVerificationOpts testutil.SchemaOptions) {
 	schemaVerificationOpts.ExcludeAclSchema = true
 	backup(t, backupDir)
-	waitForRestore(t, sendRestoreRequest(t, backupDir, "", 0), dg)
+	testutil.WaitForRestore(t, sendRestoreRequest(t, backupDir, "", 0), dg)
 	testutil.VerifyQueryResponse(t, dg, queryToVerify, expectedResponse)
 	testutil.VerifySchema(t, dg, schemaVerificationOpts)
 }

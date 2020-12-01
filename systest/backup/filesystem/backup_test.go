@@ -88,6 +88,7 @@ func sendRestoreRequest(t *testing.T, location string) int {
 
 // This test takes a backup and then restores an old backup in a cluster incrementally.
 // Next, cleans up the cluster and tries restoring the backups above.
+// Regression test for DGRAPH-2775
 func TestBackupOfOldRestore(t *testing.T) {
 	dirSetup(t)
 	copyOldBackupDir(t)
@@ -101,8 +102,8 @@ func TestBackupOfOldRestore(t *testing.T) {
 
 	_ = runBackup(t, 3, 1)
 
-	_ = sendRestoreRequest(t, oldBackupDir)
-	time.Sleep(3 * time.Second)
+	restoreId := sendRestoreRequest(t, oldBackupDir)
+	testutil.WaitForRestore(t, restoreId, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	x.Check(err)
@@ -113,8 +114,8 @@ func TestBackupOfOldRestore(t *testing.T) {
 	// Clean the cluster and try restoring the backups created above.
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	time.Sleep(2 * time.Second)
-	_ = sendRestoreRequest(t, alphaBackupDir)
-	time.Sleep(3 * time.Second)
+	restoreId = sendRestoreRequest(t, alphaBackupDir)
+	testutil.WaitForRestore(t, restoreId, dg)
 
 	resp, err = dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	x.Check(err)
@@ -177,8 +178,8 @@ func TestBackupFilesystem(t *testing.T) {
 			break
 		}
 	}
-	require.True(t, moveOk)
 
+	require.True(t, moveOk)
 	// Setup test directories.
 	dirSetup(t)
 
@@ -485,10 +486,12 @@ func dirCleanup(t *testing.T) {
 }
 
 func copyOldBackupDir(t *testing.T) {
-	destPath := testutil.DockerPrefix + "_alpha1_1:/data"
-	srchPath := "." + oldBackupDir
-	if err := testutil.DockerCp(srchPath, destPath); err != nil {
-		t.Fatalf("Error copying files from docker container: %s", err.Error())
+	for i := 1; i < 4; i++ {
+		destPath := fmt.Sprintf("%s_alpha%d_1:/data", testutil.DockerPrefix, i)
+		srchPath := "." + oldBackupDir
+		if err := testutil.DockerCp(srchPath, destPath); err != nil {
+			t.Fatalf("Error copying files from docker container: %s", err.Error())
+		}
 	}
 }
 
