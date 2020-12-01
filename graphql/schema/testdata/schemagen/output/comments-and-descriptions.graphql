@@ -312,10 +312,18 @@ type DeleteTPayload {
 
 type IAggregateResult {
 	count: Int
+	sMin: String
+	sMax: String
 }
 
 type TAggregateResult {
 	count: Int
+	sMin: String
+	sMax: String
+	iMin: Int
+	iMax: Int
+	iSum: Int
+	iAvg: Float
 }
 
 type UpdateIPayload {

@@ -1011,24 +1011,54 @@ func TestRootFilter(t *testing.T) {
 	}
 }
 
-func TestRootCountQuery(t *testing.T) {
-	testCases := []TestCase{{
-		user:   "user1",
-		role:   "USER",
-		result: `{"aggregateColumn": {"count": 1}}`,
-	}, {
-		user:   "user2",
-		role:   "USER",
-		result: `{"aggregateColumn": {"count": 3}}`,
-	}, {
-		user:   "user4",
-		role:   "USER",
-		result: `{"aggregateColumn": {"count": 2}}`,
-	}}
+func TestRootAggregateQuery(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user: "user1",
+			role: "USER",
+			result: `
+						{
+							"aggregateColumn":
+								{
+									"count": 1,
+									"nameMin": "Column1",
+									"nameMax": "Column1"
+								}
+						}`,
+		},
+		{
+			user: "user2",
+			role: "USER",
+			result: `
+						{
+							"aggregateColumn":
+								{
+									"count": 3,
+									"nameMin": "Column1",
+									"nameMax": "Column3"
+								}
+						}`,
+		},
+		{
+			user: "user4",
+			role: "USER",
+			result: `
+						{
+							"aggregateColumn":
+								{
+									"count": 2,
+									"nameMin": "Column2",
+									"nameMax": "Column3"
+								}
+						}`,
+		},
+	}
 	query := `
 	query {
 		aggregateColumn {
 			count
+			nameMin
+			nameMax
 		}
 	}`
 
@@ -1040,9 +1070,9 @@ func TestRootCountQuery(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }
@@ -1108,16 +1138,41 @@ func TestRBACFilter(t *testing.T) {
 	}
 }
 
-func TestRBACFilterWithCountQuery(t *testing.T) {
+func TestRBACFilterWithAggregateQuery(t *testing.T) {
 	testCases := []TestCase{
-		{role: "USER", result: `{"aggregateLog": null}`},
-		{result: `{"aggregateLog": null}`},
-		{role: "ADMIN", result: `{"aggregateLog": {"count": 2}}`}}
+		{
+			role: "USER",
+			result: `
+						{
+							"aggregateLog": null
+						}`,
+		},
+		{
+			result: `
+						{
+							"aggregateLog": null
+						}`,
+		},
+		{
+			role: "ADMIN",
+			result: `
+						{
+							"aggregateLog":
+								{
+									"count": 2,
+									"randomMin": "test",
+									"randomMax": "test"
+								}
+						}`,
+		},
+	}
 
 	query := `
 		query {
 			aggregateLog {
 		    	count
+				randomMin
+				randomMax
 		    }
 		}
 	`
@@ -1130,9 +1185,9 @@ func TestRBACFilterWithCountQuery(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }

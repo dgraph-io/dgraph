@@ -310,6 +310,36 @@ type DeletePostPayload {
 
 type PostAggregateResult {
 	count: Int
+	titleMin: String
+	titleMax: String
+	titleByEverythingMin: String
+	titleByEverythingMax: String
+	textMin: String
+	textMax: String
+	publishByYearMin: DateTime
+	publishByYearMax: DateTime
+	publishByMonthMin: DateTime
+	publishByMonthMax: DateTime
+	publishByDayMin: DateTime
+	publishByDayMax: DateTime
+	publishByHourMin: DateTime
+	publishByHourMax: DateTime
+	publishTimestampMin: Int64
+	publishTimestampMax: Int64
+	publishTimestampSum: Int64
+	publishTimestampAvg: Float
+	numViewersMin: Int64
+	numViewersMax: Int64
+	numViewersSum: Int64
+	numViewersAvg: Float
+	numLikesMin: Int
+	numLikesMax: Int
+	numLikesSum: Int
+	numLikesAvg: Float
+	scoreMin: Float
+	scoreMax: Float
+	scoreSum: Float
+	scoreAvg: Float
 }
 
 type UpdatePostPayload {

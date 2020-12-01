@@ -39,6 +39,7 @@ var ExportBackup x.SubCommand
 
 var opt struct {
 	backupId    string
+	compression string
 	location    string
 	pdir        string
 	zero        string
@@ -111,6 +112,10 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	}
 
 	flag := Restore.Cmd.Flags()
+	flag.StringVar(&opt.compression, "badger.compression", "snappy",
+		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
+			"level (if applicable) for the postings directory. none would disable compression,"+
+			" while zstd:1 would set zstd compression at level 1.")
 	flag.StringVarP(&opt.location, "location", "l", "",
 		"Sets the source location URI (required).")
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
@@ -215,8 +220,10 @@ func runRestoreCmd() error {
 		zc = pb.NewZeroClient(zero)
 	}
 
+	ctype, clevel := x.ParseCompression(opt.compression)
+
 	start = time.Now()
-	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, opt.key)
+	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, opt.key, ctype, clevel)
 	if result.Err != nil {
 		return result.Err
 	}

@@ -243,15 +243,15 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
 		if err == nil {
 			break
 		}
+
 		if strings.Contains(err.Error(), "errIndexingInProgress") ||
 			strings.Contains(err.Error(), "is already running") {
 			glog.V(2).Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
 			time.Sleep(time.Second)
 			continue
 		}
-		if err != nil {
-			x.Panic(err)
-		}
+
+		x.Panic(err)
 	}
 
 	err := maybePopulateData(client, data)
@@ -362,9 +362,9 @@ func RunAll(t *testing.T) {
 	t.Run("filter in queries with array for AND/OR", filterInQueriesWithArrayForAndOr)
 	t.Run("query geo near filter", queryGeoNearFilter)
 	t.Run("persisted query", persistedQuery)
-	t.Run("query count without filter", queryCountWithoutFilter)
-	t.Run("query count with filter", queryCountWithFilter)
-	t.Run("query count with alias", queryCountWithAlias)
+	t.Run("query aggregate without filter", queryAggregateWithoutFilter)
+	t.Run("query aggregate with filter", queryAggregateWithFilter)
+	t.Run("query aggregate with alias", queryAggregateWithAlias)
 	t.Run("query count at child level", queryCountAtChildLevel)
 	t.Run("query count at child level with filter", queryCountAtChildLevelWithFilter)
 	t.Run("query count at child level with multiple alias", queryCountAtChildLevelWithMultipleAlias)
@@ -774,20 +774,15 @@ func allCountriesAdded() ([]*country, error) {
 
 func CheckGraphQLStarted(url string) error {
 	var err error
-	retries := 6
-	sleep := 10 * time.Second
-
 	// Because of how GraphQL starts (it needs to read the schema from Dgraph),
 	// there's no guarantee that GraphQL is available by now.  So we
 	// need to try and connect and potentially retry a few times.
-	for retries > 0 {
-		retries--
-
+	for i := 0; i < 60; i++ {
 		_, err = hasCurrentGraphQLSchema(url)
 		if err == nil {
 			return nil
 		}
-		time.Sleep(sleep)
+		time.Sleep(time.Second)
 	}
 	return err
 }

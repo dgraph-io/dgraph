@@ -19,6 +19,7 @@ package testutil
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -85,9 +86,21 @@ func MakeGQLRequest(t *testing.T, params *GraphQLParams) *GraphQLResponse {
 	return MakeGQLRequestWithAccessJwt(t, params, "")
 }
 
-func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams,
-	accessToken string) *GraphQLResponse {
-	adminUrl := "http://" + SockAddrHttp + "/admin"
+func MakeGQLRequestWithTLS(t *testing.T, params *GraphQLParams, tls *tls.Config) *GraphQLResponse {
+	return MakeGQLRequestWithAccessJwtAndTLS(t, params, tls, "")
+}
+
+func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams, accessToken string) *GraphQLResponse {
+	return MakeGQLRequestWithAccessJwtAndTLS(t, params, nil, accessToken)
+}
+
+func MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *GraphQLParams, tls *tls.Config, accessToken string) *GraphQLResponse {
+	var adminUrl string
+	if tls != nil {
+		adminUrl = "https://" + SockAddrHttp + "/admin"
+	} else {
+		adminUrl = "http://" + SockAddrHttp + "/admin"
+	}
 
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
@@ -99,6 +112,11 @@ func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams,
 		req.Header.Set("X-Dgraph-AccessToken", accessToken)
 	}
 	client := &http.Client{}
+	if tls != nil {
+		client.Transport = &http.Transport{
+			TLSClientConfig: tls,
+		}
+	}
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 

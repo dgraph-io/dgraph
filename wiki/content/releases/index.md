@@ -6,8 +6,14 @@ title = "Dgraph Releases"
   weight = 14
 +++
 
-Dgraph releases starting with v20.03 follow [calendar versioning](https://calver.org).
-You can watch the [Announce][] Discuss category to know about the latest releases and other important announcements.
+Dgraph releases starting with v20.03 follow
+[calendar versioning](https://calver.org). To learn more about our switch from
+semantic to calendar versioning, and why v2-v19 don't exist as a result of this
+switch, see our Blog post on the 
+[switch to calendar versioning](https://dgraph.io/blog/post/dgraph-calendar-versioning/).
+
+To learn about the latest releases and other important announcements, watch the
+[Announce][] category on Discuss.
 
 [Announce]: https://discuss.dgraph.io/c/announce
 

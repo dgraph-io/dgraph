@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -29,18 +30,17 @@ import (
 )
 
 func setSchema(schema string) {
-	for retry := 0; retry < 3; retry++ {
-		err := client.Alter(context.Background(), &api.Operation{
+	var err error
+	for retry := 0; retry < 60; retry++ {
+		err = client.Alter(context.Background(), &api.Operation{
 			Schema: schema,
 		})
 		if err == nil {
 			return
 		}
-		// We'll panic if we are in last iteration.
-		if retry == 2 {
-			panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
-		}
+		time.Sleep(time.Second)
 	}
+	panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
 }
 
 func dropPredicate(pred string) {

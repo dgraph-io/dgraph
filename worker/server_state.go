@@ -126,6 +126,8 @@ func (s *ServerState) initStorage() {
 		// zero out from memory
 		opt.EncryptionKey = nil
 	}
+	// Temp directory
+	x.Check(os.MkdirAll(x.WorkerConfig.TmpDir, 0700))
 
 	s.gcCloser = z.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)

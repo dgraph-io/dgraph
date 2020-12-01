@@ -81,8 +81,8 @@ func TestCurlAuthorization(t *testing.T) {
 	// sleep long enough (longer than 10s, the access JWT TTL defined in the docker-compose.yml
 	// in this directory) for the accessJwt to expire, in order to test auto login through refresh
 	// JWT
-	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
-	time.Sleep(4 * time.Second)
+	glog.Infof("Sleeping for accessJwt to expire")
+	time.Sleep(expireJwtSleep)
 	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
@@ -103,7 +103,7 @@ func TestCurlAuthorization(t *testing.T) {
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 
 	createGroupAndAcls(t, unusedGroup, false)
-	time.Sleep(4 * time.Second)
+	time.Sleep(expireJwtSleep)
 	testutil.VerifyCurlCmd(t, queryArgs(accessJwt), &testutil.CurlFailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",

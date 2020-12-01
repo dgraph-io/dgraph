@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/pkg/errors"
 
@@ -35,7 +36,7 @@ import (
 )
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice) LoadResult {
+func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype options.CompressionType, clevel int) LoadResult {
 	// Create the pdir if it doesn't exist.
 	if err := os.MkdirAll(pdir, 0700); err != nil {
 		return LoadResult{0, 0, err}
@@ -64,6 +65,8 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice) LoadR
 			// The badger DB should be opened only after creating the backup
 			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+				WithCompression(ctype).
+				WithZSTDCompressionLevel(clevel).
 				WithSyncWrites(false).
 				WithValueThreshold(1 << 10).
 				WithBlockCacheSize(100 * (1 << 20)).

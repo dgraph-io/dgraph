@@ -295,6 +295,10 @@ type AddObjectPayload {
 
 type BusinessManAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
+	companyNameMin: String
+	companyNameMax: String
 }
 
 type DeleteBusinessManPayload {
@@ -317,10 +321,14 @@ type DeletePersonPayload {
 
 type ObjectAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type PersonAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type UpdateBusinessManPayload {

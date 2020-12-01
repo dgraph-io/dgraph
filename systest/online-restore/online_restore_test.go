@@ -21,13 +21,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -57,7 +58,7 @@ func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) 
 			"backupNum": backupNum,
 		},
 	}
-	resp := testutil.MakeGQLRequest(t, &params)
+	resp := testutil.MakeGQLRequestWithTLS(t, &params, testutil.GetAlphaClientConfig(t))
 	resp.RequireNoGraphQLErrors(t)
 
 	var restoreResp struct {
@@ -87,8 +88,9 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	restoreDone := false
+	client := testutil.GetHttpsClient(t)
 	for i := 0; i < 15; i++ {
-		resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
+		resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)
@@ -145,7 +147,8 @@ func disableDraining(t *testing.T) {
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -226,7 +229,7 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 func TestBasicRestore(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -242,7 +245,7 @@ func TestBasicRestore(t *testing.T) {
 func TestRestoreBackupNum(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -259,7 +262,7 @@ func TestRestoreBackupNum(t *testing.T) {
 func TestRestoreBackupNumInvalid(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -283,7 +286,8 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	bufString := string(buf)
@@ -306,7 +310,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	b, err = json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err = http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
+	resp, err = client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err = ioutil.ReadAll(resp.Body)
 	bufString = string(buf)
@@ -317,7 +321,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 func TestMoveTablets(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -369,8 +373,8 @@ func TestInvalidBackupId(t *testing.T) {
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-
-	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -399,7 +403,8 @@ func TestListBackups(t *testing.T) {
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -411,7 +416,17 @@ func TestListBackups(t *testing.T) {
 }
 
 func TestRestoreWithDropOperations(t *testing.T) {
-	dg, err := testutil.DgraphClientDropAll(testutil.SockAddr)
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	for {
+		// keep retrying until we succeed or receive a non-retriable error
+		err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
+		if err == nil || !strings.Contains(err.Error(), "Please retry") {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	require.NoError(t, err)
 
 	// apply initial schema
@@ -606,7 +621,7 @@ func backup(t *testing.T, backupDir string) {
 		}`,
 		Variables: map[string]interface{}{"backupDir": backupDir},
 	}
-	testutil.MakeGQLRequest(t, backupParams).RequireNoGraphQLErrors(t)
+	testutil.MakeGQLRequestWithTLS(t, backupParams, testutil.GetAlphaClientConfig(t)).RequireNoGraphQLErrors(t)
 }
 
 func backupRestoreAndVerify(t *testing.T, dg *dgo.Dgraph, backupDir, queryToVerify,
