@@ -26,7 +26,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc/credentials"
 
@@ -74,6 +73,7 @@ func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) 
 	return restoreResp.Restore.RestoreId
 }
 
+<<<<<<< HEAD
 func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	query := fmt.Sprintf(`query status() {
 		 restoreStatus(restoreId: %d) {
@@ -131,6 +131,8 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	}
 }
 
+=======
+>>>>>>> Copy old backup dir to all alphas, wait for restore to finish
 // disableDraining disables draining mode before each test for increased reliability.
 func disableDraining(t *testing.T) {
 	drainRequest := `mutation draining {
@@ -237,7 +239,7 @@ func TestBasicRestore(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 	runMutations(t, dg)
 }
@@ -254,7 +256,7 @@ func TestRestoreBackupNum(t *testing.T) {
 	runQueries(t, dg, true)
 
 	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 1)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 	runQueries(t, dg, true)
 	runMutations(t, dg)
 }
@@ -329,13 +331,13 @@ func TestMoveTablets(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
 	restoreId = sendRestoreRequest(t, "", "blissful_hermann1", 0)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
@@ -628,7 +630,7 @@ func backupRestoreAndVerify(t *testing.T, dg *dgo.Dgraph, backupDir, queryToVeri
 	expectedResponse string, schemaVerificationOpts testutil.SchemaOptions) {
 	schemaVerificationOpts.ExcludeAclSchema = true
 	backup(t, backupDir)
-	waitForRestore(t, sendRestoreRequest(t, backupDir, "", 0), dg)
+	testutil.WaitForRestore(t, sendRestoreRequest(t, backupDir, "", 0), dg)
 	testutil.VerifyQueryResponse(t, dg, queryToVerify, expectedResponse)
 	testutil.VerifySchema(t, dg, schemaVerificationOpts)
 }
