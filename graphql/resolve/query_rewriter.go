@@ -1116,7 +1116,7 @@ func buildAggregateFields(
 		}
 	}
 	// mainField is only added as an aggregate child if it has any children fields inside it.
-	// This ensures that if only count aggregation field is there, the mainField is added.
+	// This ensures that if only count aggregation field is there, the mainField is not added.
 	// As mainField contains only var fields. It is not needed in case of count.
 	if len(mainField.Children) > 0 {
 		aggregateChildren = append([]*gql.GraphQuery{mainField}, aggregateChildren...)
