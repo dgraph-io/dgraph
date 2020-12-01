@@ -17,8 +17,11 @@
 package schema
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
+
+	"github.com/spf13/cast"
 
 	"github.com/dgraph-io/dgraph/gql"
 
@@ -33,9 +36,10 @@ const (
 )
 
 type RBACQuery struct {
-	Variable string
-	Operator string
-	Operand  string
+	Variable      string
+	Operator      string
+	Operand       interface{}
+	compiledRegex *regexp.Regexp
 }
 
 type RuleNode struct {
@@ -64,11 +68,78 @@ const (
 	Negative
 )
 
-func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
-	if rq.Operator == "eq" {
-		if av[rq.Variable] == rq.Operand {
+func evaluateFromArray(arr []interface{}, val interface{}) RuleResult {
+	for _, v := range arr {
+		if v == val {
 			return Positive
 		}
+	}
+	return Negative
+}
+
+func evaluateFromValue(val1 interface{}, val2 interface{}) RuleResult {
+	if val1 == val2 {
+		return Positive
+	}
+	return Negative
+}
+
+func evaluateRegexFromArray(arr []interface{}, regex *regexp.Regexp) RuleResult {
+	for _, v := range arr {
+		strv, ok := v.(string)
+		if !ok {
+			continue
+		}
+		if regex.MatchString(strv) {
+			return Positive
+		}
+	}
+	return Negative
+}
+
+func evaluateRegexFromValue(val1 interface{}, regex *regexp.Regexp) RuleResult {
+	strv, ok := val1.(string)
+	if !ok {
+		return Negative
+	}
+	if regex.MatchString(strv) {
+		return Positive
+	}
+	return Negative
+}
+
+func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
+	switch rq.Operator {
+	case "eq":
+		// if eq, auth rule value will be matched completely
+		tokenValues, err := cast.ToSliceE(av[rq.Variable])
+		if err == nil {
+			return evaluateFromArray(tokenValues, rq.Operand)
+		}
+
+		return evaluateFromValue(av[rq.Variable], rq.Operand)
+	case "regexp":
+		// if regexp, auth rule value should always be string and so as token values
+		tokenValues, err := cast.ToSliceE(av[rq.Variable])
+		if err == nil {
+			return evaluateRegexFromArray(tokenValues, rq.compiledRegex)
+		}
+
+		return evaluateRegexFromValue(av[rq.Variable], rq.compiledRegex)
+	case "in":
+		// if in, auth rule will only have array as the value
+		ruleOperand := cast.ToSlice(rq.Operand)
+		tokenValues, err := cast.ToSliceE(av[rq.Variable])
+		if err == nil {
+			for _, t := range tokenValues {
+				if evaluateFromArray(ruleOperand, t) == Positive {
+					return Positive
+				}
+			}
+			return Negative
+		}
+
+		return evaluateFromArray(ruleOperand, av[rq.Variable])
 	}
 	return Negative
 }
@@ -363,7 +434,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 
 func rbacValidateRule(typ *ast.Definition, rule string) (*RBACQuery, error) {
 	rbacRegex, err :=
-		regexp.Compile(`^{[\s]?(.*?)[\s]?:[\s]?{[\s]?(\w*)[\s]?:[\s]?"(.*)"[\s]?}[\s]?}$`)
+		regexp.Compile(`^{[\s]?(.*?)[\s]?:[\s]?{[\s]?(\w*)[\s]?:[\s]?(.*)[\s]?}[\s]?}$`)
 	if err != nil {
 		return nil, gqlerror.Errorf("Type %s: @auth: `%s` error while parsing rule.",
 			typ.Name, err)
@@ -374,11 +445,27 @@ func rbacValidateRule(typ *ast.Definition, rule string) (*RBACQuery, error) {
 		return nil, gqlerror.Errorf("Type %s: @auth: `%s` is not a valid rule.",
 			typ.Name, rule)
 	}
+	//	bool, for booleans
+	//	float64, for numbers
+	//	string, for strings
+	//	[]interface{}, for JSON arrays
+	//	map[string]interface{}, for JSON objects
+	//	nil for JSON null
+	var op interface{}
+	if err = json.Unmarshal([]byte(rule[idx[0][6]:idx[0][7]]), &op); err != nil {
+		return nil, gqlerror.Errorf("Type %s: @auth: `%s` is not a valid GraphQL variable.",
+			typ.Name, rule[idx[0][2]:idx[0][3]])
+	}
 
+	//objects and nil values are not supported in rules
+	if op == nil {
+		return nil, gqlerror.Errorf("Type %s: @auth: `%s` is not a valid GraphQL variable. "+
+			"object or nil values aren't supported", typ.Name, rule[idx[0][2]:idx[0][3]])
+	}
 	query := RBACQuery{
 		Variable: rule[idx[0][2]:idx[0][3]],
 		Operator: rule[idx[0][4]:idx[0][5]],
-		Operand:  rule[idx[0][6]:idx[0][7]],
+		Operand:  op,
 	}
 
 	if !strings.HasPrefix(query.Variable, "$") {
@@ -386,12 +473,36 @@ func rbacValidateRule(typ *ast.Definition, rule string) (*RBACQuery, error) {
 			typ.Name, query.Variable)
 	}
 	query.Variable = query.Variable[1:]
+	if err = validateRBACOperators(typ, query); err != nil {
+		return nil, err
+	}
 
-	if query.Operator != "eq" {
-		return nil, gqlerror.Errorf("Type %s: @auth: `%s` operator is not supported in "+
+	if query.Operator == "regexp" {
+		compile, err := regexp.Compile(query.Operand.(string))
+		if err != nil {
+			return nil, err
+		}
+		query.compiledRegex = compile
+	}
+
+	return &query, nil
+}
+
+func validateRBACOperators(typ *ast.Definition, query RBACQuery) error {
+	var ok = true
+	switch query.Operator {
+	case "regexp":
+		_, ok = query.Operand.(string)
+	case "in":
+		// auth rule value should be of array type
+		_, ok = query.Operand.([]interface{})
+	}
+	if !ok {
+		return gqlerror.Errorf("Type %s: @auth: `%s` operator is not supported in "+
 			"this rule.", typ.Name, query.Operator)
 	}
-	return &query, nil
+
+	return nil
 }
 
 func gqlValidateRule(s *ast.Schema, typ *ast.Definition, rule string, node *RuleNode) error {
