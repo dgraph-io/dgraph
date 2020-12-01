@@ -4576,3 +4576,30 @@ func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 	DeleteGqlType(t, "post1", filter, 2, nil)
 
 }
+
+func idDirectiveWithIntMutation(t *testing.T) {
+	query := &GraphQLParams{
+		Query: ``,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, response.Errors)
+}
+
+func idDirectiveWithInt64Mutation(t *testing.T) {
+	query := &GraphQLParams{
+		Query: ``,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, response.Errors)
+}
+
+func idDirectiveWithFloatMutation(t *testing.T) {
+	query := &GraphQLParams{
+		Query: ``,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	require.Nil(t, response.Errors)
+}

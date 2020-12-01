@@ -655,6 +655,9 @@ func RunAll(t *testing.T) {
 	t.Run("query aggregate and other fields at child level", queryAggregateAndOtherFieldsAtChildLevel)
 	t.Run("query at child level with multiple alias on scalar field", queryChildLevelWithMultipleAliasOnScalarField)
 	t.Run("checkUserPassword query", passwordTest)
+	t.Run("query id directive with int", idDirectiveWithInt)
+	t.Run("query id directive with int64", idDirectiveWithInt64)
+	t.Run("query id directive with float", idDirectiveWithFloat)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -702,6 +705,9 @@ func RunAll(t *testing.T) {
 	t.Run("Geo - MultiPolygon type", mutationMultiPolygonType)
 	t.Run("filter in mutations with array for AND/OR", filterInMutationsWithArrayForAndOr)
 	t.Run("filter in update mutations with array for AND/OR", filterInUpdateMutationsWithFilterAndOr)
+	t.Run("mutation id directive with int", idDirectiveWithIntMutation)
+	t.Run("mutation id directive with int64", idDirectiveWithInt64Mutation)
+	t.Run("mutation id directive with float", idDirectiveWithFloatMutation)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
