@@ -200,7 +200,7 @@ func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error
 
 	dgQuery := rewriteAsGet(m, uid, xid, authRw)
 
-	// Handle empty dgQuery
+	// Handle empty dgQuery.
 	if strings.HasSuffix(dgQuery.Attr, "()") {
 		return dgQuery, nil
 	}
@@ -218,7 +218,7 @@ func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error
 	predicate := queriedType.DgraphPredicate(name)
 	password := m.ArgValue(name).(string)
 
-	// This adds the checkPwd function
+	// This adds the checkPwd function.
 	op := &gql.GraphQuery{
 		Attr:   "checkPwd",
 		Func:   mainQuery.Func,
