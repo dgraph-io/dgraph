@@ -56,9 +56,9 @@ sudo apt-get install gcc make
 
 ### macOS
 
-As a prerequisite, you need to have installed [XCode](https://apps.apple.com/us/app/xcode/id497799835?mt=12) (or the [XCode Command-line Tools](https://developer.apple.com/downloads/)) and [Homebrew](https://brew.sh/).
+As a prerequisite, first install [XCode](https://apps.apple.com/us/app/xcode/id497799835?mt=12) (or the [XCode Command-line Tools](https://developer.apple.com/downloads/)) and [Homebrew](https://brew.sh/).
 
-Next, install required the dependencies:
+Next, install the required dependencies:
 
 ```bash
 brew update
