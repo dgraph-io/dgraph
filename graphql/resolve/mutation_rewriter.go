@@ -993,17 +993,11 @@ func rewriteObject(
 	if xid != nil {
 		if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 			switch xid.Type().Name() {
-			case "Int!":
-				fallthrough
-			case "Int":
+			case "Int!", "Int":
 				xidString = strconv.FormatInt(xidVal.(int64), 10)
-			case "Float!":
-				fallthrough
-			case "Float":
+			case "Float!", "Float":
 				xidString = strconv.FormatFloat(xidVal.(float64), 'f', -1, 64)
-			case "Int64!":
-				fallthrough
-			case "Int64":
+			case "Int64!", "Int64":
 				fallthrough
 			default:
 				xidString, ok = xidVal.(string)
