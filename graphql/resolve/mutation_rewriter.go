@@ -994,17 +994,23 @@ func rewriteObject(
 		if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 			switch xid.Type().Name() {
 			case "Int!":
+				fallthrough
+			case "Int":
 				xidString = strconv.FormatInt(xidVal.(int64), 10)
 			case "Float!":
+				fallthrough
+			case "Float":
 				xidString = strconv.FormatFloat(xidVal.(float64), 'f', -1, 64)
 			case "Int64!":
+				fallthrough
+			case "Int64":
 				fallthrough
 			default:
 				xidString, ok = xidVal.(string)
 				if !ok {
 					errFrag := newFragment(nil)
-					errFrag.err = errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't " +
-							"a String or Int! or Int64! or Float!", xid.Name(), xid.Type().Name()))
+					errFrag.err = errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+						"a String or Int! or Int64! or Float!", xid.Name(), xid.Type().Name()))
 					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
 				}
 			}
