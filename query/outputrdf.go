@@ -101,7 +101,7 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 		case len(sg.counts) > 0:
 			// Add count rdf.
 			b.rdfForCount(uid, sg.counts[i], sg)
-		case i < len(sg.uidMatrix) && len(sg.uidMatrix[i].Uids) != 0:
+		case i < len(sg.uidMatrix) && len(sg.uidMatrix[i].Uids) != 0 && len(sg.Children) > 0:
 			// Add posting list relation.
 			b.rdfForUIDList(uid, sg.uidMatrix[i], sg)
 		case i < len(sg.valueMatrix):
