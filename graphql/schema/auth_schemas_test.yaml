@@ -59,7 +59,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `eq` operator has invalid value in this rule." }
+      { "message": "Type X: @auth: `$USER` is not a valid GraphQL variable." }
+    ]
 
   - name: "Invalid RBAC rule: null as the value"
     input: |
@@ -70,7 +71,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `eq` operator has invalid value in this rule." }
+      { "message": "Type X: @auth: `$USER` is not a valid GraphQL variable. object with nil values aren't supported" }
+    ]
 
   - name: "Invalid RBAC rule: regexp filter not string variable"
     input: |

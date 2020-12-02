@@ -1893,7 +1893,7 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	deleteLog(t, logID)
 }
 
-func TestAuth(t *testing.T) {
+func TestAuthRBACEvaluation(t *testing.T) {
 	tcs := []struct {
 		name   string
 		header http.Header
