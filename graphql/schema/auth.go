@@ -37,10 +37,10 @@ const (
 )
 
 type RBACQuery struct {
-	Variable      string
-	Operator      string
-	Operand       interface{}
-	compiledRegex *regexp.Regexp
+	Variable string
+	Operator string
+	Operand  interface{}
+	regex    *regexp.Regexp
 }
 
 type RuleNode struct {
@@ -88,10 +88,7 @@ func checkIfEqual(val1 interface{}, val2 interface{}) RuleResult {
 func checkIfRegexMatchExistInArray(regex *regexp.Regexp, arr []interface{}) RuleResult {
 	for _, v := range arr {
 		strv, ok := v.(string)
-		if !ok {
-			continue
-		}
-		if regex.MatchString(strv) {
+		if ok && regex.MatchString(strv) {
 			return Positive
 		}
 	}
@@ -100,15 +97,20 @@ func checkIfRegexMatchExistInArray(regex *regexp.Regexp, arr []interface{}) Rule
 
 func checkIfRegexMatch(regex *regexp.Regexp, val1 interface{}) RuleResult {
 	strv, ok := val1.(string)
-	if !ok {
-		return Negative
-	}
-	if regex.MatchString(strv) {
+	if ok && regex.MatchString(strv) {
 		return Positive
 	}
 	return Negative
 }
 
+// EvaluateRBACRule evaluates the auth token based on the auth query
+// There are two cases here:
+// 1. Auth token has an array of values for the variable.
+// 2. Auth token has non-array value for the variable.
+// match would be deep equal except for regex match in case of regexp operator.
+// In case array one match would made the rule positive.
+// For example, Rule {$USER: { eq:"uid"}} and token $USER:["u", "id", "uid"] would result in match.
+// also Rule {$USER: { in: ["uid", "xid"]}} and token $USER:["u", "id", "uid"] would also result in match.
 func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 	switch rq.Operator {
 	case "eq":
@@ -124,9 +126,9 @@ func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 		tokenValues, err := cast.ToSliceE(av[rq.Variable])
 		if err != nil {
 			// this means value for variable in token in not an array
-			return checkIfRegexMatch(rq.compiledRegex, av[rq.Variable])
+			return checkIfRegexMatch(rq.regex, av[rq.Variable])
 		}
-		return checkIfRegexMatchExistInArray(rq.compiledRegex, tokenValues)
+		return checkIfRegexMatchExistInArray(rq.regex, tokenValues)
 
 	case "in":
 		// if in, auth rule will only have array as the value
@@ -480,11 +482,11 @@ func rbacValidateRule(typ *ast.Definition, rule string) (*RBACQuery, error) {
 	}
 
 	if query.Operator == "regexp" {
-		compile, err := regexp.Compile(query.Operand.(string))
+		regex, err := regexp.Compile(query.Operand.(string))
 		if err != nil {
 			return nil, err
 		}
-		query.compiledRegex = compile
+		query.regex = regex
 	}
 
 	return &query, nil
