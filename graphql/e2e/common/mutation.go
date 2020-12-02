@@ -4605,7 +4605,7 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
 
-	DeleteGqlType(t, "Book", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "Book", map[string]interface{}{}, 2, nil)
 }
 
 func idDirectiveWithIntMutation(t *testing.T) {
@@ -4634,7 +4634,7 @@ func idDirectiveWithIntMutation(t *testing.T) {
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
 
-	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 2, nil)
 }
 
 func idDirectiveWithFloatMutation(t *testing.T) {
@@ -4668,5 +4668,5 @@ func idDirectiveWithFloatMutation(t *testing.T) {
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
 
-	DeleteGqlType(t, "Section", map[string]interface{}{}, 2, nil)
+	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
 }
