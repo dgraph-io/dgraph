@@ -84,7 +84,7 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 		}
 	}
 
-	if nonNullChild {
+	if len(sg.Children) > 0 && !nonNullChild {
 		return nil
 	}
 
