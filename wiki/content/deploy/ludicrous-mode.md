@@ -45,9 +45,9 @@ There are no transactions in Ludicrous mode. That is, you cannot open a transact
 
 Yes, Ludicrous mode works with a cluster set up in a highly-available (HA) configuration.
 
-### Can a cluster run with multiple data shards?
+### Can Ludicrous mode run in a cluster with multiple data shards?
 
-Yes, Ludicrous mode works with the cluster set up with multiple data shards.
+Yes, Ludicrous mode works in a cluster set up with multiple data shards.
 
 ### How does Ludicrous mode handle concurrency?
 
