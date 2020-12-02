@@ -994,19 +994,34 @@ func rewriteObject(
 	xidEncounteredFirstTime := false
 	if xid != nil {
 		if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
+			errResponse := func(err error) *mutationRes {
+				errFrag := newFragment(nil)
+				errFrag.err = err
+				return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+			}
 			switch xid.Type().Name() {
-			case "Int!", "Int":
-				xidString = strconv.FormatInt(xidVal.(int64), 10)
-			case "Float!", "Float":
-				xidString = strconv.FormatFloat(xidVal.(float64), 'f', -1, 64)
-			case "Int64!", "Int64":
+			case "Int":
+				val, ok := xidVal.(int64)
+				if !ok {
+					return errResponse(errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+						"a Int but data type in schema is Int", xid.Name(), xid.Type().Name())))
+				}
+				xidString = strconv.FormatInt(val, 10)
+			case "Float":
+				val, ok := xidVal.(float64)
+				if !ok {
+					return errResponse(errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+						"a Float but data type in schema is Float", xid.Name(), xid.Type().Name())))
+				}
+				xidString = strconv.FormatFloat(val, 'f', -1, 64)
+			case "Int64":
 				fallthrough
 			default:
 				xidString, ok = xidVal.(string)
 				if !ok {
 					errFrag := newFragment(nil)
 					errFrag.err = errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-						"a String or Int! or Int64! or Float!", xid.Name(), xid.Type().Name()))
+						"a String or Int64", xid.Name(), xid.Type().Name()))
 					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
 				}
 			}
