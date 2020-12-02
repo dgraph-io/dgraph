@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -34,10 +35,11 @@ import (
 )
 
 var (
-	subscriptionEndpoint = "ws://"+ testutil.ContainerAddr("alpha1", 8080) +"/graphql"
+	subscriptionEndpoint = "ws://" + testutil.ContainerAddr("alpha1", 8080) + "/graphql"
 )
+
 const (
-	customTypes          = `type MovieDirector @remote {
+	customTypes = `type MovieDirector @remote {
 		 id: ID!
 		 name: String!
 		 directed: [Movie]
@@ -73,25 +75,6 @@ const (
 	}`
 )
 
-func updateSchema(t *testing.T, sch string) *common.GraphQLResponse {
-	add := &common.GraphQLParams{
-		Query: `mutation updateGQLSchema($sch: String!) {
-			 updateGQLSchema(input: { set: { schema: $sch }}) {
-				 gqlSchema {
-					 schema
-				 }
-			 }
-		 }`,
-		Variables: map[string]interface{}{"sch": sch},
-	}
-	return add.ExecuteAsPost(t, common.GraphqlAdminURL)
-}
-
-func updateSchemaRequireNoGQLErrors(t *testing.T, sch string) {
-	resp := updateSchema(t, sch)
-	common.RequireNoGQLErrors(t, resp)
-}
-
 func TestCustomGetQuery(t *testing.T) {
 	schema := customTypes + `
 	 type Query {
@@ -100,8 +83,7 @@ func TestCustomGetQuery(t *testing.T) {
 				 method: "GET"
 		 })
 	 }`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	query := `
 	 query {
@@ -119,7 +101,7 @@ func TestCustomGetQuery(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%+v", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected := `{"myFavoriteMovies":[{"id":"0x3","name":"Star Wars","director":[{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":[{"id":"0x6","name":"J.J. Abrams"}]}]}`
 	require.JSONEq(t, expected, string(result.Data))
@@ -133,8 +115,7 @@ func TestCustomPostQuery(t *testing.T) {
 				 method: "POST"
 		 })
 	 }`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	query := `
 	 query {
@@ -152,7 +133,7 @@ func TestCustomPostQuery(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected := `{"myFavoriteMoviesPost":[{"id":"0x3","name":"Star Wars","director":[{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":[{"id":"0x6","name":"J.J. Abrams"}]}]}`
 	require.JSONEq(t, expected, string(result.Data))
@@ -167,8 +148,7 @@ func TestCustomPostQueryWithBody(t *testing.T) {
 				 method: "POST"
 		 })
 	 }`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	query := `
 	 query {
@@ -186,7 +166,7 @@ func TestCustomPostQueryWithBody(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected := `{"myFavoriteMoviesPost":[{"id":"0x3","name":"Star Wars","director":
     [{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":
@@ -208,8 +188,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 		 # Dgraph.Secret Github-Api-Token "random-fake-token"
 		 # Dgraph.Secret app "should-be-overriden"
 	 `
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	query := `
 	 query {
@@ -228,7 +207,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%s", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
 }
@@ -247,8 +226,7 @@ func TestCustomNameForwardHeaders(t *testing.T) {
 
 		 # Dgraph.Secret Github-Api-Token "random-fake-token"
 	 `
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	query := `
 	 query {
@@ -267,7 +245,7 @@ func TestCustomNameForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%s", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
 }
@@ -299,7 +277,7 @@ func TestSchemaIntrospectionForCustomQueryShouldForwardHeaders(t *testing.T) {
 
 		# Dgraph.Secret GITHUB-API-TOKEN "random-api-token"
 		  `
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 }
 
 func TestServerShouldAllowForwardHeaders(t *testing.T) {
@@ -331,8 +309,7 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 		})
 	}`
 
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	req, err := http.NewRequest(http.MethodOptions, common.GraphqlURL, nil)
 	require.NoError(t, err)
@@ -345,7 +322,7 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 }
 
 func TestCustomFieldsInSubscription(t *testing.T) {
-	updateSchemaRequireNoGQLErrors(t, `
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, `
 	type Teacher @withSubscription {
 		tid: ID!
 		age: Int!
@@ -374,7 +351,7 @@ func TestCustomFieldsInSubscription(t *testing.T) {
 }
 
 func TestSubscriptionInNestedCustomField(t *testing.T) {
-	updateSchemaRequireNoGQLErrors(t, `
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, `
 	type Episode {
 		name: String! @id
 		anotherName: String! @custom(http: {
@@ -425,7 +402,7 @@ func addPerson(t *testing.T) *user {
 	}
 
 	result := addTeacherParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	var res struct {
 		AddPerson struct {
@@ -447,8 +424,7 @@ func TestCustomQueryWithNonExistentURLShouldReturnError(t *testing.T) {
                 method: "GET"
         })
 	}`
-	updateSchema(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	query := `
 	query {
@@ -516,9 +492,7 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 						mode: SINGLE
 					})
 	}`
-
-	updateSchema(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 	p := addPerson(t)
 
 	queryPerson := `
@@ -1023,8 +997,7 @@ func TestCustomFieldsShouldForwardHeaders(t *testing.T) {
 # Dgraph.Secret STRIPE-API-KEY "some-api-key"
   `
 
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	users := addUsers(t)
 
@@ -1045,7 +1018,7 @@ func TestCustomFieldsShouldForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%+v", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 }
 
 func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
@@ -1068,8 +1041,7 @@ func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
 
 # Dgraph.Secret GITHUB-API-TOKEN "some-api-token"
   `
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	users := addUsers(t)
 	queryUser := `
@@ -1086,11 +1058,11 @@ func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%+v", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 }
 
 func TestCustomFieldsShouldPassBody(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 	schema := `
@@ -1111,8 +1083,7 @@ func TestCustomFieldsShouldPassBody(t *testing.T) {
   	}
 # Dgraph.Secret GITHUB-API-TOKEN "some-api-token"
   `
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `mutation addUser {
@@ -1142,7 +1113,7 @@ func TestCustomFieldsShouldPassBody(t *testing.T) {
 	}
 
 	result = params.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nilf(t, result.Errors, "%+v", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 }
 
 func TestCustomFieldsShouldBeResolved(t *testing.T) {
@@ -1154,8 +1125,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	// 4. Single operation mode along with GraphQL.
 
 	schema := readFile(t, "schemas/batch-mode-rest.graphql")
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	// add some data
 	teachers := addTeachers(t)
@@ -1170,21 +1140,21 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	t.Run("rest single operation mode", func(t *testing.T) {
 		// lets update the schema and check single mode now
 		schema := readFile(t, "schemas/single-mode-rest.graphql")
-		updateSchemaRequireNoGQLErrors(t, schema)
+		common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 		verifyData(t, users, teachers, schools)
 	})
 
 	t.Run("graphql single operation mode", func(t *testing.T) {
 		// update schema to single mode where fields are resolved using GraphQL endpoints.
 		schema := readFile(t, "schemas/single-mode-graphql.graphql")
-		updateSchemaRequireNoGQLErrors(t, schema)
+		common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 		verifyData(t, users, teachers, schools)
 	})
 
 	t.Run("graphql batch operation mode", func(t *testing.T) {
 		// update schema to single mode where fields are resolved using GraphQL endpoints.
 		schema := readFile(t, "schemas/batch-mode-graphql.graphql")
-		updateSchemaRequireNoGQLErrors(t, schema)
+		common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 		verifyData(t, users, teachers, schools)
 	})
 
@@ -1192,7 +1162,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	t.Run("mixed mode", func(t *testing.T) {
 		// update schema to single mode where fields are resolved using GraphQL endpoints.
 		schema := readFile(t, "schemas/mixed-modes.graphql")
-		updateSchemaRequireNoGQLErrors(t, schema)
+		common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 		verifyData(t, users, teachers, schools)
 	})
 }
@@ -1228,7 +1198,7 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 			}
 		  )
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 	users := addUsers(t)
 	// Sleep so that schema update can come through in Alpha.
 	time.Sleep(time.Second)
@@ -1319,10 +1289,8 @@ func TestForInvalidCustomQuery(t *testing.T) {
 			graphql: "query($id: ID!) { country(code: $id) }"
 		})
 	}`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(), " query `country` is not present in remote schema")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
+		[]string{"query `country` is not present in remote schema"})
 }
 
 func TestForInvalidArgument(t *testing.T) {
@@ -1347,12 +1315,8 @@ func TestForInvalidArgument(t *testing.T) {
 			graphql: "query($id: ID!) { country(code: $id) }"
 		})
 	}`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(), "argument `code` is not present in remote query"+
-		" `country`")
-
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
+		[]string{"argument `code` is not present in remote query `country`"})
 }
 
 func TestForInvalidType(t *testing.T) {
@@ -1377,11 +1341,8 @@ func TestForInvalidType(t *testing.T) {
 			graphql: "query($id: ID!) { country(code: $id) }"
 		})
 	}`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(), "found type mismatch for "+
-		"variable `$id` in query `country`, expected `ID!`, got `Int!`")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil, []string{
+		"found type mismatch for variable `$id` in query `country`, expected `ID!`, got `Int!`"})
 }
 
 func TestCustomLogicGraphql(t *testing.T) {
@@ -1401,8 +1362,7 @@ func TestCustomLogicGraphql(t *testing.T) {
 			}
 		  )
 	  }`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 	query := `
 	query {
 		getCountry1(id: "BI"){
@@ -1437,8 +1397,7 @@ func TestCustomLogicGraphqlWithArgumentsOnFields(t *testing.T) {
 			}
 		  )
 	  }`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 	query := `
 	query {
 		getCountry2(id: "BI"){
@@ -1487,8 +1446,7 @@ func TestCustomLogicGraphqlWithError(t *testing.T) {
 			graphql: "query($id: ID!) { country(code: $id) }"
 		})
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 	query := `
 	query {
 		getCountryOnlyErr(id: "BI"){
@@ -1522,8 +1480,7 @@ func TestCustomLogicGraphQLValidArrayResponse(t *testing.T) {
 			}
 		  )
 	  }`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 	query := `
 	query {
 		getCountries(id: "BI"){
@@ -1572,8 +1529,7 @@ func TestCustomLogicWithErrorResponse(t *testing.T) {
 			graphql: "query($id: ID!) { country(code: $id) }"
 		})
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 	query := `
 	query {
 		getCountriesErr(id: "BI"){
@@ -1680,8 +1636,7 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 					})
 		episodes: [Episode]
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	ep1 := "episode-1"
 	ep2 := "episode-2"
@@ -1787,7 +1742,7 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 					})
 		episodes: [Episode]
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	result = params.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, result)
@@ -1814,8 +1769,7 @@ func TestCustomPostMutation(t *testing.T) {
 			body: "{ movies: $input}"
         })
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -1893,8 +1847,7 @@ func TestCustomPostMutationNullInBody(t *testing.T) {
 			body: "{ movies: $input}"
         })
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -1963,8 +1916,7 @@ func TestCustomPatchMutation(t *testing.T) {
 			body: "$input"
         })
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -2014,8 +1966,7 @@ func TestCustomMutationShouldForwardHeaders(t *testing.T) {
 			forwardHeaders: ["X-App-Token", "X-User-Id"]
         })
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -2054,10 +2005,8 @@ func TestCustomGraphqlNullQueryType(t *testing.T) {
 			graphql: "query($id: ID!) { getCountry(id: $id) }"
 		})
 	}`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(), "remote schema doesn't have any queries.")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
+		[]string{"remote schema doesn't have any queries."})
 }
 
 func TestCustomGraphqlNullMutationType(t *testing.T) {
@@ -2069,10 +2018,8 @@ func TestCustomGraphqlNullMutationType(t *testing.T) {
 			graphql: "mutation($input: CountryInput!) { putCountry(country: $input) }"
 		})
 	}`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(), "remote schema doesn't have any mutations.")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
+		[]string{"remote schema doesn't have any mutations."})
 }
 
 func TestCustomGraphqlMissingQueryType(t *testing.T) {
@@ -2084,10 +2031,8 @@ func TestCustomGraphqlMissingQueryType(t *testing.T) {
 			graphql: "query($id: ID!) { getCountry(id: $id) }"
 		})
 	}`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(), "remote schema doesn't have any type named Query.")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
+		[]string{"remote schema doesn't have any type named Query."})
 }
 
 func TestCustomGraphqlMissingMutationType(t *testing.T) {
@@ -2099,10 +2044,8 @@ func TestCustomGraphqlMissingMutationType(t *testing.T) {
 			graphql: "mutation($input: CountryInput!) { putCountry(country: $input) }"
 		})
 	}`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(), "remote schema doesn't have any type named Mutation")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
+		[]string{"remote schema doesn't have any type named Mutation"})
 }
 
 func TestCustomGraphqlMissingMutation(t *testing.T) {
@@ -2117,11 +2060,8 @@ func TestCustomGraphqlMissingMutation(t *testing.T) {
 			}
 		  )
 	  }`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(), "mutation `putCountry` is not present in remote"+
-		" schema")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
+		[]string{"mutation `putCountry` is not present in remote schema"})
 }
 
 func TestCustomGraphqlReturnTypeMismatch(t *testing.T) {
@@ -2133,11 +2073,8 @@ func TestCustomGraphqlReturnTypeMismatch(t *testing.T) {
 			graphql: "mutation($input: CountryInput!) { setCountry(country: $input) }"
 		})
 	}`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(), "found return type mismatch for mutation"+
-		" `setCountry`, expected `Movie!`, got `Country!`")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil, []string{
+		"found return type mismatch for mutation `setCountry`, expected `Movie!`, got `Country!`"})
 }
 
 func TestCustomGraphqlReturnTypeMismatchForBatchedField(t *testing.T) {
@@ -2158,13 +2095,10 @@ func TestCustomGraphqlReturnTypeMismatchForBatchedField(t *testing.T) {
 		})
 	}
 	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(),
-		"resolving updateGQLSchema failed because input:13: Type Post; Field author: inside "+
-			"graphql in @custom directive, found return type mismatch for query `getPosts`, "+
-			"expected `[Author!]`, got `[Post!]`.\n")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil, []string{
+		"resolving updateGQLSchema failed because input:13: Type Post; Field author: inside " +
+			"graphql in @custom directive, found return type mismatch for query `getPosts`, " +
+			"expected `[Author!]`, got `[Post!]`.\n"})
 }
 
 func TestCustomGraphqlInvalidInputFormatForBatchedField(t *testing.T) {
@@ -2181,13 +2115,10 @@ func TestCustomGraphqlInvalidInputFormatForBatchedField(t *testing.T) {
 		})
 	}
 	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(),
-		"resolving updateGQLSchema failed because input:9: Type Post; Field comments: inside "+
-			"graphql in @custom directive, for BATCH mode, query `getPosts` can have only one "+
-			"argument whose value should be a variable.\n")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil, []string{
+		"resolving updateGQLSchema failed because input:9: Type Post; Field comments: inside " +
+			"graphql in @custom directive, for BATCH mode, query `getPosts` can have only one " +
+			"argument whose value should be a variable.\n"})
 }
 
 func TestCustomGraphqlMissingTypeForBatchedFieldInput(t *testing.T) {
@@ -2204,13 +2135,10 @@ func TestCustomGraphqlMissingTypeForBatchedFieldInput(t *testing.T) {
 						})
 	}
 	`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(),
-		"resolving updateGQLSchema failed because input:9: Type Post; Field comments: inside "+
-			"graphql in @custom directive, remote schema doesn't have any type named "+
-			"PostFilterInput.\n")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil, []string{
+		"resolving updateGQLSchema failed because input:9: Type Post; Field comments: inside " +
+			"graphql in @custom directive, remote schema doesn't have any type named " +
+			"PostFilterInput.\n"})
 }
 
 func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
@@ -2246,11 +2174,9 @@ func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
 										graphql: "mutation { setCountry() }"
 									})
 	}`
-	res := updateSchema(t, schema)
-	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
-	require.Len(t, res.Errors, 1)
-	require.Contains(t, res.Errors[0].Error(), "argument `country` in mutation"+
-		" `setCountry` is missing, it is required by remote mutation.")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil, []string{
+		"argument `country` in mutation" +
+			" `setCountry` is missing, it is required by remote mutation."})
 }
 
 // this one accepts an object and returns an object
@@ -2287,8 +2213,7 @@ func TestCustomGraphqlMutation1(t *testing.T) {
 					graphql: "mutation($input: CountryInput!) { setCountry(country: $input) }"
 			})
 	  }`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -2377,8 +2302,7 @@ func TestCustomGraphqlMutation2(t *testing.T) {
 								graphql: "mutation($name: String, $std: Int) { updateCountries(name: $name, std: $std) }"
 							})
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -2435,8 +2359,7 @@ func TestForValidInputArgument(t *testing.T) {
 			}
 		  )
 	  }`
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -2493,8 +2416,8 @@ func TestForInvalidInputObject(t *testing.T) {
 			myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/invalidfield", method: "POST", graphql: "query($yo: CountryInput!) {countries(filter: $yo)}"})
 		}
 	 `
-	res := updateSchema(t, schema)
-	require.Contains(t, res.Errors.Error(), "expected type for the field code is Int! but got String! in type CountryInput")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
+		[]string{"expected type for the field code is Int! but got String! in type CountryInput"})
 }
 
 func TestForNestedInvalidInputObject(t *testing.T) {
@@ -2528,8 +2451,8 @@ func TestForNestedInvalidInputObject(t *testing.T) {
 		graphql: "query($yo: CountryInput!) {countries(filter: $yo)}"})
     }
 	 `
-	res := updateSchema(t, schema)
-	require.Contains(t, res.Errors.Error(), "expected type for the field name is Int! but got String! in type StateInput")
+	common.AssertUpdateGQLSchemaFailure(t, common.Alpha1HTTP, schema, nil,
+		[]string{"expected type for the field name is Int! but got String! in type StateInput"})
 }
 
 func TestRestCustomLogicInDeepNestedField(t *testing.T) {
@@ -2560,8 +2483,7 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 	}
 	`
 
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -2628,7 +2550,7 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 }
 
 func TestCustomDQL(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.AlphagRPC)
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
@@ -2704,8 +2626,7 @@ func TestCustomDQL(t *testing.T) {
 		""")
 	}
 	`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -2815,8 +2736,7 @@ func TestCustomGetQuerywithRESTError(t *testing.T) {
 				 method: "GET"
 		 })
 	 }`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	query := `
 	 query {
@@ -2875,8 +2795,7 @@ func TestCustomFieldsWithRestError(t *testing.T) {
   	}
   `
 
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `mutation addUser {
@@ -2954,8 +2873,7 @@ func TestCustomPostMutationWithRESTError(t *testing.T) {
 			body: "{ movies: $input}"
         })
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -3003,8 +2921,7 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 			body: "{name: $name, totalCredits: $totalCredits}"
 		})
 	}`
-	updateSchemaRequireNoGQLErrors(t, schema)
-	time.Sleep(2 * time.Second)
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	addCharacterParams := &common.GraphQLParams{
 		Query: `mutation {
@@ -3053,4 +2970,13 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 	common.DeleteGqlType(t, "Character", map[string]interface{}{"id": []interface{}{addResp.
 		AddHuman.Human[0].ID}},
 		1, nil)
+}
+
+func TestMain(m *testing.M) {
+	err := common.CheckGraphQLStarted(common.GraphqlAdminURL)
+	if err != nil {
+		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
 }

@@ -287,6 +287,8 @@ type AddTPayload {
 
 type BAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteBPayload {
@@ -313,6 +315,8 @@ type IAggregateResult {
 
 type TAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
 }
 
 type UpdateBPayload {

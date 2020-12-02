@@ -1411,17 +1411,25 @@
     }
 
 -
-  name: "Count Query"
+  name: "Aggregate Query"
   gqlquery: |
     query {
       aggregateCountry(filter: { name: { regexp: "/.*ust.*/" }}) {
         count
+        nameMin
+        nameMax
       }
     }
   dgquery: |-
     query {
-      aggregateCountry(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
-        count : count(uid)
+      aggregateCountry() {
+        count : max(val(countVar))
+        nameMin : min(val(nameVar))
+        nameMax : max(val(nameVar))
+      }
+      var(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
+        countVar as count(uid)
+        nameVar as Country.name
       }
     }
 
@@ -1936,6 +1944,32 @@
     }
 
 -
+  name: "fragment on interface implemented by type which implements multiple interfaces in query on some other interface"
+  gqlquery: |
+    query {
+      queryCharacter {
+        id
+        name
+        ... on Employee {
+            ename
+        }
+        ... on Human {
+            female
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCharacter(func: type(Character)) {
+        dgraph.type
+        id : uid
+        name : Character.name
+        ename : Employee.ename
+        female : Human.female
+      }
+    }
+
+-
   name: "Filter with id uses uid func at root."
   gqlquery: |
     query {
@@ -2326,6 +2360,24 @@
       }
     }
 
+-
+  name: "Password query with alias"
+  gqlquery: |
+    query {
+      verify : checkUserPassword(name: "user1", pwd: "Password") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      checkUserPassword(func: eq(User.name, "user1")) @filter((eq(val(pwd), 1) AND type(User))) {
+        name : User.name
+        dgraph.uid : uid
+      }
+      checkPwd(func: eq(User.name, "user1")) @filter(type(User)) {
+        pwd as checkpwd(User.pwd, "Password")
+      }
+    }
 
 - name: "Rewrite without custom fields"
   gqlquery: |
@@ -2875,6 +2927,47 @@
     }
 
 -
+  name: "Aggregate query at child level with filter and multiple aggregate fields"
+  gqlquery: |
+    query {
+      queryCountry {
+        nm : name
+        ag : statesAggregate {
+          nMin : nameMin
+          nMax : nameMax
+        }
+        statesAggregate(filter: { code: { eq: "state code" } }) {
+          cnt : count
+          nMin : nameMin
+          nMax : nameMax
+          cMin : capitalMin
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryCountry(func: type(Country)) {
+        name : Country.name
+        statesAggregate : Country.states {
+          statesAggregate_nameVar as State.name
+          dgraph.uid : uid
+        }
+        nameMin_statesAggregate : min(val(statesAggregate_nameVar))
+        nameMax_statesAggregate : max(val(statesAggregate_nameVar))
+        statesAggregate1 : Country.states @filter(eq(State.code, "state code")) {
+          statesAggregate1_nameVar as State.name
+          statesAggregate1_capitalVar as State.capital
+          dgraph.uid : uid
+        }
+        count_statesAggregate1 : count(Country.states) @filter(eq(State.code, "state code"))
+        nameMin_statesAggregate1 : min(val(statesAggregate1_nameVar))
+        nameMax_statesAggregate1 : max(val(statesAggregate1_nameVar))
+        capitalMin_statesAggregate1 : min(val(statesAggregate1_capitalVar))
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "Count query at child level with filter"
   gqlquery: |
     query {
@@ -2923,5 +3016,32 @@
           dgraph.uid : uid
         }
         dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Aggregate Query with Sum and Avg"
+  gqlquery: |
+    query {
+      aggregateTweets() {
+        count
+        scoreMin
+        scoreMax
+        scoreAvg
+        scoreSum
+      }
+    }
+  dgquery: |-
+    query {
+      aggregateTweets() {
+        count : max(val(countVar))
+        scoreMin : min(val(scoreVar))
+        scoreMax : max(val(scoreVar))
+        scoreAvg : avg(val(scoreVar))
+        scoreSum : sum(val(scoreVar))
+      }
+      var(func: type(Tweets)) {
+        countVar as count(uid)
+        scoreVar as Tweets.score
       }
     }

@@ -338,6 +338,8 @@ type AddStarshipPayload {
 
 type CharacterAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteCharacterPayload {
@@ -372,18 +374,36 @@ type DeleteStarshipPayload {
 
 type DroidAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
+	primaryFunctionMin: String
+	primaryFunctionMax: String
 }
 
 type HumanAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
+	totalCreditsMin: Int
+	totalCreditsMax: Int
+	totalCreditsSum: Int
+	totalCreditsAvg: Float
 }
 
 type PlanetAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type StarshipAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
+	lengthMin: Float
+	lengthMax: Float
+	lengthSum: Float
+	lengthAvg: Float
 }
 
 type UpdateCharacterPayload {

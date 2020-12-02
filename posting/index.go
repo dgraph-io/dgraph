@@ -35,12 +35,12 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var emptyCountParams countParams
@@ -645,8 +645,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 		return &bpb.KVList{Kv: kvs}, nil
 	}
-	stream.Send = func(kvList *bpb.KVList) error {
-		if err := tmpWriter.Write(kvList); err != nil {
+	stream.Send = func(buf *z.Buffer) error {
+		if err := tmpWriter.Write(buf); err != nil {
 			return errors.Wrap(err, "error setting entries in temp badger")
 		}
 
@@ -682,33 +682,35 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// No need to write a loop after ReadPostingList to skip unread entries
 		// for a given key because we only wrote BitDeltaPosting to temp badger.
 
-		alloc := tmpStream.Allocator(itr.ThreadId)
-		kvs, err := l.Rollup(alloc)
+		kvs, err := l.Rollup(nil)
 		if err != nil {
 			return nil, err
 		}
 
 		return &bpb.KVList{Kv: kvs}, nil
 	}
-	tmpStream.Send = func(kvList *bpb.KVList) error {
-		for _, kv := range kvList.Kv {
+	tmpStream.Send = func(buf *z.Buffer) error {
+		return buf.SliceIterate(func(slice []byte) error {
+			kv := &bpb.KV{}
+			if err := kv.Unmarshal(slice); err != nil {
+				return err
+			}
 			if len(kv.Value) == 0 {
-				continue
+				return nil
 			}
 
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
 			// which occurred before this schema mutation.
 			e := &badger.Entry{
-				Key:      y.Copy(kv.Key),
-				Value:    y.Copy(kv.Value),
+				Key:      kv.Key,
+				Value:    kv.Value,
 				UserMeta: BitCompletePosting,
 			}
 			if err := writer.SetEntryAt(e.WithDiscard(), r.startTs); err != nil {
 				return errors.Wrap(err, "error in writing index to pstore")
 			}
-		}
-
-		return nil
+			return nil
+		})
 	}
 
 	if err := tmpStream.Orchestrate(ctx); err != nil {

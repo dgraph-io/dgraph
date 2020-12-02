@@ -274,6 +274,8 @@ type AddAuthorPayload {
 
 type AuthorAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteAuthorPayload {

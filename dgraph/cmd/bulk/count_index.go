@@ -24,7 +24,6 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v2"
-	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -119,9 +118,6 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	}
 
 	streamId := atomic.AddUint32(&c.streamId, 1)
-	list := &bpb.KVList{}
-	var listSz int
-
 	buf.SortSlice(func(ls, rs []byte) bool {
 		left := countEntry(ls)
 		right := countEntry(rs)
@@ -139,6 +135,8 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	var pl pb.PostingList
 	encoder := codec.Encoder{BlockSize: 256}
 
+	outBuf := z.NewBuffer(5 << 20)
+	defer outBuf.Release()
 	encode := func() {
 		pl.Pack = encoder.Done()
 		if codec.ExactLen(pl.Pack) == 0 {
@@ -150,17 +148,15 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		kv.Key = append([]byte{}, lastCe.Key()...)
 		kv.Version = c.state.writeTs
 		kv.StreamId = streamId
-		list.Kv = append(list.Kv, kv)
+		badger.KVToBuffer(kv, outBuf)
 
-		listSz += kv.Size()
 		encoder = codec.Encoder{BlockSize: 256}
 		pl.Reset()
 
 		// Flush out the buffer.
-		if listSz > 4<<20 {
-			x.Check(c.writer.Write(list))
-			listSz = 0
-			list = &bpb.KVList{}
+		if outBuf.LenNoPadding() > 4<<20 {
+			x.Check(c.writer.Write(outBuf))
+			outBuf.Reset()
 		}
 	}
 
@@ -174,7 +170,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		return nil
 	})
 	encode()
-	x.Check(c.writer.Write(list))
+	x.Check(c.writer.Write(outBuf))
 }
 
 func (c *countIndexer) wait() {

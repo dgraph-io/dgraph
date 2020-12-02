@@ -283,6 +283,16 @@ type DeleteMessagePayload {
 
 type MessageAggregateResult {
 	count: Int
+	contentMin: String
+	contentMax: String
+	authorMin: String
+	authorMax: String
+	uniqueIdMin: Int64
+	uniqueIdMax: Int64
+	uniqueIdSum: Int64
+	uniqueIdAvg: Float
+	datePostedMin: DateTime
+	datePostedMax: DateTime
 }
 
 type UpdateMessagePayload {

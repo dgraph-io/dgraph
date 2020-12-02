@@ -21,7 +21,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
@@ -40,12 +41,12 @@ const (
 )
 
 type badgerWriter interface {
-	Write(kvs *bpb.KVList) error
+	Write(buf *z.Buffer) error
 	Flush() error
 }
 
 // populateSnapshot gets data for a shard from the leader and writes it to BadgerDB on the follower.
-func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
+func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 	con := pl.Get()
 	c := pb.NewWorkerClient(con)
 
@@ -58,11 +59,11 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	snap.Context = n.RaftContext
 	stream, err := c.StreamSnapshot(ctx)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	if err := stream.Send(&snap); err != nil {
-		return 0, err
+		return err
 	}
 
 	var writer badgerWriter
@@ -71,7 +72,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		defer sw.Cancel()
 
 		if err := sw.Prepare(); err != nil {
-			return 0, err
+			return err
 		}
 
 		writer = sw
@@ -80,12 +81,12 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	}
 
 	// We can use count to check the number of posting lists returned in tests.
-	count := 0
+	size := 0
 	var done *pb.KVS
 	for {
 		kvs, err := stream.Recv()
 		if err != nil {
-			return count, err
+			return err
 		}
 		if kvs.Done {
 			done = kvs
@@ -94,33 +95,36 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		}
 		select {
 		case <-ctx.Done():
-			return 0, ctx.Err()
+			return ctx.Err()
 		default:
 		}
 
-		glog.V(1).Infof("Received a batch of %d keys. Total so far: %d\n", len(kvs.Kv), count)
-		if err := writer.Write(&bpb.KVList{Kv: kvs.Kv}); err != nil {
-			return 0, err
+		size += len(kvs.Data)
+		glog.V(1).Infof("Received batch of size: %s. Total so far: %s\n",
+			humanize.IBytes(uint64(len(kvs.Data))), humanize.IBytes(uint64(size)))
+
+		buf := z.BufferFrom(kvs.Data)
+		if err := writer.Write(buf); err != nil {
+			return err
 		}
-		count += len(kvs.Kv)
 	}
 	if err := writer.Flush(); err != nil {
-		return 0, err
+		return err
 	}
 
 	if err := deleteStalePreds(ctx, done); err != nil {
-		return count, err
+		return err
 	}
 
 	glog.Infof("Snapshot writes DONE. Sending ACK")
 	// Send an acknowledgement back to the leader.
 	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
-		return 0, err
+		return err
 	}
 
 	x.VerifySnapshot(pstore, snap.ReadTs)
-	glog.Infof("Populated snapshot with %d keys.\n", count)
-	return count, nil
+	glog.Infof("Populated snapshot with data size: %s\n", humanize.IBytes(uint64(size)))
+	return nil
 }
 
 func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
@@ -199,15 +203,13 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		return err
 	}
 
-	var num int
 	stream := pstore.NewStreamAt(snap.ReadTs)
 	stream.LogPrefix = "Sending Snapshot"
 	// Use the default implementation. We no longer try to generate a rolled up posting list here.
 	// Instead, we just stream out all the versions as they are.
 	stream.KeyToList = nil
-	stream.Send = func(list *bpb.KVList) error {
-		kvs := &pb.KVS{Kv: list.Kv}
-		num += len(kvs.Kv)
+	stream.Send = func(buf *z.Buffer) error {
+		kvs := &pb.KVS{Data: buf.Bytes()}
 		return out.Send(kvs)
 	}
 	stream.ChooseKey = func(item *badger.Item) bool {
@@ -247,7 +249,7 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		return err
 	}
 
-	glog.Infof("Streaming done. Sent %d entries. Waiting for ACK...", num)
+	glog.Infof("Streaming done. Waiting for ACK...")
 	ack, err := out.Recv()
 	if err != nil {
 		return err

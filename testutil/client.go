@@ -19,6 +19,7 @@ package testutil
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -26,10 +27,14 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgraph/gql"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -58,6 +63,10 @@ var (
 	// SockAddrZeroHttp is the address to the HTTP endpoint of the zero used during tests.
 	SockAddrZeroHttp string
 )
+
+func AdminUrlHttps() string {
+	return "https://" + SockAddrHttp + "/admin"
+}
 
 func AdminUrl() string {
 	return "http://" + SockAddrHttp + "/admin"
@@ -223,6 +232,18 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 	}
 }
 
+func RetryAlter(dg *dgo.Dgraph, op *api.Operation) error {
+	var err error
+	for i := 0; i < 10; i++ {
+		err = dg.Alter(context.Background(), op)
+		if err == nil || !strings.Contains(err.Error(), "opIndexing is already running") {
+			return err
+		}
+		time.Sleep(time.Second)
+	}
+	return err
+}
+
 // RetryBadQuery will retry a query until it failse with a non-retryable error.
 func RetryBadQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 	for {
@@ -316,7 +337,10 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 	if err != nil {
 		return "", "", errors.Wrapf(err, "unable to read from response")
 	}
-
+	if resp.StatusCode != http.StatusOK {
+		return "", "", errors.New(fmt.Sprintf("got non 200 response from the server with %s ",
+			string(respBody)))
+	}
 	var outputJson map[string]interface{}
 	if err := json.Unmarshal(respBody, &outputJson); err != nil {
 		var errOutputJson map[string]interface{}
@@ -384,10 +408,16 @@ type curlOutput struct {
 	Errors []curlErrorEntry       `json:"errors"`
 }
 
-func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) {
+func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) error {
 	output := curlOutput{}
 	require.NoError(t, json.Unmarshal(bytes, &output),
 		"unable to unmarshal the curl output")
+	for _, e := range output.Errors {
+		if strings.Contains(e.Message, "is already running") ||
+			strings.Contains(e.Message, "errIndexingInProgress") {
+			return errRetryCurl
+		}
+	}
 
 	if failureConfig.ShouldFail {
 		require.True(t, len(output.Errors) > 0, "no error entry found")
@@ -401,11 +431,15 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) 
 		require.True(t, output.Data != nil,
 			fmt.Sprintf("no data entry found in the output:%+v", output))
 	}
+	return nil
 }
+
+var errRetryCurl = errors.New("retry the curl command")
 
 // VerifyCurlCmd executes the curl command with the given arguments and verifies
 // the result against the expected output.
 func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig) {
+top:
 	queryCmd := exec.Command("curl", args...)
 	output, err := queryCmd.Output()
 	if len(failureConfig.CurlErrMsg) > 0 {
@@ -417,7 +451,11 @@ func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig
 		}
 	} else {
 		require.NoError(t, err, "the curl command should have succeeded")
-		verifyOutput(t, output, failureConfig)
+		if err := verifyOutput(t, output, failureConfig); err == errRetryCurl {
+			goto top
+		} else {
+			require.NoError(t, err)
+		}
 	}
 }
 
@@ -425,4 +463,83 @@ func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig
 func AssignUids(num uint64) error {
 	_, err := http.Get(fmt.Sprintf("http://"+SockAddrZeroHttp+"/assign?what=uids&num=%d", num))
 	return err
+}
+
+func RequireUid(t *testing.T, uid string) {
+	_, err := gql.ParseUid(uid)
+	require.NoErrorf(t, err, "expecting a uid, got: %s", uid)
+}
+
+func CheckForGraphQLEndpointToReady(t *testing.T) error {
+	var err error
+	retries := 6
+	sleep := 10 * time.Second
+
+	// Because of how GraphQL starts (it needs to read the schema from Dgraph),
+	// there's no guarantee that GraphQL is available by now.  So we
+	// need to try and connect and potentially retry a few times.
+	for retries > 0 {
+		retries--
+
+		_, err = hasAdminGraphQLSchema(t)
+		if err == nil {
+			return nil
+		}
+		time.Sleep(sleep)
+	}
+	return err
+}
+
+func hasAdminGraphQLSchema(t *testing.T) (bool, error) {
+	schemaQry := &GraphQLParams{
+		Query: `query { getGQLSchema { schema } }`,
+	}
+
+	result := MakeGQLRequest(t, schemaQry)
+	if len(result.Errors) > 0 {
+		return false, result.Errors
+	}
+	var sch struct {
+		GetGQLSchema struct {
+			Schema string
+		}
+	}
+
+	err := json.Unmarshal(result.Data, &sch)
+	if err != nil {
+		return false, errors.Wrap(err, "error trying to unmarshal GraphQL query result")
+	}
+
+	if sch.GetGQLSchema.Schema == "" {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func GetHttpsClient(t *testing.T) http.Client {
+	tlsConf := GetAlphaClientConfig(t)
+	return http.Client{
+		Timeout: time.Second * 3,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConf,
+		},
+	}
+}
+
+func GetAlphaClientConfig(t *testing.T) *tls.Config {
+	_, filename, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	tlsDir := path.Join(path.Dir(filename), "../tlstest/mtls_internal/tls/live")
+	c := &x.TLSHelperConfig{
+		CertRequired:     true,
+		Cert:             tlsDir + "/client.liveclient.crt",
+		Key:              tlsDir + "/client.liveclient.key",
+		ServerName:       "alpha1",
+		RootCACert:       tlsDir + "/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	return tlsConf
 }

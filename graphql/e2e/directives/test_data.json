@@ -86,7 +86,7 @@
         "text": "this post is not worth publishing",
         "myPost.tags": ["Random"],
         "test.dgraph.topic": "Random",
-        "myPost.numLikes": 0,
+        "myPost.numLikes": 1,
         "myPost.numViews": 0,
         "is_published": false,
         "myPost.postType": "Fact",

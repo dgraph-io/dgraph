@@ -286,6 +286,8 @@ type DeleteHotelPayload {
 
 type HotelAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type UpdateHotelPayload {

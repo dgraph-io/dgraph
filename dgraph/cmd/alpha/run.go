@@ -103,6 +103,7 @@ they form a Raft group and provide synchronous replication.
 	x.FillCommonFlags(flag)
 
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
+	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
 	// Options around how to set up Badger.
 	flag.String("badger.compression", "snappy",
@@ -433,6 +434,7 @@ func setupServer(closer *z.Closer) {
 	// Global Epoch is a lockless synchronization mechanism for graphql service.
 	// It's is just an atomic counter used by the graphql subscription to update its state.
 	// It's is used to detect the schema changes and server exit.
+	// It is also reported by /probe/graphql endpoint as the schemaUpdateCounter.
 
 	// Implementation for schema change:
 	// The global epoch is incremented when there is a schema change.
@@ -457,7 +459,8 @@ func setupServer(closer *z.Closer) {
 		}
 		w.WriteHeader(httpStatusCode)
 		w.Header().Set("Content-Type", "application/json")
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s"}`, healthStatus.StatusMsg))))
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
+			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
 	})
 	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
@@ -638,6 +641,7 @@ func run() {
 	x.Check(err)
 
 	x.WorkerConfig = x.WorkerOptions{
+		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending-proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
@@ -655,6 +659,9 @@ func run() {
 		TLSServerConfig:      tlsServerConf,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
+
+	// Set the directory for temporary buffers.
+	z.SetTmpDir(x.WorkerConfig.TmpDir)
 
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
@@ -756,6 +763,7 @@ func run() {
 			origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
 			if err != nil {
 				glog.Errorf("Error while retrieving cors origins: %s", err.Error())
+				time.Sleep(time.Second)
 				continue
 			}
 			x.UpdateCorsOrigins(origins)

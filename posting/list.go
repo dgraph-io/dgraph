@@ -918,6 +918,8 @@ func (out *rollupOutput) marshalPostingListPart(alloc *z.Allocator,
 	return kv, nil
 }
 
+// MarshalPostingList returns a KV with the marshalled posting list. The caller
+// SHOULD SET the Key and Version for the returned KV.
 func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
 	kv := y.NewKV(alloc)
 	if isPlistEmpty(plist) {

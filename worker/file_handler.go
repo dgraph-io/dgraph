@@ -78,8 +78,8 @@ func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName 
 // GetLatestManifest reads the manifests at the given URL and returns the
 // latest manifest.
 func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
-	if !pathExist(uri.Path) {
-		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	if err := createIfNotExists(uri.Path); err != nil {
+		return nil, errors.Errorf("while GetLatestManifest: %v", err)
 	}
 
 	// Find the max Since value from the latest backup.
@@ -103,10 +103,21 @@ func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 	return &m, nil
 }
 
+func createIfNotExists(path string) error {
+	if pathExist(path) {
+		return nil
+	}
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return errors.Errorf("The path %q does not exist or it is inaccessible."+
+			" While trying to create it, got error: %v", path, err)
+	}
+	return nil
+}
+
 // CreateBackupFile prepares the a path to save the backup file.
 func (h *fileHandler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
-	if !pathExist(uri.Path) {
-		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	if err := createIfNotExists(uri.Path); err != nil {
+		return errors.Errorf("while CreateBackupFile: %v", err)
 	}
 
 	fileName := backupName(req.ReadTs, req.GroupId)
@@ -115,8 +126,8 @@ func (h *fileHandler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) erro
 
 // CreateManifest completes the backup by writing the manifest to a file.
 func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error {
-	if !pathExist(uri.Path) {
-		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	if err := createIfNotExists(uri.Path); err != nil {
+		return errors.Errorf("while CreateManifest: %v", err)
 	}
 
 	return h.createFiles(uri, req, backupManifest)
@@ -124,8 +135,8 @@ func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error 
 
 func (h *fileHandler) GetManifests(uri *url.URL, backupId string,
 	backupNum uint64) ([]*Manifest, error) {
-	if !pathExist(uri.Path) {
-		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	if err := createIfNotExists(uri.Path); err != nil {
+		return nil, errors.Errorf("while GetManifests: %v", err)
 	}
 
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)
@@ -209,8 +220,8 @@ func (h *fileHandler) Verify(uri *url.URL, req *pb.RestoreRequest, currentGroups
 
 // ListManifests loads the manifests in the locations and returns them.
 func (h *fileHandler) ListManifests(uri *url.URL) ([]string, error) {
-	if !pathExist(uri.Path) {
-		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	if err := createIfNotExists(uri.Path); err != nil {
+		return nil, errors.Errorf("while ListManifests: %v", err)
 	}
 
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)

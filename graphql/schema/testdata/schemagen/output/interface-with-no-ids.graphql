@@ -307,10 +307,14 @@ type DeleteUserPayload {
 
 type MessageAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
 }
 
 type QuestionAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
 }
 
 type UpdateMessagePayload {
@@ -330,6 +334,8 @@ type UpdateUserPayload {
 
 type UserAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 #######################

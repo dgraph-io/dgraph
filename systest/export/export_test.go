@@ -109,10 +109,11 @@ func setupDgraph(t *testing.T) {
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
 	ctx := context.Background()
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	require.NoError(t, testutil.RetryAlter(dg, &api.Operation{DropAll: true}))
 
 	// Add schema and types.
-	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .
+	// this is because Alters are always blocked until the indexing is finished.
+	require.NoError(t, testutil.RetryAlter(dg, &api.Operation{Schema: `movie: string .
 		type Node {
 			movie
 		}`}))
@@ -142,7 +143,7 @@ func requestExport(t *testing.T) map[string]interface{} {
 		}
 	}`
 
-	adminUrl := "http://"+ testutil.SockAddrHttp+ "/admin"
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 	params := testutil.GraphQLParams{
 		Query: exportRequest,
 		Variables: map[string]interface{}{

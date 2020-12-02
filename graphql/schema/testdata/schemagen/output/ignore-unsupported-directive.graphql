@@ -287,6 +287,14 @@ type DeleteProductPayload {
 
 type ProductAggregateResult {
 	count: Int
+	priceMin: Float
+	priceMax: Float
+	priceSum: Float
+	priceAvg: Float
+	nameMin: String
+	nameMax: String
+	name2Min: String
+	name2Max: String
 }
 
 type UpdateProductPayload {
