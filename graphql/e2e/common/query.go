@@ -17,7 +17,6 @@
 package common
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -3197,11 +3196,7 @@ func passwordTest(t *testing.T) {
 func idDirectiveWithInt64(t *testing.T) {
 	query := &GraphQLParams{
 		Query: `query {
-		  queryBook(filter: {
-			bookId: {
-			  eq: 1234567890
-			}
-		  }) {
+		  getBook(bookId: 1234567890) {
 			bookId
 			name
 			desc
@@ -3210,32 +3205,21 @@ func idDirectiveWithInt64(t *testing.T) {
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
-	require.Nil(t, response.Errors)
+	RequireNoGQLErrors(t, response)
 	var expected = `{
-			"queryBook": [
-			  {
+			"getBook": {
 				"bookId": 1234567890,
 				"name": "Dgraph and Graphql",
 				"desc": "All love between dgraph and graphql"
 			  }
-			]
 		 }`
-	b, _ := response.Data.MarshalJSON()
-	expBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
-	actBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(actBuffer, b))
-	require.Equal(t, expBuffer.String(), actBuffer.String())
+	require.JSONEq(t, expected, string(response.Data))
 }
 
 func idDirectiveWithInt(t *testing.T) {
 	query := &GraphQLParams{
 		Query: `query {
-		  queryChapter(filter: {
-			chapterId: {
-			  eq: 1
-			}
-		  }) {
+		  getChapter(chapterId: 1) {
 			bookId
 			chapterId
 			name
@@ -3244,32 +3228,21 @@ func idDirectiveWithInt(t *testing.T) {
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
-	require.Nil(t, response.Errors)
+	RequireNoGQLErrors(t, response)
 	var expected = `{
-	  	"queryChapter": [
-		  {
+	  	"getChapter": {
 			"bookId": 1234567890,
 			"chapterId": 1,
 			"name": "How Dgraph Works"
 		  }
-		]
 	}`
-	b, _ := response.Data.MarshalJSON()
-	expBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
-	actBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(actBuffer, b))
-	require.Equal(t, expBuffer.String(), actBuffer.String())
+	require.JSONEq(t, expected, string(response.Data))
 }
 
 func idDirectiveWithFloat(t *testing.T) {
 	query := &GraphQLParams{
 		Query: `query {
-		  querySection(filter: {
-			sectionId: {
-			  eq: 1.1
-			}
-		  }) {
+		  getSection(sectionId: 1.1) {
 			chapterId
 			sectionId
 			name
@@ -3278,20 +3251,13 @@ func idDirectiveWithFloat(t *testing.T) {
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
-	require.Nil(t, response.Errors)
+	RequireNoGQLErrors(t, response)
 	var expected = `{
-	 	"querySection": [
-		  {
+	 	"getSection": {
 			"chapterId": 1,
 			"sectionId": 1.1,
 			"name": "How to define dgraph schema"
 		  }
-		]
 	}`
-	b, _ := response.Data.MarshalJSON()
-	expBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
-	actBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(actBuffer, b))
-	require.Equal(t, expBuffer.String(), actBuffer.String())
+	require.JSONEq(t, expected, string(response.Data))
 }
