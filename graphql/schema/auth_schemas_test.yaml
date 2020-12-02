@@ -36,8 +36,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `in`
-      operator has invalid value in this rule." }
+      { "message": "Type X: @auth: `in` operator has invalid value in this rule." }
     ]
 
   - name: "Invalid RBAC rule: in filter not array variable 2"
@@ -49,9 +48,29 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `in`
-      operator has invalid value in this rule."}
+      { "message": "Type X: @auth: `in` operator has invalid value in this rule."}
     ]
+  - name: "Invalid RBAC rule: null as the value"
+    input: |
+      type X @auth(
+        query: { rule:  "{$USER: { eq: nil } }"}
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      { "message": "Type X: @auth: `eq` operator has invalid value in this rule." }
+
+  - name: "Invalid RBAC rule: null as the value"
+    input: |
+      type X @auth(
+        query: { rule:  "{$USER: { eq: null } }"}
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      { "message": "Type X: @auth: `eq` operator has invalid value in this rule." }
 
   - name: "Invalid RBAC rule: regexp filter not string variable"
     input: |
@@ -62,8 +81,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `regexp`
-          operator has invalid value in this rule." }
+      { "message": "Type X: @auth: `regexp` operator has invalid value in this rule." }
     ]
 
   - name: "RBAC rule invalid variable"
