@@ -70,7 +70,7 @@ func sendRestoreRequest(t *testing.T, location string) int {
 			"location": location,
 		},
 	}
-	resp := testutil.MakeGQLRequest(t, &params)
+	resp := testutil.MakeGQLRequestWithTLS(t, &params, testutil.GetAlphaClientConfig(t))
 	resp.RequireNoGraphQLErrors(t)
 
 	var restoreResp struct {
@@ -94,7 +94,9 @@ func TestBackupOfOldRestore(t *testing.T) {
 	dirSetup(t)
 	copyOldBackupDir(t)
 
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	require.NoError(t, err)
 
 	testutil.DropAll(t, dg)

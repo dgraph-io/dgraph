@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -66,11 +65,11 @@ func openDgraph(pdir string) (*badger.DB, error) {
 
 func WaitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	query := fmt.Sprintf(`query status() {
-		 restoreStatus(restoreId: %d) {
-			status
-			errors
-		}
-	}`, restoreId)
+		restoreStatus(restoreId: %d) {
+		   status
+		   errors
+	   }
+   }`, restoreId)
 	params := GraphQLParams{
 		Query: query,
 	}
@@ -78,13 +77,13 @@ func WaitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	restoreDone := false
+	client := GetHttpsClient(t)
 	for i := 0; i < 15; i++ {
-		resp, err := http.Post(AdminUrl(), "application/json", bytes.NewBuffer(b))
+		resp, err := client.Post(AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)
 		sbuf := string(buf)
-		println(sbuf)
 		if strings.Contains(sbuf, "OK") {
 			restoreDone = true
 			break
@@ -102,9 +101,9 @@ func WaitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	for {
 		// This is a dummy query that returns no results.
 		_, err = dg.NewTxn().Query(context.Background(), `{
-		q(func: has(invalid_pred)) {
-			invalid_pred
-		}}`)
+	   q(func: has(invalid_pred)) {
+		   invalid_pred
+	   }}`)
 
 		if err == nil {
 			numSuccess += 1
