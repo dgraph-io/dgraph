@@ -80,7 +80,7 @@ The query below only return those `posts` which have a non-null `text` field.
 
 #### Nesting
 
-The cascading nature of field selection is overwritten by a nested `@casecade`.
+The cascading nature of field selection is overwritten by a nested `@cascade`.
 
 For example, the query below ensures that an author has the `reputation` and `name` fields, and, if it has a `posts` subfield, then that subfield must have a `text` field.
 

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -237,12 +238,23 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 }
 
 func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
-	err := addSchema(GraphqlAdminURL, string(schema))
-	if err != nil {
+	for {
+		err := addSchema(GraphqlAdminURL, string(schema))
+		if err == nil {
+			break
+		}
+
+		if strings.Contains(err.Error(), "errIndexingInProgress") ||
+			strings.Contains(err.Error(), "is already running") {
+			glog.V(2).Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
+			time.Sleep(time.Second)
+			continue
+		}
+
 		x.Panic(err)
 	}
 
-	err = maybePopulateData(client, data)
+	err := maybePopulateData(client, data)
 	if err != nil {
 		x.Panic(err)
 	}
@@ -350,14 +362,14 @@ func RunAll(t *testing.T) {
 	t.Run("filter in queries with array for AND/OR", filterInQueriesWithArrayForAndOr)
 	t.Run("query geo near filter", queryGeoNearFilter)
 	t.Run("persisted query", persistedQuery)
-	t.Run("query count without filter", queryCountWithoutFilter)
-	t.Run("query count with filter", queryCountWithFilter)
-	t.Run("query count with alias", queryCountWithAlias)
-	t.Run("query count at child level", queryCountAtChildLevel)
-	t.Run("query count at child level with filter", queryCountAtChildLevelWithFilter)
-	t.Run("query count at child level with multiple alias", queryCountAtChildLevelWithMultipleAlias)
+	t.Run("query aggregate without filter", queryAggregateWithoutFilter)
+	t.Run("query aggregate with filter", queryAggregateWithFilter)
+	t.Run("query aggregate with alias", queryAggregateWithAlias)
+	t.Run("query aggregate at child level", queryAggregateAtChildLevel)
+	t.Run("query aggregate at child level with filter", queryAggregateAtChildLevelWithFilter)
+	t.Run("query aggregate at child level with multiple alias", queryAggregateAtChildLevelWithMultipleAlias)
+	t.Run("query aggregate and other fields at child level", queryAggregateAndOtherFieldsAtChildLevel)
 	t.Run("query at child level with multiple alias on scalar field", queryChildLevelWithMultipleAliasOnScalarField)
-	t.Run("query count and other fields at child level", queryCountAndOtherFieldsAtChildLevel)
 	t.Run("checkUserPassword query", passwordTest)
 
 	// mutation tests
@@ -762,20 +774,15 @@ func allCountriesAdded() ([]*country, error) {
 
 func CheckGraphQLStarted(url string) error {
 	var err error
-	retries := 6
-	sleep := 10 * time.Second
-
 	// Because of how GraphQL starts (it needs to read the schema from Dgraph),
 	// there's no guarantee that GraphQL is available by now.  So we
 	// need to try and connect and potentially retry a few times.
-	for retries > 0 {
-		retries--
-
+	for i := 0; i < 60; i++ {
 		_, err = hasCurrentGraphQLSchema(url)
 		if err == nil {
 			return nil
 		}
-		time.Sleep(sleep)
+		time.Sleep(time.Second)
 	}
 	return err
 }

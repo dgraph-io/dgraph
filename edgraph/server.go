@@ -249,6 +249,9 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 	for _, update := range result.Preds {
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
+		//
+		// TODO: Should we allow Guardians to make this change? To fix up a broken index, for
+		// example?
 		if schema.IsPreDefPredChanged(update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
 				" modified", update.Predicate)

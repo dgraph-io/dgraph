@@ -47,11 +47,25 @@ docker pull dgraph/dgraph:latest
 
 If you want to install from source, install Go 1.13+ or later and the following dependencies:
 
-Ubuntu:
+### Ubuntu
+
 ```bash
 sudo apt-get update
 sudo apt-get install gcc make
 ```
+
+### macOS
+
+As a prerequisite, first install [XCode](https://apps.apple.com/us/app/xcode/id497799835?mt=12) (or the [XCode Command-line Tools](https://developer.apple.com/downloads/)) and [Homebrew](https://brew.sh/).
+
+Next, install the required dependencies:
+
+```bash
+brew update
+brew install jemalloc go
+```
+
+### Build and Install
 
 Then clone the Dgraph repository and use `make install` to install the Dgraph binary to `$GOPATH/bin`.
 

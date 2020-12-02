@@ -1011,24 +1011,54 @@ func TestRootFilter(t *testing.T) {
 	}
 }
 
-func TestRootCountQuery(t *testing.T) {
-	testCases := []TestCase{{
-		user:   "user1",
-		role:   "USER",
-		result: `{"aggregateColumn": {"count": 1}}`,
-	}, {
-		user:   "user2",
-		role:   "USER",
-		result: `{"aggregateColumn": {"count": 3}}`,
-	}, {
-		user:   "user4",
-		role:   "USER",
-		result: `{"aggregateColumn": {"count": 2}}`,
-	}}
+func TestRootAggregateQuery(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user: "user1",
+			role: "USER",
+			result: `
+						{
+							"aggregateColumn":
+								{
+									"count": 1,
+									"nameMin": "Column1",
+									"nameMax": "Column1"
+								}
+						}`,
+		},
+		{
+			user: "user2",
+			role: "USER",
+			result: `
+						{
+							"aggregateColumn":
+								{
+									"count": 3,
+									"nameMin": "Column1",
+									"nameMax": "Column3"
+								}
+						}`,
+		},
+		{
+			user: "user4",
+			role: "USER",
+			result: `
+						{
+							"aggregateColumn":
+								{
+									"count": 2,
+									"nameMin": "Column2",
+									"nameMax": "Column3"
+								}
+						}`,
+		},
+	}
 	query := `
 	query {
 		aggregateColumn {
 			count
+			nameMin
+			nameMax
 		}
 	}`
 
@@ -1040,9 +1070,9 @@ func TestRootCountQuery(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }
@@ -1108,16 +1138,41 @@ func TestRBACFilter(t *testing.T) {
 	}
 }
 
-func TestRBACFilterWithCountQuery(t *testing.T) {
+func TestRBACFilterWithAggregateQuery(t *testing.T) {
 	testCases := []TestCase{
-		{role: "USER", result: `{"aggregateLog": null}`},
-		{result: `{"aggregateLog": null}`},
-		{role: "ADMIN", result: `{"aggregateLog": {"count": 2}}`}}
+		{
+			role: "USER",
+			result: `
+						{
+							"aggregateLog": null
+						}`,
+		},
+		{
+			result: `
+						{
+							"aggregateLog": null
+						}`,
+		},
+		{
+			role: "ADMIN",
+			result: `
+						{
+							"aggregateLog":
+								{
+									"count": 2,
+									"randomMin": "test",
+									"randomMax": "test"
+								}
+						}`,
+		},
+	}
 
 	query := `
 		query {
 			aggregateLog {
 		    	count
+				randomMin
+				randomMax
 		    }
 		}
 	`
@@ -1130,9 +1185,9 @@ func TestRBACFilterWithCountQuery(t *testing.T) {
 			}
 
 			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }
@@ -1539,16 +1594,42 @@ func TestMain(m *testing.M) {
 	os.Exit(0)
 }
 
-func TestChildCountQueryWithDeepRBAC(t *testing.T) {
+func TestChildAggregateQueryWithDeepRBAC(t *testing.T) {
 	testCases := []TestCase{
 		{
-			user:   "user1",
-			role:   "USER",
-			result: `{"queryUser": [{"username": "user1", "issuesAggregate":{"count": null}}]}`},
+			user: "user1",
+			role: "USER",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username": "user1",
+									"issuesAggregate":
+										{
+											"count": null,
+											"msgMax": null,
+											"msgMin": null
+										}
+								}
+							]
+					}`},
 		{
-			user:   "user1",
-			role:   "ADMIN",
-			result: `{"queryUser":[{"username":"user1","issuesAggregate":{"count":1}}]}`},
+			user: "user1",
+			role: "ADMIN",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username":"user1",
+									"issuesAggregate":
+										{
+											"count":1,
+											"msgMax": "Issue1",
+											"msgMin": "Issue1"
+										}
+								}
+							]
+					}`},
 	}
 
 	query := `
@@ -1557,6 +1638,8 @@ func TestChildCountQueryWithDeepRBAC(t *testing.T) {
 		username
 		issuesAggregate {
 		  count
+		  msgMax
+		  msgMin
 		}
 	  }
 	}
@@ -1577,16 +1660,49 @@ func TestChildCountQueryWithDeepRBAC(t *testing.T) {
 	}
 }
 
-func TestChildCountQueryWithOtherFields(t *testing.T) {
+func TestChildAggregateQueryWithOtherFields(t *testing.T) {
 	testCases := []TestCase{
 		{
-			user:   "user1",
-			role:   "USER",
-			result: `{"queryUser": [{"username": "user1","issues":[],"issuesAggregate":{"count": null}}]}`},
+			user: "user1",
+			role: "USER",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username": "user1",
+									"issues":[],
+									"issuesAggregate":
+										{
+											"count": null,
+											"msgMin": null,
+											"msgMax": null
+										}
+								}
+							]
+					}`},
 		{
-			user:   "user1",
-			role:   "ADMIN",
-			result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}],"issuesAggregate":{"count":1}}]}`},
+			user: "user1",
+			role: "ADMIN",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username":"user1",
+									"issues":
+										[
+											{
+												"msg":"Issue1"
+											}
+										],
+									"issuesAggregate":
+										{
+											"count": 1,
+											"msgMin": "Issue1",
+											"msgMax": "Issue1"
+										}
+								}
+							]
+					}`},
 	}
 
 	query := `
@@ -1595,6 +1711,8 @@ func TestChildCountQueryWithOtherFields(t *testing.T) {
 		username
 		issuesAggregate {
 		  count
+		  msgMin
+		  msgMax
 		}
 		issues {
 		  msg

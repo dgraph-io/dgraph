@@ -116,6 +116,11 @@ func TestLogRotate(t *testing.T) {
 		require.Equal(t, expEntry.Term, gotEntry.Term)
 		require.Equal(t, expEntry.Type, gotEntry.Type)
 	}
+
+	// 1 filled logfile should be present in files,
+	// and 1 partially filled logfile should be present in current.
+	require.Len(t, el.files, 1)
+	require.NotNil(t, el.current)
 }
 
 // TestLogGrow writes data of sufficient size to grow the log file.

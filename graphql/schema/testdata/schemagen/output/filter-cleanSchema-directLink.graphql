@@ -321,6 +321,8 @@ type UpdateZPayload {
 
 type XAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type YAggregateResult {

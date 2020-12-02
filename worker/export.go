@@ -38,6 +38,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 
@@ -750,12 +751,17 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		glog.Fatalf("Invalid export format found: %s", in.Format)
 	}
 
-	stream.Send = func(list *bpb.KVList) error {
-		for _, kv := range list.Kv {
+	stream.Send = func(buf *z.Buffer) error {
+		kv := &bpb.KV{}
+		return buf.SliceIterate(func(s []byte) error {
+			kv.Reset()
+			if err := kv.Unmarshal(s); err != nil {
+				return err
+			}
 			// Skip nodes that have no data. Otherwise, the exported data could have
 			// formatting and/or syntax errors.
 			if len(kv.Value) == 0 {
-				continue
+				return nil
 			}
 
 			var writer *fileWriter
@@ -781,12 +787,9 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				hasDataBefore = true
 			}
 
-			if _, err := writer.gw.Write(kv.Value); err != nil {
-				return err
-			}
-		}
-		// Once all the sends are done, writers must be flushed and closed in order.
-		return nil
+			_, err = writer.gw.Write(kv.Value)
+			return err
+		})
 	}
 
 	// All prepwork done. Time to roll.
