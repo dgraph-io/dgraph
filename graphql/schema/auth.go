@@ -420,7 +420,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	if rule := val.Children.ForName("rule"); rule != nil {
 		var err error
 		if strings.HasPrefix(rule.Raw, RBACQueryPrefix) {
-			result.RBACRule, err = rbacValidateRule(typ, rule.Raw)
+			result.RBACRule, err = getRBACQuery(typ, rule.Raw)
 		} else {
 			err = gqlValidateRule(s, typ, rule.Raw, result)
 		}
@@ -436,7 +436,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	return result, errResult
 }
 
-func rbacValidateRule(typ *ast.Definition, rule string) (*RBACQuery, error) {
+func getRBACQuery(typ *ast.Definition, rule string) (*RBACQuery, error) {
 	rbacRegex, err :=
 		regexp.Compile(`^{[\s]?(.*?)[\s]?:[\s]?{[\s]?(\w*)[\s]?:[\s]?(.*)[\s]?}[\s]?}$`)
 	if err != nil {
@@ -466,16 +466,20 @@ func rbacValidateRule(typ *ast.Definition, rule string) (*RBACQuery, error) {
 		return nil, gqlerror.Errorf("Type %s: @auth: `%s` is not a valid GraphQL variable. "+
 			"object with nil values aren't supported", typ.Name, rule[idx[0][2]:idx[0][3]])
 	}
-	query := RBACQuery{
+	query := &RBACQuery{
 		Variable: rule[idx[0][2]:idx[0][3]],
 		Operator: rule[idx[0][4]:idx[0][5]],
 		Operand:  op,
 	}
-
-	if err = validateRBACOperators(typ, query); err != nil {
+	if err = validateRBACQuery(typ, query); err != nil {
 		return nil, err
 	}
+	// we have validated that variable is like $XYZ.
+	// For further uses we will ensure that we won't get the $ sign while evaluation
+	query.Variable = query.Variable[1:]
 
+	// we will be sticking to compile once principle.
+	// regex in rule will be compiled once and used again.
 	if query.Operator == "regexp" {
 		query.regex, err = regexp.Compile(query.Operand.(string))
 		if err != nil {
@@ -483,17 +487,24 @@ func rbacValidateRule(typ *ast.Definition, rule string) (*RBACQuery, error) {
 				typ.Name, query.Variable)
 		}
 	}
-
-	if !strings.HasPrefix(query.Variable, "$") {
-		return nil, gqlerror.Errorf("Type %s: @auth: `%s` is not a valid GraphQL variable.",
-			typ.Name, query.Variable)
-	}
-
-	query.Variable = query.Variable[1:]
-	return &query, nil
+	return query, nil
 }
 
-func validateRBACOperators(typ *ast.Definition, query RBACQuery) error {
+func validateRBACQuery(typ *ast.Definition, rbacQuery *RBACQuery) error {
+	// validate rule operators
+	if err := validateRBACOperators(typ, rbacQuery); err != nil {
+		return err
+	}
+
+	// validate variable name
+	if !strings.HasPrefix(rbacQuery.Variable, "$") {
+		return gqlerror.Errorf("Type %s: @auth: `%s` is not a valid GraphQL variable.",
+			typ.Name, rbacQuery.Variable)
+	}
+	return nil
+}
+
+func validateRBACOperators(typ *ast.Definition, query *RBACQuery) error {
 	ok := false
 	switch query.Operator {
 	case "eq": // only check we could have is for primitive but not necessary we will have equal match later
