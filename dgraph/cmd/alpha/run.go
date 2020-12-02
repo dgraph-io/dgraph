@@ -727,26 +727,29 @@ func run() {
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		var numShutDownSig int
-		closer := admin.ServerCloser
-		if closer != nil {
-			for range sdCh {
-				select {
-				case <-closer.HasBeenClosed():
-				default:
-					closer.Signal()
-				}
-				numShutDownSig++
-				glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
+		for range sdCh {
+			closer := admin.ServerCloser
+			if closer == nil {
+				glog.Infoln("Caught Ctrl-C. Terminating now.")
+				os.Exit(1)
+			}
 
-				switch {
-				case atomic.LoadUint32(&initDone) < 2:
-					// Forcefully kill alpha if we haven't finish server initialization.
-					glog.Infoln("Stopped before initialization completed")
-					os.Exit(1)
-				case numShutDownSig == 3:
-					glog.Infoln("Signaled thrice. Aborting!")
-					os.Exit(1)
-				}
+			select {
+			case <-closer.HasBeenClosed():
+			default:
+				closer.Signal()
+			}
+			numShutDownSig++
+			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
+
+			switch {
+			case atomic.LoadUint32(&initDone) < 2:
+				// Forcefully kill alpha if we haven't finish server initialization.
+				glog.Infoln("Stopped before initialization completed")
+				os.Exit(1)
+			case numShutDownSig == 3:
+				glog.Infoln("Signaled thrice. Aborting!")
+				os.Exit(1)
 			}
 		}
 	}()
