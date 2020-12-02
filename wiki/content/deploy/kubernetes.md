@@ -41,14 +41,14 @@ gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.
 
 ## Single Server
 
-Once your Kubernetes cluster is up, you can use [dgraph-single.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml) to start a Zero, Alpha, and Ratel UI services.
+Once your Kubernetes cluster is up, you can use [dgraph-single.yaml](https://github.com/dgraph-io/dgraph/blob/release/v20.07/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml) to start a Zero, Alpha, and Ratel UI services.
 
 ### Deploy Single Server
 
 From your machine, run the following command to start a StatefulSet that creates a single Pod with Zero, Alpha, and Ratel UI running in it.
 
 ```sh
-kubectl create --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
+kubectl create --filename https://raw.githubusercontent.com/dgraph-io/dgraph/release/v20.07/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
 ```
 
 Output:
@@ -93,7 +93,7 @@ Go to `http://localhost:8000` and verify Dgraph is working as expected.
 Delete all the resources
 
 ```sh
-kubectl delete --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
+kubectl delete --filename https://raw.githubusercontent.com/dgraph-io/dgraph/release/v20.07/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
 kubectl delete persistentvolumeclaims --selector app=dgraph
 ```
 
@@ -131,14 +131,14 @@ gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   40s   v1.14.10-gke.
 gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.36
 ```
 
-Once your Kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml) to start the cluster.
+Once your Kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/release/v20.07/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml) to start the cluster.
 
 #### Deploy Dgraph HA Cluster
 
 From your machine, run the following command to start the cluster.
 
 ```sh
-kubectl create --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml
+kubectl create --filename https://raw.githubusercontent.com/dgraph-io/dgraph/release/v20.07/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml
 ```
 
 Output:
@@ -195,7 +195,7 @@ Go to `http://localhost:8000` and verify Dgraph is working as expected.
 Delete all the resources
 
 ```sh
-kubectl delete --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml
+kubectl delete --filename https://raw.githubusercontent.com/dgraph-io/dgraph/release/v20.07/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml
 kubectl delete persistentvolumeclaims --selector app=dgraph-zero
 kubectl delete persistentvolumeclaims --selector app=dgraph-alpha
 ```
@@ -372,7 +372,7 @@ NAME                  DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
 prometheus-operator   1         1         1            1           3m
 ```
 
-* Apply prometheus manifest present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/prometheus.yaml).
+* Apply prometheus manifest present [here](https://github.com/dgraph-io/dgraph/blob/release/v20.07/contrib/config/monitoring/prometheus/prometheus.yaml).
 
 ```sh
 $ kubectl apply -f prometheus.yaml
@@ -395,7 +395,7 @@ The UI is accessible at port 9090. Open http://localhost:9090 in your browser to
 
 To register alerts from dgraph cluster with your prometheus deployment follow the steps below:
 
-* Create a kubernetes secret containing alertmanager configuration. Edit the configuration file present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/alertmanager-config.yaml)
+* Create a kubernetes secret containing alertmanager configuration. Edit the configuration file present [here](https://github.com/dgraph-io/dgraph/blob/release/v20.07/contrib/config/monitoring/prometheus/alertmanager-config.yaml)
 with the required reciever configuration including the slack webhook credential and create the secret.
 
 You can find more information about alertmanager configuration [here](https://prometheus.io/docs/alerting/configuration/).
@@ -408,8 +408,8 @@ NAME                                            TYPE                 DATA   AGE
 alertmanager-alertmanager-dgraph-io             Opaque               1      87m
 ```
 
-* Apply the [alertmanager](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/alertmanager.yaml) along with [alert-rules](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/alert-rules.yaml) manifest
-to use the default configured alert configuration. You can also add custom rules based on the metrics exposed by dgraph cluster similar to [alert-rules](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/alert-rules.yaml)
+* Apply the [alertmanager](https://github.com/dgraph-io/dgraph/blob/release/v20.07/contrib/config/monitoring/prometheus/alertmanager.yaml) along with [alert-rules](https://github.com/dgraph-io/dgraph/blob/release/v20.07/contrib/config/monitoring/prometheus/alert-rules.yaml) manifest
+to use the default configured alert configuration. You can also add custom rules based on the metrics exposed by dgraph cluster similar to [alert-rules](https://github.com/dgraph-io/dgraph/blob/release/v20.07/contrib/config/monitoring/prometheus/alert-rules.yaml)
 manifest.
 
 ```sh
@@ -562,5 +562,5 @@ Containers](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/)
 to copy the data to the pod volume before the Alpha process runs.
 
 See the `initContainers` configuration in
-[dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml)
+[dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/release/v20.07/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml)
 to learn more.
