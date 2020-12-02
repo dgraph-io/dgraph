@@ -1998,7 +1998,7 @@ func idValidation(sch *ast.Schema,
 	}
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		dir.Position,
-		"Type %s; Field %s: with @id directive must be of type String!, not %s",
+		"Type %s; Field %s: with @id directive must be of type String!, Int!, Int64! or Float!, not %s",
 		typ.Name, field.Name, field.Type.String())}
 }
 
