@@ -21,11 +21,9 @@ package common
 // dataset and mutating and leaving unexpected data will result in flaky tests.
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sort"
 	"testing"
 
@@ -4595,22 +4593,19 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
-	require.Nil(t, response.Errors)
+	RequireNoGQLErrors(t, response)
 	var expected = `{
 		  	"addBook": {
 			  "numUids": 1
 			}
 		}`
-	b, _ := response.Data.MarshalJSON()
-	expBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
-	actBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(actBuffer, b))
-	require.Equal(t, expBuffer.String(), actBuffer.String())
+	require.JSONEq(t, expected, string(response.Data))
 
 	// adding same mutation again should result in error because of duplicate id
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
+
+	DeleteGqlType(t, "Book", map[string]interface{}{}, 1, nil)
 }
 
 func idDirectiveWithIntMutation(t *testing.T) {
@@ -4627,25 +4622,19 @@ func idDirectiveWithIntMutation(t *testing.T) {
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
-	if response.Errors != nil {
-		log.Print("error from servce is", response.Errors.Error())
-	}
-	require.Nil(t, response.Errors)
+	RequireNoGQLErrors(t, response)
 	var expected = `{
 			"addChapter": {
 			  "numUids": 1
 			}
 		}`
-	b, _ := response.Data.MarshalJSON()
-	expBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
-	actBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(actBuffer, b))
-	require.Equal(t, expBuffer.String(), actBuffer.String())
+	require.JSONEq(t, expected, string(response.Data))
 
 	// adding same mutation again should result in error because of duplicate id
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
+
+	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 1, nil)
 }
 
 func idDirectiveWithFloatMutation(t *testing.T) {
@@ -4667,20 +4656,17 @@ func idDirectiveWithFloatMutation(t *testing.T) {
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
-	require.Nil(t, response.Errors)
+	RequireNoGQLErrors(t, response)
 	var expected = `{
 			"addSection": {
 			  "numUids": 2
 			}
 		}`
-	b, _ := response.Data.MarshalJSON()
-	expBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(expBuffer, []byte(expected)))
-	actBuffer := new(bytes.Buffer)
-	require.NoError(t, json.Compact(actBuffer, b))
-	require.Equal(t, expBuffer.String(), actBuffer.String())
+	require.JSONEq(t, expected, string(response.Data))
 
 	// adding same mutation again should result in error because of duplicate id
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
+
+	DeleteGqlType(t, "Section", map[string]interface{}{}, 2, nil)
 }
