@@ -42,8 +42,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
-	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
 )
@@ -73,6 +73,12 @@ var (
 		"Clear all the test clusters.")
 	dry = pflag.BoolP("dry", "", false,
 		"Just show how the packages would be executed, without running tests.")
+	rebuildBinary = pflag.BoolP("rebuild-binary", "", true,
+		"Build Dgraph before running tests.")
+	useExisting = pflag.String("prefix", "",
+		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
+	skipSlow = pflag.BoolP("skip-slow", "s", false,
+		"If true, don't run tests on slow packages.")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -102,16 +108,24 @@ func startCluster(composeFile, prefix string) {
 		"docker-compose", "-f", composeFile, "-p", prefix,
 		"up", "--force-recreate", "--remove-orphans", "--detach")
 	cmd.Stderr = nil
+
 	fmt.Printf("Bringing up cluster %s...\n", prefix)
 	runFatal(cmd)
 	fmt.Printf("CLUSTER UP: %s\n", prefix)
 
-	// Let it stabilize.
-	time.Sleep(3 * time.Second)
+	// Wait for cluster to be healthy.
+	for i := 1; i <= 3; i++ {
+		in := getInstance(prefix, "zero"+strconv.Itoa(i))
+		in.bestEffortWaitForHealthy(6080)
+	}
+	for i := 1; i <= 6; i++ {
+		in := getInstance(prefix, "alpha"+strconv.Itoa(i))
+		in.bestEffortWaitForHealthy(8080)
+	}
 }
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	go func() {
-		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down")
+		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
@@ -134,25 +148,33 @@ func getInstance(prefix, name string) instance {
 func (in instance) String() string {
 	return fmt.Sprintf("%s_%s_1", in.Prefix, in.Name)
 }
-
-func allContainers(prefix string) []types.Container {
-	cli, err := client.NewEnvClient()
-	x.Check(err)
-
-	containers, err := cli.ContainerList(ctxb, types.ContainerListOptions{All: true})
-	if err != nil {
-		log.Fatalf("While listing container: %v\n", err)
+func (in instance) bestEffortWaitForHealthy(privatePort uint16) {
+	port := in.publicPort(privatePort)
+	if len(port) == 0 {
+		return
 	}
-
-	var out []types.Container
-	for _, c := range containers {
-		for _, name := range c.Names {
-			if strings.HasPrefix(name, "/"+prefix) {
-				out = append(out, c)
-			}
+	checkACL := func(body []byte) {
+		const acl string = "\"acl\""
+		if bytes.Index(body, []byte(acl)) > 0 {
+			in.loginFatal()
 		}
 	}
-	return out
+
+	for i := 0; i < 30; i++ {
+		resp, err := http.Get("http://localhost:" + port + "/health")
+		var body []byte
+		if resp != nil && resp.Body != nil {
+			body, _ = ioutil.ReadAll(resp.Body)
+			resp.Body.Close()
+		}
+		if err == nil && resp.StatusCode == http.StatusOK {
+			checkACL(body)
+			return
+		}
+		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
+		time.Sleep(time.Second)
+	}
+	return
 }
 
 func (in instance) getContainer() types.Container {
@@ -180,18 +202,19 @@ func (in instance) publicPort(privatePort uint16) string {
 }
 
 func (in instance) login() error {
-	addr := in.publicPort(9080)
+	addr := in.publicPort(8080)
 	if len(addr) == 0 {
 		return fmt.Errorf("unable to find container: %s", in)
 	}
-	dg, err := testutil.DgraphClientWithGroot("localhost:" + addr)
+
+	_, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: "http://localhost:" + addr + "/admin",
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+
 	if err != nil {
 		return fmt.Errorf("while connecting: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(ctxb, 10*time.Second)
-	defer cancel()
-	if err := dg.Login(ctx, "groot", "password"); err != nil {
-		return fmt.Errorf("while logging in: %v", err)
 	}
 	fmt.Printf("Logged into %s\n", in)
 	return nil
@@ -203,10 +226,39 @@ func (in instance) loginFatal() {
 		if err == nil {
 			return
 		}
-		fmt.Printf("Login failed: %v. Retrying...\n", err)
+		if strings.Contains(err.Error(), "Invalid X-Dgraph-AuthToken") {
+			// This is caused by Poor Man's auth. Return.
+			return
+		}
+		if strings.Contains(err.Error(), "Client sent an HTTP request to an HTTPS server.") {
+			// This is TLS enabled cluster. We won't be able to login.
+			return
+		}
+		fmt.Printf("Login failed for %s: %v. Retrying...\n", in, err)
 		time.Sleep(time.Second)
 	}
-	glog.Fatalf("Unable to login to %s\n", in)
+	fmt.Printf("Unable to login to %s\n", in)
+	os.Exit(1)
+}
+
+func allContainers(prefix string) []types.Container {
+	cli, err := client.NewEnvClient()
+	x.Check(err)
+
+	containers, err := cli.ContainerList(ctxb, types.ContainerListOptions{All: true})
+	if err != nil {
+		log.Fatalf("While listing container: %v\n", err)
+	}
+
+	var out []types.Container
+	for _, c := range containers {
+		for _, name := range c.Names {
+			if strings.HasPrefix(name, "/"+prefix) {
+				out = append(out, c)
+			}
+		}
+	}
+	return out
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
@@ -282,18 +334,15 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	}()
 
 	defaultCompose := path.Join(*baseDir, "dgraph/docker-compose.yml")
-	prefix := getPrefix()
+	prefix := getClusterPrefix()
 
 	var started, stopped bool
 	start := func() {
-		if started {
+		if len(*useExisting) > 0 || started {
 			return
 		}
 		startCluster(defaultCompose, prefix)
 		started = true
-
-		// Wait for cluster to be healthy.
-		getInstance(prefix, "alpha1").loginFatal()
 	}
 
 	stop := func() {
@@ -335,43 +384,33 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	return nil
 }
 
-func getPrefix() string {
+func getGlobalPrefix() string {
+	var tc string
+	if isTeamcity {
+		tc = "tc-"
+	}
+	return "test-" + tc
+}
+
+func getClusterPrefix() string {
+	if len(*useExisting) > 0 {
+		return *useExisting
+	}
 	id := atomic.AddInt32(&testId, 1)
-	return fmt.Sprintf("test-%03d-%d", procId, id)
+	return fmt.Sprintf("%s%03d-%d", getGlobalPrefix(), procId, id)
 }
 
 func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
 
 	compose := composeFileFor(pkg)
-	prefix := getPrefix()
+	prefix := getClusterPrefix()
 
 	startCluster(compose, prefix)
 	if !*keepCluster {
 		wg.Add(1)
 		defer stopCluster(compose, prefix, wg)
 	}
-
-	port := getInstance(prefix, "alpha1").publicPort(8080)
-	if len(port) > 0 {
-		for i := 0; i < 30; i++ {
-			resp, err := http.Get("http://localhost:" + port + "/health")
-			if err == nil && resp.StatusCode == http.StatusOK {
-				fmt.Printf("Health check: OK for %s. Status: %s\n", prefix, resp.Status)
-				break
-			}
-			var body []byte
-			if resp != nil && resp.Body != nil {
-				body, _ = ioutil.ReadAll(resp.Body)
-				resp.Body.Close()
-			}
-			fmt.Printf("Health failed: %v. Response: %q. Retrying...\n", err, body)
-			time.Sleep(time.Second)
-		}
-	}
-
-	// Wait for cluster to be healthy.
-	// getInstance(prefix, "alpha1").loginFatal()
 
 	return runTestsFor(ctx, pkg, prefix)
 }
@@ -478,8 +517,9 @@ func getPackages() []task {
 		return false
 	}
 
-	moveSlowToFront := func(list []task) {
-		slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker"}
+	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
+	moveSlowToFront := func(list []task) []task {
+		// These packages typically take over a minute to run.
 		left := 0
 		for i := 0; i < len(list); i++ {
 			// These packages take time. So, move them to the front.
@@ -488,10 +528,26 @@ func getPackages() []task {
 				left++
 			}
 		}
+		if !*skipSlow {
+			return list
+		}
+		out := list[:0]
+		for _, t := range list {
+			if !has(slowPkgs, t.pkg.ID) {
+				out = append(out, t)
+			}
+		}
+		return out
 	}
 
 	pkgs, err := packages.Load(nil, *baseDir+"/...")
 	x.Check(err)
+	for _, pkg := range pkgs {
+		if len(pkg.Errors) > 0 {
+			fmt.Printf("Got errors while reading pkg: %s. Error: %+v", pkg.ID, pkg.Errors)
+			os.Exit(1)
+		}
+	}
 	limitTo := findPackagesFor(*runTest)
 
 	var valid []task
@@ -512,7 +568,7 @@ func getPackages() []task {
 		t := task{pkg: pkg, isCommon: os.IsNotExist(err)}
 		valid = append(valid, t)
 	}
-	moveSlowToFront(valid)
+	valid = moveSlowToFront(valid)
 	if len(valid) == 0 {
 		fmt.Println("Couldn't find any packages. Exiting...")
 		os.Exit(1)
@@ -525,7 +581,7 @@ func getPackages() []task {
 }
 
 func removeAllTestContainers() {
-	containers := allContainers("test-")
+	containers := allContainers(getGlobalPrefix())
 
 	cli, err := client.NewEnvClient()
 	x.Check(err)
@@ -548,7 +604,7 @@ func removeAllTestContainers() {
 	networks, err := cli.NetworkList(ctxb, types.NetworkListOptions{})
 	x.Check(err)
 	for _, n := range networks {
-		if strings.HasPrefix(n.Name, "test-") {
+		if strings.HasPrefix(n.Name, getGlobalPrefix()) {
 			if err := cli.NetworkRemove(ctxb, n.ID); err != nil {
 				fmt.Printf("Error: %v while removing network: %+v\n", err, n)
 			} else {
@@ -556,35 +612,50 @@ func removeAllTestContainers() {
 			}
 		}
 	}
+
+	volumes, err := cli.VolumeList(ctxb, filters.Args{})
+	x.Check(err)
+	for _, v := range volumes.Volumes {
+		if strings.HasPrefix(v.Name, getGlobalPrefix()) {
+			if err := cli.VolumeRemove(ctxb, v.Name, true); err != nil {
+				fmt.Printf("Error: %v while removing volume: %+v\n", err, v)
+			} else {
+				fmt.Printf("Removed volume: %s\n", v.Name)
+			}
+		}
+	}
 }
 
 func run() error {
-	if *clear {
-		removeAllTestContainers()
-		return nil
-	}
-
-	start := time.Now()
-	oc.Took(0, "START", time.Millisecond)
-
-	cmd := command("make", "install")
-	cmd.Dir = *baseDir
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	oc.Took(0, "COMPILE", time.Since(start))
-
-	if len(*runPkg) > 0 && len(*runTest) > 0 {
-		log.Fatalf("Both pkg and test can't be set.\n")
-	}
-	tmpDir, err := ioutil.TempDir("", "dgraph-test")
-	x.Check(err)
-	defer os.RemoveAll(tmpDir)
-
 	if tc := os.Getenv("TEAMCITY_VERSION"); len(tc) > 0 {
 		fmt.Printf("Found Teamcity: %s\n", tc)
 		isTeamcity = true
 	}
+	if *clear {
+		removeAllTestContainers()
+		return nil
+	}
+	if len(*runPkg) > 0 && len(*runTest) > 0 {
+		log.Fatalf("Both pkg and test can't be set.\n")
+	}
+	fmt.Printf("Proc ID is %d\n", procId)
+
+	start := time.Now()
+	oc.Took(0, "START", time.Millisecond)
+
+	if *rebuildBinary {
+		// cmd := command("make", "BUILD_RACE=y", "install")
+		cmd := command("make", "install")
+		cmd.Dir = *baseDir
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+		oc.Took(0, "COMPILE", time.Since(start))
+	}
+
+	tmpDir, err := ioutil.TempDir("", "dgraph-test")
+	x.Check(err)
+	defer os.RemoveAll(tmpDir)
 
 	N := *concurrency
 	if len(*runPkg) > 0 || len(*runTest) > 0 {

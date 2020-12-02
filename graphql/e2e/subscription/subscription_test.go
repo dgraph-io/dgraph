@@ -19,8 +19,11 @@ package subscription_test
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -1062,4 +1065,13 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 	require.Nil(t, res)
 	// Terminate Subscription
 	subscriptionClient1.Terminate()
+}
+
+func TestMain(m *testing.M) {
+	err := common.CheckGraphQLStarted(common.GraphqlAdminURL)
+	if err != nil {
+		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
 }

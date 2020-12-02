@@ -286,6 +286,8 @@ type AddUserPayload {
 
 type CarAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteCarPayload {
@@ -312,6 +314,10 @@ type UpdateUserPayload {
 
 type UserAggregateResult {
 	count: Int
+	ageMin: Int
+	ageMax: Int
+	ageSum: Int
+	ageAvg: Float
 }
 
 #######################

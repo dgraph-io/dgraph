@@ -132,7 +132,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		tl := pr.threads[itr.ThreadId]
-		tl.alloc = stream.Allocator(itr.ThreadId)
+		tl.alloc = nil
 		kvList, dropOp, err := tl.toBackupList(key, itr)
 		if err != nil {
 			return nil, err
@@ -166,7 +166,11 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		_, ok := predMap[parsedKey.Attr]
 		return ok
 	}
-	stream.Send = func(list *bpb.KVList) error {
+	stream.Send = func(buf *z.Buffer) error {
+		list, err := badger.BufferToKVList(buf)
+		if err != nil {
+			return err
+		}
 		for _, kv := range list.Kv {
 			if maxVersion < kv.Version {
 				maxVersion = kv.Version

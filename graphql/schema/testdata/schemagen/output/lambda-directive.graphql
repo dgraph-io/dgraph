@@ -287,6 +287,10 @@ type UpdateUserPayload {
 
 type UserAggregateResult {
 	count: Int
+	firstNameMin: String
+	firstNameMax: String
+	lastNameMin: String
+	lastNameMax: String
 }
 
 #######################

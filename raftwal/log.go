@@ -53,7 +53,7 @@ const (
 	// and baseIV (remaining 8 bytes) are stored.
 	encOffset = logFileOffset - 16 // 1MB - 16B
 	// logFileSize is the initial size of the log file.
-	logFileSize = 64 << 20 // 64MB
+	logFileSize = 256 << 20 // 256MB
 	// entrySize is the size in bytes of a single entry.
 	entrySize = 32
 	// logSuffix is the suffix for log files.
@@ -145,7 +145,7 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 			if lf.dataKey, err = lf.registry.DataKey(keyID); err != nil {
 				return nil, err
 			}
-			lf.baseIV = buf[8:]
+			lf.baseIV = y.Copy(buf[8:])
 			y.AssertTrue(len(lf.baseIV) == 8)
 		}
 	}
@@ -346,7 +346,7 @@ func (lf *logFile) bootstrap() error {
 		return y.Wrapf(err, "Error while creating base IV, while creating logfile")
 	}
 	// Initialize base IV.
-	lf.baseIV = make([]byte, 8)
-	y.AssertTrue(8 == copy(lf.baseIV, buf[8:]))
+	lf.baseIV = y.Copy(buf[8:])
+	y.AssertTrue(len(lf.baseIV) == 8)
 	return nil
 }

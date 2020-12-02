@@ -721,7 +721,8 @@ func main() {
 	if opts.OutFile == "-" {
 		x.Check2(fmt.Printf("%s", doc))
 	} else {
-		x.Check2(fmt.Fprintf(os.Stdout, "Writing file: %s\n", opts.OutFile))
+		fmt.Printf("Options: %+v\n", opts)
+		fmt.Printf("Writing file: %s\n", opts.OutFile)
 		err = ioutil.WriteFile(opts.OutFile, []byte(doc), 0644)
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))

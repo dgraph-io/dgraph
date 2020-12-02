@@ -86,7 +86,7 @@
         "Post.text": "this post is not worth publishing",
         "Post.tags": ["Random"],
         "Post.topic": "Random",
-        "Post.numLikes": 0,
+        "Post.numLikes": 1,
         "Post.numViews": 0,
         "Post.isPublished": false,
         "Post.postType": "Fact",

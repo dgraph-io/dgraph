@@ -219,7 +219,7 @@ func ProcessListBackups(ctx context.Context, location string, creds *Credentials
 
 	manifests, err := ListBackupManifests(location, creds)
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot read manfiests at location %s", location)
+		return nil, errors.Wrapf(err, "cannot read manifests at location %s", location)
 	}
 
 	res := make([]*Manifest, 0)
