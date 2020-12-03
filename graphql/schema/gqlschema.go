@@ -612,7 +612,7 @@ var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.
 var defnValidations, typeValidations []func(schema *ast.Schema, defn *ast.Definition) gqlerror.List
 var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.List
 
-func assignAstFieldDef(src *ast.FieldDefinition, dst *ast.FieldDefinition) {
+func assignAstFieldDef(src, dst *ast.FieldDefinition) {
 	var dirs ast.DirectiveList
 	dirs = append(dirs, src.Directives...)
 
@@ -681,7 +681,7 @@ func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 							return gqlerror.ErrorPosf(defn.Position, "For type \"%s\" to implement interface"+
 								" \"%s\" the field \"%s\" must have type \"%s\"", defn.Name, i.Name, field.Name, field.Type.String())
 						}
-						if fieldSeen[field.Name] == false {
+						if !fieldSeen[field.Name] {
 							// Overwrite the existing field definition in type with the field definition of interface
 							assignAstFieldDef(field, defn.Fields.ForName(field.Name))
 						} else {
