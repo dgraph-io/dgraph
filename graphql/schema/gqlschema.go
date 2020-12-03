@@ -661,7 +661,7 @@ func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 	// interface.
 	for _, defn := range doc.Definitions {
 		if defn.Kind == ast.Object && len(defn.Interfaces) > 0 {
-			fieldSeen := make(map[string]bool)
+			fieldSeen := make(map[string]string)
 			defFields := make(map[string]int64)
 			for _, d := range defn.Fields {
 				defFields[d.Name]++
@@ -678,23 +678,35 @@ func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 					// If field name is repeated multiple times in type then it will result in validation error later.
 					if defFields[field.Name] == 1 {
 						if field.Type.String() != initialDefFields.ForName(field.Name).Type.String() {
-							return gqlerror.ErrorPosf(defn.Position, "For type \"%s\" to implement interface"+
-								" \"%s\" the field \"%s\" must have type \"%s\"", defn.Name, i.Name, field.Name, field.Type.String())
+							return gqlerror.ErrorPosf(defn.Position, "For type %s to implement interface"+
+								" %s the field %s must have type %s", defn.Name, i.Name, field.Name, field.Type.String())
 						}
-						if !fieldSeen[field.Name] {
+						if fieldSeen[field.Name] == "" {
 							// Overwrite the existing field definition in type with the field definition of interface
 							assignAstFieldDef(field, defn.Fields.ForName(field.Name))
 						} else {
-							// if field definition is already written,just add interface definition in type
-							// it will later results in validation error because of repeated fields
+							// If field definition is already written,just add interface definition in type
+							// It will later results in validation error because of repeated fields
+							if field.Type.NamedType != IDType {
+								fields = append(fields, copyAstFieldDef(field))
+							}
+						}
+					} else {
+						// If ID type is already seen in any other interface then we don't copy it again
+						// And validator won't through error for id types later
+						if field.Type.NamedType == IDType && fieldSeen[field.Name] != "" {
+							if field.Type.String() != defn.Fields.ForName(field.Name).Type.String() {
+								return gqlerror.ErrorPosf(defn.Position, "field %s is of type %s in interface %s"+
+									"and is of type %s in interface %s",
+									field.Name, field.Type.String(), i.Name, defn.Fields.ForName(field.Name).Type.String(), fieldSeen[field.Name])
+							}
+						} else {
+							// Creating a copy here is important, otherwise arguments like filter, order
+							// etc. are added multiple times if the pointer is shared.
 							fields = append(fields, copyAstFieldDef(field))
 						}
-						fieldSeen[field.Name] = true
-					} else {
-						// Creating a copy here is important, otherwise arguments like filter, order
-						// etc. are added multiple times if the pointer is shared.
-						fields = append(fields, copyAstFieldDef(field))
 					}
+					fieldSeen[field.Name] = i.Name
 				}
 				defn.Fields = append(fields, defn.Fields...)
 				passwordDirective := i.Directives.ForName("secret")
