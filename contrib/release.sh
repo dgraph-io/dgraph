@@ -247,7 +247,7 @@ pushd $TMP
   # Get a fresh ubuntu:latest image each time
   # Don't rely on whatever "latest" version
   # happens to be on the machine.
-  docker image rm ubuntu:latest
+  docker pull ubuntu:latest
 
   docker build -t dgraph/dgraph:$DOCKER_TAG .
 popd
