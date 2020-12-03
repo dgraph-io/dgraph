@@ -194,8 +194,10 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 		typesToComplete = append(typesToComplete, defn.Name)
 	}
 
-	expandSchema(doc)
-
+	gqlErr = expandSchema(doc)
+	if gqlErr != nil {
+		return nil, gqlerror.List{gqlErr}
+	}
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return nil, gqlerror.List{gqlErr}

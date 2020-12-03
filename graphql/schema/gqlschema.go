@@ -621,9 +621,21 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	return dst
 }
 
+func assignAstFieldDef(src *ast.FieldDefinition, dst *ast.FieldDefinition) {
+	var dirs ast.DirectiveList
+	dirs = append(dirs, src.Directives...)
+
+	dst.Name = src.Name
+	dst.DefaultValue = src.DefaultValue
+	dst.Type = src.Type
+	dst.Directives = dirs
+	dst.Arguments = src.Arguments
+	dst.Position = src.Position
+}
+
 // expandSchema adds schemaExtras to the doc and adds any fields inherited from interfaces into
 // implementing types
-func expandSchema(doc *ast.SchemaDocument) {
+func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
 		x.Panic(gqlErr)
@@ -642,6 +654,12 @@ func expandSchema(doc *ast.SchemaDocument) {
 	// interface.
 	for _, defn := range doc.Definitions {
 		if defn.Kind == ast.Object && len(defn.Interfaces) > 0 {
+			fieldSeen := make(map[string]bool)
+			defFields := make(map[string]int64)
+			for _, d := range defn.Fields {
+				defFields[d.Name]++
+			}
+			initialDefFields := defn.Fields
 			for _, implements := range defn.Interfaces {
 				i, ok := interfaces[implements]
 				if !ok {
@@ -650,9 +668,26 @@ func expandSchema(doc *ast.SchemaDocument) {
 				}
 				fields := make([]*ast.FieldDefinition, 0, len(i.Fields))
 				for _, field := range i.Fields {
-					// Creating a copy here is important, otherwise arguments like filter, order
-					// etc. are added multiple times if the pointer is shared.
-					fields = append(fields, copyAstFieldDef(field))
+					// If field name is repeated multiple times in type then it will result in validation error later.
+					if defFields[field.Name] == 1 {
+						if field.Type.String() != initialDefFields.ForName(field.Name).Type.String() {
+							return gqlerror.ErrorPosf(defn.Position, "For type \"%s\" to implement interface"+
+								" \"%s\" the field \"%s\" must have type \"%s\"", defn.Name, i.Name, field.Name, field.Type.String())
+						}
+						if fieldSeen[field.Name] == false {
+							// Overwrite the existing field definition in type with the field definition of interface
+							assignAstFieldDef(field, defn.Fields.ForName(field.Name))
+						} else {
+							// if field definition is already written,just add interface definition in type
+							// it will later results in validation error because of repeated fields
+							fields = append(fields, copyAstFieldDef(field))
+						}
+						fieldSeen[field.Name] = true
+					} else {
+						// Creating a copy here is important, otherwise arguments like filter, order
+						// etc. are added multiple times if the pointer is shared.
+						fields = append(fields, copyAstFieldDef(field))
+					}
 				}
 				defn.Fields = append(fields, defn.Fields...)
 				passwordDirective := i.Directives.ForName("secret")
@@ -665,6 +700,7 @@ func expandSchema(doc *ast.SchemaDocument) {
 
 	doc.Definitions = append(doc.Definitions, docExtras.Definitions...)
 	doc.Directives = append(doc.Directives, docExtras.Directives...)
+	return nil
 }
 
 // preGQLValidation validates schema before GraphQL validation.  Validation
