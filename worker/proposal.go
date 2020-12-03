@@ -18,7 +18,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -109,8 +108,8 @@ func (rl *rateLimiter) decr(retry int) {
 }
 
 // uniqueKey is meant to be unique across all the replicas.
-func uniqueKey() string {
-	return fmt.Sprintf("%02d-%d", groups().Node.Id, groups().Node.Rand.Uint64())
+func uniqueKey() uint64 {
+	return uint64(groups().Node.Id)<<32 | uint64(groups().Node.Rand.Uint32())
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
@@ -195,7 +194,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// have this shared key. Thus, each server in the group can identify
 	// whether it has already done this work, and if so, skip it.
 	key := uniqueKey()
-	proposal.Key = key
 	span := otrace.FromContext(ctx)
 
 	stop := x.SpanTimer(span, "n.proposeAndWait")

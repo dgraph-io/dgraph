@@ -18,7 +18,6 @@ package zero
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -73,8 +72,8 @@ func (n *node) AmLeader() bool {
 	return time.Since(n.lastQuorum) <= 5*time.Second
 }
 
-func (n *node) uniqueKey() string {
-	return fmt.Sprintf("z%x-%d", n.Id, n.Rand.Uint64())
+func (n *node) uniqueKey() uint64 {
+	return uint64(n.Id)<<32 | uint64(n.Rand.Uint32())
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
