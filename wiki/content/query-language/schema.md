@@ -382,19 +382,6 @@ transaction conflict rate. Use only the minimum number of and simplest indexes
 that your application needs.
 {{% /notice %}}
 
-Please note that when specifying at the same time both `term` and `trigram` indexes, in the schema, you will need to specify them in the following exact order:   `<predicate>: string @index(term, trigram) .` not vice-versa.
-Doing otherwise causes queries using the index to return an error about invalid tokenizers.
-
-```
-{
-     "message": ": Attribute streamTitle does not have a valid tokenizer.",
-     "extensions": {
-       "code": "ErrorInvalidRequest"
-     }
-   }
-```   
-
-
 ### DateTime Indices
 
 The indices available for `dateTime` are as follows.
