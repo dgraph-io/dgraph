@@ -96,6 +96,7 @@ func TestMetrics(t *testing.T) {
 
 		// Dgraph Memory Metrics
 		"dgraph_memory_idle_bytes", "dgraph_memory_inuse_bytes", "dgraph_memory_proc_bytes",
+		"dgraph_memory_alloc_bytes",
 		// Dgraph Activity Metrics
 		"dgraph_active_mutations_total", "dgraph_pending_proposals_total",
 		"dgraph_pending_queries_total",
