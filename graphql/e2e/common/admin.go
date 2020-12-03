@@ -481,7 +481,6 @@ func adminState(t *testing.T) {
 	queryParams := &GraphQLParams{
 		Query: `query {
 			state {
-				counter
 				groups {
 					id
 					members {
@@ -542,8 +541,7 @@ func adminState(t *testing.T) {
 
 	var result struct {
 		State struct {
-			Counter uint64
-			Groups  []struct {
+			Groups []struct {
 				Id         uint32
 				Members    []*pb.Member
 				Tablets    []*pb.Tablet
@@ -574,7 +572,6 @@ func adminState(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, jsonpb.Unmarshal(bytes.NewReader(stateRes), &state))
 
-	require.Equal(t, state.Counter, result.State.Counter)
 	for _, group := range result.State.Groups {
 		require.Contains(t, state.Groups, group.Id)
 		expectedGroup := state.Groups[group.Id]
