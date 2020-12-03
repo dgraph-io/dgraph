@@ -461,8 +461,9 @@ func MonitorMemoryMetrics(lc *z.Closer) {
 	defer fastTicker.Stop()
 
 	update := func() {
-		// ReadMemStats stops the world, so don't call it too frequently.
-		// Calling it every minute is OK.
+		// ReadMemStats stops the world which is expensive especially when the
+		// heap is large. So don't call it too frequently. Calling it every
+		// minute is OK.
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
 
