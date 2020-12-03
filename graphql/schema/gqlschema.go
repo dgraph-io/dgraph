@@ -691,20 +691,18 @@ func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 								fields = append(fields, copyAstFieldDef(field))
 							}
 						}
-					} else {
+					} else if field.Type.NamedType == IDType && fieldSeen[field.Name] != "" {
 						// If ID type is already seen in any other interface then we don't copy it again
 						// And validator won't through error for id types later
-						if field.Type.NamedType == IDType && fieldSeen[field.Name] != "" {
-							if field.Type.String() != defn.Fields.ForName(field.Name).Type.String() {
-								return gqlerror.ErrorPosf(defn.Position, "field %s is of type %s in interface %s"+
-									"and is of type %s in interface %s",
-									field.Name, field.Type.String(), i.Name, defn.Fields.ForName(field.Name).Type.String(), fieldSeen[field.Name])
-							}
-						} else {
-							// Creating a copy here is important, otherwise arguments like filter, order
-							// etc. are added multiple times if the pointer is shared.
-							fields = append(fields, copyAstFieldDef(field))
+						if field.Type.String() != defn.Fields.ForName(field.Name).Type.String() {
+							return gqlerror.ErrorPosf(defn.Position, "field %s is of type %s in interface %s"+
+								" and is of type %s in interface %s",
+								field.Name, field.Type.String(), i.Name, defn.Fields.ForName(field.Name).Type.String(), fieldSeen[field.Name])
 						}
+					} else {
+						// Creating a copy here is important, otherwise arguments like filter, order
+						// etc. are added multiple times if the pointer is shared.
+						fields = append(fields, copyAstFieldDef(field))
 					}
 					fieldSeen[field.Name] = i.Name
 				}
