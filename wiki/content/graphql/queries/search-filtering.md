@@ -217,7 +217,7 @@ queryStudent(fitler: {name: between: {min: "ba", max: "hz"}}){
 }
 ```
 
-## Filter to match specified field values with `in`
+### Filter to match specified field values with `in`
 
 You can filter query results to find objects with one or more specified values using the
 `in` keyword. This keyword can find matches for fields with the `@id` directive
@@ -247,7 +247,7 @@ query {
     }
 ```
 
-## Filter for objects with specified non-null fields using `has`
+### Filter for objects with specified non-null fields using `has`
 
 You can filter queries to find objects with a non-null value in a specified
 field using the `has` keyword. The `has` keyword can only check whether a field
