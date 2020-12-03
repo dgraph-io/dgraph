@@ -70,7 +70,7 @@ var (
 	// PendingProposals records the current number of pending RAFT proposals.
 	PendingProposals = stats.Int64("pending_proposals_total",
 		"Number of pending proposals", stats.UnitDimensionless)
-	// MemoryInUse records the amount of memory allocated via jemalloc/Go
+	// MemoryAlloc records the amount of memory allocated via jemalloc
 	MemoryAlloc = stats.Int64("memory_alloc_bytes",
 		"Amount of memory allocated", stats.UnitBytes)
 	// MemoryInUse records the current amount of used memory by Dgraph.
