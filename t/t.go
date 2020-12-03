@@ -44,7 +44,6 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
-	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
 )
@@ -78,6 +77,8 @@ var (
 		"Build Dgraph before running tests.")
 	useExisting = pflag.String("prefix", "",
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
+	skipSlow = pflag.BoolP("skip-slow", "s", false,
+		"If true, don't run tests on slow packages.")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -113,6 +114,10 @@ func startCluster(composeFile, prefix string) {
 	fmt.Printf("CLUSTER UP: %s\n", prefix)
 
 	// Wait for cluster to be healthy.
+	for i := 1; i <= 3; i++ {
+		in := getInstance(prefix, "zero"+strconv.Itoa(i))
+		in.bestEffortWaitForHealthy(6080)
+	}
 	for i := 1; i <= 6; i++ {
 		in := getInstance(prefix, "alpha"+strconv.Itoa(i))
 		in.bestEffortWaitForHealthy(8080)
@@ -143,21 +148,28 @@ func getInstance(prefix, name string) instance {
 func (in instance) String() string {
 	return fmt.Sprintf("%s_%s_1", in.Prefix, in.Name)
 }
-
 func (in instance) bestEffortWaitForHealthy(privatePort uint16) {
 	port := in.publicPort(privatePort)
 	if len(port) == 0 {
 		return
 	}
+	checkACL := func(body []byte) {
+		const acl string = "\"acl\""
+		if bytes.Index(body, []byte(acl)) > 0 {
+			in.loginFatal()
+		}
+	}
+
 	for i := 0; i < 30; i++ {
 		resp, err := http.Get("http://localhost:" + port + "/health")
-		if err == nil && resp.StatusCode == http.StatusOK {
-			return
-		}
 		var body []byte
 		if resp != nil && resp.Body != nil {
 			body, _ = ioutil.ReadAll(resp.Body)
 			resp.Body.Close()
+		}
+		if err == nil && resp.StatusCode == http.StatusOK {
+			checkACL(body)
+			return
 		}
 		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
 		time.Sleep(time.Second)
@@ -190,18 +202,19 @@ func (in instance) publicPort(privatePort uint16) string {
 }
 
 func (in instance) login() error {
-	addr := in.publicPort(9080)
+	addr := in.publicPort(8080)
 	if len(addr) == 0 {
 		return fmt.Errorf("unable to find container: %s", in)
 	}
-	dg, err := testutil.DgraphClientWithGroot("localhost:" + addr)
+
+	_, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: "http://localhost:" + addr + "/admin",
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+
 	if err != nil {
 		return fmt.Errorf("while connecting: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(ctxb, 10*time.Second)
-	defer cancel()
-	if err := dg.Login(ctx, "groot", "password"); err != nil {
-		return fmt.Errorf("while logging in: %v", err)
 	}
 	fmt.Printf("Logged into %s\n", in)
 	return nil
@@ -213,10 +226,19 @@ func (in instance) loginFatal() {
 		if err == nil {
 			return
 		}
-		fmt.Printf("Login failed: %v. Retrying...\n", err)
+		if strings.Contains(err.Error(), "Invalid X-Dgraph-AuthToken") {
+			// This is caused by Poor Man's auth. Return.
+			return
+		}
+		if strings.Contains(err.Error(), "Client sent an HTTP request to an HTTPS server.") {
+			// This is TLS enabled cluster. We won't be able to login.
+			return
+		}
+		fmt.Printf("Login failed for %s: %v. Retrying...\n", in, err)
 		time.Sleep(time.Second)
 	}
-	glog.Fatalf("Unable to login to %s\n", in)
+	fmt.Printf("Unable to login to %s\n", in)
+	os.Exit(1)
 }
 
 func allContainers(prefix string) []types.Container {
@@ -321,9 +343,6 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		}
 		startCluster(defaultCompose, prefix)
 		started = true
-
-		// Wait for cluster to be healthy.
-		getInstance(prefix, "alpha1").loginFatal()
 	}
 
 	stop := func() {
@@ -498,9 +517,9 @@ func getPackages() []task {
 		return false
 	}
 
-	moveSlowToFront := func(list []task) {
+	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
+	moveSlowToFront := func(list []task) []task {
 		// These packages typically take over a minute to run.
-		slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
 		left := 0
 		for i := 0; i < len(list); i++ {
 			// These packages take time. So, move them to the front.
@@ -509,6 +528,16 @@ func getPackages() []task {
 				left++
 			}
 		}
+		if !*skipSlow {
+			return list
+		}
+		out := list[:0]
+		for _, t := range list {
+			if !has(slowPkgs, t.pkg.ID) {
+				out = append(out, t)
+			}
+		}
+		return out
 	}
 
 	pkgs, err := packages.Load(nil, *baseDir+"/...")
@@ -539,7 +568,7 @@ func getPackages() []task {
 		t := task{pkg: pkg, isCommon: os.IsNotExist(err)}
 		valid = append(valid, t)
 	}
-	moveSlowToFront(valid)
+	valid = moveSlowToFront(valid)
 	if len(valid) == 0 {
 		fmt.Println("Couldn't find any packages. Exiting...")
 		os.Exit(1)

@@ -12,12 +12,16 @@ Lambda provides a way to write your custom logic in JavaScript, integrate it wit
 - Declare lambda queries, mutations, and fields in your GraphQL schema as needed
 - Define lambda resolvers for them in a JavaScript file
 
-This also simplifies the job of UI developers, allowing them to work in JavaScript, without knowing any other backend language.
+This also simplifies the job of developers, as they can build a complex backend that is rich with business logic, without setting up multiple different services. Also, you can build your backend in JavaScript, which means you can build both your frontend and backend using the same language.
 
-Dgraph doesn't execute your custom logic itself. It makes external HTTP requests to a user-defined lambda server. That means, you can deploy your lambda logic into the same Kubernetes cluster as your Dgraph instance. 
+Dgraph doesn't execute your custom logic itself. It makes external HTTP requests to a user-defined lambda server. [Slash GraphQL](https://dgraph.io/slash-graphql) will do all of this for you. 
 
 {{% notice "tip" %}}
 If you want to deploy your own lambda server, you can find the implementation of Dgraph Lambda in our [open-source repository](https://github.com/dgraph-io/dgraph-lambda). Please refer to the documentation on [setting up a lambda server](/graphql/lambda/server) for more details.
+{{% /notice %}}
+
+{{% notice "note" %}}
+If you're using [Slash GraphQL](https://dgraph.io/slash-graphql), the final compiled script file must be under 500Kb
 {{% /notice %}}
 
 ## Declaring lambda in a GraphQL schema
@@ -61,13 +65,14 @@ A lambda resolver is a user-defined JavaScript function that performs custom act
 The `self.addGraphQLResolvers` method takes an object as an argument, which maps a resolver name to the resolver function that implements it. The resolver functions registered using `self.addGraphQLResolvers` receive `{ parent, args, graphql, dql }` as argument:
 
 - `parent`, the parent object for which to resolve the current lambda field registered using `addGraphQLResolver`.
+The `parent` receives all immediate fields of that object, whether or not they were actually queried.
 Available only for types and interfaces (`null` for queries and mutations)
-- `args`,  the set of arguments for lambda queries and mutations (`null` for types and interfaces)
-- `graphql`, a function to execute auto-generated GraphQL API calls from the lambda server
+- `args`,  the set of arguments for lambda queries and mutations
+- `graphql`, a function to execute auto-generated GraphQL API calls from the lambda server. The user's auth header is passed back to the `graphql` function, so this can be used securely
 - `dql`, provides an API to execute DQL from the lambda server
 
 {{% notice "tip" %}}
-`self.addGraphQLResolvers` is the default choice for registering resolvers when not all the parent objects of a lambda field are required during resolution.
+`self.addGraphQLResolvers` is the default choice for registering resolvers when the result of the lambda for each parent is independant of other parents.
 {{% /notice %}}
 
 Each resolver function should return data in the exact format as the return type of GraphQL field, query, or mutation for which it is being registered.
@@ -97,17 +102,15 @@ self.addGraphQLResolvers({
 
 ### addMultiParentGraphQLResolvers
 
-The `self.addMultiParentGraphQLResolvers` is useful in scenarios where you want to perform computations involving all the parent objects returned from Dgraph for a lambda field.
-This is only useful for lambda fields and not for queries or mutations. 
+The `self.addMultiParentGraphQLResolvers` is useful in scenarios where you want to perform computations involving all the parents returned from Dgraph for a lambda field. This is useful in two scenarios:
 
-{{% notice "tip" %}}
-This method provides a much better performance if you are able to combine multiple requests together.
-{{% /notice %}}
+- When you want to perform a computation between parents
+- When you want to execute a complex query, and want to optimize it by firing a single query for all the parents
 
 This method takes an object as an argument, which maps a resolver name to the resolver function that implements it. The resolver functions registered using this method receive `{ parents, args, graphql, dql }` as argument:
 
 - `parents`, a list of parent objects for which to resolve the current lambda field registered using `addMultiParentGraphQLResolvers`. Available only for types and interfaces (`null` for queries and mutations)
-- `args`,  the set of arguments for lambda queries and mutations (`null` for types/interfaces)
+- `args`,  the set of arguments for lambda queries and mutations (`null` for types and interfaces)
 - `graphql`, a function to execute auto-generated GraphQL API calls from the lambda server
 - `dql`, provides an API to execute DQL from the lambda server
 
@@ -129,16 +132,14 @@ type Author {
 ```
 
 ```javascript
+import { sortBy } from 'lodash';
+
 /* 
 This function computes the rank of each author based on the reputation of the author relative to other authors.
 */
 async function rank({parents}) {
-    const idRepList = parents.map(function (parent) {
-        return {id: parent.id, rep: parent.reputation}
-    });
     const idRepMap = {};
-    idRepList.sort((a, b) => a.rep > b.rep ? -1 : 1)
-        .forEach((a, i) => idRepMap[a.id] = i + 1)
+    _.sortBy(parents, 'reputation').forEach((parent, i) => idRepMap[parent.id] = parents.length - i)
     return parents.map(p => idRepMap[p.id])
 }
 
@@ -146,6 +147,10 @@ self.addMultiParentGraphQLResolvers({
     "Author.rank": rank
 })
 ```
+
+{{% notice "note" %}}
+Webpack is required to use the sample `rank()` function.
+{{% /notice %}}
 
 Another resolver example using a `dql` call:
 

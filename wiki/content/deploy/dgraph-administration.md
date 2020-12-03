@@ -112,7 +112,7 @@ To fully secure alter operations in the cluster, the auth token must be set for 
 
 ## Exporting Database
 
-An export of all nodes is started by locally executing the following GraphQL mutation on /admin endpoint using any compatible client like Insomnia, GraphQL Playground or GraphiQL.
+An export of all nodes is started by locally executing the following GraphQL mutation on the `/admin` endpoint of an Alpha node (e.g. `localhost:8080/admin`) using any compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
 ```graphql
 mutation {
@@ -142,6 +142,19 @@ export.
 Each Alpha leader for a group writes output as a gzipped file to the export
 directory specified via the `--export` flag (defaults to a directory called `"export"`). If any of the groups fail, the
 entire export process is considered failed and an error is returned.
+
+Starting in Dgraph v20.11.0 you can provide an absolute path to the directory where you want to export data in the GraphQL mutation request, as follows:
+
+```graphql
+mutation {
+  export(input: {format: "rdf",destination: "<absolute-path-to-your-export-dir>"}) {
+    response {
+      message
+      code
+    }
+  }
+}
+```
 
 The data is exported in RDF format by default. A different output format may be specified with the
 `format` field. For example:

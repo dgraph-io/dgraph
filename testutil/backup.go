@@ -17,10 +17,17 @@
 package testutil
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -54,6 +61,63 @@ func openDgraph(pdir string) (*badger.DB, error) {
 		WithIndexCacheSize(10 * (1 << 20)).
 		WithEncryptionKey(k)
 	return badger.OpenManaged(opt)
+}
+
+func WaitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
+	query := fmt.Sprintf(`query status() {
+		restoreStatus(restoreId: %d) {
+		   status
+		   errors
+	   }
+   }`, restoreId)
+	params := GraphQLParams{
+		Query: query,
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	restoreDone := false
+	client := GetHttpsClient(t)
+	for i := 0; i < 15; i++ {
+		resp, err := client.Post(AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
+		require.NoError(t, err)
+		buf, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		sbuf := string(buf)
+		if strings.Contains(sbuf, "OK") {
+			restoreDone = true
+			break
+		}
+		time.Sleep(4 * time.Second)
+	}
+	require.True(t, restoreDone)
+
+	// Wait for the client to exit draining mode. This is needed because the client might
+	// be connected to a follower and might be behind the leader in applying the restore.
+	// Waiting for three consecutive successful queries is done to prevent a situation in
+	// which the query succeeds at the first attempt because the follower is behind and
+	// has not started to apply the restore proposal.
+	numSuccess := 0
+	for {
+		// This is a dummy query that returns no results.
+		_, err = dg.NewTxn().Query(context.Background(), `{
+	   q(func: has(invalid_pred)) {
+		   invalid_pred
+	   }}`)
+
+		if err == nil {
+			numSuccess += 1
+		} else {
+			require.Contains(t, err.Error(), "the server is in draining mode")
+			numSuccess = 0
+		}
+
+		if numSuccess == 3 {
+			// The server has been responsive three times in a row.
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
 
 // GetPredicateValues reads the specified p directory and returns the values for the given

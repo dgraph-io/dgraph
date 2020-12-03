@@ -277,6 +277,8 @@ input StringHashFilter {
 
 type AbstractAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type AddMessagePayload {
@@ -298,6 +300,14 @@ type DeleteMessagePayload {
 
 type MessageAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
+	contentMin: String
+	contentMax: String
+	authorMin: String
+	authorMax: String
+	datePostedMin: DateTime
+	datePostedMax: DateTime
 }
 
 type UpdateAbstractPayload {

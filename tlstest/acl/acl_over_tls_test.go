@@ -3,19 +3,19 @@ package acl
 import (
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/spf13/viper"
 )
 
 func TestLoginOverTLS(t *testing.T) {
-	t.Skipf("TODO(aman): Please fix me.")
 	conf := viper.New()
-	conf.Set("tls_cacert", "../tls/ca.crt")
-	conf.Set("tls_server_name", "node")
+	conf.Set("tls-cacert", "../mtls_internal/tls/live/ca.crt")
+	conf.Set("tls-server-name", "alpha1")
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)

@@ -40,208 +40,25 @@ import (
 )
 
 const (
-	// Dgraph schema should look like this if the GraphQL layer has started and
-	// successfully connected
-	initSchema = `{
-    "schema": [
-        {
-            "predicate": "dgraph.cors",
-            "type": "string",
-            "list": true,
-            "index": true,
-            "tokenizer": [
-             "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.drop.op",
-            "type": "string"
-        },
-        {
-            "predicate":"dgraph.graphql.p_query",
-            "type":"string"
-        },
-        {
-            "predicate":"dgraph.graphql.p_sha256hash",
-            "type":"string",
-            "index":true,
-            "tokenizer":["exact"]
-        },
-        {
-            "predicate": "dgraph.graphql.schema",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.schema_created_at",
-            "type": "datetime"
-		},
-        {
-            "predicate": "dgraph.graphql.schema_history",
-            "type": "string"
-		},
-        {
-            "predicate": "dgraph.graphql.xid",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.type",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true
-        }
-    ],
-    "types": [
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema"
-                },{
-                    "name": "dgraph.graphql.xid"
-                }
-            ],
-            "name": "dgraph.graphql"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema_history"
-                },{
-                    "name": "dgraph.graphql.schema_created_at"
-                }
-            ],
-            "name": "dgraph.graphql.history"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.p_query"
-                },
-                {
-                    "name": "dgraph.graphql.p_sha256hash"
-                }
-            ],
-            "name": "dgraph.graphql.persisted_query"
-        }
-    ]
-}`
-
-	firstTypes = `
+	firstGqlSchema = `
 	type A {
 		b: String
 	}`
-	firstSchema = `{
-    "schema": [
-        {
-            "predicate": "A.b",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.cors",
-            "type": "string",
-            "list": true,
-            "index": true,
-            "tokenizer": [
-             "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.drop.op",
-            "type": "string"
-        },
-        {
-            "predicate":"dgraph.graphql.p_query",
-            "type":"string"
-        },
-        {
-            "predicate":"dgraph.graphql.p_sha256hash",
-            "type":"string",
-            "index":true,
-            "tokenizer":["exact"]
-        },
-        {
-            "predicate": "dgraph.graphql.schema",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.schema_created_at",
-            "type": "datetime"
-		},
-        {
-            "predicate": "dgraph.graphql.schema_history",
-            "type": "string"
-		},
-        {
-            "predicate": "dgraph.graphql.xid",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.type",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true
-        }
-    ],
-    "types": [
-        {
-            "fields": [
-                {
-                    "name": "A.b"
-                }
-            ],
-            "name": "A"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema"
-                },{
-                    "name": "dgraph.graphql.xid"
-                }
-            ],
-            "name": "dgraph.graphql"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema_history"
-                },{
-                    "name": "dgraph.graphql.schema_created_at"
-                }
-            ],
-            "name": "dgraph.graphql.history"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.p_query"
-                },
-                {
-                    "name": "dgraph.graphql.p_sha256hash"
-                }
-            ],
-            "name": "dgraph.graphql.persisted_query"
-        }
-    ]
-}`
-	firstGQLSchema = `{
+	firstPreds = `
+	{
+		"predicate": "A.b",
+		"type": "string"
+	}`
+	firstTypes = `
+	{
+		"fields": [
+			{
+				"name": "A.b"
+			}
+		],
+		"name": "A"
+	}`
+	firstIntrospectionResponse = `{
     "__type": {
         "name": "A",
         "fields": [
@@ -252,122 +69,33 @@ const (
     }
 }`
 
-	updatedTypes = `
+	updatedGqlSchema = `
 	type A {
 		b: String
 		c: Int
 	}`
-	updatedSchema = `{
-    "schema": [
-        {
-            "predicate": "A.b",
-            "type": "string"
-        },
-        {
-            "predicate": "A.c",
-            "type": "int"
-        },
-        {
-            "predicate": "dgraph.cors",
-            "type": "string",
-            "list": true,
-            "index": true,
-            "tokenizer": [
-             "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.drop.op",
-            "type": "string"
-        },
-        {
-            "predicate":"dgraph.graphql.p_query",
-            "type":"string"
-        },
-        {
-            "predicate":"dgraph.graphql.p_sha256hash",
-            "type":"string",
-            "index":true,
-            "tokenizer":["exact"]
-        },
-        {
-            "predicate": "dgraph.graphql.schema",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.schema_created_at",
-            "type": "datetime"
-		},
-        {
-            "predicate": "dgraph.graphql.schema_history",
-            "type": "string"
-		},
-        {
-            "predicate": "dgraph.graphql.xid",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.type",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true
-        }
-    ],
-    "types": [
-        {
-            "fields": [
-                {
-                    "name": "A.b"
-                },
-                {
-                    "name": "A.c"
-                }
-            ],
-            "name": "A"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema"
-                },{
-                    "name": "dgraph.graphql.xid"
-                }
-            ],
-            "name": "dgraph.graphql"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema_history"
-                },{
-                    "name": "dgraph.graphql.schema_created_at"
-                }
-            ],
-            "name": "dgraph.graphql.history"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.p_query"
-                },
-                {
-                    "name": "dgraph.graphql.p_sha256hash"
-                }
-            ],
-            "name": "dgraph.graphql.persisted_query"
-        }
-    ]
-}`
-	updatedGQLSchema = `{
+	updatedPreds = `
+	{
+		"predicate": "A.b",
+		"type": "string"
+	},
+	{
+		"predicate": "A.c",
+		"type": "int"
+	}`
+	updatedTypes = `
+	{
+		"fields": [
+			{
+				"name": "A.b"
+			},
+			{
+				"name": "A.c"
+			}
+		],
+		"name": "A"
+	}`
+	updatedIntrospectionResponse = `{
     "__type": {
         "name": "A",
         "fields": [
@@ -381,14 +109,13 @@ const (
     }
 }`
 
-	adminSchemaEndptTypes = `
+	adminSchemaEndptGqlSchema = `
 	type A {
 		b: String
 		c: Int
 		d: Float
 	}`
-	adminSchemaEndptSchema = `{
-    "schema": [
+	adminSchemaEndptPreds = `
         {
             "predicate": "A.b",
             "type": "string"
@@ -400,111 +127,23 @@ const (
         {
             "predicate": "A.d",
             "type": "float"
-        },
-        {
-            "predicate": "dgraph.cors",
-            "type": "string",
-            "list": true,
-            "index": true,
-            "tokenizer": [
-             "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.drop.op",
-            "type": "string"
-        },
-        {
-            "predicate":"dgraph.graphql.p_query",
-            "type":"string"
-        },
-        {
-            "predicate":"dgraph.graphql.p_sha256hash",
-            "type":"string",
-            "index":true,
-            "tokenizer":["exact"]
-        },
-        {
-            "predicate": "dgraph.graphql.schema",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.schema_created_at",
-            "type": "datetime"
-		},
-        {
-            "predicate": "dgraph.graphql.schema_history",
-            "type": "string"
-		},
-        {
-            "predicate": "dgraph.graphql.xid",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.type",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true
-        }
-    ],
-    "types": [
-        {
-            "fields": [
-                {
-                    "name": "A.b"
-                },
-                {
-                    "name": "A.c"
-                },
-                {
-                    "name": "A.d"
-                }
-            ],
-            "name": "A"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema"
-                },{
-                    "name": "dgraph.graphql.xid"
-                }
-            ],
-            "name": "dgraph.graphql"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema_history"
-                },{
-                    "name": "dgraph.graphql.schema_created_at"
-                }
-            ],
-            "name": "dgraph.graphql.history"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.p_query"
-                },
-                {
-                    "name": "dgraph.graphql.p_sha256hash"
-                }
-            ],
-            "name": "dgraph.graphql.persisted_query"
-        }
-    ]
-}`
-	adminSchemaEndptGQLSchema = `{
+        }`
+	adminSchemaEndptTypes = `
+	{
+		"fields": [
+			{
+				"name": "A.b"
+			},
+			{
+				"name": "A.c"
+			},
+			{
+				"name": "A.d"
+			}
+		],
+		"name": "A"
+	}`
+	adminSchemaEndptIntrospectionResponse = `{
     "__type": {
         "name": "A",
         "fields": [
@@ -523,7 +162,7 @@ const (
 )
 
 func admin(t *testing.T) {
-	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
@@ -558,58 +197,59 @@ func admin(t *testing.T) {
 }
 
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
-	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
-	require.NoError(t, err)
-	require.JSONEq(t, initSchema, string(resp.GetJson()))
+	testutil.VerifySchema(t, client, testutil.SchemaOptions{ExcludeAclSchema: true})
 }
 
 func addGQLSchema(t *testing.T, client *dgo.Dgraph) {
-	err := addSchema(GraphqlAdminURL, firstTypes)
-	require.NoError(t, err)
+	SafelyUpdateGQLSchemaOnAlpha1(t, firstGqlSchema)
 
-	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
-	require.NoError(t, err)
+	testutil.VerifySchema(t, client, testutil.SchemaOptions{
+		UserPreds:        firstPreds,
+		UserTypes:        firstTypes,
+		ExcludeAclSchema: true,
+	})
 
-	require.JSONEq(t, firstSchema, string(resp.GetJson()))
-
-	introspect(t, firstGQLSchema)
+	introspect(t, firstIntrospectionResponse)
 }
 
 func updateSchema(t *testing.T, client *dgo.Dgraph) {
-	err := addSchema(GraphqlAdminURL, updatedTypes)
-	require.NoError(t, err)
+	SafelyUpdateGQLSchemaOnAlpha1(t, updatedGqlSchema)
 
-	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
-	require.NoError(t, err)
+	testutil.VerifySchema(t, client, testutil.SchemaOptions{
+		UserPreds:        updatedPreds,
+		UserTypes:        updatedTypes,
+		ExcludeAclSchema: true,
+	})
 
-	require.JSONEq(t, updatedSchema, string(resp.GetJson()))
-
-	introspect(t, updatedGQLSchema)
+	introspect(t, updatedIntrospectionResponse)
 }
 
 func updateSchemaThroughAdminSchemaEndpt(t *testing.T, client *dgo.Dgraph) {
-	err := addSchemaThroughAdminSchemaEndpt(graphqlAdminTestAdminSchemaURL, adminSchemaEndptTypes)
-	require.NoError(t, err)
+	assertUpdateGqlSchemaUsingAdminSchemaEndpt(t, Alpha1HTTP, adminSchemaEndptGqlSchema)
 
-	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
-	require.NoError(t, err)
+	testutil.VerifySchema(t, client, testutil.SchemaOptions{
+		UserPreds:        adminSchemaEndptPreds,
+		UserTypes:        adminSchemaEndptTypes,
+		ExcludeAclSchema: true,
+	})
 
-	require.JSONEq(t, adminSchemaEndptSchema, string(resp.GetJson()))
-
-	introspect(t, adminSchemaEndptGQLSchema)
+	introspect(t, adminSchemaEndptIntrospectionResponse)
 }
 
 func gqlSchemaNodeHasXid(t *testing.T, client *dgo.Dgraph) {
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), `query {
-		gqlSchema(func: type(dgraph.graphql)) {
+		gqlSchema(func: has(dgraph.graphql.schema)) {
 			dgraph.graphql.xid
+			dgraph.type
 		}
 	}`)
 	require.NoError(t, err)
-	// confirm that there is only one node of type dgraph.graphql and it has xid.
+	// confirm that there is only one node having GraphQL schema, it has xid,
+	// and its type is dgraph.graphql
 	require.JSONEq(t, `{
 		"gqlSchema": [{
-			"dgraph.graphql.xid": "dgraph.graphql.schema"
+			"dgraph.graphql.xid": "dgraph.graphql.schema",
+			"dgraph.type": ["dgraph.graphql"]
 		}]
 	}`, string(resp.GetJson()))
 }
@@ -659,7 +299,7 @@ func health(t *testing.T) {
 	require.NoError(t, err)
 
 	var health []pb.HealthInfo
-	resp, err := http.Get(adminDgraphHealthURL)
+	resp, err := http.Get(dgraphHealthURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	healthRes, err := ioutil.ReadAll(resp.Body)
@@ -825,7 +465,7 @@ func adminState(t *testing.T) {
 	require.NoError(t, err)
 
 	var state pb.MembershipState
-	resp, err := http.Get(adminDgraphStateURL)
+	resp, err := http.Get(dgraphStateURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	stateRes, err := ioutil.ReadAll(resp.Body)

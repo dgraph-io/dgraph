@@ -34,6 +34,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/gql"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
@@ -335,7 +337,10 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 	if err != nil {
 		return "", "", errors.Wrapf(err, "unable to read from response")
 	}
-
+	if resp.StatusCode != http.StatusOK {
+		return "", "", errors.New(fmt.Sprintf("got non 200 response from the server with %s ",
+			string(respBody)))
+	}
 	var outputJson map[string]interface{}
 	if err := json.Unmarshal(respBody, &outputJson); err != nil {
 		var errOutputJson map[string]interface{}
@@ -460,6 +465,11 @@ func AssignUids(num uint64) error {
 	return err
 }
 
+func RequireUid(t *testing.T, uid string) {
+	_, err := gql.ParseUid(uid)
+	require.NoErrorf(t, err, "expecting a uid, got: %s", uid)
+}
+
 func CheckForGraphQLEndpointToReady(t *testing.T) error {
 	var err error
 	retries := 6
@@ -486,7 +496,9 @@ func hasAdminGraphQLSchema(t *testing.T) (bool, error) {
 	}
 
 	result := MakeGQLRequest(t, schemaQry)
-	result.RequireNoGraphQLErrors(t)
+	if len(result.Errors) > 0 {
+		return false, result.Errors
+	}
 	var sch struct {
 		GetGQLSchema struct {
 			Schema string

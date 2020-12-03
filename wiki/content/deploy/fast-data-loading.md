@@ -98,9 +98,19 @@ Alpha server.
 
 `-a, --alpha` (default: `localhost:9080`): Dgraph Alpha gRPC server address to connect for live loading. This can be a comma-separated list of Alphas addresses in the same cluster to distribute the load, e.g.,  `"alpha:grpc_port,alpha2:grpc_port,alpha3:grpc_port"`.
 
-`-x, --xidmap` (default: disabled. Need a path): Store `xid` to `uid` mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific `uid`.
+`-x, --xidmap` (default: disabled. Need a path): Store `xid` to `uid` mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. 
 
-`--ludicrous_mode` (default: `false`): Live Loader, by default, does smart batching to ingest data faster. This behavior is not required in ludicrous mode and ends up taking more time and memory. This option allows the user to notify Live Loader that the Alpha server is running in ludicrous mode. This mode disables smart batching, increasing speed, and memory. This option should only be used if Dgraph is running in ludicrous mode.
+{{% notice "tip" %}}
+Using the `--xidmap` flag is recommended if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific `uid`.
+{{% /notice %}}
+
+`--ludicrous_mode` (default: `false`): This option allows the user to notify Live Loader that the Alpha server is running in ludicrous mode.
+Live Loader, by default, does smart batching of data to avoid transaction conflicts, which improves the performance in normal mode.
+Since there's no conflict detection in ludicrous mode, smart batching is disabled to speed up the data ingestion further.
+
+{{% notice "note" %}}
+The `--ludicrous_mode` option should only be used if Dgraph is also running in [ludicrous mode]({{< relref "ludicrous-mode.md" >}}).
+{{% /notice %}}
 
 `-U, --upsertPredicate` (default: disabled): Runs Live Loader in `upsertPredicate` mode. The provided value will be used to store blank nodes as a `xid`.
 

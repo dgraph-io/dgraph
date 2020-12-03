@@ -286,6 +286,8 @@ type AddPostPayload {
 
 type AuthorAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteAuthorPayload {
@@ -302,6 +304,10 @@ type DeletePostPayload {
 
 type PostAggregateResult {
 	count: Int
+	titleMin: String
+	titleMax: String
+	textMin: String
+	textMax: String
 }
 
 type UpdateAuthorPayload {
