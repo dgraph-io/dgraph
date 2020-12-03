@@ -70,6 +70,9 @@ var (
 	// PendingProposals records the current number of pending RAFT proposals.
 	PendingProposals = stats.Int64("pending_proposals_total",
 		"Number of pending proposals", stats.UnitDimensionless)
+	// MemoryAlloc records the amount of memory allocated via jemalloc
+	MemoryAlloc = stats.Int64("memory_alloc_bytes",
+		"Amount of memory allocated", stats.UnitBytes)
 	// MemoryInUse records the current amount of used memory by Dgraph.
 	MemoryInUse = stats.Int64("memory_inuse_bytes",
 		"Amount of memory in use", stats.UnitBytes)
@@ -209,6 +212,13 @@ var (
 			Description: PendingProposals.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     nil,
+		},
+		{
+			Name:        MemoryAlloc.Name(),
+			Measure:     MemoryAlloc,
+			Description: MemoryAlloc.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
 		},
 		{
 			Name:        MemoryInUse.Name(),
@@ -465,8 +475,13 @@ func MonitorMemoryMetrics(lc *z.Closer) {
 	defer lc.Done()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
+	fastTicker := time.NewTicker(time.Second)
+	defer fastTicker.Stop()
 
 	update := func() {
+		// ReadMemStats stops the world which is expensive especially when the
+		// heap is large. So don't call it too frequently. Calling it every
+		// minute is OK.
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
 
@@ -493,6 +508,8 @@ func MonitorMemoryMetrics(lc *z.Closer) {
 		select {
 		case <-lc.HasBeenClosed():
 			return
+		case <-fastTicker.C:
+			ostats.Record(context.Background(), MemoryAlloc.M(z.NumAllocBytes()))
 		case <-ticker.C:
 			update()
 		}
