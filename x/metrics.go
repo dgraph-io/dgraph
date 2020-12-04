@@ -500,16 +500,20 @@ func MonitorMemoryMetrics(lc *z.Closer) {
 			MemoryIdle.M(int64(idle)),
 			MemoryProc.M(int64(getMemUsage())))
 	}
+	updateAlloc := func() {
+		ostats.Record(context.Background(), MemoryAlloc.M(z.NumAllocBytes()))
+	}
 	// Call update immediately so that Dgraph reports memory stats without
 	// having to wait for the first tick.
 	update()
+	updateAlloc()
 
 	for {
 		select {
 		case <-lc.HasBeenClosed():
 			return
 		case <-fastTicker.C:
-			ostats.Record(context.Background(), MemoryAlloc.M(z.NumAllocBytes()))
+			updateAlloc()
 		case <-ticker.C:
 			update()
 		}

@@ -68,7 +68,7 @@ mutation addAuthor($author: [AddAuthorInput!]!) {
 ```
 Variables:
 ```json
-{ "auth":
+{ "author":
   { "name": "A.N. Author",
     "dob": "2000-01-01",
     "posts": []
