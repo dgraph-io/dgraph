@@ -120,7 +120,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		key := n.uniqueKey()
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 		defer n.Proposals.Delete(key)
-		span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
+		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
 
 		data := make([]byte, 8+proposal.Size())
 		binary.BigEndian.PutUint64(data[:8], key)
