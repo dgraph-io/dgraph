@@ -501,7 +501,6 @@ func printKeys(db *badger.DB) {
 	var total uint64
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
-		key = item.KeyCopy(key)
 		pk, err := x.Parse(key)
 		x.Check(err)
 		var buf bytes.Buffer
