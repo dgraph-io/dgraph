@@ -579,6 +579,10 @@ func printKeys(db *badger.DB) {
 			fmt.Fprintf(&buf, " isz: %d icount: %d", invalidSz, invalidCount)
 		}
 		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(key))
+		// If total size is more than 1 GB or we have more than 1 million keys, flag this key.
+		if uint64(sz)+invalidSz > (1<<30) || uint64(deltaCount)+invalidCount > 10e6 {
+			fmt.Fprintf(&buf, " [HEAVY]")
+		}
 		fmt.Println(buf.String())
 		atomic.AddUint64(&total, 1)
 		return nil, nil
