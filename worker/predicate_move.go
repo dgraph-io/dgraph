@@ -313,7 +313,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if err != nil {
 			return nil, err
 		}
-		kvs, err := l.Rollup(nil)
+		kvs, err := l.Rollup(itr.Alloc)
 		for _, kv := range kvs {
 			// Let's set all of them at this move timestamp.
 			kv.Version = in.TxnTs
