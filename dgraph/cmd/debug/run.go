@@ -447,20 +447,26 @@ func rollupKey(db *badger.DB) {
 	txn := db.NewTransactionAt(opt.readTs, false)
 	defer txn.Discard()
 
+	key, err := hex.DecodeString(opt.rollupKey)
+	x.Check(err)
+
 	iopts := badger.DefaultIteratorOptions
 	iopts.AllVersions = true
 	iopts.PrefetchValues = false
-	itr := txn.NewIterator(iopts)
+	itr := txn.NewKeyIterator(key, iopts)
 	defer itr.Close()
 
-	key, err := hex.DecodeString(opt.rollupKey)
-	x.Check(err)
-	itr.Seek(key)
+	itr.Rewind()
 	if !itr.Valid() {
 		log.Fatalf("Unable to seek to key: %s", hex.Dump(key))
 	}
 
 	item := itr.Item()
+	// Don't need to do anything if the bitdelta is not set.
+	if item.UserMeta()&posting.BitDeltaPosting == 0 {
+		fmt.Println("First item doesn't have bitdelta. Nothing to do")
+		return
+	}
 	pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
 	x.Check(err)
 
