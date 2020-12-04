@@ -201,7 +201,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	if err != nil {
 		return err
 	}
-	data = data[8+sz:]
+
+	// Trim data to the new size after Marshal.
+	data = data[:8+sz]
 
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "n.proposeAndWait")
