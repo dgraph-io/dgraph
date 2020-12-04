@@ -499,6 +499,7 @@ func printKeys(db *badger.DB) {
 	}
 	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
 	stream := db.NewStreamAt(opt.readTs)
+	stream.NumGo = 16
 	stream.Prefix = prefix
 	var total uint64
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
@@ -824,7 +825,10 @@ func run() {
 
 	bopts := badger.DefaultOptions(dir).
 		WithReadOnly(opt.readOnly).
-		WithEncryptionKey(opt.key)
+		WithEncryptionKey(opt.key).
+		WithBlockCacheSize(1 << 30).
+		WithIndexCacheSize(1 << 30).
+		WithLoggingLevel(badger.WARNING)
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
