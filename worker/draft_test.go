@@ -21,7 +21,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -29,11 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft/raftpb"
 )
-
-func openBadger(dir string) (*badger.DB, error) {
-	opt := badger.DefaultOptions(dir)
-	return badger.Open(opt)
-}
 
 func getEntryForMutation(index, startTs uint64) raftpb.Entry {
 	proposal := pb.Proposal{Mutations: &pb.Mutations{StartTs: startTs}}
@@ -52,14 +46,12 @@ func getEntryForCommit(index, startTs, commitTs uint64) raftpb.Entry {
 }
 
 func TestCalculateSnapshot(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
+	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := openBadger(dir)
-	require.NoError(t, err)
-	ds := raftwal.Init(db, 0, 0)
-	defer ds.Closer.SignalAndWait()
+	ds := raftwal.Init(dir)
+	defer ds.Close()
 
 	n := newNode(ds, 1, 1, "")
 	var entries []raftpb.Entry

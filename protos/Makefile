@@ -43,7 +43,7 @@ copy-protos:
 	@mkdir -p ${TMPDIR}/src/${DGO_PATH}/protos
 	@mkdir -p ${TMPDIR}/src/${BADGER_PATH}/pb
 	@mkdir -p ${TMPDIR}/src/${GOGO_PATH}/gogoproto
-	@cp $(shell go list -m -f "{{.Dir}}" ${BADGER_PATH})/pb/pb.proto ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
+	@cp $(shell go list -m -f "{{.Dir}}" ${BADGER_PATH})/pb/badgerpb2.proto ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
 	@cp $(shell go list -m -f "{{.Dir}}" ${DGO_PATH})/protos/api.proto ${TMPDIR}/src/${DGO_PATH}/protos/api.proto
 	@cp $(shell go list -m -f "{{.Dir}}" ${GOGO_PATH})/gogoproto/gogo.proto ${TMPDIR}/src/${GOGO_PATH}/gogoproto/gogo.proto
 

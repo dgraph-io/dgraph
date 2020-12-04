@@ -71,7 +71,7 @@ function StartAlpha
   if [[ $p_dir ]]; then
     docker cp $p_dir alpha1:/data/alpha1/
   fi
-  DockerCompose -f $DOCKER_CONF up -d alpha1
+  DockerCompose -f $DOCKER_CONF up -d --remove-orphans alpha1
 
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
@@ -88,7 +88,7 @@ function StartAlpha
 function ResetCluster
 {
     INFO "restarting cluster with only one zero and alpha"
-    DockerCompose -f $DOCKER_CONF down
+    DockerCompose -f $DOCKER_CONF down --remove-orphans
     StartZero
     StartAlpha
 }
@@ -119,7 +119,7 @@ function QuerySchema
 {
   INFO "running schema query"
   local out_file="schema.out"
-  curl -sS -H "Content-Type: application/graphql+-" localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
+  curl -sS -H "Content-Type: application/dql" localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python3 -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
   echo >> $out_file
 }
 
@@ -196,11 +196,17 @@ EOF
 
   INFO "checking that each predicate appears in only one shard"
 
-  dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4  > all_dbs.out
-  dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4 >> all_dbs.out
+  dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f3  > all_dbs.out
+  dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f3 >> all_dbs.out
   diff <(LC_ALL=C sort all_dbs.out | uniq -c) - <<EOF
       1 dgraph.acl.rule
+      1 dgraph.cors
+      1 dgraph.drop.op
+      1 dgraph.graphql.p_query
+      1 dgraph.graphql.p_sha256hash
       1 dgraph.graphql.schema
+      1 dgraph.graphql.schema_created_at
+      1 dgraph.graphql.schema_history
       1 dgraph.graphql.xid
       1 dgraph.password
       1 dgraph.rule.permission
@@ -218,7 +224,7 @@ EOF
 function StopServers
 {
   INFO "stopping containers"
-  DockerCompose -f $DOCKER_CONF down
+  DockerCompose -f $DOCKER_CONF down --remove-orphans
 }
 
 function Cleanup
@@ -235,7 +241,6 @@ UpdateDatabase
 QuerySchema
 DoExport
 StopServers
-
 popd >/dev/null
 mkdir dir2
 pushd dir2 >/dev/null

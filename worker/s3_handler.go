@@ -166,7 +166,8 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 	return json.NewDecoder(reader).Decode(m)
 }
 
-func (h *s3Handler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, error) {
+func (h *s3Handler) GetManifests(uri *url.URL, backupId string,
+	backupNum uint64) ([]*Manifest, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
 		return nil, err
@@ -198,24 +199,15 @@ func (h *s3Handler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, er
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
-	manifests, err = filterManifests(manifests, backupId)
-	if err != nil {
-		return nil, err
-	}
 
-	// Sort manifests in the ascending order of their BackupNum so that the first
-	// manifest corresponds to the first full backup and so on.
-	sort.Slice(manifests, func(i, j int) bool {
-		return manifests[i].BackupNum < manifests[j].BackupNum
-	})
-	return manifests, nil
+	return getManifests(manifests, backupId, backupNum)
 }
 
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Since value on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
-	manifests, err := h.GetManifests(uri, backupId)
+func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
+	manifests, err := h.GetManifests(uri, backupId, backupNum)
 	if err != nil {
 		return LoadResult{0, 0, errors.Wrapf(err, "while retrieving manifests")}
 	}
@@ -259,7 +251,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, err := fn(reader, gid, predSet)
+			groupMaxUid, err := fn(reader, gid, predSet, manifest.DropOperations)
 			if err != nil {
 				return LoadResult{0, 0, err}
 			}
@@ -275,17 +267,12 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 
 // Verify performs basic checks to decide whether the specified backup can be restored
 // to a live cluster.
-func (h *s3Handler) Verify(uri *url.URL, backupId string, currentGroups []uint32) error {
-	manifests, err := h.GetManifests(uri, backupId)
+func (h *s3Handler) Verify(uri *url.URL, req *pb.RestoreRequest, currentGroups []uint32) error {
+	manifests, err := h.GetManifests(uri, req.GetBackupId(), req.GetBackupNum())
 	if err != nil {
 		return errors.Wrapf(err, "while retrieving manifests")
 	}
-
-	if len(manifests) == 0 {
-		return errors.Errorf("No backups with the specified backup ID %s", backupId)
-	}
-
-	return verifyGroupsInBackup(manifests, currentGroups)
+	return verifyRequest(req, manifests, currentGroups)
 }
 
 // ListManifests loads the manifests in the locations and returns them.

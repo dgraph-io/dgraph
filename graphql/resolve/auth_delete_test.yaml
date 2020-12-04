@@ -5,6 +5,8 @@
         msg
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter": { "aSecret": { "anyofterms": "auth is applied" } } }
   dgmutations:
@@ -22,6 +24,76 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
+- name: "Delete with inverse field and RBAC true"
+  gqlquery: |
+    mutation {
+      deleteTweets(
+        filter: {
+          text: {anyoftext: "abc"}
+        }) {
+        tweets {
+          text
+        }
+      }
+    }
+  jwtvar:
+    USER: "foo"
+    ROLE: "admin"
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "User.tweets" : [{"uid":"uid(x)"}],
+            "uid" : "uid(User2)"
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteTweets(func: uid(TweetsRoot)) {
+        uid
+        User2 as Tweets.user
+      }
+      TweetsRoot as var(func: uid(Tweets1))
+      Tweets1 as var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "abc"))
+      tweets(func: uid(Tweets3)) {
+        text : Tweets.text
+        dgraph.uid : uid
+      }
+      Tweets3 as var(func: uid(Tweets4))
+      Tweets4 as var(func: uid(x))
+    }
+
+- name: "Delete with inverse field and RBAC false"
+  gqlquery: |
+    mutation {
+      deleteTweets(
+        filter: {
+          text: {anyoftext: "abc"}
+        }) {
+        tweets {
+          text
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "admin"
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" }
+        ]
+  dgquery: |-
+    query {
+      x as deleteTweets()
+      tweets(func: uid(Tweets1)) {
+        text : Tweets.text
+        dgraph.uid : uid
+      }
+      Tweets1 as var(func: uid(Tweets2))
+      Tweets2 as var(func: uid(x))
+    }
+
 - name: "Delete with deep auth"
   gqlquery: |
     mutation deleteTicket($filter: TicketFilter!) {
@@ -29,13 +101,15 @@
         msg
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter": { "title": { "anyofterms": "auth is applied" } } }
   dgmutations:
     - deletejson: |
         [
           { "uid": "uid(x)" },
-          { 
+          {
             "uid":"uid(Column3)",
             "Column.tickets": [ { "uid":"uid(x)" } ]
           },
@@ -90,6 +164,8 @@
         }
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter": { "title": { "anyofterms": "auth is applied" } } }
   dgmutations:
@@ -206,7 +282,9 @@
     {
       "projs" : ["0x01", "0x02"]
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -244,7 +322,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -269,6 +349,8 @@
         "username": { "eq": "userxyz" }
       }
     }
+  jwtvar:
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [
@@ -276,6 +358,10 @@
           {
             "Ticket.assignedTo" : [ {"uid":"uid(x)"} ],
             "uid" : "uid(Ticket4)"
+          },
+          {
+            "Tweets.user" : {"uid":"uid(x)"},
+            "uid" : "uid(Tweets5)"
           }
         ]
   dgquery: |-
@@ -283,6 +369,7 @@
       x as deleteUser(func: uid(UserRoot)) {
         uid
         Ticket4 as User.tickets
+        Tweets5 as User.tweets
       }
       UserRoot as var(func: uid(User1)) @filter((uid(UserAuth2) AND uid(UserAuth3)))
       User1 as var(func: type(User)) @filter(eq(User.username, "userxyz"))
@@ -297,6 +384,8 @@
         msg
       }
     }
+  jwtvar:
+    USER: "user1"
   variables: |
     { "filter":
       {
@@ -331,7 +420,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -359,7 +450,9 @@
         "id": ["0x1", "0x2"]
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -377,7 +470,7 @@
         random : Log.random
         dgraph.uid : uid
       }
-      Log2 as var(func: uid(Log3), orderasc: Log.logs)
+      Log2 as var(func: uid(Log3))
       Log3 as var(func: uid(x))
     }
 
@@ -392,7 +485,9 @@
     {
       "ids" : ["0x01", "0x02"]
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{ "uid": "uid(x)" }]
@@ -416,6 +511,8 @@
     {
       "ids" : ["0x01", "0x02"]
     }
+  jwtvar:
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{ "uid": "uid(x)" }]
@@ -437,12 +534,12 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -454,7 +551,7 @@
         uid
       }
       IssueRoot as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
-      Issue1 as var(func: type(Issue))
+      Issue1 as var(func: uid(0x1, 0x2)) @filter(type(Issue))
       IssueAuth2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
         dgraph.uid : uid
@@ -469,12 +566,12 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    { 
+      "ids": ["0x1", "0x2"]
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -493,12 +590,12 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -517,12 +614,12 @@
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgmutations:
     - deletejson: |
         [{
@@ -530,7 +627,246 @@
          }]
   dgquery: |-
     query {
-      x as deleteRole(func: type(Role)) {
+      x as deleteRole(func: uid(0x1, 0x2)) @filter(type(Role)) {
         uid
+      }
+    }
+
+- name: "Deleting interface having its own auth rules and implementing types also have auth rules and some of the rules of implementing types are not satisfied"
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deletePost(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  jwtvar:
+    USER: "user1"
+    ANS:  "true"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         },{
+           "Author.posts": [
+             {"uid": "uid(x)"}
+           ],
+           "uid": "uid(Author5)"
+         }]
+  dgquery: |-
+    query {
+      x as deletePost(func: uid(PostRoot)) {
+        uid
+        Author5 as Post.author
+      }
+      PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(AnswerAuth4)))
+      Post1 as var(func: uid(0x1, 0x2)) @filter(type(Post))
+      Question1 as var(func: type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Answer1 as var(func: type(Answer))
+      AnswerAuth4 as var(func: uid(Answer1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Deleting interface having its own auth rules and implementing types also have auth rules and the rules of interface are not satisfied"
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deletePost(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    AND: "true"
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deletePost()
+    }
+
+- name: "Deleting interface having no own auth rules but some implementing types have auth rules and they are not satisfied."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteA(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteA(func: uid(ARoot)) {
+        uid
+      }
+      ARoot as var(func: uid(A1)) @filter((uid(B1)))
+      A1 as var(func: uid(0x1, 0x2)) @filter(type(A))
+      B1 as var(func: type(B))
+    }
+
+- name: "Delete Type Having Graph Traversal Auth Rules on Interface."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteQuestion(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  jwtvar:
+    USER: "user1"
+    ANS: "true"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         },{
+           "Author.posts": [
+             {"uid": "uid(x)"}
+           ],
+           "uid": "uid(Author4)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteQuestion(func: uid(QuestionRoot)) {
+        uid
+        Author4 as Post.author
+      }
+      QuestionRoot as var(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3)))
+      Question1 as var(func: uid(0x1, 0x2)) @filter(type(Question))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Delete Type Having Graph Traversal Auth Rules on Interface and those are not satisfied."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteQuestion(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  jwtvar:
+    ANS: "true"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteQuestion()
+    }
+
+- name: "Delete type having RBAC Auth Rules on interface and those are not satisfied."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteFbPost(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { 
+      "ids": ["0x1", "0x2"]
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteFbPost()
+    }
+
+- name: "Delete type having RBAC Auth Rules on interface and all are satisfied."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteFbPost(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         },{
+           "Author.posts": [
+             {"uid": "uid(x)"}
+           ],
+           "uid": "uid(Author3)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteFbPost(func: uid(FbPostRoot)) {
+        uid
+        Author3 as Post.author
+      }
+      FbPostRoot as var(func: uid(FbPost1)) @filter(uid(FbPostAuth2))
+      FbPost1 as var(func: uid(0x1, 0x2)) @filter(type(FbPost))
+      FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
       }
     }

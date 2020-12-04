@@ -17,11 +17,14 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
+	"os"
 	"runtime"
 	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 )
@@ -32,25 +35,44 @@ func main() {
 	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
 	// benchmark notes are located in badger-bench/randread.
 	runtime.GOMAXPROCS(128)
+	fmt.Printf("Page Size: %d\n", os.Getpagesize())
+
+	absDiff := func(a, b uint64) uint64 {
+		if a > b {
+			return a - b
+		}
+		return b - a
+	}
+
+	ticker := time.NewTicker(10 * time.Second)
 
 	// Make sure the garbage collector is run periodically.
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
 		minDiff := uint64(2 << 30)
+
+		var ms runtime.MemStats
 		var lastMs runtime.MemStats
 		var lastNumGC uint32
-		var ms runtime.MemStats
+
+		var js z.MemStats
+		var lastAlloc uint64
 
 		for range ticker.C {
-			runtime.ReadMemStats(&ms)
-			var diff uint64
-			if ms.HeapAlloc > lastMs.HeapAlloc {
-				diff = ms.HeapAlloc - lastMs.HeapAlloc
+			// Read Jemalloc stats first. Print if there's a big difference.
+			z.ReadMemStats(&js)
+			if diff := absDiff(uint64(z.NumAllocBytes()), lastAlloc); diff > 256<<20 {
+				glog.V(2).Infof("NumAllocBytes: %s jemalloc: Active %s Allocated: %s"+
+					" Resident: %s Retained: %s\n",
+					humanize.IBytes(uint64(z.NumAllocBytes())),
+					humanize.IBytes(js.Active), humanize.IBytes(js.Allocated),
+					humanize.IBytes(js.Resident), humanize.IBytes(js.Retained))
+				lastAlloc = uint64(z.NumAllocBytes())
 			} else {
-				diff = lastMs.HeapAlloc - ms.HeapAlloc
+				// Don't update the lastJs here.
 			}
+
+			runtime.ReadMemStats(&ms)
+			diff := absDiff(ms.HeapAlloc, lastMs.HeapAlloc)
 
 			switch {
 			case ms.NumGC > lastNumGC:
@@ -66,14 +88,22 @@ func main() {
 
 			case ms.NumGC == lastNumGC:
 				runtime.GC()
-				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC,
-					humanize.Bytes(ms.HeapInuse),
-					humanize.Bytes(ms.HeapIdle-ms.HeapReleased))
+				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s. jemalloc: %s.\n", ms.NumGC,
+					humanize.IBytes(ms.HeapInuse),
+					humanize.IBytes(ms.HeapIdle-ms.HeapReleased),
+					humanize.IBytes(js.Active))
 				lastNumGC = ms.NumGC + 1
 				lastMs = ms
 			}
 		}
 	}()
 
+	// Run the program.
 	cmd.Execute()
+	ticker.Stop()
+	if z.NumAllocBytes() > 0 {
+		glog.Warningf("MEMORY LEAK detected of size: %s\n",
+			humanize.Bytes(uint64(z.NumAllocBytes())))
+		z.PrintLeaks()
+	}
 }

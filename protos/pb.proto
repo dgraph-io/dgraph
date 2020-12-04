@@ -219,6 +219,7 @@ message DirectedEdge {
 	}
 	Op op = 8;
 	repeated api.Facet facets = 9;
+	repeated string allowedPreds = 10;
 }
 
 message Mutations {
@@ -286,6 +287,8 @@ message RestoreRequest {
 	string vault_path = 13;
 	string vault_field = 14;
 	string vault_format = 15;
+
+	uint64 backup_num = 16;
 }
 
 message Proposal {
@@ -302,7 +305,7 @@ message Proposal {
 }
 
 message KVS {
-	repeated badgerpb2.KV kv = 1;
+	bytes data = 5;
 
 	// done used to indicate if the stream of KVS is over.
 	bool done	= 2;
@@ -364,6 +367,7 @@ message UidBlock {
 message UidPack {
 	uint32 block_size        = 1;
 	repeated UidBlock blocks = 2;
+	uint64 alloc_ref = 23; // This field should be set to 0 during marshal.
 }
 
 message PostingList {
@@ -472,15 +476,6 @@ message MapHeader {
 	repeated bytes partition_keys = 1;
 }
 
-// Bulk loader proto.
-message MapEntry {
-	bytes key = 1;
-
-	// Only one should be set.
-	fixed64 uid = 2;
-	Posting posting = 3;
-}
-
 message MovePredicatePayload {
 	string predicate         = 1;
 	uint32 source_gid        = 2;
@@ -542,7 +537,7 @@ service Worker {
 	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc Backup (BackupRequest)              returns (Status) {}
+	rpc Backup (BackupRequest)              returns (BackupResponse) {}
 	rpc Restore (RestoreRequest)            returns (Status) {}
 	rpc Export (ExportRequest)              returns (ExportResponse) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
@@ -604,6 +599,21 @@ message BackupRequest {
 	repeated string predicates = 10;
 }
 
+message BackupResponse {
+	repeated DropOperation drop_operations = 1;
+}
+
+message DropOperation {
+	enum DropOp {
+		ALL = 0;
+		DATA = 1;
+		ATTR = 2;
+	}
+	DropOp drop_op    = 1;
+	// When drop_op is ATTR, drop_value will be the name of the ATTR; empty otherwise.
+	string drop_value = 2;
+}
+
 message ExportRequest {
 	uint32  group_id = 1;  // Group id to back up.
 	uint64  read_ts  = 2;
@@ -653,6 +663,7 @@ message BackupPostingList {
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3;
   repeated uint64 splits = 4;
+	bytes uid_bytes = 5;
 }
 
 message UpdateGraphQLSchemaRequest {

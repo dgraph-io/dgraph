@@ -20,10 +20,12 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
+	"github.com/dgraph-io/dgraph/gql"
+
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 )
 
 const (
@@ -41,15 +43,17 @@ type RuleNode struct {
 	And       []*RuleNode
 	Not       *RuleNode
 	Rule      Query
+	DQLRule   *gql.GraphQuery
 	RBACRule  *RBACQuery
 	Variables ast.VariableDefinitionList
 }
 
 type AuthContainer struct {
-	Query  *RuleNode
-	Add    *RuleNode
-	Update *RuleNode
-	Delete *RuleNode
+	Password *RuleNode
+	Query    *RuleNode
+	Add      *RuleNode
+	Update   *RuleNode
+	Delete   *RuleNode
 }
 
 type RuleResult int
@@ -142,6 +146,18 @@ type TypeAuth struct {
 	Fields map[string]*AuthContainer
 }
 
+func createEmptyDQLRule(typeName string) *RuleNode {
+	return &RuleNode{DQLRule: &gql.GraphQuery{
+		Attr: typeName + "Root",
+		Var:  typeName + "Root",
+		Func: &gql.Function{
+			Name: "type",
+			Args: []gql.Arg{{Value: typeName}},
+		},
+	},
+	}
+}
+
 func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 	//TODO: Add position in error.
 	var errResult, err error
@@ -165,7 +181,79 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		}
 	}
 
+	// Merge the Auth rules on interfaces into the implementing types
+	for _, typ := range s.Types {
+		name := typeName(typ)
+		if typ.Kind == ast.Object {
+			for _, intrface := range typ.Interfaces {
+				interfaceName := typeName(s.Types[intrface])
+				if authRules[interfaceName] != nil && authRules[interfaceName].Rules != nil {
+					authRules[name].Rules = mergeAuthRules(authRules[name].Rules, authRules[interfaceName].Rules, mergeAuthNodeWithAnd)
+				}
+			}
+		}
+	}
+
+	// Reinitialize the Interface's auth to be empty as Any operation on interface
+	// will be broken into an operation on subsequent implementing types and auth rules
+	// will be verified against the types only.
+	for _, typ := range s.Types {
+		name := typeName(typ)
+		if typ.Kind == ast.Interface {
+			authRules[name] = &TypeAuth{}
+		}
+	}
+
 	return authRules, errResult
+}
+
+func mergeAuthNodeWithOr(objectAuth, interfaceAuth *RuleNode) *RuleNode {
+	if objectAuth == nil {
+		return interfaceAuth
+	}
+
+	if interfaceAuth == nil {
+		return objectAuth
+	}
+
+	ruleNode := &RuleNode{}
+	ruleNode.Or = append(ruleNode.Or, objectAuth, interfaceAuth)
+	return ruleNode
+}
+
+func mergeAuthNodeWithAnd(objectAuth, interfaceAuth *RuleNode) *RuleNode {
+	if objectAuth == nil {
+		return interfaceAuth
+	}
+
+	if interfaceAuth == nil {
+		return objectAuth
+	}
+
+	ruleNode := &RuleNode{}
+	ruleNode.And = append(ruleNode.And, objectAuth, interfaceAuth)
+	return ruleNode
+}
+
+func mergeAuthRules(objectAuthRules, interfaceAuthRules *AuthContainer, mergeAuthNode func(*RuleNode, *RuleNode) *RuleNode) *AuthContainer {
+	// return copy of interfaceAuthRules since it is a pointer and otherwise it will lead
+	// to unnecessary errors
+	if objectAuthRules == nil {
+		return &AuthContainer{
+			Password: interfaceAuthRules.Password,
+			Query:    interfaceAuthRules.Query,
+			Add:      interfaceAuthRules.Add,
+			Delete:   interfaceAuthRules.Delete,
+			Update:   interfaceAuthRules.Update,
+		}
+	}
+
+	objectAuthRules.Password = mergeAuthNode(objectAuthRules.Password, interfaceAuthRules.Password)
+	objectAuthRules.Query = mergeAuthNode(objectAuthRules.Query, interfaceAuthRules.Query)
+	objectAuthRules.Add = mergeAuthNode(objectAuthRules.Add, interfaceAuthRules.Add)
+	objectAuthRules.Delete = mergeAuthNode(objectAuthRules.Delete, interfaceAuthRules.Delete)
+	objectAuthRules.Update = mergeAuthNode(objectAuthRules.Update, interfaceAuthRules.Update)
+	return objectAuthRules
 }
 
 func parseAuthDirective(
@@ -179,6 +267,11 @@ func parseAuthDirective(
 
 	var errResult, err error
 	result := &AuthContainer{}
+
+	if pwd := dir.Arguments.ForName("password"); pwd != nil && pwd.Value != nil {
+		result.Password, err = parseAuthNode(s, typ, pwd.Value)
+		errResult = AppendGQLErrs(errResult, err)
+	}
 
 	if qry := dir.Arguments.ForName("query"); qry != nil && qry.Value != nil {
 		result.Query, err = parseAuthNode(s, typ, qry.Value)

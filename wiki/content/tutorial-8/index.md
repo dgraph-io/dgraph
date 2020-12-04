@@ -1667,11 +1667,11 @@ our newsletter to get the latest tutorial right into your inbox.
 
 ## What's Next?
 
-- Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
+- Go to [Clients]({{< relref "clients/_index.md" >}}) to see how to communicate
 with Dgraph from your application.
 - Take the [Tour](https://dgraph.io/tour/) for a guided tour of how to write queries in Dgraph.
-- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
-- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
+- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/_index.md" >}}) reference.
+- See [Deploy]({{< relref "deploy/_index.md" >}}) if you wish to run Dgraph
   in a cluster.
 
 ## Need Help

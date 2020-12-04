@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
@@ -34,6 +35,7 @@ var (
 
 	// These variables are set using -ldflags
 	dgraphVersion  string
+	dgraphCodename string
 	gitBranch      string
 	lastCommitSHA  string
 	lastCommitTime string
@@ -74,13 +76,20 @@ func BuildDetails() string {
 		licenseInfo = "Licensed variously under the Apache Public License 2.0 and Dgraph " +
 			"Community License"
 	}
+
+	buf := z.CallocNoRef(1)
+	jem := len(buf) > 0
+	z.Free(buf)
+
 	return fmt.Sprintf(`
 Dgraph version   : %v
+Dgraph codename  : %v
 Dgraph SHA-256   : %x
 Commit SHA-1     : %v
 Commit timestamp : %v
 Branch           : %v
 Go version       : %v
+jemalloc enabled : %v
 
 For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
@@ -89,8 +98,8 @@ For discussions about Dgraph     , visit https://discuss.dgraph.io.
 Copyright 2015-2020 Dgraph Labs, Inc.
 
 `,
-		dgraphVersion, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
-		runtime.Version(), licenseInfo)
+		dgraphVersion, dgraphCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
+		runtime.Version(), jem, licenseInfo)
 }
 
 // PrintVersion prints version and other helpful information if --version.

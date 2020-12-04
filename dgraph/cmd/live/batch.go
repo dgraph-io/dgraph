@@ -86,9 +86,11 @@ type loader struct {
 	uidsLock  sync.RWMutex
 
 	reqNum   uint64
-	reqs     chan request
+	reqs     chan *request
 	zeroconn *grpc.ClientConn
 	schema   *schema
+
+	upsertLock sync.RWMutex
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -135,14 +137,12 @@ func handleError(err error, isRetry bool) {
 	}
 }
 
-func (l *loader) infinitelyRetry(req request) {
+func (l *loader) infinitelyRetry(req *request) {
 	defer l.retryRequestsWg.Done()
-	defer l.deregister(&req)
+	defer l.deregister(req)
 	nretries := 1
 	for i := time.Millisecond; ; i *= 2 {
-		txn := l.dc.NewTxn()
-		req.CommitNow = true
-		_, err := txn.Mutate(l.opts.Ctx, req.Mutation)
+		err := l.mutate(req)
 		if err == nil {
 			if opt.verbose {
 				fmt.Printf("Transaction succeeded after %s.\n",
@@ -162,16 +162,24 @@ func (l *loader) infinitelyRetry(req request) {
 	}
 }
 
-func (l *loader) request(req request) {
-	atomic.AddUint64(&l.reqNum, 1)
+func (l *loader) mutate(req *request) error {
 	txn := l.dc.NewTxn()
 	req.CommitNow = true
-	_, err := txn.Mutate(l.opts.Ctx, req.Mutation)
+	request := &api.Request{
+		CommitNow: true,
+		Mutations: []*api.Mutation{req.Mutation},
+	}
+	_, err := txn.Do(l.opts.Ctx, request)
+	return err
+}
 
+func (l *loader) request(req *request) {
+	atomic.AddUint64(&l.reqNum, 1)
+	err := l.mutate(req)
 	if err == nil {
 		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 		atomic.AddUint64(&l.txns, 1)
-		l.deregister(&req)
+		l.deregister(req)
 		return
 	}
 	handleError(err, false)
@@ -375,14 +383,14 @@ func (l *loader) deregister(req *request) {
 func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
 
-	buffer := make([]request, 0, l.opts.bufferSize)
+	buffer := make([]*request, 0, l.opts.bufferSize)
 	drain := func(maxSize int) {
 		for len(buffer) > maxSize {
 			i := 0
 			for _, req := range buffer {
 				// If there is no conflict in req, we will use it
 				// and then it would shift all the other reqs in buffer
-				if !l.addConflictKeys(&req) {
+				if !l.addConflictKeys(req) {
 					buffer[i] = req
 					i++
 					continue
@@ -395,8 +403,8 @@ func (l *loader) makeRequests() {
 	}
 
 	for req := range l.reqs {
-		req.conflicts = l.conflictKeysForReq(&req)
-		if l.addConflictKeys(&req) {
+		req.conflicts = l.conflictKeysForReq(req)
+		if l.addConflictKeys(req) {
 			l.request(req)
 		} else {
 			buffer = append(buffer, req)

@@ -17,6 +17,7 @@
 package testutil
 
 import (
+	"bytes"
 	"fmt"
 	"go/build"
 	"io"
@@ -40,30 +41,33 @@ type CmdOpts struct {
 
 // Exec runs a single external command.
 func Exec(argv ...string) error {
-	return Pipeline([][]string{argv})
+	_, err := Pipeline([][]string{argv})
+	return err
 }
 
 // ExecWithOpts runs a single external command with the given options.
 func ExecWithOpts(argv []string, opts CmdOpts) error {
-	return pipelineInternal([][]string{argv}, []CmdOpts{opts})
+	_, err := pipelineInternal([][]string{argv}, []CmdOpts{opts})
+	return err
 }
 
 // Pipeline runs several commands such that the output of one command becomes the input of the next.
 // The first argument should be an two-dimensional array containing the commands.
 // TODO: allow capturing output, sending to terminal, etc
-func Pipeline(cmds [][]string) error {
+func Pipeline(cmds [][]string) (string, error) {
 	return pipelineInternal(cmds, nil)
 }
 
 // piplineInternal takes a list of commands and a list of options (one for each).
 // If opts is nil, all commands should be run with the default options.
-func pipelineInternal(cmds [][]string, opts []CmdOpts) error {
+func pipelineInternal(cmds [][]string, opts []CmdOpts) (string, error) {
 	x.AssertTrue(opts == nil || len(cmds) == len(opts))
 
 	var p io.ReadCloser
 	var numCmds = len(cmds)
 
 	cmd := make([]*exec.Cmd, numCmds)
+	var stdout bytes.Buffer
 
 	// Run all commands in parallel, connecting stdin of each to the stdout of the previous.
 	for i, c := range cmds {
@@ -81,13 +85,12 @@ func pipelineInternal(cmds [][]string, opts []CmdOpts) error {
 
 		if !lastCmd {
 			p, _ = cmd[i].StdoutPipe()
+		} else {
+			cmd[i].Stdout = &stdout
 		}
 
 		if ShowOutput {
 			cmd[i].Stderr = os.Stderr
-			if lastCmd {
-				cmd[i].Stdout = os.Stdout
-			}
 		} else if ShowError {
 			cmd[i].Stderr = os.Stderr
 		}
@@ -114,7 +117,12 @@ func pipelineInternal(cmds [][]string, opts []CmdOpts) error {
 		}
 	}
 
-	return err
+	outStr := stdout.String()
+	if ShowOutput {
+		fmt.Println(outStr)
+	}
+
+	return outStr, err
 }
 
 func DgraphBinaryPath() string {

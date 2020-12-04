@@ -1,0 +1,251 @@
+type Country @auth(
+    query:
+    { rule: """
+    query($USERNAME: String!) {
+    	queryCountry {
+    		cities {
+    			restaurants {
+    				restaurant {
+    					owner(filter: {
+    						username: {
+    							eq: $USERNAME
+    						}
+    					}) {
+    						username
+    					}
+    				}
+    			}
+    		}
+    	}
+    }
+    """ }) {
+    cid: ID!
+    id: String! @id
+    name: String! @search(by: [term])
+    cities: [City]
+}
+
+type City @auth(
+    query:
+    { rule: """
+    query($USERNAME: String!) {
+    	queryCity {
+    		restaurants {
+    			restaurant {
+    				owner(filter: {
+    					username: {
+    						eq: $USERNAME
+    					}
+    				}) {
+    					username
+    				}
+    			}
+    		}
+    	}
+    }
+    """ }) {
+    cid: ID!
+    id: String! @id
+    name: String! @search(by: [term])
+    country: Country! @hasInverse(field: cities)
+    restaurants: [RestaurantAddress] @hasInverse(field: city)
+}
+
+interface Location {
+    id: ID!
+    lat: Float!
+    long: Float!
+    address: String!
+    locality: String!
+    city: City!
+    zipcode: Int
+}
+
+type RestaurantAddress implements Location @auth(
+    query: { rule: """
+    query($USERNAME: String!) {
+    	queryRestaurantAddress {
+    		restaurant {
+    			owner(filter: {
+    				username: {
+    					eq: $USERNAME
+    				}
+    			}) {
+    				username
+    			}
+    		}
+    	}
+    }
+    """}) {
+    restaurant: Restaurant! @hasInverse(field: addr)
+}
+
+type Restaurant @auth(
+    query: { or: [
+        { rule: """
+        query($RName: String!) {
+            queryRestaurant(filter: { name: { anyofterms: $RName } }) {
+                __typename
+            }
+        }
+        """ },
+        { rule: """
+        query($RCurr: String!) {
+            queryRestaurant(filter: { currency: { eq: $RCurr } }) {
+                __typename
+            }
+        }
+        """ },
+        { rule: """
+        query($USERNAME: String!) {
+            queryRestaurant {
+                owner(filter: {username: { eq: $USERNAME } }) {
+                    username
+                }
+            }
+        }""" }]
+    },
+    add: { rule: """
+    query {
+        queryRestaurant {
+            cuisines(filter: {public: true})  {
+                __typename
+            }
+        }
+    }
+    """
+    },
+    update: { rule: """
+    query {
+        queryRestaurant {
+            cuisines(filter: {public: true})  {
+                __typename
+            }
+        }
+    }
+    """
+    }
+) {
+    id: ID!
+    xid: String! @id
+    name: String!  @search(by: [term])
+    pic: String
+    addr: RestaurantAddress
+    rating: Float
+    costFor2: Float
+    currency: String @search(by: [hash])
+    cuisines: [Cuisine]
+    dishes: [Dish] @hasInverse(field: servedBy)
+    createdAt: DateTime
+    owner: Owner
+}
+
+type Cuisine @auth(
+    query: { or: [
+        { rule: "{$Role: { eq: \"ADMIN\" }}" },
+        { or: [
+            { rule: """
+            query($RCurr: String!) {
+                queryCuisine {
+                    restaurants(filter: { currency: { eq: $RCurr } }) {
+                        __typename
+                    }
+                }
+            }
+            """
+            },
+            { rule: """
+            query($RName: String!) {
+                queryCuisine {
+                restaurants(filter: { name: { anyofterms: $RName } }) {
+                    __typename
+                }
+                }
+            }
+            """
+            },
+            { rule: """
+            query($USERNAME: String!) {
+                queryCuisine {
+                    restaurants {
+                        owner(filter: {username: { eq: $USERNAME } }) {
+                            username
+                        }
+                    }
+                }
+            }""" }
+        ]}
+    ]},
+    add: { rule: """
+    query {
+        queryCuisine(filter: {public: true})  {
+            __typename
+        }
+    }
+    """
+    },
+    update: { rule: """
+    query {
+        queryCuisine(filter: {public: true}) {
+            __typename
+        }
+    }
+    """
+    }
+) {
+    id: ID!
+    name: String! @id
+    restaurants: [Restaurant] @hasInverse(field: cuisines)
+    dishes: [Dish] @hasInverse(field: cuisine)
+    type: String! @search(by: [hash])
+    public: Boolean @search
+}
+
+type Dish @auth(
+    query: { or: [
+        { rule: """
+        query($Dish: String!) {
+            queryDish(filter: { name: { anyofterms: $Dish } }) {
+                __typename
+            }
+        }
+        """ },
+        { rule: """
+        query($USERNAME: String!) {
+            queryDish {
+                servedBy {
+                    owner(filter: {username: { eq: $USERNAME } }) {
+                        username
+                    }
+                }
+            }
+        }""" }
+    ]},
+    add: { rule: "{$Role: { eq: \"ADMIN\" }}"},
+    update: { rule: "{$Role: { eq: \"ADMIN\" }}"},
+){
+    id: ID!
+    name: String! @search(by: [term])
+    type: String! @search(by: [hash])
+    pic: String
+    price: Float
+    description: String
+    isVeg: Boolean
+    cuisine: Cuisine
+    servedBy: Restaurant
+}
+
+type Owner @auth(
+    query:
+    { rule: """
+    query($USERNAME: String!) {
+        queryOwner(filter: {username: { eq: $USERNAME } }) {
+            username
+        }
+    }""" }) {
+    username: String! @id
+    name: String! @search(by: [hash])
+    hasRestaurants: [Restaurant] @hasInverse(field: owner)
+}
+
+# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}

@@ -397,6 +397,14 @@ func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
 		}
 		return false
 	}
+	// Below check doesn't differentiate between different filters.
+	// It is added to differential between `hasFriend` and `hasFriend @filter()`
+	if sg.Filters != nil {
+		if ssg.Filters != nil && len(sg.Filters) == len(ssg.Filters) {
+			return true
+		}
+		return false
+	}
 	return true
 }
 
@@ -553,9 +561,9 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			IsInternal:   gchild.IsInternal,
 		}
 
-		// If parent has @cascade (with or without params), inherit @cascade (with no params)
+		// Inherit from the parent.
 		if len(sg.Params.Cascade) > 0 {
-			args.Cascade = append(args.Cascade, "__all__")
+			args.Cascade = append(args.Cascade, sg.Params.Cascade...)
 		}
 		// Allow over-riding at this level.
 		if len(gchild.Cascade) > 0 {
@@ -919,7 +927,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 
 // calculateFirstN returns the count of result we need to proceed query further down.
 func calculateFirstN(sg *SubGraph) int32 {
-	// by default count is zero. (zero will retrive all the results)
+	// by default count is zero. (zero will retrieve all the results)
 	count := math.MaxInt32
 	// In order to limit we have to make sure that the this level met the following conditions
 	// - No Filter (We can't filter until we have all the uids)
@@ -2010,6 +2018,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
 			})
 		}
+		if sg.Params.AfterUID > 0 {
+			i := sort.Search(len(sg.DestUIDs.Uids), func(i int) bool { return sg.DestUIDs.Uids[i] > sg.Params.AfterUID })
+			sg.DestUIDs.Uids = sg.DestUIDs.Uids[i:]
+		}
+
 	case sg.Attr == "":
 		// This is when we have uid function in children.
 		if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid" {
@@ -2534,7 +2547,7 @@ func isValidFuncName(f string) bool {
 
 func isInequalityFn(f string) bool {
 	switch f {
-	case "eq", "le", "ge", "gt", "lt":
+	case "eq", "le", "ge", "gt", "lt", "between":
 		return true
 	}
 	return false
@@ -2639,7 +2652,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	stop := x.SpanTimer(span, "query.ProcessQuery")
 	defer stop()
 
-	// doneVars stores the processed variables.
+	// Vars stores the processed variables.
 	req.Vars = make(map[string]varValue)
 	loopStart := time.Now()
 	queries := req.GqlQuery.Query

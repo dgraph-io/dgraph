@@ -20,46 +20,28 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-)
-
-const (
-	graphqlURL = "http://localhost:8180/graphql"
 )
 
 var (
 	metaInfo *testutil.AuthMeta
 )
 
-type User struct {
-	Username string `json:"username,omitempty"`
-	Age      uint64 `json:"age,omitempty"`
-	IsPublic bool   `json:"isPublic,omitempty"`
-	Disabled bool   `json:"disabled,omitempty"`
-}
-
-type UserSecret struct {
-	Id      string `json:"id,omitempty"`
-	ASecret string `json:"aSecret,omitempty"`
-	OwnedBy string `json:"ownedBy,omitempty"`
-}
-
 type Region struct {
-	Id     string  `json:"id,omitempty"`
-	Name   string  `json:"name,omitempty"`
-	Users  []*User `json:"users,omitempty"`
-	Global bool    `json:"global,omitempty"`
+	Id     string         `json:"id,omitempty"`
+	Name   string         `json:"name,omitempty"`
+	Users  []*common.User `json:"users,omitempty"`
+	Global bool           `json:"global,omitempty"`
 }
 
 type Movie struct {
@@ -70,15 +52,52 @@ type Movie struct {
 }
 
 type Issue struct {
-	Id    string `json:"id,omitempty"`
-	Msg   string `json:"msg,omitempty"`
-	Owner *User  `json:"owner,omitempty"`
+	Id    string       `json:"id,omitempty"`
+	Msg   string       `json:"msg,omitempty"`
+	Owner *common.User `json:"owner,omitempty"`
+}
+
+type Author struct {
+	Id    string      `json:"id,omitempty"`
+	Name  string      `json:"name,omitempty"`
+	Posts []*Question `json:"posts,omitempty"`
+}
+
+type Post struct {
+	Id     string  `json:"id,omitempty"`
+	Text   string  `json:"text,omitempty"`
+	Author *Author `json:"author,omitempty"`
+}
+
+type Question struct {
+	Id       string  `json:"id,omitempty"`
+	Text     string  `json:"text,omitempty"`
+	Answered bool    `json:"answered,omitempty"`
+	Author   *Author `json:"author,omitempty"`
+	Pwd      string  `json:"pwd,omitempty"`
+}
+
+type Answer struct {
+	Id     string  `json:"id,omitempty"`
+	Text   string  `json:"text,omitempty"`
+	Author *Author `json:"author,omitempty"`
+}
+
+type FbPost struct {
+	Id        string  `json:"id,omitempty"`
+	Text      string  `json:"text,omitempty"`
+	Author    *Author `json:"author,omitempty"`
+	Sender    *Author `json:"sender,omitempty"`
+	Receiver  *Author `json:"receiver,omitempty"`
+	PostCount int     `json:"postCount,omitempty"`
+	Pwd       string  `json:"pwd,omitempty"`
 }
 
 type Log struct {
 	Id     string `json:"id,omitempty"`
 	Logs   string `json:"logs,omitempty"`
 	Random string `json:"random,omitempty"`
+	Pwd    string `json:"pwd,omitempty"`
 }
 
 type ComplexLog struct {
@@ -88,16 +107,16 @@ type ComplexLog struct {
 }
 
 type Role struct {
-	Id         string  `json:"id,omitempty"`
-	Permission string  `json:"permission,omitempty"`
-	AssignedTo []*User `json:"assignedTo,omitempty"`
+	Id         string         `json:"id,omitempty"`
+	Permission string         `json:"permission,omitempty"`
+	AssignedTo []*common.User `json:"assignedTo,omitempty"`
 }
 
 type Ticket struct {
-	Id         string  `json:"id,omitempty"`
-	OnColumn   *Column `json:"onColumn,omitempty"`
-	Title      string  `json:"title,omitempty"`
-	AssignedTo []*User `json:"assignedTo,omitempty"`
+	Id         string         `json:"id,omitempty"`
+	OnColumn   *Column        `json:"onColumn,omitempty"`
+	Title      string         `json:"title,omitempty"`
+	AssignedTo []*common.User `json:"assignedTo,omitempty"`
 }
 
 type Column struct {
@@ -112,6 +131,7 @@ type Project struct {
 	Name    string    `json:"name,omitempty"`
 	Roles   []*Role   `json:"roles,omitempty"`
 	Columns []*Column `json:"columns,omitempty"`
+	Pwd     string    `json:"pwd,omitempty"`
 }
 
 type Student struct {
@@ -119,14 +139,28 @@ type Student struct {
 	Email string `json:"email,omitempty"`
 }
 
+type Task struct {
+	Id          string            `json:"id,omitempty"`
+	Name        string            `json:"name,omitempty"`
+	Occurrences []*TaskOccurrence `json:"occurrences,omitempty"`
+}
+
+type TaskOccurrence struct {
+	Id   string `json:"id,omitempty"`
+	Due  string `json:"due,omitempty"`
+	Comp string `json:"comp,omitempty"`
+}
+
 type TestCase struct {
-	user      string
-	role      string
-	result    string
-	name      string
-	filter    map[string]interface{}
-	variables map[string]interface{}
-	query     string
+	user          string
+	role          string
+	ans           bool
+	result        string
+	name          string
+	filter        map[string]interface{}
+	variables     map[string]interface{}
+	query         string
+	expectedError bool
 }
 
 type uidResult struct {
@@ -135,9 +169,26 @@ type uidResult struct {
 	}
 }
 
+type Tasks []Task
+
+func (tasks Tasks) add(t *testing.T) {
+	getParams := &common.GraphQLParams{
+		Query: `
+		mutation AddTask($tasks : [AddTaskInput!]!) {
+		  addTask(input: $tasks) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"tasks": tasks},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+}
+
 func (r *Region) add(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, user, role),
+		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query: `
 		mutation addRegion($region: AddRegionInput!) {
 		  addRegion(input: [$region]) {
@@ -147,13 +198,13 @@ func (r *Region) add(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"region": r},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (r *Region) delete(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, user, role),
+		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query: `
 		mutation deleteRegion($name: String) {
 		  deleteRegion(filter:{name: { eq: $name}}) {
@@ -163,26 +214,8 @@ func (r *Region) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"name": r.Name},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-}
-
-func getJWT(t *testing.T, user, role string) http.Header {
-	metaInfo.AuthVars = map[string]interface{}{}
-	if user != "" {
-		metaInfo.AuthVars["USER"] = user
-	}
-
-	if role != "" {
-		metaInfo.AuthVars["ROLE"] = role
-	}
-
-	jwtToken, err := metaInfo.GetSignedToken("./sample_private_key.pem")
-	require.NoError(t, err)
-
-	h := make(http.Header)
-	h.Add(metaInfo.Header, jwtToken)
-	return h
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func TestOptimizedNestedAuthQuery(t *testing.T) {
@@ -201,12 +234,12 @@ func TestOptimizedNestedAuthQuery(t *testing.T) {
 	role := "ADMIN"
 
 	getUserParams := &common.GraphQLParams{
-		Headers: getJWT(t, user, role),
+		Headers: common.GetJWT(t, user, role, metaInfo),
 		Query:   query,
 	}
 
-	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 	beforeTouchUids := gqlResponse.Extensions["touched_uids"]
 	beforeResult := gqlResponse.Data
 
@@ -223,8 +256,8 @@ func TestOptimizedNestedAuthQuery(t *testing.T) {
 		regions = append(regions, r)
 	}
 
-	gqlResponse = getUserParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	gqlResponse = getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	afterTouchUids := gqlResponse.Extensions["touched_uids"]
 	require.Equal(t, beforeTouchUids, afterTouchUids)
@@ -249,8 +282,8 @@ func (s Student) deleteByEmail(t *testing.T) {
 			"email": map[string]interface{}{"eq": s.Email},
 		}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (s Student) add(t *testing.T) {
@@ -264,9 +297,45 @@ func (s Student) add(t *testing.T) {
 		Variables: map[string]interface{}{"student": s},
 	}
 	result := `{"addStudent":{"numUids": 1}}`
-	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := mutation.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
 	require.JSONEq(t, result, string(gqlResponse.Data))
+}
+
+func TestAddMutationWithXid(t *testing.T) {
+	mutation := `
+	mutation addTweets($tweet: AddTweetsInput!){
+      addTweets(input: [$tweet]) {
+        numUids
+      }
+    }
+	`
+
+	tweet := common.Tweets{
+		Id:        "tweet1",
+		Text:      "abc",
+		Timestamp: "2020-10-10",
+	}
+	user := "foo"
+	addTweetsParams := &common.GraphQLParams{
+		Headers:   common.GetJWT(t, user, "", metaInfo),
+		Query:     mutation,
+		Variables: map[string]interface{}{"tweet": tweet},
+	}
+
+	// Add the tweet for the first time.
+	gqlResponse := addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	// Re-adding the tweet should fail.
+	gqlResponse = addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Error(t, gqlResponse.Errors)
+	require.Equal(t, len(gqlResponse.Errors), 1)
+	require.Contains(t, gqlResponse.Errors[0].Error(),
+		"GraphQL debug: id already exists for type Tweets")
+
+	// Clear the tweet.
+	tweet.DeleteByID(t, user, metaInfo)
 }
 
 func TestAuthWithDgraphDirective(t *testing.T) {
@@ -303,9 +372,9 @@ func TestAuthWithDgraphDirective(t *testing.T) {
 		t.Run(tcase.role+"_"+tcase.user, func(t *testing.T) {
 			queryParams := &common.GraphQLParams{
 				Query:   queryStudent,
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 			}
-			gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
@@ -317,6 +386,112 @@ func TestAuthWithDgraphDirective(t *testing.T) {
 	}
 }
 
+func TestAuthOnInterfaces(t *testing.T) {
+	TestCases := []TestCase{
+		{
+			name: "Types inherit Interface's auth rules and its own rules",
+			query: `
+		query{
+			queryQuestion{
+				text
+			}
+		}
+		`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			result: `{"queryQuestion":[{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Should return empty for non-existent user",
+			query: `
+		query{
+			queryQuestion{
+				text
+			}
+		}
+		`,
+			user:   "user3@dgraph.io",
+			ans:    true,
+			result: `{"queryQuestion":[]}`,
+		},
+		{
+			name: "Types inherit Only Interface's auth rules if it doesn't have its own auth rules",
+			query: `
+			query{
+				queryAnswer{
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			result: `{"queryAnswer": [{"text": "A Answer"}]}`,
+		},
+		{
+			name: "Types inherit auth rules from all the different Interfaces",
+			query: `
+			query{
+				queryFbPost{
+					text
+				}
+			}
+			`,
+			user:   "user2@dgraph.io",
+			role:   "ADMIN",
+			result: `{"queryFbPost": [{"text": "B FbPost"}]}`,
+		},
+		{
+			name: "Query Interface should interhit auth rules from all the interfaces",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			role:   "ADMIN",
+			result: `{"queryPost":[{"text": "A Answer"},{"text": "A FbPost"},{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Interface should return those implementing type whose auth rules are satisfied",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			user:   "user1@dgraph.io",
+			ans:    true,
+			result: `{"queryPost":[{"text": "A Answer"},{"text": "A Question"}]}`,
+		},
+		{
+			name: "Query Interface should return empty if the Auth rules of interface are not satisfied",
+			query: `
+			query{
+				queryPost(order: {asc: text}){
+					text
+				}
+			}
+			`,
+			ans:    true,
+			result: `{"queryPost":[]}`,
+		},
+	}
+
+	for _, tcase := range TestCases {
+		t.Run(tcase.name, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
+				Query:   tcase.query,
+			}
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
+	}
+}
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Query non auth field without JWT Token",
@@ -376,28 +551,163 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 
 		testInvalidKey := strings.HasSuffix(tcase.name, "invalid JWT Token")
 		if testInvalidKey {
-			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
+			queryParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
 			jwtVar := queryParams.Headers.Get(metaInfo.Header)
 
 			// Create a invalid JWT signature.
 			jwtVar = jwtVar + "A"
 			queryParams.Headers.Set(metaInfo.Header, jwtVar)
 		} else if tcase.user != "" || tcase.role != "" {
-			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
+			queryParams.Headers = common.GetJWT(t, tcase.user, tcase.role, metaInfo)
 		}
 
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
 		if testInvalidKey {
 			require.Contains(t, gqlResponse.Errors[0].Error(),
 				"couldn't rewrite query queryProject because unable to parse jwt token")
 		} else {
-			require.Nil(t, gqlResponse.Errors)
+			common.RequireNoGQLErrors(t, gqlResponse)
 		}
 
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
 		}
 	}
+}
+
+func TestOrderAndOffset(t *testing.T) {
+	tasks := Tasks{
+		Task{
+			Name: "First Task four occurrence",
+			Occurrences: []*TaskOccurrence{
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+			},
+		},
+		Task{
+			Name: "Second Task single occurrence",
+			Occurrences: []*TaskOccurrence{
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+			},
+		},
+		Task{
+			Name:        "Third Task no occurrence",
+			Occurrences: []*TaskOccurrence{},
+		},
+		Task{
+			Name: "Fourth Task two occurrences",
+			Occurrences: []*TaskOccurrence{
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+			},
+		},
+	}
+	tasks.add(t)
+
+	query := `
+	query {
+	  queryTask(first: 4, order: {asc : name}) {
+		name
+		occurrences(first: 2) {
+		  due
+		  comp
+		}
+	  }
+	}
+	`
+	testCases := []TestCase{{
+		user: "user1",
+		role: "ADMIN",
+		result: `
+		{
+		"queryTask": [
+		  {
+			"name": "First Task four occurrence",
+			"occurrences": [
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  },
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  }
+			]
+		  },
+		  {
+			"name": "Fourth Task two occurrences",
+			"occurrences": [
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  },
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  }
+			]
+		  },
+		  {
+			"name": "Second Task single occurrence",
+			"occurrences": [
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  }
+			]
+		  },
+		  {
+			"name": "Third Task no occurrence",
+			"occurrences": []
+		  }
+		]
+	  }
+		`,
+	}}
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+
+	// Clean up `Task`
+	getParams := &common.GraphQLParams{
+		Query: `
+		mutation DelTask {
+		  deleteTask(filter: {}) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"tasks": tasks},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	// Clean up `TaskOccurrence`
+	getParams = &common.GraphQLParams{
+		Query: `
+		mutation DelTaskOccuerence {
+		  deleteTaskOccurrence(filter: {}) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"tasks": tasks},
+	}
+	gqlResponse = getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func TestOrRBACFilter(t *testing.T) {
@@ -447,12 +757,12 @@ func TestOrRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -474,13 +784,13 @@ func getColID(t *testing.T, tcase TestCase) string {
 	}
 
 	getUserParams := &common.GraphQLParams{
-		Headers:   getJWT(t, tcase.user, tcase.role),
+		Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 		Query:     query,
 		Variables: map[string]interface{}{"name": tcase.name},
 	}
 
-	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	err := json.Unmarshal(gqlResponse.Data, &result)
 	require.Nil(t, err)
@@ -526,13 +836,13 @@ func TestRootGetFilter(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"id": tcase.name},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -553,13 +863,13 @@ func getProjectID(t *testing.T, tcase TestCase) string {
 	}
 
 	getUserParams := &common.GraphQLParams{
-		Headers:   getJWT(t, tcase.user, tcase.role),
+		Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 		Query:     query,
 		Variables: map[string]interface{}{"name": tcase.name},
 	}
 
-	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	err := json.Unmarshal(gqlResponse.Data, &result)
 	require.Nil(t, err)
@@ -608,13 +918,13 @@ func TestRootGetDeepFilter(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"id": tcase.name},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -653,13 +963,13 @@ func TestDeepFilter(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   getJWT(t, tcase.user, tcase.role),
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:     query,
 				Variables: map[string]interface{}{"name": tcase.name},
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
@@ -689,14 +999,80 @@ func TestRootFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func TestRootAggregateQuery(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user: "user1",
+			role: "USER",
+			result: `
+						{
+							"aggregateColumn":
+								{
+									"count": 1,
+									"nameMin": "Column1",
+									"nameMax": "Column1"
+								}
+						}`,
+		},
+		{
+			user: "user2",
+			role: "USER",
+			result: `
+						{
+							"aggregateColumn":
+								{
+									"count": 3,
+									"nameMin": "Column1",
+									"nameMax": "Column3"
+								}
+						}`,
+		},
+		{
+			user: "user4",
+			role: "USER",
+			result: `
+						{
+							"aggregateColumn":
+								{
+									"count": 2,
+									"nameMin": "Column2",
+									"nameMax": "Column3"
+								}
+						}`,
+		},
+	}
+	query := `
+	query {
+		aggregateColumn {
+			count
+			nameMin
+			nameMax
+		}
+	}`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			params := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }
@@ -721,12 +1097,12 @@ func TestDeepRBACValue(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -750,14 +1126,68 @@ func TestRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func TestRBACFilterWithAggregateQuery(t *testing.T) {
+	testCases := []TestCase{
+		{
+			role: "USER",
+			result: `
+						{
+							"aggregateLog": null
+						}`,
+		},
+		{
+			result: `
+						{
+							"aggregateLog": null
+						}`,
+		},
+		{
+			role: "ADMIN",
+			result: `
+						{
+							"aggregateLog":
+								{
+									"count": 2,
+									"randomMin": "test",
+									"randomMax": "test"
+								}
+						}`,
+		},
+	}
+
+	query := `
+		query {
+			aggregateLog {
+		    	count
+				randomMin
+				randomMax
+		    }
+		}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			params := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }
@@ -787,12 +1217,12 @@ func TestAndRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -899,12 +1329,12 @@ func TestNestedFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: getJWT(t, tcase.user, tcase.role),
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   query,
 			}
 
-			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-			require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
 
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
@@ -946,15 +1376,15 @@ func TestDeleteAuthRule(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Headers: getJWT(t, tcase.user, tcase.role),
+			Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 			Query:   query,
 			Variables: map[string]interface{}{
 				"filter": tcase.filter,
 			},
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nilf(t, gqlResponse.Errors, "%+v", gqlResponse.Errors)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)
@@ -963,7 +1393,7 @@ func TestDeleteAuthRule(t *testing.T) {
 }
 
 func AddDeleteAuthTestData(t *testing.T) {
-	client, err := testutil.DgraphClient(common.AlphagRPC)
+	client, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	data := `[{
 		"uid": "_:usersecret1",
@@ -977,7 +1407,7 @@ func AddDeleteAuthTestData(t *testing.T) {
 }
 
 func AddDeleteDeepAuthTestData(t *testing.T) {
-	client, err := testutil.DgraphClient(common.AlphagRPC)
+	client, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 
 	userQuery := `{
@@ -1056,15 +1486,15 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Headers: getJWT(t, tcase.user, tcase.role),
+			Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 			Query:   query,
 			Variables: map[string]interface{}{
 				"filter": tcase.filter,
 			},
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)
@@ -1072,36 +1502,83 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 	}
 }
 
+func TestDeepRBACValueCascade(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user: "user1",
+			role: "USER",
+			query: `
+			query {
+			  queryUser (filter:{username:{eq:"user1"}}) @cascade {
+				username
+				issues {
+				  msg
+				}
+			  }
+			}`,
+			result: `{"queryUser": []}`,
+		},
+		{
+			user: "user1",
+			role: "USER",
+			query: `
+			query {
+			  queryUser (filter:{username:{eq:"user1"}}) {
+				username
+				issues @cascade {
+				  msg
+				}
+			  }
+			}`,
+			result: `{"queryUser": [{"username": "user1", "issues":[]}]}`,
+		},
+		{
+			user: "user1",
+			role: "ADMIN",
+			query: `
+			query {
+			  queryUser (filter:{username:{eq:"user1"}}) @cascade {
+				username
+				issues {
+				  msg
+				}
+			  }
+			}`,
+			result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}]}]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   tcase.query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
-	schemaFile := "schema.graphql"
-	schema, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		panic(err)
-	}
-
-	jsonFile := "test_data.json"
-	data, err := ioutil.ReadFile(jsonFile)
-	if err != nil {
-		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
-	}
-
-	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
+	schema, data := common.BootstrapAuthData()
+	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
-		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem")
+		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem", false)
 		if err != nil {
 			panic(err)
 		}
 
-		authMeta, err := authorization.Parse(string(authSchema))
-		if err != nil {
-			panic(err)
-		}
-
+		authMeta := testutil.SetAuthMeta(string(authSchema))
 		metaInfo = &testutil.AuthMeta{
-			PublicKey: authMeta.VerificationKey,
-			Namespace: authMeta.Namespace,
-			Algo:      authMeta.Algo,
-			Header:    authMeta.Header,
+			PublicKey:      authMeta.VerificationKey,
+			Namespace:      authMeta.Namespace,
+			Algo:           authMeta.Algo,
+			Header:         authMeta.Header,
+			PrivateKeyPath: "./sample_private_key.pem",
 		}
 
 		common.BootstrapServer(authSchema, data)
@@ -1115,4 +1592,295 @@ func TestMain(m *testing.M) {
 		}
 	}
 	os.Exit(0)
+}
+
+func TestChildAggregateQueryWithDeepRBAC(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user: "user1",
+			role: "USER",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username": "user1",
+									"issuesAggregate":
+										{
+											"count": null,
+											"msgMax": null,
+											"msgMin": null
+										}
+								}
+							]
+					}`},
+		{
+			user: "user1",
+			role: "ADMIN",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username":"user1",
+									"issuesAggregate":
+										{
+											"count":1,
+											"msgMax": "Issue1",
+											"msgMin": "Issue1"
+										}
+								}
+							]
+					}`},
+	}
+
+	query := `
+	query {
+	  queryUser (filter:{username:{eq:"user1"}}) {
+		username
+		issuesAggregate {
+		  count
+		  msgMax
+		  msgMin
+		}
+	  }
+	}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func TestChildAggregateQueryWithOtherFields(t *testing.T) {
+	testCases := []TestCase{
+		{
+			user: "user1",
+			role: "USER",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username": "user1",
+									"issues":[],
+									"issuesAggregate":
+										{
+											"count": null,
+											"msgMin": null,
+											"msgMax": null
+										}
+								}
+							]
+					}`},
+		{
+			user: "user1",
+			role: "ADMIN",
+			result: `{
+						"queryUser":
+							[
+								{
+									"username":"user1",
+									"issues":
+										[
+											{
+												"msg":"Issue1"
+											}
+										],
+									"issuesAggregate":
+										{
+											"count": 1,
+											"msgMin": "Issue1",
+											"msgMax": "Issue1"
+										}
+								}
+							]
+					}`},
+	}
+
+	query := `
+	query {
+	  queryUser (filter:{username:{eq:"user1"}}) {
+		username
+		issuesAggregate {
+		  count
+		  msgMin
+		  msgMax
+		}
+		issues {
+		  msg
+		}
+	  }
+	}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func checkLogPassword(t *testing.T, logID, pwd, role string) *common.GraphQLResponse {
+	// Check Log Password for given logID, pwd, role
+	checkLogParamsFalse := &common.GraphQLParams{
+		Headers: common.GetJWT(t, "SomeUser", role, metaInfo),
+		Query: `query checkLogPassword($name: ID!, $pwd: String!) {
+			checkLogPassword(id: $name, pwd: $pwd) { id }
+		}`,
+		Variables: map[string]interface{}{
+			"name": logID,
+			"pwd":  pwd,
+		},
+	}
+
+	gqlResponse := checkLogParamsFalse.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	return gqlResponse
+}
+
+func deleteLog(t *testing.T, logID string) {
+	deleteLogParams := &common.GraphQLParams{
+		Query: `
+		mutation DelLog($logID: ID!) {
+		  deleteLog(filter:{id:[$logID]}) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"logID": logID},
+		Headers:   common.GetJWT(t, "SomeUser", "ADMIN", metaInfo),
+	}
+	gqlResponse := deleteLogParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+}
+
+func deleteUser(t *testing.T, username string) {
+	deleteUserParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, username, "ADMIN", metaInfo),
+		Query: `
+		mutation DelUser($username: String!) {
+		  deleteUser(filter:{username: {eq: $username } } ) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"username": username},
+	}
+	gqlResponse := deleteUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+}
+
+func TestAuthWithSecretDirective(t *testing.T) {
+
+	// Check that no auth rule is applied to checkUserPassword query.
+	newUser := &common.User{
+		Username: "Test User",
+		Password: "password",
+		IsPublic: true,
+	}
+
+	addUserParams := &common.GraphQLParams{
+		Query: `mutation addUser($user: [AddUserInput!]!) {
+			addUser(input: $user) {
+				user {
+					username
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"user": []*common.User{newUser}},
+	}
+
+	gqlResponse := addUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Equal(t, `{"addUser":{"user":[{"username":"Test User"}]}}`,
+		string(gqlResponse.Data))
+
+	checkUserParams := &common.GraphQLParams{
+		Query: `query checkUserPassword($name: String!, $pwd: String!) {
+					checkUserPassword(username: $name, password: $pwd) { 
+						username
+						isPublic
+					}
+				}`,
+		Variables: map[string]interface{}{
+			"name": newUser.Username,
+			"pwd":  newUser.Password,
+		},
+	}
+
+	gqlResponse = checkUserParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		CheckUserPassword *common.User `json:"checkUserPassword,omitempty"`
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.Nil(t, err)
+
+	opt := cmpopts.IgnoreFields(common.User{}, "Password")
+	if diff := cmp.Diff(newUser, result.CheckUserPassword, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+	deleteUser(t, newUser.Username)
+
+	// Check that checkLogPassword works with RBAC rule
+	newLog := &Log{
+		Pwd: "password",
+	}
+
+	addLogParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, "Random", "ADMIN", metaInfo),
+		Query: `mutation addLog($log: [AddLogInput!]!) {
+			addLog(input: $log) {
+				log {
+					id
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"log": []*Log{newLog}},
+	}
+
+	gqlResponse = addLogParams.ExecuteAsPost(t, common.GraphqlURL)
+	var addLogResult struct {
+		AddLog struct {
+			Log []*Log
+		}
+	}
+
+	err = json.Unmarshal([]byte(gqlResponse.Data), &addLogResult)
+	require.Nil(t, err)
+	// Id of the created log
+	logID := addLogResult.AddLog.Log[0].Id
+
+	// checkLogPassword with RBAC rule true should work
+	gqlResponse = checkLogPassword(t, logID, newLog.Pwd, "Admin")
+	var resultLog struct {
+		CheckLogPassword *Log `json:"checkLogPassword,omitempty"`
+	}
+
+	err = json.Unmarshal([]byte(gqlResponse.Data), &resultLog)
+	require.Nil(t, err)
+
+	require.Equal(t, resultLog.CheckLogPassword.Id, logID)
+
+	// checkLogPassword with RBAC rule false should not work
+	gqlResponse = checkLogPassword(t, logID, newLog.Pwd, "USER")
+	require.JSONEq(t, `{"checkLogPassword": null}`, string(gqlResponse.Data))
+	deleteLog(t, logID)
 }

@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -30,9 +31,8 @@ import (
 )
 
 var (
-	userid         = "alice"
-	userpassword   = "simplepassword"
-	dgraphEndpoint = testutil.SockAddr
+	userid       = "alice"
+	userpassword = "simplepassword"
 )
 
 func createUser(t *testing.T, accessToken, username, password string) *testutil.GraphQLResponse {
@@ -83,7 +83,7 @@ func checkUserCount(t *testing.T, resp []byte, expected int) {
 	require.Equal(t, expected, len(r.AddUser.User))
 }
 
-func deleteUser(t *testing.T, accessToken, username string, confirmDeletion bool) {
+func deleteUser(t *testing.T, accessToken, username string, confirmDeletion bool) *testutil.GraphQLResponse {
 	delUser := `
 	mutation deleteUser($name: String!) {
 		deleteUser(filter: {name: {eq: $name}}) {
@@ -99,16 +99,17 @@ func deleteUser(t *testing.T, accessToken, username string, confirmDeletion bool
 		},
 	}
 	resp := makeRequest(t, accessToken, params)
-	resp.RequireNoGraphQLErrors(t)
 
 	if confirmDeletion {
+		resp.RequireNoGraphQLErrors(t)
 		require.JSONEq(t, `{"deleteUser":{"msg":"Deleted","numUids":1}}`, string(resp.Data))
 	}
+	return resp
 }
 
-func deleteGroup(t *testing.T, accessToken, name string) {
+func deleteGroup(t *testing.T, accessToken, name string, confirmDeletion bool) *testutil.GraphQLResponse {
 	delGroup := `
-	mutation deleteUser($name: String!) {
+	mutation deleteGroup($name: String!) {
 		deleteGroup(filter: {name: {eq: $name}}) {
 			msg
 			numUids
@@ -122,9 +123,23 @@ func deleteGroup(t *testing.T, accessToken, name string) {
 		},
 	}
 	resp := makeRequest(t, accessToken, params)
-	resp.RequireNoGraphQLErrors(t)
 
-	require.JSONEq(t, `{"deleteGroup":{"msg":"Deleted","numUids":1}}`, string(resp.Data))
+	if confirmDeletion {
+		resp.RequireNoGraphQLErrors(t)
+		require.JSONEq(t, `{"deleteGroup":{"msg":"Deleted","numUids":1}}`, string(resp.Data))
+	}
+	return resp
+}
+
+func deleteUsingNQuad(userClient *dgo.Dgraph, sub, pred, val string) (*api.Response, error) {
+	ctx := context.Background()
+	txn := userClient.NewTxn()
+	mutString := fmt.Sprintf("%s %s %s .", sub, pred, val)
+	mutation := &api.Mutation{
+		DelNquads: []byte(mutString),
+		CommitNow: true,
+	}
+	return txn.Mutate(ctx, mutation)
 }
 
 func TestInvalidGetUser(t *testing.T) {
@@ -170,7 +185,8 @@ func TestGetCurrentUser(t *testing.T) {
 
 	// clean up the user to allow repeated running of this test
 	userid := "hamilton"
-	deleteUser(t, accessJwt, userid, false)
+	deleteUserResp := deleteUser(t, accessJwt, userid, false)
+	deleteUserResp.RequireNoGraphQLErrors(t)
 	glog.Infof("cleaned up db user state")
 
 	resp := createUser(t, accessJwt, userid, userpassword)
@@ -202,7 +218,7 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	checkUserCount(t, resp.Data, 0)
 
 	// delete the user
-	deleteUser(t, accessJwt, userid, true)
+	_ = deleteUser(t, accessJwt, userid, true)
 
 	resp = createUser(t, accessJwt, userid, userpassword)
 	resp.RequireNoGraphQLErrors(t)
@@ -214,7 +230,8 @@ func resetUser(t *testing.T) {
 	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 
 	// clean up the user to allow repeated running of this test
-	deleteUser(t, accessJwt, userid, false)
+	deleteUserResp := deleteUser(t, accessJwt, userid, false)
+	deleteUserResp.RequireNoGraphQLErrors(t)
 	glog.Infof("deleted user")
 
 	resp := createUser(t, accessJwt, userid, userpassword)
@@ -253,15 +270,67 @@ func TestAuthorization(t *testing.T) {
 	}
 	testAuthorization(t, dg1)
 	glog.Infof("done")
-
-	glog.Infof("testing with port 9182")
-	dg2, err := testutil.DgraphClientWithGroot(":9182")
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-	testAuthorization(t, dg2)
-	glog.Infof("done")
 }
+
+func getGrootAndGuardiansUid(t *testing.T, dg *dgo.Dgraph) (string, string) {
+	ctx := context.Background()
+	txn := dg.NewTxn()
+	grootUserQuery := `
+	{
+		grootUser(func:eq(dgraph.xid, "groot")){
+			uid
+		}
+	}`
+
+	// Structs to parse groot user query response
+	type userNode struct {
+		Uid string `json:"uid"`
+	}
+
+	type userQryResp struct {
+		GrootUser []userNode `json:"grootUser"`
+	}
+
+	resp, err := txn.Query(ctx, grootUserQuery)
+	require.NoError(t, err, "groot user query failed")
+
+	var userResp userQryResp
+	if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
+		t.Fatal("Couldn't unmarshal response from groot user query")
+	}
+	grootUserUid := userResp.GrootUser[0].Uid
+
+	txn = dg.NewTxn()
+	guardiansGroupQuery := `
+	{
+		guardiansGroup(func:eq(dgraph.xid, "guardians")){
+			uid
+		}
+	}`
+
+	// Structs to parse guardians group query response
+	type groupNode struct {
+		Uid string `json:"uid"`
+	}
+
+	type groupQryResp struct {
+		GuardiansGroup []groupNode `json:"guardiansGroup"`
+	}
+
+	resp, err = txn.Query(ctx, guardiansGroupQuery)
+	require.NoError(t, err, "guardians group query failed")
+
+	var groupResp groupQryResp
+	if err := json.Unmarshal(resp.GetJson(), &groupResp); err != nil {
+		t.Fatal("Couldn't unmarshal response from guardians group query")
+	}
+	guardiansGroupUid := groupResp.GuardiansGroup[0].Uid
+
+	return grootUserUid, guardiansGroupUid
+}
+
+const defaultTimeToSleep = 500 * time.Millisecond
+const expireJwtSleep = 21 * time.Second
 
 func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	createAccountAndData(t, dg)
@@ -276,9 +345,9 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t, unusedGroup, false)
-	// wait for 6 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
-	time.Sleep(6 * time.Second)
+	// wait for 5 seconds to ensure the new acl have reached all acl caches
+	glog.Infof("Sleeping for acl caches to be refreshed")
+	time.Sleep(defaultTimeToSleep)
 
 	// now all these operations except query should fail since
 	// there are rules defined on the unusedGroup
@@ -288,19 +357,19 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	// create the dev group and add the user to it
 	createGroupAndAcls(t, devGroup, true)
 
-	// wait for 6 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
-	time.Sleep(6 * time.Second)
+	// wait for 5 seconds to ensure the new acl have reached all acl caches
+	glog.Infof("Sleeping for acl caches to be refreshed")
+	time.Sleep(defaultTimeToSleep)
 
 	// now the operations should succeed again through the devGroup
 	queryPredicateWithUserAccount(t, dg, false)
 	// sleep long enough (10s per the docker-compose.yml)
 	// for the accessJwt to expire in order to test auto login through refresh jwt
-	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
-	time.Sleep(4 * time.Second)
+	glog.Infof("Sleeping for accessJwt to expire")
+	time.Sleep(expireJwtSleep)
 	mutatePredicateWithUserAccount(t, dg, false)
-	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
-	time.Sleep(4 * time.Second)
+	glog.Infof("Sleeping for accessJwt to expire")
+	time.Sleep(expireJwtSleep)
 	alterPredicateWithUserAccount(t, dg, false)
 }
 
@@ -452,9 +521,9 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{
 		Schema: fmt.Sprintf(`%s: string @index(exact) .`, predicateToRead),
 	}))
-	// wait for 6 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
-	time.Sleep(6 * time.Second)
+	// wait for 5 seconds to ensure the new acl have reached all acl caches
+	t.Logf("Sleeping for acl caches to be refreshed\n")
+	time.Sleep(defaultTimeToSleep)
 
 	// create some data, e.g. user with name alice
 	resetUser(t)
@@ -785,9 +854,10 @@ func TestPredicatePermission(t *testing.T) {
 	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t, unusedGroup, false)
 
-	// Wait for 6 seconds to ensure the new acl have reached all acl caches.
-	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
-	time.Sleep(6 * time.Second)
+	// Wait for 5 seconds to ensure the new acl have reached all acl caches.
+	t.Logf("Sleeping for acl caches to be refreshed")
+	time.Sleep(defaultTimeToSleep)
+
 	// The operations except query should fail when there is a rule defined, but the
 	// current user is not allowed.
 	queryPredicateWithUserAccount(t, dg, false)
@@ -860,18 +930,12 @@ func TestUnauthorizedDeletion(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
 
-	txn = userClient.NewTxn()
-	mutString := fmt.Sprintf("<%s> <%s> * .", nodeUID, unAuthPred)
-	mutation = &api.Mutation{
-		DelNquads: []byte(mutString),
-		CommitNow: true,
-	}
-	_, err = txn.Mutate(ctx, mutation)
+	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "<"+unAuthPred+">", "*")
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "PermissionDenied")
@@ -899,7 +963,7 @@ func TestGuardianAccess(t *testing.T) {
 	nodeUID, ok := resp.Uids["a"]
 	require.True(t, ok)
 
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 	gClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err, "Error while creating client")
 
@@ -1037,7 +1101,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1193,7 +1257,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1213,7 +1277,8 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name>, write access of <age> to dev
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}})
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
+
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
 	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
@@ -1228,7 +1293,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err, "login failed")
 	// Add alice to sre group which has read access to <age> and write access to <name>
 	addToGroup(t, accessJwt, userid, sreGroup)
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.Nil(t, err)
@@ -1246,12 +1311,122 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name> and <nickname>, write access of <age> to dev
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}, {"nickname", Read.Code}})
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.Nil(t, err)
 
 	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
+		string(resp.GetJson()))
+
+}
+func TestDeleteQueryWithACLPermissions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+		age 	 : int .
+		type Person {
+			name: string
+			nickname: string
+			age: int
+		}
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	createGroup(t, accessJwt, devGroup)
+
+	addToGroup(t, accessJwt, userid, devGroup)
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "Person" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "Person" .
+		`),
+		CommitNow: true,
+	}
+	resp, err := txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	nodeUID := resp.Uids["a"]
+	query := `{q1(func: type(Person)){
+		expand(_all_)
+    }}`
+
+	// Test that groot has access to all the predicates
+	resp, err = dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy","age":23, "nickname": "RG"},{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
+		string(resp.GetJson()))
+
+	// Give Write Access to alice for name and age predicate
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Write.Code}, {"age", Write.Code}})
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(defaultTimeToSleep)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	// delete S * * (user now has permission to name and age)
+	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "*", "*")
+	require.NoError(t, err)
+
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	resp, err = dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	// Only name and age predicates got deleted via user - alice
+	testutil.CompareJSON(t, `{"q1":[{"nickname": "RG"},{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
+		string(resp.GetJson()))
+
+	// Give write access of <name> <dgraph.type> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Write.Code}, {"age", Write.Code}, {"dgraph.type", Write.Code}})
+	time.Sleep(defaultTimeToSleep)
+
+	// delete S * * (user now has permission to name, age and dgraph.type)
+	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "*", "*")
+	require.NoError(t, err)
+
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	resp, err = dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	// Because alise had permission to dgraph.type the node reference has been deleted
+	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy2","age":25,  "nickname": "RG2"}]}`,
 		string(resp.GetJson()))
 
 }
@@ -1396,11 +1571,33 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],
 			"q2":[{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25},{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23}]}`,
 		},
+		{
+			`{
+				f as q1(func: has(name), orderasc: name) {
+					name
+					age
+				}
+				q2(func: uid(f), orderasc: name) {
+					name
+					age
+				}
+			}`,
+			"alice doesn't have access to name or age",
+			`{"q2":[]}`,
+
+			`alice has access to name`,
+			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],
+			"q2":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+
+			"alice has access to name and age",
+			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],
+			"q2":[{"name":"RandomGuy2","age":25},{"name":"RandomGuy","age":23}]}`,
+		},
 	}
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1425,7 +1622,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name> to dev
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	for _, tc := range tests {
 		desc := tc.descriptionNamePerm
@@ -1446,7 +1643,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name> and <age> to dev
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}, {"age", Read.Code}})
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	for _, tc := range tests {
 		desc := tc.descriptionNameAgePerm
@@ -1467,7 +1664,7 @@ func TestNewACLPredicates(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1585,7 +1782,7 @@ func TestDeleteRule(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1604,7 +1801,7 @@ func TestDeleteRule(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 	removeRuleFromGroup(t, accessJwt, devGroup, "name")
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, queryName)
 	require.NoError(t, err, "Error while querying data")
@@ -1701,7 +1898,7 @@ func TestNonExistentGroup(t *testing.T) {
 }
 
 func TestQueryUserInfo(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1935,11 +2132,43 @@ func TestSchemaQueryWithACL(t *testing.T) {
       "predicate": "dgraph.acl.rule",
       "type": "uid",
       "list": true
-    },
+	},
+	{
+		"predicate": "dgraph.cors",
+		"type": "string",
+		"list": true,
+		"index": true,
+      	"tokenizer": [
+          "exact"
+      	],
+      	"upsert": true
+	},
+	{
+		"predicate":"dgraph.drop.op",
+		"type":"string"
+	},
+	{
+		"predicate":"dgraph.graphql.p_query",
+		"type":"string"
+	},
+	{
+		"predicate":"dgraph.graphql.p_sha256hash",
+		"type":"string",
+		"index":true,
+		"tokenizer":["exact"]
+	},
     {
       "predicate": "dgraph.graphql.schema",
       "type": "string"
-    },
+	},
+	{
+		"predicate": "dgraph.graphql.schema_created_at",
+		"type": "datetime"
+	},
+	{
+		"predicate": "dgraph.graphql.schema_history",
+		"type": "string"
+	},
     {
       "predicate": "dgraph.graphql.xid",
       "type": "string",
@@ -2002,7 +2231,28 @@ func TestSchemaQueryWithACL(t *testing.T) {
         }
       ],
       "name": "dgraph.graphql"
-    },
+	},
+	{
+		"fields": [
+			{
+				"name": "dgraph.graphql.schema_history"
+			},{
+				"name": "dgraph.graphql.schema_created_at"
+			}
+		],
+		"name": "dgraph.graphql.history"
+	},
+	{
+		"fields": [
+			{
+				"name": "dgraph.graphql.p_query"
+			},
+			{
+				"name": "dgraph.graphql.p_sha256hash"
+			}
+		],
+		"name": "dgraph.graphql.persisted_query"
+	},
     {
       "fields": [
         {
@@ -2056,7 +2306,15 @@ func TestSchemaQueryWithACL(t *testing.T) {
     {
       "fields": [],
       "name": "dgraph.graphql"
-    },
+	},
+	{
+		"fields": [],
+		"name": "dgraph.graphql.history"
+	},
+	{
+		"fields":[],
+		"name":"dgraph.graphql.persisted_query"
+	},
     {
       "fields": [],
       "name": "dgraph.type.Group"
@@ -2084,7 +2342,7 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	resetUser(t)
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 	addDataAndRules(ctx, t, dg)
-	time.Sleep(6 * time.Second) // wait for ACL cache to refresh, otherwise it will be flaky test
+	time.Sleep(defaultTimeToSleep) // wait for ACL cache to refresh, otherwise it will be flaky test
 
 	// the other user should be able to view only the part of schema for which it has read access
 	dg, err = testutil.DgraphClient(testutil.SockAddr)
@@ -2110,7 +2368,7 @@ func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 
-	deleteUser(t, accessJwt, userid, true)
+	_ = deleteUser(t, accessJwt, userid, true)
 
 	gqlQuery := `
 	query {
@@ -2185,7 +2443,7 @@ func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 
-	deleteGroup(t, accessJwt, "dev-a")
+	_ = deleteGroup(t, accessJwt, "dev-a", true)
 
 	gqlQuery := `
 	query {
@@ -2322,6 +2580,7 @@ func TestHealthForAcl(t *testing.T) {
 	// we have 9 instances of alphas/zeros in teamcity environment
 	require.Len(t, guardianResp.Health, 9)
 	for _, v := range guardianResp.Health {
+		t.Logf("Got health: %+v\n", v)
 		require.Contains(t, []string{"alpha", "zero"}, v.Instance)
 		require.NotEmpty(t, v.Address)
 		require.NotEmpty(t, v.LastEcho)
@@ -2363,7 +2622,7 @@ type graphQLAdminEndpointTestCase struct {
 	queryName          string
 	respIsArray        bool
 	testGuardianAccess bool
-	guardianErrs       x.GqlErrorList
+	guardianErr        string
 	// specifying this as empty string means it won't be compared with response data
 	guardianData string
 }
@@ -2383,11 +2642,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "backup",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message:   "resolving backup failed because you must specify a 'destination' value",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"backup": null}`,
+			guardianErr:        "you must specify a 'destination' value",
+			guardianData:       `{"backup": null}`,
 		},
 		{
 			name: "listBackups has guardian auth",
@@ -2400,18 +2656,14 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			queryName:          "listBackups",
 			respIsArray:        true,
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message: "resolving listBackups failed because Error: cannot read manfiests at " +
-					"location : The path \"\" does not exist or it is inaccessible.",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"listBackups": []}`,
+			guardianErr:        "The path \"\" does not exist or it is inaccessible.",
+			guardianData:       `{"listBackups": []}`,
 		},
 		{
 			name: "config update has guardian auth",
 			query: `
 					mutation {
-					  config(input: {lruMb: 1}) {
+					  config(input: {cacheMb: -1}) {
 						response {
 						  code
 						  message
@@ -2420,23 +2672,20 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "config",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message:   "resolving config failed because lru_mb must be at least 1024\n",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"config": null}`,
+			guardianErr:        "cache-mb must be non-negative",
+			guardianData:       `{"config": null}`,
 		},
 		{
 			name: "config get has guardian auth",
 			query: `
 					query {
 					  config {
-						lruMb
+						cacheMb
 					  }
 					}`,
 			queryName:          "config",
 			testGuardianAccess: true,
-			guardianErrs:       nil,
+			guardianErr:        "",
 			guardianData:       "",
 		},
 		{
@@ -2452,7 +2701,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "draining",
 			testGuardianAccess: true,
-			guardianErrs:       nil,
+			guardianErr:        "",
 			guardianData: `{
 								"draining": {
 									"response": {
@@ -2475,11 +2724,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "export",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message:   "resolving export failed because invalid export format: invalid",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"export": null}`,
+			guardianErr:        "invalid export format: invalid",
+			guardianData:       `{"export": null}`,
 		},
 		{
 			name: "restore has guardian auth",
@@ -2491,12 +2737,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "restore",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message: "resolving restore failed because failed to verify backup: while retrieving" +
-					" manifests: The path \"\" does not exist or it is inaccessible.",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"restore": {"code": "Failure"}}`,
+			guardianErr:        "The path \"\" does not exist or it is inaccessible.",
+			guardianData:       `{"restore": {"code": "Failure"}}`,
 		},
 		{
 			name: "getGQLSchema has guardian auth",
@@ -2508,7 +2750,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "getGQLSchema",
 			testGuardianAccess: true,
-			guardianErrs:       nil,
+			guardianErr:        "",
 			guardianData:       "",
 		},
 		{
@@ -2523,7 +2765,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "updateGQLSchema",
 			testGuardianAccess: false,
-			guardianErrs:       nil,
+			guardianErr:        "",
 			guardianData:       "",
 		},
 		{
@@ -2539,7 +2781,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "shutdown",
 			testGuardianAccess: false,
-			guardianErrs:       nil,
+			guardianErr:        "",
 			guardianData:       "",
 		},
 	}
@@ -2556,10 +2798,11 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 				accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 				resp := makeRequest(t, accessJwt, params)
 
-				if tcase.guardianErrs == nil {
+				if tcase.guardianErr == "" {
 					resp.RequireNoGraphQLErrors(t)
 				} else {
-					require.Equal(t, tcase.guardianErrs, resp.Errors)
+					require.Len(t, resp.Errors, 1)
+					require.Contains(t, resp.Errors[0].Message, tcase.guardianErr)
 				}
 
 				if tcase.guardianData != "" {
@@ -2623,11 +2866,11 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 	require.ElementsMatch(t, []rule{updatedRules[0], updatedRules[2]}, updatedGroup1.Rules)
 
 	// cleanup
-	deleteGroup(t, grootJwt, groupName)
+	_ = deleteGroup(t, grootJwt, groupName, true)
 }
 
 func TestAllowUIDAccess(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2663,7 +2906,7 @@ func TestAllowUIDAccess(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -2683,7 +2926,7 @@ func TestAllowUIDAccess(t *testing.T) {
 }
 
 func TestAddNewPredicate(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2709,7 +2952,7 @@ func TestAddNewPredicate(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 	addToGroup(t, accessJwt, userid, "guardians")
-	time.Sleep(6 * time.Second)
+	time.Sleep(expireJwtSleep)
 
 	// Alice is a guardian now, it can create new predicate.
 	err = userClient.Alter(ctx, &api.Operation{
@@ -2751,7 +2994,7 @@ func TestCrossGroupPermission(t *testing.T) {
 	addRulesToGroup(t, accessJwt, "writer", []rule{{Predicate: "newpred", Permission: 2}})
 	addRulesToGroup(t, accessJwt, "alterer", []rule{{Predicate: "newpred", Permission: 1}})
 	// Wait for acl cache to be refreshed
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
@@ -2780,7 +3023,7 @@ func TestCrossGroupPermission(t *testing.T) {
 			addToGroup(t, accessJwt, "user"+userIdx, "reader")
 		}
 	}
-	time.Sleep(6 * time.Second)
+	time.Sleep(defaultTimeToSleep)
 
 	// operations
 	dgQuery := func(client *dgo.Dgraph, shouldFail bool, user string) {
@@ -2832,4 +3075,255 @@ func TestCrossGroupPermission(t *testing.T) {
 		dgMutation(userClient, i&2 == 0, "user"+userIdx)
 		dgAlter(userClient, i&1 == 0, "user"+userIdx)
 	}
+}
+
+func TestMutationWithValueVar(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	err = dg.Alter(ctx, &api.Operation{
+		Schema: `
+			name	: string @index(exact) .
+			nickname: string .
+			age     : int .
+		`,
+	})
+	require.NoError(t, err)
+
+	data := &api.Mutation{
+		SetNquads: []byte(`
+			_:u1 <name> "RandomGuy" .
+			_:u1 <nickname> "r1" .
+		`),
+		CommitNow: true,
+	}
+	_, err = dg.NewTxn().Mutate(ctx, data)
+	require.NoError(t, err)
+
+	resetUser(t)
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err)
+	createUser(t, accessJwt, userid, userpassword)
+	createGroup(t, accessJwt, devGroup)
+	addToGroup(t, accessJwt, userid, devGroup)
+	addRulesToGroup(t, accessJwt, devGroup, []rule{
+		{
+			Predicate:  "name",
+			Permission: Read.Code | Write.Code,
+		},
+		{
+			Predicate:  "nickname",
+			Permission: Read.Code,
+		},
+		{
+			Predicate:  "age",
+			Permission: Write.Code,
+		},
+	})
+	time.Sleep(defaultTimeToSleep)
+
+	query := `
+		{
+			u1 as var(func: has(name)) {
+				nick1 as nickname
+				age1 as age
+			}
+		}
+	`
+
+	mutation1 := &api.Mutation{
+		SetNquads: []byte(`
+			uid(u1) <name> val(nick1) .
+			uid(u1) <name> val(age1) .
+		`),
+		CommitNow: true,
+	}
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	_, err = userClient.NewTxn().Do(ctx, &api.Request{
+		Query:     query,
+		Mutations: []*api.Mutation{mutation1},
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	query = `
+		{
+			me(func: has(name)) {
+				nickname
+				name
+				age
+			}
+		}
+	`
+
+	resp, err := userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+
+	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson()))
+}
+
+func TestFailedLogin(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+
+	grootClient, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	op := api.Operation{DropAll: true}
+	if err := grootClient.Alter(ctx, &op); err != nil {
+		t.Fatalf("Unable to cleanup db:%v", err)
+	}
+	require.NoError(t, err)
+
+	client, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	// User is not present
+	err = client.Login(ctx, userid, "simplepassword")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
+
+	resetUser(t)
+	// User is present
+	err = client.Login(ctx, userid, "randomstring")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
+}
+
+func TestDeleteGuardiansGroupShouldFail(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	resp := deleteGroup(t, accessJwt, "guardians", false)
+	require.Contains(t, resp.Errors.Error(),
+		"guardians group and groot user cannot be deleted.")
+}
+
+func TestDeleteGrootUserShouldFail(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	resp := deleteUser(t, accessJwt, "groot", false)
+	require.Contains(t, resp.Errors.Error(),
+		"guardians group and groot user cannot be deleted.")
+}
+
+func TestDeleteGrootUserFromGuardiansGroupShouldFail(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	require.NoError(t, err, "login failed")
+
+	gqlresp := removeUserFromGroup(t, "groot", "guardians")
+
+	require.Contains(t, gqlresp.Errors.Error(),
+		"guardians group and groot user cannot be deleted.")
+}
+
+func TestDeleteGrootAndGuardiansUsingDelNQuadShouldFail(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	require.NoError(t, err, "login failed")
+
+	grootUid, guardiansUid := getGrootAndGuardiansUid(t, dg)
+
+	// Try deleting groot user
+	_, err = deleteUsingNQuad(dg, "<"+grootUid+">", "*", "*")
+	require.Error(t, err, "Deleting groot user should have returned an error")
+	require.Contains(t, err.Error(), "Properties of guardians group and groot user cannot be deleted")
+
+	// Try deleting guardians group
+	_, err = deleteUsingNQuad(dg, "<"+guardiansUid+">", "*", "*")
+	require.Error(t, err, "Deleting guardians group should have returned an error")
+	require.Contains(t, err.Error(), "Properties of guardians group and groot user cannot be deleted")
+}
+
+func deleteGuardiansGroupAndGrootUserShouldFail(t *testing.T) {
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// Try deleting guardians group should fail
+	resp := deleteGroup(t, accessJwt, "guardians", false)
+	require.Contains(t, resp.Errors.Error(),
+		"guardians group and groot user cannot be deleted.")
+	// Try deleting groot user should fail
+	resp = deleteUser(t, accessJwt, "groot", false)
+	require.Contains(t, resp.Errors.Error(),
+		"guardians group and groot user cannot be deleted.")
+}
+
+func TestDropAllShouldResetGuardiansAndGroot(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	addDataAndRules(ctx, t, dg)
+
+	require.NoError(t, err, "login failed")
+
+	// Try Drop All
+	op := api.Operation{
+		DropAll: true,
+		DropOp:  api.Operation_ALL,
+	}
+	if err := dg.Alter(ctx, &op); err != nil {
+		t.Fatalf("Unable to drop all. Error:%v", err)
+	}
+
+	time.Sleep(defaultTimeToSleep)
+	deleteGuardiansGroupAndGrootUserShouldFail(t)
+
+	// Try Drop Data
+	op = api.Operation{
+		DropOp: api.Operation_DATA,
+	}
+	if err := dg.Alter(ctx, &op); err != nil {
+		t.Fatalf("Unable to drop data. Error:%v", err)
+	}
+
+	time.Sleep(defaultTimeToSleep)
+	deleteGuardiansGroupAndGrootUserShouldFail(t)
+}
+
+func TestMain(m *testing.M) {
+	adminEndpoint = "http://" + testutil.SockAddrHttp + "/admin"
+	fmt.Printf("Using adminEndpoint for acl package: %s\n", adminEndpoint)
+	os.Exit(m.Run())
 }

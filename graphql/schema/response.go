@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -45,6 +47,7 @@ type Response struct {
 	Errors     x.GqlErrorList
 	Data       bytes.Buffer
 	Extensions *Extensions
+	Header     http.Header
 }
 
 // ErrorResponse formats an error as a list of GraphQL errors and builds
@@ -67,6 +70,18 @@ func (r *Response) GetExtensions() *Extensions {
 
 // WithError generates GraphQL errors from err and records those in r.
 func (r *Response) WithError(err error) {
+	if err == nil {
+		return
+	}
+
+	if !x.Config.GraphqlDebug && strings.Contains(err.Error(), "authorization failed") {
+		return
+	}
+
+	if !x.Config.GraphqlDebug && strings.Contains(err.Error(), "GraphQL debug:") {
+		return
+	}
+
 	r.Errors = append(r.Errors, AsGQLErrors(err)...)
 }
 

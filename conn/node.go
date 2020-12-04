@@ -19,6 +19,7 @@ package conn
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -38,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -65,16 +67,17 @@ type Node struct {
 	_raft      raft.Node
 
 	// Fields which are never changed after init.
-	StartTime   time.Time
-	Cfg         *raft.Config
-	MyAddr      string
-	Id          uint64
-	peers       map[uint64]string
-	confChanges map[uint64]chan error
-	messages    chan sendmsg
-	RaftContext *pb.RaftContext
-	Store       *raftwal.DiskStorage
-	Rand        *rand.Rand
+	StartTime       time.Time
+	Cfg             *raft.Config
+	MyAddr          string
+	Id              uint64
+	peers           map[uint64]string
+	confChanges     map[uint64]chan error
+	messages        chan sendmsg
+	RaftContext     *pb.RaftContext
+	Store           *raftwal.DiskStorage
+	Rand            *rand.Rand
+	tlsClientConfig *tls.Config
 
 	Proposals proposals
 
@@ -83,7 +86,7 @@ type Node struct {
 }
 
 // NewNode returns a new Node instance.
-func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
+func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Config) *Node {
 	snap, err := store.Snapshot()
 	x.Check(err)
 
@@ -134,13 +137,14 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		Applied:     y.WaterMark{Name: fmt.Sprintf("Applied watermark")},
-		RaftContext: rc,
-		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
-		confChanges: make(map[uint64]chan error),
-		messages:    make(chan sendmsg, 100),
-		peers:       make(map[uint64]string),
-		requestCh:   make(chan linReadReq, 100),
+		Applied:         y.WaterMark{Name: "Applied watermark"},
+		RaftContext:     rc,
+		Rand:            rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
+		confChanges:     make(map[uint64]chan error),
+		messages:        make(chan sendmsg, 100),
+		peers:           make(map[uint64]string),
+		requestCh:       make(chan linReadReq, 100),
+		tlsClientConfig: tlsConfig,
 	}
 	n.Applied.Init(nil)
 	// This should match up to the Applied index set above.
@@ -318,11 +322,7 @@ func (n *Node) PastLife() (uint64, bool, error) {
 		restart = true
 	}
 
-	var num int
-	num, rerr = n.Store.NumEntries()
-	if rerr != nil {
-		return 0, false, rerr
-	}
+	num := n.Store.NumEntries()
 	glog.Infof("Group %d found %d entries\n", n.RaftContext.Group, num)
 	// We'll always have at least one entry.
 	if num > 1 {
@@ -524,7 +524,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 		n.SetPeer(pid, addr)
 		return
 	}
-	GetPools().Connect(addr)
+	GetPools().Connect(addr, n.tlsClientConfig)
 	n.SetPeer(pid, addr)
 }
 
@@ -617,11 +617,16 @@ type linReadReq struct {
 var errReadIndex = errors.Errorf(
 	"Cannot get linearized read (time expired or no configured leader)")
 
+var readIndexOk, readIndexTotal uint64
+
 // WaitLinearizableRead waits until a linearizable read can be performed.
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "WaitLinearizableRead")
 
+	if num := atomic.AddUint64(&readIndexTotal, 1); num%1000 == 0 {
+		glog.V(2).Infof("ReadIndex Total: %d\n", num)
+	}
 	indexCh := make(chan uint64, 1)
 	select {
 	case n.requestCh <- linReadReq{indexCh: indexCh}:
@@ -636,6 +641,8 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 		span.Annotatef(nil, "Received index: %d", index)
 		if index == 0 {
 			return errReadIndex
+		} else if num := atomic.AddUint64(&readIndexOk, 1); num%1000 == 0 {
+			glog.V(2).Infof("ReadIndex OK: %d\n", num)
 		}
 		err := n.Applied.WaitForMark(ctx, index)
 		span.Annotatef(nil, "Error from Applied.WaitForMark: %v", err)
@@ -647,7 +654,7 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 }
 
 // RunReadIndexLoop runs the RAFT index in a loop.
-func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
+func (n *Node) RunReadIndexLoop(closer *z.Closer, readStateCh <-chan raft.ReadState) {
 	defer closer.Done()
 	readIndex := func(activeRctx []byte) (uint64, error) {
 		// Read Request can get rejected then we would wait indefinitely on the channel
@@ -701,7 +708,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			// call, causing more unique traffic and further delays in request processing.
 			activeRctx := make([]byte, 8)
 			x.Check2(n.Rand.Read(activeRctx))
-			glog.V(3).Infof("Request readctx: %#x", activeRctx)
+			glog.V(4).Infof("Request readctx: %#x", activeRctx)
 			for {
 				index, err := readIndex(activeRctx)
 				if err == errInternalRetry {

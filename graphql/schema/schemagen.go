@@ -25,11 +25,11 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
 )
 
 // A Handler can produce valid GraphQL and Dgraph schemas given an input of
@@ -72,7 +72,7 @@ func (s *handler) DGSchema() string {
 	return s.dgraphSchema
 }
 
-func parseSecrets(sch string) (map[string]string, error) {
+func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error) {
 	m := make(map[string]string)
 	scanner := bufio.NewScanner(strings.NewReader(sch))
 	authSecret := ""
@@ -81,7 +81,7 @@ func parseSecrets(sch string) (map[string]string, error) {
 
 		if strings.HasPrefix(text, "# Dgraph.Authorization") {
 			if authSecret != "" {
-				return nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
+				return nil, nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
 					"a schema, found second mention: %v", text)
 			}
 			authSecret = text
@@ -94,12 +94,12 @@ func parseSecrets(sch string) (map[string]string, error) {
 		const doubleQuotesCode = 34
 
 		if len(parts) < 4 {
-			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+			return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
 				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
 		}
 		val := strings.Join(parts[3:], " ")
 		if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
-			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+			return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
 				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
 		}
 
@@ -109,23 +109,28 @@ func parseSecrets(sch string) (map[string]string, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
+		return nil, nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
 	}
+
 	if authSecret == "" {
-		return m, nil
+		return m, nil, nil
 	}
-	err := authorization.ParseAuthMeta(authSecret)
-	return m, err
+
+	metaInfo, err := authorization.ParseAuthMeta(authSecret)
+	if err != nil {
+		return nil, nil, err
+	}
+	return m, metaInfo, nil
 }
 
 // NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
-func NewHandler(input string) (Handler, error) {
+func NewHandler(input string, validateOnly bool) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
 
-	secrets, err := parseSecrets(input)
+	secrets, metaInfo, err := parseSecrets(input)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +185,7 @@ func NewHandler(input string) (Handler, error) {
 			continue
 		}
 		defns = append(defns, defn.Name)
-		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
+		if defn.Kind == ast.Object || defn.Kind == ast.Interface || defn.Kind == ast.Union {
 			remoteDir := defn.Directives.ForName(remoteDirective)
 			if remoteDir != nil {
 				continue
@@ -201,12 +206,40 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
-	headers := getAllowedHeaders(sch, defns)
+	var authHeader string
+	if metaInfo != nil {
+		authHeader = metaInfo.Header
+	}
+
+	headers := getAllowedHeaders(sch, defns, authHeader)
 	dgSchema := genDgSchema(sch, typesToComplete)
 	completeSchema(sch, typesToComplete)
+	cleanSchema(sch)
 
 	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
+	}
+
+	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
+	// then initialise the http client and Fetch the JWKs from the JWKUrl
+	if metaInfo != nil && metaInfo.JWKUrl != "" {
+		metaInfo.InitHttpClient()
+		fetchErr := metaInfo.FetchJWKs()
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+	}
+
+	handler := &handler{
+		input:          input,
+		dgraphSchema:   dgSchema,
+		completeSchema: sch,
+		originalDefs:   defns,
+	}
+
+	// Return early since we are only validating the schema.
+	if validateOnly {
+		return handler, nil
 	}
 
 	hc.Lock()
@@ -214,12 +247,10 @@ func NewHandler(input string) (Handler, error) {
 	hc.secrets = schemaSecrets
 	hc.Unlock()
 
-	return &handler{
-		input:          input,
-		dgraphSchema:   dgSchema,
-		completeSchema: sch,
-		originalDefs:   defns,
-	}, nil
+	if metaInfo != nil {
+		authorization.SetAuthMeta(metaInfo)
+	}
+	return handler, nil
 }
 
 type headersConfig struct {
@@ -237,7 +268,7 @@ var hc = headersConfig{
 	allowed: x.AccessControlAllowedHeaders,
 }
 
-func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
+func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string) string {
 	headers := make(map[string]struct{})
 
 	setHeaders := func(dir *ast.Directive) {
@@ -278,8 +309,8 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 	}
 
 	// Add Auth Header to allowed headers list
-	if authorization.GetHeader() != "" {
-		finalHeaders = append(finalHeaders, authorization.GetHeader())
+	if authHeader != "" {
+		finalHeaders = append(finalHeaders, authHeader)
 	}
 
 	allowed := x.AccessControlAllowedHeaders
@@ -394,7 +425,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			pwdField := getPasswordField(def)
 
 			for _, f := range def.Fields {
-				if f.Type.Name() == "ID" {
+				if f.Type.Name() == "ID" || hasCustomOrLambda(f) {
 					continue
 				}
 
@@ -416,8 +447,18 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
-				case ast.Object, ast.Interface:
-					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
+				case ast.Object, ast.Interface, ast.Union:
+					if isGeoType(f.Type) {
+						typStr = inbuiltTypeToDgraph[f.Type.Name()]
+						var indexes []string
+						if f.Directives.ForName(searchDirective) != nil {
+							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
+								Name()]].dgIndex)
+						}
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
+					} else {
+						typStr = fmt.Sprintf("%suid%s", prefix, suffix)
+					}
 
 					if parentInt == nil {
 						if strings.HasPrefix(fname, "~") {
@@ -436,7 +477,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				case ast.Scalar:
 					typStr = fmt.Sprintf(
 						"%s%s%s",
-						prefix, scalarToDgraph[f.Type.Name()], suffix,
+						prefix, inbuiltTypeToDgraph[f.Type.Name()], suffix,
 					)
 
 					var indexes []string
@@ -453,7 +494,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						if arg != nil {
 							indexes = append(indexes, getAllSearchIndexes(arg.Value)...)
 						} else {
-							indexes = append(indexes, defaultSearches[f.Type.Name()])
+							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
+								Name()]].dgIndex)
 						}
 					}
 

@@ -21,8 +21,10 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"mime"
 	"net/http"
 	"sort"
 	"strconv"
@@ -176,21 +178,30 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		Query     string            `json:"query"`
 		Variables map[string]string `json:"variables"`
 	}
+
 	contentType := r.Header.Get("Content-Type")
-	switch strings.ToLower(contentType) {
+	mediaType, contentTypeParams, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid Content-Type")
+	}
+	if charset, ok := contentTypeParams["charset"]; ok && strings.ToLower(charset) != "utf-8" {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported charset. "+
+			"Supported charset is UTF-8")
+		return
+	}
+
+	switch mediaType {
 	case "application/json":
 		if err := json.Unmarshal(body, &params); err != nil {
 			jsonErr := convertJSONError(string(body), err)
 			x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 			return
 		}
-
-	case "application/graphql+-":
+	case "application/graphql+-", "application/dql":
 		params.Query = string(body)
-
 	default:
 		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
-			"Supported content types are application/json, application/graphql+-")
+			"Supported content types are application/json, application/graphql+-,application/dql")
 		return
 	}
 
@@ -239,6 +250,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	// Add cost to the header.
+	w.Header().Set(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 
 	e := query.Extensions{
 		Txn:     resp.Txn,
@@ -297,7 +310,17 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req *api.Request
 	contentType := r.Header.Get("Content-Type")
-	switch strings.ToLower(contentType) {
+	mediaType, contentTypeParams, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid Content-Type")
+	}
+	if charset, ok := contentTypeParams["charset"]; ok && strings.ToLower(charset) != "utf-8" {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported charset. "+
+			"Supported charset is UTF-8")
+		return
+	}
+
+	switch mediaType {
 	case "application/json":
 		ms := make(map[string]*skipJSONUnmarshal)
 		if err := json.Unmarshal(body, &ms); err != nil {
@@ -391,6 +414,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	// Add cost to the header.
+	w.Header().Set(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 
 	resp.Latency.ParsingNs = uint64(parseEnd.Sub(parseStart).Nanoseconds())
 	e := query.Extensions{
@@ -564,10 +589,8 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("The alter request is forwarded by %s\n", fwd)
 	}
 
-	md := metadata.New(nil)
-	// Pass in an auth token, if present.
-	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
-	ctx := metadata.NewIncomingContext(context.Background(), md)
+	// Pass in PoorMan's auth, ACL and IP information if present.
+	ctx := x.AttachAuthToken(context.Background(), r)
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	if _, err := (&edgraph.Server{}).Alter(ctx, op); err != nil {

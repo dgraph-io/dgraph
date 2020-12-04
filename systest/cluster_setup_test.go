@@ -82,17 +82,16 @@ func (d *DgraphCluster) StartZeroOnly() error {
 	}
 
 	// Wait for dgraphzero to start listening and become the leader.
-	time.Sleep(time.Second * 4)
+	time.Sleep(time.Second * 6)
 	return nil
 }
 
 func (d *DgraphCluster) StartAlphaOnly() error {
 	d.dgraph = exec.Command(testutil.DgraphBinaryPath(),
 		"alpha",
-		"--lru_mb=4096",
 		"--zero", ":"+d.zeroPort,
-		"--port_offset", strconv.Itoa(d.alphaPortOffset),
-		"--custom_tokenizers", d.TokenizerPluginsArg,
+		"--port-offset", strconv.Itoa(d.alphaPortOffset),
+		"--custom-tokenizers", d.TokenizerPluginsArg,
 	)
 	d.dgraph.Dir = d.dir
 	if err := d.dgraph.Start(); err != nil {
@@ -108,7 +107,7 @@ func (d *DgraphCluster) StartAlphaOnly() error {
 	// programmatically by hitting the query port. This would be quicker than
 	// just waiting 4 seconds (which seems to be the smallest amount of time to
 	// reliably wait).
-	time.Sleep(time.Second * 4)
+	time.Sleep(time.Second * 6)
 
 	d.client = dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
 
@@ -132,9 +131,8 @@ func (d *DgraphCluster) AddNode(dir string) (Node, error) {
 	o := strconv.Itoa(freePort(x.PortInternal))
 	dgraph := exec.Command(testutil.DgraphBinaryPath(),
 		"alpha",
-		"--lru_mb=4096",
 		"--zero", ":"+d.zeroPort,
-		"--port_offset", o,
+		"--port-offset", o,
 	)
 	dgraph.Dir = dir
 	dgraph.Stdout = os.Stdout

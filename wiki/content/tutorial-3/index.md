@@ -387,17 +387,7 @@ Here's the query.
 }
 ```
 
-{{% load-img "/images/tutorials/3/j-dislike-index-2.png" "Dislikes" %}}
-
-Oops! We forgot to add the index for the dislike predicate!
-
-Go to the Schema tab, find the `dislikes` predicate, add the index from the UI.
-
-{{% load-img "/images/tutorials/3/g-dislike-index-3.png" "Add index" %}}
-
-_Note: Notice that the `dislike` predicate is of integer type._
-
-Let's rerun the query.
+The query returns:
 
 {{% load-img "/images/tutorials/3/n-three-blogs.png" "rating-blog-rating" %}}
 

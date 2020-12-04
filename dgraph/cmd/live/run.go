@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,12 +36,15 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v2"
 	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -51,24 +55,27 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 type options struct {
-	dataFiles      string
-	dataFormat     string
-	schemaFile     string
-	zero           string
-	concurrent     int
-	batchSize      int
-	clientDir      string
-	authToken      string
-	useCompression bool
-	newUids        bool
-	verbose        bool
-	httpAddr       string
-	bufferSize     int
-	ludicrousMode  bool
-	key            x.SensitiveByteSlice
+	dataFiles       string
+	dataFormat      string
+	schemaFile      string
+	zero            string
+	concurrent      int
+	batchSize       int
+	clientDir       string
+	authToken       string
+	useCompression  bool
+	newUids         bool
+	verbose         bool
+	httpAddr        string
+	bufferSize      int
+	ludicrousMode   bool
+	upsertPredicate string
+	tmpDir          string
+	key             x.SensitiveByteSlice
 }
 
 type predicate struct {
@@ -138,18 +145,25 @@ func init() {
 	flag.IntP("batch", "b", 1000,
 		"Number of N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
-	flag.StringP("auth_token", "t", "",
-		"The auth token passed to the server for Alter operation of the schema file")
-	flag.BoolP("use_compression", "C", false,
+	flag.StringP("auth-token", "t", "",
+		"The auth token passed to the server for Alter operation of the schema file. If used with --slash-grpc-endpoint, then this "+
+			"should be set to the API token issued by Slash GraphQL")
+	flag.String("slash-grpc-endpoint", "", "Path to Slash GraphQL GRPC endpoint. If --slash-grpc-endpoint is set, "+
+		"all other TLS options and connection options will be ignored")
+	flag.BoolP("use-compression", "C", false,
 		"Enable compression on connection to alpha server")
-	flag.Bool("new_uids", false,
+	flag.Bool("new-uids", false,
 		"Ignore UIDs in load files and assign new ones.")
 	flag.String("http", "localhost:6060", "Address to serve http (pprof).")
 	flag.Bool("verbose", false, "Run the live loader in verbose mode")
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
-	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
-	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should only be done when alpha is under ludicrous mode)")
+	flag.StringP("buffer-size", "m", "100", "Buffer for each thread")
+	flag.Bool("ludicrous-mode", false, "Run live loader in ludicrous mode (Should "+
+		"only be done when alpha is under ludicrous mode)")
+	flag.StringP("upsert-predicate", "U", "", "run in upsert-predicate mode. the value would "+
+		"be used to store blank nodes as an xid")
+	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -220,7 +234,144 @@ func (l *loader) uid(val string) string {
 	sb := strings.Builder{}
 	x.Check2(sb.WriteString(val))
 	uid, _ := l.alloc.AssignUid(sb.String())
+
 	return fmt.Sprintf("%#x", uint64(uid))
+}
+
+func generateBlankNode(val string) string {
+	// generates "u_hash(val)"
+
+	sb := strings.Builder{}
+	x.Check2(sb.WriteString("u_"))
+	x.Check2(sb.WriteString(strconv.FormatUint(farm.Fingerprint64([]byte(val)), 10)))
+	return sb.String()
+}
+
+func generateUidFunc(val string) string {
+	// generates "uid(val)"
+
+	sb := strings.Builder{}
+	sb.WriteString("uid(")
+	sb.WriteString(val)
+	sb.WriteRune(')')
+	return sb.String()
+}
+
+func generateQuery(node, predicate, xid string) string {
+	// generates "node as node(func: eq(predicate, xid)) {uid}"
+
+	sb := strings.Builder{}
+	sb.WriteString(node)
+	sb.WriteString(" as ")
+	sb.WriteString(node)
+	sb.WriteString("(func: eq(")
+	sb.WriteString(predicate)
+	sb.WriteString(`, "`)
+	sb.WriteString(xid)
+	sb.WriteString(`")) {uid}`)
+	return sb.String()
+}
+
+func (l *loader) upsertUids(nqs []*api.NQuad) {
+	// We form upsertPredicate query for each of the ids we saw in the request, along with
+	// adding the corresponding xid to that uid. The mutation we added is only useful if the
+	// uid doesn't exists.
+	//
+	// Example upsertPredicate mutation:
+	//
+	// query {
+	//     u_1 as var(func: eq(xid, "m.1234"))
+	// }
+	//
+	// mutation {
+	//     set {
+	//          uid(u_1) xid m.1234 .
+	//     }
+	// }
+	l.upsertLock.Lock()
+	defer l.upsertLock.Unlock()
+
+	ids := make(map[string]string)
+
+	for _, i := range nqs {
+		// taking hash as the value might contain invalid symbols
+		ids[i.Subject] = generateBlankNode(i.Subject)
+
+		if len(i.ObjectId) > 0 {
+			// taking hash as the value might contain invalid symbols
+			ids[i.ObjectId] = generateBlankNode(i.ObjectId)
+		}
+	}
+
+	mutations := make([]*api.NQuad, 0, len(ids))
+	query := strings.Builder{}
+	query.WriteString("query {")
+	query.WriteRune('\n')
+
+	for xid, idx := range ids {
+		if l.alloc.CheckUid(xid) {
+			continue
+		}
+
+		query.WriteString(generateQuery(idx, opt.upsertPredicate, xid))
+		query.WriteRune('\n')
+		mutations = append(mutations, &api.NQuad{
+			Subject:     generateUidFunc(idx),
+			Predicate:   opt.upsertPredicate,
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: xid}},
+		})
+	}
+
+	if len(mutations) == 0 {
+		return
+	}
+
+	query.WriteRune('}')
+
+	// allocate all the new xids
+	resp, err := l.dc.NewTxn().Do(l.opts.Ctx, &api.Request{
+		CommitNow: true,
+		Query:     query.String(),
+		Mutations: []*api.Mutation{{Set: mutations}},
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	type dResult struct {
+		Uid string
+	}
+
+	var result map[string][]dResult
+	err = json.Unmarshal(resp.GetJson(), &result)
+	if err != nil {
+		panic(err)
+	}
+
+	for xid, idx := range ids {
+		// xid already exist in dgraph
+		if val, ok := result[idx]; ok && len(val) > 0 {
+			uid, err := strconv.ParseUint(val[0].Uid, 0, 64)
+			if err != nil {
+				panic(err)
+			}
+
+			l.alloc.SetUid(xid, uid)
+			continue
+		}
+
+		// new uid created in draph
+		if val, ok := resp.GetUids()[generateUidFunc(idx)]; ok {
+			uid, err := strconv.ParseUint(val, 0, 64)
+			if err != nil {
+				panic(err)
+			}
+
+			l.alloc.SetUid(xid, uid)
+			continue
+		}
+	}
 }
 
 // allocateUids looks for the maximum uid value in the given NQuads and bumps the
@@ -308,7 +459,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				if len(buffer) < opt.batchSize {
 					sz = len(buffer)
 				}
-				mu := request{Mutation: &api.Mutation{Set: buffer[:sz]}}
+				mu := &request{Mutation: &api.Mutation{Set: buffer[:sz]}}
 				l.reqs <- mu
 				buffer = buffer[sz:]
 			}
@@ -319,7 +470,12 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				continue
 			}
 
-			l.allocateUids(nqs)
+			if opt.upsertPredicate == "" {
+				l.allocateUids(nqs)
+			} else {
+				l.upsertUids(nqs)
+			}
+
 			for _, nq := range nqs {
 				nq.Subject = l.uid(nq.Subject)
 				if len(nq.ObjectId) > 0 {
@@ -363,32 +519,48 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	return nil
 }
 
-func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
+func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader {
 	var db *badger.DB
 	if len(opt.clientDir) > 0 {
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
 
 		var err error
 		db, err = badger.Open(badger.DefaultOptions(opt.clientDir).
-			WithTableLoadingMode(bopt.MemoryMap).
 			WithCompression(bopt.ZSTD).
 			WithSyncWrites(false).
-			WithLoadBloomsOnOpen(false).
+			WithBlockCacheSize(100 * (1 << 20)).
+			WithIndexCacheSize(100 * (1 << 20)).
 			WithZSTDCompressionLevel(3))
 		x.Checkf(err, "Error while creating badger KV posting store")
 
 	}
 
+	dialOpts := []grpc.DialOption{}
+	if conf.GetString("slash-grpc-endpoint") != "" && conf.IsSet("auth-token") {
+		dialOpts = append(dialOpts, x.WithAuthorizationCredentials(conf.GetString("auth-token")))
+	}
+
+	var tlsConfig *tls.Config = nil
+	if conf.GetString("slash-grpc-endpoint") != "" {
+		var tlsErr error
+		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash-grpc-endpoint"))
+		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
+	} else {
+		var tlsErr error
+		tlsConfig, tlsErr = x.LoadClientTLSConfigForInternalPort(conf)
+		x.Check(tlsErr)
+	}
+
 	// compression with zero server actually makes things worse
-	connzero, err := x.SetupConnection(opt.zero, nil, false)
+	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(connzero, db)
+	alloc := xidmap.New(connzero, db, "")
 	l := &loader{
 		opts:      opts,
 		dc:        dc,
 		start:     time.Now(),
-		reqs:      make(chan request, opts.Pending*2),
+		reqs:      make(chan *request, opts.Pending*2),
 		conflicts: make(map[uint64]struct{}),
 		alloc:     alloc,
 		db:        db,
@@ -405,24 +577,36 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 }
 
 func run() error {
+	var zero string
+	if Live.Conf.GetString("slash-grpc-endpoint") != "" {
+		zero = Live.Conf.GetString("slash-grpc-endpoint")
+	} else {
+		zero = Live.Conf.GetString("zero")
+	}
+
 	var err error
 	x.PrintVersion()
 	opt = options{
-		dataFiles:      Live.Conf.GetString("files"),
-		dataFormat:     Live.Conf.GetString("format"),
-		schemaFile:     Live.Conf.GetString("schema"),
-		zero:           Live.Conf.GetString("zero"),
-		concurrent:     Live.Conf.GetInt("conc"),
-		batchSize:      Live.Conf.GetInt("batch"),
-		clientDir:      Live.Conf.GetString("xidmap"),
-		authToken:      Live.Conf.GetString("auth_token"),
-		useCompression: Live.Conf.GetBool("use_compression"),
-		newUids:        Live.Conf.GetBool("new_uids"),
-		verbose:        Live.Conf.GetBool("verbose"),
-		httpAddr:       Live.Conf.GetString("http"),
-		bufferSize:     Live.Conf.GetInt("bufferSize"),
-		ludicrousMode:  Live.Conf.GetBool("ludicrous_mode"),
+		dataFiles:       Live.Conf.GetString("files"),
+		dataFormat:      Live.Conf.GetString("format"),
+		schemaFile:      Live.Conf.GetString("schema"),
+		zero:            zero,
+		concurrent:      Live.Conf.GetInt("conc"),
+		batchSize:       Live.Conf.GetInt("batch"),
+		clientDir:       Live.Conf.GetString("xidmap"),
+		authToken:       Live.Conf.GetString("auth-token"),
+		useCompression:  Live.Conf.GetBool("use-compression"),
+		newUids:         Live.Conf.GetBool("new-uids"),
+		verbose:         Live.Conf.GetBool("verbose"),
+		httpAddr:        Live.Conf.GetString("http"),
+		bufferSize:      Live.Conf.GetInt("buffer-size"),
+		ludicrousMode:   Live.Conf.GetBool("ludicrous-mode"),
+		upsertPredicate: Live.Conf.GetString("upsert-predicate"),
+		tmpDir:          Live.Conf.GetString("tmp"),
 	}
+
+	z.SetTmpDir(opt.tmpDir)
+
 	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
 		fmt.Printf("unable to read key %v", err)
 		return err
@@ -442,10 +626,13 @@ func run() error {
 		bufferSize:    opt.bufferSize,
 	}
 
+	// Create directory for temporary buffers.
+	x.Check(os.MkdirAll(opt.tmpDir, 0700))
+
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
 
-	l := setup(bmOpts, dg)
+	l := setup(bmOpts, dg, Live.Conf)
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
@@ -483,7 +670,7 @@ func run() error {
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {
-			errCh <- l.processFile(ctx, file, opt.key)
+			errCh <- errors.Wrapf(l.processFile(ctx, file, opt.key), file)
 		}(file)
 	}
 
@@ -494,7 +681,7 @@ func run() error {
 
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			fmt.Printf("Error while processing data file %q: %s\n", filesList[i], err)
+			fmt.Printf("Error while processing data file %s\n", err)
 			return err
 		}
 	}
@@ -520,10 +707,10 @@ func run() error {
 	fmt.Printf("Time spent                   : %v\n", c.Elapsed)
 	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
+	if err := l.alloc.Flush(); err != nil {
+		return err
+	}
 	if l.db != nil {
-		if err := l.alloc.Flush(); err != nil {
-			return err
-		}
 		if err := l.db.Close(); err != nil {
 			return err
 		}

@@ -1,4 +1,4 @@
-type User @auth(
+type User @secret(field: "password") @auth(
   delete: { and: [
     { rule: """
     query($USER: String!) {
@@ -23,6 +23,21 @@ type User @auth(
   tickets: [Ticket] @hasInverse(field: assignedTo)
   secrets: [UserSecret]
   issues: [Issue]
+  tweets: [Tweets] @hasInverse(field: user)
+}
+
+type Tweets @auth (
+    query: { rule: "{$ROLE: { eq: \"admin\" } }"},
+    add: { rule: "{$USER: { eq: \"foo\" } }"},
+    delete: { rule: "{$USER: { eq: \"foo\" } }"},
+    update: { rule: "{$USER: { eq: \"foo\" } }"}
+){
+    id: String! @id
+    text: String! @search(by: [fulltext])
+    user: User
+    timestamp: DateTime! @search
+    score: Int @search
+    streams: String @search
 }
 
 type UserSecret @auth(
@@ -247,11 +262,12 @@ type Issue @auth(
   random: String
 }
 
-type Log @auth(
-      query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-      add: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-      update: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-      delete: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+type Log @secret(field: "pwd") @auth(
+    password: { rule: "{$ROLE: { eq: \"Admin\" } }"},
+    query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+    add: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+    update: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+    delete: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
 ) {
   id: ID!
   logs: String
@@ -286,7 +302,19 @@ type ComplexLog @auth(
   visible: Boolean @search
 }
 
-type Project @auth(
+type Project @secret(field: "pwd") @auth(
+    password: { or: [
+        { rule: """query($USER: String!) {
+                     queryProject {
+                       roles(filter: { permission: { eq: EDIT } }) {
+                        assignedTo(filter: { username: { eq: $USER } }) {
+                         __typename
+                        }
+                       }
+                     }
+                 }""" },
+        { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
+    ]},
      query: { or: [
          { rule: """query($USER: String!) {
                       queryProject {
@@ -386,6 +414,18 @@ enum Permission {
 }
 
 type Column @auth(
+    password: { rule: """
+    query($USER: String!) {
+        queryColumn {
+            inProject {
+                roles(filter: { permission: { eq: EDIT } } ) {
+                    assignedTo(filter: { username: { eq: $USER } }) {
+                        __typename
+                    }
+                }
+            }
+        }
+    }"""},
     query: { rule: """
     query($USER: String!) {
         queryColumn {
@@ -521,4 +561,196 @@ query($USER: String!) {
 """},{ rule: "{$ROLE: { eq: \"ADMIN\" }}"}]}) {
     id: ID!
     email: String! @dgraph(pred: "IOw80vnV") @search(by: [hash])
+}
+
+type Contact @auth(
+    query: { rule: "{$ContactRole: { eq: \"ADMINISTRATOR\"}}" }
+) {
+    id: ID!
+    nickName: String @search(by: [exact, term, fulltext, regexp])
+    adminTasks: [AdminTask] @hasInverse(field: forContact)
+    tasks: [Task] @hasInverse(field: forContact)
+}
+
+type AdminTask @auth(
+    query: { rule: "{$TaskRole: { eq: \"ADMINISTRATOR\"}}" }
+) {
+    id: ID!
+    name: String @search(by: [exact, term, fulltext, regexp])
+    occurrences: [TaskOccurrence] @hasInverse(field: adminTask)
+    forContact: Contact @hasInverse(field: adminTasks)
+}
+
+type Task {
+    id: ID!
+    name: String @search(by: [exact, term, fulltext, regexp])
+    occurrences: [TaskOccurrence] @hasInverse(field: task)
+    forContact: Contact @hasInverse(field: tasks)
+}
+
+type TaskOccurrence @auth(
+    query: { or : [ { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
+        {and : [
+            {rule: "{$TaskOccuranceRole: { eq: \"ADMINISTRATOR\"}}"},
+            {rule: """
+            query($TaskOccuranceRole: String!) {
+                queryTaskOccurrence(filter: {role: { eq: $TaskOccuranceRole}}) {
+                    __typename
+                }
+            }
+            """}
+] } ] }
+) {
+    id: ID!
+    due: DateTime @search
+    comp: DateTime @search
+    task: Task @hasInverse(field: occurrences)
+    adminTask: AdminTask @hasInverse(field: occurrences)
+    isPublic: Boolean @search
+    role: String @search(by: [exact, term, fulltext, regexp])
+}
+
+type Author {
+  id: ID!
+  name: String! @search(by: [exact])
+  posts: [Post] @hasInverse(field: author)
+}
+
+interface Post @secret(field: "pwd") @auth(
+    password: { rule: "{$ROLE: { eq: \"Admin\" } }"},
+    query: { rule: """
+            query($USER: String!) { 
+              queryPost{
+                  author(filter: {name: {eq: $USER}}){
+                      name
+                  }
+              } 
+            }""" },
+    add: { rule: """
+            query($USER: String!) { 
+              queryPost{
+                  author(filter: {name: {eq: $USER}}){
+                      name
+                  }
+              } 
+            }""" },
+    delete: { rule: """
+            query($USER: String!) { 
+              queryPost{
+                  author(filter: {name: {eq: $USER}}){
+                      name
+                  }
+              } 
+            }""" },
+    update: { rule: """
+            query($USER: String!) { 
+              queryPost{
+                  author(filter: {name: {eq: $USER}}){
+                      name
+                  }
+              } 
+            }""" }
+){
+    id: ID!
+    text: String! @search(by: [exact])
+    topic: String
+    datePublished: DateTime @search
+    author: Author! 
+}
+
+interface MsgPost @auth(
+    query: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
+    add: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
+    delete: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
+    update: { rule: "{$ROLE: { eq: \"ADMIN\" } }" }
+){
+    sender: Author
+    receiver: Author
+}
+
+type Question implements Post  @auth(
+    password:{ rule: """
+            query($ANS: Boolean!) {
+              queryQuestion(filter: { answered: $ANS } ) {
+                id
+                text
+              }
+            }""" },
+    query:{ rule: """
+            query($ANS: Boolean!) { 
+              queryQuestion(filter: { answered: $ANS } ) { 
+                id 
+              } 
+            }""" },
+    add:{ rule: """
+            query($ANS: Boolean!) { 
+              queryQuestion(filter: { answered: $ANS } ) { 
+                id 
+              } 
+            }""" },
+    delete:{ rule: """
+            query($ANS: Boolean!) { 
+              queryQuestion(filter: { answered: $ANS } ) { 
+                id 
+              } 
+            }""" },
+    update:{ rule: """
+            query($ANS: Boolean!) { 
+              queryQuestion(filter: { answered: $ANS } ) { 
+                id 
+              } 
+            }""" },
+){
+    answered:  Boolean @search
+}
+
+type FbPost implements Post & MsgPost @auth(
+    password: { rule: """
+        query($USER: String!) {
+            queryFbPost{
+                author(filter: {name: {eq: $USER}}){
+                    name
+                }
+            }
+        }"""
+    }
+) {
+    postCount: Int
+}
+
+type Answer implements Post {
+    markedUseful:  Boolean @search
+}
+
+interface A {
+    id: ID!
+    fieldA: String @search(by: [exact])
+    random: String 
+}
+
+type B implements A {
+    fieldB: Boolean @search
+}
+
+type C implements A @auth(
+    query:{ rule: """
+            query($ANS: Boolean!) { 
+              queryC(filter: { fieldC: $ANS } ) { 
+                id 
+              } 
+            }""" },
+    delete:{ rule: """
+            query($ANS: Boolean!) { 
+              queryC(filter: { fieldC: $ANS } ) { 
+                id 
+              } 
+            }""" }
+){
+    fieldC: Boolean @search
+}
+
+type Todo {
+    id: ID
+    owner: String
+    text: String
 }

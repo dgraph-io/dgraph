@@ -36,6 +36,8 @@ func GetTokenizerForLang(t Tokenizer, lang string) Tokenizer {
 		// We must return a new instance because another goroutine might be calling this
 		// with a different lang.
 		return FullTextTokenizer{lang: lang}
+	case TermTokenizer:
+		return TermTokenizer{lang: lang}
 	case ExactTokenizer:
 		langTag, err := language.Parse(lang)
 		// We default to english if the language is not supported.

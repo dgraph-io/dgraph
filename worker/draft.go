@@ -38,7 +38,6 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/posting"
@@ -47,6 +46,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type node struct {
@@ -60,12 +60,12 @@ type node struct {
 	applyCh chan []*pb.Proposal
 	ctx     context.Context
 	gid     uint32
-	closer  *y.Closer
+	closer  *z.Closer
 
 	streaming int32 // Used to avoid calculating snapshot
 
 	// Used to track the ops going on in the system.
-	ops     map[op]*y.Closer
+	ops     map[op]*z.Closer
 	opsLock sync.Mutex
 
 	canCampaign bool
@@ -86,6 +86,10 @@ func (id op) String() string {
 		return "opIndexing"
 	case opRestore:
 		return "opRestore"
+	case opBackup:
+		return "opBackup"
+	case opPredMove:
+		return "opPredMove"
 	default:
 		return "opUnknown"
 	}
@@ -96,6 +100,8 @@ const (
 	opSnapshot
 	opIndexing
 	opRestore
+	opBackup
+	opPredMove
 )
 
 // startTask is used to check whether an op is already running. If a rollup is running,
@@ -104,7 +110,7 @@ const (
 // Restore operations have preference and cancel all other operations, not just rollups.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
-func (n *node) startTask(id op) (*y.Closer, error) {
+func (n *node) startTask(id op) (*z.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
 
@@ -123,7 +129,7 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		}
 	}
 
-	closer := y.NewCloser(1)
+	closer := z.NewCloser(1)
 	switch id {
 	case opRollup:
 		if len(n.ops) > 0 {
@@ -141,7 +147,18 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 			delete(n.ops, otherId)
 			otherCloser.SignalAndWait()
 		}
-	case opSnapshot, opIndexing:
+	case opBackup:
+		// Backup cancels all other operations, except for other backups since
+		// only one restore operation should be active any given moment.
+		for otherId, otherCloser := range n.ops {
+			if otherId == opBackup {
+				return nil, errors.Errorf("another backup operation is already running")
+			}
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
+			otherCloser.SignalAndWait()
+		}
+	case opSnapshot, opIndexing, opPredMove:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
 				// Remove from map and signal the closer to cancel the operation.
@@ -158,7 +175,7 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 
 	n.ops[id] = closer
 	glog.Infof("Operation started with id: %s", id)
-	go func(id op, closer *y.Closer) {
+	go func(id op, closer *z.Closer) {
 		closer.Wait()
 		stopTask(id)
 	}(id, closer)
@@ -214,7 +231,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		Group: gid,
 		Id:    id,
 	}
-	m := conn.NewNode(rc, store)
+	m := conn.NewNode(rc, store, x.WorkerConfig.TLSClientConfig)
 
 	n := &node{
 		Node: m,
@@ -225,11 +242,11 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// to maintain quorum health.
 		applyCh: make(chan []*pb.Proposal, 1000),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:  y.NewCloser(4), // Matches CLOSER:1
-		ops:     make(map[op]*y.Closer),
+		closer:  z.NewCloser(4), // Matches CLOSER:1
+		ops:     make(map[op]*z.Closer),
 	}
 	if x.WorkerConfig.LudicrousMode {
-		n.ex = newExecutor(&m.Applied)
+		n.ex = newExecutor(&m.Applied, x.WorkerConfig.LudicrousConcurrency)
 	}
 	return n
 }
@@ -290,7 +307,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
-		return posting.DeleteData()
+		if err := posting.DeleteData(); err != nil {
+			return err
+		}
+
+		// Clear entire cache.
+		posting.ResetCache()
+		return nil
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_ALL {
@@ -301,6 +324,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		if err := posting.DeleteAll(); err != nil {
 			return err
 		}
+
+		// Clear entire cache.
+		posting.ResetCache()
 
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema()
@@ -364,6 +390,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
 			return err
+		}
+
+		// Clear the entire cache if there is a schema update because the index rebuild
+		// will invalidate the state.
+		if len(proposal.Mutations.Schema) > 0 {
+			posting.ResetCache()
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
@@ -590,7 +622,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		defer x.UpdateDrainingMode(false)
 
 		var err error
-		var closer *y.Closer
+		var closer *z.Closer
 		closer, err = n.startTask(opRestore)
 		if err != nil {
 			return errors.Wrapf(err, "cannot start restore task")
@@ -647,7 +679,9 @@ func (n *node) processApplyCh() {
 			psz := proposal.Size()
 			totalSize += int64(psz)
 
-			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil && proposal.Mutations.StartTs == 0 {
+			// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
+			// commit ts.
+			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil {
 				proposal.Mutations.StartTs = State.GetTimestamp(false)
 			}
 
@@ -748,11 +782,23 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 			return errors.Wrapf(err, "while flushing to disk")
 		}
 	}
+	if x.WorkerConfig.HardSync {
+		if err := pstore.Sync(); err != nil {
+			glog.Errorf("Error while calling Sync while commitOrAbort: %v", err)
+		}
+	}
 
 	g := groups()
 	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
 		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 	}
+
+	// Clear all the cached lists that were touched by this transaction.
+	for _, status := range delta.Txns {
+		txn := posting.Oracle().GetTxn(status.StartTs)
+		txn.RemoveCachedKeys()
+	}
+	posting.WaitForCache()
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -828,7 +874,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// commits up until then have already been written to pstore. And the way we take snapshots, we
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
-	if _, err := n.populateSnapshot(snap, pool); err != nil {
+	if err := n.populateSnapshot(snap, pool); err != nil {
 		return errors.Wrapf(err, "cannot retrieve snapshot from peer")
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -851,7 +897,7 @@ func (n *node) proposeSnapshot(discardN int) error {
 	proposal := &pb.Proposal{
 		Snapshot: snap,
 	}
-	n.elog.Printf("Proposing snapshot: %+v\n", snap)
+	glog.V(2).Infof("Proposing snapshot: %+v\n", snap)
 	data, err := proposal.Marshal()
 	x.Check(err)
 	return n.Raft().Propose(n.ctx, data)
@@ -884,19 +930,14 @@ func (n *node) updateRaftProgress() error {
 	//
 	// Let's check what we already have. And only update if the new snap.Index is ahead of the last
 	// stored applied.
-	applied, err := n.Store.Checkpoint()
-	if err != nil {
-		return err
-	}
+	applied := n.Store.Uint(raftwal.CheckpointIndex)
 
 	snap, err := n.calculateSnapshot(applied, 3) // 3 is a randomly chosen small number.
 	if err != nil || snap == nil || snap.Index <= applied {
 		return err
 	}
 
-	if err := n.Store.UpdateCheckpoint(snap); err != nil {
-		return err
-	}
+	n.Store.SetUint(raftwal.CheckpointIndex, snap.GetIndex())
 	glog.V(2).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
 	return nil
 }
@@ -917,12 +958,25 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 
 			if n.AmLeader() {
-				var calculate bool
+				// If leader doesn't have a snapshot, we should create one immediately. This is very
+				// useful when you bring up the cluster from bulk loader. If you remove an alpha and
+				// add a new alpha, the new follower won't get a snapshot if the leader doesn't have
+				// one.
+				snap, err := n.Store.Snapshot()
+				if err != nil {
+					glog.Errorf("While retrieving snapshot from Store: %v\n", err)
+					continue
+				}
+
+				// If we don't have a snapshot, or if there are too many log files in Raft,
+				// calculate a new snapshot.
+				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
+
 				if chk, err := n.Store.Checkpoint(); err == nil {
 					if first, err := n.Store.FirstIndex(); err == nil {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
-						calculate = chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
+						calculate = calculate || chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
 						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
 							"snapshotAfter:%d snap:%v", first, chk, chk-first,
 							x.WorkerConfig.SnapshotAfter, calculate)
@@ -940,7 +994,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
 				if calculate {
-					if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
+					// We can set discardN argument to zero, because we already know that calculate
+					// would be true if either we absolutely needed to calculate the snapshot,
+					// or our checkpoint already crossed the SnapshotAfter threshold.
+					if err := n.proposeSnapshot(0); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					}
 				}
@@ -964,19 +1021,23 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 }
 
 func (n *node) drainApplyChan() {
+	numDrained := 0
 	for {
 		select {
 		case proposals := <-n.applyCh:
-			glog.Infof("Draining %d proposals\n", len(proposals))
+			numDrained += len(proposals)
 			for _, proposal := range proposals {
 				n.Proposals.Done(proposal.Key, nil)
 				n.Applied.Done(proposal.Index)
 			}
 		default:
+			glog.Infof("Drained %d proposals\n", numDrained)
 			return
 		}
 	}
 }
+
+const tickDur = 100 * time.Millisecond
 
 func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
@@ -988,15 +1049,15 @@ func (n *node) Run() {
 	// "tick missed to fire" logs. Etcd uses 100ms and they haven't seen those issues.
 	// Additionally, using 100ms for ticks does not cause proposals to slow down, because they get
 	// sent out asap and don't rely on ticks. So, setting this to 100ms instead of 20ms is a NOOP.
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(tickDur)
 	defer ticker.Stop()
 
 	done := make(chan struct{})
 	go n.checkpointAndClose(done)
 	go n.ReportRaftComms()
 
-	if x.WorkerConfig.LudicrousMode {
-		closer := y.NewCloser(2)
+	if !x.WorkerConfig.HardSync {
+		closer := z.NewCloser(2)
 		defer closer.SignalAndWait()
 		go x.StoreSync(n.Store, closer)
 		go x.StoreSync(pstore, closer)
@@ -1101,7 +1162,7 @@ func (n *node) Run() {
 							break
 						}
 						glog.Errorf("While retrieving snapshot, error: %v. Retrying...", err)
-						time.Sleep(100 * time.Millisecond) // Wait for a bit.
+						time.Sleep(time.Second) // Wait for a bit.
 					}
 					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
 
@@ -1125,7 +1186,7 @@ func (n *node) Run() {
 					raft.IsEmptySnap(rd.Snapshot),
 					raft.IsEmptyHardState(rd.HardState))
 			}
-			if !x.WorkerConfig.LudicrousMode && rd.MustSync {
+			if x.WorkerConfig.HardSync && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %+v", err)
 				}
@@ -1158,7 +1219,8 @@ func (n *node) Run() {
 				default:
 					proposal := &pb.Proposal{}
 					if err := proposal.Unmarshal(entry.Data); err != nil {
-						x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
+						glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
+						break
 					}
 					if pctx := n.Proposals.Get(proposal.Key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
@@ -1227,7 +1289,7 @@ func (n *node) Run() {
 					glog.Errorf("Error recording stats: %+v", err)
 				}
 			}
-			if timer.Total() > 200*time.Millisecond {
+			if timer.Total() > 5*tickDur {
 				glog.Warningf(
 					"Raft.Ready took too long to process: %s"+
 						" Num entries: %d. MustSync: %v",
@@ -1266,7 +1328,7 @@ func (n *node) calculateTabletSizes() {
 		total += size
 	}
 
-	tableInfos := pstore.Tables(false)
+	tableInfos := pstore.Tables()
 	previousLeft := ""
 	var previousSize int64
 	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
@@ -1288,7 +1350,7 @@ func (n *node) calculateTabletSizes() {
 			glog.V(3).Info("Skipping table not owned by one predicate")
 		}
 		previousLeft = left.Attr
-		previousSize = int64(tinfo.EstimatedSz)
+		previousSize = int64(tinfo.OnDiskSize)
 	}
 	// The last table has not been counted. Assign it to the predicate at the left of the table.
 	updateSize(previousLeft, previousSize)
@@ -1465,12 +1527,11 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// all entries at once, retrieve it in batches of 64MB.
 	var lastEntry raftpb.Entry
 	for batchFirst := first; batchFirst <= last; {
-		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
+		entries, err := n.Store.Entries(batchFirst, last+1, 256<<20)
 		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
 		}
-
 		// Exit early from the loop if no entries were found.
 		if len(entries) == 0 {
 			break
@@ -1538,6 +1599,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 		Index:   snapshotIdx,
 		ReadTs:  maxCommitTs,
 	}
+	glog.V(2).Infof("Calculated snapshot: %+v\n", result)
 	span.Annotatef(nil, "Got snapshot: %+v", result)
 	return result, nil
 }

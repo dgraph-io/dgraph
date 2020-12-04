@@ -85,16 +85,19 @@ func defaultMatch(value types.Val, filter *stringFilter) bool {
 }
 
 func ineqMatch(value types.Val, filter *stringFilter) bool {
-	if len(filter.eqVals) == 0 {
-		return types.CompareVals(filter.funcName, value, filter.ineqValue)
+	if filter.funcName == eq {
+		for _, v := range filter.eqVals {
+			if types.CompareVals(filter.funcName, value, v) {
+				return true
+			}
+		}
+		return false
+	} else if filter.funcName == between {
+		return types.CompareVals("ge", value, filter.eqVals[0]) &&
+			types.CompareVals("le", value, filter.eqVals[1])
 	}
 
-	for _, v := range filter.eqVals {
-		if types.CompareVals(filter.funcName, value, v) {
-			return true
-		}
-	}
-	return false
+	return types.CompareVals(filter.funcName, value, filter.eqVals[0])
 }
 
 func tokenizeValue(value types.Val, filter *stringFilter) []string {

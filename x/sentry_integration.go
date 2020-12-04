@@ -47,7 +47,7 @@ const (
 func SentryOptOutNote() {
 	glog.Infof("This instance of Dgraph will send anonymous reports of panics back " +
 		"to Dgraph Labs via Sentry. No confidential information is sent. These reports " +
-		"help improve Dgraph. To opt-out, restart your instance with the --enable_sentry=false " +
+		"help improve Dgraph. To opt-out, restart your instance with the --enable-sentry=false " +
 		"flag. For more info, see https://dgraph.io/docs/howto/#data-handling.")
 }
 
@@ -112,6 +112,7 @@ func ConfigureSentryScope(subcmd string) {
 		scope.SetTag("commit", lastCommitSHA)
 		scope.SetTag("commit_ts", lastCommitTime)
 		scope.SetTag("branch", gitBranch)
+		scope.SetTag("codename", dgraphCodename)
 		scope.SetLevel(sentry.LevelFatal)
 	})
 
@@ -180,9 +181,17 @@ func WrapPanics() {
 	if err != nil {
 		panic(err)
 	}
-	// If exitStatus >= 0, then we're the parent process and the panicwrap
-	// re-executed ourselves and completed. Just exit with the proper status.
-	if exitStatus >= 0 {
+
+	// Note: panicwrap.Wrap documentation states that exitStatus == -1
+	// should be used to determine whether the process is the child.
+	// However, this is not reliable. See https://github.com/mitchellh/panicwrap/issues/18
+	// we have found that exitStatus = -1 is returned even when
+	// the process is the parent. Likely due to panicwrap returning
+	// syscall.WaitStatus.ExitStatus() as the exitStatus, which _can_ be
+	// -1. Checking panicwrap.Wrapped(nil) is more reliable.
+	if !panicwrap.Wrapped(nil) {
+		// parent
 		os.Exit(exitStatus)
 	}
+	// child
 }
