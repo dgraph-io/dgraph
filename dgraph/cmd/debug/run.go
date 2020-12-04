@@ -826,8 +826,7 @@ func run() {
 		WithReadOnly(opt.readOnly).
 		WithEncryptionKey(opt.key).
 		WithBlockCacheSize(1 << 30).
-		WithIndexCacheSize(1 << 30).
-		WithLoggingLevel(badger.WARNING)
+		WithIndexCacheSize(1 << 30)
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
