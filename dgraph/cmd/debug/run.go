@@ -56,6 +56,7 @@ var (
 type flagOptions struct {
 	vals          bool
 	keyLookup     string
+	rollupKey     string
 	keyHistory    bool
 	predicate     string
 	readOnly      bool
@@ -93,6 +94,7 @@ func init() {
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
+	flag.StringVar(&opt.rollupKey, "rollup", "", "Hex of key to rollup.")
 	flag.BoolVarP(&opt.keyHistory, "history", "y", false, "Show all versions of a key.")
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
@@ -441,6 +443,43 @@ func appendPosting(w io.Writer, o *pb.Posting) {
 	}
 	fmt.Fprintln(w, "")
 }
+func rollupKey(db *badger.DB) {
+	txn := db.NewTransactionAt(opt.readTs, false)
+	defer txn.Discard()
+
+	key, err := hex.DecodeString(opt.rollupKey)
+	x.Check(err)
+
+	iopts := badger.DefaultIteratorOptions
+	iopts.AllVersions = true
+	iopts.PrefetchValues = false
+	itr := txn.NewKeyIterator(key, iopts)
+	defer itr.Close()
+
+	itr.Rewind()
+	if !itr.Valid() {
+		log.Fatalf("Unable to seek to key: %s", hex.Dump(key))
+	}
+
+	item := itr.Item()
+	// Don't need to do anything if the bitdelta is not set.
+	if item.UserMeta()&posting.BitDeltaPosting == 0 {
+		fmt.Printf("First item has UserMeta:[b%04b]. Nothing to do\n", item.UserMeta())
+		return
+	}
+	pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
+	x.Check(err)
+
+	alloc := z.NewAllocator(32 << 20)
+	defer alloc.Release()
+
+	kvs, err := pl.Rollup(alloc)
+	x.Check(err)
+
+	wb := db.NewManagedWriteBatch()
+	x.Check(wb.WriteList(&bpb.KVList{Kv: kvs}))
+	x.Check(wb.Flush())
+}
 
 func lookup(db *badger.DB) {
 	txn := db.NewTransactionAt(opt.readTs, false)
@@ -543,6 +582,7 @@ func printKeys(db *badger.DB) {
 		}
 
 		var sz, deltaCount int64
+	LOOP:
 		for ; itr.ValidForPrefix(prefix); itr.Next() {
 			item := itr.Item()
 			if !bytes.Equal(item.Key(), key) {
@@ -556,7 +596,7 @@ func printKeys(db *badger.DB) {
 			// This is rather a default case as one of the 4 bit must be set.
 			case posting.BitCompletePosting, posting.BitEmptyPosting, posting.BitSchemaPosting:
 				sz += item.EstimatedSize()
-				break
+				break LOOP
 			case posting.BitDeltaPosting:
 				sz += item.EstimatedSize()
 				deltaCount++
@@ -898,6 +938,8 @@ func run() {
 	// fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
 
 	switch {
+	case len(opt.rollupKey) > 0:
+		rollupKey(db)
 	case len(opt.keyLookup) > 0:
 		lookup(db)
 	case len(opt.jepsen) > 0:
