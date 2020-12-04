@@ -18,6 +18,7 @@ package debug
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -26,8 +27,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v2"
+	bpb "github.com/dgraph-io/badger/v2/pb"
+
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
@@ -487,26 +491,16 @@ func lookup(db *badger.DB) {
 // {i} attr: name term: [8] woods  ts: 535 item: [28, b0100] sz: 81 dcnt: 3 key: 00000...6f6f6473
 // Fix the TestBulkLoadMultiShard accordingly, if the format changes.
 func printKeys(db *badger.DB) {
-	txn := db.NewTransactionAt(opt.readTs, false)
-	defer txn.Discard()
-
-	iopts := badger.DefaultIteratorOptions
-	iopts.AllVersions = true
-	iopts.PrefetchValues = false
-	itr := txn.NewIterator(iopts)
-	defer itr.Close()
-
 	var prefix []byte
 	if len(opt.predicate) > 0 {
 		prefix = x.PredicatePrefix(opt.predicate)
 	}
-
 	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
-	var loop int
-	for itr.Seek(prefix); itr.ValidForPrefix(prefix); {
+	stream := db.NewStreamAt(opt.readTs)
+	stream.Prefix = prefix
+	var total uint64
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
-		var key []byte
-		key = item.KeyCopy(key)
 		pk, err := x.Parse(key)
 		x.Check(err)
 		var buf bytes.Buffer
@@ -569,20 +563,32 @@ func printKeys(db *badger.DB) {
 				break
 			}
 		}
+		var invalidSz, invalidCount uint64
 		// skip all the versions of key
 		for ; itr.ValidForPrefix(prefix); itr.Next() {
 			item := itr.Item()
 			if !bytes.Equal(item.Key(), key) {
 				break
 			}
+			invalidSz += uint64(item.EstimatedSize())
+			invalidCount++
 		}
 
 		fmt.Fprintf(&buf, " sz: %d dcnt: %d", sz, deltaCount)
+		if invalidCount > 0 {
+			fmt.Fprintf(&buf, " isz: %d icount: %d", invalidSz, invalidCount)
+		}
 		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(key))
+		// If total size is more than 1 GB or we have more than 1 million keys, flag this key.
+		if uint64(sz)+invalidSz > (1<<30) || uint64(deltaCount)+invalidCount > 10e6 {
+			fmt.Fprintf(&buf, " [HEAVY]")
+		}
 		fmt.Println(buf.String())
-		loop++
+		atomic.AddUint64(&total, 1)
+		return nil, nil
 	}
-	fmt.Printf("Found %d keys\n", loop)
+	x.Check(stream.Orchestrate(context.Background()))
+	fmt.Printf("Found %d keys\n", atomic.LoadUint64(&total))
 }
 
 // Creates bounds for an histogram. The bounds are powers of two of the form
