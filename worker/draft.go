@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -57,7 +58,7 @@ type node struct {
 	*conn.Node
 
 	// Fields which are never changed after init.
-	applyCh chan []*pb.Proposal
+	applyCh chan []raftpb.Entry
 	ctx     context.Context
 	gid     uint32
 	closer  *z.Closer
@@ -668,12 +669,18 @@ func (n *node) processApplyCh() {
 		size int
 		seen time.Time
 	}
-	previous := make(map[string]*P)
+	previous := make(map[uint64]*P)
 
 	// This function must be run serially.
-	handle := func(proposals []*pb.Proposal) {
+	handle := func(entries []raftpb.Entry) {
 		var totalSize int64
-		for _, proposal := range proposals {
+		for _, entry := range entries {
+			key := binary.BigEndian.Uint64(entry.Data[:8])
+
+			var proposal pb.Proposal
+			x.Check(proposal.Unmarshal(entry.Data[8:]))
+			proposal.Index = entry.Index
+
 			// We use the size as a double check to ensure that we're
 			// working with the same proposal as before.
 			psz := proposal.Size()
@@ -686,19 +693,19 @@ func (n *node) processApplyCh() {
 			}
 
 			var perr error
-			p, ok := previous[proposal.Key]
+			p, ok := previous[key]
 			if ok && p.err == nil && p.size == psz {
 				n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
-					proposal.Key, proposal.Index)
-				previous[proposal.Key].seen = time.Now() // Update the ts.
+					key, proposal.Index)
+				previous[key].seen = time.Now() // Update the ts.
 				// Don't break here. We still need to call the Done below.
 
 			} else {
 				start := time.Now()
-				perr = n.applyCommitted(proposal)
-				if len(proposal.Key) > 0 {
+				perr = n.applyCommitted(&proposal)
+				if key != 0 {
 					p := &P{err: perr, size: psz, seen: time.Now()}
-					previous[proposal.Key] = p
+					previous[key] = p
 				}
 				if perr != nil {
 					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
@@ -1194,7 +1201,7 @@ func (n *node) Run() {
 			}
 
 			// Now schedule or apply committed entries.
-			var proposals []*pb.Proposal
+			var proposals []raftpb.Entry
 			for _, entry := range rd.CommittedEntries {
 				// Need applied watermarks for schema mutation also for read linearazibility
 				// Applied watermarks needs to be emitted as soon as possible sequentially.
@@ -1217,24 +1224,33 @@ func (n *node) Run() {
 					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
 					n.Applied.Done(entry.Index)
 				default:
-					proposal := &pb.Proposal{}
-					if err := proposal.Unmarshal(entry.Data); err != nil {
-						glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
-						break
-					}
-					if pctx := n.Proposals.Get(proposal.Key); pctx != nil {
+					// proposal := &pb.Proposal{}
+					// if err := proposal.Unmarshal(entry.Data); err != nil {
+					// 	glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
+					// 	break
+					// }
+					key := binary.BigEndian.Uint64(entry.Data[:8])
+					if pctx := n.Proposals.Get(key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
-						if x.WorkerConfig.LudicrousMode && len(proposal.Mutations.GetEdges()) > 0 {
-							// Assuming that there will be no error while applying. But this
-							// assumption is only made for data mutations and not schema mutations.
-							n.Proposals.Done(proposal.Key, nil)
+						if x.WorkerConfig.LudicrousMode {
+							var p pb.Proposal
+							if err := p.Unmarshal(entry.Data[8:]); err != nil {
+								glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
+								break
+							}
+							if len(p.Mutations.GetEdges()) > 0 {
+								// Assuming that there will be no error while applying. But this
+								// assumption is only made for data mutations and not schema mutations.
+								// TODO: This should not be done here. Instead, it should be done
+								// within the ludicrous mode scheduler.
+								n.Proposals.Done(key, nil)
+							}
 						}
 					}
-					proposal.Index = entry.Index
-					proposals = append(proposals, proposal)
+					proposals = append(proposals, entry)
 				}
 			}
 			// Send the whole lot to applyCh in one go, instead of sending proposals one by one.

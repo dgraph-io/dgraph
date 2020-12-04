@@ -18,6 +18,7 @@ package worker
 
 import (
 	"context"
+	"encoding/binary"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -194,8 +195,15 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// have this shared key. Thus, each server in the group can identify
 	// whether it has already done this work, and if so, skip it.
 	key := uniqueKey()
-	span := otrace.FromContext(ctx)
+	data := make([]byte, 8+proposal.Size())
+	binary.BigEndian.PutUint64(data, key)
+	sz, err := proposal.MarshalToSizedBuffer(data[8:])
+	if err != nil {
+		return err
+	}
+	data = data[8+sz:]
 
+	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "n.proposeAndWait")
 	defer stop()
 
@@ -208,14 +216,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			ErrCh: errCh,
 			Ctx:   cctx,
 		}
-		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%x]", key)
 		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
 
 		span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
-		data, err := proposal.Marshal()
-		if err != nil {
-			return err
-		}
+
 		if err = n.Raft().Propose(cctx, data); err != nil {
 			return errors.Wrapf(err, "While proposing")
 		}
