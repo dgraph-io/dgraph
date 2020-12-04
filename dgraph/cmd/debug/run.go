@@ -582,6 +582,7 @@ func printKeys(db *badger.DB) {
 		}
 
 		var sz, deltaCount int64
+	LOOP:
 		for ; itr.ValidForPrefix(prefix); itr.Next() {
 			item := itr.Item()
 			if !bytes.Equal(item.Key(), key) {
@@ -595,7 +596,7 @@ func printKeys(db *badger.DB) {
 			// This is rather a default case as one of the 4 bit must be set.
 			case posting.BitCompletePosting, posting.BitEmptyPosting, posting.BitSchemaPosting:
 				sz += item.EstimatedSize()
-				break
+				break LOOP
 			case posting.BitDeltaPosting:
 				sz += item.EstimatedSize()
 				deltaCount++
