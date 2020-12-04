@@ -1225,11 +1225,6 @@ func (n *node) Run() {
 					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
 					n.Applied.Done(entry.Index)
 				default:
-					// proposal := &pb.Proposal{}
-					// if err := proposal.Unmarshal(entry.Data); err != nil {
-					// 	glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
-					// 	break
-					// }
 					key := binary.BigEndian.Uint64(entry.Data[:8])
 					if pctx := n.Proposals.Get(key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
@@ -1244,7 +1239,8 @@ func (n *node) Run() {
 							}
 							if len(p.Mutations.GetEdges()) > 0 {
 								// Assuming that there will be no error while applying. But this
-								// assumption is only made for data mutations and not schema mutations.
+								// assumption is only made for data mutations and not schema
+								// mutations.
 								// TODO: This should not be done here. Instead, it should be done
 								// within the ludicrous mode scheduler.
 								n.Proposals.Done(key, nil)
