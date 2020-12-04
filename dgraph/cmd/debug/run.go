@@ -59,6 +59,7 @@ type flagOptions struct {
 	rollupKey     string
 	keyHistory    bool
 	predicate     string
+	prefix        string
 	readOnly      bool
 	pdir          string
 	itemMeta      bool
@@ -93,6 +94,7 @@ func init() {
 	flag.Uint64Var(&opt.readTs, "at", math.MaxUint64, "Set read timestamp for all txns.")
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
+	flag.StringVarP(&opt.prefix, "prefix", "", "", "Uses a hex prefix.")
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
 	flag.StringVar(&opt.rollupKey, "rollup", "", "Hex of key to rollup.")
 	flag.BoolVarP(&opt.keyHistory, "history", "y", false, "Show all versions of a key.")
@@ -538,6 +540,10 @@ func printKeys(db *badger.DB) {
 	var prefix []byte
 	if len(opt.predicate) > 0 {
 		prefix = x.PredicatePrefix(opt.predicate)
+	} else if len(opt.prefix) > 0 {
+		p, err := hex.DecodeString(opt.prefix)
+		x.Check(err)
+		prefix = p
 	}
 	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
 	stream := db.NewStreamAt(opt.readTs)
