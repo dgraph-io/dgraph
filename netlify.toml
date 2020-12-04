@@ -2,6 +2,7 @@
   base = "wiki/"
   command = "./scripts/build.sh"
   publish = "./public"
+  ignore = "git diff --quiet HEAD^ HEAD wiki/"
 
 [context.production.environment]
   HUGO_VERSION = "0.74.3"
