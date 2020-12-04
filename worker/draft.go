@@ -679,7 +679,7 @@ func (n *node) processApplyCh() {
 			var proposal pb.Proposal
 			var key uint64
 			if len(entry.Data) > 0 {
-				key := binary.BigEndian.Uint64(entry.Data[:8])
+				key = binary.BigEndian.Uint64(entry.Data[:8])
 				x.Check(proposal.Unmarshal(entry.Data[8:]))
 			}
 			proposal.Index = entry.Index

@@ -53,7 +53,7 @@ func printEntry(es raftpb.Entry, pending map[uint64]bool) {
 	} else if err := zpr.Unmarshal(es.Data[8:]); err == nil {
 		printZeroProposal(&buf, &zpr)
 	} else {
-		buf.Write(fmt.Sprintf(" Unable to parse Proposal: %v", err))
+		fmt.Fprintf(&buf, " Unable to parse Proposal: %v", err)
 	}
 }
 
