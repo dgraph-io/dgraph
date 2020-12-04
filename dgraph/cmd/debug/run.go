@@ -464,7 +464,7 @@ func rollupKey(db *badger.DB) {
 	item := itr.Item()
 	// Don't need to do anything if the bitdelta is not set.
 	if item.UserMeta()&posting.BitDeltaPosting == 0 {
-		fmt.Println("First item doesn't have bitdelta. Nothing to do")
+		fmt.Printf("First item has UserMeta:[b%04b]. Nothing to do\n", item.UserMeta())
 		return
 	}
 	pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
