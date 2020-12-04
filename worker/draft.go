@@ -537,7 +537,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 	ctx := n.Ctx(key)
 	span := otrace.FromContext(ctx)
-	span.Annotatef(nil, "node.applyCommitted Node id: %d. Group id: %d. Got proposal key: %s",
+	span.Annotatef(nil, "node.applyCommitted Node id: %d. Group id: %d. Got proposal key: %d",
 		n.Id, n.gid, key)
 
 	if proposal.Mutations != nil {

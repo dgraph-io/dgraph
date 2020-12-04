@@ -221,7 +221,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%x]", key)
 		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
 
-		span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
+		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
 
 		if err = n.Raft().Propose(cctx, data); err != nil {
 			return errors.Wrapf(err, "While proposing")
