@@ -162,14 +162,14 @@ var (
 			Name:        RaftAppliedIndex.Name(),
 			Measure:     RaftAppliedIndex,
 			Description: RaftAppliedIndex.Description(),
-			Aggregation: view.Count(),
+			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
 		{
 			Name:        MaxAssignedTs.Name(),
 			Measure:     MaxAssignedTs,
 			Description: MaxAssignedTs.Description(),
-			Aggregation: view.Count(),
+			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
 		{
