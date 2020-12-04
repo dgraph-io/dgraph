@@ -675,10 +675,13 @@ func (n *node) processApplyCh() {
 	handle := func(entries []raftpb.Entry) {
 		var totalSize int64
 		for _, entry := range entries {
-			key := binary.BigEndian.Uint64(entry.Data[:8])
 
 			var proposal pb.Proposal
-			x.Check(proposal.Unmarshal(entry.Data[8:]))
+			var key uint64
+			if len(entry.Data) > 0 {
+				key := binary.BigEndian.Uint64(entry.Data[:8])
+				x.Check(proposal.Unmarshal(entry.Data[8:]))
+			}
 			proposal.Index = entry.Index
 
 			// We use the size as a double check to ensure that we're
@@ -1227,7 +1230,10 @@ func (n *node) Run() {
 					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
 					n.Applied.Done(entry.Index)
 				default:
-					key := binary.BigEndian.Uint64(entry.Data[:8])
+					var key uint64
+					if len(entry.Data) > 0 {
+						key = binary.BigEndian.Uint64(entry.Data[:8])
+					}
 					if pctx := n.Proposals.Get(key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
@@ -1235,9 +1241,11 @@ func (n *node) Run() {
 						}
 						if x.WorkerConfig.LudicrousMode {
 							var p pb.Proposal
-							if err := p.Unmarshal(entry.Data[8:]); err != nil {
-								glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
-								break
+							if len(entry.Data) > 0 {
+								if err := p.Unmarshal(entry.Data[8:]); err != nil {
+									glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
+									break
+								}
 							}
 							if len(p.Mutations.GetEdges()) > 0 {
 								// Assuming that there will be no error while applying. But this
@@ -1563,12 +1571,11 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 				continue
 			}
 			var proposal pb.Proposal
-			if len(entry.Data) == 0 {
-				continue
-			}
-			if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
-				span.Annotatef(nil, "Error: %v", err)
-				return nil, err
+			if len(entry.Data) > 0 {
+				if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
+					span.Annotatef(nil, "Error: %v", err)
+					return nil, err
+				}
 			}
 
 			var start uint64
