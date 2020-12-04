@@ -11,4 +11,3 @@
 [context.deploy-preview.environment]
   HUGO_VERSION = "0.74.3"
   LOOP = "false"
-
