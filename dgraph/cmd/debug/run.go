@@ -499,7 +499,6 @@ func printKeys(db *badger.DB) {
 	}
 	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
 	stream := db.NewStreamAt(opt.readTs)
-	stream.NumGo = 16
 	stream.Prefix = prefix
 	var total uint64
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
