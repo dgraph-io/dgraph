@@ -806,8 +806,9 @@ func run() {
 
 	bopts := badger.DefaultOptions(dir).
 		WithReadOnly(opt.readOnly).
-		WithEncryptionKey(opt.key)
-
+		WithEncryptionKey(opt.key).
+		WithIndexCacheSize(64 << 20).
+		WithBlockCacheSize(64 << 20)
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
 
