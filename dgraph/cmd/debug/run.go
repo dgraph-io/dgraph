@@ -453,7 +453,7 @@ func rollupKey(db *badger.DB) {
 	itr := txn.NewIterator(iopts)
 	defer itr.Close()
 
-	key, err := hex.DecodeString(opt.keyLookup)
+	key, err := hex.DecodeString(opt.rollupKey)
 	x.Check(err)
 	itr.Seek(key)
 	if !itr.Valid() {
