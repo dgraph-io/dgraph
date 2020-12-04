@@ -305,7 +305,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		return 0, nil
 	}
 	key := binary.BigEndian.Uint64(e.Data[:8])
-	if err := p.Unmarshal(e.Data); err != nil {
+	if err := p.Unmarshal(e.Data[8:]); err != nil {
 		return key, err
 	}
 	if key == 0 {

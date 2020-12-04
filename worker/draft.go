@@ -241,7 +241,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh: make(chan []*raftpb.Entry, 1000),
+		applyCh: make(chan []raftpb.Entry, 1000),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:  z.NewCloser(4), // Matches CLOSER:1
 		ops:     make(map[op]*z.Closer),
@@ -252,7 +252,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	return n
 }
 
-func (n *node) Ctx(key string) context.Context {
+func (n *node) Ctx(key uint64) context.Context {
 	if pctx := n.Proposals.Get(key); pctx != nil {
 		return pctx.Ctx
 	}
@@ -534,11 +534,11 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	return nil
 }
 
-func (n *node) applyCommitted(proposal *pb.Proposal) error {
-	ctx := n.Ctx(proposal.Key)
+func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
+	ctx := n.Ctx(key)
 	span := otrace.FromContext(ctx)
 	span.Annotatef(nil, "node.applyCommitted Node id: %d. Group id: %d. Got proposal key: %s",
-		n.Id, n.gid, proposal.Key)
+		n.Id, n.gid, key)
 
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's committed.
@@ -557,7 +557,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		return populateKeyValues(ctx, proposal.Kv)
 
 	case proposal.State != nil:
-		n.elog.Printf("Applying state for key: %s", proposal.Key)
+		n.elog.Printf("Applying state for key: %s", key)
 		// This state needn't be snapshotted in this group, on restart we would fetch
 		// a state which is latest or equal to this.
 		groups().applyState(proposal.State)
@@ -584,8 +584,8 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
 
 	case proposal.Delta != nil:
-		n.elog.Printf("Applying Oracle Delta for key: %s", proposal.Key)
-		return n.commitOrAbort(proposal.Key, proposal.Delta)
+		n.elog.Printf("Applying Oracle Delta for key: %d", key)
+		return n.commitOrAbort(key, proposal.Delta)
 
 	case proposal.Snapshot != nil:
 		existing, err := n.Store.Snapshot()
@@ -636,7 +636,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 
 		// Call commitOrAbort to update the group checksums.
 		ts := proposal.Restore.RestoreTs
-		return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+		return n.commitOrAbort(key, &pb.OracleDelta{
 			Txns: []*pb.TxnStatus{
 				{StartTs: ts, CommitTs: ts},
 			},
@@ -702,7 +702,7 @@ func (n *node) processApplyCh() {
 
 			} else {
 				start := time.Now()
-				perr = n.applyCommitted(&proposal)
+				perr = n.applyCommitted(&proposal, key)
 				if key != 0 {
 					p := &P{err: perr, size: psz, seen: time.Now()}
 					previous[key] = p
@@ -710,8 +710,8 @@ func (n *node) processApplyCh() {
 				if perr != nil {
 					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
 				}
-				n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
-					proposal.Key, proposal.Index, perr)
+				n.elog.Printf("Applied proposal with key: %d, index: %d. Err: %v",
+					key, proposal.Index, perr)
 
 				var tags []tag.Mutator
 				switch {
@@ -758,7 +758,7 @@ func (n *node) processApplyCh() {
 }
 
 // TODO(Anurag - 4 May 2020): Are we using pkey? Remove if unused.
-func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
+func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
@@ -1034,7 +1034,8 @@ func (n *node) drainApplyChan() {
 		case entries := <-n.applyCh:
 			numDrained += len(entries)
 			for _, entry := range entries {
-				n.Proposals.Done(entry.Data[:8], nil)
+				key := binary.BigEndian.Uint64(entry.Data[:8])
+				n.Proposals.Done(key, nil)
 				n.Applied.Done(entry.Index)
 			}
 		default:
@@ -1201,7 +1202,7 @@ func (n *node) Run() {
 			}
 
 			// Now schedule or apply committed entries.
-			var proposals []raftpb.Entry
+			var entries []raftpb.Entry
 			for _, entry := range rd.CommittedEntries {
 				// Need applied watermarks for schema mutation also for read linearazibility
 				// Applied watermarks needs to be emitted as soon as possible sequentially.
@@ -1250,23 +1251,23 @@ func (n *node) Run() {
 							}
 						}
 					}
-					proposals = append(proposals, entry)
+					entries = append(entries, entry)
 				}
 			}
 			// Send the whole lot to applyCh in one go, instead of sending proposals one by one.
-			if len(proposals) > 0 {
+			if len(entries) > 0 {
 				// Apply the meter this before adding size to pending size so some crazy big
 				// proposal can be pushed to applyCh. If this do this after adding its size to
 				// pending size, we could block forever in rampMeter.
 				rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
 				var pendingSize int64
-				for _, p := range proposals {
+				for _, p := range entries {
 					pendingSize += int64(p.Size())
 				}
 				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
 					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
 				}
-				n.applyCh <- proposals
+				n.applyCh <- entries
 			}
 
 			if span != nil {
