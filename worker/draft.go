@@ -241,7 +241,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh: make(chan []*pb.Proposal, 1000),
+		applyCh: make(chan []*raftpb.Entry, 1000),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:  z.NewCloser(4), // Matches CLOSER:1
 		ops:     make(map[op]*z.Closer),
@@ -724,7 +724,7 @@ func (n *node) processApplyCh() {
 				_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 
-			n.Proposals.Done(proposal.Key, perr)
+			n.Proposals.Done(key, perr)
 			n.Applied.Done(proposal.Index)
 			ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 		}
@@ -1031,11 +1031,11 @@ func (n *node) drainApplyChan() {
 	numDrained := 0
 	for {
 		select {
-		case proposals := <-n.applyCh:
-			numDrained += len(proposals)
-			for _, proposal := range proposals {
-				n.Proposals.Done(proposal.Key, nil)
-				n.Applied.Done(proposal.Index)
+		case entries := <-n.applyCh:
+			numDrained += len(entries)
+			for _, entry := range entries {
+				n.Proposals.Done(entry.Data[:8], nil)
+				n.Applied.Done(entry.Index)
 			}
 		default:
 			glog.Infof("Drained %d proposals\n", numDrained)

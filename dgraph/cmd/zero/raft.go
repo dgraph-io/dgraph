@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"encoding/binary"
 	"log"
 	"math"
 	"sort"
@@ -119,13 +120,15 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		key := n.uniqueKey()
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 		defer n.Proposals.Delete(key)
-		proposal.Key = key
 		span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
 
-		data, err := proposal.Marshal()
+		data := make([]byte, 8+proposal.Size())
+		binary.BigEndian.PutUint64(data[:8], key)
+		sz, err := proposal.MarshalToSizedBuffer(data[8:])
 		if err != nil {
 			return err
 		}
+		data = data[:8+sz]
 		// Propose the change.
 		if err := n.Raft().Propose(cctx, data); err != nil {
 			span.Annotatef(nil, "Error while proposing via Raft: %v", err)
@@ -295,19 +298,20 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	return nil
 }
 
-func (n *node) applyProposal(e raftpb.Entry) (string, error) {
+func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 	var p pb.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
 	if len(e.Data) == 0 {
-		return p.Key, nil
+		return 0, nil
 	}
+	key := binary.BigEndian.Uint64(e.Data[:8])
 	if err := p.Unmarshal(e.Data); err != nil {
-		return p.Key, err
+		return key, err
 	}
-	if p.Key == "" {
-		return p.Key, errInvalidProposal
+	if key == 0 {
+		return key, errInvalidProposal
 	}
-	span := otrace.FromContext(n.Proposals.Ctx(p.Key))
+	span := otrace.FromContext(n.Proposals.Ctx(key))
 
 	n.server.Lock()
 	defer n.server.Unlock()
@@ -316,13 +320,13 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	state.Counter = e.Index
 	if len(p.Cid) > 0 {
 		if len(state.Cid) > 0 {
-			return p.Key, errInvalidProposal
+			return key, errInvalidProposal
 		}
 		state.Cid = p.Cid
 	}
 	if p.MaxRaftId > 0 {
 		if p.MaxRaftId <= state.MaxRaftId {
-			return p.Key, errInvalidProposal
+			return key, errInvalidProposal
 		}
 		state.MaxRaftId = p.MaxRaftId
 		n.server.nextRaftId = x.Max(n.server.nextRaftId, p.MaxRaftId+1)
@@ -345,14 +349,14 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		if err := n.handleMemberProposal(p.Member); err != nil {
 			span.Annotatef(nil, "While applying membership proposal: %+v", err)
 			glog.Errorf("While applying membership proposal: %+v", err)
-			return p.Key, err
+			return key, err
 		}
 	}
 	if p.Tablet != nil {
 		if err := n.handleTabletProposal(p.Tablet); err != nil {
 			span.Annotatef(nil, "While applying tablet proposal: %v", err)
 			glog.Errorf("While applying tablet proposal: %v", err)
-			return p.Key, err
+			return key, err
 		}
 	}
 	if p.License != nil {
@@ -363,7 +367,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			numNodes += len(group.GetMembers())
 		}
 		if uint64(numNodes) > p.GetLicense().GetMaxNodes() {
-			return p.Key, errInvalidProposal
+			return key, errInvalidProposal
 		}
 		state.License = p.License
 		// Check expiry and set enabled accordingly.
@@ -386,7 +390,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		n.server.orc.updateCommitStatus(e.Index, p.Txn)
 	}
 
-	return p.Key, nil
+	return key, nil
 }
 
 func (n *node) applyConfChange(e raftpb.Entry) {
