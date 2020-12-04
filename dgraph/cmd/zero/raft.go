@@ -499,7 +499,7 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 				continue
 			}
 			var proposal pb.ZeroProposal
-			err = proposal.Unmarshal(entry.Data)
+			err = proposal.Unmarshal(entry.Data[8:])
 			if err != nil {
 				return false, err
 			}
@@ -779,7 +779,7 @@ func (n *node) Run() {
 					if took := time.Since(start); took > time.Second {
 						var p pb.ZeroProposal
 						// Raft commits empty entry on becoming a leader.
-						if err := p.Unmarshal(entry.Data); err == nil {
+						if err := p.Unmarshal(entry.Data[8:]); err == nil {
 							glog.V(2).Infof("Proposal took %s to apply: %+v\n",
 								took.Round(time.Second), p)
 						}

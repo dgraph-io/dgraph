@@ -905,7 +905,9 @@ func (n *node) proposeSnapshot(discardN int) error {
 		Snapshot: snap,
 	}
 	glog.V(2).Infof("Proposing snapshot: %+v\n", snap)
-	data, err := proposal.Marshal()
+	data := make([]byte, 8+proposal.Size())
+	sz, err := proposal.MarshalToSizedBuffer(data[8:])
+	data = data[:8+sz]
 	x.Check(err)
 	return n.Raft().Propose(n.ctx, data)
 }
@@ -1561,7 +1563,10 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 				continue
 			}
 			var proposal pb.Proposal
-			if err := proposal.Unmarshal(entry.Data); err != nil {
+			if len(entry.Data) == 0 {
+				continue
+			}
+			if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
 				span.Annotatef(nil, "Error: %v", err)
 				return nil, err
 			}
