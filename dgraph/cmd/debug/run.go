@@ -17,6 +17,7 @@
 package debug
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -26,6 +27,7 @@ import (
 	"math"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,6 +35,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -585,11 +588,33 @@ func printKeys(db *badger.DB) {
 		if uint64(sz)+invalidSz > (1<<30) || uint64(deltaCount)+invalidCount > 10e6 {
 			fmt.Fprintf(&buf, " [HEAVY]")
 		}
-		fmt.Println(buf.String())
-		atomic.AddUint64(&total, 1)
-		return nil, nil
+		buf.WriteRune('\n')
+		list := &bpb.KVList{}
+		list.Kv = append(list.Kv, &bpb.KV{
+			Value: buf.Bytes(),
+		})
+		// Don't call fmt.Println here. It is much slower.
+		return list, nil
+	}
+
+	w := bufio.NewWriterSize(os.Stdout, 16<<20)
+	stream.Send = func(buf *z.Buffer) error {
+		var count int
+		err := buf.SliceIterate(func(s []byte) error {
+			var kv bpb.KV
+			if err := kv.Unmarshal(s); err != nil {
+				return err
+			}
+			x.Check2(w.Write(kv.Value))
+			count++
+			return nil
+		})
+		atomic.AddUint64(&total, uint64(count))
+		return err
 	}
 	x.Check(stream.Orchestrate(context.Background()))
+	w.Flush()
+	fmt.Println()
 	fmt.Printf("Found %d keys\n", atomic.LoadUint64(&total))
 }
 
