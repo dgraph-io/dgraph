@@ -91,7 +91,7 @@ var (
 	// RaftAppliedIndex records the latest applied RAFT index.
 	RaftAppliedIndex = stats.Int64("raft_applied_index",
 		"Latest applied Raft index", stats.UnitDimensionless)
-	RaftApplyCh = stats.Int64("raft_applych_total",
+	RaftApplyCh = stats.Int64("raft_applych_size",
 		"Number of proposals in Raft apply channel", stats.UnitDimensionless)
 	RaftPendingSize = stats.Int64("pending_proposal_bytes",
 		"Size of Raft pending proposal", stats.UnitBytes)
