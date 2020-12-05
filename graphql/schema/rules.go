@@ -1228,7 +1228,7 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	if x.Config.GraphqlLambdaUrl == "" {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(dir.Position,
 			"Type %s; Field %s: has the @lambda directive, but the "+
-				"`--graphql-lambda-url` flag wasn't specified during alpha startup.",
+				"`--graphql_lambda_url` flag wasn't specified during alpha startup.",
 			typ.Name, field.Name)}
 	}
 	// reuse @custom directive validation

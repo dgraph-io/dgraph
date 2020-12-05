@@ -18,28 +18,27 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/credentials"
-
-	"github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	minio "github.com/minio/minio-go/v6"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	minio "github.com/minio/minio-go/v6"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -53,19 +52,45 @@ var (
 	localBackupDst string
 )
 
-func TestBackupMinio(t *testing.T) {
+func getTlsConf(t *testing.T) *tls.Config {
+	c := &x.TLSHelperConfig{
+		CertRequired:     true,
+		Cert:             "../../tls/live/client.liveclient.crt",
+		Key:              "../../tls/live/client.liveclient.key",
+		ServerName:       "alpha1",
+		RootCACert:       "../../tls/live/ca.crt",
+		UseSystemCACerts: true,
+	}
+	tlsConf, err := x.GenerateClientTLSConfig(c)
+	require.NoError(t, err)
+	return tlsConf
+}
+
+func getHttpClient(t *testing.T) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: getTlsConf(t),
+		},
+	}
+}
+
+func TestBackupMinioEncrypted(t *testing.T) {
+	conf := viper.GetViper()
+	conf.Set("tls_cacert", "../../tls/live/ca.crt")
+	conf.Set("tls_internal_port_enabled", true)
+	conf.Set("tls_server_name", "alpha1")
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
+	require.NoError(t, err)
+
+	// TODO: Fix this.
 	backupDst = "minio://minio:9001/dgraph-backup?secure=false"
 
 	addr := testutil.ContainerAddr("minio", 9001)
 	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
-
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
-	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-
 	mc, err = testutil.NewMinioClient()
 	require.NoError(t, err)
 	require.NoError(t, mc.MakeBucket(bucketName, ""))
+	t.Logf("Bucket created\n")
 
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
@@ -91,8 +116,7 @@ func TestBackupMinio(t *testing.T) {
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 
 	// Move tablet to group 1 to avoid messes later.
-	client := testutil.GetHttpsClient(t)
-	_, err = client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
+	_, err = getHttpClient(t).Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
 
 	// After the move, we need to pause a bit to give zero a chance to quorum.
@@ -100,7 +124,7 @@ func TestBackupMinio(t *testing.T) {
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
 		time.Sleep(3 * time.Second)
-		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
+		state, err := testutil.GetStateHttps(getTlsConf(t))
 		require.NoError(t, err)
 		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
 			moveOk = true
@@ -119,14 +143,6 @@ func TestBackupMinio(t *testing.T) {
 	// Send backup request.
 	_ = runBackup(t, 3, 1)
 	restored := runRestore(t, "", math.MaxUint64)
-
-	// Check the predicates and types in the schema are as expected.
-	// TODO: refactor tests so that minio and filesystem tests share most of their logic.
-	preds := []string{"dgraph.graphql.schema", "dgraph.cors", "dgraph.graphql.xid", "dgraph.type", "movie",
-		"dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at", "dgraph.graphql.p_query",
-		"dgraph.graphql.p_sha256hash", "dgraph.drop.op"}
-	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.history", "dgraph.graphql.persisted_query"}
-	testutil.CheckSchema(t, preds, types)
 
 	checks := []struct {
 		blank, expected string
@@ -152,25 +168,9 @@ func TestBackupMinio(t *testing.T) {
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
 
-	// Update schema and types to make sure updates to the schema are backed up.
-	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `
-		movie: string .
-		actor: string .
-		type Node {
-			movie
-		}
-		type NewNode {
-			actor
-		}`}))
-
 	// Perform first incremental backup.
 	_ = runBackup(t, 6, 2)
 	restored = runRestore(t, "", incr1.Txn.CommitTs)
-
-	// Check the predicates and types in the schema are as expected.
-	preds = append(preds, "actor")
-	types = append(types, "NewNode")
-	testutil.CheckSchema(t, preds, types)
 
 	checks = []struct {
 		blank, expected string
@@ -195,7 +195,6 @@ func TestBackupMinio(t *testing.T) {
 	// Perform second incremental backup.
 	_ = runBackup(t, 9, 3)
 	restored = runRestore(t, "", incr2.Txn.CommitTs)
-	testutil.CheckSchema(t, preds, types)
 
 	checks = []struct {
 		blank, expected string
@@ -218,9 +217,8 @@ func TestBackupMinio(t *testing.T) {
 	require.NoError(t, err)
 
 	// Perform second full backup.
-	_ = runBackupInternal(t, true, 12, 4)
+	dirs := runBackupInternal(t, true, 12, 4)
 	restored = runRestore(t, "", incr3.Txn.CommitTs)
-	testutil.CheckSchema(t, preds, types)
 
 	// Check all the values were restored to their most recent value.
 	checks = []struct {
@@ -236,39 +234,10 @@ func TestBackupMinio(t *testing.T) {
 		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
 
-	// Do a DROP_DATA
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropOp: api.Operation_DATA}))
-
-	// add some data
-	incr4, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
-		CommitNow: true,
-		SetNquads: []byte(`
-				<_:x1> <movie> "El laberinto del fauno" .
-				<_:x2> <movie> "Black Panther 2" .
-			`),
-	})
-	require.NoError(t, err)
-
-	// perform an incremental backup and then restore
-	dirs := runBackup(t, 15, 5)
-	restored = runRestore(t, "", incr4.Txn.CommitTs)
-
-	// Check that the newly added data is the only data for the movie predicate
-	require.Len(t, restored, 2)
-	checks = []struct {
-		blank, expected string
-	}{
-		{blank: "x1", expected: "El laberinto del fauno"},
-		{blank: "x2", expected: "Black Panther 2"},
-	}
-	for _, check := range checks {
-		require.EqualValues(t, check.expected, restored[incr4.Uids[check.blank]])
-	}
-
 	// Remove the full backup dirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))
-	runFailingRestore(t, backupDir, "", incr4.Txn.CommitTs)
+	runFailingRestore(t, backupDir, "", incr3.Txn.CommitTs)
 
 	// Clean up test directories.
 	dirCleanup(t)
@@ -301,8 +270,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	client := testutil.GetHttpsClient(t)
-	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	resp, err := getHttpClient(t).Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -335,8 +303,9 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
+	testutil.KeyFile = "../../../../ee/enc/test-fixtures/enc-key"
 	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-		"--force_zero=false"}
+		"--encryption_key_file", testutil.KeyFile, "--force_zero=false"}
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
@@ -351,7 +320,21 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	pdir := "./data/restore/p1"
 	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
 	require.NoError(t, err)
+
+	restoredPreds, err := testutil.GetPredicateNames(pdir)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.cors", "dgraph.graphql.xid",
+		"dgraph.type", "movie", "dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at",
+		"dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash", "dgraph.drop.op"},
+		restoredPreds)
+
+	restoredTypes, err := testutil.GetTypeNames(pdir)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"Node", "dgraph.graphql", "dgraph.graphql.history", "dgraph.graphql.persisted_query"}, restoredTypes)
+
+	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
+
 	return restored
 }
 
@@ -361,9 +344,24 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
+	// Get key.
+	config := getEncConfig()
+	config.Set("encryption_key_file", "../../../../ee/enc/test-fixtures/enc-key")
+	k, err := enc.ReadKey(config)
+	require.NotNil(t, k)
+	require.NoError(t, err)
+
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, k)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
+}
+
+func getEncConfig() *viper.Viper {
+	config := viper.New()
+	flags := &pflag.FlagSet{}
+	enc.RegisterFlags(flags)
+	config.BindPFlags(flags)
+	return config
 }
 
 func dirSetup(t *testing.T) {
