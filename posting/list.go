@@ -1140,7 +1140,13 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
 			res = append(res, p.Uid)
-			if len(res) > opt.First {
+			if opt.First < 0 {
+				// We need the last N.
+				// TODO: This could be optimized by only considering some of the last UidBlocks.
+				if len(res) > -opt.First {
+					res = res[1:]
+				}
+			} else if len(res) > opt.First {
 				return ErrStopIteration
 			}
 		}
