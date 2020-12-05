@@ -916,7 +916,7 @@ func (n *node) proposeSnapshot(discardN int) error {
 }
 
 const (
-	maxPendingSize int64 = 64 << 20 // in bytes.
+	maxPendingSize int64 = 256 << 20 // in bytes.
 	nodeApplyChan        = "pushing to raft node applyCh"
 )
 
