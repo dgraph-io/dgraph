@@ -37,6 +37,7 @@ import (
 	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/viper"
@@ -564,4 +565,14 @@ func getMemUsage() int {
 	}
 
 	return rss * os.Getpagesize()
+}
+
+func JemallocHandler(w http.ResponseWriter, r *http.Request) {
+	AddCorsHeaders(w)
+
+	na := z.NumAllocBytes()
+	fmt.Fprintf(w, "Num Allocated Bytes: %s [%d]\n",
+		humanize.IBytes(uint64(na)), na)
+	fmt.Fprintf(w, "Allocators:\n%s\n", z.Allocators())
+	fmt.Fprintf(w, "%s\n", z.Leaks())
 }

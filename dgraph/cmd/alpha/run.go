@@ -48,7 +48,6 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
@@ -333,16 +332,6 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(resp.Json)
 }
 
-func jemallocHandler(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-
-	na := z.NumAllocBytes()
-	fmt.Fprintf(w, "Num Allocated Bytes: %s [%d]\n",
-		humanize.IBytes(uint64(na)), na)
-	fmt.Fprintf(w, "Allocators:\n%s\n", z.Allocators())
-	fmt.Fprintf(w, "%s\n", z.Leaks())
-}
-
 func stateHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	x.AddCorsHeaders(w)
@@ -436,7 +425,7 @@ func setupServer(closer *z.Closer) {
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/state", stateHandler)
-	http.HandleFunc("/jemalloc", jemallocHandler)
+	http.HandleFunc("/jemalloc", x.JemallocHandler)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
