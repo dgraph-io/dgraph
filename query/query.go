@@ -949,7 +949,11 @@ func calculateFirstN(sg *SubGraph) int32 {
 	//     name
 	//   }
 	// }
-	isSupportedFunction := sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
+	// isSupportedFunction := sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
+
+	// Manish: Shouldn't all functions allow this? If we don't have a order and we don't have a
+	// filter, then we can respect the first N, offset Y arguments when retrieving data.
+	isSupportedFunction := true
 	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 &&
 		isSupportedFunction {
 		// Offset also added because, we need n results to trim the offset.
