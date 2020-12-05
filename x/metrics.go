@@ -568,7 +568,7 @@ func getMemUsage() int {
 }
 
 func JemallocHandler(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
+	AddCorsHeaders(w)
 
 	na := z.NumAllocBytes()
 	fmt.Fprintf(w, "Num Allocated Bytes: %s [%d]\n",
