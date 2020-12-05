@@ -74,9 +74,6 @@ PATH="$GOPATH/bin:$PATH"
 GOVERSION=${GOVERSION:-"1.15.5"}
 
 TAG=$1
-# The Docker tag should not contain a slash e.g. feature/issue1234
-# The initial slash is taken from the repository name dgraph/dgraph:tag
-DOCKER_TAG=${2:-$(echo "$TAG" | tr '/' '-')}
 
 (
     cd "$repodir"
@@ -125,6 +122,10 @@ pushd $basedir/dgraph
   lastCommitTime=$(git log -1 --format=%ci)
   release_version=$(git describe --always --tags)
 popd
+
+# The Docker tag should not contain a slash e.g. feature/issue1234
+# The initial slash is taken from the repository name dgraph/dgraph:tag
+DOCKER_TAG=${2:-$release_version}
 
 # Regenerate protos. Should not be different from what's checked in.
 pushd $basedir/dgraph/protos
