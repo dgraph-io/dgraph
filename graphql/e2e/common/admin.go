@@ -312,6 +312,7 @@ func health(t *testing.T) {
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "Uptime"),
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "LastEcho"),
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "Ongoing"),
+		cmpopts.IgnoreFields(pb.HealthInfo{}, "MaxAssigned"),
 		cmpopts.EquateEmpty(),
 	}
 	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
