@@ -91,6 +91,10 @@ var (
 	// RaftAppliedIndex records the latest applied RAFT index.
 	RaftAppliedIndex = stats.Int64("raft_applied_index",
 		"Latest applied Raft index", stats.UnitDimensionless)
+	RaftApplyCh = stats.Int64("raft_applych_size",
+		"Number of proposals in Raft apply channel", stats.UnitDimensionless)
+	RaftPendingSize = stats.Int64("pending_proposal_bytes",
+		"Size of Raft pending proposal", stats.UnitBytes)
 	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
@@ -162,6 +166,20 @@ var (
 			Name:        RaftAppliedIndex.Name(),
 			Measure:     RaftAppliedIndex,
 			Description: RaftAppliedIndex.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        RaftApplyCh.Name(),
+			Measure:     RaftApplyCh,
+			Description: RaftApplyCh.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        RaftPendingSize.Name(),
+			Measure:     RaftPendingSize,
+			Description: RaftPendingSize.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
