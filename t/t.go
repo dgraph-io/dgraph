@@ -90,6 +90,9 @@ var (
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
 		"If true, don't run tests on slow packages.")
+	currentDir, _ = os.Getwd()
+	benchmarksDir = fmt.Sprintf("%s/benchmarks", currentDir)
+	dataDir       = fmt.Sprintf("%s/data", benchmarksDir)
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -188,7 +191,7 @@ func downloadFile(url string, filepath string) error {
 	return err
 }
 
-func handleSpecificPackages(ctx context.Context, task task, prefix string) (bool, error) {
+func downloadDatasets() {
 	// TODO(rahul): may be use a common path across tests
 	currentDir, err := os.Getwd()
 	x.Check(err)
@@ -197,66 +200,132 @@ func handleSpecificPackages(ctx context.Context, task task, prefix string) (bool
 	runFatal(exec.CommandContext(ctxb, "rm", "-rf", benchmarksDir))
 	runFatal(exec.CommandContext(ctxb, "mkdir", "-p", dataDir))
 
-	if strings.Contains(task.pkg.ID, "systest/1million") {
-		// test-reindex.sh
-		composeFile := composeFileFor(task.pkg.ID)
-
-		// download data
-		files := [3]string{oneMillionNoIndexSchema, oneMillionRdf, oneMillionSchema}
-		for _, file := range files {
-			filePath := path.Join(dataDir, file)
-			url := fmt.Sprintf(benchmarksURL, file)
-			println(url)
-			// TODO: make this concurrent
-			err := downloadFile(url, filePath)
-			x.Check(err)
-		}
-
-		startCluster(composeFile, prefix, "zero1")
-		// TODO: test healthiness of zero
-		bulkLoad(prefix, benchmarksDir, path.Join(dataDir, oneMillionNoIndexSchema), path.Join(dataDir, oneMillionRdf))
-
-		startCluster(composeFile, prefix, "alpha1 alpha2 alpha3")
-
-		alpha1 := getInstance(prefix, "alpha1")
-		alpha1.loginFatal()
-
-		// update the schema
-		client, err := testutil.DgraphClientWithGroot("localhost:" + alpha1.publicPort(9080))
+	// download 1 million data
+	files := [3]string{oneMillionNoIndexSchema, oneMillionRdf, oneMillionSchema}
+	for _, file := range files {
+		filePath := path.Join(dataDir, file)
+		url := fmt.Sprintf(benchmarksURL, file)
+		println(url)
+		// TODO: make this concurrent
+		err := downloadFile(url, filePath)
 		x.Check(err)
-		dat, err := ioutil.ReadFile(path.Join(dataDir, oneMillionSchema))
+	}
+
+	// download 21 million dataset
+	files = [3]string{twentyOneMillionNoIndexSchema, twentyOneMillionRdf, twentyOneMillionSchema}
+	for _, file := range files {
+		filePath := path.Join(dataDir, file)
+		url := fmt.Sprintf(benchmarksURL, file)
+		println(url)
+		// TODO: make this concurrent
+		err := downloadFile(url, filePath)
 		x.Check(err)
-		err = client.Alter(ctx, &api.Operation{
-			Schema: string(dat),
-		})
+	}
+}
 
-		if err != nil {
-			return true, err
-		}
-		err = runTestsFor(ctx, task.pkg.ID, prefix)
+func run1MillionSystest(ctx context.Context, packageId string, prefix string) (bool, error) {
+	// test-reindex.sh
+	composeFile := composeFileFor(packageId)
+	startCluster(composeFile, prefix, "zero1")
+	println("started zero")
+	// TODO: test healthiness of zero
+	bulkLoad(prefix, benchmarksDir, path.Join(dataDir, oneMillionNoIndexSchema),
+		path.Join(dataDir, oneMillionRdf))
 
+	startCluster(composeFile, prefix, "alpha1", "alpha2", "alpha3")
+	println("started alphas")
+	alpha1 := getInstance(prefix, "alpha1")
+	alpha1.loginFatal()
+
+	// update the schema
+	client, err := testutil.DgraphClientWithGroot("localhost:" + alpha1.publicPort(9080))
+	x.Check(err)
+	dat, err := ioutil.ReadFile(path.Join(dataDir, oneMillionSchema))
+	x.Check(err)
+	err = client.Alter(ctx, &api.Operation{
+		Schema: string(dat),
+	})
+
+	if err != nil {
 		return true, err
 	}
-	if strings.Contains(task.pkg.ID, "systest/21million") {
-		composeFile := composeFileFor(task.pkg.ID)
-		// download data
-		files := [3]string{twentyOneMillionNoIndexSchema, twentyOneMillionRdf, twentyOneMillionSchema}
-		for _, file := range files {
-			filePath := path.Join(dataDir, file)
-			url := fmt.Sprintf(benchmarksURL, file)
-			println(url)
-			// TODO: make this concurrent
-			err := downloadFile(url, filePath)
-			x.Check(err)
-		}
+	err = runTestsFor(ctx, packageId, prefix)
 
-		startCluster(composeFile, prefix, "zero1")
-		bulkLoad(prefix, benchmarksDir, path.Join(dataDir, twentyOneMillionSchema), path.Join(dataDir, twentyOneMillionRdf))
-		startCluster(composeFile, prefix, "alpha1 alpha2 alpha3")
-		getInstance(prefix, "alpha1").loginFatal()
-		err = runTestsFor(ctx, task.pkg.ID, prefix)
+	return true, err
+}
 
-		return true, err
+func run21MillionSystest(ctx context.Context, packageId string, prefix string) (bool, error) {
+	composeFile := composeFileFor(packageId)
+	startCluster(composeFile, prefix, "zero1")
+	bulkLoad(prefix, benchmarksDir, path.Join(dataDir, twentyOneMillionSchema), path.Join(dataDir, twentyOneMillionRdf))
+	startCluster(composeFile, prefix, "alpha1 alpha2 alpha3")
+	getInstance(prefix, "alpha1").loginFatal()
+	err := runTestsFor(ctx, packageId, prefix)
+
+	return true, err
+}
+
+func runBulkSchemaSystest(ctx context.Context, packageId string, prefix string, wg *sync.WaitGroup) (bool, error) {
+	// test-bulk-schema.sh
+	composeFile := composeFileFor(packageId)
+	runFatal(command("mkdir", "dir1"))
+	runFatal(command("pushd", "dir1"))
+	startCluster(composeFile, prefix)
+	alpha1 := getInstance(prefix, "alpha1")
+	alpha1.loginFatal()
+	client, err := testutil.DgraphClientWithGroot("localhost:" + alpha1.publicPort(9080))
+	err = client.Alter(ctx, &api.Operation{
+		Schema: string(`predicate_with_no_uid_count:string  .
+		predicate_with_default_type:default  .
+		predicate_with_index_no_uid_count:string @index(exact) .`),
+	})
+	quad := &api.NQuad{
+		Subject:     "_:company1",
+		Predicate:   "predicate_with_default_type",
+		ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "CompanyABC"}},
+	}
+
+	client.NewTxn().Mutate(ctx, &api.Mutation{Set: []*api.NQuad{quad}, CommitNow: true})
+	querySchema := func() (*api.Response, error) {
+		return client.NewTxn().Query(ctx, `schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}`)
+	}
+	resp1, err := querySchema()
+	x.Check(err)
+	exportCommand := command("docker", "exec", "alpha1", "curl", "-sS", "-H",
+		"\"Content-Type: application/json\"", "localhost:8080/admin", "-XPOST", "-d",
+		`{ "query": "mutation { export(input: {format: \"rdf\"}) { response { code message } }}`)
+	runFatal(exportCommand)
+	stopCluster(composeFile, prefix, wg)
+	runFatal(command("popd"))
+	runFatal(command("mkdir", "dir2"))
+	runFatal(command("pushd", "dir2"))
+	startCluster(composeFile, prefix, "zero1")
+	bulkLoadExportedData := command("dgraph", "bulk", "-z", "localhost:5080", "-s",
+		"../dir1/export/*/g01.schema.gz", "-f", "../dir1/export/*/g01.rdf.gz")
+	runFatal(bulkLoadExportedData)
+	startCluster(composeFile, prefix, "alpha1")
+	runFatal(command("docker", "cp", "./out/0/p", "alpha1:/data/alpha1"))
+	time.Sleep(5 * time.Second)
+	resp2, err := querySchema()
+	x.Check(err)
+	println(string(resp1.Json))
+	println(string(resp2.Json))
+	// compare resp1, resp2
+	// WIP
+
+	return false, nil
+}
+
+func handleSpecificPackages(ctx context.Context, packageId string, prefix string, wg *sync.WaitGroup) (bool, error) {
+	switch {
+	case strings.Contains(packageId, "systest/1million"):
+		return run1MillionSystest(ctx, packageId, prefix)
+
+	case strings.Contains(packageId, "systest/21million"):
+		return run21MillionSystest(ctx, packageId, prefix)
+
+	case strings.Contains(packageId, "cmd/bulk"):
+		return runBulkSchemaSystest(ctx, packageId, prefix, wg)
 	}
 
 	return false, nil
@@ -469,7 +538,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 
 		startCluster(defaultCompose, prefix)
 		started = true
-z	}
+	}
 
 	stop := func() {
 		if *keepCluster || stopped {
@@ -491,18 +560,8 @@ z	}
 		if !hasTestFiles(task.pkg.ID) {
 			continue
 		}
-		if !strings.Contains(task.pkg.ID, "systest/bgindex") {
-			continue
-		}
 
 		fmt.Println(task.pkg.ID)
-		specific, err := handleSpecificPackages(ctx, task, prefix)
-		if specific {
-			if err != nil {
-				return err
-			}
-			continue
-		}
 		if task.isCommon {
 			if *runCustom {
 				// If we only need to run custom cluster tests, then skip this one.
@@ -513,6 +572,13 @@ z	}
 				return err
 			}
 		} else {
+			specific, err := handleSpecificPackages(ctx, task.pkg.ID, prefix, wg)
+			if specific {
+				if err != nil {
+					return err
+				}
+				continue
+			}
 			if err := runCustomClusterTest(ctx, task.pkg.ID, wg); err != nil {
 				return err
 			}
@@ -773,12 +839,14 @@ func run() error {
 		removeAllTestContainers()
 		return nil
 	}
+	if len(*runPkg) > 0 && len(*runTest) > 0 {
+		log.Fatalf("Both pkg and test can't be set.\n")
 	}
 	fmt.Printf("Proc ID is %d\n", procId)
 
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
-
+	if *rebuildBinary {
 		// cmd := command("make", "BUILD_RACE=y", "install")
 		cmd := command("make", "install")
 		cmd.Dir = *baseDir
@@ -856,6 +924,7 @@ func run() error {
 }
 
 func main() {
+	//downloadDatasets()
 	pflag.Parse()
 	rand.Seed(time.Now().UnixNano())
 	procId = rand.Intn(1000)
