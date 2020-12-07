@@ -547,21 +547,6 @@ invalid_schemas:
       ]
 
   -
-    name: "Type implements an interface with the field definition repeated"
-    input: |
-      interface Y {
-        id: ID
-      }
-      type X implements Y {
-        id: ID
-        y: String
-      }
-    errlist: [
-      {"message": "Field X.id can only be defined once.",
-      "locations":[{"line":5, "column":3}]}
-      ]
-
-  -
     name: "Type implements an interface with the field name repeated but different type"
     input: |
       interface Y {
@@ -572,8 +557,8 @@ invalid_schemas:
         y: String
       }
     errlist: [
-      {"message": "Field X.id can only be defined once.",
-      "locations":[{"line":5, "column":3}]}
+      {"message": "For type X to implement interface Y the field id must have type ID",
+      "locations":[{"line":4, "column":6}]}
       ]
 
   -
@@ -590,10 +575,10 @@ invalid_schemas:
       ]
 
   -
-    name: "Type implements from two interfaces where both have ID"
+    name: "Type implements from two interfaces where both have ID with different type"
     input: |
       interface X {
-        id: ID
+        id: ID!
       }
       interface Y {
         id: ID
@@ -602,8 +587,8 @@ invalid_schemas:
         name: String
       }
     errlist: [
-      {"message": "Field Z.id can only be defined once.",
-      "locations":[{"line":2, "column":3}]}
+      {"message": "field id is of type ID in interface Y and is of type ID! in interface X",
+      "locations":[{"line":7, "column":6}]}
       ]
 
   -
@@ -2662,8 +2647,59 @@ invalid_schemas:
       { "message": "Type X; Field name: pred argument 'as' for @dgraph directive is a reserved keyword.", "locations": [ { "line": 3, "column": 17 } ] },
     ]
 
+  - name: "field type mismatched between implementation and interface"
+    input: |
+      interface I1 {
+          name: String!
+        }
+      type I3 implements I1 {
+          name:String
+        }
+    errlist: [
+        { "message": "For type I3 to implement interface I1 the field name must have type String!", "locations": [ { "line": 4, "column": 6 } ] },
+      ]
+
+  - name: "Type implements multiple interfaces with same field name"
+    input: |
+      interface I1 {
+          name: String!
+        }
+      interface I2 {
+          name: String!
+        }
+      type I3 implements I1 & I2 {
+          name:String!
+        }
+    errlist: [
+          { "message": "Field I3.name can only be defined once.", "locations": [ { "line": 2, "column": 5 } ] },
+          ]
+
 
 valid_schemas:
+  - name: "Type implements from two interfaces where both have ID"
+    input: |
+      interface X {
+          id: ID
+        }
+      interface Y {
+          id: ID
+        }
+      type Z implements X & Y {
+          name: String
+        }
+
+  - name: "Type implements an interface with the field definition repeated"
+    input: |
+      interface Y {
+        id: ID
+        name:String
+      }
+      type X implements Y {
+        id: ID
+        name:String
+        y: String
+      }
+
   - name: "schema with union"
     input: |
       interface W {

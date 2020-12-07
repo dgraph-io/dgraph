@@ -425,6 +425,7 @@ func setupServer(closer *z.Closer) {
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/state", stateHandler)
+	http.HandleFunc("/jemalloc", x.JemallocHandler)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -434,6 +435,7 @@ func setupServer(closer *z.Closer) {
 	// Global Epoch is a lockless synchronization mechanism for graphql service.
 	// It's is just an atomic counter used by the graphql subscription to update its state.
 	// It's is used to detect the schema changes and server exit.
+	// It is also reported by /probe/graphql endpoint as the schemaUpdateCounter.
 
 	// Implementation for schema change:
 	// The global epoch is incremented when there is a schema change.
@@ -458,7 +460,8 @@ func setupServer(closer *z.Closer) {
 		}
 		w.WriteHeader(httpStatusCode)
 		w.Header().Set("Content-Type", "application/json")
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s"}`, healthStatus.StatusMsg))))
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
+			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
 	})
 	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
@@ -726,10 +729,16 @@ func run() {
 	go func() {
 		var numShutDownSig int
 		for range sdCh {
+			closer := admin.ServerCloser
+			if closer == nil {
+				glog.Infoln("Caught Ctrl-C. Terminating now.")
+				os.Exit(1)
+			}
+
 			select {
-			case <-admin.ServerCloser.HasBeenClosed():
+			case <-closer.HasBeenClosed():
 			default:
-				admin.ServerCloser.Signal()
+				closer.Signal()
 			}
 			numShutDownSig++
 			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")

@@ -132,7 +132,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		tl := pr.threads[itr.ThreadId]
-		tl.alloc = nil
+		tl.alloc = itr.Alloc
 		kvList, dropOp, err := tl.toBackupList(key, itr)
 		if err != nil {
 			return nil, err
