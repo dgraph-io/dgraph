@@ -904,7 +904,8 @@ func run() {
 
 	// If this is a new format WAL, print and return.
 	if isWal && !opt.oldWalFormat {
-		store := raftwal.Init(dir)
+		store, err := raftwal.InitEncrypted(dir, opt.key)
+		x.Check(err)
 		fmt.Printf("RaftID: %+v\n", store.Uint(raftwal.RaftId))
 
 		// TODO: Fix the pending logic.
