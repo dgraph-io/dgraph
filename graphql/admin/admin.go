@@ -213,7 +213,7 @@ const (
 		format: String
 
 		"""
-		Destination for the backup: e.g. Minio or S3 bucket or /absolute/path
+		Destination for the export: e.g. Minio or S3 bucket or /absolute/path
 		"""
 		destination: String
 

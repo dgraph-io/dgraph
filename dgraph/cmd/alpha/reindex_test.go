@@ -189,15 +189,16 @@ func TestReindexReverseCount(t *testing.T) {
 }
 
 func checkSchema(t *testing.T, query, key string) {
-	for i := 0; i < 10; i++ {
+	N := 10
+	for i := 0; i < N; i++ {
 		res, _, err := queryWithTs(query, "application/dql", "", 0)
 		require.NoError(t, err)
 		if strings.Contains(res, key) {
 			return
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(time.Second)
 
-		if i == 9 {
+		if i == N-1 {
 			t.Fatalf("expected %v, got schema: %v", key, res)
 		}
 	}

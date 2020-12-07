@@ -291,6 +291,8 @@ type AddHumanPayload {
 
 type CharacterAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteCharacterPayload {
@@ -313,10 +315,24 @@ type DeleteHumanPayload {
 
 type EmployeeAggregateResult {
 	count: Int
+	employeeIdMin: String
+	employeeIdMax: String
+	titleMin: String
+	titleMax: String
 }
 
 type HumanAggregateResult {
 	count: Int
+	employeeIdMin: String
+	employeeIdMax: String
+	titleMin: String
+	titleMax: String
+	nameMin: String
+	nameMax: String
+	totalCreditsMin: Int
+	totalCreditsMax: Int
+	totalCreditsSum: Int
+	totalCreditsAvg: Float
 }
 
 type UpdateCharacterPayload {

@@ -874,7 +874,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// commits up until then have already been written to pstore. And the way we take snapshots, we
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
-	if _, err := n.populateSnapshot(snap, pool); err != nil {
+	if err := n.populateSnapshot(snap, pool); err != nil {
 		return errors.Wrapf(err, "cannot retrieve snapshot from peer")
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -897,7 +897,7 @@ func (n *node) proposeSnapshot(discardN int) error {
 	proposal := &pb.Proposal{
 		Snapshot: snap,
 	}
-	n.elog.Printf("Proposing snapshot: %+v\n", snap)
+	glog.V(2).Infof("Proposing snapshot: %+v\n", snap)
 	data, err := proposal.Marshal()
 	x.Check(err)
 	return n.Raft().Propose(n.ctx, data)
@@ -967,7 +967,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					glog.Errorf("While retrieving snapshot from Store: %v\n", err)
 					continue
 				}
-				calculate := raft.IsEmptySnap(snap) // If no snapshot, then calculate one immediately.
+
+				// If we don't have a snapshot, or if there are too many log files in Raft,
+				// calculate a new snapshot.
+				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
 
 				if chk, err := n.Store.Checkpoint(); err == nil {
 					if first, err := n.Store.FirstIndex(); err == nil {
@@ -1216,7 +1219,8 @@ func (n *node) Run() {
 				default:
 					proposal := &pb.Proposal{}
 					if err := proposal.Unmarshal(entry.Data); err != nil {
-						x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
+						glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
+						break
 					}
 					if pctx := n.Proposals.Get(proposal.Key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
@@ -1523,12 +1527,11 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// all entries at once, retrieve it in batches of 64MB.
 	var lastEntry raftpb.Entry
 	for batchFirst := first; batchFirst <= last; {
-		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
+		entries, err := n.Store.Entries(batchFirst, last+1, 256<<20)
 		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
 		}
-
 		// Exit early from the loop if no entries were found.
 		if len(entries) == 0 {
 			break
@@ -1596,6 +1599,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 		Index:   snapshotIdx,
 		ReadTs:  maxCommitTs,
 	}
+	glog.V(2).Infof("Calculated snapshot: %+v\n", result)
 	span.Annotatef(nil, "Got snapshot: %+v", result)
 	return result, nil
 }
@@ -1707,6 +1711,7 @@ func (n *node) InitAndStartNode() {
 	go n.processTabletSizes()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
+	go n.monitorRaftMetrics()
 	// Ignoring the error since InitAndStartNode does not return an error and using x.Check would
 	// not be the right thing to do.
 	_, _ = n.startTask(opRollup)
@@ -1720,4 +1725,14 @@ func (n *node) AmLeader() bool {
 	}
 	r := n.Raft()
 	return r.Status().Lead == r.Status().ID
+}
+
+func (n *node) monitorRaftMetrics() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		curPendingSize := atomic.LoadInt64(&n.pendingSize)
+		ostats.Record(n.ctx, x.RaftPendingSize.M(curPendingSize))
+		ostats.Record(n.ctx, x.RaftApplyCh.M(int64(len(n.applyCh))))
+	}
 }

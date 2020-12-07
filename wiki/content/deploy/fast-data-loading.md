@@ -98,14 +98,24 @@ Alpha server.
 
 `-a, --alpha` (default: `localhost:9080`): Dgraph Alpha gRPC server address to connect for live loading. This can be a comma-separated list of Alphas addresses in the same cluster to distribute the load, e.g.,  `"alpha:grpc_port,alpha2:grpc_port,alpha3:grpc_port"`.
 
-`-x, --xidmap` (default: disabled. Need a path): Store `xid` to `uid` mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific `uid`.
+`-x, --xidmap` (default: disabled. Need a path): Store `xid` to `uid` mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. 
 
-`--ludicrous_mode` (default: `false`): Live Loader, by default, does smart batching to ingest data faster. This behavior is not required in ludicrous mode and ends up taking more time and memory. This option allows the user to notify Live Loader that the Alpha server is running in ludicrous mode. This mode disables smart batching, increasing speed, and memory. This option should only be used if Dgraph is running in ludicrous mode.
+{{% notice "tip" %}}
+Using the `--xidmap` flag is recommended if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific `uid`.
+{{% /notice %}}
+
+`--ludicrous_mode` (default: `false`): This option allows the user to notify Live Loader that the Alpha server is running in ludicrous mode.
+Live Loader, by default, does smart batching of data to avoid transaction conflicts, which improves the performance in normal mode.
+Since there's no conflict detection in ludicrous mode, smart batching is disabled to speed up the data ingestion further.
+
+{{% notice "note" %}}
+The `--ludicrous_mode` option should only be used if Dgraph is also running in [ludicrous mode]({{< relref "ludicrous-mode.md" >}}).
+{{% /notice %}}
 
 `-U, --upsertPredicate` (default: disabled): Runs Live Loader in `upsertPredicate` mode. The provided value will be used to store blank nodes as a `xid`.
 
-`--vault_*` flags specifies the Vault server address, role id, secret id and 
-field that contains the encryption key that can be used to decrypt the encrypted export. 
+`--vault_*` flags specifies the Vault server address, role id, secret id and
+field that contains the encryption key that can be used to decrypt the encrypted export.
 
 ## Bulk Loader
 
@@ -252,7 +262,7 @@ Here's an example to run Bulk Loader with a key used to write encrypted data:
 ```bash
 dgraph bulk --encryption_key_file ./enc_key_file -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
 ```
-Alternatively, starting with v20.07.0, the `vault_*` options can be used to decrypt the encrypted export. 
+Alternatively, starting with v20.07.0, the `vault_*` options can be used to decrypt the encrypted export.
 
 
 ### Encrypting imports via Bulk Loader (Enterprise Feature)
@@ -267,7 +277,7 @@ So, with the above two options we have 4 cases:
 
 Error: If the input is encrypted, a key file must be provided.
 
-2. `--encrypted=true` and `encryption_key_file`=`path to key.
+2. `--encrypted=true` and `encryption_key_file=path-to-key`.
 
 Input is encrypted and output `p` dir is encrypted as well.
 
@@ -279,11 +289,18 @@ Input is not encrypted and the output `p` dir is also not encrypted.
 
 Input is not encrypted but the output is encrypted. (This is the migration use case mentioned above).
 
-Alternatively, starting with v20.07.0, the `vault_*` options can be used instead of the `--encryption_key_file` option above to achieve the same effect except that the keys are sitting in a Vault server. 
+Alternatively, starting with v20.07.0, the `vault_*` options can be used instead of the `--encryption_key_file` option above to achieve the same effect except that the keys are sitting in a Vault server.
 
 ### Other Bulk Loader options
 
-`--new_uids` (default: false): Assign new UIDs instead of using the existing
+You can further configure Bulk Loader using the following options:
+
+`--badger.compression`: Configure the compression of data on disk. By default,
+the Snappy compression format is used, but you can also use Zstandard
+compression. Or, you can choose no compression to minimize CPU usage. To learn
+more, see [Data Compression on Disk](/deploy/data-compression).
+
+`--new_uids`: (default: false): Assign new UIDs instead of using the existing
 UIDs in data files. This is useful to avoid overriding the data in a DB already
 in operation.
 
@@ -299,8 +316,8 @@ use [External IDs]({{< relref "mutations/external-ids.md" >}}).
 
 `--xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
 
-`--vault_*` flags specifies the Vault server address, role id, secret id and 
-field that contains the encryption key that can be used to decrypt the encrypted export. 
+`--vault_*` flags specifies the Vault server address, role id, secret id and
+field that contains the encryption key that can be used to decrypt the encrypted export.
 
 ### Tuning & monitoring
 

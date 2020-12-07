@@ -19,6 +19,7 @@ package testutil
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -85,9 +86,21 @@ func MakeGQLRequest(t *testing.T, params *GraphQLParams) *GraphQLResponse {
 	return MakeGQLRequestWithAccessJwt(t, params, "")
 }
 
-func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams,
-	accessToken string) *GraphQLResponse {
-	adminUrl := "http://" + SockAddrHttp + "/admin"
+func MakeGQLRequestWithTLS(t *testing.T, params *GraphQLParams, tls *tls.Config) *GraphQLResponse {
+	return MakeGQLRequestWithAccessJwtAndTLS(t, params, tls, "")
+}
+
+func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams, accessToken string) *GraphQLResponse {
+	return MakeGQLRequestWithAccessJwtAndTLS(t, params, nil, accessToken)
+}
+
+func MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *GraphQLParams, tls *tls.Config, accessToken string) *GraphQLResponse {
+	var adminUrl string
+	if tls != nil {
+		adminUrl = "https://" + SockAddrHttp + "/admin"
+	} else {
+		adminUrl = "http://" + SockAddrHttp + "/admin"
+	}
 
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
@@ -99,6 +112,11 @@ func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams,
 		req.Header.Set("X-Dgraph-AccessToken", accessToken)
 	}
 	client := &http.Client{}
+	if tls != nil {
+		client.Transport = &http.Transport{
+			TLSClientConfig: tls,
+		}
+	}
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 
@@ -207,32 +225,28 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 }
 
 func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault bool) ([]byte, error) {
-	authInfo := `# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"],"ClosedByDefault":%s}`
-	if algo == "HS256" {
-		if closedByDefault {
-			authInfo = fmt.Sprintf(authInfo, "true")
-		} else {
-			authInfo = fmt.Sprintf(authInfo, "false")
-		}
-		return append(schema, []byte(authInfo)...), nil
-	}
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"%s","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"],"ClosedByDefault":%s}`
 
-	if algo != "RS256" {
-		return schema, nil
-	}
-
-	_, err := ioutil.ReadFile(publicKeyFile)
-	if err != nil {
-		return nil, err
-	}
-
-	// Replacing ASCII newline with "\n" as the authorization information in the schema should be
-	// present in a single line.
+	closedByDefaultStr := "false"
 	if closedByDefault {
-		authInfo = fmt.Sprintf(authInfo, "true")
-	} else {
-		authInfo = fmt.Sprintf(authInfo, "false")
+		closedByDefaultStr = "true"
 	}
+
+	var verificationKey string
+	switch algo {
+	case "HS256":
+		verificationKey = "secretkey"
+	case "RS256":
+		keyData, err := ioutil.ReadFile(publicKeyFile)
+		if err != nil {
+			return nil, err
+		}
+		// Replacing ASCII newline with "\n" as the authorization information in the schema
+		// should be present in a single line.
+		verificationKey = string(bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110}))
+	}
+
+	authInfo = fmt.Sprintf(authInfo, verificationKey, closedByDefaultStr)
 	return append(schema, []byte(authInfo)...), nil
 }
 

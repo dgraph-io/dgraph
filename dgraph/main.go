@@ -55,17 +55,18 @@ func main() {
 		var lastNumGC uint32
 
 		var js z.MemStats
-		var lastJs z.MemStats
+		var lastAlloc uint64
 
 		for range ticker.C {
 			// Read Jemalloc stats first. Print if there's a big difference.
 			z.ReadMemStats(&js)
-			if diff := absDiff(js.Active, lastJs.Active); diff > 256<<20 {
-				glog.V(2).Infof("jemalloc: Active %s Allocated: %s Resident: %s Retained: %s\n",
+			if diff := absDiff(uint64(z.NumAllocBytes()), lastAlloc); diff > 256<<20 {
+				glog.V(2).Infof("NumAllocBytes: %s jemalloc: Active %s Allocated: %s"+
+					" Resident: %s Retained: %s\n",
+					humanize.IBytes(uint64(z.NumAllocBytes())),
 					humanize.IBytes(js.Active), humanize.IBytes(js.Allocated),
 					humanize.IBytes(js.Resident), humanize.IBytes(js.Retained))
-				lastJs = js
-				z.PrintAllocators()
+				lastAlloc = uint64(z.NumAllocBytes())
 			} else {
 				// Don't update the lastJs here.
 			}
@@ -100,9 +101,11 @@ func main() {
 	// Run the program.
 	cmd.Execute()
 	ticker.Stop()
+
+	glog.V(2).Infof("Num Allocated Bytes at program end: %d", z.NumAllocBytes())
 	if z.NumAllocBytes() > 0 {
 		glog.Warningf("MEMORY LEAK detected of size: %s\n",
 			humanize.Bytes(uint64(z.NumAllocBytes())))
-		z.PrintLeaks()
+		glog.Warningf("%s", z.Leaks())
 	}
 }

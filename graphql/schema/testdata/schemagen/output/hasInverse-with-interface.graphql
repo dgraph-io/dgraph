@@ -311,10 +311,16 @@ type AddQuestionPayload {
 
 type AnswerAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
 }
 
 type AuthorAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteAnswerPayload {
@@ -343,10 +349,18 @@ type DeleteQuestionPayload {
 
 type PostAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
 }
 
 type QuestionAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
 }
 
 type UpdateAnswerPayload {

@@ -105,11 +105,20 @@ interface Character {
 }
 
 type Human implements Character & Employee {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
+        ename: String!
         starships: [Starship]
         totalCredits: Float
 }
 
 type Droid implements Character {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
         primaryFunction: String
 }
 

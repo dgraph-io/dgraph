@@ -105,11 +105,20 @@ interface Character @dgraph(type: "performance.character") {
 }
 
 type Human implements Character & Employee {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
+        ename: String!
         starships: [Starship]
         totalCredits: Float @dgraph(pred: "credits")
 }
 
 type Droid implements Character @dgraph(type: "roboDroid") {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
         primaryFunction: String
 }
 

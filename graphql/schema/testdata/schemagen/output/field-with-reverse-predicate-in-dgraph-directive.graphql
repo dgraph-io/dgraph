@@ -300,10 +300,14 @@ type DeleteMoviePayload {
 
 type MovieAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type MovieDirectorAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type UpdateMovieDirectorPayload {

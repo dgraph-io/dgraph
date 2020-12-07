@@ -20,6 +20,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -32,49 +34,28 @@ const (
 )
 
 func TestAdminOnlyPoorManAuth(t *testing.T) {
-	t.Skipf("TODO: This test is failing for some reason. FIX IT.")
-	// without X-Dgraph-AuthToken should give error
-	params := getUpdateGqlSchemaParams()
-	assertAuthTokenError(t, common.GraphqlAdminURL, params)
-
-	// setting a wrong value for the token should still give error
-	params.Headers.Set(authTokenHeader, wrongAuthToken)
-	assertAuthTokenError(t, common.GraphqlAdminURL, params)
-
-	// setting correct value for the token should not give any GraphQL error
-	params.Headers.Set(authTokenHeader, authToken)
-	common.RequireNoGQLErrors(t, params.ExecuteAsPost(t, common.GraphqlAdminURL))
-}
-
-
-func assertAuthTokenError(t *testing.T, url string, params *common.GraphQLParams) {
-	req, err := params.CreateGQLPost(url)
-	require.NoError(t, err)
-
-	resp, err := common.RunGQLRequest(req)
-	require.NoError(t, err)
-	require.JSONEq(t, `{
-		"errors":[{
-			"message":"Invalid X-Dgraph-AuthToken",
-			"extensions":{"code":"ErrorUnauthorized"}
-		}]
-	}`, string(resp))
-}
-
-func getUpdateGqlSchemaParams() *common.GraphQLParams {
 	schema := `type Person {
 		id: ID!
 		name: String!
 	}`
-	return &common.GraphQLParams{
-		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					schema
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"sch": schema},
-		Headers:   http.Header{},
-	}
+	// without X-Dgraph-AuthToken should give error
+	headers := http.Header{}
+	assertAuthTokenError(t, schema, headers)
+
+	// setting a wrong value for the token should still give error
+	headers.Set(authTokenHeader, wrongAuthToken)
+	assertAuthTokenError(t, schema, headers)
+
+	// setting correct value for the token should successfully update the schema
+	headers.Set(authTokenHeader, authToken)
+	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, headers)
+}
+
+func assertAuthTokenError(t *testing.T, schema string, headers http.Header) {
+	resp := common.RetryUpdateGQLSchema(t, common.Alpha1HTTP, schema, headers)
+	require.Equal(t, x.GqlErrorList{{
+		Message:    "Invalid X-Dgraph-AuthToken",
+		Extensions: map[string]interface{}{"code": "ErrorUnauthorized"},
+	}}, resp.Errors)
+	require.Nil(t, resp.Data)
 }

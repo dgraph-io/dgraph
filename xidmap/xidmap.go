@@ -91,7 +91,7 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
-			tree: z.NewTree("", 100<<20),
+			tree: z.NewTree(),
 		}
 	}
 
@@ -286,9 +286,6 @@ func (m *XidMap) Flush() error {
 	}
 	close(m.kvChan)
 	m.wg.Wait()
-	for _, shard := range m.shards {
-		shard.tree.Release()
-	}
 
 	if m.writer == nil {
 		return nil
