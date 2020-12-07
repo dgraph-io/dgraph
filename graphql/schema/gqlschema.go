@@ -684,12 +684,10 @@ func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 						if fieldSeen[field.Name] == "" {
 							// Overwrite the existing field definition in type with the field definition of interface
 							assignAstFieldDef(field, defn.Fields.ForName(field.Name))
-						} else {
+						} else if field.Type.NamedType != IDType {
 							// If field definition is already written,just add interface definition in type
 							// It will later results in validation error because of repeated fields
-							if field.Type.NamedType != IDType {
-								fields = append(fields, copyAstFieldDef(field))
-							}
+							fields = append(fields, copyAstFieldDef(field))
 						}
 					} else if field.Type.NamedType == IDType && fieldSeen[field.Name] != "" {
 						// If ID type is already seen in any other interface then we don't copy it again
