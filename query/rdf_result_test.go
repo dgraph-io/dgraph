@@ -111,6 +111,38 @@ func TestRDFIngoreReflex(t *testing.T) {
 		"ignorereflex directive is not supported in the rdf output format")
 }
 
+func TestRDFRecurse(t *testing.T) {
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Rick Daryl")) @recurse(depth: 1, loop: true) {
+			name
+			friend
+		}
+	}`
+	rdf, err := processQueryRDF(context.Background(), t, query)
+	require.NoError(t, err)
+	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
+<0x17> <name> "Rick Grimes" .
+<0x19> <name> "Daryl Dixon" .
+`)
+}
+
+func TestRDFIgnoreUid(t *testing.T) {
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Rick Daryl")) {
+			uid
+			name
+		}
+	}`
+	rdf, err := processQueryRDF(context.Background(), t, query)
+	require.NoError(t, err)
+	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
+<0x17> <name> "Rick Grimes" .
+<0x19> <name> "Daryl Dixon" .
+`)
+}
+
 func TestRDFCheckPwd(t *testing.T) {
 	query := `
     {

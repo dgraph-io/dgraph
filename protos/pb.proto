@@ -193,6 +193,7 @@ message HealthInfo {
     repeated string ongoing = 8;
     repeated string indexing = 9;
     repeated string ee_features = 10;
+		uint64 max_assigned = 11;
 }
 
 message Tablet {
@@ -305,7 +306,7 @@ message Proposal {
 }
 
 message KVS {
-	repeated badgerpb2.KV kv = 1;
+	bytes data = 5;
 
 	// done used to indicate if the stream of KVS is over.
 	bool done	= 2;

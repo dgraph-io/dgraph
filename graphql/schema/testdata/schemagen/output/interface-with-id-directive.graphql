@@ -289,6 +289,12 @@ type AddLibraryPayload {
 
 type BookAggregateResult {
 	count: Int
+	refIDMin: String
+	refIDMax: String
+	titleMin: String
+	titleMax: String
+	authorMin: String
+	authorMax: String
 }
 
 type DeleteBookPayload {
@@ -315,6 +321,8 @@ type LibraryAggregateResult {
 
 type LibraryItemAggregateResult {
 	count: Int
+	refIDMin: String
+	refIDMax: String
 }
 
 type UpdateBookPayload {

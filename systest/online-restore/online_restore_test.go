@@ -21,13 +21,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -40,7 +41,7 @@ import (
 
 func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) int {
 	if location == "" {
-		location = "/data/backup"
+		location = "/data/backup2"
 	}
 	params := testutil.GraphQLParams{
 		Query: `mutation restore($location: String!, $backupId: String, $backupNum: Int) {
@@ -57,7 +58,7 @@ func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) 
 			"backupNum": backupNum,
 		},
 	}
-	resp := testutil.MakeGQLRequest(t, &params)
+	resp := testutil.MakeGQLRequestWithTLS(t, &params, testutil.GetAlphaClientConfig(t))
 	resp.RequireNoGraphQLErrors(t)
 
 	var restoreResp struct {
@@ -71,62 +72,6 @@ func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) 
 	require.Equal(t, restoreResp.Restore.Code, "Success")
 	require.Greater(t, restoreResp.Restore.RestoreId, 0)
 	return restoreResp.Restore.RestoreId
-}
-
-func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
-	query := fmt.Sprintf(`query status() {
-		 restoreStatus(restoreId: %d) {
-			status
-			errors
-		}
-	}`, restoreId)
-	params := testutil.GraphQLParams{
-		Query: query,
-	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	restoreDone := false
-	for i := 0; i < 15; i++ {
-		resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
-		require.NoError(t, err)
-		buf, err := ioutil.ReadAll(resp.Body)
-		require.NoError(t, err)
-		sbuf := string(buf)
-		if strings.Contains(sbuf, "OK") {
-			restoreDone = true
-			break
-		}
-		time.Sleep(4 * time.Second)
-	}
-	require.True(t, restoreDone)
-
-	// Wait for the client to exit draining mode. This is needed because the client might
-	// be connected to a follower and might be behind the leader in applying the restore.
-	// Waiting for three consecutive successful queries is done to prevent a situation in
-	// which the query succeeds at the first attempt because the follower is behind and
-	// has not started to apply the restore proposal.
-	numSuccess := 0
-	for {
-		// This is a dummy query that returns no results.
-		_, err = dg.NewTxn().Query(context.Background(), `{
-		q(func: has(invalid_pred)) {
-			invalid_pred
-		}}`)
-
-		if err == nil {
-			numSuccess += 1
-		} else {
-			require.Contains(t, err.Error(), "the server is in draining mode")
-			numSuccess = 0
-		}
-
-		if numSuccess == 3 {
-			// The server has been responsive three times in a row.
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
 }
 
 // disableDraining disables draining mode before each test for increased reliability.
@@ -145,7 +90,8 @@ func disableDraining(t *testing.T) {
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -226,7 +172,7 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 func TestBasicRestore(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -234,7 +180,7 @@ func TestBasicRestore(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 	runMutations(t, dg)
 }
@@ -242,7 +188,7 @@ func TestBasicRestore(t *testing.T) {
 func TestRestoreBackupNum(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -251,7 +197,7 @@ func TestRestoreBackupNum(t *testing.T) {
 	runQueries(t, dg, true)
 
 	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 1)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 	runQueries(t, dg, true)
 	runMutations(t, dg)
 }
@@ -259,7 +205,7 @@ func TestRestoreBackupNum(t *testing.T) {
 func TestRestoreBackupNumInvalid(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -269,7 +215,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	// Send a request with a backupNum greater than the number of manifests.
 	restoreRequest := fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
+		 restore(input: {location: "/data/backup2", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
@@ -283,7 +229,8 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	bufString := string(buf)
@@ -292,7 +239,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 
 	// Send a request with a negative backupNum value.
 	restoreRequest = fmt.Sprintf(`mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "%s", backupNum: %d,
+		 restore(input: {location: "/data/backup2", backupId: "%s", backupNum: %d,
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
@@ -306,7 +253,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 	b, err = json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err = http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
+	resp, err = client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err = ioutil.ReadAll(resp.Body)
 	bufString = string(buf)
@@ -317,7 +264,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 func TestMoveTablets(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -325,13 +272,13 @@ func TestMoveTablets(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
 	restoreId = sendRestoreRequest(t, "", "blissful_hermann1", 0)
-	waitForRestore(t, restoreId, dg)
+	testutil.WaitForRestore(t, restoreId, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
@@ -369,8 +316,8 @@ func TestInvalidBackupId(t *testing.T) {
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-
-	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -379,7 +326,7 @@ func TestInvalidBackupId(t *testing.T) {
 
 func TestListBackups(t *testing.T) {
 	query := `query backup() {
-		listBackups(input: {location: "/data/backup"}) {
+		listBackups(input: {location: "/data/backup2"}) {
 			backupId
 			backupNum
 			encrypted
@@ -399,7 +346,8 @@ func TestListBackups(t *testing.T) {
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err := http.Post(testutil.AdminUrl(), "application/json", bytes.NewBuffer(b))
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.Post(testutil.AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -411,7 +359,17 @@ func TestListBackups(t *testing.T) {
 }
 
 func TestRestoreWithDropOperations(t *testing.T) {
-	dg, err := testutil.DgraphClientDropAll(testutil.SockAddr)
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	for {
+		// keep retrying until we succeed or receive a non-retriable error
+		err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
+		if err == nil || !strings.Contains(err.Error(), "Please retry") {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	require.NoError(t, err)
 
 	// apply initial schema
@@ -434,11 +392,7 @@ func TestRestoreWithDropOperations(t *testing.T) {
 		CommitNow: true})
 	require.NoError(t, err)
 
-	// setup backup directories
-	backupDir := "/data/backup/tmp"
-	localFsDirs := []string{"./backup/tmp"}
-	setupDirs(t, localFsDirs)
-
+	backupDir := "/data/backup"
 	// create a full backup in backupDir
 	backup(t, backupDir)
 
@@ -576,10 +530,6 @@ func TestRestoreWithDropOperations(t *testing.T) {
 				"name": "Flower"
 			}`,
 		})
-
-	// remove backup directories to make sure this test doesn't leave anything behind
-	// TODO: This is having some problem on TeamCity
-	//cleanupDirs(t, localFsDirs)
 }
 
 func setupDirs(t *testing.T, dirs []string) {
@@ -594,7 +544,9 @@ func setupDirs(t *testing.T, dirs []string) {
 
 func cleanupDirs(t *testing.T, dirs []string) {
 	for _, dir := range dirs {
-		require.NoError(t, os.RemoveAll(dir))
+		if err := os.RemoveAll(dir); err != nil {
+			t.Logf("Got error while removing: %s: %v\n", dir, err)
+		}
 	}
 }
 
@@ -612,14 +564,14 @@ func backup(t *testing.T, backupDir string) {
 		}`,
 		Variables: map[string]interface{}{"backupDir": backupDir},
 	}
-	testutil.MakeGQLRequest(t, backupParams).RequireNoGraphQLErrors(t)
+	testutil.MakeGQLRequestWithTLS(t, backupParams, testutil.GetAlphaClientConfig(t)).RequireNoGraphQLErrors(t)
 }
 
 func backupRestoreAndVerify(t *testing.T, dg *dgo.Dgraph, backupDir, queryToVerify,
 	expectedResponse string, schemaVerificationOpts testutil.SchemaOptions) {
 	schemaVerificationOpts.ExcludeAclSchema = true
 	backup(t, backupDir)
-	waitForRestore(t, sendRestoreRequest(t, backupDir, "", 0), dg)
+	testutil.WaitForRestore(t, sendRestoreRequest(t, backupDir, "", 0), dg)
 	testutil.VerifyQueryResponse(t, dg, queryToVerify, expectedResponse)
 	testutil.VerifySchema(t, dg, schemaVerificationOpts)
 }

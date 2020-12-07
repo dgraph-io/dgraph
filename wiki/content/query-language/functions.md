@@ -265,7 +265,7 @@ Index Required: An index is required for the `eq(predicate, ...)` forms (see tab
 | `int`      | `int`         |
 | `float`    | `float`       |
 | `bool`     | `bool`        |
-| `string`   | `exact`, `hash` |
+| `string`   | `exact`, `hash`, `term`, `fulltext` |
 | `dateTime` | `dateTime`    |
 
 Test for equality of a predicate or variable to a value or find in a list of values.

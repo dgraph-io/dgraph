@@ -189,7 +189,6 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	ds := Init(dir)
-
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
 	data := []byte("data")
@@ -353,7 +352,8 @@ func TestStorageOnlySnap(t *testing.T) {
 		x.WorkerConfig.EncryptionKey = key
 		dir, err := ioutil.TempDir("", "raftwal")
 		require.NoError(t, err)
-		ds := Init(dir)
+		ds, err := InitEncrypted(dir, key)
+		require.NoError(t, err)
 		t.Logf("Creating dir: %s\n", dir)
 
 		buf := make([]byte, 128)
@@ -385,10 +385,10 @@ func TestStorageOnlySnap(t *testing.T) {
 
 func TestStorageBig(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
-		x.WorkerConfig.EncryptionKey = key
 		dir, err := ioutil.TempDir("", "raftwal")
 		require.NoError(t, err)
-		ds := Init(dir)
+		ds, err := InitEncrypted(dir, key)
+		require.NoError(t, err)
 		defer os.RemoveAll(dir)
 
 		ent := raftpb.Entry{
@@ -494,7 +494,8 @@ func TestStorageBig(t *testing.T) {
 		}
 		require.NoError(t, ds.Sync())
 
-		ks := Init(dir)
+		ks, err := InitEncrypted(dir, key)
+		require.NoError(t, err)
 		ents = ks.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
 		require.Equal(t, 51, len(ents))
 		for idx, ent := range ents {

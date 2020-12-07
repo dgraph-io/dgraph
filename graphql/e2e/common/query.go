@@ -1929,7 +1929,7 @@ func queryWithMultipleAliasOfSameField(t *testing.T) {
 				"p2": [
 					{
 						"title": "Random post",
-						"numLikes": 0
+						"numLikes": 1
 					}
 				]
 			}
@@ -2810,11 +2810,13 @@ func persistedQuery(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 }
 
-func queryCountWithFilter(t *testing.T) {
+func queryAggregateWithFilter(t *testing.T) {
 	queryPostParams := &GraphQLParams{
 		Query: `query {
 			aggregatePost (filter: {title : { anyofterms : "Introducing" }} ) {
 				count
+				numLikesMax
+				titleMin
 			}
 		}`,
 	}
@@ -2822,13 +2824,22 @@ func queryCountWithFilter(t *testing.T) {
 	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
-		`{"aggregatePost":{"count":1}}`,
+		`{
+					"aggregatePost":
+						{
+							"count":1,
+							"numLikesMax": 100,
+							"titleMin": "Introducing GraphQL in Dgraph"
+						}
+				}`,
 		string(gqlResponse.Data))
 
 	queryPostParams = &GraphQLParams{
 		Query: `query {
 			aggregatePost (filter: {title : { anyofterms : "Nothing" }} ) {
 				count
+				numLikesMax
+				titleMin
 			}
 		}`,
 	}
@@ -2836,14 +2847,27 @@ func queryCountWithFilter(t *testing.T) {
 	gqlResponse = queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
-		`{"aggregatePost":{"count":0}}`,
+		`{
+					"aggregatePost":
+						{
+							"count":0,
+							"numLikesMax": 0,
+							"titleMin": "0.000000"
+						}
+				}`,
 		string(gqlResponse.Data))
 }
 
-func queryCountWithoutFilter(t *testing.T) {
+func queryAggregateWithoutFilter(t *testing.T) {
 	queryPostParams := &GraphQLParams{
 		Query: `query {
 			aggregatePost {
+				titleMax
+				titleMin
+				numLikesSum
+				numLikesAvg
+				numLikesMax
+				numLikesMin
 				count
 			}
 		}`,
@@ -2852,15 +2876,29 @@ func queryCountWithoutFilter(t *testing.T) {
 	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
-		`{"aggregatePost":{"count":4}}`,
+		`{
+					"aggregatePost":
+						{
+							"count":4,
+							"titleMax": "Random post",
+							"titleMin": "GraphQL doco",
+							"numLikesAvg": 66.25,
+							"numLikesMax": 100,
+							"numLikesMin": 1,
+							"numLikesSum": 265
+						}
+				}`,
 		string(gqlResponse.Data))
 }
 
-func queryCountWithAlias(t *testing.T) {
+func queryAggregateWithAlias(t *testing.T) {
 	queryPostParams := &GraphQLParams{
 		Query: `query {
 			aggregatePost {
 				cnt: count
+				tmin : titleMin
+				tmax: titleMax
+				navg : numLikesAvg 
 			}
 		}`,
 	}
@@ -2868,11 +2906,19 @@ func queryCountWithAlias(t *testing.T) {
 	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
-		`{"aggregatePost":{"cnt":4}}`,
+		`{
+					"aggregatePost":
+							{
+								"cnt":4,
+								"tmax": "Random post",
+								"tmin": "GraphQL doco",
+								"navg": 66.25
+							}
+				}`,
 		string(gqlResponse.Data))
 }
 
-func queryCountAtChildLevel(t *testing.T) {
+func queryAggregateAtChildLevel(t *testing.T) {
 	queryNumberOfStates := &GraphQLParams{
 		Query: `query
 		{
@@ -2880,6 +2926,7 @@ func queryCountAtChildLevel(t *testing.T) {
 				name
 				ag : statesAggregate {
 					count
+					nameMin
 				}
 			}
 		}`,
@@ -2892,21 +2939,23 @@ func queryCountAtChildLevel(t *testing.T) {
 			"queryCountry": [{
 				"name": "India",
 				"ag": { 
-					"count" : 3
+					"count" : 3,
+					"nameMin": "Gujarat"
 				}
 			}]
 		}`,
 		string(gqlResponse.Data))
 }
 
-func queryCountAtChildLevelWithFilter(t *testing.T) {
+func queryAggregateAtChildLevelWithFilter(t *testing.T) {
 	queryNumberOfIndianStates := &GraphQLParams{
 		Query: `query 
 		{
 			queryCountry(filter: { name: { eq: "India" } }) {
 				name
 				ag : statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
-                	count   
+                	count
+					nameMin
                 }
 			}
 		}`,
@@ -2919,14 +2968,15 @@ func queryCountAtChildLevelWithFilter(t *testing.T) {
 			"queryCountry": [{
 				"name": "India",
 				"ag": { 
-					"count" : 2
+					"count" : 2,
+					"nameMin" : "Karnataka"
 				}
 			}]
 		}`,
 		string(gqlResponse.Data))
 }
 
-func queryCountAtChildLevelWithMultipleAlias(t *testing.T) {
+func queryAggregateAtChildLevelWithMultipleAlias(t *testing.T) {
 	queryNumberOfIndianStates := &GraphQLParams{
 		Query: `query
 		{
@@ -2934,9 +2984,11 @@ func queryCountAtChildLevelWithMultipleAlias(t *testing.T) {
 				name
 				ag1: statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
 					count
+					nameMax
 				}
 				ag2: statesAggregate(filter: {xcode: {in: ["ka", "mh", "gj", "xyz"]}}) {
 					count
+					nameMax
 				}
 			}
 		}`,
@@ -2949,11 +3001,55 @@ func queryCountAtChildLevelWithMultipleAlias(t *testing.T) {
 			"queryCountry": [{
 				"name": "India",
 				"ag1": { 
-					"count" : 2
+					"count" : 2,
+					"nameMax" : "Maharashtra"
 				},
 				"ag2": {
-					"count" : 3
+					"count" : 3,
+					"nameMax" : "Maharashtra"
 				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateAndOtherFieldsAtChildLevel(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query 
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate {
+                	count
+					nameMin
+                },
+				states {
+					name
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 3,
+					"nameMin" : "Gujarat"
+				},
+				"states": [
+				{
+					"name": "Maharashtra"
+				}, 
+				{
+					"name": "Gujarat"
+				},
+				{
+					"name": "Karnataka"
+				}]
 			}]
 		}`,
 		string(gqlResponse.Data))
@@ -2984,46 +3080,6 @@ func queryChildLevelWithMultipleAliasOnScalarField(t *testing.T) {
 		string(gqlResponse.Data))
 }
 
-func queryCountAndOtherFieldsAtChildLevel(t *testing.T) {
-	queryNumberOfIndianStates := &GraphQLParams{
-		Query: `query 
-		{
-			queryCountry(filter: { name: { eq: "India" } }) {
-				name
-				ag : statesAggregate {
-                	count   
-                },
-				states {
-					name
-				}
-			}
-		}`,
-	}
-	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-	testutil.CompareJSON(t,
-		`
-		{
-			"queryCountry": [{
-				"name": "India",
-				"ag": { 
-					"count" : 3
-				},
-				"states": [
-				{
-					"name": "Maharashtra"
-				}, 
-				{
-					"name": "Gujarat"
-				},
-				{
-					"name": "Karnataka"
-				}]
-			}]
-		}`,
-		string(gqlResponse.Data))
-}
-
 func checkUser(t *testing.T, userObj, expectedObj *user) {
 	checkUserParams := &GraphQLParams{
 		Query: `query checkUserPassword($name: String!, $pwd: String!) {
@@ -3040,6 +3096,33 @@ func checkUser(t *testing.T, userObj, expectedObj *user) {
 
 	var result struct {
 		CheckUserPasword *user `json:"checkUserPassword,omitempty"`
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.Nil(t, err)
+
+	opt := cmpopts.IgnoreFields(user{}, "Password")
+	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func checkUserPasswordWithAlias(t *testing.T, userObj, expectedObj *user) {
+	checkUserParams := &GraphQLParams{
+		Query: `query checkUserPassword($name: String!, $pwd: String!) {
+			verify : checkUserPassword(name: $name, password: $pwd) { name }
+		}`,
+		Variables: map[string]interface{}{
+			"name": userObj.Name,
+			"pwd":  userObj.Password,
+		},
+	}
+
+	gqlResponse := checkUserParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		CheckUserPasword *user `json:"verify,omitempty"`
 	}
 
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -3095,6 +3178,7 @@ func passwordTest(t *testing.T) {
 			string(gqlResponse.Data))
 
 		checkUser(t, newUser, newUser)
+		checkUserPasswordWithAlias(t, newUser, newUser)
 		checkUser(t, &user{Name: "Test User", Password: "Wrong Pass"}, nil)
 
 		gqlResponse = postExecutor(t, GraphqlURL, updateUserParams)
