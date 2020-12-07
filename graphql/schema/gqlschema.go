@@ -657,7 +657,7 @@ func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 				defFields[d.Name]++
 			}
 			initialDefFields := defn.Fields
-			// initialDefFields store initial definitions of the type.
+			// initialDefFields store initial field definitions of the type.
 			for _, implements := range defn.Interfaces {
 				i, ok := interfaces[implements]
 				if !ok {
