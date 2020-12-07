@@ -2692,9 +2692,11 @@ valid_schemas:
     input: |
       interface Y {
         id: ID
+        name:String
       }
       type X implements Y {
         id: ID
+        name:String
         y: String
       }
 

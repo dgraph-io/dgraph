@@ -662,11 +662,14 @@ func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 	for _, defn := range doc.Definitions {
 		if defn.Kind == ast.Object && len(defn.Interfaces) > 0 {
 			fieldSeen := make(map[string]string)
+			// fieldSeen a map from field name to interface name in which the field was seen.
 			defFields := make(map[string]int64)
+			// defFields is used to keep track of fields in the defn before any inherited fields are added to it.
 			for _, d := range defn.Fields {
 				defFields[d.Name]++
 			}
 			initialDefFields := defn.Fields
+			// initialDefFields store initial definitions of the type.
 			for _, implements := range defn.Interfaces {
 				i, ok := interfaces[implements]
 				if !ok {
@@ -683,7 +686,7 @@ func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 						}
 						if fieldSeen[field.Name] == "" {
 							// Overwrite the existing field definition in type with the field definition of interface
-							assignAstFieldDef(field, defn.Fields.ForName(field.Name))
+							*defn.Fields.ForName(field.Name) = *field
 						} else if field.Type.NamedType != IDType {
 							// If field definition is already written,just add interface definition in type
 							// It will later results in validation error because of repeated fields
@@ -691,7 +694,7 @@ func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 						}
 					} else if field.Type.NamedType == IDType && fieldSeen[field.Name] != "" {
 						// If ID type is already seen in any other interface then we don't copy it again
-						// And validator won't through error for id types later
+						// And validator won't throw error for id types later
 						if field.Type.String() != defn.Fields.ForName(field.Name).Type.String() {
 							return gqlerror.ErrorPosf(defn.Position, "field %s is of type %s in interface %s"+
 								" and is of type %s in interface %s",
