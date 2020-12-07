@@ -207,7 +207,7 @@ func (in instance) login() error {
 		return fmt.Errorf("unable to find container: %s", in)
 	}
 
-	_, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	_, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: "http://localhost:" + addr + "/admin",
 		UserID:   "groot",
 		Passwd:   "password",
