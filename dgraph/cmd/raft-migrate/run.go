@@ -22,6 +22,7 @@ import (
 	"os"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -32,6 +33,7 @@ var (
 	// RaftMigrate is the sub-command invoked when running "dgraph raft-migrate".
 	RaftMigrate x.SubCommand
 	quiet       bool // enabling quiet mode would suppress the warning logs
+	encKey      x.SensitiveByteSlice
 )
 
 func init() {
@@ -52,6 +54,7 @@ func init() {
 		"Node ID of the old node. This will be the node ID of the new node.")
 	flag.IntP("old-group-id", "", 0, "Group ID of the old node. This is used to open the old wal.")
 	flag.StringP("new-dir", "", "", "Path to the new (z)w directory.")
+	enc.RegisterFlags(flag)
 }
 
 func run(conf *viper.Viper) error {
@@ -67,10 +70,18 @@ func run(conf *viper.Viper) error {
 
 	nodeId := conf.GetInt("old-node-id")
 	groupId := conf.GetInt("old-group-id")
+
+	var err error
+	if encKey, err = enc.ReadKey(conf); err != nil {
+		log.Fatalf("Failed to read encryption file: %s", err)
+	}
+
 	// Copied over from zero/run.go
 	kvOpt := badger.LSMOnlyOptions(oldDir).
 		WithSyncWrites(false).
-		WithValueLogFileSize(64 << 20)
+		WithValueLogFileSize(64 << 20).
+		WithIndexCacheSize(100 << 20).
+		WithEncryptionKey(encKey)
 
 	kv, err := badger.OpenManaged(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
@@ -105,7 +116,9 @@ func run(conf *viper.Viper) error {
 		os.Mkdir(newDir, 0777)
 	}
 
-	newWal := raftwal.Init(newDir)
+	newWal, err := raftwal.InitEncrypted(newDir, encKey)
+	x.Check(err)
+
 	fmt.Printf("Setting raftID to: %+v\n", raftID)
 	// Set the raft ID
 	newWal.SetUint(raftwal.RaftId, raftID)

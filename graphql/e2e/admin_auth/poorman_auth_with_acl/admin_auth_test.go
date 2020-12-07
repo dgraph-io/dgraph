@@ -37,14 +37,13 @@ const (
 )
 
 func TestLoginWithPoorManAuth(t *testing.T) {
-	t.Skipf("TODO: This test is failing for some reason. FIX IT.")
 	// without X-Dgraph-AuthToken should give error
 	params := getGrootLoginParams()
-	assertAuthTokenError(t, common.GraphqlAdminURL, params)
+	assertAuthTokenError(t, params.ExecuteAsPost(t, common.GraphqlAdminURL))
 
 	// setting a wrong value for the token should still give error
 	params.Headers.Set(authTokenHeader, wrongAuthToken)
-	assertAuthTokenError(t, common.GraphqlAdminURL, params)
+	assertAuthTokenError(t, params.ExecuteAsPost(t, common.GraphqlAdminURL))
 
 	// setting correct value for the token should not give any GraphQL error
 	params.Headers.Set(authTokenHeader, authToken)
@@ -52,45 +51,41 @@ func TestLoginWithPoorManAuth(t *testing.T) {
 }
 
 func TestAdminPoorManWithAcl(t *testing.T) {
-	t.Skipf("TODO: This test is failing for some reason. FIX IT.")
+	schema := `type Person {
+		id: ID!
+		name: String!
+	}`
 	// without auth token and access JWT headers, should give auth token related error
-	params := getUpdateGqlSchemaParams()
-	assertAuthTokenError(t, common.GraphqlAdminURL, params)
+	headers := http.Header{}
+	assertAuthTokenError(t, common.RetryUpdateGQLSchema(t, common.Alpha1HTTP, schema, headers))
 
 	// setting a wrong value for the auth token should still give auth token related error
-	params.Headers.Set(authTokenHeader, wrongAuthToken)
-	assertAuthTokenError(t, common.GraphqlAdminURL, params)
+	headers.Set(authTokenHeader, wrongAuthToken)
+	assertAuthTokenError(t, common.RetryUpdateGQLSchema(t, common.Alpha1HTTP, schema, headers))
 
 	// setting correct value for the auth token should now give ACL related GraphQL error
-	params.Headers.Set(authTokenHeader, authToken)
-	assertMissingAclError(t, params)
+	headers.Set(authTokenHeader, authToken)
+	assertMissingAclError(t, common.RetryUpdateGQLSchema(t, common.Alpha1HTTP, schema, headers))
 
 	// setting wrong value for the access JWT should still give ACL related GraphQL error
-	params.Headers.Set(accessJwtHeader, wrongAuthToken)
-	assertBadAclError(t, params)
+	headers.Set(accessJwtHeader, wrongAuthToken)
+	assertBadAclError(t, common.RetryUpdateGQLSchema(t, common.Alpha1HTTP, schema, headers))
 
 	// setting correct value for both tokens should not give errors
 	accessJwt, _ := grootLogin(t)
-	params.Headers.Set(accessJwtHeader, accessJwt)
-	common.RequireNoGQLErrors(t, params.ExecuteAsPost(t, common.GraphqlAdminURL))
+	headers.Set(accessJwtHeader, accessJwt)
+	common.AssertUpdateGQLSchemaSuccess(t, common.Alpha1HTTP, schema, headers)
 }
 
-func assertAuthTokenError(t *testing.T, url string, params *common.GraphQLParams) {
-	req, err := params.CreateGQLPost(url)
-	require.NoError(t, err)
-
-	resp, err := common.RunGQLRequest(req)
-	require.NoError(t, err)
-	require.JSONEq(t, `{
-		"errors":[{
-			"message":"Invalid X-Dgraph-AuthToken",
-			"extensions":{"code":"ErrorUnauthorized"}
-		}]
-	}`, string(resp))
+func assertAuthTokenError(t *testing.T, resp *common.GraphQLResponse) {
+	require.Equal(t, x.GqlErrorList{{
+		Message:    "Invalid X-Dgraph-AuthToken",
+		Extensions: map[string]interface{}{"code": "ErrorUnauthorized"},
+	}}, resp.Errors)
+	require.Nil(t, resp.Data)
 }
 
-func assertMissingAclError(t *testing.T, params *common.GraphQLParams) {
-	resp := params.ExecuteAsPost(t, common.GraphqlAdminURL)
+func assertMissingAclError(t *testing.T, resp *common.GraphQLResponse) {
 	require.Equal(t, x.GqlErrorList{{
 		Message: "resolving updateGQLSchema failed because rpc error: code = PermissionDenied desc = no accessJwt available",
 		Locations: []x.Location{{
@@ -100,8 +95,7 @@ func assertMissingAclError(t *testing.T, params *common.GraphQLParams) {
 	}}, resp.Errors)
 }
 
-func assertBadAclError(t *testing.T, params *common.GraphQLParams) {
-	resp := params.ExecuteAsPost(t, common.GraphqlAdminURL)
+func assertBadAclError(t *testing.T, resp *common.GraphQLResponse) {
 	require.Equal(t, x.GqlErrorList{{
 		Message: "resolving updateGQLSchema failed because rpc error: code = Unauthenticated desc = unable to parse jwt token:token contains an invalid number of segments",
 		Locations: []x.Location{{
@@ -146,23 +140,5 @@ func getGrootLoginParams() *common.GraphQLParams {
 			"refreshToken": "",
 		},
 		Headers: http.Header{},
-	}
-}
-
-func getUpdateGqlSchemaParams() *common.GraphQLParams {
-	schema := `type Person {
-		id: ID!
-		name: String!
-	}`
-	return &common.GraphQLParams{
-		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					schema
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"sch": schema},
-		Headers:   http.Header{},
 	}
 }

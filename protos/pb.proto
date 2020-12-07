@@ -193,6 +193,7 @@ message HealthInfo {
     repeated string ongoing = 8;
     repeated string indexing = 9;
     repeated string ee_features = 10;
+		uint64 max_assigned = 11;
 }
 
 message Tablet {

@@ -61,7 +61,8 @@ const (
 )
 
 var (
-	emptyEntry = entry(make([]byte, entrySize))
+	emptyEntry    = entry(make([]byte, entrySize))
+	encryptionKey x.SensitiveByteSlice
 )
 
 type entry []byte
@@ -103,15 +104,14 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 		fid: fid,
 	}
 	var err error
-	encKey := x.WorkerConfig.EncryptionKey
 	// Initialize the registry for logFile if encryption in enabled.
 	// NOTE: If encryption is enabled then there is no going back because if we disable it
 	// later then the older log files which were previously encrypted can't be opened.
-	if len(encKey) > 0 {
+	if len(encryptionKey) > 0 {
 		krOpt := badger.KeyRegistryOptions{
 			ReadOnly:                      false,
 			Dir:                           dir,
-			EncryptionKey:                 encKey,
+			EncryptionKey:                 encryptionKey,
 			EncryptionKeyRotationDuration: 10 * 24 * time.Hour,
 			InMemory:                      false,
 		}
@@ -138,7 +138,7 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 		// If keyID is non-zero, then the opened file is encrypted.
 		if keyID != 0 {
 			// Logfile is encrypted but encryption key is not provided.
-			if encKey == nil {
+			if encryptionKey == nil {
 				return nil, errors.New("Logfile is encrypted but encryption key is nil")
 			}
 			// retrieve datakey from the keyID of the logfile.

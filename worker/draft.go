@@ -1711,6 +1711,7 @@ func (n *node) InitAndStartNode() {
 	go n.processTabletSizes()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
+	go n.monitorRaftMetrics()
 	// Ignoring the error since InitAndStartNode does not return an error and using x.Check would
 	// not be the right thing to do.
 	_, _ = n.startTask(opRollup)
@@ -1724,4 +1725,14 @@ func (n *node) AmLeader() bool {
 	}
 	r := n.Raft()
 	return r.Status().Lead == r.Status().ID
+}
+
+func (n *node) monitorRaftMetrics() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		curPendingSize := atomic.LoadInt64(&n.pendingSize)
+		ostats.Record(n.ctx, x.RaftPendingSize.M(curPendingSize))
+		ostats.Record(n.ctx, x.RaftApplyCh.M(int64(len(n.applyCh))))
+	}
 }
