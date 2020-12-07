@@ -79,6 +79,7 @@ var (
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
 		"If true, don't run tests on slow packages.")
+	suite = pflag.String("suite", "", "This flag is used to specify which test suites to run. Possible values are all, load, unit")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -406,6 +407,16 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 	compose := composeFileFor(pkg)
 	prefix := getClusterPrefix()
 
+	if isClusterToBeRunWithZeroNodeOnly(pkg) {
+		startZeroOnly(compose, prefix)
+		if !*keepCluster {
+			wg.Add(1)
+			defer stopCluster(compose, prefix, wg)
+		}
+
+		return runTestsFor(ctx, pkg, prefix)
+	}
+
 	startCluster(compose, prefix)
 	if !*keepCluster {
 		wg.Add(1)
@@ -413,6 +424,32 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 	}
 
 	return runTestsFor(ctx, pkg, prefix)
+}
+
+var clusterWithZeroNodeOnly = []string{"systest/bulk"}
+func isClusterToBeRunWithZeroNodeOnly(pkg string) bool {
+	for _, p := range clusterWithZeroNodeOnly {
+		if strings.Contains(pkg, p) {
+			return true
+		}
+	}
+	return false
+}
+func startZeroOnly(compose, prefix string) {
+	cmd := command(
+		"docker-compose", "-f", compose, "-p", prefix,
+		"up", "--force-recreate", "--remove-orphans", "--detach")
+	cmd.Stderr = nil
+
+	fmt.Printf("Bringing up Zero Node only %s...\n", prefix)
+	runFatal(cmd)
+	fmt.Printf("Zero Node UP: %s\n", prefix)
+
+	// Wait for cluster to be healthy.
+	for i := 1; i <= 3; i++ {
+		in := getInstance(prefix, "zero"+strconv.Itoa(i))
+		in.bestEffortWaitForHealthy(6080)
+	}
 }
 
 func findPackagesFor(testName string) []string {
