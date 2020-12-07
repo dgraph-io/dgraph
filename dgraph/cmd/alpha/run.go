@@ -729,10 +729,16 @@ func run() {
 	go func() {
 		var numShutDownSig int
 		for range sdCh {
+			closer := admin.ServerCloser
+			if closer == nil {
+				glog.Infoln("Caught Ctrl-C. Terminating now.")
+				os.Exit(1)
+			}
+
 			select {
-			case <-admin.ServerCloser.HasBeenClosed():
+			case <-closer.HasBeenClosed():
 			default:
-				admin.ServerCloser.Signal()
+				closer.Signal()
 			}
 			numShutDownSig++
 			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
