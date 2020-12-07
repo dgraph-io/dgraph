@@ -1,5 +1,3 @@
-// +build standalone
-
 /*
  * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
@@ -16,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package common
 
 import (
 	"context"
@@ -40,7 +38,7 @@ var savedir = flag.String("savedir", "",
 var quiet = flag.Bool("quiet", false,
 	"just output whether json differs, not a diff")
 
-func TestQueries(t *testing.T) {
+func TestQueriesFor21Million(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := path.Join(path.Dir(thisFile), "queries")
 

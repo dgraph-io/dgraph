@@ -1,5 +1,3 @@
-// +build systest
-
 /*
  * Copyright 2020 Dgraph Labs, Inc. and Contributors
  *
@@ -20,8 +18,15 @@ package main
 
 import (
 	"context"
+	"log"
+	"net/http"
+	"os"
+	"os/exec"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	glog "github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
@@ -9279,4 +9284,64 @@ func Test1Million(t *testing.T) {
 
 		testutil.CompareJSON(t, tt.resp, string(resp.Json))
 	}
+}
+
+var rootDir = os.TempDir()
+
+func TestMain(m *testing.M) {
+	noschemaFile := os.Getenv("GOPATH") + "/src/github.com/dgraph-io/benchmarks/data/1million-noindex.schema"
+	rdfFile := os.Getenv("GOPATH") + "/src/github.com/dgraph-io/benchmarks/data/1million.rdf.gz"
+
+	bulkCmd := exec.Command(testutil.DgraphBinaryPath(), "bulk",
+		"-f", rdfFile,
+		"-s", noschemaFile,
+		"--http", "",
+		"-j=1",
+		"--store-xids=true",
+		"--zero", testutil.SockAddrZero,
+	)
+	bulkCmd.Dir = rootDir
+	log.Print(bulkCmd.String())
+	if out, err := bulkCmd.CombinedOutput(); err != nil {
+		glog.Error("Error %v", err)
+		glog.Error("Output %v", out)
+		os.Exit(1)
+	}
+
+	cmd := exec.Command("docker-compose", "-f", "./alpha.yml", "-p", testutil.DockerPrefix,
+		"up", "-d", "--force-recreate", "alpha1,alpha2,alpha3")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if err := cmd.Run(); err != nil {
+		glog.Infof("Error while bringing up alpha node. Prefix: %s. Error: %v\n", testutil.DockerPrefix, err)
+		os.Exit(1)
+	}
+	for i := 0; i < 30; i++ {
+		time.Sleep(time.Second)
+		resp, err := http.Get(testutil.ContainerAddr("alpha1", 8080) + "/health")
+		if resp != nil && resp.Body != nil {
+			resp.Body.Close()
+		}
+		if err == nil && resp.StatusCode == http.StatusOK {
+			return
+		}
+	}
+
+	schemaFile := os.Getenv("GOPATH") + "/src/github.com/dgraph-io/benchmarks/data/1million.schema"
+	client, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
+	if err != nil {
+		glog.Error("error while create client", err)
+		os.Exit(1)
+	}
+	err = client.Alter(context.Background(), &api.Operation{
+		Schema: schemaFile,
+	})
+	if err != nil {
+		glog.Error("error while indexing", err)
+		os.Exit(1)
+	}
+	exitCode := m.Run()
+	_ = os.RemoveAll(rootDir)
+	os.Exit(exitCode)
 }
