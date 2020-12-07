@@ -79,7 +79,8 @@ var (
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
 		"If true, don't run tests on slow packages.")
-	suite = pflag.String("suite", "", "This flag is used to specify which test suites to run. Possible values are all, load, unit")
+	suite = pflag.String("suite", "unit", "This flag is used to specify which "+
+		"test suites to run. Possible values are all, load, unit")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -426,7 +427,12 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 	return runTestsFor(ctx, pkg, prefix)
 }
 
-var clusterWithZeroNodeOnly = []string{"systest/bulk"}
+var clusterWithZeroNodeOnly = []string{
+	"/systest/bulk",
+	"/systest/21million/bulk",
+	"/systest/1million/bulk",
+}
+
 func isClusterToBeRunWithZeroNodeOnly(pkg string) bool {
 	for _, p := range clusterWithZeroNodeOnly {
 		if strings.Contains(pkg, p) {
@@ -663,6 +669,73 @@ func removeAllTestContainers() {
 	}
 }
 
+var loadPackages = []string{
+	"/systest/21million",
+	"/systest/1million",
+	"/systest/bulk",
+	"/systest/bgindex",
+	"/contrib/scripts",
+	"/dgraph/cmd/bulk/systest",
+}
+
+func runLoadSuiteOnly(taskCh chan task, closer *z.Closer) {
+	go func() {
+		defer close(taskCh)
+		valid := getPackages()
+		for i, task := range valid {
+			for _, p := range loadPackages {
+				if strings.HasSuffix(task.pkg.ID, p) {
+					continue
+				}
+			}
+			select {
+			case taskCh <- task:
+				fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
+			case <-closer.HasBeenClosed():
+				return
+			}
+		}
+	}()
+	return
+}
+
+func runUnitSuiteOnly(taskCh chan task, closer *z.Closer) {
+	go func() {
+		defer close(taskCh)
+		valid := getPackages()
+		for i, task := range valid {
+			for _, p := range loadPackages {
+				if !strings.HasSuffix(task.pkg.ID, p) {
+					continue
+				}
+			}
+			select {
+			case taskCh <- task:
+				fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
+			case <-closer.HasBeenClosed():
+				return
+			}
+		}
+	}()
+	return
+}
+
+func runAllSuiteOnly(taskCh chan task, closer *z.Closer) {
+	go func() {
+		defer close(taskCh)
+		valid := getPackages()
+		for i, task := range valid {
+			select {
+			case taskCh <- task:
+				fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
+			case <-closer.HasBeenClosed():
+				return
+			}
+		}
+	}()
+	return
+}
+
 func run() error {
 	if tc := os.Getenv("TEAMCITY_VERSION"); len(tc) > 0 {
 		fmt.Printf("Found Teamcity: %s\n", tc)
@@ -728,19 +801,14 @@ func run() error {
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	// pkgs, err := packages.Load(nil, "github.com/dgraph-io/dgraph/...")
-	go func() {
-		defer close(testCh)
-
-		valid := getPackages()
-		for i, task := range valid {
-			select {
-			case testCh <- task:
-				fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
-			case <-closer.HasBeenClosed():
-				return
-			}
-		}
-	}()
+	switch *suite {
+	case "all":
+		runAllSuiteOnly(testCh, closer)
+	case "load":
+		runLoadSuiteOnly(testCh, closer)
+	case "unit":
+		runUnitSuiteOnly(testCh, closer)
+	}
 
 	closer.Wait()
 	close(errCh)
