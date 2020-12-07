@@ -612,18 +612,6 @@ var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.
 var defnValidations, typeValidations []func(schema *ast.Schema, defn *ast.Definition) gqlerror.List
 var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.List
 
-func assignAstFieldDef(src, dst *ast.FieldDefinition) {
-	var dirs ast.DirectiveList
-	dirs = append(dirs, src.Directives...)
-
-	dst.Name = src.Name
-	dst.DefaultValue = src.DefaultValue
-	dst.Type = src.Type
-	dst.Directives = dirs
-	dst.Arguments = src.Arguments
-	dst.Position = src.Position
-}
-
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	var dirs ast.DirectiveList
 	dirs = append(dirs, src.Directives...)
