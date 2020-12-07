@@ -85,26 +85,38 @@ type indexRange struct {
 	from, until uint64 // index range for deletion, until index is not deleted.
 }
 
-// Init initializes returns a properly initialized instance of DiskStorage.
-// To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
+// Init initializes an instance of DiskStorage without encryption.
 func Init(dir string) *DiskStorage {
+	ds, err := InitEncrypted(dir, nil)
+	x.Check(err)
+	return ds
+}
+
+// InitEncrypted initializes returns a properly initialized instance of DiskStorage.
+// To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
+func InitEncrypted(dir string, encKey x.SensitiveByteSlice) (*DiskStorage, error) {
 	w := &DiskStorage{
 		dir: dir,
 	}
 
 	var err error
-	w.meta, err = newMetaFile(dir)
-	x.Check(err)
+	if w.meta, err = newMetaFile(dir); err != nil {
+		return nil, err
+	}
 	// fmt.Printf("meta: %s\n", hex.Dump(w.meta.data[1024:2048]))
 	// fmt.Printf("found snapshot of size: %d\n", sliceSize(w.meta.data, snapshotOffset))
 
-	w.wal, err = openWal(dir)
-	x.Check(err)
+	encryptionKey = encKey
+	if w.wal, err = openWal(dir); err != nil {
+		return nil, err
+	}
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
 	snap, err := w.meta.snapshot()
-	x.Check(err)
+	if err != nil {
+		return nil, err
+	}
 
 	first, _ := w.FirstIndex()
 	if !raft.IsEmptySnap(snap) {
@@ -119,7 +131,7 @@ func Init(dir string) *DiskStorage {
 
 	glog.Infof("Init Raft Storage with snap: %d, first: %d, last: %d\n",
 		snap.Metadata.Index, first, last)
-	return w
+	return w, nil
 }
 
 func (w *DiskStorage) SetUint(info MetaInfo, id uint64) { w.meta.SetUint(info, id) }

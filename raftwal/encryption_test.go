@@ -24,16 +24,15 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
 func TestEntryReadWrite(t *testing.T) {
-	x.WorkerConfig.EncryptionKey = []byte("badger16byteskey")
+	key := []byte("badger16byteskey")
 	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
-	el, err := openWal(dir)
+	ds, err := InitEncrypted(dir, key)
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
@@ -41,30 +40,29 @@ func TestEntryReadWrite(t *testing.T) {
 	data := make([]byte, rand.Intn(1000))
 	rand.Read(data)
 
-	require.NoError(t, el.AddEntries([]raftpb.Entry{{Index: 1, Term: 1, Data: data}}))
-	entries := el.allEntries(0, 100, 10000)
+	require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{{Index: 1, Term: 1, Data: data}}))
+	entries := ds.wal.allEntries(0, 100, 10000)
 	require.Equal(t, 1, len(entries))
 	require.Equal(t, uint64(1), entries[0].Index)
 	require.Equal(t, uint64(1), entries[0].Term)
 	require.Equal(t, data, entries[0].Data)
 
 	// Open the wal file again.
-	el2, err := openWal(dir)
+	ds2, err := InitEncrypted(dir, key)
 	require.NoError(t, err)
-	entries = el2.allEntries(0, 100, 10000)
+	entries = ds2.wal.allEntries(0, 100, 10000)
 	require.Equal(t, 1, len(entries))
 	require.Equal(t, uint64(1), entries[0].Index)
 	require.Equal(t, uint64(1), entries[0].Term)
 	require.Equal(t, data, entries[0].Data)
 
 	// Opening it with a wrong key fails.
-	x.WorkerConfig.EncryptionKey = []byte("other16byteskeys")
-	_, err = openWal(dir)
+	wrongKey := []byte("other16byteskeys")
+	_, err = InitEncrypted(dir, wrongKey)
 	require.EqualError(t, err, "Encryption key mismatch")
 
 	// Opening it without encryption key fails.
-	x.WorkerConfig.EncryptionKey = nil
-	_, err = openWal(dir)
+	_, err = InitEncrypted(dir, nil)
 	require.EqualError(t, err, "Logfile is encrypted but encryption key is nil")
 }
 
@@ -126,10 +124,9 @@ func TestLogRotate(t *testing.T) {
 // TestLogGrow writes data of sufficient size to grow the log file.
 func TestLogGrow(t *testing.T) {
 	test := func(t *testing.T, key []byte) {
-		x.WorkerConfig.EncryptionKey = key
 		dir, err := ioutil.TempDir("", "raftwal")
 		require.NoError(t, err)
-		el, err := openWal(dir)
+		ds, err := InitEncrypted(dir, key)
 		require.NoError(t, err)
 		defer os.RemoveAll(dir)
 
@@ -144,13 +141,13 @@ func TestLogGrow(t *testing.T) {
 			entry := raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}
 			entries = append(entries, entry)
 		}
-		err = el.AddEntries(entries)
+		err = ds.wal.AddEntries(entries)
 		require.NoError(t, err)
 
 		// Reopen the file and retrieve all entries.
-		el, err = openWal(dir)
+		ds, err = InitEncrypted(dir, key)
 		require.NoError(t, err)
-		readEntries := el.allEntries(0, math.MaxInt64, math.MaxInt64)
+		readEntries := ds.wal.allEntries(0, math.MaxInt64, math.MaxInt64)
 		require.Equal(t, numEntries, len(readEntries))
 
 		for i, gotEntry := range readEntries {
