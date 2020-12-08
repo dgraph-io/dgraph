@@ -82,7 +82,8 @@ var (
 	suite = pflag.String("suite", "unit", "This flag is used to specify which "+
 		"test suites to run. Possible values are load, unit")
 	tmp = pflag.String("tmp", "", "Temporary directory used to download data.")
-	downloadResources = pflag.BoolP("download", "d", true, "Flag to specify whether to download resources or not")
+	downloadResources = pflag.BoolP("download", "d", true,
+		"Flag to specify whether to download resources or not")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -735,6 +736,10 @@ func downloadDataFiles() {
 		}
 	}
 }
+func PreRunSteps() error {
+	testutil.GeneratePlugins()
+	return nil
+}
 
 func run() error {
 	if tc := os.Getenv("TEAMCITY_VERSION"); len(tc) > 0 {
@@ -767,6 +772,8 @@ func run() error {
 	x.Check(err)
 	defer os.RemoveAll(tmpDir)
 
+	err = PreRunSteps()
+	x.Check(err)
 	N := *concurrency
 	if len(*runPkg) > 0 || len(*runTest) > 0 {
 		N = 1

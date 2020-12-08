@@ -265,7 +265,7 @@ func TestReverseIndex(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for {
-			time.Sleep(5 * time.Second)
+			time.Sleep(2 * time.Second)
 			cur := atomic.LoadUint64(&count)
 			fmt.Printf("%v/%v done\n", cur, numEdges-1)
 			if cur+1 == uint64(numEdges) {

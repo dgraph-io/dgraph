@@ -2,20 +2,16 @@ package bulk
 
 import (
 	"fmt"
+	"github.com/dgraph-io/dgraph/testutil"
 	"os"
 	"os/exec"
-	"time"
-
-	"github.com/dgraph-io/dgraph/testutil"
-
-	"github.com/dgraph-io/dgraph/systest/21million/common"
 
 	"testing"
 )
-
-func TestQueries(t *testing.T) {
-	t.Run("Run queries", common.TestQueriesFor21Million)
-}
+//
+//func TestQueries(t *testing.T) {
+//	t.Run("Run queries", common.TestQueriesFor21Million)
+//}
 
 func TestMain(m *testing.M) {
 	schemaFile := os.Getenv("TEST_DATA_DIRECTORY") + "/21million.schema"
@@ -34,10 +30,11 @@ func TestMain(m *testing.M) {
 		cleanupAndExit(1)
 	}
 
-	fmt.Print("waiting for the indexes to be completed \n")
-	time.Sleep(10 * time.Minute)
-	exitCode := m.Run()
-	cleanupAndExit(exitCode)
+	// dont run queries
+	//fmt.Print("waiting for the indexes to be completed \n")
+	//time.Sleep(10 * time.Minute)
+	//exitCode := m.Run()
+	cleanupAndExit(0)
 }
 
 func cleanupAndExit(exitCode int) {

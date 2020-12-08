@@ -42,7 +42,7 @@ func printStats(counter *uint64, quit <-chan struct{}, wg *sync.WaitGroup) {
 // blocks until query returns no error.
 func waitForSchemaUpdate(query string, dg *dgo.Dgraph) {
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(2 * time.Second)
 		_, err := dg.NewReadOnlyTxn().Query(context.Background(), query)
 		if err != nil {
 			continue
