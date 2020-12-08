@@ -46,17 +46,16 @@ func TestLoginWithPoorManAuth(t *testing.T) {
 	assertAuthTokenError(t, params.ExecuteAsPost(t, common.GraphqlAdminURL))
 
 	// setting correct value for the token should not give any GraphQL error
+	params.Headers.Set(authTokenHeader, authToken)
 	var resp *common.GraphQLResponse
-		for i := 0; i < 10; i++ {
-			// setting correct value for the token should not give any GraphQL error
-			params.Headers.Set(authTokenHeader, authToken)
-			resp = params.ExecuteAsPost(t, common.GraphqlAdminURL)
-			if len(resp.Errors) == 0 {
-				break
-			}
-			time.Sleep(time.Second)
+	for i := 0; i < 10; i++ {
+		resp = params.ExecuteAsPost(t, common.GraphqlAdminURL)
+		if len(resp.Errors) == 0 {
+			break
 		}
-		common.RequireNoGQLErrors(t, resp)
+		time.Sleep(time.Second)
+	}
+	common.RequireNoGQLErrors(t, resp)
 }
 
 func TestAdminPoorManWithAcl(t *testing.T) {
