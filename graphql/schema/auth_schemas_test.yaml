@@ -30,13 +30,14 @@ invalid_schemas:
   - name: "Invalid RBAC rule: in filter not array variable 1"
     input: |
       type X @auth(
-          query: { rule:  "{$USER: { in: \"amanbansal@dgraph.io\" } }"}
+          query: { rule:  "{$USER: { in: \"xyz@dgraph.io\" } }"}
       ) {
         username: String! @id
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `in` operator has invalid value in this rule." }
+      { "message": "Type X: @auth: `in` operator has invalid value `xyz@dgraph.io` in this rule.
+      Reason: Value should be an array." }
     ]
 
   - name: "Invalid RBAC rule: in filter not array variable 2"
@@ -48,9 +49,11 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `in` operator has invalid value in this rule."}
+      { "message": "Type X: @auth: `in` operator has invalid value `true` in this rule.
+      Reason: Value should be an array."}
     ]
-  - name: "Invalid RBAC rule: null as the value"
+
+  - name: "Invalid RBAC rule: nil as the value"
     input: |
       type X @auth(
         query: { rule:  "{$USER: { eq: nil } }"}
@@ -71,7 +74,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `$USER` is not a valid GraphQL variable. object with nil values aren't supported" }
+      { "message": "Type X: @auth: `eq` operator has invalid value. null values aren't supported." }
     ]
 
   - name: "Invalid RBAC rule: regexp filter not string variable"
@@ -83,7 +86,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `regexp` operator has invalid value in this rule." }
+      { "message": "Type X: @auth: `regexp` operator has invalid value `12345` in this rule.
+      Reason: Value should be of type String." }
     ]
 
   - name: "RBAC rule invalid variable"

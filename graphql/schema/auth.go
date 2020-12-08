@@ -18,6 +18,7 @@ package schema
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
@@ -69,37 +70,42 @@ const (
 	Negative
 )
 
-func checkIfExistInArray(arr []interface{}, val interface{}) RuleResult {
-	for _, v := range arr {
-		if reflect.DeepEqual(v, val) {
+func (rq *RBACQuery) checkIfMatchInArray(array []interface{}) RuleResult {
+	for _, v := range array {
+		if rq.checkIfMatch(v) == Positive {
 			return Positive
 		}
 	}
 	return Negative
 }
 
-func checkIfEqual(val1 interface{}, val2 interface{}) RuleResult {
-	if reflect.DeepEqual(val1, val2) {
-		return Positive
+func (rq *RBACQuery) checkIfMatch(value interface{}) RuleResult {
+	rules, ok := rq.Operand.([]interface{})
+	if ok {
+		// this means rule operand is array slice
+		for _, r := range rules {
+			if evaluate(r, value, rq.regex) == Positive {
+				return Positive
+			}
+		}
+		return Negative
 	}
-	return Negative
+	return evaluate(rq.Operand, value, rq.regex)
 }
 
-func checkIfRegexMatchExistInArray(regex *regexp.Regexp, arr []interface{}) RuleResult {
-	for _, v := range arr {
-		strv, ok := v.(string)
+func evaluate(operand interface{}, value interface{}, regex *regexp.Regexp) RuleResult {
+	if regex != nil {
+		strv, ok := value.(string)
 		if ok && regex.MatchString(strv) {
 			return Positive
 		}
+		return Negative
 	}
-	return Negative
-}
 
-func checkIfRegexMatch(regex *regexp.Regexp, val1 interface{}) RuleResult {
-	strv, ok := val1.(string)
-	if ok && regex.MatchString(strv) {
+	if reflect.DeepEqual(value, operand) {
 		return Positive
 	}
+
 	return Negative
 }
 
@@ -112,38 +118,32 @@ func checkIfRegexMatch(regex *regexp.Regexp, val1 interface{}) RuleResult {
 // For example, Rule {$USER: { eq:"uid"}} and token $USER:["u", "id", "uid"] would result in match.
 // also Rule {$USER: { in: ["uid", "xid"]}} and token $USER:["u", "id", "uid"] would also result in match.
 func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
+	tokenValues, tokenCastErr := cast.ToSliceE(av[rq.Variable])
 	switch rq.Operator {
 	case "eq":
 		// if eq, auth rule value will be matched completely
-		tokenValues, err := cast.ToSliceE(av[rq.Variable])
-		if err != nil {
+		if tokenCastErr != nil {
 			// this means value for variable in token in not an array
-			return checkIfEqual(av[rq.Variable], rq.Operand)
+			return rq.checkIfMatch(av[rq.Variable])
 		}
-		return checkIfExistInArray(tokenValues, rq.Operand)
+		return rq.checkIfMatchInArray(tokenValues)
 	case "regexp":
 		// if regexp, auth rule value should always be string and so as token values
-		tokenValues, err := cast.ToSliceE(av[rq.Variable])
-		if err != nil {
+		if tokenCastErr != nil {
 			// this means value for variable in token in not an array
-			return checkIfRegexMatch(rq.regex, av[rq.Variable])
+			return rq.checkIfMatch(av[rq.Variable])
 		}
-		return checkIfRegexMatchExistInArray(rq.regex, tokenValues)
+		return rq.checkIfMatchInArray(tokenValues)
 
 	case "in":
 		// if in, auth rule will only have array as the value
-		ruleOperand := cast.ToSlice(rq.Operand)
-		tokenValues, err := cast.ToSliceE(av[rq.Variable])
-		if err != nil {
+		// check has to consider that
+		if tokenCastErr != nil {
 			// this means value for variable in token in not an array
-			return checkIfExistInArray(ruleOperand, av[rq.Variable])
+			return rq.checkIfMatch(tokenValues)
 		}
 
-		for _, t := range tokenValues {
-			if checkIfExistInArray(ruleOperand, t) == Positive {
-				return Positive
-			}
-		}
+		return rq.checkIfMatchInArray(tokenValues)
 	}
 	return Negative
 }
@@ -463,8 +463,8 @@ func getRBACQuery(typ *ast.Definition, rule string) (*RBACQuery, error) {
 
 	//objects with nil values are not supported in rules
 	if op == nil {
-		return nil, gqlerror.Errorf("Type %s: @auth: `%s` is not a valid GraphQL variable. "+
-			"object with nil values aren't supported", typ.Name, rule[idx[0][2]:idx[0][3]])
+		return nil, gqlerror.Errorf("Type %s: @auth: `%s` operator has invalid value. "+
+			"null values aren't supported.", typ.Name, rule[idx[0][4]:idx[0][5]])
 	}
 	query := &RBACQuery{
 		Variable: rule[idx[0][2]:idx[0][3]],
@@ -492,8 +492,8 @@ func getRBACQuery(typ *ast.Definition, rule string) (*RBACQuery, error) {
 
 func validateRBACQuery(typ *ast.Definition, rbacQuery *RBACQuery) error {
 	// validate rule operators
-	if err := validateRBACOperators(typ, rbacQuery); err != nil {
-		return err
+	if ok, reason := validateRBACOperators(typ, rbacQuery); !ok {
+		return gqlerror.Errorf(reason)
 	}
 
 	// validate variable name
@@ -504,25 +504,36 @@ func validateRBACQuery(typ *ast.Definition, rbacQuery *RBACQuery) error {
 	return nil
 }
 
-func validateRBACOperators(typ *ast.Definition, query *RBACQuery) error {
-	ok := false
+func validateRBACOperators(typ *ast.Definition, query *RBACQuery) (bool, string) {
 	switch query.Operator {
-	case "eq": // only check we could have is for primitive but not necessary we will have equal match later
-		ok = true
+	case "eq":
+		// Array values in eq operator will not be supported.
+		// They are handled in a different way to manage all possible situations
+		_, isArray := query.Operand.([]interface{})
+		if isArray {
+			return false, fmt.Sprintf("Type %s: @auth: `%s` operator has invalid value `%v` in "+
+				"this rule. Reason: Array values in eq operator will not be supported.",
+				typ.Name, query.Operator, query.Operand)
+		}
 	case "regexp":
-		_, ok = query.Operand.(string)
+		_, ok := query.Operand.(string)
+		if !ok {
+			return false, fmt.Sprintf("Type %s: @auth: `%s` operator has invalid value `%v` in "+
+				"this rule. Reason: Value should be of type String.", typ.Name, query.Operator, query.Operand)
+		}
 	case "in":
 		// auth rule value should be of array type
-		_, ok = query.Operand.([]interface{})
+		_, ok := query.Operand.([]interface{})
+		if !ok {
+			return false, fmt.Sprintf("Type %s: @auth: `%s` operator has invalid value `%v` in "+
+				"this rule. Reason: Value should be an array.", typ.Name, query.Operator, query.Operand)
+		}
 	default:
-		return gqlerror.Errorf("Type %s: @auth: `%s` operator is not supported in "+
+		return false, fmt.Sprintf("Type %s: @auth: `%s` operator is not supported in "+
 			"this rule.", typ.Name, query.Operator)
 	}
-	if !ok {
-		return gqlerror.Errorf("Type %s: @auth: `%s` operator has invalid value in "+
-			"this rule.", typ.Name, query.Operator)
-	}
-	return nil
+
+	return true, ""
 }
 
 func gqlValidateRule(s *ast.Schema, typ *ast.Definition, rule string, node *RuleNode) error {
