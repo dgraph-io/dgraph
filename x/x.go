@@ -873,15 +873,15 @@ func WithAuthorizationCredentials(authToken string) grpc.DialOption {
 }
 
 // GetDgraphClient creates a Dgraph client based on the following options in the configuration:
-// --slash-grpc-endpoint specifies the grpc endpoint for slash. It takes precedence over --alpha and TLS
+// --slash_grpc_endpoint specifies the grpc endpoint for slash. It takes precedence over --alpha and TLS
 // --alpha specifies a comma separated list of endpoints to connect to
-// --tls-cacert, --tls-cert, --tls-key etc specify the TLS configuration of the connection
+// --tls_cacert, --tls_cert, --tls_key etc specify the TLS configuration of the connection
 // --retries specifies how many times we should retry the connection to each endpoint upon failures
 // --user and --password specify the credentials we should use to login with the server
 func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	var alphas string
-	if conf.GetString("slash-grpc-endpoint") != "" {
-		alphas = conf.GetString("slash-grpc-endpoint")
+	if conf.GetString("slash_grpc_endpoint") != "" {
+		alphas = conf.GetString("slash_grpc_endpoint")
 	} else {
 		alphas = conf.GetString("alpha")
 	}
@@ -907,8 +907,8 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	}
 
 	dialOpts := []grpc.DialOption{}
-	if conf.GetString("slash-grpc-endpoint") != "" && conf.IsSet("auth-token") {
-		dialOpts = append(dialOpts, WithAuthorizationCredentials(conf.GetString("auth-token")))
+	if conf.GetString("slash_grpc_endpoint") != "" && conf.IsSet("auth_token") {
+		dialOpts = append(dialOpts, WithAuthorizationCredentials(conf.GetString("auth_token")))
 	}
 
 	for _, d := range ds {
