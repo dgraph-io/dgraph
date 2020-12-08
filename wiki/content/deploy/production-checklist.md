@@ -185,11 +185,11 @@ Dgraph Zero configuration options:
 
 The number of replica members per Alpha group depends on the setting of Dgraph Zero's `--replicas` flag. Above, it is set to 3. So when Dgraph Alphas join the cluster, Dgraph Zero will assign it to an Alpha group to fill in its members up to the limit per group set by the `--replicas` flag.
 
-First Alpha example: `dgraph alpha --my=alpha1:7080 --zero=zero1:7080`
+First Alpha example: `dgraph alpha --my=alpha1:7080 --zero=zero1:5080`
 
-Second Alpha example: `dgraph alpha --my=alpha2:7080 --zero=zero1:7080`
+Second Alpha example: `dgraph alpha --my=alpha2:7080 --zero=zero1:5080`
 
-First Alpha example: `dgraph alpha --my=alpha3:7080 --zero=zero1:7080`
+First Alpha example: `dgraph alpha --my=alpha3:7080 --zero=zero1:5080`
 
 Dgraph Alpha configuration options:
 
