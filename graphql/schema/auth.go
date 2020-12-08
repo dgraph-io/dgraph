@@ -140,7 +140,7 @@ func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 		// check has to consider that
 		if tokenCastErr != nil {
 			// this means value for variable in token in not an array
-			return rq.checkIfMatch(tokenValues)
+			return rq.checkIfMatch(av[rq.Variable])
 		}
 
 		return rq.checkIfMatchInArray(tokenValues)
