@@ -88,6 +88,16 @@ It is recommended to set the file descriptors limit to unlimited. If that is not
 
 A Dgraph instance is run as a single process from a single static binary. It does not require any additional dependencies or separate services in order to run (see the [Supplementary Services]({{< relref "#supplementary-services" >}}) section for third-party services that work alongside Dgraph). A Dgraph cluster is set up by running multiple Dgraph processes networked together.
 
+### Backup Policy
+
+A backup policy is a predefined, set schedule used to schedule backups of information from business applications. For Dgraph, backups occur when data is copied to disk using the `backup ee` tool. A backup policy helps to ensure data recoverability in the event of accidental data deletion, data corruption a system outage.
+
+We **strongly** recommend that you have a backup policy in place before moving your application to the production phase, and we also suggest that you have a backup policy even for pre-production apps supported by Dgraph database instances running in development, staging, QA or pre-production clusters.
+
+We suggest that your policy include frequent full and incremental backups. Accordingly, we suggest the following backup policy for your production apps:
+* [full backup](https://dgraph.io/docs/enterprise-features/binary-backups/#forcing-a-full-backup) every 24hrs
+* incremental backup every 2/4hrs
+
 ### Terminology
 
 An **N-node cluster** is a Dgraph cluster that contains N number of Dgraph instances. For example, a 6-node cluster means six Dgraph instances. The **replication setting** specifies the number of Dgraph Alpha replicas are assigned per group. The replication setting is a configuration flag (`--replicas`) on Dgraph Zero. A **Dgraph Alpha group** is a set of Dgraph Alphas that store replications of the data amongst each other. Every Dgraph Alpha group is assigned a set of distinct predicates to store and serve.
