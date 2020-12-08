@@ -237,7 +237,7 @@ func TestStringIndex(t *testing.T) {
 	go func() {
 		defer th.Done(nil)
 		for {
-			time.Sleep(2 * time.Second)
+			time.Sleep(5 * time.Second)
 			cur := atomic.LoadUint64(&count)
 			fmt.Printf("%v/%v done\n", cur, len(balIndex))
 			if int(cur) == len(balIndex) {

@@ -18,7 +18,6 @@ package common
 
 import (
 	"context"
-	"flag"
 	"io/ioutil"
 	"path"
 	"runtime"
@@ -33,17 +32,17 @@ import (
 // JSON output can be hundreds of lines and diffs can scroll off the terminal before you
 // can look at them. This option allows saving the JSON to a specified directory instead
 // for easier reviewing after the test completes.
-var savedir = flag.String("savedir", "",
-	"directory to save json from test failures in")
-var quiet = flag.Bool("quiet", false,
-	"just output whether json differs, not a diff")
+//var savedir = flag.String("savedir", "",
+//	"directory to save json from test failures in")
+//var quiet = flag.Bool("quiet", false,
+//	"just output whether json differs, not a diff")
 
 func TestQueriesFor21Million(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
-	queryDir := path.Join(path.Dir(thisFile), "queries")
+	queryDir := path.Join(path.Dir(thisFile), "../queries")
 
 	// For this test we DON'T want to start with an empty database.
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
@@ -53,8 +52,8 @@ func TestQueriesFor21Million(t *testing.T) {
 		t.Fatalf("Error reading directory: %s", err.Error())
 	}
 
-	savepath := ""
-	diffs := 0
+	//savepath := ""
+	//diffs := 0
 	for _, file := range files {
 		if !strings.HasPrefix(file.Name(), "query-") {
 			continue
@@ -88,19 +87,16 @@ func TestQueriesFor21Million(t *testing.T) {
 				}
 
 				t.Logf("running %s", file.Name())
-				if *savedir != "" {
-					savepath = path.Join(*savedir, file.Name())
-				}
+				//if *savedir != "" {
+				//	savepath = path.Join(*savedir, file.Name())
+				//}
 
-				if !testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet) {
-					diffs++
-				}
-				break
+				testutil.CompareJSON(t, bodies[1], string(resp.GetJson()))
 			}
 		})
 	}
-
-	if *savedir != "" && diffs > 0 {
-		t.Logf("test json saved in directory: %s", *savedir)
-	}
+	//
+	//if *savedir != "" && diffs > 0 {
+	//	t.Logf("test json saved in directory: %s", *savedir)
+	//}
 }

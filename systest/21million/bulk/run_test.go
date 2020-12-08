@@ -1,17 +1,10 @@
 package bulk
 
 import (
-	"log"
-	"net/http"
-	"os"
-	"os/exec"
-	"time"
-
-	"github.com/golang/glog"
-
-	"github.com/dgraph-io/dgraph/testutil"
-
 	"github.com/dgraph-io/dgraph/systest/21million/common"
+	"github.com/dgraph-io/dgraph/testutil"
+	"log"
+	"os"
 
 	"testing"
 )
@@ -20,49 +13,32 @@ func TestQueries(t *testing.T) {
 	t.Run("Run queries", common.TestQueriesFor21Million)
 }
 
-var rootDir = os.TempDir()
-
 func TestMain(m *testing.M) {
-	schemaFile := os.Getenv("GOPATH") + "/src/github.com/dgraph-io/benchmarks/data/21million.schema"
-	rdfFile := os.Getenv("GOPATH") + "/src/github.com/dgraph-io/benchmarks/data/21million.rdf.gz"
-
-	bulkCmd := exec.Command(testutil.DgraphBinaryPath(), "bulk",
-		"-f", rdfFile,
-		"-s", schemaFile,
-		"--http", "",
-		"-j=1",
-		"--store-xids=true",
-		"--zero", testutil.SockAddrZero,
-	)
-	bulkCmd.Dir = rootDir
-	log.Print(bulkCmd.String())
-	if out, err := bulkCmd.CombinedOutput(); err != nil {
-		glog.Error("Error %v", err)
-		glog.Error("Output %v", out)
+	schemaFile := os.Getenv("TEST_DATA_DIRECTORY") + "/21million.schema"
+	rdfFile := os.Getenv("TEST_DATA_DIRECTORY") + "/21million.rdf.gz"
+	if err := testutil.MakeDirEmpty([]string{"out/0", "out/1", "out/2"}); err != nil {
 		os.Exit(1)
 	}
 
-	cmd := exec.Command("docker-compose", "-f", "./alpha.yml", "-p", testutil.DockerPrefix,
-		"up", "-d", "--force-recreate", "alpha1,alpha2,alpha3")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
-	if err := cmd.Run(); err != nil {
-		glog.Infof("Error while bringing up alpha node. Prefix: %s. Error: %v\n", testutil.DockerPrefix, err)
-		os.Exit(1)
+	if err := testutil.BulkLoad(testutil.BulkOpts{
+		Zero:       testutil.SockAddrZero,
+		Shards:     3,
+		RdfFile:    rdfFile,
+		SchemaFile: schemaFile,
+	}); err != nil {
+		cleanupAndExit(1)
 	}
-	for i := 0; i < 30; i++ {
-		time.Sleep(time.Second)
-		resp, err := http.Get(testutil.ContainerAddr("alpha1", 8080) + "/health")
-		if resp != nil && resp.Body != nil {
-			resp.Body.Close()
-		}
-		if err == nil && resp.StatusCode == http.StatusOK {
-			return
-		}
+
+	if err := testutil.BringAlphaUp("./alpha.yml"); err != nil {
+		cleanupAndExit(1)
 	}
 
 	exitCode := m.Run()
-	_ = os.RemoveAll(rootDir)
+	cleanupAndExit(exitCode)
+}
+
+func cleanupAndExit(exitCode int) {
+	testutil.BringAlphaDown("./alpha.yml")
+	log.Print(os.RemoveAll("out"))
 	os.Exit(exitCode)
 }
