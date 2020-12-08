@@ -85,7 +85,7 @@ func TestTokens(t *testing.T) {
 			},
 		},
 	} {
-		got, err := Tokens(test.input)
+		got, err := CIDRTokenizer{}.Tokens(test.input)
 		if err != nil {
 			t.Error(err)
 		}
