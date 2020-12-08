@@ -9330,6 +9330,6 @@ func TestMain(m *testing.M) {
 
 func cleanupAndExit(exitCode int) {
 	testutil.BringAlphaDown("./alpha.yml")
-	log.Print(os.RemoveAll("out"))
+	_ = os.RemoveAll("out")
 	os.Exit(exitCode)
 }

@@ -1,11 +1,8 @@
 package bulk
 
 import (
-	"fmt"
-	"os"
-	"os/exec"
-
 	"github.com/dgraph-io/dgraph/testutil"
+	"os"
 
 	"github.com/dgraph-io/dgraph/systest/21million/common"
 
@@ -19,20 +16,20 @@ func TestQueries(t *testing.T) {
 func TestMain(m *testing.M) {
 	schemaFile := os.Getenv("TEST_DATA_DIRECTORY") + "/21million.schema"
 	rdfFile := os.Getenv("TEST_DATA_DIRECTORY") + "/21million.rdf.gz"
-
-	liveCmd := exec.Command(testutil.DgraphBinaryPath(), "live",
-		"--files", rdfFile,
-		"--schema", schemaFile,
-		"--alpha", testutil.SockAddr,
-		"--zero", testutil.SockAddrZero,
-	)
-	if out, err := liveCmd.Output(); err != nil {
-		fmt.Printf("error %v\n", err)
-		fmt.Printf("output %v\n", out)
-		os.Exit(1)
+	if err := testutil.LiveLoad(testutil.LiveOpts{
+		Alpha:      testutil.ContainerAddr("alpha1", 9080),
+		Zero:       testutil.SockAddrZero,
+		RdfFile:    rdfFile,
+		SchemaFile: schemaFile,
+	}); err != nil {
+		cleanupAndExit(1)
 	}
 
 	exitCode := m.Run()
+	cleanupAndExit(exitCode)
+}
+
+func cleanupAndExit(exitCode int) {
 	_ = os.RemoveAll("./t")
 	os.Exit(exitCode)
 }
