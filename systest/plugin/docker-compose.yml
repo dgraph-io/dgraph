@@ -16,7 +16,7 @@ services:
       target: /gobin
       read_only: true
     - type: bind
-      source: ./generated
+      source: ../../testutil/custom_plugins
       target: /plugins
       read_only: true
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
