@@ -90,12 +90,11 @@ A Dgraph instance is run as a single process from a single static binary. It doe
 
 ### Backup Policy
 
-A backup policy is a pre-defined, set schedule whereby information from business applications (in this case from Dgraph) are copied to disk (using the backup ee tool) to ensure data recoverability in the event of accidental data deletion, corrupted information or some kind of a system outage
+A backup policy is a predefined, set schedule used to schedule backups of information from business applications. For Dgraph, backups occur when data is copied to disk using the `backup ee` tool. A backup policy helps to ensure data recoverability in the event of accidental data deletion, data corruption a system outage.
 
-We **highly** recommend you have a solid backup policy in place before moving your application to the production phase (it's also suggested to have a backup policy even for development/stage/qa/pre-prod clusters).
+We **strongly** recommend that you have a backup policy in place before moving your application to the production phase, and we also suggest that you have a backup policy even for pre-production apps supported by Dgraph database instances running in development, staging, QA or pre-production clusters.
 
-Our suggestion for you backup policy is the following:
-
+We suggest that your policy include frequent full and incremental backups. Accordingly, we suggest the following backup policy for your production apps:
 * [full backup](https://dgraph.io/docs/enterprise-features/binary-backups/#forcing-a-full-backup) every 24hrs
 * incremental backup every 2/4hrs
 
