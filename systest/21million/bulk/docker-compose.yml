@@ -15,10 +15,6 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: bind
-      source: ./data
-      target: /data
-      read_only: false
     - type: volume
       source: data
       target: /data

@@ -169,7 +169,7 @@ func TestParallelIndexing(t *testing.T) {
 	go func() {
 		defer th.Done(nil)
 		for {
-			time.Sleep(2 * time.Second)
+			time.Sleep(5 * time.Second)
 			cur := atomic.LoadUint64(&count)
 			fmt.Printf("%v/%v done\n", cur, total*3)
 			if int(cur) == total*3 {

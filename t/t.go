@@ -80,7 +80,9 @@ var (
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
 		"If true, don't run tests on slow packages.")
 	suite = pflag.String("suite", "unit", "This flag is used to specify which "+
-		"test suites to run. Possible values are all, load, unit")
+		"test suites to run. Possible values are load, unit")
+	tmp = pflag.String("tmp", "", "Temporary directory used to download data.")
+	downloadResources = pflag.BoolP("download", "d", true, "Flag to specify whether to download resources or not")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -264,7 +266,7 @@ func allContainers(prefix string) []types.Container {
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-failfast", "-v"}
+	var args = []string{"go", "test", "-timeout", "30m", "-failfast", "-v"}
 	if *count > 0 {
 		args = append(args, "-count="+strconv.Itoa(*count))
 	}
@@ -277,7 +279,11 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	args = append(args, pkg)
 	cmd := commandWithContext(ctx, args...)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
-
+	abs, err := filepath.Abs(*tmp)
+	if err != nil {
+		return fmt.Errorf("while getting absolute path of tmp directory: %v Error: %v\n", *tmp, err)
+	}
+	cmd.Env = append(cmd.Env, "TEST_DATA_DIRECTORY="+abs)
 	// Use failureCatcher.
 	cmd.Stdout = oc
 
@@ -428,14 +434,14 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 }
 
 var clusterWithZeroNodeOnly = []string{
-	"/systest/bulk",
+	"/systest/bulk_live/bulk",
 	"/systest/21million/bulk",
-	"/systest/1million/bulk",
+	"/systest/1million",
 }
 
 func isClusterToBeRunWithZeroNodeOnly(pkg string) bool {
 	for _, p := range clusterWithZeroNodeOnly {
-		if strings.Contains(pkg, p) {
+		if strings.HasSuffix(pkg, p) {
 			return true
 		}
 	}
@@ -606,6 +612,16 @@ func getPackages() []task {
 			fmt.Printf("Found package for %s: %s\n", *runTest, pkg.ID)
 		}
 
+		if *suite == "load" {
+			if !isLoadPackage(pkg.ID) {
+				continue
+			}
+		} else {
+			if isLoadPackage(pkg.ID) {
+				continue
+			}
+		}
+
 		fname := composeFileFor(pkg.ID)
 		_, err := os.Stat(fname)
 		t := task{pkg: pkg, isCommon: os.IsNotExist(err)}
@@ -670,70 +686,52 @@ func removeAllTestContainers() {
 }
 
 var loadPackages = []string{
-	"/systest/21million",
+	"/systest/21million/bulk",
+	"/systest/21million/ludicrous",
+	"/systest/21million/live",
 	"/systest/1million",
-	"/systest/bulk",
+	"/systest/bulk_live/bulk",
+	"/systest/bulk_live/live",
 	"/systest/bgindex",
 	"/contrib/scripts",
 	"/dgraph/cmd/bulk/systest",
 }
 
-func runLoadSuiteOnly(taskCh chan task, closer *z.Closer) {
-	go func() {
-		defer close(taskCh)
-		valid := getPackages()
-		for i, task := range valid {
-			for _, p := range loadPackages {
-				if strings.HasSuffix(task.pkg.ID, p) {
-					continue
-				}
-			}
-			select {
-			case taskCh <- task:
-				fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
-			case <-closer.HasBeenClosed():
-				return
-			}
+func isLoadPackage(pkg string) bool {
+	for _, p := range loadPackages {
+		if strings.HasSuffix(pkg, p) {
+			return true
 		}
-	}()
-	return
+	}
+	return false
 }
 
-func runUnitSuiteOnly(taskCh chan task, closer *z.Closer) {
-	go func() {
-		defer close(taskCh)
-		valid := getPackages()
-		for i, task := range valid {
-			for _, p := range loadPackages {
-				if !strings.HasSuffix(task.pkg.ID, p) {
-					continue
-				}
-			}
-			select {
-			case taskCh <- task:
-				fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
-			case <-closer.HasBeenClosed():
-				return
-			}
-		}
-	}()
-	return
+var datafiles = map[string]string{
+	"1million-noindex.schema": "https://github.com/dgraph-io/benchmarks/blob/master/data/1million-noindex.schema?raw=true",
+	"1million.schema": "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.schema?raw=true",
+	"1million.rdf.gz": "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.rdf.gz?raw=true",
+	"21million.schema": "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true",
+	"21million.rdf.gz": "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true",
 }
 
-func runAllSuiteOnly(taskCh chan task, closer *z.Closer) {
-	go func() {
-		defer close(taskCh)
-		valid := getPackages()
-		for i, task := range valid {
-			select {
-			case taskCh <- task:
-				fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
-			case <-closer.HasBeenClosed():
-				return
-			}
+func downloadDataFiles() {
+	if !*downloadResources {
+		fmt.Print("Skipping downloading of resources\n")
+		return
+	}
+	if *tmp == "" {
+		*tmp = os.TempDir()
+	}
+	x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+	for fname, f := range datafiles {
+		cmd := exec.Command("wget", "-O", fname, f)
+		cmd.Dir = *tmp
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			fmt.Printf("Error %v", err)
+			fmt.Printf("Output %v", out)
 		}
-	}()
-	return
+	}
 }
 
 func run() error {
@@ -801,14 +799,21 @@ func run() error {
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	// pkgs, err := packages.Load(nil, "github.com/dgraph-io/dgraph/...")
-	switch *suite {
-	case "all":
-		runAllSuiteOnly(testCh, closer)
-	case "load":
-		runLoadSuiteOnly(testCh, closer)
-	case "unit":
-		runUnitSuiteOnly(testCh, closer)
-	}
+	go func() {
+		defer close(testCh)
+		valid := getPackages()
+		if *suite == "load" {
+			downloadDataFiles()
+		}
+		for i, task := range valid {
+			select {
+			case testCh <- task:
+				fmt.Printf("Sent %d/%d packages for processing.\n", i+1, len(valid))
+			case <-closer.HasBeenClosed():
+				return
+			}
+		}
+	}()
 
 	closer.Wait()
 	close(errCh)
@@ -831,6 +836,7 @@ func main() {
 	procId = rand.Intn(1000)
 
 	err := run()
+	_ = os.RemoveAll(*tmp)
 	if err != nil {
 		os.Exit(1)
 	}

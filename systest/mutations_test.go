@@ -60,7 +60,7 @@ func TestSystem(t *testing.T) {
 	t.Run("facets on scalar list", wrap(FacetsOnScalarList))
 	t.Run("lang and sort bug", wrap(LangAndSortBugTest))
 	t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
-	t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
+	t.Run("require.NoError( schema after deleting node", wrap(SchemaAfterDeleteNode))
 	t.Run("fulltext equal", wrap(FullTextEqual))
 	t.Run("json blank node", wrap(JSONBlankNode))
 	t.Run("scalar to list", wrap(ScalarToList))
@@ -87,8 +87,8 @@ func TestSystem(t *testing.T) {
 	t.Run("drop type", wrap(DropType))
 	t.Run("drop type without specified type", wrap(DropTypeNoValue))
 	t.Run("reverse count index", wrap(ReverseCountIndex))
-	t.Run("type predicate check", wrap(TypePredicateCheck))
-	t.Run("internal predicate check", wrap(InternalPredicateCheck))
+	t.Run("type predicate require.NoError(", wrap(TypePredicateCheck))
+	t.Run("internal predicate require.NoError(", wrap(InternalPredicateCheck))
 	t.Run("infer schema as list", wrap(InferSchemaAsList))
 	t.Run("infer schema as list JSON", wrap(InferSchemaAsListJSON))
 	t.Run("force schema as list JSON", wrap(ForceSchemaAsListJSON))
@@ -1095,7 +1095,7 @@ func HasWithDash(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{
 		Schema: `name: string @index(hash) .`,
 	}
-	check(t, (c.Alter(ctx, op)))
+	require.NoError(t, (c.Alter(ctx, op)))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -1134,7 +1134,7 @@ func ListGeoFilterTest(t *testing.T, c *dgo.Dgraph) {
 			loc: [geo] @index(geo) .
 		`,
 	}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1151,14 +1151,14 @@ func ListGeoFilterTest(t *testing.T, c *dgo.Dgraph) {
 			_:c <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	resp, err := c.NewTxn().Query(context.Background(), `{
 		q(func: near(loc, [-122.4220186,37.772318], 1000)) {
 			name
 		}
 	}`)
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1182,7 +1182,7 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 			per: [string] @index(trigram) .
 		`,
 	}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1199,14 +1199,14 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 			_:c <per> "write" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	resp, err := c.NewTxn().Query(context.Background(), `{
 		q(func: regexp(per, /^rea.*$/)) {
 			name
 		}
 	}`)
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1230,7 +1230,7 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 			per: [string] @index(trigram) .
 		`,
 	}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1247,7 +1247,7 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 			_:c <per> "write" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	resp, err := c.NewTxn().QueryWithVars(context.Background(), `
 		query search($term: string){
@@ -1255,7 +1255,7 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 				name
 			}
 		}`, map[string]string{"$term": "/^rea.*$/"})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1274,7 +1274,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1289,7 +1289,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			_:a <friend> _:b  .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	a := au.Uids["a"]
 	b := au.Uids["b"]
@@ -1302,7 +1302,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			name
 		}
 	}`, map[string]string{"$alice": a})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1323,7 +1323,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			}
 		}
 	}`, map[string]string{"$bob": b})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1350,7 +1350,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			}
 		}
 	}`, map[string]string{"$friends": friends})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1375,7 +1375,7 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1387,7 +1387,7 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 			_:c <name> "Foobar" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	// Try GraphQL variable with filter at root.
 	resp, err := c.NewTxn().Query(context.Background(), `
@@ -1397,7 +1397,7 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 			hasChildren: math(containerCount >= 1)
 		}
 	}`)
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 		{
 		  "q": [
@@ -1426,7 +1426,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 			_:d2 <start> "" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	var ids []string
 	for key, uid := range assigned.Uids {
@@ -1445,11 +1445,11 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 			me(func: has(end)) { uid }
 			you(func: has(end)) { count(uid) }
 		}`)
-		check(t, err)
+		require.NoError(t, err)
 		t.Logf("resp: %s\n", resp.GetJson())
 		m := make(map[string][]U)
 		err = json.Unmarshal(resp.GetJson(), &m)
-		check(t, err)
+		require.NoError(t, err)
 		uids := m["me"]
 		var result []string
 		for _, uid := range uids {
@@ -1474,7 +1474,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	`, ids[len(ids)-1]))
 	t.Logf("deleteMu: %+v\n", deleteMu)
 	_, err = txn.Mutate(ctx, deleteMu)
-	check(t, err)
+	require.NoError(t, err)
 
 	txn = c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1494,7 +1494,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 			_:d <end> "" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	require.Equal(t, 1, len(assigned.Uids))
 	for _, uid := range assigned.Uids {
@@ -1514,7 +1514,7 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	op := &api.Operation{Schema: `follow: [uid] @reverse .`}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -1528,7 +1528,7 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 			_:bob <follow> _:carol .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	type F struct {
 		Name string `json:"name"`
@@ -1540,12 +1540,12 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 		fwd(func: has(follow)) { name }
 		rev(func: has(~follow)) { name }
 		}`)
-	check(t, err)
+	require.NoError(t, err)
 
 	t.Logf("resp: %s\n", resp.GetJson())
 	m := make(map[string][]F)
 	err = json.Unmarshal(resp.GetJson(), &m)
-	check(t, err)
+	require.NoError(t, err)
 
 	fwds := m["fwd"]
 	revs := m["rev"]
@@ -1639,13 +1639,13 @@ func DropData(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 
-	// Check schema is still there.
+	// require.NoError( schema is still there.
 	query := `schema(preds: [name, follow]) {predicate}`
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"schema": [{"predicate":"name"}, {"predicate":"follow"}]}`, string(resp.Json))
 
-	// Check data is gone.
+	// require.NoError( data is gone.
 	resp, err = c.NewTxn().Query(ctx, `{
 		q(func: has(name)) {
 			uid
@@ -1680,7 +1680,7 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 		`,
 	}))
 
-	// Check type has been added.
+	// require.NoError( type has been added.
 	query := `schema(type: Person) {}`
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
@@ -1692,7 +1692,7 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 		DropValue: "Person",
 	}))
 
-	// Check type is gone.
+	// require.NoError( type is gone.
 	resp, err = c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, "{}", string(resp.Json))
