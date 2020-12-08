@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -9300,8 +9299,8 @@ func TestMain(m *testing.M) {
 		cleanupAndExit(1)
 	}
 
-	if err := testutil.BringAlphaUp("./alpha.yml"); err != nil {
-		log.Print(err)
+	if err := testutil.StartAlphas("./alpha.yml"); err != nil {
+		fmt.Printf("Error while bringin up alphas. Error: %v\n", err)
 		cleanupAndExit(1)
 	}
 	schemaFile := os.Getenv("TEST_DATA_DIRECTORY") + "/1million.schema"
@@ -9329,7 +9328,7 @@ func TestMain(m *testing.M) {
 }
 
 func cleanupAndExit(exitCode int) {
-	testutil.BringAlphaDown("./alpha.yml")
+	testutil.StopAlphas("./alpha.yml")
 	_ = os.RemoveAll("out")
 	os.Exit(exitCode)
 }

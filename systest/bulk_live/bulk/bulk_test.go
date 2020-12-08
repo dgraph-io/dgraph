@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// run this in sequential order. cleanup is necessary for bulk loader to work
 func TestBulkCases(t *testing.T) {
 	t.Run("bulk test cases", common.RunBulkCases)
 }

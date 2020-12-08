@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -116,7 +115,6 @@ func init() {
 
 	SockAddrZero = ContainerAddr("zero1", 5080)
 	SockAddrZeroHttp = ContainerAddr("zero1", 6080)
-	rand.Seed(int64(time.Now().Nanosecond()))
 
 	fmt.Printf("testutil: %q %s %s\n", DockerPrefix, SockAddr, SockAddrZero)
 }

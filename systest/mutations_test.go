@@ -60,7 +60,7 @@ func TestSystem(t *testing.T) {
 	t.Run("facets on scalar list", wrap(FacetsOnScalarList))
 	t.Run("lang and sort bug", wrap(LangAndSortBugTest))
 	t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
-	t.Run("require.NoError( schema after deleting node", wrap(SchemaAfterDeleteNode))
+	t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
 	t.Run("fulltext equal", wrap(FullTextEqual))
 	t.Run("json blank node", wrap(JSONBlankNode))
 	t.Run("scalar to list", wrap(ScalarToList))
@@ -87,8 +87,8 @@ func TestSystem(t *testing.T) {
 	t.Run("drop type", wrap(DropType))
 	t.Run("drop type without specified type", wrap(DropTypeNoValue))
 	t.Run("reverse count index", wrap(ReverseCountIndex))
-	t.Run("type predicate require.NoError(", wrap(TypePredicateCheck))
-	t.Run("internal predicate require.NoError(", wrap(InternalPredicateCheck))
+	t.Run("type predicate check", wrap(TypePredicateCheck))
+	t.Run("internal predicate check", wrap(InternalPredicateCheck))
 	t.Run("infer schema as list", wrap(InferSchemaAsList))
 	t.Run("infer schema as list JSON", wrap(InferSchemaAsListJSON))
 	t.Run("force schema as list JSON", wrap(ForceSchemaAsListJSON))
@@ -1639,13 +1639,13 @@ func DropData(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 
-	// require.NoError( schema is still there.
+	// Check schema is still there.
 	query := `schema(preds: [name, follow]) {predicate}`
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"schema": [{"predicate":"name"}, {"predicate":"follow"}]}`, string(resp.Json))
 
-	// require.NoError( data is gone.
+	// Check data is gone.
 	resp, err = c.NewTxn().Query(ctx, `{
 		q(func: has(name)) {
 			uid
@@ -1680,7 +1680,7 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 		`,
 	}))
 
-	// require.NoError( type has been added.
+	// Check type has been added.
 	query := `schema(type: Person) {}`
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
@@ -1692,7 +1692,7 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 		DropValue: "Person",
 	}))
 
-	// require.NoError( type is gone.
+	// Check type is gone.
 	resp, err = c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, "{}", string(resp.Json))

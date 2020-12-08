@@ -1,5 +1,3 @@
-# Auto-generated with: [./compose -a 3 -z 1 -r 1 --port_offset=0 --expose_ports=false --alpha_volume data:/data --zero_volume data:/data -w --mem= --names=false -O ../systest/1million/docker-compose.yml]
-#
 version: "3.5"
 services:
   zero1:

@@ -13,7 +13,7 @@ import (
 func GeneratePlugins() {
 	_, curr, _, ok := runtime.Caller(0)
 	if !ok {
-		fmt.Print("error while getting current directory")
+		fmt.Print("error while getting current file")
 		return
 	}
 	var soFiles []string
