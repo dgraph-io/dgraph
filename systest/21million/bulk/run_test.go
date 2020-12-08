@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 		cleanupAndExit(1)
 	}
 
-	if err := testutil.BringAlphaUp("./alpha.yml"); err != nil {
+	if err := testutil.StartAlphas("./alpha.yml"); err != nil {
 		cleanupAndExit(1)
 	}
 
@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 }
 
 func cleanupAndExit(exitCode int) {
-	testutil.BringAlphaDown("./alpha.yml")
+	testutil.StopAlphas("./alpha.yml")
 	_ = os.RemoveAll("out")
 	os.Exit(exitCode)
 }

@@ -736,7 +736,7 @@ func downloadDataFiles() {
 		}
 	}
 }
-func PreRunSteps() error {
+func executePreRunSteps() error {
 	testutil.GeneratePlugins()
 	return nil
 }
@@ -772,7 +772,7 @@ func run() error {
 	x.Check(err)
 	defer os.RemoveAll(tmpDir)
 
-	err = PreRunSteps()
+	err = executePreRunSteps()
 	x.Check(err)
 	N := *concurrency
 	if len(*runPkg) > 0 || len(*runTest) > 0 {

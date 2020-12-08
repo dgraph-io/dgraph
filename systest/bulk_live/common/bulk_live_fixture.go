@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/pkg/errors"
 )
 
 var rootDir = "./data"
@@ -54,13 +53,13 @@ func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
 		opts: opts,
 	}
 
-	s.checkFatal(makeDirEmpty(rootDir))
+	require.NoError(s.t, makeDirEmpty(rootDir))
 	rdfFile := filepath.Join(rootDir, "rdfs.rdf")
-	s.checkFatal(ioutil.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
+	require.NoError(s.t, ioutil.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
 	schemaFile := filepath.Join(rootDir, "schema.txt")
-	s.checkFatal(ioutil.WriteFile(schemaFile, []byte(opts.schema), 0644))
+	require.NoError(s.t, ioutil.WriteFile(schemaFile, []byte(opts.schema), 0644))
 	gqlSchemaFile := filepath.Join(rootDir, "gql_schema.txt")
-	s.checkFatal(ioutil.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
+	require.NoError(s.t, ioutil.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
 	s.setup(t, "schema.txt", "rdfs.rdf", "gql_schema.txt")
 	return s
 }
@@ -96,10 +95,7 @@ func newSuiteFromFile(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) *
 }
 
 func (s *suite) setup(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) {
-	s.checkFatal(
-		makeDirEmpty(filepath.Join(rootDir, "out", "0")),
-	)
-
+	require.NoError(s.t, makeDirEmpty(filepath.Join(rootDir, "out", "0")))
 	if s.opts.bulkSuite {
 		err := testutil.BulkLoad(testutil.BulkOpts{
 			Zero:          testutil.SockAddrZero,
@@ -111,7 +107,7 @@ func (s *suite) setup(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) {
 		})
 
 		require.NoError(t, err)
-		err = testutil.BringAlphaUp("../bulk/alpha.yml")
+		err = testutil.StartAlphas("../bulk/alpha.yml")
 		require.NoError(t, err)
 		return
 	}
@@ -139,7 +135,7 @@ func (s *suite) cleanup() {
 	// NOTE: Shouldn't raise any errors here or fail a test, since this is
 	// called when we detect an error (don't want to mask the original problem).
 	if s.opts.bulkSuite {
-		testutil.BringAlphaDown("../bulk/alpha.yml")
+		testutil.StopAlphas("../bulk/alpha.yml")
 		_ = os.RemoveAll(rootDir)
 		return
 	}
@@ -164,15 +160,5 @@ func testCase(query, wantResult string) func(*testing.T) {
 		resp, err := txn.Query(ctx2, query)
 		require.NoError(t, err)
 		testutil.CompareJSON(t, wantResult, string(resp.GetJson()))
-	}
-}
-
-func (s *suite) checkFatal(errs ...error) {
-	for _, err := range errs {
-		err = errors.Wrapf(err, "") // Add a stack.
-		if err != nil {
-			s.cleanup()
-			s.t.Fatalf("%+v", err)
-		}
 	}
 }

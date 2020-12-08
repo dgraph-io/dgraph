@@ -125,14 +125,6 @@ func pipelineInternal(cmds [][]string, opts []CmdOpts) (string, error) {
 	return outStr, err
 }
 
-func GoBinaryPath() string {
-	gopath := os.Getenv("GOROOT")
-	if gopath == "" {
-		gopath = build.Default.GOROOT
-	}
-	return gopath
-}
-
 func DgraphBinaryPath() string {
 	gopath := os.Getenv("GOPATH")
 

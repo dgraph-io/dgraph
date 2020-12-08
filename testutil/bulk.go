@@ -14,11 +14,11 @@ import (
 )
 
 type LiveOpts struct {
-	Alpha string
-	Zero          string
-	RdfFile       string
-	SchemaFile    string
-	Dir string
+	Alpha      string
+	Zero       string
+	RdfFile    string
+	SchemaFile string
+	Dir        string
 }
 
 func LiveLoad(opts LiveOpts) error {
@@ -48,7 +48,7 @@ type BulkOpts struct {
 	RdfFile       string
 	SchemaFile    string
 	GQLSchemaFile string
-	Dir string
+	Dir           string
 }
 
 func BulkLoad(opts BulkOpts) error {
@@ -56,7 +56,7 @@ func BulkLoad(opts BulkOpts) error {
 		"-f", opts.RdfFile,
 		"-s", opts.SchemaFile,
 		"-g", opts.GQLSchemaFile,
-		"--http", "localhost:" + strconv.Itoa(FreePort(0)),
+		"--http", "localhost:"+strconv.Itoa(FreePort(0)),
 		"--reduce-shards="+strconv.Itoa(opts.Shards),
 		"--map-shards="+strconv.Itoa(opts.Shards),
 		"--store-xids=true",
@@ -79,7 +79,9 @@ func MakeDirEmpty(dir []string) error {
 	for _, d := range dir {
 		_ = os.RemoveAll(d)
 		err := os.MkdirAll(d, 0755)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -99,7 +101,7 @@ func FreePort(port int) int {
 	}
 }
 
-func BringAlphaUp(compose string) error {
+func StartAlphas(compose string) error {
 	cmd := exec.Command("docker-compose", "-f", compose, "-p", DockerPrefix,
 		"up", "-d", "--force-recreate")
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -123,7 +125,7 @@ func BringAlphaUp(compose string) error {
 	return err
 }
 
-func BringAlphaDown(compose string) {
+func StopAlphas(compose string) {
 	dg, err := DgraphClient(ContainerAddr("alpha1", 9080))
 	if err == nil {
 		_ = dg.Alter(context.Background(), &api.Operation{

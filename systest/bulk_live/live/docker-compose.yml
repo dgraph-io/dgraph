@@ -1,4 +1,4 @@
-# Auto-generated with: [../../compose/compose -z=1]
+# Auto-generated with: [../../compose/compose -z=1 -a=1]
 #
 version: "3.5"
 services:
