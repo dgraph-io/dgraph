@@ -421,28 +421,7 @@ func addFilterToField(dgQuery *gql.GraphQuery, field schema.Field) {
 }
 
 func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
-	if query.Attr != "" {
-		addTypeFilter(query, field.Type())
-		return
-	}
-
-	var rootQuery *gql.GraphQuery
-	for _, q := range query.Children {
-		if q.Attr == field.Name() {
-			rootQuery = q
-			break
-		}
-		for _, cq := range q.Children {
-			if cq.Attr == field.Name() {
-				rootQuery = cq
-				break
-			}
-		}
-	}
-
-	if rootQuery != nil {
-		addTypeFilter(rootQuery, field.Type())
-	}
+	addTypeFilter(query, field.Type())
 }
 
 func rewriteAsGet(
