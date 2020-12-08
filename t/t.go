@@ -612,14 +612,9 @@ func getPackages() []task {
 			fmt.Printf("Found package for %s: %s\n", *runTest, pkg.ID)
 		}
 
-		if *suite == "load" {
-			if !isLoadPackage(pkg.ID) {
-				continue
-			}
-		} else {
-			if isLoadPackage(pkg.ID) {
-				continue
-			}
+		if !isValidPackageForSuite(pkg.ID) {
+			fmt.Printf("Skipping pacakge %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			continue
 		}
 
 		fname := composeFileFor(pkg.ID)
@@ -695,6 +690,13 @@ var loadPackages = []string{
 	"/systest/bgindex",
 	"/contrib/scripts",
 	"/dgraph/cmd/bulk/systest",
+}
+
+func isValidPackageForSuite(pkg string) bool {
+	if *suite == "load" {
+		return isLoadPackage(pkg)
+	}
+	return !isLoadPackage(pkg)
 }
 
 func isLoadPackage(pkg string) bool {

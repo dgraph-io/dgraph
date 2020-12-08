@@ -28,14 +28,19 @@ func TestMain(m *testing.M) {
 		"--zero", testutil.SockAddrZero,
 		"--ludicrous_mode",
 	)
-	if out, err := liveCmd.Output(); err != nil {
+	if out, err := liveCmd.CombinedOutput(); err != nil {
 		fmt.Printf("error %v\n", err)
 		fmt.Printf("output %v\n", out)
-		os.Exit(1)
+		cleanupAndExit(1)
 	}
 
+	fmt.Print("waiting for the indexes to be completed \n")
 	time.Sleep(10 * time.Minute)
 	exitCode := m.Run()
+	cleanupAndExit(exitCode)
+}
+
+func cleanupAndExit(exitCode int) {
 	_ = os.RemoveAll("./t")
 	os.Exit(exitCode)
 }

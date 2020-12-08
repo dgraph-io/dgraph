@@ -3,7 +3,6 @@ package bulk
 import (
 	"github.com/dgraph-io/dgraph/systest/21million/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"log"
 	"os"
 
 	"testing"
@@ -39,6 +38,6 @@ func TestMain(m *testing.M) {
 
 func cleanupAndExit(exitCode int) {
 	testutil.BringAlphaDown("./alpha.yml")
-	log.Print(os.RemoveAll("out"))
+	_ = os.RemoveAll("out")
 	os.Exit(exitCode)
 }
