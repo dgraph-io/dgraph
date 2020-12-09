@@ -100,6 +100,7 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 }
 
 func (o *Oracle) purgeBelow(minTs uint64) {
+	glog.Infof("purgeBelow: %d\n", minTs)
 	var timer x.Timer
 	timer.Start()
 
@@ -267,7 +268,9 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
-	o.syncMarks = append(o.syncMarks, syncMark{index: index, ts: src.StartTs})
+	s := syncMark{index: index, ts: src.StartTs}
+	// glog.V(2).Infof("Adding synmark: %+v\n", s)
+	o.syncMarks = append(o.syncMarks, s)
 	return true
 }
 
@@ -495,6 +498,7 @@ func (s *Server) SyncedUntil() uint64 {
 	// Find max index with timestamp less than tmax
 	var idx int
 	for i, sm := range s.orc.syncMarks {
+		glog.V(2).Infof("i: %d sm: %+v\n", i, sm)
 		idx = i
 		if sm.ts >= s.orc.tmax {
 			break

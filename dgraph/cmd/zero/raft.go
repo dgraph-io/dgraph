@@ -666,6 +666,7 @@ func (n *node) trySnapshot(skip uint64) {
 	x.Checkf(err, "Unable to get existing snapshot")
 	si := existing.Metadata.Index
 	idx := n.server.SyncedUntil()
+	glog.V(2).Infof("trySnapshot: si: %d idx: %d\n", si, idx)
 	if idx <= si+skip {
 		return
 	}
