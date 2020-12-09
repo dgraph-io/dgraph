@@ -2672,7 +2672,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "config",
 			testGuardianAccess: true,
-			guardianErr:        "cache-mb must be non-negative",
+			guardianErr:        "cache_mb must be non-negative",
 			guardianData:       `{"config": null}`,
 		},
 		{
