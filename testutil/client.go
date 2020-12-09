@@ -23,13 +23,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -39,8 +37,6 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -51,9 +47,11 @@ import (
 // socket addr = IP address and port number
 var (
 	// Instance is the instance name of the Alpha.
-	DockerPrefix  string
-	Instance      string
-	MinioInstance string
+	DockerPrefix string
+	// Global test data directory used to store resources
+	TestDataDirectory string
+	Instance          string
+	MinioInstance     string
 	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
 	SockAddr string
 	// SockAddrHttp is the address to the HTTP of alpha used during tests.
@@ -72,42 +70,11 @@ func AdminUrl() string {
 	return "http://" + SockAddrHttp + "/admin"
 }
 
-func getContainer(name string) types.Container {
-	cli, err := client.NewEnvClient()
-	x.Check(err)
-
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
-	if err != nil {
-		log.Fatalf("While listing container: %v\n", err)
-	}
-
-	q := fmt.Sprintf("/%s_%s_", DockerPrefix, name)
-	for _, c := range containers {
-		for _, n := range c.Names {
-			if !strings.HasPrefix(n, q) {
-				continue
-			}
-			return c
-		}
-	}
-	return types.Container{}
-}
-
-func ContainerAddr(name string, privatePort uint16) string {
-	c := getContainer(name)
-	for _, p := range c.Ports {
-		if p.PrivatePort == privatePort {
-			return "localhost:" + strconv.Itoa(int(p.PublicPort))
-		}
-	}
-	return "localhost:" + strconv.Itoa(int(privatePort))
-}
-
 // This allows running (most) tests against dgraph running on the default ports, for example.
 // Only the GRPC ports are needed and the others are deduced.
 func init() {
 	DockerPrefix = os.Getenv("TEST_DOCKER_PREFIX")
-
+	TestDataDirectory = os.Getenv("TEST_DATA_DIRECTORY")
 	MinioInstance = ContainerAddr("minio", 9001)
 	Instance = fmt.Sprintf("%s_%s_1", DockerPrefix, "alpha1")
 	SockAddr = ContainerAddr("alpha1", 9080)
@@ -289,7 +256,7 @@ type LoginParams struct {
 // HttpLogin sends a HTTP request to the server
 // and returns the access JWT and refresh JWT extracted from
 // the HTTP response
-func HttpLogin(params *LoginParams) (string, string, error) {
+func HttpLogin(params *LoginParams) (*HttpToken, error) {
 	loginPayload := api.LoginRequest{}
 	if len(params.RefreshJwt) > 0 {
 		loginPayload.RefreshToken = params.RefreshJwt
@@ -317,28 +284,28 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 	}
 	body, err := json.Marshal(gqlParams)
 	if err != nil {
-		return "", "", errors.Wrapf(err, "unable to marshal body")
+		return nil, errors.Wrapf(err, "unable to marshal body")
 	}
 
 	req, err := http.NewRequest("POST", params.Endpoint, bytes.NewBuffer(body))
 	if err != nil {
-		return "", "", errors.Wrapf(err, "unable to create request")
+		return nil, errors.Wrapf(err, "unable to create request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", errors.Wrapf(err, "login through curl failed")
+		return nil, errors.Wrapf(err, "login through curl failed")
 	}
 	defer resp.Body.Close()
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", errors.Wrapf(err, "unable to read from response")
+		return nil, errors.Wrapf(err, "unable to read from response")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", errors.New(fmt.Sprintf("got non 200 response from the server with %s ",
+		return nil, errors.New(fmt.Sprintf("got non 200 response from the server with %s ",
 			string(respBody)))
 	}
 	var outputJson map[string]interface{}
@@ -346,49 +313,61 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 		var errOutputJson map[string]interface{}
 		if err := json.Unmarshal(respBody, &errOutputJson); err == nil {
 			if _, ok := errOutputJson["errors"]; ok {
-				return "", "", errors.Errorf("response error: %v", string(respBody))
+				return nil, errors.Errorf("response error: %v", string(respBody))
 			}
 		}
-		return "", "", errors.Wrapf(err, "unable to unmarshal the output to get JWTs")
+		return nil, errors.Wrapf(err, "unable to unmarshal the output to get JWTs")
 	}
 
 	data, found := outputJson["data"].(map[string]interface{})
 	if !found {
-		return "", "", errors.Wrapf(err, "data entry found in the output")
+		return nil, errors.Wrapf(err, "data entry found in the output")
 	}
 
 	l, found := data["login"].(map[string]interface{})
 	if !found {
-		return "", "", errors.Wrapf(err, "data entry found in the output")
+		return nil, errors.Wrapf(err, "data entry found in the output")
 	}
 
 	response, found := l["response"].(map[string]interface{})
 	if !found {
-		return "", "", errors.Wrapf(err, "data entry found in the output")
+		return nil, errors.Wrapf(err, "data entry found in the output")
 	}
 
 	newAccessJwt, found := response["accessJWT"].(string)
 	if !found || newAccessJwt == "" {
-		return "", "", errors.Errorf("no access JWT found in the output")
+		return nil, errors.Errorf("no access JWT found in the output")
 	}
 	newRefreshJwt, found := response["refreshJWT"].(string)
 	if !found || newRefreshJwt == "" {
-		return "", "", errors.Errorf("no refresh JWT found in the output")
+		return nil, errors.Errorf("no refresh JWT found in the output")
 	}
 
-	return newAccessJwt, newRefreshJwt, nil
+	return &HttpToken{
+		UserId:       params.UserID,
+		Password:     params.Passwd,
+		AccessJwt:    newAccessJwt,
+		RefreshToken: newRefreshJwt,
+	}, nil
+}
+
+type HttpToken struct {
+	UserId       string
+	Password     string
+	AccessJwt    string
+	RefreshToken string
 }
 
 // GrootHttpLogin logins using the groot account with the default password
 // and returns the access JWT
-func GrootHttpLogin(endpoint string) (string, string) {
-	accessJwt, refreshJwt, err := HttpLogin(&LoginParams{
+func GrootHttpLogin(endpoint string) *HttpToken {
+	token, err := HttpLogin(&LoginParams{
 		Endpoint: endpoint,
 		UserID:   x.GrootId,
 		Passwd:   "password",
 	})
 	x.Check(err)
-	return accessJwt, refreshJwt
+	return token
 }
 
 // CurlFailureConfig stores information about the expected failure of a curl test.
@@ -520,7 +499,6 @@ func hasAdminGraphQLSchema(t *testing.T) (bool, error) {
 func GetHttpsClient(t *testing.T) http.Client {
 	tlsConf := GetAlphaClientConfig(t)
 	return http.Client{
-		Timeout: time.Second * 3,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConf,
 		},

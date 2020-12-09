@@ -18,10 +18,10 @@ package admin_auth
 
 import (
 	"encoding/json"
+	"github.com/dgraph-io/dgraph/x"
 	"net/http"
 	"testing"
-
-	"github.com/dgraph-io/dgraph/x"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -47,7 +47,15 @@ func TestLoginWithPoorManAuth(t *testing.T) {
 
 	// setting correct value for the token should not give any GraphQL error
 	params.Headers.Set(authTokenHeader, authToken)
-	common.RequireNoGQLErrors(t, params.ExecuteAsPost(t, common.GraphqlAdminURL))
+	var resp *common.GraphQLResponse
+	for i := 0; i < 10; i++ {
+		resp = params.ExecuteAsPost(t, common.GraphqlAdminURL)
+		if len(resp.Errors) == 0 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	common.RequireNoGQLErrors(t, resp)
 }
 
 func TestAdminPoorManWithAcl(t *testing.T) {
