@@ -1416,7 +1416,9 @@
     query {
       aggregateCountry(filter: { name: { regexp: "/.*ust.*/" }}) {
         count
+        cnt : count
         nameMin
+        nm : nameMin
         nameMax
       }
     }
@@ -2938,7 +2940,9 @@
         }
         statesAggregate(filter: { code: { eq: "state code" } }) {
           cnt : count
+          cnt2 : count
           nMin : nameMin
+          nameMin
           nMax : nameMax
           cMin : capitalMin
         }
