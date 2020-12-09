@@ -306,6 +306,8 @@ func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
 			snap.Index, existing.Metadata.Index)
 		return nil
 	}
+	n.server.orc.purgeBelow(snap.CheckpointTs)
+
 	data, err := snap.Marshal()
 	x.Check(err)
 
@@ -685,25 +687,20 @@ func (n *node) snapshotPeriodically(closer *z.Closer) {
 	}
 }
 
+// calculateSnapshotAndPurge works by tracking Alpha group leaders' checkpoint timestamps. It then
+// finds the minimum checkpoint ts across these groups, say Tmin.  And then, iterates over Zero Raft
+// logs to determine what all entries we could discard which are below Tmin. It uses that
+// information to calculate a snapshot, which it proposes to other Zeros. When the proposal arrives
+// via Raft, all Zeros apply it to themselves via applySnapshot in raft.Ready.
 func (n *node) calculateSnapshotAndPurge() error {
 	// Only run this on the leader.
 	if !n.AmLeader() {
-		n.server.orc.keyCommit.Reset()
 		return nil
 	}
 
 	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
 		otrace.WithSampler(otrace.AlwaysSample()))
 	defer span.End()
-
-	// existing, err := n.Store.Snapshot()
-	// x.Checkf(err, "Unable to get existing snapshot")
-	// si := existing.Metadata.Index
-	// idx := n.server.SyncedUntil()
-	// glog.V(2).Infof("trySnapshot: si: %d idx: %d\n", si, idx)
-	// if idx <= si+skip {
-	// 	return
-	// }
 
 	// We calculate the minimum timestamp from all the group's maxAssigned.
 	discardBelow := uint64(math.MaxUint64)
@@ -735,9 +732,6 @@ func (n *node) calculateSnapshotAndPurge() error {
 
 	span.Annotatef(nil, "First index: %d. Last index: %d. Discard Below: %d",
 		first, last, discardBelow)
-	if discardBelow < math.MaxUint64 {
-		n.server.orc.purgeBelow(discardBelow)
-	}
 
 	var snapshotIndex uint64
 	for batchFirst := first; batchFirst <= last; {
@@ -785,10 +779,6 @@ func (n *node) calculateSnapshotAndPurge() error {
 	span.Annotatef(nil, "Error while proposeAndWait: %v", err)
 	return err
 }
-
-// 	err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
-// 	x.Checkf(err, "While creating snapshot")
-// 	glog.Infof("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
 
 const tickDur = 100 * time.Millisecond
 
