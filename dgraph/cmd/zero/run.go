@@ -291,8 +291,6 @@ func run() {
 		_ = httpListener.Close()
 		// Stop Raft.
 		st.node.closer.SignalAndWait()
-		// Try to generate a snapshot before the shutdown.
-		st.node.trySnapshot(0)
 		// Stop all internal requests.
 		_ = grpcListener.Close()
 

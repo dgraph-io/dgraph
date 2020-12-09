@@ -47,14 +47,11 @@ type Oracle struct {
 	keyCommit   *z.Tree // fp(key) -> commitTs. Used to detect conflict.
 	maxAssigned uint64  // max transaction assigned by us.
 
-	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
-	tmax uint64
 	// All transactions with startTs < startTxnTs return true for hasConflict.
 	startTxnTs  uint64
 	subscribers map[int]chan pb.OracleDelta
 	updates     chan *pb.OracleDelta
 	doneUntil   y.WaterMark
-	syncMarks   []syncMark
 }
 
 // Init initializes the oracle.
@@ -106,6 +103,10 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 
 	o.Lock()
 	defer o.Unlock()
+
+	// Set startTxnTs so that every txn with start ts less than this, would be aborted.
+	o.startTxnTs = minTs
+
 	// Dropping would be cheaper if abort/commits map is sharded
 	for ts := range o.commits {
 		if ts < minTs {
@@ -117,12 +118,12 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	// There is no transaction running with startTs less than minTs
 	// So we can delete everything from rowCommit whose commitTs < minTs
 	stats := o.keyCommit.Stats()
+	glog.V(2).Infof("Stats: %+v\n", stats)
 	if stats.Occupancy < 50.0 {
 		return
 	}
 	o.keyCommit.DeleteBelow(minTs)
 	timer.Record("deleteBelow")
-	o.tmax = minTs
 	glog.V(2).Infof("Purged below ts:%d, len(o.commits):%d, keyCommit: [before: %+v, after: %+v].\n",
 		minTs, len(o.commits), stats, o.keyCommit.Stats())
 	if timer.Total() > time.Second {
@@ -268,9 +269,6 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
-	s := syncMark{index: index, ts: src.StartTs}
-	// glog.V(2).Infof("Adding synmark: %+v\n", s)
-	o.syncMarks = append(o.syncMarks, s)
 	return true
 }
 
@@ -489,27 +487,6 @@ func (s *Server) Oracle(_ *api.Payload, server pb.Zero_OracleServer) error {
 			return errServerShutDown
 		}
 	}
-}
-
-// SyncedUntil returns the timestamp up to which all the nodes have synced.
-func (s *Server) SyncedUntil() uint64 {
-	s.orc.Lock()
-	defer s.orc.Unlock()
-	// Find max index with timestamp less than tmax
-	var idx int
-	for i, sm := range s.orc.syncMarks {
-		glog.V(2).Infof("i: %d sm: %+v\n", i, sm)
-		idx = i
-		if sm.ts >= s.orc.tmax {
-			break
-		}
-	}
-	var syncUntil uint64
-	if idx > 0 {
-		syncUntil = s.orc.syncMarks[idx-1].index
-	}
-	s.orc.syncMarks = s.orc.syncMarks[idx:]
-	return syncUntil
 }
 
 // TryAbort attempts to abort the given transactions which are not already committed..
