@@ -1,5 +1,3 @@
-// +build linux
-
 /*
  * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
@@ -20,12 +18,7 @@ package main
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strconv"
-	"strings"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
@@ -34,63 +27,37 @@ import (
 )
 
 func TestPlugins(t *testing.T) {
-	t.Skipf("TODO: Needs to be converted to use Docker.")
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
 	}
-
-	var soFiles []string
-	for i, src := range []string{
-		"./_customtok/anagram/main.go",
-		"./_customtok/cidr/main.go",
-		"./_customtok/factor/main.go",
-		"./_customtok/rune/main.go",
-	} {
-		so := strconv.Itoa(i) + ".so"
-		t.Logf("compiling plugin: src=%q so=%q", src, so)
-		cmd := exec.Command("go", "build", "-buildmode=plugin", "-o", so, src)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("Could not compile plugin: %v", string(out))
-		}
-		absSO, err := filepath.Abs(so)
-		check(t, err)
-		defer os.Remove(absSO)
-		soFiles = append(soFiles, absSO)
-	}
-
-	tmpDir, err := ioutil.TempDir("", "")
-	check(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	cluster := NewDgraphCluster(tmpDir)
-	cluster.TokenizerPluginsArg = strings.Join(soFiles, ",")
-	check(t, cluster.Start())
-	defer cluster.Close()
 
 	type testCase struct {
 		query      string
 		wantResult string
 	}
+
+	client, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
 	suite := func(initialSchema string, setJSON string, cases []testCase) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		check(t, cluster.client.Alter(ctx, &api.Operation{
+		require.NoError(t, client.Alter(ctx, &api.Operation{
 			DropAll: true,
 		}))
-		check(t, cluster.client.Alter(ctx, &api.Operation{
+		require.NoError(t, client.Alter(ctx, &api.Operation{
 			Schema: initialSchema,
 		}))
 
-		txn := cluster.client.NewTxn()
+		txn := client.NewTxn()
 		_, err = txn.Mutate(ctx, &api.Mutation{SetJson: []byte(setJSON)})
-		check(t, err)
-		check(t, txn.Commit(ctx))
+		require.NoError(t, err)
+		require.NoError(t, txn.Commit(ctx))
 
 		for _, test := range cases {
-			txn := cluster.client.NewTxn()
+			txn := client.NewTxn()
 			reply, err := txn.Query(ctx, test.query)
-			check(t, err)
+			require.NoError(t, err)
 			testutil.CompareJSON(t, test.wantResult, string(reply.GetJson()))
 		}
 	}

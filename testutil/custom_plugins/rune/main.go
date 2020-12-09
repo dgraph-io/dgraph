@@ -16,38 +16,23 @@
 
 package main
 
-import (
-	"context"
-	"fmt"
-	"sync"
-	"sync/atomic"
-	"time"
+import "encoding/binary"
 
-	"github.com/dgraph-io/dgo/v200"
-)
+func Tokenizer() interface{} { return RuneTokenizer{} }
 
-func printStats(counter *uint64, quit <-chan struct{}, wg *sync.WaitGroup) {
-	defer wg.Done()
-	for {
-		select {
-		case <-quit:
-			return
-		case <-time.After(2 * time.Second):
-		}
+type RuneTokenizer struct{}
 
-		fmt.Println("mutations:", atomic.LoadUint64(counter))
+func (RuneTokenizer) Name() string     { return "rune" }
+func (RuneTokenizer) Type() string     { return "string" }
+func (RuneTokenizer) Identifier() byte { return 0xfd }
+
+func (t RuneTokenizer) Tokens(value interface{}) ([]string, error) {
+	var toks []string
+	for _, r := range value.(string) {
+		var buf [binary.MaxVarintLen32]byte
+		n := binary.PutVarint(buf[:], int64(r))
+		tok := string(buf[:n])
+		toks = append(toks, tok)
 	}
-}
-
-// blocks until query returns no error.
-func waitForSchemaUpdate(query string, dg *dgo.Dgraph) {
-	for {
-		time.Sleep(2 * time.Second)
-		_, err := dg.NewReadOnlyTxn().Query(context.Background(), query)
-		if err != nil {
-			continue
-		}
-
-		return
-	}
+	return toks, nil
 }

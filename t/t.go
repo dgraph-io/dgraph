@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -79,6 +78,11 @@ var (
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
 		"If true, don't run tests on slow packages.")
+	suite = pflag.String("suite", "unit", "This flag is used to specify which "+
+		"test suites to run. Possible values are all, load, unit")
+	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
+	downloadResources = pflag.BoolP("download", "d", true,
+		"Flag to specify whether to download resources or not")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -115,12 +119,17 @@ func startCluster(composeFile, prefix string) {
 
 	// Wait for cluster to be healthy.
 	for i := 1; i <= 3; i++ {
-		in := getInstance(prefix, "zero"+strconv.Itoa(i))
-		in.bestEffortWaitForHealthy(6080)
+		in := testutil.GetContainerInstance(prefix, "zero"+strconv.Itoa(i))
+		if err := in.BestEffortWaitForHealthy(6080); err != nil {
+			fmt.Printf("Error while checking zero health %s. Error %v", in.Name, err)
+		}
+
 	}
 	for i := 1; i <= 6; i++ {
-		in := getInstance(prefix, "alpha"+strconv.Itoa(i))
-		in.bestEffortWaitForHealthy(8080)
+		in := testutil.GetContainerInstance(prefix, "alpha"+strconv.Itoa(i))
+		if err := in.BestEffortWaitForHealthy(8080); err != nil {
+			fmt.Printf("Error while checking alpha health %s. Error %v", in.Name, err)
+		}
 	}
 }
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
@@ -137,132 +146,8 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	}()
 }
 
-type instance struct {
-	Prefix string
-	Name   string
-}
-
-func getInstance(prefix, name string) instance {
-	return instance{Prefix: prefix, Name: name}
-}
-func (in instance) String() string {
-	return fmt.Sprintf("%s_%s_1", in.Prefix, in.Name)
-}
-func (in instance) bestEffortWaitForHealthy(privatePort uint16) {
-	port := in.publicPort(privatePort)
-	if len(port) == 0 {
-		return
-	}
-	checkACL := func(body []byte) {
-		const acl string = "\"acl\""
-		if bytes.Index(body, []byte(acl)) > 0 {
-			in.loginFatal()
-		}
-	}
-
-	for i := 0; i < 30; i++ {
-		resp, err := http.Get("http://localhost:" + port + "/health")
-		var body []byte
-		if resp != nil && resp.Body != nil {
-			body, _ = ioutil.ReadAll(resp.Body)
-			resp.Body.Close()
-		}
-		if err == nil && resp.StatusCode == http.StatusOK {
-			checkACL(body)
-			return
-		}
-		fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
-		time.Sleep(time.Second)
-	}
-	return
-}
-
-func (in instance) getContainer() types.Container {
-	containers := allContainers(in.Prefix)
-
-	q := fmt.Sprintf("/%s_%s_", in.Prefix, in.Name)
-	for _, container := range containers {
-		for _, name := range container.Names {
-			if strings.HasPrefix(name, q) {
-				return container
-			}
-		}
-	}
-	return types.Container{}
-}
-
-func (in instance) publicPort(privatePort uint16) string {
-	c := in.getContainer()
-	for _, p := range c.Ports {
-		if p.PrivatePort == privatePort {
-			return strconv.Itoa(int(p.PublicPort))
-		}
-	}
-	return ""
-}
-
-func (in instance) login() error {
-	addr := in.publicPort(8080)
-	if len(addr) == 0 {
-		return fmt.Errorf("unable to find container: %s", in)
-	}
-
-	_, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: "http://localhost:" + addr + "/admin",
-		UserID:   "groot",
-		Passwd:   "password",
-	})
-
-	if err != nil {
-		return fmt.Errorf("while connecting: %v", err)
-	}
-	fmt.Printf("Logged into %s\n", in)
-	return nil
-}
-
-func (in instance) loginFatal() {
-	for i := 0; i < 30; i++ {
-		err := in.login()
-		if err == nil {
-			return
-		}
-		if strings.Contains(err.Error(), "Invalid X-Dgraph-AuthToken") {
-			// This is caused by Poor Man's auth. Return.
-			return
-		}
-		if strings.Contains(err.Error(), "Client sent an HTTP request to an HTTPS server.") {
-			// This is TLS enabled cluster. We won't be able to login.
-			return
-		}
-		fmt.Printf("Login failed for %s: %v. Retrying...\n", in, err)
-		time.Sleep(time.Second)
-	}
-	fmt.Printf("Unable to login to %s\n", in)
-	os.Exit(1)
-}
-
-func allContainers(prefix string) []types.Container {
-	cli, err := client.NewEnvClient()
-	x.Check(err)
-
-	containers, err := cli.ContainerList(ctxb, types.ContainerListOptions{All: true})
-	if err != nil {
-		log.Fatalf("While listing container: %v\n", err)
-	}
-
-	var out []types.Container
-	for _, c := range containers {
-		for _, name := range c.Names {
-			if strings.HasPrefix(name, "/"+prefix) {
-				out = append(out, c)
-			}
-		}
-	}
-	return out
-}
-
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-failfast", "-v"}
+	var args = []string{"go", "test", "-timeout", "30m", "-failfast", "-v"}
 	if *count > 0 {
 		args = append(args, "-count="+strconv.Itoa(*count))
 	}
@@ -275,7 +160,11 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	args = append(args, pkg)
 	cmd := commandWithContext(ctx, args...)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
-
+	abs, err := filepath.Abs(*tmp)
+	if err != nil {
+		return fmt.Errorf("while getting absolute path of tmp directory: %v Error: %v\n", *tmp, err)
+	}
+	cmd.Env = append(cmd.Env, "TEST_DATA_DIRECTORY="+abs)
 	// Use failureCatcher.
 	cmd.Stdout = oc
 
@@ -405,7 +294,6 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 
 	compose := composeFileFor(pkg)
 	prefix := getClusterPrefix()
-
 	startCluster(compose, prefix)
 	if !*keepCluster {
 		wg.Add(1)
@@ -563,6 +451,11 @@ func getPackages() []task {
 			fmt.Printf("Found package for %s: %s\n", *runTest, pkg.ID)
 		}
 
+		if !isValidPackageForSuite(pkg.ID) {
+			fmt.Printf("Skipping pacakge %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			continue
+		}
+
 		fname := composeFileFor(pkg.ID)
 		_, err := os.Stat(fname)
 		t := task{pkg: pkg, isCommon: os.IsNotExist(err)}
@@ -581,7 +474,7 @@ func getPackages() []task {
 }
 
 func removeAllTestContainers() {
-	containers := allContainers(getGlobalPrefix())
+	containers := testutil.AllContainers(getGlobalPrefix())
 
 	cli, err := client.NewEnvClient()
 	x.Check(err)
@@ -626,6 +519,74 @@ func removeAllTestContainers() {
 	}
 }
 
+var loadPackages = []string{
+	"/systest/21million/bulk",
+	"/systest/21million/ludicrous",
+	"/systest/21million/live",
+	"/systest/1million",
+	"/systest/bulk_live/bulk",
+	"/systest/bulk_live/live",
+	"/systest/bgindex",
+	"/contrib/scripts",
+	"/dgraph/cmd/bulk/systest",
+}
+
+func isValidPackageForSuite(pkg string) bool {
+	switch *suite {
+	case "all":
+		return true
+	case "load":
+		return isLoadPackage(pkg)
+	case "unit":
+		return !isLoadPackage(pkg)
+	default:
+		fmt.Printf("wrong suite is provide %s. valid values are all/load/unit \n", *suite)
+		return false
+	}
+}
+
+func isLoadPackage(pkg string) bool {
+	for _, p := range loadPackages {
+		if strings.HasSuffix(pkg, p) {
+			return true
+		}
+	}
+	return false
+}
+
+var datafiles = map[string]string{
+	"1million-noindex.schema": "https://github.com/dgraph-io/benchmarks/blob/master/data/1million-noindex.schema?raw=true",
+	"1million.schema":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.schema?raw=true",
+	"1million.rdf.gz":         "https://github.com/dgraph-io/benchmarks/blob/master/data/1million.rdf.gz?raw=true",
+	"21million.schema":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true",
+	"21million.rdf.gz":        "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true",
+}
+
+func downloadDataFiles() {
+	if !*downloadResources {
+		fmt.Print("Skipping downloading of resources\n")
+		return
+	}
+	if *tmp == "" {
+		*tmp = os.TempDir()
+	}
+	x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+	for fname, link := range datafiles {
+		cmd := exec.Command("wget", "-O", fname, link)
+		cmd.Dir = *tmp
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			fmt.Printf("Error %v", err)
+			fmt.Printf("Output %v", out)
+		}
+	}
+}
+
+func executePreRunSteps() error {
+	testutil.GeneratePlugins()
+	return nil
+}
+
 func run() error {
 	if tc := os.Getenv("TEAMCITY_VERSION"); len(tc) > 0 {
 		fmt.Printf("Found Teamcity: %s\n", tc)
@@ -657,6 +618,8 @@ func run() error {
 	x.Check(err)
 	defer os.RemoveAll(tmpDir)
 
+	err = executePreRunSteps()
+	x.Check(err)
 	N := *concurrency
 	if len(*runPkg) > 0 || len(*runTest) > 0 {
 		N = 1
@@ -693,8 +656,10 @@ func run() error {
 	// pkgs, err := packages.Load(nil, "github.com/dgraph-io/dgraph/...")
 	go func() {
 		defer close(testCh)
-
 		valid := getPackages()
+		if *suite == "load" {
+			downloadDataFiles()
+		}
 		for i, task := range valid {
 			select {
 			case testCh <- task:
@@ -726,6 +691,7 @@ func main() {
 	procId = rand.Intn(1000)
 
 	err := run()
+	_ = os.RemoveAll(*tmp)
 	if err != nil {
 		os.Exit(1)
 	}
