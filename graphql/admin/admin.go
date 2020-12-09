@@ -260,7 +260,7 @@ const (
 		"""
 		Estimated memory the caches can take. Actual usage by the process would be
 		more than specified here. The caches will be updated according to the
-		cache-percentage flag.
+		cache_percentage flag.
 		"""
 		cacheMb: Float
 
