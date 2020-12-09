@@ -97,7 +97,6 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 }
 
 func (o *Oracle) purgeBelow(minTs uint64) {
-	glog.Infof("purgeBelow: %d\n", minTs)
 	var timer x.Timer
 	timer.Start()
 
@@ -118,7 +117,6 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	// There is no transaction running with startTs less than minTs
 	// So we can delete everything from rowCommit whose commitTs < minTs
 	stats := o.keyCommit.Stats()
-	glog.V(2).Infof("Stats: %+v\n", stats)
 	if stats.Occupancy < 50.0 {
 		return
 	}

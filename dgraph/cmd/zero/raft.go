@@ -775,9 +775,13 @@ func (n *node) calculateSnapshotAndPurge() error {
 	glog.V(2).Infof("Proposing snapshot at Index: %d Checkpoint Ts: %d\n",
 		zs.Index, zs.CheckpointTs)
 	zp := &pb.ZeroProposal{Snapshot: zs}
-	err = n.proposeAndWait(n.ctx, zp)
-	span.Annotatef(nil, "Error while proposeAndWait: %v", err)
-	return err
+	if err = n.proposeAndWait(n.ctx, zp); err != nil {
+		glog.Errorf("Error while proposing snapshot: %v\n", err)
+		span.Annotatef(nil, "Error while proposing snapshot: %v", err)
+		return err
+	}
+	span.Annotatef(nil, "Snapshot proposed: Done")
+	return nil
 }
 
 const tickDur = 100 * time.Millisecond
