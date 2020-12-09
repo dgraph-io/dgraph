@@ -90,7 +90,7 @@ A Dgraph instance is run as a single process from a single static binary. It doe
 
 ### Backup Policy
 
-A backup policy is a predefined, set schedule used to schedule backups of information from business applications. A backup policy helps to ensure data recoverability in the event of accidental data deletion, data corruption a system outage.
+A backup policy is a predefined, set schedule used to schedule backups of information from business applications. A backup policy helps to ensure data recoverability in the event of accidental data deletion, data corruption, or a system outage.
 
 For Dgraph, backups are created using the [backups enterprise feature]({{< relref "/enterprise-features/binary-backups" >}}). You can also create full backups of your data and schema using [data exports]({{< relref "/deploy/dgraph-administration/index.md#exporting-database" >}}) available as an open source feature.
 
