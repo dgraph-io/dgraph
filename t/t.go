@@ -91,8 +91,8 @@ var (
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
 		"If true, don't run tests on slow packages.")
 	currentDir, _ = os.Getwd()
-	benchmarksDir = fmt.Sprintf("%s/benchmarks", currentDir)
-	dataDir       = fmt.Sprintf("%s/data", benchmarksDir)
+	benchmarksDir = path.Join(currentDir, "benchmarks")
+	dataDir       = path.Join(benchmarksDir, "data")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
