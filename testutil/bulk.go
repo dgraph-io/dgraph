@@ -72,9 +72,9 @@ func BulkLoad(opts BulkOpts) error {
 		"-s", opts.SchemaFile,
 		"-g", opts.GQLSchemaFile,
 		"--http", "localhost:"+strconv.Itoa(freePort(0)),
-		"--reduce-shards="+strconv.Itoa(opts.Shards),
-		"--map-shards="+strconv.Itoa(opts.Shards),
-		"--store-xids=true",
+		"--reduce_shards="+strconv.Itoa(opts.Shards),
+		"--map_shards="+strconv.Itoa(opts.Shards),
+		"--store_xids=true",
 		"--zero", opts.Zero,
 	)
 
