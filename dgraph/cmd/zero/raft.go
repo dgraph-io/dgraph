@@ -677,7 +677,7 @@ func (n *node) snapshotPeriodically(closer *z.Closer) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := n.calculateSnapshotAndPurge(); err != nil {
+			if err := n.calculateAndProposeSnapshot(); err != nil {
 				glog.Errorf("While calculateAndProposeSnapshot: %v", err)
 			}
 
@@ -687,12 +687,12 @@ func (n *node) snapshotPeriodically(closer *z.Closer) {
 	}
 }
 
-// calculateSnapshotAndPurge works by tracking Alpha group leaders' checkpoint timestamps. It then
+// calculateAndProposeSnapshot works by tracking Alpha group leaders' checkpoint timestamps. It then
 // finds the minimum checkpoint ts across these groups, say Tmin.  And then, iterates over Zero Raft
 // logs to determine what all entries we could discard which are below Tmin. It uses that
 // information to calculate a snapshot, which it proposes to other Zeros. When the proposal arrives
 // via Raft, all Zeros apply it to themselves via applySnapshot in raft.Ready.
-func (n *node) calculateSnapshotAndPurge() error {
+func (n *node) calculateAndProposeSnapshot() error {
 	// Only run this on the leader.
 	if !n.AmLeader() {
 		return nil
