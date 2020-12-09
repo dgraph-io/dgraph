@@ -1,16 +1,31 @@
+/*
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package testutil
 
 import (
 	"context"
 	"fmt"
-	"github.com/dgraph-io/dgo/v200/protos/api"
 	"math/rand"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
-	"time"
+
+	"github.com/dgraph-io/dgo/v200/protos/api"
 )
 
 type LiveOpts struct {
@@ -56,7 +71,7 @@ func BulkLoad(opts BulkOpts) error {
 		"-f", opts.RdfFile,
 		"-s", opts.SchemaFile,
 		"-g", opts.GQLSchemaFile,
-		"--http", "localhost:"+strconv.Itoa(FreePort(0)),
+		"--http", "localhost:"+strconv.Itoa(freePort(0)),
 		"--reduce-shards="+strconv.Itoa(opts.Shards),
 		"--map-shards="+strconv.Itoa(opts.Shards),
 		"--store-xids=true",
@@ -86,7 +101,7 @@ func MakeDirEmpty(dir []string) error {
 	return nil
 }
 
-func FreePort(port int) int {
+func freePort(port int) int {
 	// Linux reuses ports in FIFO order. So a port that we listen on and then
 	// release will be free for a long time.
 	for {
@@ -109,20 +124,17 @@ func StartAlphas(compose string) error {
 		fmt.Printf("Output %v\n", string(out))
 		return err
 	}
-	var err error
-	for i := 0; i < 30; i++ {
-		time.Sleep(time.Second)
-		var resp *http.Response
-		resp, err = http.Get("http://" + ContainerAddr("alpha1", 8080) + "/health")
-		if resp != nil && resp.Body != nil {
-			resp.Body.Close()
-		}
-		if err == nil && resp.StatusCode == http.StatusOK {
-			return nil
+
+	for i := 1; i <= 6; i++ {
+		in := GetContainerInstance(DockerPrefix, "alpha"+strconv.Itoa(i))
+		err := in.BestEffortWaitForHealthy(8080)
+		if err != nil {
+			fmt.Printf("Error while checking alpha health %s. Error %v", in.Name, err)
+			return err
 		}
 	}
 
-	return err
+	return nil
 }
 
 func StopAlphas(compose string) {

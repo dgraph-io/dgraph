@@ -23,13 +23,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -39,8 +37,6 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -51,9 +47,11 @@ import (
 // socket addr = IP address and port number
 var (
 	// Instance is the instance name of the Alpha.
-	DockerPrefix  string
-	Instance      string
-	MinioInstance string
+	DockerPrefix string
+	// Global test data directory used to store resources
+	TestDataDirectory string
+	Instance          string
+	MinioInstance     string
 	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
 	SockAddr string
 	// SockAddrHttp is the address to the HTTP of alpha used during tests.
@@ -72,42 +70,11 @@ func AdminUrl() string {
 	return "http://" + SockAddrHttp + "/admin"
 }
 
-func getContainer(name string) types.Container {
-	cli, err := client.NewEnvClient()
-	x.Check(err)
-
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
-	if err != nil {
-		log.Fatalf("While listing container: %v\n", err)
-	}
-
-	q := fmt.Sprintf("/%s_%s_", DockerPrefix, name)
-	for _, c := range containers {
-		for _, n := range c.Names {
-			if !strings.HasPrefix(n, q) {
-				continue
-			}
-			return c
-		}
-	}
-	return types.Container{}
-}
-
-func ContainerAddr(name string, privatePort uint16) string {
-	c := getContainer(name)
-	for _, p := range c.Ports {
-		if p.PrivatePort == privatePort {
-			return "localhost:" + strconv.Itoa(int(p.PublicPort))
-		}
-	}
-	return "localhost:" + strconv.Itoa(int(privatePort))
-}
-
 // This allows running (most) tests against dgraph running on the default ports, for example.
 // Only the GRPC ports are needed and the others are deduced.
 func init() {
 	DockerPrefix = os.Getenv("TEST_DOCKER_PREFIX")
-
+	TestDataDirectory = os.Getenv("TEST_DATA_DIRECTORY")
 	MinioInstance = ContainerAddr("minio", 9001)
 	Instance = fmt.Sprintf("%s_%s_1", DockerPrefix, "alpha1")
 	SockAddr = ContainerAddr("alpha1", 9080)

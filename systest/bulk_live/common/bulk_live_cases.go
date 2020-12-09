@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -32,7 +29,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/stretchr/testify/require"
@@ -68,7 +68,7 @@ func RunBulkCases(t *testing.T) {
 	suite.cleanup()
 }
 
-// run this in sequential order. cleanup is necessary for bulk loader to work
+// run this in sequential order. cleanup is necessary for live loader to work
 func RunLiveCases(t *testing.T) {
 	suite := helloWorldSetup(t, false)
 	testHelloWorld(t)
@@ -86,7 +86,6 @@ func RunLiveCases(t *testing.T) {
 	testLoadTypes(t)
 	suite.cleanup()
 }
-
 
 func helloWorldSetup(t *testing.T, isBulkLoader bool) *suite {
 	if isBulkLoader {
@@ -265,8 +264,6 @@ func countIndexSetup(t *testing.T, isBulkLoader bool) *suite {
 }
 
 func testCountIndex(t *testing.T) {
-	// Ensures that the index keys are written to disk after commit.
-	time.Sleep(time.Second)
 	t.Run("All queries", testCase(`
 	{
 		alice_friend_count(func: eq(name, "Alice")) {
@@ -405,10 +402,7 @@ func loadTypesSetup(t *testing.T, isBulkLoader bool) *suite {
 	return s
 }
 
-
 func testLoadTypes(t *testing.T) {
-	// Ensures that the index keys are written to disk after commit.
-	time.Sleep(time.Second)
 	t.Run("All queries", testCase("schema(type: Person) {}",
 		`{"types":[{"name":"Person", "fields":[{"name":"name"}]}]}`))
 }
@@ -463,8 +457,6 @@ func bulkSingleUidSetup(t *testing.T, isBulkLoader bool) *suite {
 // should detect this and force it to be a list to avoid any data loss. This test only runs
 // in the bulk loader.
 func testBulkSingleUid(t *testing.T) {
-	// Ensures that the index keys are written to disk after commit.
-	time.Sleep(5*time.Second)
 	t.Run("All queries", testCase(`
 	{
 		alice_friend_count(func: eq(name, "Alice")) {

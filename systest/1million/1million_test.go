@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -9284,8 +9285,8 @@ func Test1Million(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	noschemaFile := os.Getenv("TEST_DATA_DIRECTORY") + "/1million-noindex.schema"
-	rdfFile := os.Getenv("TEST_DATA_DIRECTORY") + "/1million.rdf.gz"
+	noschemaFile := path.Join(testutil.TestDataDirectory, "1million-noindex.schema")
+	rdfFile := path.Join(testutil.TestDataDirectory, "1million.rdf.gz")
 	if err := testutil.MakeDirEmpty([]string{"out/0", "out/1", "out/2"}); err != nil {
 		os.Exit(1)
 	}
@@ -9303,7 +9304,7 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Error while bringin up alphas. Error: %v\n", err)
 		cleanupAndExit(1)
 	}
-	schemaFile := os.Getenv("TEST_DATA_DIRECTORY") + "/1million.schema"
+	schemaFile := path.Join(testutil.TestDataDirectory, "1million.schema")
 	client, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
 	if err != nil {
 		fmt.Printf("Error while creating client. Error: %v\n", err)
