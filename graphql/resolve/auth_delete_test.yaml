@@ -132,13 +132,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -195,13 +191,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       ticket(func: uid(Ticket5)) {
         title : Ticket.title
@@ -228,13 +220,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       var(func: uid(Ticket5)) {
         Column6 as Ticket.onColumn
@@ -255,19 +243,14 @@
       ProjectAuth12 as var(func: uid(Project7)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       ColumnAuth14 as var(func: uid(Column6)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -530,7 +513,7 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteIssue(filter: {id: $ids}) {
-    	numUids
+      numUids
       }
     }
   variables: |
@@ -554,7 +537,6 @@
       Issue1 as var(func: uid(0x1, 0x2)) @filter(type(Issue))
       IssueAuth2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
     }
 
@@ -562,11 +544,11 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteIssue(filter: {id: $ids}) {
-    	numUids
+      numUids
       }
     }
   variables: |
-    { 
+    {
       "ids": ["0x1", "0x2"]
     }
   jwtvar:
@@ -586,7 +568,7 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteRole(filter: {id: $ids}) {
-    	numUids
+      numUids
       }
     }
   variables: |
@@ -610,7 +592,7 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteRole(filter: {id: $ids}) {
-    	numUids
+      numUids
       }
     }
   variables: |
@@ -636,7 +618,7 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deletePost(filter: {id: $ids}) {
-    	numUids
+      numUids
       }
     }
   variables: |
@@ -672,18 +654,14 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Answer1 as var(func: type(Answer))
       AnswerAuth4 as var(func: uid(Answer1)) @cascade {
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -691,7 +669,7 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deletePost(filter: {id: $ids}) {
-    	numUids
+      numUids
       }
     }
   jwtvar:
@@ -715,7 +693,7 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteA(filter: {id: $ids}) {
-    	numUids
+        numUids
       }
     }
   variables: |
@@ -741,7 +719,7 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteQuestion(filter: {id: $ids}) {
-    	numUids
+        numUids
       }
     }
   variables: |
@@ -776,9 +754,7 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -786,7 +762,7 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteQuestion(filter: {id: $ids}) {
-    	numUids
+        numUids
       }
     }
   variables: |
@@ -809,11 +785,11 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteFbPost(filter: {id: $ids}) {
-    	numUids
+        numUids
       }
     }
   variables: |
-    { 
+    {
       "ids": ["0x1", "0x2"]
     }
   jwtvar:
@@ -833,7 +809,7 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteFbPost(filter: {id: $ids}) {
-    	numUids
+        numUids
       }
     }
   variables: |
@@ -865,8 +841,6 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }

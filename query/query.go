@@ -1992,7 +1992,18 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if len(sg.Attr) > 0 {
 		suffix += "." + sg.Attr
 	}
-	span := otrace.FromContext(ctx)
+	// queries like `Users as var(func: ...)` have Alias = var and don't have an attr. Instead, they
+	// would have Var = Users. So, if there are a lot of such queries in a single request,
+	// then it is easier to identify them in traces if we also use Var to construct the span name.
+	if len(sg.Params.Var) > 0 {
+		suffix += "." + sg.Params.Var
+	}
+	// starting a span for every sub-graph that is processed creates an execution tree in jaeger UI,
+	// which makes it very easier to understand the flow of request execution.
+	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph."+suffix)
+	defer span.End()
+
+	// span timer doesn't show up in jaeger UI directly. Instead, it is part of logs for each span.
 	stop := x.SpanTimer(span, "query.ProcessGraph"+suffix)
 	defer stop()
 

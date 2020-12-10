@@ -152,6 +152,8 @@ func (w *DiskStorage) HardState() (raftpb.HardState, error) {
 	}
 	return w.meta.HardState()
 }
+
+// Checkpoint returns the Raft index corresponding to the checkpoint.
 func (w *DiskStorage) Checkpoint() (uint64, error) {
 	if w.meta == nil {
 		return 0, errors.Errorf("uninitialized meta file")

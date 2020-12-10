@@ -708,12 +708,16 @@ func (n *node) calculateAndProposeSnapshot() error {
 		s := n.server
 		s.RLock()
 		if len(s.state.Groups) != len(s.checkpointPerGroup) {
-			glog.Infof("Skipping creating a snapshot. Num groups: %d, Num max assigned: %d",
+			log := fmt.Sprintf("Skipping creating a snapshot."+
+				" Num groups: %d, Num checkpoints: %d\n",
 				len(s.state.Groups), len(s.checkpointPerGroup))
 			s.RUnlock()
+			span.Annotatef(nil, log)
+			glog.Infof(log)
 			return nil
 		}
-		for _, ts := range s.checkpointPerGroup {
+		for gid, ts := range s.checkpointPerGroup {
+			span.Annotatef(nil, "Group: %d Checkpoint Ts: %d", gid, ts)
 			discardBelow = x.Min(discardBelow, ts)
 		}
 		s.RUnlock()
@@ -730,7 +734,7 @@ func (n *node) calculateAndProposeSnapshot() error {
 		return err
 	}
 
-	span.Annotatef(nil, "First index: %d. Last index: %d. Discard Below: %d",
+	span.Annotatef(nil, "First index: %d. Last index: %d. Discard Below Ts: %d",
 		first, last, discardBelow)
 
 	var snapshotIndex uint64
@@ -764,7 +768,7 @@ func (n *node) calculateAndProposeSnapshot() error {
 	if snapshotIndex == 0 {
 		return nil
 	}
-	span.Annotatef(nil, "Taking snapshot at: %d", snapshotIndex)
+	span.Annotatef(nil, "Taking snapshot at index: %d", snapshotIndex)
 	state := n.server.membershipState()
 
 	zs := &pb.ZeroSnapshot{
@@ -772,7 +776,7 @@ func (n *node) calculateAndProposeSnapshot() error {
 		CheckpointTs: discardBelow,
 		State:        state,
 	}
-	glog.V(2).Infof("Proposing snapshot at Index: %d Checkpoint Ts: %d\n",
+	glog.V(2).Infof("Proposing snapshot at index: %d, checkpoint ts: %d\n",
 		zs.Index, zs.CheckpointTs)
 	zp := &pb.ZeroProposal{Snapshot: zs}
 	if err = n.proposeAndWait(n.ctx, zp); err != nil {
