@@ -62,7 +62,8 @@ type node struct {
 	gid     uint32
 	closer  *z.Closer
 
-	streaming int32 // Used to avoid calculating snapshot
+	checkpointTs uint64 // Timestamp corresponding to checkpoint.
+	streaming    int32  // Used to avoid calculating snapshot
 
 	// Used to track the ops going on in the system.
 	ops     map[op]*z.Closer
@@ -600,7 +601,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			return nil
 		}
 		n.elog.Printf("Creating snapshot: %+v", snap)
-		glog.Infof("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
+		glog.Infof("Creating snapshot at Index: %d, ReadTs: %d\n", snap.Index, snap.ReadTs)
 
 		data, err := snap.Marshal()
 		x.Check(err)
@@ -936,9 +937,10 @@ func (n *node) updateRaftProgress() error {
 	if err != nil || snap == nil || snap.Index <= applied {
 		return err
 	}
+	atomic.StoreUint64(&n.checkpointTs, snap.ReadTs)
 
 	n.Store.SetUint(raftwal.CheckpointIndex, snap.GetIndex())
-	glog.V(2).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
+	glog.V(2).Infof("[%#x] Set Raft progress to index: %d, ts: %d.", n.Id, snap.Index, snap.ReadTs)
 	return nil
 }
 
