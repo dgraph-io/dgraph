@@ -702,11 +702,11 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryUserSecret(func: uid(UserSecretRoot), orderasc: UserSecret.aSecret, first: 1) {
+      queryUserSecret(func: uid(UserSecretRoot), orderasc: UserSecret.aSecret) {
         id : uid
         ownedBy : UserSecret.ownedBy
       }
-      UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
+      UserSecretRoot as var(func: uid(UserSecret1), first: 1) @filter(uid(UserSecretAuth2))
       UserSecret1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
@@ -843,11 +843,11 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) {
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
         content : Movie.content
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie1)) @filter((NOT (uid(MovieAuth2)) AND (uid(MovieAuth3) OR uid(MovieAuth4))))
+      MovieRoot as var(func: uid(Movie1), first: 10, offset: 10) @filter((NOT (uid(MovieAuth2)) AND (uid(MovieAuth3) OR uid(MovieAuth4))))
       Movie1 as var(func: type(Movie)) @filter(eq(Movie.content, "A. N. Author"))
       MovieAuth2 as var(func: uid(Movie1)) @filter(eq(Movie.hidden, true)) @cascade
       MovieAuth3 as var(func: uid(Movie1)) @cascade {
@@ -878,7 +878,7 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) @cascade {
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) @cascade {
         content : Movie.content
         regionsAvailable : Movie.regionsAvailable @filter(uid(Region2)) (orderasc: Region.name, first: 10, offset: 10) {
           name : Region.name
@@ -887,7 +887,7 @@
         }
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie3)) @filter((NOT (uid(MovieAuth4)) AND (uid(MovieAuth5) OR uid(MovieAuth6))))
+      MovieRoot as var(func: uid(Movie3), first: 10, offset: 10) @filter((NOT (uid(MovieAuth4)) AND (uid(MovieAuth5) OR uid(MovieAuth6))))
       Movie3 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
       MovieAuth4 as var(func: uid(Movie3)) @filter(eq(Movie.hidden, true)) @cascade
       MovieAuth5 as var(func: uid(Movie3)) @cascade {
@@ -931,7 +931,7 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) {
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
         content : Movie.content
         regionsAvailable : Movie.regionsAvailable @filter(uid(Region7)) (orderasc: Region.name, first: 10, offset: 10) @cascade {
           name : Region.name
@@ -951,7 +951,7 @@
         }
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie8)) @filter((NOT (uid(MovieAuth9)) AND (uid(MovieAuth10) OR uid(MovieAuth11))))
+      MovieRoot as var(func: uid(Movie8), first: 10, offset: 10) @filter((NOT (uid(MovieAuth9)) AND (uid(MovieAuth10) OR uid(MovieAuth11))))
       Movie8 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
       MovieAuth9 as var(func: uid(Movie8)) @filter(eq(Movie.hidden, true)) @cascade
       MovieAuth10 as var(func: uid(Movie8)) @cascade {
@@ -1526,12 +1526,12 @@
     USER: "Random"
   dgquery: |-
     query {
-      queryPost(func: uid(PostRoot), orderdesc: Post.text, first: 10, offset: 5) {
+      queryPost(func: uid(PostRoot), orderdesc: Post.text) {
         dgraph.type
         text : Post.text
         dgraph.uid : uid
       }
-      PostRoot as var(func: uid(Post1)) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(FbPostAuth4) OR uid(AnswerAuth5)))
+      PostRoot as var(func: uid(Post1), first: 10, offset: 5) @filter(((uid(QuestionAuth2) AND uid(QuestionAuth3)) OR uid(FbPostAuth4) OR uid(AnswerAuth5)))
       Post1 as var(func: type(Post)) @filter(eq(Post.text, "A Post"))
       Question1 as var(func: type(Question))
       QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
