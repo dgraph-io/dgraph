@@ -1,6 +1,6 @@
 +++
 title = "Aggregate Queries"
-weight = 3
+weight = 4
 [menu.main]
     parent = "graphql-queries"
     name = "Aggregate Queries"
