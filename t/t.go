@@ -657,7 +657,7 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
-		if *suite == "load" {
+		if *suite == "load" || *suite == "all" {
 			downloadDataFiles()
 		}
 		for i, task := range valid {

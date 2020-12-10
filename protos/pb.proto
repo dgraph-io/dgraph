@@ -202,10 +202,11 @@ message Tablet {
     uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
     string predicate = 2;
     bool force = 3; // Used while moving predicate.
-    int64 space = 7;
+    int64 on_disk_bytes = 7;
     bool remove = 8;
     bool read_only = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
-    uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
+	uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
+	int64 uncompressed_bytes = 11; // Estimated uncompressed size of tablet in bytes
 }
 
 message DirectedEdge {

@@ -730,9 +730,11 @@ func (authRw *authRewriter) addAuthQueries(
 			Args: []gql.Arg{{Value: authRw.varName}},
 		},
 		Filter: filter,
+		Args:   dgQuery[0].Args,
 	}
 
 	dgQuery[0].Filter = nil
+	dgQuery[0].Args = nil
 
 	// The user query starts from the var query generated above and is filtered
 	// by the the filter generated from auth processing, so now we build
