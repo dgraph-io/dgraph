@@ -37,6 +37,7 @@ import (
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
+	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
@@ -1313,26 +1314,28 @@ func (n *node) calculateTabletSizes() {
 	}
 	var total int64
 	tablets := make(map[string]*pb.Tablet)
-	updateSize := func(pred string, size int64) {
+	updateSize := func(tinfo badger.TableInfo) {
+		// The error has already been checked by caller.
+		left, _ := x.Parse(tinfo.Left)
+		pred := left.Attr
 		if pred == "" {
 			return
 		}
-
 		if tablet, ok := tablets[pred]; ok {
-			tablet.Space += size
+			tablet.OnDiskBytes += int64(tinfo.OnDiskSize)
+			tablet.UncompressedBytes += int64(tinfo.UncompressedSize)
 		} else {
 			tablets[pred] = &pb.Tablet{
-				GroupId:   n.gid,
-				Predicate: pred,
-				Space:     size,
+				GroupId:           n.gid,
+				Predicate:         pred,
+				OnDiskBytes:       int64(tinfo.OnDiskSize),
+				UncompressedBytes: int64(tinfo.UncompressedSize),
 			}
 		}
-		total += size
+		total += int64(tinfo.OnDiskSize)
 	}
 
 	tableInfos := pstore.Tables()
-	previousLeft := ""
-	var previousSize int64
 	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
 	for _, tinfo := range tableInfos {
 		left, err := x.Parse(tinfo.Left)
@@ -1340,22 +1343,19 @@ func (n *node) calculateTabletSizes() {
 			glog.V(3).Infof("Unable to parse key: %v", err)
 			continue
 		}
+		right, err := x.Parse(tinfo.Right)
+		if err != nil {
+			glog.V(3).Infof("Unable to parse key: %v", err)
+			continue
+		}
 
-		if left.Attr == previousLeft {
-			// Dgraph cannot depend on the right end of the table to know if the table belongs
-			// to a single predicate because there might be Badger-specific keys.
-			// Instead, Dgraph only counts the previous table if the current one belongs to the
-			// same predicate.
-			// We could later specifically iterate over these tables to get their estimated sizes.
-			updateSize(previousLeft, previousSize)
+		// Count the table only if it is occupied by a single predicate.
+		if left.Attr == right.Attr {
+			updateSize(tinfo)
 		} else {
 			glog.V(3).Info("Skipping table not owned by one predicate")
 		}
-		previousLeft = left.Attr
-		previousSize = int64(tinfo.OnDiskSize)
 	}
-	// The last table has not been counted. Assign it to the predicate at the left of the table.
-	updateSize(previousLeft, previousSize)
 
 	if len(tablets) == 0 {
 		glog.V(2).Infof("No tablets found.")

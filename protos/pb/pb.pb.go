@@ -7,6 +7,10 @@ import (
 	context "context"
 	encoding_binary "encoding/binary"
 	fmt "fmt"
+	io "io"
+	math "math"
+	math_bits "math/bits"
+
 	pb "github.com/dgraph-io/badger/v2/pb"
 	api "github.com/dgraph-io/dgo/v200/protos/api"
 	_ "github.com/gogo/protobuf/gogoproto"
@@ -14,9 +18,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	io "io"
-	math "math"
-	math_bits "math/bits"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -1751,10 +1752,11 @@ type Tablet struct {
 	GroupId              uint32   `protobuf:"varint,1,opt,name=group_id,json=groupId,proto3" json:"groupId,omitempty"`
 	Predicate            string   `protobuf:"bytes,2,opt,name=predicate,proto3" json:"predicate,omitempty"`
 	Force                bool     `protobuf:"varint,3,opt,name=force,proto3" json:"force,omitempty"`
-	Space                int64    `protobuf:"varint,7,opt,name=space,proto3" json:"space,omitempty"`
+	OnDiskBytes          int64    `protobuf:"varint,7,opt,name=on_disk_bytes,json=onDiskBytes,proto3" json:"on_disk_bytes,omitempty"`
 	Remove               bool     `protobuf:"varint,8,opt,name=remove,proto3" json:"remove,omitempty"`
 	ReadOnly             bool     `protobuf:"varint,9,opt,name=read_only,json=readOnly,proto3" json:"readOnly,omitempty"`
 	MoveTs               uint64   `protobuf:"varint,10,opt,name=move_ts,json=moveTs,proto3" json:"moveTs,omitempty"`
+	UncompressedBytes    int64    `protobuf:"varint,11,opt,name=uncompressed_bytes,json=uncompressedBytes,proto3" json:"uncompressed_bytes,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1814,9 +1816,9 @@ func (m *Tablet) GetForce() bool {
 	return false
 }
 
-func (m *Tablet) GetSpace() int64 {
+func (m *Tablet) GetOnDiskBytes() int64 {
 	if m != nil {
-		return m.Space
+		return m.OnDiskBytes
 	}
 	return 0
 }
@@ -1838,6 +1840,13 @@ func (m *Tablet) GetReadOnly() bool {
 func (m *Tablet) GetMoveTs() uint64 {
 	if m != nil {
 		return m.MoveTs
+	}
+	return 0
+}
+
+func (m *Tablet) GetUncompressedBytes() int64 {
+	if m != nil {
+		return m.UncompressedBytes
 	}
 	return 0
 }
@@ -8106,6 +8115,11 @@ func (m *Tablet) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
+	if m.UncompressedBytes != 0 {
+		i = encodeVarintPb(dAtA, i, uint64(m.UncompressedBytes))
+		i--
+		dAtA[i] = 0x58
+	}
 	if m.MoveTs != 0 {
 		i = encodeVarintPb(dAtA, i, uint64(m.MoveTs))
 		i--
@@ -8131,8 +8145,8 @@ func (m *Tablet) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x40
 	}
-	if m.Space != 0 {
-		i = encodeVarintPb(dAtA, i, uint64(m.Space))
+	if m.OnDiskBytes != 0 {
+		i = encodeVarintPb(dAtA, i, uint64(m.OnDiskBytes))
 		i--
 		dAtA[i] = 0x38
 	}
@@ -11563,8 +11577,8 @@ func (m *Tablet) Size() (n int) {
 	if m.Force {
 		n += 2
 	}
-	if m.Space != 0 {
-		n += 1 + sovPb(uint64(m.Space))
+	if m.OnDiskBytes != 0 {
+		n += 1 + sovPb(uint64(m.OnDiskBytes))
 	}
 	if m.Remove {
 		n += 2
@@ -11574,6 +11588,9 @@ func (m *Tablet) Size() (n int) {
 	}
 	if m.MoveTs != 0 {
 		n += 1 + sovPb(uint64(m.MoveTs))
+	}
+	if m.UncompressedBytes != 0 {
+		n += 1 + sovPb(uint64(m.UncompressedBytes))
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -16874,9 +16891,9 @@ func (m *Tablet) Unmarshal(dAtA []byte) error {
 			m.Force = bool(v != 0)
 		case 7:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Space", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field OnDiskBytes", wireType)
 			}
-			m.Space = 0
+			m.OnDiskBytes = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowPb
@@ -16886,7 +16903,7 @@ func (m *Tablet) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Space |= int64(b&0x7F) << shift
+				m.OnDiskBytes |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -16946,6 +16963,25 @@ func (m *Tablet) Unmarshal(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.MoveTs |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UncompressedBytes", wireType)
+			}
+			m.UncompressedBytes = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.UncompressedBytes |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
