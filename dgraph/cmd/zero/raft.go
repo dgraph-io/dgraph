@@ -750,11 +750,11 @@ func (n *node) calculateAndProposeSnapshot() error {
 			break
 		}
 		for _, entry := range entries {
-			if entry.Type != raftpb.EntryNormal {
+			if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
 				continue
 			}
 			var p pb.ZeroProposal
-			if err := p.Unmarshal(entry.Data); err != nil {
+			if err := p.Unmarshal(entry.Data[8:]); err != nil {
 				span.Annotatef(nil, "Error: %v", err)
 				return err
 			}
