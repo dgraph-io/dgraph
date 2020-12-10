@@ -42,8 +42,8 @@ func checkForbiddenOpts(conf *viper.Viper, forbiddenOpts []string) error {
 		var isSet bool
 		switch conf.Get(opt).(type) {
 		case string:
-			if opt == "group-list" {
-				// handle group-list specially since the default value is not an empty string
+			if opt == "group_list" {
+				// handle group_list specially since the default value is not an empty string
 				isSet = conf.GetString(opt) != defaultGroupList
 			} else {
 				isSet = len(conf.GetString(opt)) > 0
@@ -251,12 +251,12 @@ func mod(conf *viper.Viper) error {
 			return err
 		}
 
-		newPassword := conf.GetBool("new-password")
-		groupList := conf.GetString("group-list")
+		newPassword := conf.GetBool("new_password")
+		groupList := conf.GetString("group_list")
 		if (newPassword && groupList != defaultGroupList) ||
 			(!newPassword && groupList == defaultGroupList) {
 			return errors.Errorf(
-				"one of --new-password or --group-list must be provided, but not both")
+				"one of --new_password or --group_list must be provided, but not both")
 		}
 
 		if newPassword {
@@ -267,7 +267,7 @@ func mod(conf *viper.Viper) error {
 	}
 
 	// when modifying the group, some user options are forbidden
-	if err := checkForbiddenOpts(conf, []string{"group-list", "new-password"}); err != nil {
+	if err := checkForbiddenOpts(conf, []string{"group_list", "new_password"}); err != nil {
 		return err
 	}
 	return chMod(conf)

@@ -117,15 +117,15 @@ the schema is large and needs to be reused, such as in between unit tests.
 ## Create a transaction
 
 Dgraph supports running distributed ACID transactions. To create a
-transaction, just call `c.NewTxn()`. This operation incurs no network call.
-Typically, you'd also want to call a `defer txn.Discard()` to let it
+transaction, just call `c.NewTxn()`. This operation doesn't incur in network calls.
+Typically, you'd also want to call a `defer txn.Discard(ctx)` to let it
 automatically rollback in case of errors. Calling `Discard` after `Commit` would
 be a no-op.
 
 ```go
 func runTxn(c *dgo.Dgraph) {
 	txn := c.NewTxn()
-	defer txn.Discard()
+	defer txn.Discard(ctx)
 	...
 }
 ```
@@ -178,10 +178,14 @@ via `json.Unmarshal`.
 	}
 ```
 
-## Query for RDF response.
+## Query with RDF response
 
 You can get query result as a RDF response by calling `txn.QueryRDF`. The response would contain
 a `Rdf` field, which has the RDF encoded result.
+
+{{% notice "note" %}}
+If you are querying only for `uid` values, use a JSON format response.
+{{% /notice %}}
 
 ```go
 	// Query the balance for Alice and Bob.

@@ -937,18 +937,20 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 			healthAll = append(healthAll, p.HealthInfo())
 		}
 	}
+
 	// Append self.
 	healthAll = append(healthAll, pb.HealthInfo{
-		Instance:   "alpha",
-		Address:    x.WorkerConfig.MyAddr,
-		Status:     "healthy",
-		Group:      strconv.Itoa(int(worker.GroupId())),
-		Version:    x.Version(),
-		Uptime:     int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
-		LastEcho:   time.Now().Unix(),
-		Ongoing:    worker.GetOngoingTasks(),
-		Indexing:   schema.GetIndexingPredicates(),
-		EeFeatures: ee.GetEEFeaturesList(),
+		Instance:    "alpha",
+		Address:     x.WorkerConfig.MyAddr,
+		Status:      "healthy",
+		Group:       strconv.Itoa(int(worker.GroupId())),
+		Version:     x.Version(),
+		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho:    time.Now().Unix(),
+		Ongoing:     worker.GetOngoingTasks(),
+		Indexing:    schema.GetIndexingPredicates(),
+		EeFeatures:  ee.GetEEFeaturesList(),
+		MaxAssigned: posting.Oracle().MaxAssigned(),
 	})
 
 	var err error

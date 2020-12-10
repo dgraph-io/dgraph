@@ -57,9 +57,9 @@ func TestBackupMinioE(t *testing.T) {
 	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
 
 	conf := viper.GetViper()
-	conf.Set("tls-cacert", "../../../tlstest/mtls_internal/tls/live/ca.crt")
-	conf.Set("tls-internal-port-enabled", true)
-	conf.Set("tls-server-name", "alpha1")
+	conf.Set("tls_cacert", "../../../tlstest/mtls_internal/tls/live/ca.crt")
+	conf.Set("tls_internal_port_enabled", true)
+	conf.Set("tls_server_name", "alpha1")
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 	mc, err = testutil.NewMinioClient()
@@ -309,7 +309,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	t.Logf("--- Restoring from: %q", localBackupDst)
 	testutil.KeyFile = "../../../ee/enc/test-fixtures/enc-key"
 	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-		"--encryption-key-file", testutil.KeyFile, "--force-zero=false"}
+		"--encryption_key_file", testutil.KeyFile, "--force_zero=false"}
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
@@ -350,7 +350,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 
 	// Get key.
 	config := getEncConfig()
-	config.Set("encryption-key-file", "../../../ee/enc/test-fixtures/enc-key")
+	config.Set("encryption_key_file", "../../../ee/enc/test-fixtures/enc-key")
 	k, err := enc.ReadKey(config)
 	require.NotNil(t, k)
 	require.NoError(t, err)

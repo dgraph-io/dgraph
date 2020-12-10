@@ -447,13 +447,9 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
       inProject : Column.inProject {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
   var(func: uid(TicketRoot)) {
     Column1 as Ticket.onColumn
@@ -463,11 +459,8 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
     inProject : Column.inProject {
       roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
         assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
 }`,
 		},
@@ -503,13 +496,9 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
       inProject : Column.inProject {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
   var(func: uid(TicketRoot)) {
     Column1 as Ticket.onColumn
@@ -519,11 +508,8 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
     inProject : Column.inProject {
       roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
         assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
 }`,
 		},

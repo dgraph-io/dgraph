@@ -139,6 +139,7 @@ message Group {
 	map<string, Tablet> tablets = 2; // Predicate + others are key.
 	uint64 snapshot_ts          = 3; // Stores Snapshot transaction ts.
 	uint64 checksum             = 4; // Stores a checksum.
+	uint64 checkpoint_ts        = 5; // Stores checkpoint ts as seen by leader.
 }
 
 message License {
@@ -159,6 +160,7 @@ message ZeroProposal {
 	api.TxnContext txn = 7;
 	string cid = 9; // Used as unique identifier for the cluster.
 	License license = 10;
+	ZeroSnapshot snapshot = 11; // Used to make Zeros take a snapshot.
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -193,16 +195,18 @@ message HealthInfo {
     repeated string ongoing = 8;
     repeated string indexing = 9;
     repeated string ee_features = 10;
+		uint64 max_assigned = 11;
 }
 
 message Tablet {
     uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
     string predicate = 2;
     bool force = 3; // Used while moving predicate.
-    int64 space = 7;
+    int64 on_disk_bytes = 7;
     bool remove = 8;
     bool read_only = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
-    uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
+	uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
+	int64 uncompressed_bytes = 11; // Estimated uncompressed size of tablet in bytes
 }
 
 message DirectedEdge {
@@ -264,6 +268,12 @@ message Snapshot {
 	bool done	= 4;
 	// since_ts stores the ts of the last snapshot to support diff snap updates.
 	uint64 since_ts = 5;
+}
+
+message ZeroSnapshot {
+	uint64 index = 1;
+	uint64 checkpoint_ts = 2;
+	MembershipState state = 5;
 }
 
 message RestoreRequest {

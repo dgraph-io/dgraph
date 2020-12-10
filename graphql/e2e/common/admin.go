@@ -306,12 +306,13 @@ func health(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(healthRes, &health))
 
-	// Uptime and LastEcho might have changed between the GraphQL and /health calls.
-	// If we don't remove them, the test would be flakey.
+	// These fields might have changed between the GraphQL and /health calls.
+	// If we don't remove them, the test would be flaky.
 	opts := []cmp.Option{
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "Uptime"),
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "LastEcho"),
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "Ongoing"),
+		cmpopts.IgnoreFields(pb.HealthInfo{}, "MaxAssigned"),
 		cmpopts.EquateEmpty(),
 	}
 	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {

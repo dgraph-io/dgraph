@@ -210,6 +210,9 @@ const (
 	}
 
 	input ExportInput {
+		"""
+		Data format for the export, e.g. "rdf" or "json" (default: "rdf")
+		"""
 		format: String
 
 		"""
@@ -260,7 +263,7 @@ const (
 		"""
 		Estimated memory the caches can take. Actual usage by the process would be
 		more than specified here. The caches will be updated according to the
-		cache-percentage flag.
+		cache_percentage flag.
 		"""
 		cacheMb: Float
 

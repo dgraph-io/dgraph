@@ -283,6 +283,7 @@ type ListOptions struct {
 	ReadTs    uint64
 	AfterUid  uint64   // Any UIDs returned must be after this value.
 	Intersect *pb.List // Intersect results with this list of UIDs.
+	First     int
 }
 
 // NewPosting takes the given edge and returns its equivalent representation as a posting.
@@ -1118,6 +1119,9 @@ func (l *List) ApproxLen() int {
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
 func (l *List) Uids(opt ListOptions) (*pb.List, error) {
+	if opt.First == 0 {
+		opt.First = math.MaxInt32
+	}
 	// Pre-assign length to make it faster.
 	l.RLock()
 	// Use approximate length for initial capacity.
@@ -1136,6 +1140,15 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
 			res = append(res, p.Uid)
+			if opt.First < 0 {
+				// We need the last N.
+				// TODO: This could be optimized by only considering some of the last UidBlocks.
+				if len(res) > -opt.First {
+					res = res[1:]
+				}
+			} else if len(res) > opt.First {
+				return ErrStopIteration
+			}
 		}
 		return nil
 	})
