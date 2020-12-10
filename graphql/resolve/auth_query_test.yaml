@@ -795,9 +795,9 @@
       UserRoot as var(func: uid(User4))
       User4 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        Ticket1 as User.tickets
+        Ticket1 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
       }
-      Ticket3 as var(func: uid(Ticket1)) @filter((anyofterms(Ticket.title, "graphql") AND uid(TicketAuth2)))
+      Ticket3 as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
       TicketAuth2 as var(func: uid(Ticket1)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
@@ -873,9 +873,9 @@
         regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
       }
       var(func: uid(MovieRoot)) {
-        Region1 as Movie.regionsAvailable
+        Region1 as Movie.regionsAvailable @filter(eq(Region.name, "Region123"))
       }
-      Region2 as var(func: uid(Region1)) @filter(eq(Region.name, "Region123"))
+      Region2 as var(func: uid(Region1))
     }
 
 - name: "Auth deep query - 3 level"
@@ -934,17 +934,17 @@
         regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
       }
       var(func: uid(MovieRoot)) {
-        Region1 as Movie.regionsAvailable
+        Region1 as Movie.regionsAvailable @filter(eq(Region.name, "Region123"))
       }
-      Region7 as var(func: uid(Region1)) @filter(eq(Region.name, "Region123"))
+      Region7 as var(func: uid(Region1))
       var(func: uid(Region1)) {
-        User2 as Region.users
+        User2 as Region.users @filter(eq(User.username, "User321"))
       }
-      User6 as var(func: uid(User2)) @filter(eq(User.username, "User321"))
+      User6 as var(func: uid(User2))
       var(func: uid(User2)) {
-        UserSecret3 as User.secrets
+        UserSecret3 as User.secrets @filter(allofterms(UserSecret.aSecret, "Secret132"))
       }
-      UserSecret5 as var(func: uid(UserSecret3)) @filter((allofterms(UserSecret.aSecret, "Secret132") AND uid(UserSecretAuth4)))
+      UserSecret5 as var(func: uid(UserSecret3)) @filter(uid(UserSecretAuth4))
       UserSecretAuth4 as var(func: uid(UserSecret3)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
@@ -1154,9 +1154,9 @@
       UserRoot as var(func: uid(User4))
       User4 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        TicketAggregateResult1 as User.tickets
+        TicketAggregateResult1 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
       }
-      Ticket3 as var(func: uid(TicketAggregateResult1)) @filter((anyofterms(Ticket.title, "graphql") AND uid(TicketAuth2)))
+      Ticket3 as var(func: uid(TicketAggregateResult1)) @filter(uid(TicketAuth2))
       TicketAuth2 as var(func: uid(TicketAggregateResult1)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
@@ -1210,9 +1210,9 @@
       UserRoot as var(func: uid(User10))
       User10 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        TicketAggregateResult1 as User.tickets
+        TicketAggregateResult1 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
       }
-      Ticket3 as var(func: uid(TicketAggregateResult1)) @filter((anyofterms(Ticket.title, "graphql") AND uid(TicketAuth2)))
+      Ticket3 as var(func: uid(TicketAggregateResult1)) @filter(uid(TicketAuth2))
       TicketAuth2 as var(func: uid(TicketAggregateResult1)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
@@ -1230,9 +1230,9 @@
         owner : Issue.owner @filter(eq(User.username, "user1"))
       }
       var(func: uid(UserRoot)) {
-        Ticket7 as User.tickets
+        Ticket7 as User.tickets @filter(anyofterms(Ticket.title, "graphql2"))
       }
-      Ticket9 as var(func: uid(Ticket7)) @filter((anyofterms(Ticket.title, "graphql2") AND uid(TicketAuth8)))
+      Ticket9 as var(func: uid(Ticket7)) @filter(uid(TicketAuth8))
       TicketAuth8 as var(func: uid(Ticket7)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
