@@ -19,12 +19,12 @@ package testutil
 import (
 	"bytes"
 	"fmt"
+	"github.com/dgraph-io/dgraph/x"
 	"go/build"
 	"io"
 	"os"
 	"os/exec"
-
-	"github.com/dgraph-io/dgraph/x"
+	"strconv"
 )
 
 // These are exported so they can also be set directly from outside this package.
@@ -133,4 +133,71 @@ func DgraphBinaryPath() string {
 	}
 
 	return os.ExpandEnv(gopath + "/bin/dgraph")
+}
+
+func DetectRaceConditionInZeros(prefix string) {
+	for i := 0; i <= 3; i++ {
+		in := GetContainerInstance(prefix, "zero"+strconv.Itoa(i))
+		err := DetectIfRaceConditionViolation(in)
+		if err != nil {
+			fmt.Printf("Error while detecting race condition %v\n", err)
+		}
+	}
+}
+
+
+func DetectRaceConditionInAlphas(prefix string) {
+	for i := 0; i <= 6; i++ {
+		in := GetContainerInstance(prefix, "alpha"+strconv.Itoa(i))
+		err := DetectIfRaceConditionViolation(in)
+		if err != nil {
+			fmt.Printf("Error while detecting race condition %v\n", err)
+		}
+	}
+}
+
+func DetectIfRaceConditionViolation(instance ContainerInstance) error {
+	c := instance.GetContainer()
+	if c == nil {
+		return nil
+	}
+
+	logCmd := exec.Command("docker", "logs", c.ID)
+	awkCmd := exec.Command("awk", "/WARNING: DATA RACE/{flag=1}flag;/==================/{flag=0}")
+
+	reader, writer := io.Pipe()
+	logCmd.Stdout = writer
+	logCmd.Stderr = writer
+	awkCmd.Stdin = reader
+
+	var b bytes.Buffer
+	awkCmd.Stdout = &b
+	awkCmd.Stderr = &b
+
+	if err := logCmd.Start(); err != nil {
+		return err
+	}
+	if err := awkCmd.Start(); err != nil {
+		return err
+	}
+	if err := logCmd.Wait(); err != nil {
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+	if err := awkCmd.Wait(); err != nil {
+		return err
+	}
+	// Todo do we need to kill the process?
+	//var timer *time.Timer
+	//timer = time.AfterFunc(10 * time.Second, func() {
+	//	timer.Stop()
+	//	_ = logCmd.Process.Kill()
+	//	_ = awkCmd.Process.Kill()
+	//})
+	if len(b.Bytes()) > 0 {
+		fmt.Printf("DATA RACE DETECTED %s\n", string(b.Bytes()))
+	}
+	return nil
 }

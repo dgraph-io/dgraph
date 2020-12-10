@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -50,8 +51,10 @@ var (
 	DockerPrefix string
 	// Global test data directory used to store resources
 	TestDataDirectory string
-	Instance          string
-	MinioInstance     string
+	// This flag determines whether to look for Race Conditions or not
+	DetectRaceCondition bool
+	Instance            string
+	MinioInstance       string
 	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
 	SockAddr string
 	// SockAddrHttp is the address to the HTTP of alpha used during tests.
@@ -75,6 +78,7 @@ func AdminUrl() string {
 func init() {
 	DockerPrefix = os.Getenv("TEST_DOCKER_PREFIX")
 	TestDataDirectory = os.Getenv("TEST_DATA_DIRECTORY")
+	DetectRaceCondition, _ = strconv.ParseBool(os.Getenv("TEST_DETECT_RACE_ENABLED"))
 	MinioInstance = ContainerAddr("minio", 9001)
 	Instance = fmt.Sprintf("%s_%s_1", DockerPrefix, "alpha1")
 	SockAddr = ContainerAddr("alpha1", 9080)

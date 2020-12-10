@@ -138,6 +138,10 @@ func StartAlphas(compose string) error {
 }
 
 func StopAlphas(compose string) {
+	if DetectRaceCondition {
+		DetectRaceConditionInAlphas(DockerPrefix)
+	}
+
 	dg, err := DgraphClient(ContainerAddr("alpha1", 9080))
 	if err == nil {
 		_ = dg.Alter(context.Background(), &api.Operation{
