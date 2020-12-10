@@ -415,11 +415,6 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	addPagination(dgQuery, field)
 }
 
-func addFilterToField(dgQuery *gql.GraphQuery, field schema.Field) {
-	filter, _ := field.ArgValue("filter").(map[string]interface{})
-	_ = addFilter(dgQuery, field.Type(), filter)
-}
-
 func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
 	addTypeFilter(query, field.Type())
 }
