@@ -24,6 +24,7 @@ import (
 	"math"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v2"
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
@@ -138,4 +139,19 @@ func UpdateLruMb(memoryMB float64) error {
 	posting.Config.AllottedMemory = memoryMB
 	posting.Config.Unlock()
 	return nil
+}
+
+// UpdateLogRequest updates value of x.WorkerConfig.LogRequest.
+func UpdateLogRequest(val bool) {
+	if val {
+		atomic.StoreInt32(&x.WorkerConfig.LogRequest, 1)
+		return
+	}
+
+	atomic.StoreInt32(&x.WorkerConfig.LogRequest, 0)
+}
+
+// LogRequestEnabled returns true if logging of requests is enabled otherwise false.
+func LogRequestEnabled() bool {
+	return atomic.LoadInt32(&x.WorkerConfig.LogRequest) > 0
 }

@@ -221,6 +221,12 @@ const (
 		more than specified here. (default -1 means no set limit)
 		"""
 		lruMb: Float
+
+		"""
+		True value of logRequest enables logging of all the requests coming to alphas.
+		False value of logRequest disables above.
+		"""
+		logRequest: Boolean
 	}
 
 	type ConfigPayload {
