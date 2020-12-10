@@ -2927,6 +2927,7 @@ func queryAggregateWithRepeatedFields(t *testing.T) {
 				tmin : titleMin
 				tmin_again : titleMin
 				tmax: titleMax
+				tmax_again : titleMax
 				navg : numLikesAvg
 				navg2 : numLikesAvg
 			}
@@ -2942,6 +2943,7 @@ func queryAggregateWithRepeatedFields(t *testing.T) {
 								"count":4,
 								"cnt2":4,
 								"tmax": "Random post",
+								"tmax_again": "Random post",
 								"tmin": "GraphQL doco",
 								"tmin_again": "GraphQL doco",
 								"navg": 66.25,
