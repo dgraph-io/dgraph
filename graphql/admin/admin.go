@@ -210,6 +210,9 @@ const (
 	}
 
 	input ExportInput {
+		"""
+		Data format for the export, e.g. "rdf" or "json" (default: "rdf")
+		"""
 		format: String
 
 		"""
