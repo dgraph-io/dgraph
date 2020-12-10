@@ -1240,7 +1240,8 @@ func (n *node) Run() {
 						if x.WorkerConfig.LudicrousMode {
 							var p pb.Proposal
 							if err := p.Unmarshal(entry.Data[8:]); err != nil {
-								glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
+								glog.Errorf("Unable to unmarshal proposal: %v %x\n",
+									err, entry.Data)
 								break
 							}
 							if len(p.Mutations.GetEdges()) > 0 {
