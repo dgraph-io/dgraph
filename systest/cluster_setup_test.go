@@ -90,8 +90,8 @@ func (d *DgraphCluster) StartAlphaOnly() error {
 	d.dgraph = exec.Command(testutil.DgraphBinaryPath(),
 		"alpha",
 		"--zero", ":"+d.zeroPort,
-		"--port-offset", strconv.Itoa(d.alphaPortOffset),
-		"--custom-tokenizers", d.TokenizerPluginsArg,
+		"--port_offset", strconv.Itoa(d.alphaPortOffset),
+		"--custom_tokenizers", d.TokenizerPluginsArg,
 	)
 	d.dgraph.Dir = d.dir
 	if err := d.dgraph.Start(); err != nil {
@@ -132,7 +132,7 @@ func (d *DgraphCluster) AddNode(dir string) (Node, error) {
 	dgraph := exec.Command(testutil.DgraphBinaryPath(),
 		"alpha",
 		"--zero", ":"+d.zeroPort,
-		"--port-offset", o,
+		"--port_offset", o,
 	)
 	dgraph.Dir = dir
 	dgraph.Stdout = os.Stdout
