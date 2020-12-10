@@ -23,10 +23,10 @@
       queryContact(func: uid(ContactRoot)) {
         id : uid
         nickName : Contact.nickName
-        adminTasks : Contact.adminTasks @filter(uid(AdminTask5)) {
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask1)) {
           id : uid
           name : AdminTask.name
-          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence4)) {
+          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence3)) {
             due : TaskOccurrence.due
             comp : TaskOccurrence.comp
             dgraph.uid : uid
@@ -36,14 +36,14 @@
       ContactRoot as var(func: uid(Contact6))
       Contact6 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
-        AdminTask1 as Contact.adminTasks
+        AdminTask2 as Contact.adminTasks
       }
-      AdminTask5 as var(func: uid(AdminTask1))
+      AdminTask1 as var(func: uid(AdminTask2))
       var(func: uid(AdminTask1)) {
-        TaskOccurrence2 as AdminTask.occurrences
+        TaskOccurrence4 as AdminTask.occurrences
       }
-      TaskOccurrence4 as var(func: uid(TaskOccurrence2)) @filter(uid(TaskOccurrenceAuth3))
-      TaskOccurrenceAuth3 as var(func: uid(TaskOccurrence2)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
+      TaskOccurrence3 as var(func: uid(TaskOccurrence4)) @filter(uid(TaskOccurrenceAuth5))
+      TaskOccurrenceAuth5 as var(func: uid(TaskOccurrence4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
     }
 
 - name: "Deep RBAC rule - Level 0 false"
@@ -97,8 +97,8 @@
         id : uid
         nickName : Contact.nickName
       }
-      ContactRoot as var(func: uid(Contact5))
-      Contact5 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact6))
+      Contact6 as var(func: type(Contact))
     }
 
 - name: "Deep RBAC rule with cascade - Level 1 false"
@@ -126,10 +126,10 @@
       queryContact(func: uid(ContactRoot)) @cascade {
         id : uid
         nickName : Contact.nickName
-        adminTasks : Contact.adminTasks @filter(uid(AdminTask6)) {
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask1)) {
           id : uid
           name : AdminTask.name
-          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence4)) {
+          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence3)) {
             due : TaskOccurrence.due
             comp : TaskOccurrence.comp
             dgraph.uid : uid
@@ -139,15 +139,15 @@
       ContactRoot as var(func: uid(Contact7))
       Contact7 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
-        AdminTask1 as Contact.adminTasks
+        AdminTask2 as Contact.adminTasks
       }
-      AdminTask6 as var(func: uid(AdminTask1)) @filter(uid(AdminTask5))
+      AdminTask1 as var(func: uid(AdminTask2)) @filter(uid(AdminTask6))
       var(func: uid(AdminTask1)) {
-        TaskOccurrence2 as AdminTask.occurrences
+        TaskOccurrence4 as AdminTask.occurrences
       }
-      TaskOccurrence4 as var(func: uid(TaskOccurrence2)) @filter(uid(TaskOccurrenceAuth3))
-      TaskOccurrenceAuth3 as var(func: uid(TaskOccurrence2)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
-      AdminTask5 as var(func: uid())
+      TaskOccurrence3 as var(func: uid(TaskOccurrence4)) @filter(uid(TaskOccurrenceAuth5))
+      TaskOccurrenceAuth5 as var(func: uid(TaskOccurrence4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
+      AdminTask6 as var(func: uid())
     }
 
 - name: "Deep RBAC rule - Level 2 false"
@@ -175,17 +175,17 @@
       queryContact(func: uid(ContactRoot)) {
         id : uid
         nickName : Contact.nickName
-        adminTasks : Contact.adminTasks @filter(uid(AdminTask3)) {
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask1)) {
           id : uid
           name : AdminTask.name
         }
       }
-      ContactRoot as var(func: uid(Contact4))
-      Contact4 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact5))
+      Contact5 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
-        AdminTask1 as Contact.adminTasks
+        AdminTask2 as Contact.adminTasks
       }
-      AdminTask3 as var(func: uid(AdminTask1))
+      AdminTask1 as var(func: uid(AdminTask2))
     }
 
 - name: "Deep RBAC rule - Level 1 type without auth."
