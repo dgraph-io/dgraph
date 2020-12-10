@@ -67,7 +67,6 @@ type options struct {
 	batchSize       int
 	clientDir       string
 	authToken       string
-	useCompression  bool
 	newUids         bool
 	verbose         bool
 	httpAddr        string
@@ -150,8 +149,6 @@ func init() {
 			"should be set to the API token issued by Slash GraphQL")
 	flag.String("slash_grpc_endpoint", "", "Path to Slash GraphQL GRPC endpoint. If --slash_grpc_endpoint is set, "+
 		"all other TLS options and connection options will be ignored")
-	flag.BoolP("use_compression", "C", false,
-		"Enable compression on connection to alpha server")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
 	flag.String("http", "localhost:6060", "Address to serve http (pprof).")
@@ -595,7 +592,6 @@ func run() error {
 		batchSize:       Live.Conf.GetInt("batch"),
 		clientDir:       Live.Conf.GetString("xidmap"),
 		authToken:       Live.Conf.GetString("auth_token"),
-		useCompression:  Live.Conf.GetBool("use_compression"),
 		newUids:         Live.Conf.GetBool("new_uids"),
 		verbose:         Live.Conf.GetBool("verbose"),
 		httpAddr:        Live.Conf.GetString("http"),
