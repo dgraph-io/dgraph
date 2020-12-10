@@ -1341,10 +1341,12 @@ func (n *node) calculateTabletSizes() {
 		left, err := x.Parse(tinfo.Left)
 		if err != nil {
 			glog.V(3).Infof("Unable to parse key: %v", err)
+			continue
 		}
 		right, err := x.Parse(tinfo.Right)
 		if err != nil {
 			glog.V(3).Infof("Unable to parse key: %v", err)
+			continue
 		}
 
 		// Count the table only if it is occupied by a single predicate.
