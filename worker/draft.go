@@ -1315,6 +1315,29 @@ func (n *node) calculateTabletSizes() {
 	var total int64
 	tablets := make(map[string]*pb.Tablet)
 	updateSize := func(tinfo badger.TableInfo) {
+		// The error has already been checked by caller.
+		left, _ := x.Parse(tinfo.Left)
+		pred := left.Attr
+		if pred == "" {
+			return
+		}
+		if tablet, ok := tablets[pred]; ok {
+			tablet.OnDiskBytes += int64(tinfo.OnDiskSize)
+			tablet.UncompressedBytes += int64(tinfo.UncompressedSize)
+		} else {
+			tablets[pred] = &pb.Tablet{
+				GroupId:           n.gid,
+				Predicate:         pred,
+				OnDiskBytes:       int64(tinfo.OnDiskSize),
+				UncompressedBytes: int64(tinfo.UncompressedSize),
+			}
+		}
+		total += int64(tinfo.OnDiskSize)
+	}
+
+	tableInfos := pstore.Tables()
+	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
+	for _, tinfo := range tableInfos {
 		left, err := x.Parse(tinfo.Left)
 		if err != nil {
 			glog.V(3).Infof("Unable to parse key: %v", err)
@@ -1326,31 +1349,10 @@ func (n *node) calculateTabletSizes() {
 
 		// Count the table only if it is occupied by a single predicate.
 		if left.Attr == right.Attr {
-			pred := left.Attr
-			if pred == "" {
-				return
-			}
-			if tablet, ok := tablets[pred]; ok {
-				tablet.OnDiskBytes += int64(tinfo.OnDiskSize)
-				tablet.UncompressedBytes += int64(tinfo.UncompressedSize)
-			} else {
-				tablets[pred] = &pb.Tablet{
-					GroupId:           n.gid,
-					Predicate:         pred,
-					OnDiskBytes:       int64(tinfo.OnDiskSize),
-					UncompressedBytes: int64(tinfo.UncompressedSize),
-				}
-			}
-			total += int64(tinfo.OnDiskSize)
+			updateSize(tinfo)
 		} else {
 			glog.V(3).Info("Skipping table not owned by one predicate")
 		}
-	}
-
-	tableInfos := pstore.Tables()
-	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
-	for _, tinfo := range tableInfos {
-		updateSize(tinfo)
 	}
 
 	if len(tablets) == 0 {
