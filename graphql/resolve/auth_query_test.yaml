@@ -299,9 +299,7 @@
       ProjectAuth5 as var(func: uid(Project4)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       var(func: uid(ProjectRoot)) {
         Column1 as Project.columns
@@ -311,11 +309,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -437,7 +432,6 @@
       Issue3 as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
       IssueAuth2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
     }
 
@@ -455,14 +449,14 @@
     ROLE: "USER"
     USER: "user1"
   dgquery: |-
-      query {
-        queryUser(func: uid(UserRoot)) {
-          username : User.username
-          dgraph.uid : uid
-        }
-        UserRoot as var(func: uid(User2))
-        User2 as var(func: type(User))
+    query {
+      queryUser(func: uid(UserRoot)) {
+        username : User.username
+        dgraph.uid : uid
       }
+      UserRoot as var(func: uid(User2))
+      User2 as var(func: type(User))
+    }
 
 - name: "Auth with top level AND rbac true"
   gqlquery: |
@@ -484,7 +478,6 @@
       Issue1 as var(func: type(Issue))
       IssueAuth2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
     }
 
@@ -554,9 +547,9 @@
     ROLE: "USER"
     USER: "user1"
   dgquery: |-
-     query {
-       queryLog()
-     }
+    query {
+      queryLog()
+    }
 
 - name: "Auth with top level AND rbac false"
   gqlquery: |
@@ -569,9 +562,9 @@
     ROLE: "USER"
     USER: "user1"
   dgquery: |-
-     query {
-       queryIssue()
-     }
+    query {
+      queryIssue()
+    }
 
 - name: "Aggregate Query on Auth with top level AND rbac false"
   gqlquery: |
@@ -600,14 +593,14 @@
     ROLE: "ADMIN"
     USER: "user1"
   dgquery: |-
-     query {
-       queryProject(func: uid(ProjectRoot)) {
-         name : Project.name
-         dgraph.uid : uid
-       }
-       ProjectRoot as var(func: uid(Project1))
-       Project1 as var(func: type(Project))
-     }
+    query {
+      queryProject(func: uid(ProjectRoot)) {
+        name : Project.name
+        dgraph.uid : uid
+      }
+      ProjectRoot as var(func: uid(Project1))
+      Project1 as var(func: type(Project))
+    }
 
 - name: "Aggregate on Auth with top level OR rbac true"
   gqlquery: |
@@ -655,17 +648,15 @@
       Group1 as var(func: type(Group))
       GroupAuth2 as var(func: uid(Group1)) @cascade {
         users : Group.users @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
       GroupAuth3 as var(func: uid(Group1)) @cascade {
         createdBy : Group.createdBy @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
     }
 
 - name: "Auth with top level OR rbac false"
   gqlquery: |
-    query {                                           
+    query {
       queryProject {
         name
       }
@@ -684,9 +675,7 @@
       ProjectAuth2 as var(func: uid(Project1)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -734,13 +723,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -751,7 +736,7 @@
         username
         tickets {
           id
-          title 
+          title
         }
       }
     }
@@ -778,13 +763,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -795,7 +776,7 @@
         username
         tickets(filter: { title: { anyofterms: "graphql" } }) {
           id
-          title 
+          title
         }
       }
     }
@@ -822,13 +803,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -853,13 +830,10 @@
       MovieAuth3 as var(func: uid(Movie1)) @cascade {
         regionsAvailable : Movie.regionsAvailable {
           users : Region.users @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       MovieAuth4 as var(func: uid(Movie1)) @cascade {
         regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
-        dgraph.uid : uid
       }
     }
 
@@ -893,13 +867,10 @@
       MovieAuth5 as var(func: uid(Movie3)) @cascade {
         regionsAvailable : Movie.regionsAvailable {
           users : Region.users @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       MovieAuth6 as var(func: uid(Movie3)) @cascade {
         regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
-        dgraph.uid : uid
       }
       var(func: uid(MovieRoot)) {
         Region1 as Movie.regionsAvailable
@@ -957,13 +928,10 @@
       MovieAuth10 as var(func: uid(Movie8)) @cascade {
         regionsAvailable : Movie.regionsAvailable {
           users : Region.users @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       MovieAuth11 as var(func: uid(Movie8)) @cascade {
         regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
-        dgraph.uid : uid
       }
       var(func: uid(MovieRoot)) {
         Region1 as Movie.regionsAvailable
@@ -1001,13 +969,10 @@
       MovieAuth3 as var(func: uid(Movie1)) @cascade {
         regionsAvailable : Movie.regionsAvailable {
           users : Region.users @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       MovieAuth4 as var(func: uid(Movie1)) @cascade {
         regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
-        dgraph.uid : uid
       }
     }
 
@@ -1037,13 +1002,10 @@
       MovieAuth3 as var(func: uid(Movie1)) @cascade {
         regionsAvailable : Movie.regionsAvailable {
           users : Region.users @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       MovieAuth4 as var(func: uid(Movie1)) @cascade {
         regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
-        dgraph.uid : uid
       }
     }
 
@@ -1146,7 +1108,6 @@
       MovieAuth2 as var(func: uid(Movie1)) @filter(eq(Movie.hidden, true)) @cascade
       MovieAuth3 as var(func: uid(Movie1)) @cascade {
         regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
-        dgraph.uid : uid
       }
     }
 
@@ -1201,13 +1162,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -1261,13 +1218,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       var(func: uid(UserRoot)) {
         IssueAggregateResult4 as User.issues
@@ -1275,7 +1228,6 @@
       Issue6 as var(func: uid(IssueAggregateResult4)) @filter(uid(IssueAuth5))
       IssueAuth5 as var(func: uid(IssueAggregateResult4)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
       var(func: uid(UserRoot)) {
         Ticket7 as User.tickets
@@ -1286,13 +1238,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -1328,7 +1276,6 @@
       Issue3 as var(func: uid(IssueAggregateResult1)) @filter(uid(IssueAuth2))
       IssueAuth2 as var(func: uid(IssueAggregateResult1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
     }
 
@@ -1382,9 +1329,7 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -1410,9 +1355,7 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -1439,9 +1382,7 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -1489,27 +1430,21 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       FbPost1 as var(func: type(FbPost))
       FbPostAuth4 as var(func: uid(FbPost1)) @cascade {
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Answer1 as var(func: type(Answer))
       AnswerAuth5 as var(func: uid(Answer1)) @cascade {
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -1541,27 +1476,21 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       FbPost1 as var(func: type(FbPost))
       FbPostAuth4 as var(func: uid(FbPost1)) @cascade {
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Answer1 as var(func: type(Answer))
       AnswerAuth5 as var(func: uid(Answer1)) @cascade {
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -1607,18 +1536,14 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Answer1 as var(func: type(Answer))
       AnswerAuth4 as var(func: uid(Answer1)) @cascade {
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -1649,18 +1574,14 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Answer1 as var(func: type(Answer))
       AnswerAuth4 as var(func: uid(Answer1)) @cascade {
         dgraph.type
         author : Post.author @filter(eq(Author.name, "Random")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -1813,9 +1734,7 @@
       ProjectAuth5 as var(func: uid(Project4)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       var(func: uid(ProjectRoot)) {
         Column1 as Project.columns
@@ -1825,11 +1744,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       checkPwd(func: uid(ProjectRoot)) @filter(type(Project)) {
         pwd as checkpwd(Project.pwd, "something")
@@ -1911,9 +1827,7 @@
       FbPostAuth3 as var(func: uid(FbPost1)) @cascade {
         author : Post.author @filter(eq(Author.name, "ADMIN")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Answer1 as var(func: type(Answer))
       checkPwd(func: uid(PostRoot)) @filter(type(Post)) {
