@@ -117,15 +117,15 @@ the schema is large and needs to be reused, such as in between unit tests.
 ## Create a transaction
 
 Dgraph supports running distributed ACID transactions. To create a
-transaction, just call `c.NewTxn()`. This operation incurs no network call.
-Typically, you'd also want to call a `defer txn.Discard()` to let it
+transaction, just call `c.NewTxn()`. This operation doesn't incur in network calls.
+Typically, you'd also want to call a `defer txn.Discard(ctx)` to let it
 automatically rollback in case of errors. Calling `Discard` after `Commit` would
 be a no-op.
 
 ```go
 func runTxn(c *dgo.Dgraph) {
 	txn := c.NewTxn()
-	defer txn.Discard()
+	defer txn.Discard(ctx)
 	...
 }
 ```
