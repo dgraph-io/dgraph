@@ -326,11 +326,9 @@ func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
 }
 
 func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
+	x.AssertTrue(len(e.Data) > 0)
+
 	var p pb.ZeroProposal
-	// Raft commits empty entry on becoming a leader.
-	if len(e.Data) == 0 {
-		return 0, nil
-	}
 	key := binary.BigEndian.Uint64(e.Data[:8])
 	if err := p.Unmarshal(e.Data[8:]); err != nil {
 		return key, err
@@ -520,14 +518,12 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 		batch = entries[len(entries)-1].Index + 1
 
 		for _, entry := range entries {
-			if entry.Type != raftpb.EntryNormal {
+			if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
 				continue
 			}
 			var proposal pb.ZeroProposal
-			if len(entry.Data) > 0 {
-				if err = proposal.Unmarshal(entry.Data[8:]); err != nil {
-					return false, err
-				}
+			if err = proposal.Unmarshal(entry.Data[8:]); err != nil {
+				return false, err
 			}
 			if len(proposal.Cid) > 0 {
 				return true, err
@@ -881,6 +877,10 @@ func (n *node) Run() {
 					n.applyConfChange(entry)
 					glog.Infof("Done applying conf change at %#x", n.Id)
 
+				case len(entry.Data) == 0:
+					// Raft commits empty entry on becoming a leader.
+					// Do nothing.
+
 				case entry.Type == raftpb.EntryNormal:
 					start := time.Now()
 					key, err := n.applyProposal(entry)
@@ -891,13 +891,10 @@ func (n *node) Run() {
 					if took := time.Since(start); took > time.Second {
 						var p pb.ZeroProposal
 						// Raft commits empty entry on becoming a leader.
-						if len(entry.Data) > 0 {
-							if err := p.Unmarshal(entry.Data[8:]); err == nil {
-								glog.V(2).Infof("Proposal took %s to apply: %+v\n",
-									took.Round(time.Second), p)
-							}
+						if err := p.Unmarshal(entry.Data[8:]); err == nil {
+							glog.V(2).Infof("Proposal took %s to apply: %+v\n",
+								took.Round(time.Second), p)
 						}
-
 					}
 
 				default:

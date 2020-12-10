@@ -677,19 +677,17 @@ func (n *node) processApplyCh() {
 	handle := func(entries []raftpb.Entry) {
 		var totalSize int64
 		for _, entry := range entries {
-
-			var proposal pb.Proposal
-			var key uint64
-			if len(entry.Data) > 0 {
-				key = binary.BigEndian.Uint64(entry.Data[:8])
-				x.Check(proposal.Unmarshal(entry.Data[8:]))
-			}
-			proposal.Index = entry.Index
+			x.AssertTrue(len(entry.Data) > 0)
 
 			// We use the size as a double check to ensure that we're
 			// working with the same proposal as before.
-			psz := proposal.Size()
+			psz := entry.Size()
 			totalSize += int64(psz)
+
+			var proposal pb.Proposal
+			key := binary.BigEndian.Uint64(entry.Data[:8])
+			x.Check(proposal.Unmarshal(entry.Data[8:]))
+			proposal.Index = entry.Index
 
 			// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
 			// commit ts.
@@ -1233,10 +1231,7 @@ func (n *node) Run() {
 					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
 					n.Applied.Done(entry.Index)
 				default:
-					var key uint64
-					if len(entry.Data) > 0 {
-						key = binary.BigEndian.Uint64(entry.Data[:8])
-					}
+					key := binary.BigEndian.Uint64(entry.Data[:8])
 					if pctx := n.Proposals.Get(key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
@@ -1244,11 +1239,9 @@ func (n *node) Run() {
 						}
 						if x.WorkerConfig.LudicrousMode {
 							var p pb.Proposal
-							if len(entry.Data) > 0 {
-								if err := p.Unmarshal(entry.Data[8:]); err != nil {
-									glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
-									break
-								}
+							if err := p.Unmarshal(entry.Data[8:]); err != nil {
+								glog.Errorf("Unable to unmarshal proposal: %v %x\n", err, entry.Data)
+								break
 							}
 							if len(p.Mutations.GetEdges()) > 0 {
 								// Assuming that there will be no error while applying. But this
@@ -1270,8 +1263,8 @@ func (n *node) Run() {
 				// pending size, we could block forever in rampMeter.
 				rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
 				var pendingSize int64
-				for _, p := range entries {
-					pendingSize += int64(p.Size())
+				for _, e := range entries {
+					pendingSize += int64(e.Size())
 				}
 				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
 					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
@@ -1569,15 +1562,13 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 		batchFirst = lastEntry.Index + 1
 
 		for _, entry := range entries {
-			if entry.Type != raftpb.EntryNormal {
+			if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
 				continue
 			}
 			var proposal pb.Proposal
-			if len(entry.Data) > 0 {
-				if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
-					span.Annotatef(nil, "Error: %v", err)
-					return nil, err
-				}
+			if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
+				span.Annotatef(nil, "Error: %v", err)
+				return nil, err
 			}
 
 			var start uint64
