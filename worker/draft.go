@@ -37,6 +37,7 @@ import (
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
+	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
@@ -1311,45 +1312,43 @@ func (n *node) calculateTabletSizes() {
 	}
 	var total int64
 	tablets := make(map[string]*pb.Tablet)
-	updateSize := func(pred string, onDiskSize int64, uncompressedSize int64) {
-		if pred == "" {
-			return
+	updateSize := func(tinfo badger.TableInfo) {
+		left, err := x.Parse(tinfo.Left)
+		if err != nil {
+			glog.V(3).Infof("Unable to parse key: %v", err)
+		}
+		right, err := x.Parse(tinfo.Right)
+		if err != nil {
+			glog.V(3).Infof("Unable to parse key: %v", err)
 		}
 
-		if tablet, ok := tablets[pred]; ok {
-			tablet.OnDiskBytes += onDiskSize
-			tablet.UncompressedBytes += uncompressedSize
-		} else {
-			tablets[pred] = &pb.Tablet{
-				GroupId:           n.gid,
-				Predicate:         pred,
-				OnDiskBytes:       onDiskSize,
-				UncompressedBytes: uncompressedSize,
+		// Count the table only if it is occupied by a single predicate.
+		if left.Attr == right.Attr {
+			pred := left.Attr
+			if pred == "" {
+				return
 			}
+			if tablet, ok := tablets[pred]; ok {
+				tablet.OnDiskBytes += int64(tinfo.OnDiskSize)
+				tablet.UncompressedBytes += int64(tinfo.UncompressedSize)
+			} else {
+				tablets[pred] = &pb.Tablet{
+					GroupId:           n.gid,
+					Predicate:         pred,
+					OnDiskBytes:       int64(tinfo.OnDiskSize),
+					UncompressedBytes: int64(tinfo.UncompressedSize),
+				}
+			}
+			total += int64(tinfo.OnDiskSize)
+		} else {
+			glog.V(3).Info("Skipping table not owned by one predicate")
 		}
-		total += onDiskSize
 	}
 
 	tableInfos := pstore.Tables()
 	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
 	for _, tinfo := range tableInfos {
-		left, err := x.Parse(tinfo.Left)
-		if err != nil {
-			glog.V(3).Infof("Unable to parse key: %v", err)
-			continue
-		}
-		right, err := x.Parse(tinfo.Right)
-		if err != nil {
-			glog.V(3).Infof("Unable to parse key: %v", err)
-			continue
-		}
-
-		// Count the table only if it is occupied by a single predicate.
-		if left.Attr == right.Attr {
-			updateSize(left.Attr, int64(tinfo.OnDiskSize), int64(tinfo.UncompressedSize))
-		} else {
-			glog.V(3).Info("Skipping table not owned by one predicate")
-		}
+		updateSize(tinfo)
 	}
 
 	if len(tablets) == 0 {

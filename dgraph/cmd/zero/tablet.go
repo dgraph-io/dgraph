@@ -104,8 +104,8 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
 	}
 	msg := fmt.Sprintf("Going to move predicate: [%v], size: [ondisk: %v, uncompressed: %v]"+
-		" from group %d to %d\n", predicate, humanize.Bytes(uint64(tab.OnDiskBytes)),
-		humanize.Bytes(uint64(tab.UncompressedBytes)), srcGroup, dstGroup)
+		" from group %d to %d\n", predicate, humanize.IBytes(uint64(tab.OnDiskBytes)),
+		humanize.IBytes(uint64(tab.UncompressedBytes)), srcGroup, dstGroup)
 	glog.Info(msg)
 	span.Annotate([]otrace.Attribute{otrace.StringAttribute("tablet", predicate)}, msg)
 
