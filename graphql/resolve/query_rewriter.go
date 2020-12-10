@@ -415,11 +415,6 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	addPagination(dgQuery, field)
 }
 
-func addFilterToField(dgQuery *gql.GraphQuery, field schema.Field) {
-	filter, _ := field.ArgValue("filter").(map[string]interface{})
-	_ = addFilter(dgQuery, field.Type(), filter)
-}
-
 func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
 	addTypeFilter(query, field.Type())
 }
@@ -977,7 +972,6 @@ func buildCommonAuthQueries(
 		},
 	}
 
-	addFilterToField(selectionQry, f)
 	return commonAuthQueryVars{
 		parentQry:     parentQry,
 		selectionQry:  selectionQry,
@@ -1114,27 +1108,19 @@ func buildAggregateFields(
 	// possibly mainField. Auth filters are added to count aggregation fields and
 	// mainField. Adding filters only for mainField is sufficient for other aggregate
 	// functions as the aggregation functions use var from mainField.
-	for _, aggregateChild := range aggregateChildren {
-		if authFilter != nil {
-			if aggregateChild.Filter == nil {
-				aggregateChild.Filter = authFilter
-			} else {
-				aggregateChild.Filter = &gql.FilterTree{
-					Op:    "and",
-					Child: []*gql.FilterTree{aggregateChild.Filter, authFilter},
-				}
-			}
-		}
-	}
+
 	// Adds auth queries. The variable authQueriesAppended ensures that auth queries are
 	// appended only once. This also merges auth filters and any other filters of count
 	// aggregation fields / mainField.
 	if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
 		commonAuthQueryVars := buildCommonAuthQueries(f, auth, parentQryName)
+		// add child filter to parent query, auth filters to selection query and
+		// selection query as a filter to child
+		commonAuthQueryVars.selectionQry.Filter = authFilter
 		var authQueriesAppended = false
 		for _, aggregateChild := range aggregateChildren {
-			commonAuthQueryVars.selectionQry.Filter = aggregateChild.Filter
 			if !authQueriesAppended {
+				commonAuthQueryVars.parentQry.Children[0].Filter = aggregateChild.Filter
 				retAuthQueries = append(retAuthQueries, commonAuthQueryVars.parentQry, commonAuthQueryVars.selectionQry)
 				authQueriesAppended = true
 			}
@@ -1319,27 +1305,19 @@ func addSelectionSetFrom(
 			fieldAuth, authFilter = auth.rewriteAuthQueries(f.Type())
 		}
 
-		if authFilter != nil {
-			if child.Filter == nil {
-				child.Filter = authFilter
-			} else {
-				child.Filter = &gql.FilterTree{
-					Op:    "and",
-					Child: []*gql.FilterTree{child.Filter, authFilter},
-				}
-			}
-		}
-
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
 			commonAuthQueryVars := buildCommonAuthQueries(f, auth, parentQryName)
-			commonAuthQueryVars.selectionQry.Filter = child.Filter
-			authQueries = append(authQueries, commonAuthQueryVars.parentQry, commonAuthQueryVars.selectionQry)
+			// add child filter to parent query, auth filters to selection query and
+			// selection query as a filter to child
+			commonAuthQueryVars.parentQry.Children[0].Filter = child.Filter
+			commonAuthQueryVars.selectionQry.Filter = authFilter
 			child.Filter = &gql.FilterTree{
 				Func: &gql.Function{
 					Name: "uid",
 					Args: []gql.Arg{{Value: commonAuthQueryVars.filterVarName}},
 				},
 			}
+			authQueries = append(authQueries, commonAuthQueryVars.parentQry, commonAuthQueryVars.selectionQry)
 		}
 		authQueries = append(authQueries, selectionAuth...)
 		authQueries = append(authQueries, fieldAuth...)
