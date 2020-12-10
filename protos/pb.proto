@@ -150,6 +150,7 @@ message License {
 }
 
 message ZeroProposal {
+	reserved 8;  // Was used for string key.
 	map<uint32, uint64> snapshot_ts = 1; // Group ID -> Snapshot Ts.
 	Member member = 2;
 	Tablet tablet = 3;
@@ -157,7 +158,6 @@ message ZeroProposal {
 	uint64 maxTxnTs = 5;
 	uint64 maxRaftId = 6;
 	api.TxnContext txn = 7;
-	string key = 8;  // Used as unique identifier for proposal id.
 	string cid = 9; // Used as unique identifier for the cluster.
 	License license = 10;
 	ZeroSnapshot snapshot = 11; // Used to make Zeros take a snapshot.
@@ -302,11 +302,11 @@ message RestoreRequest {
 }
 
 message Proposal {
+	reserved 7; // Was used for string key.
 	Mutations mutations    		= 2;
 	repeated badgerpb2.KV kv  = 4;
 	MembershipState state  		= 5;
 	string clean_predicate 		= 6;  // Delete the predicate which was moved to other group.
-	string key             		= 7;
 	OracleDelta delta      		= 8;
 	Snapshot snapshot      		= 9;  // Used to tell the group when to take snapshot.
 	uint64 index           		= 10; // Used to store Raft index, in raft.Ready.
