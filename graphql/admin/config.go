@@ -27,7 +27,7 @@ import (
 )
 
 type configInput struct {
-	LruMB float64
+	LruMB *float64
 	// LogRequest is used to update WorkerOptions.LogRequest. true value of LogRequest enables
 	// logging of all requests coming to alphas. LogRequest type has been kept as *bool instead of
 	// bool to avoid updating WorkerOptions.LogRequest when it has default value of false.
@@ -42,8 +42,9 @@ func resolveConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		return emptyResult(m, err), false
 	}
 
-	if input.LruMB > 0 {
-		if err = worker.UpdateLruMb(input.LruMB); err != nil {
+	// update LruMB only when it is specified by user
+	if input.LruMB != nil {
+		if err = worker.UpdateLruMb(*input.LruMB); err != nil {
 			return emptyResult(m, err), false
 		}
 	}
