@@ -16,16 +16,19 @@
 package raftmigrate
 
 import (
+	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
 	"os"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.etcd.io/etcd/raft/raftpb"
 )
 
 var (
@@ -52,6 +55,36 @@ func init() {
 		"Node ID of the old node. This will be the node ID of the new node.")
 	flag.IntP("old-group-id", "", 0, "Group ID of the old node. This is used to open the old wal.")
 	flag.StringP("new-dir", "", "", "Path to the new (z)w directory.")
+}
+
+func updateProposalData(entries []raftpb.Entry) {
+	parseAndConvertKey := func(key string) uint64 {
+		keyFormat := "z%x-%d"
+		var random uint64
+		var parsedKey uint32
+		fmt.Sscanf(key, keyFormat, &parsedKey, &random)
+		return uint64(uint64(parsedKey)<<32 | random>>32)
+	}
+	for _, entry := range entries {
+		var proposal Proposal
+		proposal.Unmarshal(entry.Data)
+		newKey := parseAndConvertKey(proposal.Key)
+		var newProposal pb.Proposal
+		newProposal.Mutations = proposal.Mutations
+		newProposal.Kv = proposal.Kv
+		newProposal.State = proposal.State
+		newProposal.CleanPredicate = proposal.CleanPredicate
+		newProposal.Delta = proposal.Delta
+		newProposal.Snapshot = proposal.Snapshot
+		newProposal.Index = proposal.Index
+		newProposal.ExpectedChecksum = proposal.ExpectedChecksum
+		newProposal.Restore = proposal.Restore
+		data := make([]byte, 8+newProposal.Size())
+		binary.BigEndian.PutUint64(data, newKey)
+		_, err := newProposal.MarshalToSizedBuffer(data[8:])
+		x.Checkf(err, "Failed to marshal proposal to buffer")
+		entry.Data = data
+	}
 }
 
 func run(conf *viper.Viper) error {
@@ -93,6 +126,7 @@ func run(conf *viper.Viper) error {
 	fmt.Printf("Fetching entries from low: %d to high: %d\n", firstIndex, lastIndex)
 	// Should we batch this up?
 	oldEntries, err := oldWal.Entries(firstIndex, lastIndex, math.MaxUint64)
+	updateProposalData(oldEntries)
 	x.Checkf(err, "failed to read entries from low:%d high:%d err:%s", firstIndex, lastIndex, err)
 
 	snapshot, err := oldWal.Snapshot()
