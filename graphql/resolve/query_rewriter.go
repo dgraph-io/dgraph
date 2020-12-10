@@ -559,7 +559,11 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) []*gql.GraphQuery 
 
 	addArgumentsToField(dgQuery[0], field)
 	selectionAuth := addSelectionSetFrom(dgQuery[0], field, authRw)
-	addUID(dgQuery[0])
+	// we don't need to query uid for auth queries, as they always have at least one field in their
+	// selection set.
+	if !authRw.writingAuth() {
+		addUID(dgQuery[0])
+	}
 	addCascadeDirective(dgQuery[0], field)
 
 	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery, rbac)
