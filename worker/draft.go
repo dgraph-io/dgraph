@@ -1599,7 +1599,6 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 		Index:   snapshotIdx,
 		ReadTs:  maxCommitTs,
 	}
-	glog.V(2).Infof("Calculated snapshot: %+v\n", result)
 	span.Annotatef(nil, "Got snapshot: %+v", result)
 	return result, nil
 }

@@ -139,6 +139,7 @@ message Group {
 	map<string, Tablet> tablets = 2; // Predicate + others are key.
 	uint64 snapshot_ts          = 3; // Stores Snapshot transaction ts.
 	uint64 checksum             = 4; // Stores a checksum.
+	uint64 checkpoint_ts        = 5; // Stores checkpoint ts as seen by leader.
 }
 
 message License {
@@ -159,6 +160,7 @@ message ZeroProposal {
 	string key = 8;  // Used as unique identifier for proposal id.
 	string cid = 9; // Used as unique identifier for the cluster.
 	License license = 10;
+	ZeroSnapshot snapshot = 11; // Used to make Zeros take a snapshot.
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -265,6 +267,12 @@ message Snapshot {
 	bool done	= 4;
 	// since_ts stores the ts of the last snapshot to support diff snap updates.
 	uint64 since_ts = 5;
+}
+
+message ZeroSnapshot {
+	uint64 index = 1;
+	uint64 checkpoint_ts = 2;
+	MembershipState state = 5;
 }
 
 message RestoreRequest {

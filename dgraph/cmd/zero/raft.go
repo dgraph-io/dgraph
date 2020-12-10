@@ -296,6 +296,32 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	return nil
 }
 
+func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
+	existing, err := n.Store.Snapshot()
+	if err != nil {
+		return err
+	}
+	if existing.Metadata.Index >= snap.Index {
+		glog.V(2).Infof("Skipping snapshot at %d, because found one at %d\n",
+			snap.Index, existing.Metadata.Index)
+		return nil
+	}
+	n.server.orc.purgeBelow(snap.CheckpointTs)
+
+	data, err := snap.Marshal()
+	x.Check(err)
+
+	for {
+		// We should never let CreateSnapshot have an error.
+		err := n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
+		if err == nil {
+			break
+		}
+		glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
+	}
+	return nil
+}
+
 func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	var p pb.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
@@ -334,13 +360,6 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 				group.SnapshotTs = x.Max(group.SnapshotTs, ts)
 			}
 		}
-		purgeTs := uint64(math.MaxUint64)
-		for _, group := range state.Groups {
-			purgeTs = x.Min(purgeTs, group.SnapshotTs)
-		}
-		if purgeTs < math.MaxUint64 {
-			n.server.orc.purgeBelow(purgeTs)
-		}
 	}
 	if p.Member != nil {
 		if err := n.handleMemberProposal(p.Member); err != nil {
@@ -370,6 +389,11 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		// Check expiry and set enabled accordingly.
 		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
 		state.License.Enabled = time.Now().UTC().Before(expiry)
+	}
+	if p.Snapshot != nil {
+		if err := n.applySnapshot(p.Snapshot); err != nil {
+			glog.Errorf("While applying snapshot: %v\n", err)
+		}
 	}
 
 	switch {
@@ -647,13 +671,15 @@ func (n *node) checkQuorum(closer *z.Closer) {
 
 func (n *node) snapshotPeriodically(closer *z.Closer) {
 	defer closer.Done()
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			n.trySnapshot(1000)
+			if err := n.calculateAndProposeSnapshot(); err != nil {
+				glog.Errorf("While calculateAndProposeSnapshot: %v", err)
+			}
 
 		case <-closer.HasBeenClosed():
 			return
@@ -661,21 +687,101 @@ func (n *node) snapshotPeriodically(closer *z.Closer) {
 	}
 }
 
-func (n *node) trySnapshot(skip uint64) {
-	existing, err := n.Store.Snapshot()
-	x.Checkf(err, "Unable to get existing snapshot")
-	si := existing.Metadata.Index
-	idx := n.server.SyncedUntil()
-	if idx <= si+skip {
-		return
+// calculateAndProposeSnapshot works by tracking Alpha group leaders' checkpoint timestamps. It then
+// finds the minimum checkpoint ts across these groups, say Tmin.  And then, iterates over Zero Raft
+// logs to determine what all entries we could discard which are below Tmin. It uses that
+// information to calculate a snapshot, which it proposes to other Zeros. When the proposal arrives
+// via Raft, all Zeros apply it to themselves via applySnapshot in raft.Ready.
+func (n *node) calculateAndProposeSnapshot() error {
+	// Only run this on the leader.
+	if !n.AmLeader() {
+		return nil
 	}
 
-	data, err := n.server.MarshalMembershipState()
-	x.Check(err)
+	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
+		otrace.WithSampler(otrace.AlwaysSample()))
+	defer span.End()
 
-	err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
-	x.Checkf(err, "While creating snapshot")
-	glog.Infof("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
+	// We calculate the minimum timestamp from all the group's maxAssigned.
+	discardBelow := uint64(math.MaxUint64)
+	{
+		s := n.server
+		s.RLock()
+		if len(s.state.Groups) != len(s.checkpointPerGroup) {
+			glog.Infof("Skipping creating a snapshot. Num groups: %d, Num max assigned: %d",
+				len(s.state.Groups), len(s.checkpointPerGroup))
+			s.RUnlock()
+			return nil
+		}
+		for _, ts := range s.checkpointPerGroup {
+			discardBelow = x.Min(discardBelow, ts)
+		}
+		s.RUnlock()
+	}
+
+	first, err := n.Store.FirstIndex()
+	if err != nil {
+		span.Annotatef(nil, "FirstIndex error: %v", err)
+		return err
+	}
+	last, err := n.Store.LastIndex()
+	if err != nil {
+		span.Annotatef(nil, "LastIndex error: %v", err)
+		return err
+	}
+
+	span.Annotatef(nil, "First index: %d. Last index: %d. Discard Below: %d",
+		first, last, discardBelow)
+
+	var snapshotIndex uint64
+	for batchFirst := first; batchFirst <= last; {
+		entries, err := n.Store.Entries(batchFirst, last+1, 256<<20)
+		if err != nil {
+			span.Annotatef(nil, "Error: %v", err)
+			return err
+		}
+		// Exit early from the loop if no entries were found.
+		if len(entries) == 0 {
+			break
+		}
+		for _, entry := range entries {
+			if entry.Type != raftpb.EntryNormal {
+				continue
+			}
+			var p pb.ZeroProposal
+			if err := p.Unmarshal(entry.Data); err != nil {
+				span.Annotatef(nil, "Error: %v", err)
+				return err
+			}
+			if txn := p.Txn; txn != nil {
+				if txn.CommitTs > 0 && txn.CommitTs < discardBelow {
+					snapshotIndex = entry.Index
+				}
+			}
+		}
+		batchFirst = entries[len(entries)-1].Index + 1
+	}
+	if snapshotIndex == 0 {
+		return nil
+	}
+	span.Annotatef(nil, "Taking snapshot at: %d", snapshotIndex)
+	state := n.server.membershipState()
+
+	zs := &pb.ZeroSnapshot{
+		Index:        snapshotIndex,
+		CheckpointTs: discardBelow,
+		State:        state,
+	}
+	glog.V(2).Infof("Proposing snapshot at Index: %d Checkpoint Ts: %d\n",
+		zs.Index, zs.CheckpointTs)
+	zp := &pb.ZeroProposal{Snapshot: zs}
+	if err = n.proposeAndWait(n.ctx, zp); err != nil {
+		glog.Errorf("Error while proposing snapshot: %v\n", err)
+		span.Annotatef(nil, "Error while proposing snapshot: %v", err)
+		return err
+	}
+	span.Annotatef(nil, "Snapshot proposed: Done")
+	return nil
 }
 
 const tickDur = 100 * time.Millisecond
