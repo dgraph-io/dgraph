@@ -178,10 +178,14 @@ via `json.Unmarshal`.
 	}
 ```
 
-## Query for RDF response.
+## Query with RDF response
 
 You can get query result as a RDF response by calling `txn.QueryRDF`. The response would contain
 a `Rdf` field, which has the RDF encoded result.
+
+{{% notice "note" %}}
+If you are querying only for `uid` values, use a JSON format response.
+{{% /notice %}}
 
 ```go
 	// Query the balance for Alice and Bob.
