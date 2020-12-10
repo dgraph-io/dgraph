@@ -2918,6 +2918,41 @@ func queryAggregateWithAlias(t *testing.T) {
 		string(gqlResponse.Data))
 }
 
+func queryAggregateWithRepeatedFields(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost {
+				count
+				cnt2 : count
+				tmin : titleMin
+				tmin_again : titleMin
+				tmax: titleMax
+				tmax_again : titleMax
+				navg : numLikesAvg
+				navg2 : numLikesAvg
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+					"aggregatePost":
+							{
+								"count":4,
+								"cnt2":4,
+								"tmax": "Random post",
+								"tmax_again": "Random post",
+								"tmin": "GraphQL doco",
+								"tmin_again": "GraphQL doco",
+								"navg": 66.25,
+								"navg2": 66.25
+							}
+				}`,
+		string(gqlResponse.Data))
+}
+
 func queryAggregateAtChildLevel(t *testing.T) {
 	queryNumberOfStates := &GraphQLParams{
 		Query: `query
@@ -3007,6 +3042,39 @@ func queryAggregateAtChildLevelWithMultipleAlias(t *testing.T) {
 				"ag2": {
 					"count" : 3,
 					"nameMax" : "Maharashtra"
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateAtChildLevelWithRepeatedFields(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag1: statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
+					count
+					cnt2 : count
+					nameMax
+					nm : nameMax
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag1": {
+					"count" : 2,
+					"cnt2" : 2,
+					"nameMax" : "Maharashtra",
+					"nm": "Maharashtra"
 				}
 			}]
 		}`,
