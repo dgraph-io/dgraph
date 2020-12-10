@@ -190,8 +190,15 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 	}
 	// Add selection set to mainQuery and finalMainQuery.
 	isAggregateFieldVisited := make(map[string]bool)
+	// isAggregateFunctionVisited stores if the aggregate function for a field has been added or not.
+	// So the map entries would contain keys as nameMin, ageMin, nameName, etc.
+	isAggregateFunctionVisited := make(map[string]bool)
 	for _, f := range query.SelectionSet() {
 		fldName := f.Name()
+		if _, visited := isAggregateFunctionVisited[fldName]; visited {
+			continue
+		}
+		isAggregateFunctionVisited[fldName] = true
 		if fldName == "count" {
 			child := &gql.GraphQuery{
 				Var:  "countVar",
