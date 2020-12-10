@@ -1992,7 +1992,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if len(sg.Attr) > 0 {
 		suffix += "." + sg.Attr
 	}
-	span := otrace.FromContext(ctx)
+	if len(sg.Params.Var) > 0 {
+		suffix += "." + sg.Params.Alias
+	}
+	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph."+suffix)
+	defer span.End()
+
 	stop := x.SpanTimer(span, "query.ProcessGraph"+suffix)
 	defer stop()
 
