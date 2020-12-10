@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,7 +36,24 @@ var (
 	userpassword = "simplepassword"
 )
 
-func createUser(t *testing.T, accessToken, username, password string) *testutil.GraphQLResponse {
+func makeRequestAndRefreshTokenIfNecessary(t *testing.T, token *testutil.HttpToken, params testutil.GraphQLParams) *testutil.GraphQLResponse {
+	resp := testutil.MakeGQLRequestWithAccessJwt(t, &params, token.AccessJwt)
+	if len(resp.Errors) == 0 || !strings.Contains(resp.Errors.Error(), "Token is expired") {
+		return resp
+	}
+	var err error
+	newtoken, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint:   adminEndpoint,
+		UserID:     token.UserId,
+		Passwd:     token.Password,
+		RefreshJwt: token.RefreshToken,
+	})
+	require.NoError(t, err)
+	token.AccessJwt = newtoken.AccessJwt
+	token.RefreshToken = newtoken.RefreshToken
+	return testutil.MakeGQLRequestWithAccessJwt(t, &params, token.AccessJwt)
+}
+func createUser(t *testing.T, token *testutil.HttpToken, username, password string) *testutil.GraphQLResponse {
 	addUser := `
 	mutation addUser($name: String!, $pass: String!) {
 		addUser(input: [{name: $name, password: $pass}]) {
@@ -52,11 +70,11 @@ func createUser(t *testing.T, accessToken, username, password string) *testutil.
 			"pass": password,
 		},
 	}
-	resp := makeRequest(t, accessToken, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	return resp
 }
 
-func getCurrentUser(t *testing.T, accessToken string) *testutil.GraphQLResponse {
+func getCurrentUser(t *testing.T, token *testutil.HttpToken) *testutil.GraphQLResponse {
 	query := `
 	query {
 		getCurrentUser {
@@ -64,7 +82,7 @@ func getCurrentUser(t *testing.T, accessToken string) *testutil.GraphQLResponse 
 		}
 	}`
 
-	resp := makeRequest(t, accessToken, testutil.GraphQLParams{Query: query})
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, testutil.GraphQLParams{Query: query})
 	return resp
 }
 
@@ -83,7 +101,7 @@ func checkUserCount(t *testing.T, resp []byte, expected int) {
 	require.Equal(t, expected, len(r.AddUser.User))
 }
 
-func deleteUser(t *testing.T, accessToken, username string, confirmDeletion bool) *testutil.GraphQLResponse {
+func deleteUser(t *testing.T, token *testutil.HttpToken, username string, confirmDeletion bool) *testutil.GraphQLResponse {
 	delUser := `
 	mutation deleteUser($name: String!) {
 		deleteUser(filter: {name: {eq: $name}}) {
@@ -98,7 +116,7 @@ func deleteUser(t *testing.T, accessToken, username string, confirmDeletion bool
 			"name": username,
 		},
 	}
-	resp := makeRequest(t, accessToken, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 
 	if confirmDeletion {
 		resp.RequireNoGraphQLErrors(t)
@@ -107,7 +125,7 @@ func deleteUser(t *testing.T, accessToken, username string, confirmDeletion bool
 	return resp
 }
 
-func deleteGroup(t *testing.T, accessToken, name string, confirmDeletion bool) *testutil.GraphQLResponse {
+func deleteGroup(t *testing.T, token *testutil.HttpToken, name string, confirmDeletion bool) *testutil.GraphQLResponse {
 	delGroup := `
 	mutation deleteGroup($name: String!) {
 		deleteGroup(filter: {name: {eq: $name}}) {
@@ -122,7 +140,7 @@ func deleteGroup(t *testing.T, accessToken, name string, confirmDeletion bool) *
 			"name": name,
 		},
 	}
-	resp := makeRequest(t, accessToken, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 
 	if confirmDeletion {
 		resp.RequireNoGraphQLErrors(t)
@@ -143,7 +161,7 @@ func deleteUsingNQuad(userClient *dgo.Dgraph, sub, pred, val string) (*api.Respo
 }
 
 func TestInvalidGetUser(t *testing.T) {
-	currentUser := getCurrentUser(t, "invalid token")
+	currentUser := getCurrentUser(t, &testutil.HttpToken{AccessJwt: "invalid Token"})
 	require.Equal(t, `{"getCurrentUser":null}`, string(currentUser.Data))
 	require.Equal(t, x.GqlErrorList{{
 		Message: "couldn't rewrite query getCurrentUser because unable to parse jwt token: token" +
@@ -152,13 +170,12 @@ func TestInvalidGetUser(t *testing.T) {
 }
 
 func TestPasswordReturn(t *testing.T) {
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
-
 	query := `
 	query {
 		getCurrentUser {
@@ -167,7 +184,7 @@ func TestPasswordReturn(t *testing.T) {
 		}
 	}`
 
-	resp := makeRequest(t, accessJwt, testutil.GraphQLParams{Query: query})
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, testutil.GraphQLParams{Query: query})
 	require.Equal(t, resp.Errors, x.GqlErrorList{{
 		Message: `Cannot query field "password" on type "User".`,
 		Locations: []x.Location{{
@@ -178,29 +195,29 @@ func TestPasswordReturn(t *testing.T) {
 }
 
 func TestGetCurrentUser(t *testing.T) {
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-	currentUser := getCurrentUser(t, accessJwt)
+	token := testutil.GrootHttpLogin(adminEndpoint)
+	
+	currentUser := getCurrentUser(t, token)
 	currentUser.RequireNoGraphQLErrors(t)
 	require.Equal(t, string(currentUser.Data), `{"getCurrentUser":{"name":"groot"}}`)
 
 	// clean up the user to allow repeated running of this test
 	userid := "hamilton"
-	deleteUserResp := deleteUser(t, accessJwt, userid, false)
+	deleteUserResp := deleteUser(t, token, userid, false)
 	deleteUserResp.RequireNoGraphQLErrors(t)
 	glog.Infof("cleaned up db user state")
 
-	resp := createUser(t, accessJwt, userid, userpassword)
+	resp := createUser(t, token, userid, userpassword)
 	resp.RequireNoGraphQLErrors(t)
 	checkUserCount(t, resp.Data, 1)
 
-	newJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	newToken, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   userid,
 		Passwd:   userpassword,
 	})
 	require.NoError(t, err, "login failed")
-
-	currentUser = getCurrentUser(t, newJwt)
+	currentUser = getCurrentUser(t, newToken)
 	currentUser.RequireNoGraphQLErrors(t)
 	require.Equal(t, string(currentUser.Data), `{"getCurrentUser":{"name":"hamilton"}}`)
 }
@@ -209,8 +226,8 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	resetUser(t)
 
 	// adding the user again should fail
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-	resp := createUser(t, accessJwt, userid, userpassword)
+	token := testutil.GrootHttpLogin(adminEndpoint)
+	resp := createUser(t, token, userid, userpassword)
 	require.Equal(t, x.GqlErrorList{{
 		Message: "couldn't rewrite query for mutation addUser because id alice already exists" +
 			" for type User",
@@ -218,23 +235,22 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	checkUserCount(t, resp.Data, 0)
 
 	// delete the user
-	_ = deleteUser(t, accessJwt, userid, true)
+	_ = deleteUser(t, token, userid, true)
 
-	resp = createUser(t, accessJwt, userid, userpassword)
+	resp = createUser(t, token, userid, userpassword)
 	resp.RequireNoGraphQLErrors(t)
 	// now we should be able to create the user again
 	checkUserCount(t, resp.Data, 1)
 }
 
 func resetUser(t *testing.T) {
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-
+	token := testutil.GrootHttpLogin(adminEndpoint)
 	// clean up the user to allow repeated running of this test
-	deleteUserResp := deleteUser(t, accessJwt, userid, false)
+	deleteUserResp := deleteUser(t, token, userid, false)
 	deleteUserResp.RequireNoGraphQLErrors(t)
 	glog.Infof("deleted user")
 
-	resp := createUser(t, accessJwt, userid, userpassword)
+	resp := createUser(t, token, userid, userpassword)
 	resp.RequireNoGraphQLErrors(t)
 	checkUserCount(t, resp.Data, 1)
 	glog.Infof("created user")
@@ -536,7 +552,7 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 	require.NoError(t, txn.Commit(ctx))
 }
 
-func createGroup(t *testing.T, accessToken, name string) []byte {
+func createGroup(t *testing.T, token *testutil.HttpToken, name string) []byte {
 	addGroup := `
 	mutation addGroup($name: String!) {
 		addGroup(input: [{name: $name}]) {
@@ -552,12 +568,12 @@ func createGroup(t *testing.T, accessToken, name string) []byte {
 			"name": name,
 		},
 	}
-	resp := makeRequest(t, accessToken, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	resp.RequireNoGraphQLErrors(t)
 	return resp.Data
 }
 
-func createGroupWithRules(t *testing.T, accessJwt, name string, rules []rule) *group {
+func createGroupWithRules(t *testing.T, token *testutil.HttpToken, name string, rules []rule) *group {
 	queryParams := testutil.GraphQLParams{
 		Query: `
 		mutation addGroup($name: String!, $rules: [RuleRef]){
@@ -581,7 +597,7 @@ func createGroupWithRules(t *testing.T, accessJwt, name string, rules []rule) *g
 			"rules": rules,
 		},
 	}
-	resp := makeRequest(t, accessJwt, queryParams)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, queryParams)
 	resp.RequireNoGraphQLErrors(t)
 
 	var addGroupResp struct {
@@ -596,7 +612,7 @@ func createGroupWithRules(t *testing.T, accessJwt, name string, rules []rule) *g
 	return &addGroupResp.AddGroup.Group[0]
 }
 
-func updateGroup(t *testing.T, accessJwt, name string, setRules []rule,
+func updateGroup(t *testing.T, token *testutil.HttpToken, name string, setRules []rule,
 	removeRules []string) *group {
 	queryParams := testutil.GraphQLParams{
 		Query: `
@@ -635,7 +651,7 @@ func updateGroup(t *testing.T, accessJwt, name string, setRules []rule,
 			"rules": removeRules,
 		}
 	}
-	resp := makeRequest(t, accessJwt, queryParams)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, queryParams)
 	resp.RequireNoGraphQLErrors(t)
 
 	var result struct {
@@ -665,7 +681,7 @@ func checkGroupCount(t *testing.T, resp []byte, expected int) {
 	require.Equal(t, expected, len(r.AddGroup.Group))
 }
 
-func addToGroup(t *testing.T, accessToken, userName, group string) {
+func addToGroup(t *testing.T, token *testutil.HttpToken, userName, group string) {
 	addUserToGroup := `mutation updateUser($name: String!, $group: String!) {
 		updateUser(input: {
 			filter: {
@@ -695,7 +711,7 @@ func addToGroup(t *testing.T, accessToken, userName, group string) {
 			"group": group,
 		},
 	}
-	resp := makeRequest(t, accessToken, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	resp.RequireNoGraphQLErrors(t)
 
 	var result struct {
@@ -739,12 +755,7 @@ type group struct {
 	Rules []rule `json:"rules"`
 }
 
-func makeRequest(t *testing.T, accessToken string, params testutil.GraphQLParams) *testutil.
-	GraphQLResponse {
-	return testutil.MakeGQLRequestWithAccessJwt(t, &params, accessToken)
-}
-
-func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
+func addRulesToGroup(t *testing.T, token *testutil.HttpToken, group string, rules []rule) {
 	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]!) {
 		updateGroup(input: {
 			filter: {
@@ -773,7 +784,7 @@ func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
 			"rules": rules,
 		},
 	}
-	resp := makeRequest(t, accessToken, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	resp.RequireNoGraphQLErrors(t)
 	rulesb, err := json.Marshal(rules)
 	require.NoError(t, err)
@@ -791,7 +802,7 @@ func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
 }
 
 func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
@@ -799,12 +810,12 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 	require.NoError(t, err, "login failed")
 
 	// create a new group
-	resp := createGroup(t, accessJwt, group)
+	resp := createGroup(t, token, group)
 	checkGroupCount(t, resp, 1)
 
 	// add the user to the group
 	if addUserToGroup {
-		addToGroup(t, accessJwt, userid, group)
+		addToGroup(t, token, userid, group)
 	}
 
 	rules := []rule{
@@ -826,7 +837,7 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 	// also add read permission to the attribute queryAttr, which is used inside the query block
 	// add WRITE permission on the predicateToWrite
 	// add MODIFY permission on the predicateToAlter
-	addRulesToGroup(t, accessJwt, group, rules)
+	addRulesToGroup(t, token, group, rules)
 }
 
 func TestPredicatePermission(t *testing.T) {
@@ -905,15 +916,15 @@ func TestUnauthorizedDeletion(t *testing.T) {
 
 	resetUser(t)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
-	createGroup(t, accessJwt, devGroup)
+	createGroup(t, token, devGroup)
 
-	addToGroup(t, accessJwt, userid, devGroup)
+	addToGroup(t, token, userid, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -926,7 +937,7 @@ func TestUnauthorizedDeletion(t *testing.T) {
 	nodeUID, ok := resp.Uids["a"]
 	require.True(t, ok)
 
-	addRulesToGroup(t, accessJwt, devGroup, []rule{{unAuthPred, 0}})
+	addRulesToGroup(t, token, devGroup, []rule{{unAuthPred, 0}})
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
@@ -998,18 +1009,18 @@ func TestGuardianAccess(t *testing.T) {
 }
 
 func addNewUserToGroup(t *testing.T, userName, password, groupName string) {
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
 
-	resp := createUser(t, accessJwt, userName, password)
+	resp := createUser(t, token, userName, password)
 	resp.RequireNoGraphQLErrors(t)
 	checkUserCount(t, resp.Data, 1)
 
-	addToGroup(t, accessJwt, userName, groupName)
+	addToGroup(t, token, userName, groupName)
 }
 
 func removeUserFromGroup(t *testing.T, userName, groupName string) *testutil.GraphQLResponse {
@@ -1041,13 +1052,13 @@ func removeUserFromGroup(t *testing.T, userName, groupName string) *testutil.Gra
 		},
 	}
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
-	resp := makeRequest(t, accessJwt, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	return resp
 }
 
@@ -1070,14 +1081,14 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &op))
 
 	resetUser(t)
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
-	createGroup(t, accessJwt, devGroup)
-	addToGroup(t, accessJwt, userid, devGroup)
+	createGroup(t, token, devGroup)
+	addToGroup(t, token, userid, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -1097,7 +1108,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	require.NoError(t, err)
 
 	// give read access of <name> to alice
-	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
+	addRulesToGroup(t, token, devGroup, []rule{{"name", Read.Code}})
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1217,18 +1228,18 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	resetUser(t)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
 
-	createGroup(t, accessJwt, devGroup)
-	createGroup(t, accessJwt, sreGroup)
+	createGroup(t, token, devGroup)
+	createGroup(t, token, sreGroup)
 
-	addRulesToGroup(t, accessJwt, sreGroup, []rule{{"age", Read.Code}, {"name", Write.Code}})
-	addToGroup(t, accessJwt, userid, devGroup)
+	addRulesToGroup(t, token, sreGroup, []rule{{"age", Read.Code}, {"name", Write.Code}})
+	addToGroup(t, token, userid, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -1268,7 +1279,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	testutil.CompareJSON(t, `{}`, string(resp.GetJson()))
 
 	// Login to groot to modify accesses (1)
-	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+	token, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
@@ -1276,7 +1287,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err, "login failed")
 
 	// Give read access of <name>, write access of <age> to dev
-	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}})
+	addRulesToGroup(t, token, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}})
 	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
@@ -1285,14 +1296,14 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 		string(resp.GetJson()))
 
 	// Login to groot to modify accesses (2)
-	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+	token, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
 	// Add alice to sre group which has read access to <age> and write access to <name>
-	addToGroup(t, accessJwt, userid, sreGroup)
+	addToGroup(t, token, userid, sreGroup)
 	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
@@ -1302,7 +1313,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 		string(resp.GetJson()))
 
 	// Login to groot to modify accesses (3)
-	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+	token, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
@@ -1310,7 +1321,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err, "login failed")
 
 	// Give read access of <name> and <nickname>, write access of <age> to dev
-	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}, {"nickname", Read.Code}})
+	addRulesToGroup(t, token, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}, {"nickname", Read.Code}})
 	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
@@ -1342,16 +1353,16 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 
 	resetUser(t)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
 
-	createGroup(t, accessJwt, devGroup)
+	createGroup(t, token, devGroup)
 
-	addToGroup(t, accessJwt, userid, devGroup)
+	addToGroup(t, token, userid, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -1382,7 +1393,7 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 		string(resp.GetJson()))
 
 	// Give Write Access to alice for name and age predicate
-	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Write.Code}, {"age", Write.Code}})
+	addRulesToGroup(t, token, devGroup, []rule{{"name", Write.Code}, {"age", Write.Code}})
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1395,7 +1406,7 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "*", "*")
 	require.NoError(t, err)
 
-	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+	token, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
@@ -1409,14 +1420,14 @@ func TestDeleteQueryWithACLPermissions(t *testing.T) {
 		string(resp.GetJson()))
 
 	// Give write access of <name> <dgraph.type> to dev
-	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Write.Code}, {"age", Write.Code}, {"dgraph.type", Write.Code}})
+	addRulesToGroup(t, token, devGroup, []rule{{"name", Write.Code}, {"age", Write.Code}, {"dgraph.type", Write.Code}})
 	time.Sleep(defaultTimeToSleep)
 
 	// delete S * * (user now has permission to name, age and dgraph.type)
 	_, err = deleteUsingNQuad(userClient, "<"+nodeUID+">", "*", "*")
 	require.NoError(t, err)
 
-	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+	token, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
@@ -1453,18 +1464,18 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 
 	resetUser(t)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
 
-	createGroup(t, accessJwt, devGroup)
+	createGroup(t, token, devGroup)
 	// createGroup(t, accessJwt, sreGroup)
 
 	// addRulesToGroup(t, accessJwt, sreGroup, []rule{{"age", Read.Code}, {"name", Write.Code}})
-	addToGroup(t, accessJwt, userid, devGroup)
+	addToGroup(t, token, userid, devGroup)
 
 	txn := dg.NewTxn()
 	mutation := &api.Mutation{
@@ -1613,7 +1624,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 	}
 
 	// Login to groot to modify accesses (1)
-	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+	token, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
@@ -1621,7 +1632,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err, "login failed")
 
 	// Give read access of <name> to dev
-	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
+	addRulesToGroup(t, token, devGroup, []rule{{"name", Read.Code}})
 	time.Sleep(defaultTimeToSleep)
 
 	for _, tc := range tests {
@@ -1634,7 +1645,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 	}
 
 	// Login to groot to modify accesses (1)
-	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+	token, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
@@ -1642,7 +1653,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err, "login failed")
 
 	// Give read access of <name> and <age> to dev
-	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}, {"age", Read.Code}})
+	addRulesToGroup(t, token, devGroup, []rule{{"name", Read.Code}, {"age", Read.Code}})
 	time.Sleep(defaultTimeToSleep)
 
 	for _, tc := range tests {
@@ -1739,7 +1750,7 @@ func TestNewACLPredicates(t *testing.T) {
 	}
 }
 
-func removeRuleFromGroup(t *testing.T, accessToken, group string,
+func removeRuleFromGroup(t *testing.T, token *testutil.HttpToken, group string,
 	rulePredicate string) *testutil.GraphQLResponse {
 	removeRuleFromGroup := `mutation updateGroup($name: String!, $rules: [String!]!) {
 		updateGroup(input: {
@@ -1769,7 +1780,7 @@ func removeRuleFromGroup(t *testing.T, accessToken, group string,
 			"rules": []string{rulePredicate},
 		},
 	}
-	resp := makeRequest(t, accessToken, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	return resp
 }
 
@@ -1794,13 +1805,13 @@ func TestDeleteRule(t *testing.T) {
 	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
 		string(resp.GetJson()))
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
-	removeRuleFromGroup(t, accessJwt, devGroup, "name")
+	removeRuleFromGroup(t, token, devGroup, "name")
 	time.Sleep(defaultTimeToSleep)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, queryName)
@@ -1888,23 +1899,23 @@ func TestNonExistentGroup(t *testing.T) {
 
 	testutil.DropAll(t, dg)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
-	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
+	addRulesToGroup(t, token, devGroup, []rule{{"name", Read.Code}})
 }
 
 func TestQueryUserInfo(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   userid,
 		Passwd:   userpassword,
@@ -1932,7 +1943,7 @@ func TestQueryUserInfo(t *testing.T) {
 	params := testutil.GraphQLParams{
 		Query: gqlQuery,
 	}
-	gqlResp := makeRequest(t, accessJwt, params)
+	gqlResp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	gqlResp.RequireNoGraphQLErrors(t)
 
 	testutil.CompareJSON(t, `
@@ -2017,7 +2028,7 @@ func TestQueryUserInfo(t *testing.T) {
 	params = testutil.GraphQLParams{
 		Query: gqlQuery,
 	}
-	gqlResp = makeRequest(t, accessJwt, params)
+	gqlResp = makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	gqlResp.RequireNoGraphQLErrors(t)
 	// The user should only be able to see their group dev and themselves as the user.
 	testutil.CompareJSON(t, `{
@@ -2071,7 +2082,7 @@ func TestQueryUserInfo(t *testing.T) {
 	params = testutil.GraphQLParams{
 		Query: gqlQuery,
 	}
-	gqlResp = makeRequest(t, accessJwt, params)
+	gqlResp = makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	gqlResp.RequireNoGraphQLErrors(t)
 	testutil.CompareJSON(t, `{"getGroup": null}`, string(gqlResp.Data))
 }
@@ -2080,7 +2091,7 @@ func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
 	// Create a new user without any groups, queryGroup should return an empty result.
 	resetUser(t)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   userid,
 		Passwd:   userpassword,
@@ -2101,7 +2112,7 @@ func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
 	params := testutil.GraphQLParams{
 		Query: gqlQuery,
 	}
-	resp := makeRequest(t, accessJwt, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	resp.RequireNoGraphQLErrors(t)
 	testutil.CompareJSON(t, `{"queryGroup": []}`, string(resp.Data))
 
@@ -2119,7 +2130,7 @@ func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
 	params = testutil.GraphQLParams{
 		Query: gqlQuery,
 	}
-	resp = makeRequest(t, accessJwt, params)
+	resp = makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	resp.RequireNoGraphQLErrors(t)
 	testutil.CompareJSON(t, `{"queryUser": [{ "groups": [], "name": "alice"}]}`, string(resp.Data))
 }
@@ -2361,14 +2372,14 @@ func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   x.GrootId,
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
 
-	_ = deleteUser(t, accessJwt, userid, true)
+	_ = deleteUser(t, token, userid, true)
 
 	gqlQuery := `
 	query {
@@ -2381,7 +2392,7 @@ func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	params := testutil.GraphQLParams{
 		Query: gqlQuery,
 	}
-	resp := makeRequest(t, accessJwt, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	resp.RequireNoGraphQLErrors(t)
 	require.JSONEq(t, `{"queryUser":[{"name":"groot"}]}`, string(resp.Data))
 
@@ -2400,7 +2411,7 @@ func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	params = testutil.GraphQLParams{
 		Query: gqlQuery,
 	}
-	resp = makeRequest(t, accessJwt, params)
+	resp = makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	resp.RequireNoGraphQLErrors(t)
 	testutil.CompareJSON(t, `{
 		  "queryGroup": [
@@ -2436,14 +2447,14 @@ func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   x.GrootId,
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
 
-	_ = deleteGroup(t, accessJwt, "dev-a", true)
+	_ = deleteGroup(t, token, "dev-a", true)
 
 	gqlQuery := `
 	query {
@@ -2456,7 +2467,7 @@ func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
 	params := testutil.GraphQLParams{
 		Query: gqlQuery,
 	}
-	resp := makeRequest(t, accessJwt, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	resp.RequireNoGraphQLErrors(t)
 	testutil.CompareJSON(t, `{
 		  "queryGroup": [
@@ -2486,7 +2497,7 @@ func TestGroupDeleteShouldDeleteGroupFromUser(t *testing.T) {
 	params = testutil.GraphQLParams{
 		Query: gqlQuery,
 	}
-	resp = makeRequest(t, accessJwt, params)
+	resp = makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	resp.RequireNoGraphQLErrors(t)
 	testutil.CompareJSON(t, `{
 		"getUser": {
@@ -2559,9 +2570,9 @@ func TestHealthForAcl(t *testing.T) {
 	assertNonGuardianFailure(t, "health", false, params)
 
 	// assert data for guardians
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	token := testutil.GrootHttpLogin(adminEndpoint)
 
-	resp := makeRequest(t, accessJwt, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 	resp.RequireNoGraphQLErrors(t)
 	var guardianResp struct {
 		Health []struct {
@@ -2595,13 +2606,13 @@ func assertNonGuardianFailure(t *testing.T, queryName string, respIsNull bool,
 	params testutil.GraphQLParams) {
 	resetUser(t)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   userid,
 		Passwd:   userpassword,
 	})
 	require.NoError(t, err, "login failed")
-	resp := makeRequest(t, accessJwt, params)
+	resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 
 	require.Len(t, resp.Errors, 1)
 	require.Contains(t, resp.Errors[0].Message,
@@ -2795,8 +2806,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 
 			// for guardians, assert non-ACL error or success
 			if tcase.testGuardianAccess {
-				accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-				resp := makeRequest(t, accessJwt, params)
+				token := testutil.GrootHttpLogin(adminEndpoint)
+				resp := makeRequestAndRefreshTokenIfNecessary(t, token, params)
 
 				if tcase.guardianErr == "" {
 					resp.RequireNoGraphQLErrors(t)
@@ -2829,9 +2840,9 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 			Permission: 3,
 		},
 	}
-	grootJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	token := testutil.GrootHttpLogin(adminEndpoint)
 
-	addedGroup := createGroupWithRules(t, grootJwt, groupName, addedRules)
+	addedGroup := createGroupWithRules(t, token, groupName, addedRules)
 
 	require.Equal(t, groupName, addedGroup.Name)
 	require.Len(t, addedGroup.Rules, 2)
@@ -2851,14 +2862,14 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 			Permission: 2,
 		},
 	}
-	updatedGroup := updateGroup(t, grootJwt, groupName, updatedRules, nil)
+	updatedGroup := updateGroup(t, token, groupName, updatedRules, nil)
 
 	require.Equal(t, groupName, updatedGroup.Name)
 	require.Len(t, updatedGroup.Rules, 3)
 	require.ElementsMatch(t, []rule{updatedRules[0], addedRules[2], updatedRules[2]},
 		updatedGroup.Rules)
 
-	updatedGroup1 := updateGroup(t, grootJwt, groupName, nil,
+	updatedGroup1 := updateGroup(t, token, groupName, nil,
 		[]string{"test1", "test1", "test3"})
 
 	require.Equal(t, groupName, updatedGroup1.Name)
@@ -2866,11 +2877,11 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 	require.ElementsMatch(t, []rule{updatedRules[0], updatedRules[2]}, updatedGroup1.Rules)
 
 	// cleanup
-	_ = deleteGroup(t, grootJwt, groupName, true)
+	_ = deleteGroup(t, token, groupName, true)
 }
 
 func TestAllowUIDAccess(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2882,14 +2893,14 @@ func TestAllowUIDAccess(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &op))
 
 	resetUser(t)
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
-	createGroup(t, accessJwt, devGroup)
-	addToGroup(t, accessJwt, userid, devGroup)
+	createGroup(t, token, devGroup)
+	addToGroup(t, token, userid, devGroup)
 
 	require.NoError(t, testutil.AssignUids(101))
 	mutation := &api.Mutation{
@@ -2902,7 +2913,7 @@ func TestAllowUIDAccess(t *testing.T) {
 	require.NoError(t, err)
 
 	// give read access of <name> to alice
-	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
+	addRulesToGroup(t, token, devGroup, []rule{{"name", Read.Code}})
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2926,7 +2937,7 @@ func TestAllowUIDAccess(t *testing.T) {
 }
 
 func TestAddNewPredicate(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2945,13 +2956,13 @@ func TestAddNewPredicate(t *testing.T) {
 	})
 	require.Error(t, err, "User can't create new predicate. Alter should have returned error.")
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
-	addToGroup(t, accessJwt, userid, "guardians")
+	addToGroup(t, token, userid, "guardians")
 	time.Sleep(expireJwtSleep)
 
 	// Alice is a guardian now, it can create new predicate.
@@ -2962,7 +2973,7 @@ func TestAddNewPredicate(t *testing.T) {
 }
 
 func TestCrossGroupPermission(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2974,29 +2985,25 @@ func TestCrossGroupPermission(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err)
 
-	// TODO(@Animesh): I am Running all the operations with the same accessJwt
-	// but access token will expire after 3s. Find an idomatic way to run these.
-
 	// create groups
-	createGroup(t, accessJwt, "reader")
-	createGroup(t, accessJwt, "writer")
-	createGroup(t, accessJwt, "alterer")
-
+	createGroup(t, token, "reader")
+	createGroup(t, token, "writer")
+	createGroup(t, token, "alterer")
 	// add rules to groups
-	addRulesToGroup(t, accessJwt, "reader", []rule{{Predicate: "newpred", Permission: 4}})
-	addRulesToGroup(t, accessJwt, "writer", []rule{{Predicate: "newpred", Permission: 2}})
-	addRulesToGroup(t, accessJwt, "alterer", []rule{{Predicate: "newpred", Permission: 1}})
+	addRulesToGroup(t, token, "reader", []rule{{Predicate: "newpred", Permission: 4}})
+	addRulesToGroup(t, token, "writer", []rule{{Predicate: "newpred", Permission: 2}})
+	addRulesToGroup(t, token, "alterer", []rule{{Predicate: "newpred", Permission: 1}})
 	// Wait for acl cache to be refreshed
 	time.Sleep(defaultTimeToSleep)
 
-	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+	token, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
@@ -3006,7 +3013,7 @@ func TestCrossGroupPermission(t *testing.T) {
 	// create 8 users.
 	for i := 0; i < 8; i++ {
 		userIdx := strconv.Itoa(i)
-		createUser(t, accessJwt, "user"+userIdx, "password"+userIdx)
+		createUser(t, token, "user"+userIdx, "password"+userIdx)
 	}
 
 	// add users to groups. we create all possible combination
@@ -3014,13 +3021,13 @@ func TestCrossGroupPermission(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		userIdx := strconv.Itoa(i)
 		if i&1 > 0 {
-			addToGroup(t, accessJwt, "user"+userIdx, "alterer")
+			addToGroup(t, token, "user"+userIdx, "alterer")
 		}
 		if i&2 > 0 {
-			addToGroup(t, accessJwt, "user"+userIdx, "writer")
+			addToGroup(t, token, "user"+userIdx, "writer")
 		}
 		if i&4 > 0 {
-			addToGroup(t, accessJwt, "user"+userIdx, "reader")
+			addToGroup(t, token, "user"+userIdx, "reader")
 		}
 	}
 	time.Sleep(defaultTimeToSleep)
@@ -3078,7 +3085,7 @@ func TestCrossGroupPermission(t *testing.T) {
 }
 
 func TestMutationWithValueVar(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -3105,16 +3112,16 @@ func TestMutationWithValueVar(t *testing.T) {
 	require.NoError(t, err)
 
 	resetUser(t)
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   "groot",
 		Passwd:   "password",
 	})
 	require.NoError(t, err)
-	createUser(t, accessJwt, userid, userpassword)
-	createGroup(t, accessJwt, devGroup)
-	addToGroup(t, accessJwt, userid, devGroup)
-	addRulesToGroup(t, accessJwt, devGroup, []rule{
+	createUser(t, token, userid, userpassword)
+	createGroup(t, token, devGroup)
+	addToGroup(t, token, userid, devGroup)
+	addRulesToGroup(t, token, devGroup, []rule{
 		{
 			Predicate:  "name",
 			Permission: Read.Code | Write.Code,
@@ -3176,7 +3183,7 @@ func TestMutationWithValueVar(t *testing.T) {
 }
 
 func TestFailedLogin(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
 	grootClient, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -3207,14 +3214,14 @@ func TestDeleteGuardiansGroupShouldFail(t *testing.T) {
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   x.GrootId,
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
 
-	resp := deleteGroup(t, accessJwt, "guardians", false)
+	resp := deleteGroup(t, token, "guardians", false)
 	require.Contains(t, resp.Errors.Error(),
 		"guardians group and groot user cannot be deleted.")
 }
@@ -3225,14 +3232,14 @@ func TestDeleteGrootUserShouldFail(t *testing.T) {
 	require.NoError(t, err)
 	addDataAndRules(ctx, t, dg)
 
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   x.GrootId,
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
 
-	resp := deleteUser(t, accessJwt, "groot", false)
+	resp := deleteUser(t, token, "groot", false)
 	require.Contains(t, resp.Errors.Error(),
 		"guardians group and groot user cannot be deleted.")
 }
@@ -3273,7 +3280,7 @@ func TestDeleteGrootAndGuardiansUsingDelNQuadShouldFail(t *testing.T) {
 }
 
 func deleteGuardiansGroupAndGrootUserShouldFail(t *testing.T) {
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+	token, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -3281,11 +3288,11 @@ func deleteGuardiansGroupAndGrootUserShouldFail(t *testing.T) {
 	require.NoError(t, err, "login failed")
 
 	// Try deleting guardians group should fail
-	resp := deleteGroup(t, accessJwt, "guardians", false)
+	resp := deleteGroup(t, token, "guardians", false)
 	require.Contains(t, resp.Errors.Error(),
 		"guardians group and groot user cannot be deleted.")
 	// Try deleting groot user should fail
-	resp = deleteUser(t, accessJwt, "groot", false)
+	resp = deleteUser(t, token, "groot", false)
 	require.Contains(t, resp.Errors.Error(),
 		"guardians group and groot user cannot be deleted.")
 }

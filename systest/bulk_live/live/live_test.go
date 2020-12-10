@@ -14,40 +14,14 @@
  * limitations under the License.
  */
 
-package main
+package live
 
 import (
-	"context"
-	"fmt"
-	"sync"
-	"sync/atomic"
-	"time"
+	"testing"
 
-	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgraph/systest/bulk_live/common"
 )
 
-func printStats(counter *uint64, quit <-chan struct{}, wg *sync.WaitGroup) {
-	defer wg.Done()
-	for {
-		select {
-		case <-quit:
-			return
-		case <-time.After(2 * time.Second):
-		}
-
-		fmt.Println("mutations:", atomic.LoadUint64(counter))
-	}
-}
-
-// blocks until query returns no error.
-func waitForSchemaUpdate(query string, dg *dgo.Dgraph) {
-	for {
-		time.Sleep(2 * time.Second)
-		_, err := dg.NewReadOnlyTxn().Query(context.Background(), query)
-		if err != nil {
-			continue
-		}
-
-		return
-	}
+func TestLiveCases(t *testing.T) {
+	t.Run("live test cases", common.RunLiveCases)
 }

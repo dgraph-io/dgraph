@@ -712,6 +712,7 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 		if snap, err := g.Node.Snapshot(); err == nil {
 			group.SnapshotTs = snap.ReadTs
 		}
+		group.CheckpointTs = atomic.LoadUint64(&g.Node.checkpointTs)
 	}
 
 	pl := g.connToZeroLeader()

@@ -1,3 +1,5 @@
+# Auto-generated with: [../../compose/compose -z=1]
+#
 version: "3.5"
 services:
   zero1:
@@ -6,18 +8,17 @@ services:
     labels:
       cluster: test
     ports:
-    - "5080"
-    - "6080"
+    - 5080
+    - 6080
     volumes:
     - type: bind
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    - type: volume
-      source: data
-      target: /data
-      read_only: false
-    command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --replicas=1 --logtostderr
+    command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --logtostderr
       -v=2 --bindall
-volumes:
-  data: {}
+    deploy:
+      resources:
+        limits:
+          memory: 32G
+volumes: {}

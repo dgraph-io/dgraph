@@ -1095,7 +1095,7 @@ func HasWithDash(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{
 		Schema: `name: string @index(hash) .`,
 	}
-	check(t, (c.Alter(ctx, op)))
+	require.NoError(t, (c.Alter(ctx, op)))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -1134,7 +1134,7 @@ func ListGeoFilterTest(t *testing.T, c *dgo.Dgraph) {
 			loc: [geo] @index(geo) .
 		`,
 	}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1151,14 +1151,14 @@ func ListGeoFilterTest(t *testing.T, c *dgo.Dgraph) {
 			_:c <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	resp, err := c.NewTxn().Query(context.Background(), `{
 		q(func: near(loc, [-122.4220186,37.772318], 1000)) {
 			name
 		}
 	}`)
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1182,7 +1182,7 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 			per: [string] @index(trigram) .
 		`,
 	}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1199,14 +1199,14 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 			_:c <per> "write" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	resp, err := c.NewTxn().Query(context.Background(), `{
 		q(func: regexp(per, /^rea.*$/)) {
 			name
 		}
 	}`)
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1230,7 +1230,7 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 			per: [string] @index(trigram) .
 		`,
 	}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1247,7 +1247,7 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 			_:c <per> "write" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	resp, err := c.NewTxn().QueryWithVars(context.Background(), `
 		query search($term: string){
@@ -1255,7 +1255,7 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 				name
 			}
 		}`, map[string]string{"$term": "/^rea.*$/"})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1274,7 +1274,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1289,7 +1289,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			_:a <friend> _:b  .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	a := au.Uids["a"]
 	b := au.Uids["b"]
@@ -1302,7 +1302,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			name
 		}
 	}`, map[string]string{"$alice": a})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1323,7 +1323,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			}
 		}
 	}`, map[string]string{"$bob": b})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1350,7 +1350,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			}
 		}
 	}`, map[string]string{"$friends": friends})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1375,7 +1375,7 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1387,7 +1387,7 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 			_:c <name> "Foobar" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	// Try GraphQL variable with filter at root.
 	resp, err := c.NewTxn().Query(context.Background(), `
@@ -1397,7 +1397,7 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 			hasChildren: math(containerCount >= 1)
 		}
 	}`)
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 		{
 		  "q": [
@@ -1426,7 +1426,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 			_:d2 <start> "" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	var ids []string
 	for key, uid := range assigned.Uids {
@@ -1445,11 +1445,11 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 			me(func: has(end)) { uid }
 			you(func: has(end)) { count(uid) }
 		}`)
-		check(t, err)
+		require.NoError(t, err)
 		t.Logf("resp: %s\n", resp.GetJson())
 		m := make(map[string][]U)
 		err = json.Unmarshal(resp.GetJson(), &m)
-		check(t, err)
+		require.NoError(t, err)
 		uids := m["me"]
 		var result []string
 		for _, uid := range uids {
@@ -1474,7 +1474,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	`, ids[len(ids)-1]))
 	t.Logf("deleteMu: %+v\n", deleteMu)
 	_, err = txn.Mutate(ctx, deleteMu)
-	check(t, err)
+	require.NoError(t, err)
 
 	txn = c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1494,7 +1494,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 			_:d <end> "" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	require.Equal(t, 1, len(assigned.Uids))
 	for _, uid := range assigned.Uids {
@@ -1514,7 +1514,7 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	op := &api.Operation{Schema: `follow: [uid] @reverse .`}
-	check(t, c.Alter(ctx, op))
+	require.NoError(t, c.Alter(ctx, op))
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -1528,7 +1528,7 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 			_:bob <follow> _:carol .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	type F struct {
 		Name string `json:"name"`
@@ -1540,12 +1540,12 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 		fwd(func: has(follow)) { name }
 		rev(func: has(~follow)) { name }
 		}`)
-	check(t, err)
+	require.NoError(t, err)
 
 	t.Logf("resp: %s\n", resp.GetJson())
 	m := make(map[string][]F)
 	err = json.Unmarshal(resp.GetJson(), &m)
-	check(t, err)
+	require.NoError(t, err)
 
 	fwds := m["fwd"]
 	revs := m["rev"]

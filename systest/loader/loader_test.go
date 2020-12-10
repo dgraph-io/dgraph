@@ -35,9 +35,9 @@ import (
 // TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
 func TestLoaderXidmap(t *testing.T) {
 	conf := viper.GetViper()
-	conf.Set("tls-cacert", "../../tlstest/mtls_internal/tls/live/ca.crt")
-	conf.Set("tls-internal-port-enabled", true)
-	conf.Set("tls-server-name", "alpha1")
+	conf.Set("tls_cacert", "../../tlstest/mtls_internal/tls/live/ca.crt")
+	conf.Set("tls_internal_port_enabled", true)
+	conf.Set("tls_server_name", "alpha1")
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
@@ -55,11 +55,11 @@ func TestLoaderXidmap(t *testing.T) {
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"--tls-cacert", tlsDir + "/ca.crt",
-		"--tls-internal-port-enabled=true",
-		"--tls-cert", tlsDir + "/client.liveclient.crt",
-		"--tls-key", tlsDir + "/client.liveclient.key",
-		"--tls-server-name", "alpha1",
+		"--tls_cacert", tlsDir + "/ca.crt",
+		"--tls_internal_port_enabled=true",
+		"--tls_cert", tlsDir + "/client.liveclient.crt",
+		"--tls_key", tlsDir + "/client.liveclient.key",
+		"--tls_server_name", "alpha1",
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 
@@ -70,11 +70,11 @@ func TestLoaderXidmap(t *testing.T) {
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"--tls-cacert", tlsDir + "/ca.crt",
-		"--tls-internal-port-enabled=true",
-		"--tls-cert", tlsDir + "/client.liveclient.crt",
-		"--tls-key", tlsDir + "/client.liveclient.key",
-		"--tls-server-name", "alpha1",
+		"--tls_cacert", tlsDir + "/ca.crt",
+		"--tls_internal_port_enabled=true",
+		"--tls_cert", tlsDir + "/client.liveclient.crt",
+		"--tls_key", tlsDir + "/client.liveclient.key",
+		"--tls_server_name", "alpha1",
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 

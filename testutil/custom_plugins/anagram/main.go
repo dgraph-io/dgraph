@@ -16,38 +16,18 @@
 
 package main
 
-import (
-	"context"
-	"fmt"
-	"sync"
-	"sync/atomic"
-	"time"
+import "sort"
 
-	"github.com/dgraph-io/dgo/v200"
-)
+func Tokenizer() interface{} { return AnagramTokenizer{} }
 
-func printStats(counter *uint64, quit <-chan struct{}, wg *sync.WaitGroup) {
-	defer wg.Done()
-	for {
-		select {
-		case <-quit:
-			return
-		case <-time.After(2 * time.Second):
-		}
+type AnagramTokenizer struct{}
 
-		fmt.Println("mutations:", atomic.LoadUint64(counter))
-	}
-}
+func (AnagramTokenizer) Name() string     { return "anagram" }
+func (AnagramTokenizer) Type() string     { return "string" }
+func (AnagramTokenizer) Identifier() byte { return 0xfc }
 
-// blocks until query returns no error.
-func waitForSchemaUpdate(query string, dg *dgo.Dgraph) {
-	for {
-		time.Sleep(2 * time.Second)
-		_, err := dg.NewReadOnlyTxn().Query(context.Background(), query)
-		if err != nil {
-			continue
-		}
-
-		return
-	}
+func (t AnagramTokenizer) Tokens(value interface{}) ([]string, error) {
+	b := []byte(value.(string))
+	sort.Slice(b, func(i, j int) bool { return b[i] < b[j] })
+	return []string{string(b)}, nil
 }

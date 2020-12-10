@@ -75,6 +75,8 @@ type Server struct {
 
 	moveOngoing    chan struct{}
 	blockCommitsOn *sync.Map
+
+	checkpointPerGroup map[uint32]uint64
 }
 
 // Init initializes the zero server.
@@ -96,6 +98,7 @@ func (s *Server) Init() {
 	s.closer = z.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
+	s.checkpointPerGroup = make(map[uint32]uint64)
 
 	go s.rebalanceTablets()
 }
@@ -346,7 +349,7 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 
 	s.RLock()
 	defer s.RUnlock()
-	// There is only one member.
+	// There is only one member. We use for loop because we don't know what the mid is.
 	for mid, dstMember := range dst.Members {
 		group, has := s.state.Groups[dstMember.GroupId]
 		if !has {
@@ -635,6 +638,14 @@ func (s *Server) ShouldServe(
 
 // UpdateMembership updates the membership of the given group.
 func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Payload, error) {
+	// Only Zero leader would get these membership updates.
+	if ts := group.GetCheckpointTs(); ts > 0 {
+		for _, m := range group.GetMembers() {
+			s.Lock()
+			s.checkpointPerGroup[m.GetGroupId()] = ts
+			s.Unlock()
+		}
+	}
 	proposals, err := s.createProposals(group)
 	if err != nil {
 		// Sleep here so the caller doesn't keep on retrying indefinitely, creating a busy

@@ -265,8 +265,8 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 			  }
 			}`,
 	}
-	accessJwt, _ := testutil.GrootHttpLogin("http://" + testutil.SockAddrHttp + "/admin")
-	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, accessJwt)
+	token := testutil.GrootHttpLogin("http://" + testutil.SockAddrHttp + "/admin")
+	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, token.AccessJwt)
 	require.Nilf(t, resp.Errors, resp.Errors.Error())
 
 	// wait a bit to be sure export is complete
