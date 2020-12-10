@@ -57,7 +57,7 @@ Example: Fetch the total number of `posts` by all authors:
 
 Dgraph also defines aggregate `<field name>Aggregate` fields for child nodes
 within `query<type name>` queries. This is done for each field that is of type
-`List[Type/Interface]` inside `query<type name>` queries, allowing you do get
+`List[Type/Interface]` inside `query<type name>` queries, letting you fetch
 minimums, maximums, averages and sums for those fields. Which aggregate query
 fields are available depends on the field's type (`Int`, `Float`, `String` or
 `Datetime`), as follows:
