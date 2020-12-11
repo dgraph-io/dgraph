@@ -133,11 +133,7 @@ Start by adding the following schema:
 You can upload the files individually using the live loader (`dgraph live`) with the `-U` or `--upsertPredicate` option. 
 Each file has records with external keys for customers (e.g., `my.org/customer/1`) and addresses (e.g., `my.org/customer/1/address/1`). 
 
-The schema has the required fields in addition to a field named `xid`. 
-This field will be used to hold the external key value. Please note that there's a `hash` index for the `xid` field. 
-You will be using this `xid` field as the "Upsert" predicate (`-U` option) and pass it as an argument to the `dgraph live` command. 
-The live loader uses the predicate's content provided by the `-U` option (`xid` in this case) to identify and update the corresponding Dgraph node. 
-In case the corresponding Dgraph node does not exist, the live loader will create a new node.
+The schema has the required fields in addition to a field named `xid`. This field will be used to hold the external key value. Please note that there's a `hash` index for the `xid` field. You will be using this `xid` field as the "Upsert" predicate (`-U` option) and pass it as an argument to the `dgraph live` command. The live loader uses the predicate's content provided by the `-U` option (`xid` in this case) to identify and update the corresponding Dgraph node. In case the corresponding Dgraph node does not exist, the live loader will create a new node.
 
 **File** `customerNames.rdf` - Basic information like customer's first and last name:
 
