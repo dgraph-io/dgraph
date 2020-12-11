@@ -453,7 +453,7 @@
         random : Log.random
         dgraph.uid : uid
       }
-      Log2 as var(func: uid(Log3))
+      Log2 as var(func: uid(Log3), orderasc: Log.logs)
       Log3 as var(func: uid(x))
     }
 
