@@ -109,7 +109,7 @@ Fields typed as `String` and `Datetime` only get the `<field name>Max`,
 
 #### Examples
 
-Example: Fetch the average number of `posts` per `Author`:
+Example: Fetch the average number of `posts` written by all authors:
 
 ```graphql
    query {
@@ -131,6 +131,20 @@ number of `posts` by any single `Author`:
    }
 ```
 
+Example: Fetch the average number of `posts` for authors with more than 20
+`friends`:
+
+```graphql
+   query {
+     aggregateAuthor (filter: {
+       friends: {
+         gt: 20
+       }
+     }) {
+       postsAvg
+     }
+   }
+```
 
 
 ### Advanced aggregate queries for child nodes
