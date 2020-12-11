@@ -47,14 +47,11 @@ type Oracle struct {
 	keyCommit   *z.Tree // fp(key) -> commitTs. Used to detect conflict.
 	maxAssigned uint64  // max transaction assigned by us.
 
-	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
-	tmax uint64
 	// All transactions with startTs < startTxnTs return true for hasConflict.
 	startTxnTs  uint64
 	subscribers map[int]chan pb.OracleDelta
 	updates     chan *pb.OracleDelta
 	doneUntil   y.WaterMark
-	syncMarks   []syncMark
 }
 
 // Init initializes the oracle.
@@ -105,6 +102,10 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 
 	o.Lock()
 	defer o.Unlock()
+
+	// Set startTxnTs so that every txn with start ts less than this, would be aborted.
+	o.startTxnTs = minTs
+
 	// Dropping would be cheaper if abort/commits map is sharded
 	for ts := range o.commits {
 		if ts < minTs {
@@ -121,7 +122,6 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	}
 	o.keyCommit.DeleteBelow(minTs)
 	timer.Record("deleteBelow")
-	o.tmax = minTs
 	glog.V(2).Infof("Purged below ts:%d, len(o.commits):%d, keyCommit: [before: %+v, after: %+v].\n",
 		minTs, len(o.commits), stats, o.keyCommit.Stats())
 	if timer.Total() > time.Second {
@@ -267,7 +267,6 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
-	o.syncMarks = append(o.syncMarks, syncMark{index: index, ts: src.StartTs})
 	return true
 }
 
@@ -486,26 +485,6 @@ func (s *Server) Oracle(_ *api.Payload, server pb.Zero_OracleServer) error {
 			return errServerShutDown
 		}
 	}
-}
-
-// SyncedUntil returns the timestamp up to which all the nodes have synced.
-func (s *Server) SyncedUntil() uint64 {
-	s.orc.Lock()
-	defer s.orc.Unlock()
-	// Find max index with timestamp less than tmax
-	var idx int
-	for i, sm := range s.orc.syncMarks {
-		idx = i
-		if sm.ts >= s.orc.tmax {
-			break
-		}
-	}
-	var syncUntil uint64
-	if idx > 0 {
-		syncUntil = s.orc.syncMarks[idx-1].index
-	}
-	s.orc.syncMarks = s.orc.syncMarks[idx:]
-	return syncUntil
 }
 
 // TryAbort attempts to abort the given transactions which are not already committed..

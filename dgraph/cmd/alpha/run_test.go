@@ -1657,8 +1657,7 @@ var addr string
 
 // the grootAccessJWT stores the access JWT extracted from the response
 // of http login
-var grootAccessJwt string
-var grootRefreshJwt string
+var token *testutil.HttpToken
 
 func TestMain(m *testing.M) {
 	addr = "http://" + testutil.SockAddrHttp
@@ -1671,7 +1670,7 @@ func TestMain(m *testing.M) {
 	if _, err := zc.AssignUids(context.Background(), &pb.Num{Val: 1e6}); err != nil {
 		log.Fatal(err)
 	}
-	grootAccessJwt, grootRefreshJwt = testutil.GrootHttpLogin(addr + "/admin")
+	token = testutil.GrootHttpLogin(addr + "/admin")
 
 	r := m.Run()
 	os.Exit(r)

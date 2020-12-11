@@ -35,23 +35,26 @@ import (
 
 func printEntry(es raftpb.Entry, pending map[uint64]bool) {
 	var buf bytes.Buffer
+	defer func() {
+		fmt.Printf("%s\n", buf.Bytes())
+	}()
 	fmt.Fprintf(&buf, "%d . %d . %v . %-6s .", es.Term, es.Index, es.Type,
 		humanize.Bytes(uint64(es.Size())))
 	if es.Type == raftpb.EntryConfChange {
-		fmt.Printf("%s\n", buf.Bytes())
+		return
+	}
+	if len(es.Data) == 0 {
 		return
 	}
 	var pr pb.Proposal
 	var zpr pb.ZeroProposal
-	if err := pr.Unmarshal(es.Data); err == nil {
+	if err := pr.Unmarshal(es.Data[8:]); err == nil {
 		printAlphaProposal(&buf, &pr, pending)
-	} else if err := zpr.Unmarshal(es.Data); err == nil {
+	} else if err := zpr.Unmarshal(es.Data[8:]); err == nil {
 		printZeroProposal(&buf, &zpr)
 	} else {
-		fmt.Printf("%s Unable to parse Proposal: %v\n", buf.Bytes(), err)
-		return
+		fmt.Fprintf(&buf, " Unable to parse Proposal: %v", err)
 	}
-	fmt.Printf("%s\n", buf.Bytes())
 }
 
 type RaftStore interface {

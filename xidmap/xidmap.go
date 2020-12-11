@@ -276,19 +276,19 @@ func (m *XidMap) AllocateUid() uint64 {
 
 // Flush must be called if DB is provided to XidMap.
 func (m *XidMap) Flush() error {
+	if m.writer == nil {
+		return nil
+	}
 	glog.Infof("Writing xid map to DB")
 	defer func() {
 		glog.Infof("Finished writing xid map to DB")
 	}()
 
-	if m.writer != nil && len(m.kvBuf) > 0 {
+	if len(m.kvBuf) > 0 {
 		m.kvChan <- m.kvBuf
 	}
 	close(m.kvChan)
 	m.wg.Wait()
 
-	if m.writer == nil {
-		return nil
-	}
 	return m.writer.Flush()
 }

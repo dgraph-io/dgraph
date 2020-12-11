@@ -127,7 +127,7 @@ func (urw *updateGroupRewriter) Rewrite(
 	}
 
 	return []*resolve.UpsertMutation{{
-		Query:     &gql.GraphQuery{Children: []*gql.GraphQuery{upsertQuery}},
+		Query:     upsertQuery,
 		Mutations: append(mutSet, mutDel...),
 	}}, schema.GQLWrapf(schema.AppendGQLErrs(errSet, errDel), "failed to rewrite mutation payload")
 }
@@ -137,15 +137,15 @@ func (urw *updateGroupRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
+	result map[string]interface{}) ([]*gql.GraphQuery, error) {
 
 	return ((*resolve.UpdateRewriter)(urw)).FromMutationResult(ctx, mutation, assigned, result)
 }
 
 // addAclRuleQuery adds a *gql.GraphQuery to upsertQuery.Children to query a rule inside a group
 // based on its predicate value.
-func addAclRuleQuery(upsertQuery *gql.GraphQuery, predicate, variable string) {
-	upsertQuery.Children = append(upsertQuery.Children, &gql.GraphQuery{
+func addAclRuleQuery(upsertQuery []*gql.GraphQuery, predicate, variable string) {
+	upsertQuery[0].Children = append(upsertQuery[0].Children, &gql.GraphQuery{
 		Attr:  "dgraph.acl.rule",
 		Alias: variable,
 		Var:   variable,

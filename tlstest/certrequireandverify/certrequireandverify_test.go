@@ -18,8 +18,8 @@ import (
 
 func TestAccessWithoutClientCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls-cacert", "../tls/ca.crt")
-	conf.Set("tls-server-name", "node")
+	conf.Set("tls_cacert", "../tls/ca.crt")
+	conf.Set("tls_server_name", "node")
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
@@ -29,10 +29,10 @@ func TestAccessWithoutClientCert(t *testing.T) {
 
 func TestAccessWithClientCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls-cacert", "../tls/ca.crt")
-	conf.Set("tls-server-name", "node")
-	conf.Set("tls-cert", "../tls/client.acl.crt")
-	conf.Set("tls-key", "../tls/client.acl.key")
+	conf.Set("tls_cacert", "../tls/ca.crt")
+	conf.Set("tls_server_name", "node")
+	conf.Set("tls_cert", "../tls/client.acl.crt")
+	conf.Set("tls_key", "../tls/client.acl.key")
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)

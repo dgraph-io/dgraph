@@ -67,7 +67,7 @@ func runGzipWithRetry(contentType, url string, buf io.Reader, gzReq, gzResp bool
 			return nil, err
 		}
 		req.Header.Add("Content-Type", contentType)
-		req.Header.Set("X-Dgraph-AccessToken", grootAccessJwt)
+		req.Header.Set("X-Dgraph-AccessToken", token.AccessJwt)
 
 		if gzReq {
 			req.Header.Set("Content-Encoding", "gzip")
@@ -79,14 +79,15 @@ func runGzipWithRetry(contentType, url string, buf io.Reader, gzReq, gzResp bool
 
 		resp, err = client.Do(req)
 		if err != nil && strings.Contains(err.Error(), "Token is expired") {
-			grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
+			newToken, err := testutil.HttpLogin(&testutil.LoginParams{
 				Endpoint:   addr + "/admin",
-				RefreshJwt: grootRefreshJwt,
+				RefreshJwt: token.RefreshToken,
 			})
-
 			if err != nil {
 				return nil, err
 			}
+			token.AccessJwt = newToken.AccessJwt
+			token.RefreshToken = newToken.RefreshToken
 			continue
 		} else if err != nil {
 			return nil, err
@@ -303,9 +304,9 @@ func runWithRetries(method, contentType, url string, body string) (
 
 	qr, respBody, err := runRequest(req)
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
-		grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
+		token, err = testutil.HttpLogin(&testutil.LoginParams{
 			Endpoint:   addr + "/admin",
-			RefreshJwt: grootRefreshJwt,
+			RefreshJwt: token.RefreshToken,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -325,7 +326,7 @@ func runWithRetries(method, contentType, url string, body string) (
 // attach the grootAccessJWT to the request and sends the http request
 func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
 	client := &http.Client{}
-	req.Header.Set("X-Dgraph-AccessToken", grootAccessJwt)
+	req.Header.Set("X-Dgraph-AccessToken", token.AccessJwt)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, nil, err
@@ -358,9 +359,9 @@ func runWithRetriesForResp(method, contentType, url string, body string) (
 
 	qr, respBody, resp, err := runRequestForResp(req)
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
-		grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
+		token, err = testutil.HttpLogin(&testutil.LoginParams{
 			Endpoint:   addr + "/admin",
-			RefreshJwt: grootRefreshJwt,
+			RefreshJwt: token.RefreshToken,
 		})
 		if err != nil {
 			return nil, nil, nil, err
@@ -380,7 +381,7 @@ func runWithRetriesForResp(method, contentType, url string, body string) (
 // attach the grootAccessJWT to the request and sends the http request
 func runRequestForResp(req *http.Request) (*x.QueryResWithData, []byte, *http.Response, error) {
 	client := &http.Client{}
-	req.Header.Set("X-Dgraph-AccessToken", grootAccessJwt)
+	req.Header.Set("X-Dgraph-AccessToken", token.AccessJwt)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, nil, resp, err
@@ -922,12 +923,12 @@ func TestDrainingMode(t *testing.T) {
 
 	}
 
-	grootJwt, _ := testutil.GrootHttpLogin(addr + "/admin")
+	token := testutil.GrootHttpLogin(addr + "/admin")
 
-	setDrainingMode(t, true, grootJwt)
+	setDrainingMode(t, true, token.AccessJwt)
 	runRequests(true)
 
-	setDrainingMode(t, false, grootJwt)
+	setDrainingMode(t, false, token.AccessJwt)
 	runRequests(false)
 }
 
