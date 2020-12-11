@@ -23,10 +23,10 @@
       queryContact(func: uid(ContactRoot)) {
         id : uid
         nickName : Contact.nickName
-        adminTasks : Contact.adminTasks @filter(uid(AdminTask5)) {
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask1)) {
           id : uid
           name : AdminTask.name
-          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence4)) {
+          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence3)) {
             due : TaskOccurrence.due
             comp : TaskOccurrence.comp
             dgraph.uid : uid
@@ -36,14 +36,14 @@
       ContactRoot as var(func: uid(Contact6))
       Contact6 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
-        AdminTask1 as Contact.adminTasks
+        AdminTask2 as Contact.adminTasks
       }
-      AdminTask5 as var(func: uid(AdminTask1))
+      AdminTask1 as var(func: uid(AdminTask2))
       var(func: uid(AdminTask1)) {
-        TaskOccurrence2 as AdminTask.occurrences
+        TaskOccurrence4 as AdminTask.occurrences
       }
-      TaskOccurrence4 as var(func: uid(TaskOccurrence2)) @filter(uid(TaskOccurrenceAuth3))
-      TaskOccurrenceAuth3 as var(func: uid(TaskOccurrence2)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
+      TaskOccurrence3 as var(func: uid(TaskOccurrence4)) @filter(uid(TaskOccurrenceAuth5))
+      TaskOccurrenceAuth5 as var(func: uid(TaskOccurrence4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
     }
 
 - name: "Deep RBAC rule - Level 0 false"
@@ -97,8 +97,8 @@
         id : uid
         nickName : Contact.nickName
       }
-      ContactRoot as var(func: uid(Contact5))
-      Contact5 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact6))
+      Contact6 as var(func: type(Contact))
     }
 
 - name: "Deep RBAC rule with cascade - Level 1 false"
@@ -126,10 +126,10 @@
       queryContact(func: uid(ContactRoot)) @cascade {
         id : uid
         nickName : Contact.nickName
-        adminTasks : Contact.adminTasks @filter(uid(AdminTask6)) {
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask1)) {
           id : uid
           name : AdminTask.name
-          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence4)) {
+          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence3)) {
             due : TaskOccurrence.due
             comp : TaskOccurrence.comp
             dgraph.uid : uid
@@ -139,15 +139,15 @@
       ContactRoot as var(func: uid(Contact7))
       Contact7 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
-        AdminTask1 as Contact.adminTasks
+        AdminTask2 as Contact.adminTasks
       }
-      AdminTask6 as var(func: uid(AdminTask1)) @filter(uid(AdminTask5))
+      AdminTask1 as var(func: uid(AdminTask2)) @filter(uid(AdminTask6))
       var(func: uid(AdminTask1)) {
-        TaskOccurrence2 as AdminTask.occurrences
+        TaskOccurrence4 as AdminTask.occurrences
       }
-      TaskOccurrence4 as var(func: uid(TaskOccurrence2)) @filter(uid(TaskOccurrenceAuth3))
-      TaskOccurrenceAuth3 as var(func: uid(TaskOccurrence2)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
-      AdminTask5 as var(func: uid())
+      TaskOccurrence3 as var(func: uid(TaskOccurrence4)) @filter(uid(TaskOccurrenceAuth5))
+      TaskOccurrenceAuth5 as var(func: uid(TaskOccurrence4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
+      AdminTask6 as var(func: uid())
     }
 
 - name: "Deep RBAC rule - Level 2 false"
@@ -175,17 +175,17 @@
       queryContact(func: uid(ContactRoot)) {
         id : uid
         nickName : Contact.nickName
-        adminTasks : Contact.adminTasks @filter(uid(AdminTask3)) {
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask1)) {
           id : uid
           name : AdminTask.name
         }
       }
-      ContactRoot as var(func: uid(Contact4))
-      Contact4 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact5))
+      Contact5 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
-        AdminTask1 as Contact.adminTasks
+        AdminTask2 as Contact.adminTasks
       }
-      AdminTask3 as var(func: uid(AdminTask1))
+      AdminTask1 as var(func: uid(AdminTask2))
     }
 
 - name: "Deep RBAC rule - Level 1 type without auth."
@@ -213,10 +213,10 @@
       queryContact(func: uid(ContactRoot)) {
         id : uid
         nickName : Contact.nickName
-        tasks : Contact.tasks @filter(uid(Task5)) {
+        tasks : Contact.tasks @filter(uid(Task1)) {
           id : uid
           name : Task.name
-          occurrences : Task.occurrences @filter(uid(TaskOccurrence4)) {
+          occurrences : Task.occurrences @filter(uid(TaskOccurrence3)) {
             due : TaskOccurrence.due
             comp : TaskOccurrence.comp
             dgraph.uid : uid
@@ -226,14 +226,14 @@
       ContactRoot as var(func: uid(Contact6))
       Contact6 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
-        Task1 as Contact.tasks
+        Task2 as Contact.tasks
       }
-      Task5 as var(func: uid(Task1))
+      Task1 as var(func: uid(Task2))
       var(func: uid(Task1)) {
-        TaskOccurrence2 as Task.occurrences
+        TaskOccurrence4 as Task.occurrences
       }
-      TaskOccurrence4 as var(func: uid(TaskOccurrence2)) @filter(uid(TaskOccurrenceAuth3))
-      TaskOccurrenceAuth3 as var(func: uid(TaskOccurrence2)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
+      TaskOccurrence3 as var(func: uid(TaskOccurrence4)) @filter(uid(TaskOccurrenceAuth5))
+      TaskOccurrenceAuth5 as var(func: uid(TaskOccurrence4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
     }
 
 - name: "Auth query with @dgraph pred."
@@ -289,7 +289,7 @@
     query {
       getProject(func: uid(ProjectRoot)) @filter(type(Project)) {
         projID : uid
-        columns : Project.columns @filter(uid(Column3)) {
+        columns : Project.columns @filter(uid(Column1)) {
           name : Column.name
           colID : uid
         }
@@ -302,10 +302,10 @@
         }
       }
       var(func: uid(ProjectRoot)) {
-        Column1 as Project.columns
+        Column2 as Project.columns
       }
-      Column3 as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
-      ColumnAuth2 as var(func: uid(Column1)) @cascade {
+      Column1 as var(func: uid(Column2)) @filter(uid(ColumnAuth3))
+      ColumnAuth3 as var(func: uid(Column2)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -419,7 +419,7 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        issues : User.issues @filter(uid(Issue3)) {
+        issues : User.issues @filter(uid(Issue1)) {
           id : uid
         }
         dgraph.uid : uid
@@ -427,10 +427,10 @@
       UserRoot as var(func: uid(User4))
       User4 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        Issue1 as User.issues
+        Issue2 as User.issues
       }
-      Issue3 as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
-      IssueAuth2 as var(func: uid(Issue1)) @cascade {
+      Issue1 as var(func: uid(Issue2)) @filter(uid(IssueAuth3))
+      IssueAuth3 as var(func: uid(Issue2)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
@@ -454,8 +454,8 @@
         username : User.username
         dgraph.uid : uid
       }
-      UserRoot as var(func: uid(User2))
-      User2 as var(func: type(User))
+      UserRoot as var(func: uid(User3))
+      User3 as var(func: type(User))
     }
 
 - name: "Auth with top level AND rbac true"
@@ -746,7 +746,7 @@
     query {
       queryUser(func: uid(UserRoot)) {
         username : User.username
-        tickets : User.tickets @filter(uid(Ticket3)) {
+        tickets : User.tickets @filter(uid(Ticket1)) {
           id : uid
           title : Ticket.title
         }
@@ -755,10 +755,10 @@
       UserRoot as var(func: uid(User4))
       User4 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        Ticket1 as User.tickets
+        Ticket2 as User.tickets
       }
-      Ticket3 as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
-      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
+      Ticket1 as var(func: uid(Ticket2)) @filter(uid(TicketAuth3))
+      TicketAuth3 as var(func: uid(Ticket2)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
@@ -786,7 +786,7 @@
     query {
       queryUser(func: uid(UserRoot)) {
         username : User.username
-        tickets : User.tickets @filter(uid(Ticket3)) {
+        tickets : User.tickets @filter(uid(Ticket1)) {
           id : uid
           title : Ticket.title
         }
@@ -795,10 +795,10 @@
       UserRoot as var(func: uid(User4))
       User4 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        Ticket1 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
+        Ticket2 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
       }
-      Ticket3 as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
-      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
+      Ticket1 as var(func: uid(Ticket2)) @filter(uid(TicketAuth3))
+      TicketAuth3 as var(func: uid(Ticket2)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
@@ -854,7 +854,7 @@
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content) @cascade {
         content : Movie.content
-        regionsAvailable : Movie.regionsAvailable @filter(uid(Region2)) (orderasc: Region.name, first: 10, offset: 10) {
+        regionsAvailable : Movie.regionsAvailable @filter(uid(Region1)) (orderasc: Region.name, first: 10, offset: 10) {
           name : Region.name
           global : Region.global
           dgraph.uid : uid
@@ -873,9 +873,9 @@
         regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
       }
       var(func: uid(MovieRoot)) {
-        Region1 as Movie.regionsAvailable @filter(eq(Region.name, "Region123"))
+        Region2 as Movie.regionsAvailable @filter(eq(Region.name, "Region123"))
       }
-      Region2 as var(func: uid(Region1))
+      Region1 as var(func: uid(Region2))
     }
 
 - name: "Auth deep query - 3 level"
@@ -904,10 +904,10 @@
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
         content : Movie.content
-        regionsAvailable : Movie.regionsAvailable @filter(uid(Region7)) (orderasc: Region.name, first: 10, offset: 10) @cascade {
+        regionsAvailable : Movie.regionsAvailable @filter(uid(Region1)) (orderasc: Region.name, first: 10, offset: 10) @cascade {
           name : Region.name
           global : Region.global
-          users : Region.users @filter(uid(User6)) (orderasc: User.username, first: 10, offset: 10) {
+          users : Region.users @filter(uid(User3)) (orderasc: User.username, first: 10, offset: 10) {
             username : User.username
             age : User.age
             isPublic : User.isPublic
@@ -934,18 +934,18 @@
         regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
       }
       var(func: uid(MovieRoot)) {
-        Region1 as Movie.regionsAvailable @filter(eq(Region.name, "Region123"))
+        Region2 as Movie.regionsAvailable @filter(eq(Region.name, "Region123"))
       }
-      Region7 as var(func: uid(Region1))
+      Region1 as var(func: uid(Region2))
       var(func: uid(Region1)) {
-        User2 as Region.users @filter(eq(User.username, "User321"))
+        User4 as Region.users @filter(eq(User.username, "User321"))
       }
-      User6 as var(func: uid(User2))
-      var(func: uid(User2)) {
-        UserSecret3 as User.secrets @filter(allofterms(UserSecret.aSecret, "Secret132"))
+      User3 as var(func: uid(User4))
+      var(func: uid(User3)) {
+        UserSecret6 as User.secrets @filter(allofterms(UserSecret.aSecret, "Secret132"))
       }
-      UserSecret5 as var(func: uid(UserSecret3)) @filter(uid(UserSecretAuth4))
-      UserSecretAuth4 as var(func: uid(UserSecret3)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecret5 as var(func: uid(UserSecret6)) @filter(uid(UserSecretAuth7))
+      UserSecretAuth7 as var(func: uid(UserSecret6)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
 - name: "Auth with complex filter"
@@ -1052,8 +1052,8 @@
         username : User.username
         dgraph.uid : uid
       }
-      UserRoot as var(func: uid(User2))
-      User2 as var(func: type(User))
+      UserRoot as var(func: uid(User3))
+      User3 as var(func: type(User))
     }
 
 - name: "Query with missing variable - partial jwt token"
@@ -1142,11 +1142,11 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        ticketsAggregate : User.tickets @filter(uid(Ticket3)) {
+        ticketsAggregate : User.tickets @filter(uid(TicketAggregateResult1)) {
           ticketsAggregate_titleVar as Ticket.title
           dgraph.uid : uid
         }
-        count_ticketsAggregate : count(User.tickets) @filter(uid(Ticket3))
+        count_ticketsAggregate : count(User.tickets) @filter(uid(TicketAggregateResult1))
         titleMin_ticketsAggregate : min(val(ticketsAggregate_titleVar))
         titleMax_ticketsAggregate : max(val(ticketsAggregate_titleVar))
         dgraph.uid : uid
@@ -1154,10 +1154,10 @@
       UserRoot as var(func: uid(User4))
       User4 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        TicketAggregateResult1 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
+        TicketAggregateResult2 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
       }
-      Ticket3 as var(func: uid(TicketAggregateResult1)) @filter(uid(TicketAuth2))
-      TicketAuth2 as var(func: uid(TicketAggregateResult1)) @cascade {
+      TicketAggregateResult1 as var(func: uid(TicketAggregateResult2)) @filter(uid(TicketAuth3))
+      TicketAuth3 as var(func: uid(TicketAggregateResult2)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
@@ -1190,18 +1190,18 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        ticketsAggregate : User.tickets @filter(uid(Ticket3)) {
+        ticketsAggregate : User.tickets @filter(uid(TicketAggregateResult1)) {
           ticketsAggregate_titleVar as Ticket.title
           dgraph.uid : uid
         }
         titleMin_ticketsAggregate : min(val(ticketsAggregate_titleVar))
-        issuesAggregate : User.issues @filter(uid(Issue6)) {
+        issuesAggregate : User.issues @filter(uid(IssueAggregateResult4)) {
           issuesAggregate_msgVar as Issue.msg
           dgraph.uid : uid
         }
-        count_issuesAggregate : count(User.issues) @filter(uid(Issue6))
+        count_issuesAggregate : count(User.issues) @filter(uid(IssueAggregateResult4))
         msgMax_issuesAggregate : max(val(issuesAggregate_msgVar))
-        tickets : User.tickets @filter(uid(Ticket9)) {
+        tickets : User.tickets @filter(uid(Ticket7)) {
           title : Ticket.title
           dgraph.uid : uid
         }
@@ -1210,10 +1210,10 @@
       UserRoot as var(func: uid(User10))
       User10 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        TicketAggregateResult1 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
+        TicketAggregateResult2 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
       }
-      Ticket3 as var(func: uid(TicketAggregateResult1)) @filter(uid(TicketAuth2))
-      TicketAuth2 as var(func: uid(TicketAggregateResult1)) @cascade {
+      TicketAggregateResult1 as var(func: uid(TicketAggregateResult2)) @filter(uid(TicketAuth3))
+      TicketAuth3 as var(func: uid(TicketAggregateResult2)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
@@ -1223,17 +1223,17 @@
         }
       }
       var(func: uid(UserRoot)) {
-        IssueAggregateResult4 as User.issues
+        IssueAggregateResult5 as User.issues
       }
-      Issue6 as var(func: uid(IssueAggregateResult4)) @filter(uid(IssueAuth5))
-      IssueAuth5 as var(func: uid(IssueAggregateResult4)) @cascade {
+      IssueAggregateResult4 as var(func: uid(IssueAggregateResult5)) @filter(uid(IssueAuth6))
+      IssueAuth6 as var(func: uid(IssueAggregateResult5)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
       }
       var(func: uid(UserRoot)) {
-        Ticket7 as User.tickets @filter(anyofterms(Ticket.title, "graphql2"))
+        Ticket8 as User.tickets @filter(anyofterms(Ticket.title, "graphql2"))
       }
-      Ticket9 as var(func: uid(Ticket7)) @filter(uid(TicketAuth8))
-      TicketAuth8 as var(func: uid(Ticket7)) @cascade {
+      Ticket7 as var(func: uid(Ticket8)) @filter(uid(TicketAuth9))
+      TicketAuth9 as var(func: uid(Ticket8)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
@@ -1260,21 +1260,21 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        issuesAggregate : User.issues @filter(uid(Issue3)) {
+        issuesAggregate : User.issues @filter(uid(IssueAggregateResult1)) {
           issuesAggregate_msgVar as Issue.msg
           dgraph.uid : uid
         }
-        count_issuesAggregate : count(User.issues) @filter(uid(Issue3))
+        count_issuesAggregate : count(User.issues) @filter(uid(IssueAggregateResult1))
         msgMin_issuesAggregate : min(val(issuesAggregate_msgVar))
         dgraph.uid : uid
       }
       UserRoot as var(func: uid(User4))
       User4 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        IssueAggregateResult1 as User.issues
+        IssueAggregateResult2 as User.issues
       }
-      Issue3 as var(func: uid(IssueAggregateResult1)) @filter(uid(IssueAuth2))
-      IssueAuth2 as var(func: uid(IssueAggregateResult1)) @cascade {
+      IssueAggregateResult1 as var(func: uid(IssueAggregateResult2)) @filter(uid(IssueAuth3))
+      IssueAuth3 as var(func: uid(IssueAggregateResult2)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
@@ -1724,7 +1724,7 @@
       checkProjectPassword(func: uid(ProjectRoot)) @filter((eq(val(pwd), 1) AND type(Project))) {
         name : Project.name
         projID : uid
-        columns : Project.columns @filter(uid(Column3)) {
+        columns : Project.columns @filter(uid(Column1)) {
           name : Column.name
           colID : uid
         }
@@ -1737,10 +1737,10 @@
         }
       }
       var(func: uid(ProjectRoot)) {
-        Column1 as Project.columns
+        Column2 as Project.columns
       }
-      Column3 as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
-      ColumnAuth2 as var(func: uid(Column1)) @cascade {
+      Column1 as var(func: uid(Column2)) @filter(uid(ColumnAuth3))
+      ColumnAuth3 as var(func: uid(Column2)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))

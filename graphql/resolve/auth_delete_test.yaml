@@ -197,10 +197,10 @@
       }
       ticket(func: uid(Ticket5)) {
         title : Ticket.title
-        onColumn : Ticket.onColumn @filter(uid(Column15)) {
-          inProject : Column.inProject @filter(uid(Project13)) {
-            roles : Project.roles @filter(uid(Role11)) {
-              assignedTo : Role.assignedTo @filter(uid(User10)) {
+        onColumn : Ticket.onColumn @filter(uid(Column6)) {
+          inProject : Column.inProject @filter(uid(Project8)) {
+            roles : Project.roles @filter(uid(Role10)) {
+              assignedTo : Role.assignedTo @filter(uid(User12)) {
                 username : User.username
                 age : User.age
                 dgraph.uid : uid
@@ -225,27 +225,27 @@
         }
       }
       var(func: uid(Ticket5)) {
-        Column6 as Ticket.onColumn
+        Column7 as Ticket.onColumn
       }
-      Column15 as var(func: uid(Column6)) @filter(uid(ColumnAuth14))
+      Column6 as var(func: uid(Column7)) @filter(uid(ColumnAuth15))
       var(func: uid(Column6)) {
-        Project7 as Column.inProject
+        Project9 as Column.inProject
       }
-      Project13 as var(func: uid(Project7)) @filter(uid(ProjectAuth12))
-      var(func: uid(Project7)) {
-        Role8 as Project.roles
+      Project8 as var(func: uid(Project9)) @filter(uid(ProjectAuth14))
+      var(func: uid(Project8)) {
+        Role11 as Project.roles
       }
-      Role11 as var(func: uid(Role8))
-      var(func: uid(Role8)) {
-        User9 as Role.assignedTo
+      Role10 as var(func: uid(Role11))
+      var(func: uid(Role10)) {
+        User13 as Role.assignedTo
       }
-      User10 as var(func: uid(User9))
-      ProjectAuth12 as var(func: uid(Project7)) @cascade {
+      User12 as var(func: uid(User13))
+      ProjectAuth14 as var(func: uid(Project9)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
       }
-      ColumnAuth14 as var(func: uid(Column6)) @cascade {
+      ColumnAuth15 as var(func: uid(Column7)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))

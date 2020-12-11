@@ -63,8 +63,6 @@ type commonAuthQueryVars struct {
 	// Stores queries which aggregate filters and auth rules. Eg.
 	// // User6 as var(func: uid(User2), orderasc: ...) @filter((eq(User.username, "User1") AND (...Auth Filter))))
 	selectionQry *gql.GraphQuery
-	// Contains name of the generated filterVarName
-	filterVarName string
 }
 
 // NewQueryRewriter returns a new QueryRewriter.
@@ -750,7 +748,7 @@ func (authRw *authRewriter) addAuthQueries(
 		Args: []gql.Arg{{Value: authRw.parentVarName}},
 	}
 
-	// The final query that includes the user's filter and auth processsing is thus like
+	// The final query that includes the user's filter and auth processing is thus like
 	//
 	// queryTodo(func: uid(Todo1)) @filter(uid(Todo2) AND uid(Todo3)) { ... }
 	// Todo1 as var(func: ... ) @filter(...)
@@ -950,39 +948,37 @@ func buildTypeFunc(typ string) *gql.Function {
 func buildCommonAuthQueries(
 	f schema.Field,
 	auth *authRewriter,
-	parentQryName string) commonAuthQueryVars {
+	parentSelectionName string) commonAuthQueryVars {
 	// This adds the following query.
-	//	var(func: uid(Ticket)) {
-	//		User as Ticket.assignedTo
+	//	var(func: uid(Ticket1)) {
+	//		User4 as Ticket.assignedTo
 	//	}
-	// where `Ticket` is the nodes selected at parent level and `User` is the nodes we
-	// need on the current level.
+	// where `Ticket1` is the nodes selected at parent level after applying auth and `User4` is the
+	// nodes we need on the current level.
 	parentQry := &gql.GraphQuery{
 		Func: &gql.Function{
 			Name: "uid",
-			Args: []gql.Arg{{Value: auth.parentVarName}},
+			Args: []gql.Arg{{Value: parentSelectionName}},
 		},
 		Attr:     "var",
-		Children: []*gql.GraphQuery{{Attr: f.ConstructedForDgraphPredicate(), Var: parentQryName}},
+		Children: []*gql.GraphQuery{{Attr: f.ConstructedForDgraphPredicate(), Var: auth.varName}},
 	}
 
 	// This query aggregates all filters and auth rules and is used by root query to filter
 	// the final nodes for the current level.
-	// User6 as var(func: uid(User2), orderasc: ...) @filter((eq(User.username, "User1") AND (...Auth Filter))))
-	filterVarName := auth.varGen.Next(f.ConstructedFor(), "", "", auth.isWritingAuth)
+	// User3 as var(func: uid(User4)) @filter((eq(User.username, "User1") AND (...Auth Filter))))
 	selectionQry := &gql.GraphQuery{
-		Var:  filterVarName,
+		Var:  auth.parentVarName,
 		Attr: "var",
 		Func: &gql.Function{
 			Name: "uid",
-			Args: []gql.Arg{{Value: parentQryName}},
+			Args: []gql.Arg{{Value: auth.varName}},
 		},
 	}
 
 	return commonAuthQueryVars{
-		parentQry:     parentQry,
-		selectionQry:  selectionQry,
-		filterVarName: filterVarName,
+		parentQry:    parentQry,
+		selectionQry: selectionQry,
 	}
 }
 
@@ -1102,10 +1098,10 @@ func buildAggregateFields(
 	var parentVarName, parentQryName string
 	if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
 		parentVarName = auth.parentVarName
-		parentQryName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+		parentQryName = auth.varName
+		auth.parentVarName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+		auth.varName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
 	}
-	auth.parentVarName = parentVarName
-	auth.varName = parentQryName
 	var fieldAuth, retAuthQueries []*gql.GraphQuery
 	var authFilter *gql.FilterTree
 	if rbac == schema.Uncertain {
@@ -1120,7 +1116,7 @@ func buildAggregateFields(
 	// appended only once. This also merges auth filters and any other filters of count
 	// aggregation fields / mainField.
 	if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
-		commonAuthQueryVars := buildCommonAuthQueries(f, auth, parentQryName)
+		commonAuthQueryVars := buildCommonAuthQueries(f, auth, parentVarName)
 		// add child filter to parent query, auth filters to selection query and
 		// selection query as a filter to child
 		commonAuthQueryVars.selectionQry.Filter = authFilter
@@ -1134,10 +1130,13 @@ func buildAggregateFields(
 			aggregateChild.Filter = &gql.FilterTree{
 				Func: &gql.Function{
 					Name: "uid",
-					Args: []gql.Arg{{Value: commonAuthQueryVars.filterVarName}},
+					Args: []gql.Arg{{Value: commonAuthQueryVars.selectionQry.Var}},
 				},
 			}
 		}
+		// Restore the auth state after processing is done.
+		auth.parentVarName = parentVarName
+		auth.varName = parentQryName
 	}
 	// otherAggregation Children are appended to aggregationChildren to return them.
 	// This step is performed at the end to ensure that auth and other filters are
@@ -1254,9 +1253,9 @@ func addSelectionSetFrom(
 		var parentVarName, parentQryName string
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
 			parentVarName = auth.parentVarName
-			parentQryName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
-			auth.parentVarName = parentQryName
-			auth.varName = parentQryName
+			parentQryName = auth.varName
+			auth.parentVarName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+			auth.varName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
 		}
 
 		var selectionAuth []*gql.GraphQuery
@@ -1264,13 +1263,16 @@ func addSelectionSetFrom(
 			selectionAuth = addSelectionSetFrom(child, f, auth)
 		}
 
-		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
-			// Restore the state after processing is done.
-			auth.parentVarName = parentVarName
-			auth.varName = parentQryName
+		restoreAuthState := func() {
+			if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
+				// Restore the auth state after processing is done.
+				auth.parentVarName = parentVarName
+				auth.varName = parentQryName
+			}
 		}
 
 		if f.Type().IsInbuiltOrEnumType() && (fieldSeenCount[f.DgraphAlias()] > 0) {
+			restoreAuthState()
 			continue
 		}
 		fieldSeenCount[f.DgraphAlias()]++
@@ -1304,6 +1306,7 @@ func addSelectionSetFrom(
 		} else if rbac == schema.Negative {
 			// If RBAC rules are evaluated to Negative, we don't write queries for deeper levels.
 			// Hence we don't need to do any further processing for this field.
+			restoreAuthState()
 			continue
 		}
 
@@ -1313,7 +1316,7 @@ func addSelectionSetFrom(
 		}
 
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
-			commonAuthQueryVars := buildCommonAuthQueries(f, auth, parentQryName)
+			commonAuthQueryVars := buildCommonAuthQueries(f, auth, parentVarName)
 			// add child filter to parent query, auth filters to selection query and
 			// selection query as a filter to child
 			commonAuthQueryVars.parentQry.Children[0].Filter = child.Filter
@@ -1321,13 +1324,14 @@ func addSelectionSetFrom(
 			child.Filter = &gql.FilterTree{
 				Func: &gql.Function{
 					Name: "uid",
-					Args: []gql.Arg{{Value: commonAuthQueryVars.filterVarName}},
+					Args: []gql.Arg{{Value: commonAuthQueryVars.selectionQry.Var}},
 				},
 			}
 			authQueries = append(authQueries, commonAuthQueryVars.parentQry, commonAuthQueryVars.selectionQry)
 		}
 		authQueries = append(authQueries, selectionAuth...)
 		authQueries = append(authQueries, fieldAuth...)
+		restoreAuthState()
 	}
 
 	// Sort the required fields before adding them to q.Children so that the query produced after
