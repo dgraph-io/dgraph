@@ -19,34 +19,35 @@ For every `type` defined in the GraphQL schema, Dgraph generates an aggregate
 query `aggregate<type name>`. This query includes a `count` field (to learn
 more, see  [Count Queries](/graphql/queries/count/)). Additional fields defined
 for each type get one or more additional aggregate query fields (`Min`, `Max`,
-`Sum` and `Avg`). Which aggregate query fields are available depends on the
-field's type (`Int`, `Float`, `String` or `Datetime`), as follows:
+`Sum` and `Avg`).
 
-* **`<field name>Max`** and **`<field name>Min`**: generated for fields typed as
-`Int`, `Float`, `String` or `Datetime`.
-* **`<field name>Sum`** and **`<field name>Avg`**: generated for fields typed as
-`Int` or `Float`.
+{{% notice "note" %}}
+Aggregate query fields are generated according to a field's type. Fields typed
+as `Int` and `Float` get the following query fields:`<field name>Max`,
+`<field name>Min`, `<field name>Sum` and `<field name>Avg`. Fields typed as
+`String` and `Datetime` only get the `<field name>Max`, `<field name>Min` query
+fields.
+{{% /notice %}}
 
 #### Examples
 
-Example: Fetch the minimum, maximum, and average number of `posts` per
-`Author`:
+Example: Fetch the average number of `posts` per `Author`:
 
 ```graphql
    query {
      aggregateAuthor {
-       postsMin
-       postsMax
        postsAvg
      }
    }
 ```
-Example: Fetch the total number of `posts` by all authors:
+Example: Fetch the total number of `posts` by all authors, and the maximum
+number of `posts` by any single `Author`:
 
 ```graphql
    query {
      aggregateAuthor {
        postsSum
+       postsMax
      }
    }
 ```
@@ -58,19 +59,20 @@ Example: Fetch the total number of `posts` by all authors:
 Dgraph also defines aggregate `<field name>Aggregate` fields for child nodes
 within `query<type name>` queries. This is done for each field that is of type
 `List[Type/Interface]` inside `query<type name>` queries, letting you fetch
-minimums, maximums, averages and sums for those fields. Which aggregate query
-fields are available depends on the field's type (`Int`, `Float`, `String` or
-`Datetime`), as follows:
+minimums, maximums, averages and sums for those fields.
 
-* **`<field name>Max`** and **`<field name>Min`**: generated for fields typed as
-`Int`, `Float`, `String` or `Datetime`.
-* **`<field name>Sum`** and **`<field name>Avg`**: generated for fields typed as
-`Int` or `Float`.
+{{% notice "note" %}}
+Aggregate query fields are generated according to a field's type. Fields typed
+as `Int` and `Float` get the following query fields:`<field name>Max`,
+`<field name>Min`, `<field name>Sum` and `<field name>Avg`. Fields typed as
+`String` and `Datetime` only get the `<field name>Max`, `<field name>Min` query
+fields.
+{{% /notice %}}
 
 #### Examples
 
 Example: Fetch the minimum, maximum and average `score` of the `posts` for each
-author, along with each author's `name`.
+`Author`, along with each author's `name`.
 
 ```graphql
    query {
@@ -102,3 +104,5 @@ Example: Fetch the date of the most recent post with a `score` greater than
     }
   }
 ```
+
+### Aggregate query fields available by type
