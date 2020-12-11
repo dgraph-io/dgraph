@@ -248,13 +248,13 @@ Note that the corresponding nodes have been correctly updated with the `annualIn
 **File** `customer_address.rdf` - Address information:
 
 ```
-<_:my.org/customer/1>     <address> <my.org/customer/1/address/1>    .
+<_:my.org/customer/1>     <address> <_:my.org/customer/1/address/1>    .
 <_:my.org/customer/1/address/1>  <street> "One High Street" .
 <_:my.org/customer/1/address/1>  <city> "London" .
-<_:my.org/customer/2>        <address> <my.org/customer/2/address/1>   .
+<_:my.org/customer/2>        <address> <_:my.org/customer/2/address/1>   .
 <_:my.org/customer/2/address/1>  <street> "Two Main Street" .
 <_:my.org/customer/2/address/1>  <city> "New York" .
-<_:my.org/customer/2>     <address> <my.org/customer/2/address/2>   .
+<_:my.org/customer/2>     <address> <_:my.org/customer/2/address/2>   .
 <_:my.org/customer/2/address/2>  <street> "Ten Main Street" .
 <_:my.org/customer/2/address/2>  <city> "Mumbai" .
 ```
