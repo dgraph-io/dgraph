@@ -115,8 +115,8 @@ number of `posts` by any single `Author`:
 ```graphql
    query {
      aggregateAuthor {
-       postsSum
-       postsMax
+       numPostsSum
+       numPostsMax
      }
    }
 ```
@@ -131,7 +131,7 @@ Example: Fetch the average number of `posts` for authors with more than 20
          gt: 20
        }
      }) {
-       postsAvg
+       numPostsAvg
      }
    }
 ```
