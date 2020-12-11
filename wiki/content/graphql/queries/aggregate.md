@@ -6,16 +6,17 @@ weight = 3
     name = "Aggregate Queries"
 +++
 
-Dgraph automatically generates aggregate queries for a given GraphQL schema.
-Aggregate queries include:
+Dgraph automatically generates aggregate queries for GraphQL schemas.
+Aggregate queries fetch aggregate data, and including the following:
 
-* *Count queries* that let you `count` on fields and count nodes
-satisfying certain criteria specified using a filter. These also include
+* *Count queries* that let you count fields
+satisfying certain criteria specified using a filter.
 * *Advanced aggregate queries* that let you calculate the maximum, minimum, sum
 and average of specified fields.
 
 Aggregate queries are compatible with the `@auth` directive and follow the same
-authorization rules as the `query` keyword.
+authorization rules as the `query` keyword. You can also use filters with
+aggregate queries, as shown in some of the examples provided below.
 
 ### Count queries at root
 
@@ -25,7 +26,7 @@ advanced aggregate query fields, discussed below.
 
 #### Examples
 
-Exampl: Fetch the total number of `posts`.
+Example: Fetch the total number of `posts`.
 
 ```graphql
    query {
@@ -117,6 +118,7 @@ Example: Fetch the average number of `posts` per `Author`:
      }
    }
 ```
+
 Example: Fetch the total number of `posts` by all authors, and the maximum
 number of `posts` by any single `Author`:
 
