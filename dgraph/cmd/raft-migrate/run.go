@@ -56,17 +56,19 @@ func init() {
 		"Node ID of the old node. This will be the node ID of the new node.")
 	flag.IntP("old-group-id", "", 0, "Group ID of the old node. This is used to open the old wal.")
 	flag.StringP("new-dir", "", "", "Path to the new (z)w directory.")
+	flag.BoolP("is-alpha", "", true, "true if alpha directory false if zeros")
 	enc.RegisterFlags(flag)
 }
 
+func parseAndConvertKey(key string) uint64 {
+	keyFormat := "z%x-%d"
+	var random uint64
+	var parsedKey uint32
+	fmt.Sscanf(key, keyFormat, &parsedKey, &random)
+	return uint64(uint64(parsedKey)<<32 | random>>32)
+}
+
 func updateProposalData(entry raftpb.Entry) raftpb.Entry {
-	parseAndConvertKey := func(key string) uint64 {
-		keyFormat := "z%x-%d"
-		var random uint64
-		var parsedKey uint32
-		fmt.Sscanf(key, keyFormat, &parsedKey, &random)
-		return uint64(uint64(parsedKey)<<32 | random>>32)
-	}
 
 	var oldProposal Proposal
 	oldProposal.Unmarshal(entry.Data)
@@ -85,8 +87,32 @@ func updateProposalData(entry raftpb.Entry) raftpb.Entry {
 	binary.BigEndian.PutUint64(data, newKey)
 	sz, err := newProposal.MarshalToSizedBuffer(data[8:])
 	data = data[:8+sz]
-	var tempProposal pb.Proposal
-	x.Check(tempProposal.Unmarshal(data[8:]))
+
+	x.Checkf(err, "Failed to marshal proposal to buffer")
+	entry.Data = data
+	return entry
+}
+
+func updateZeroProposalData(entry raftpb.Entry) raftpb.Entry {
+	var oldProposal ZeroProposal
+	oldProposal.Unmarshal(entry.Data)
+	newKey := parseAndConvertKey(oldProposal.Key)
+	var newProposal pb.ZeroProposal
+
+	newProposal.SnapshotTs = oldProposal.SnapshotTs
+	newProposal.Member = oldProposal.Member
+	newProposal.Tablet = oldProposal.Tablet
+	newProposal.MaxLeaseId = oldProposal.MaxLeaseId
+	newProposal.MaxTxnTs = oldProposal.MaxTxnTs
+	newProposal.MaxRaftId = oldProposal.MaxRaftId
+	newProposal.Txn = oldProposal.Txn
+	newProposal.Cid = oldProposal.Cid
+	newProposal.License = oldProposal.License
+	// Snapshot is a newly added field hence skipped
+	data := make([]byte, 8+newProposal.Size())
+	binary.BigEndian.PutUint64(data, newKey)
+	sz, err := newProposal.MarshalToSizedBuffer(data[8:])
+	data = data[:8+sz]
 
 	x.Checkf(err, "Failed to marshal proposal to buffer")
 	entry.Data = data
@@ -96,6 +122,7 @@ func updateProposalData(entry raftpb.Entry) raftpb.Entry {
 func run(conf *viper.Viper) error {
 	oldDir := conf.GetString("old-dir")
 	newDir := conf.GetString("new-dir")
+	isAlpha := conf.GetBool("is-alpha")
 	if len(oldDir) == 0 {
 		log.Fatal("--old-dir not specified.")
 	}
@@ -127,8 +154,14 @@ func run(conf *viper.Viper) error {
 	// Should we batch this up?
 	oldEntries, err := oldWal.Entries(firstIndex, lastIndex, math.MaxUint64)
 
-	for i, entry := range oldEntries {
-		oldEntries[i] = updateProposalData(entry)
+	if isAlpha {
+		for i, entry := range oldEntries {
+			oldEntries[i] = updateProposalData(entry)
+		}
+	} else {
+		for i, entry := range oldEntries {
+			oldEntries[i] = updateZeroProposalData(entry)
+		}
 	}
 
 	x.Checkf(err, "failed to read entries from low:%d high:%d err:%s", firstIndex, lastIndex, err)
