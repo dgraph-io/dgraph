@@ -135,31 +135,37 @@ func DgraphBinaryPath() string {
 	return os.ExpandEnv(gopath + "/bin/dgraph")
 }
 
-func DetectRaceConditionInZeros(prefix string) {
+func DetectRaceConditionInZeros(prefix string) bool {
 	for i := 0; i <= 3; i++ {
 		in := GetContainerInstance(prefix, "zero"+strconv.Itoa(i))
-		err := DetectIfRaceConditionViolation(in)
+		raceDetected, err := DetectIfRaceConditionViolation(in)
 		if err != nil {
 			fmt.Printf("Error while detecting race condition %v\n", err)
+			continue
 		}
+		if raceDetected { return true }
 	}
+	return false
 }
 
 
-func DetectRaceConditionInAlphas(prefix string) {
+func DetectRaceConditionInAlphas(prefix string) bool {
 	for i := 0; i <= 6; i++ {
 		in := GetContainerInstance(prefix, "alpha"+strconv.Itoa(i))
-		err := DetectIfRaceConditionViolation(in)
+		raceDetected, err := DetectIfRaceConditionViolation(in)
 		if err != nil {
 			fmt.Printf("Error while detecting race condition %v\n", err)
+			continue
 		}
+		if raceDetected { return true }
 	}
+	return false
 }
 
-func DetectIfRaceConditionViolation(instance ContainerInstance) error {
+func DetectIfRaceConditionViolation(instance ContainerInstance) (bool, error) {
 	c := instance.GetContainer()
 	if c == nil {
-		return nil
+		return false, nil
 	}
 
 	logCmd := exec.Command("docker", "logs", c.ID)
@@ -175,19 +181,19 @@ func DetectIfRaceConditionViolation(instance ContainerInstance) error {
 	awkCmd.Stderr = &b
 
 	if err := logCmd.Start(); err != nil {
-		return err
+		return false, err
 	}
 	if err := awkCmd.Start(); err != nil {
-		return err
+		return false, err
 	}
 	if err := logCmd.Wait(); err != nil {
-		return err
+		return false, err
 	}
 	if err := writer.Close(); err != nil {
-		return err
+		return false, err
 	}
 	if err := awkCmd.Wait(); err != nil {
-		return err
+		return false, err
 	}
 	// Todo do we need to kill the process?
 	//var timer *time.Timer
@@ -198,6 +204,7 @@ func DetectIfRaceConditionViolation(instance ContainerInstance) error {
 	//})
 	if len(b.Bytes()) > 0 {
 		fmt.Printf("DATA RACE DETECTED %s\n", string(b.Bytes()))
+		return true, nil
 	}
-	return nil
+	return false, nil
 }

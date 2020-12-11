@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -134,17 +135,17 @@ func startCluster(composeFile, prefix string) {
 	}
 }
 
-func checkForRaceCondition(prefix string) {
+func detectRaceCondition(prefix string) bool {
 	if !*race {
-		return
+		return false
 	}
-	testutil.DetectRaceConditionInZeros(prefix)
-	testutil.DetectRaceConditionInAlphas(prefix)
+	zeroRaceDetected := testutil.DetectRaceConditionInZeros(prefix)
+	alphaRaceDetected := testutil.DetectRaceConditionInAlphas(prefix)
+	return zeroRaceDetected || alphaRaceDetected
 }
 
-func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
-	go func() {
-		checkForRaceCondition(prefix)
+func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) error {
+	stop := func() {
 		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
@@ -154,7 +155,13 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 			fmt.Printf("CLUSTER DOWN: %s\n", prefix)
 		}
 		wg.Done()
-	}()
+	}
+	if detectRaceCondition(prefix) {
+		go stop()
+		return errors.New("race condition detected. check logs for more details")
+	}
+	go stop()
+	return nil
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
@@ -168,9 +175,10 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if isTeamcity {
 		args = append(args, "-json")
 	}
-	if *race {
-		args = append(args, "-race")
-	}
+	// Todo: There are few race errors in tests itself. Enable this once that is fixed.
+	//if *race {
+	//	args = append(args, "-race")
+	//}
 	args = append(args, pkg)
 	cmd := commandWithContext(ctx, args...)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
@@ -249,12 +257,16 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		started = true
 	}
 
+	// todo check how to stop gracefully
 	stop := func() {
 		if *keepCluster || stopped {
 			return
 		}
 		wg.Add(1)
-		stopCluster(defaultCompose, prefix, wg)
+		err := stopCluster(defaultCompose, prefix, wg)
+		if err != nil {
+			closer.Signal()
+		}
 		stopped = true
 	}
 	defer stop()
@@ -280,7 +292,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				return err
 			}
 		} else {
-			if err := runCustomClusterTest(ctx, task.pkg.ID, wg); err != nil {
+			if err := runCustomClusterTest(ctx, task.pkg.ID, wg, closer); err != nil {
 				return err
 			}
 		}
@@ -304,7 +316,7 @@ func getClusterPrefix() string {
 	return fmt.Sprintf("%s%03d-%d", getGlobalPrefix(), procId, id)
 }
 
-func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
+func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup, closer *z.Closer) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
 
 	compose := composeFileFor(pkg)
@@ -312,7 +324,12 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 	startCluster(compose, prefix)
 	if !*keepCluster {
 		wg.Add(1)
-		defer stopCluster(compose, prefix, wg)
+		defer func() {
+			err := stopCluster(compose, prefix, wg)
+			if err != nil {
+				closer.Signal()
+			}
+		} ()
 	}
 
 	return runTestsFor(ctx, pkg, prefix)
