@@ -62,10 +62,14 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 	if err := VerifyBackup(req, &creds, currentGroups); err != nil {
 		return 0, errors.Wrapf(err, "failed to verify backup")
 	}
-
 	if err := FillRestoreCredentials(req.Location, req); err != nil {
 		return 0, errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
 	}
+	restoreId, err := rt.Add()
+	if err != nil {
+		return 0, errors.Wrapf(err, "cannot assign ID to restore operation")
+	}
+
 	req.RestoreTs = State.GetTimestamp(false)
 
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
@@ -80,10 +84,6 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 		}()
 	}
 
-	restoreId, err := rt.Add()
-	if err != nil {
-		return 0, errors.Wrapf(err, "cannot assign ID to restore operation")
-	}
 	go func(restoreId int) {
 		errs := make([]error, 0)
 		for range currentGroups {
