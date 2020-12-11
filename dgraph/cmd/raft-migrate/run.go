@@ -22,7 +22,6 @@ import (
 	"math"
 	"os"
 
-	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
@@ -98,21 +97,15 @@ func run(conf *viper.Viper) error {
 		log.Fatal("--new-dir not specified.")
 	}
 
-	nodeId := conf.GetInt("old-node-id")
-	groupId := conf.GetInt("old-group-id")
-	// Copied over from zero/run.go
-	kvOpt := badger.LSMOnlyOptions(oldDir).
-		WithSyncWrites(false).
-		WithValueLogFileSize(64 << 20)
+	// TODO(rahul): Maybe uncomment following
+	//nodeId := conf.GetInt("old-node-id")
+	//groupId := conf.GetInt("old-group-id")
 
-	kv, err := badger.OpenManaged(kvOpt)
-	x.Checkf(err, "Error while opening WAL store")
-	defer kv.Close()
+	oldWal := raftwal.Init(oldDir) //Init(kv, uint64(nodeId), uint32(groupId))
+	defer oldWal.Close()
 
-	raftID, err := RaftId(kv)
-	x.Check(err)
-	oldWal := Init(kv, uint64(nodeId), uint32(groupId))
-
+	// TODO(rahul): raftwal.RaftId doesn't seem to be set correctly.
+	raftID := uint64(raftwal.RaftId)
 	firstIndex, err := oldWal.FirstIndex()
 	x.Checkf(err, "failed to read FirstIndex from old wal: %s", err)
 
