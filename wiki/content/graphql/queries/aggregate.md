@@ -109,7 +109,7 @@ Fields typed as `String` and `Datetime` only get the `<field name>Max`,
 
 #### Examples
 
-Example: Fetch the average number of `posts` written by all authors:
+Example: Fetch the average number of `posts` written by authors:
 
 ```graphql
    query {
