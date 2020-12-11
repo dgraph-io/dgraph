@@ -617,13 +617,13 @@
   dgquery: |-
     query {
       aggregateProject() {
-        nameMin : min(val(nameVar))
         count : max(val(countVar))
+        nameMin : min(val(nameVar))
         randomMin : min(val(randomVar))
       }
       var(func: uid(ProjectRoot)) {
-        nameVar as Project.name
         countVar as count(uid)
+        nameVar as Project.name
         randomVar as Project.random
       }
       ProjectRoot as var(func: uid(Project1))
@@ -1194,6 +1194,7 @@
           ticketsAggregate_titleVar as Ticket.title
           dgraph.uid : uid
         }
+        count_ticketsAggregate : count(User.tickets) @filter(uid(TicketAggregateResult1))
         titleMin_ticketsAggregate : min(val(ticketsAggregate_titleVar))
         issuesAggregate : User.issues @filter(uid(IssueAggregateResult4)) {
           issuesAggregate_msgVar as Issue.msg
