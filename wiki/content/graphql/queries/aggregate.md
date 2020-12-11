@@ -1,32 +1,109 @@
 +++
 title = "Aggregate Queries"
-weight = 4
+weight = 3
 [menu.main]
     parent = "graphql-queries"
     name = "Aggregate Queries"
 +++
 
-Dgraph automatically generates aggregate queries for GraphQL schemas,
-letting you calculate the maximum, minimum, sum and average of specified fields,
-as well as nodes that meet criteria specified using a filter.
+Dgraph automatically generates aggregate queries for a given GraphQL schema.
+Aggregate queries include:
 
-Aggregate queries are compatible with the `@auth` directive and honor the same
+* *Count queries* that let you `count` on fields and count nodes
+satisfying certain criteria specified using a filter. These also include
+* *Advanced aggregate queries* that let you calculate the maximum, minimum, sum
+and average of specified fields.
+
+Aggregate queries are compatible with the `@auth` directive and follow the same
 authorization rules as the `query` keyword.
 
-### Aggregate queries at root
+### Count queries at root
+
+For every `type` defined in a GraphQL schema, Dgraph generates an aggregate query
+`aggregate<type name>`. This query includes a `count` field, as well as
+advanced aggregate query fields, discussed below.
+
+#### Examples
+
+Exampl: Fetch the total number of `posts`.
+
+```graphql
+   query {
+     aggregatePost {
+       count
+     }
+   }
+```
+
+Example: Fetch the number of `posts` whose titles contain `GraphQL`.
+
+```graphql
+   query {
+     aggregatePost(filter: {
+       title: {
+         anyofterms: "GraphQL"
+         }
+       }) {
+       count
+     }
+   }
+```
+
+
+### Count queries child nodes
+
+Dgraph also defines `<field name>Aggregate` fields for every field which
+is of type `List[Type/Interface]` inside `query<type name>` queries, allowing
+you to do a `count` on fields, or to use the advanced aggregate queries
+discussed below.
+
+#### Examples
+
+Example: Fetch the number of `posts` for all authors along with their `name`.
+
+```graphql
+   query {
+     queryAuthor {
+       name
+       postsAggregate {
+        count
+       }
+     }
+   }
+```
+
+Example: Fetch the number of `posts` with a `score` greater than `10` for all
+authors, along with their `name`
+
+```graphql
+   query {
+     queryAuthor {
+       name
+       postsAggregate(filter: {
+         score: {
+           gt: 10
+         }
+       }) {
+        count
+      }
+    }
+  }
+```
+
+### Advanced aggregate queries at root
 
 For every `type` defined in the GraphQL schema, Dgraph generates an aggregate
-query `aggregate<type name>`. This query includes a `count` field (to learn
-more, see  [Count Queries](/graphql/queries/count/)). Additional fields defined
-for each type get one or more additional aggregate query fields (`Min`, `Max`,
-`Sum` and `Avg`).
+query `aggregate<type name>`. This query includes a `count` field, and also
+includes advanced aggregate query fields. Additional fields defined
+for a given type get one or more advanced aggregate query fields
+(`<field-name>Min`, `<field-name>Max`, `<field-name>Sum` and `<field-name>Avg`).
 
 {{% notice "note" %}}
-Aggregate query fields are generated according to a field's type. Fields typed
-as `Int` and `Float` get the following query fields:`<field name>Max`,
-`<field name>Min`, `<field name>Sum` and `<field name>Avg`. Fields typed as
-`String` and `Datetime` only get the `<field name>Max`, `<field name>Min` query
-fields.
+Advanced aggregate query fields are generated according to a field's type.
+Fields typed as `Int` and `Float` get the following query fields:
+`<field name>Max`, `<field name>Min`, `<field name>Sum` and `<field name>Avg`.
+Fields typed as `String` and `Datetime` only get the `<field name>Max`,
+ `<field name>Min` query fields.
 {{% /notice %}}
 
 #### Examples
@@ -52,9 +129,7 @@ number of `posts` by any single `Author`:
    }
 ```
 
-
-
-### Aggregate queries for child nodes
+### Advanced aggregate queries for child nodes
 
 Dgraph also defines aggregate `<field name>Aggregate` fields for child nodes
 within `query<type name>` queries. This is done for each field that is of type
@@ -104,5 +179,3 @@ Example: Fetch the date of the most recent post with a `score` greater than
     }
   }
 ```
-
-### Aggregate query fields available by type
