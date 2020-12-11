@@ -144,8 +144,8 @@ func detectRaceCondition(prefix string) bool {
 	return zeroRaceDetected || alphaRaceDetected
 }
 
-func stopAndDetectRaceInCluster(composeFile, prefix string, wg *sync.WaitGroup) error {
-	stop := func() {
+func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
+	go func() {
 		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
@@ -155,13 +155,7 @@ func stopAndDetectRaceInCluster(composeFile, prefix string, wg *sync.WaitGroup) 
 			fmt.Printf("CLUSTER DOWN: %s\n", prefix)
 		}
 		wg.Done()
-	}
-	if detectRaceCondition(prefix) {
-		go stop()
-		return errors.New("race condition detected. check logs for more details")
-	}
-	go stop()
-	return nil
+	} ()
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
@@ -206,6 +200,9 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	tid, _ := ctx.Value("threadId").(int32)
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
+	if detectRaceCondition(prefix) {
+		return errors.New("race condition detected. check logs for more details")
+	}
 	return nil
 }
 
@@ -262,10 +259,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			return
 		}
 		wg.Add(1)
-		err := stopAndDetectRaceInCluster(defaultCompose, prefix, wg)
-		if err != nil {
-			closer.Signal()
-		}
+		stopCluster(defaultCompose, prefix, wg)
 		stopped = true
 	}
 	defer stop()
@@ -324,10 +318,7 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup, c
 	if !*keepCluster {
 		wg.Add(1)
 		defer func() {
-			err := stopAndDetectRaceInCluster(compose, prefix, wg)
-			if err != nil {
-				closer.Signal()
-			}
+			stopCluster(compose, prefix, wg)
 		} ()
 	}
 

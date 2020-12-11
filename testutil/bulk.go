@@ -18,6 +18,7 @@ package testutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -32,24 +33,37 @@ type LiveOpts struct {
 	RdfFile    string
 	SchemaFile string
 	Dir        string
+	Ludicrous bool
 }
 
 func LiveLoad(opts LiveOpts) error {
-	liveCmd := exec.Command(DgraphBinaryPath(), "live",
+	args := []string{
+		"live",
 		"--files", opts.RdfFile,
 		"--schema", opts.SchemaFile,
 		"--alpha", opts.Alpha,
 		"--zero", opts.Zero,
-	)
+	}
+	if opts.Ludicrous {
+		args = append(args, "--ludicrous_mode")
+	}
+	liveCmd := exec.Command(DgraphBinaryPath(), args...)
 
 	if opts.Dir != "" {
 		liveCmd.Dir = opts.Dir
 	}
 
-	if out, err := liveCmd.Output(); err != nil {
+	out, err := liveCmd.Output()
+	if err != nil {
 		fmt.Printf("Error %v\n", err)
 		fmt.Printf("Output %v\n", string(out))
 		return err
+	}
+	if DetectRaceCondition {
+		isRace := CheckIfRace(out)
+		if isRace {
+			return errors.New("race condition detected. check logs for more details")
+		}
 	}
 
 	return nil
@@ -79,12 +93,19 @@ func BulkLoad(opts BulkOpts) error {
 	if opts.Dir != "" {
 		bulkCmd.Dir = opts.Dir
 	}
-	if out, err := bulkCmd.CombinedOutput(); err != nil {
+	out, err := bulkCmd.CombinedOutput()
+	if err != nil {
 		fmt.Printf("Error %v\n", err)
 		fmt.Printf("Output %v\n", string(out))
 		return err
 	}
 
+	if DetectRaceCondition {
+		isRace:= CheckIfRace(out)
+		if isRace {
+			return errors.New("race condition detected. check logs for more details")
+		}
+	}
 	return nil
 }
 

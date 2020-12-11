@@ -138,7 +138,8 @@ func (s *suite) cleanup(t *testing.T) {
 		isRace := testutil.StopAlphasAndDetectRaceIfNecessary("../bulk/alpha.yml")
 		_ = os.RemoveAll(rootDir)
 		if isRace {
-			t.Fatalf("Failing because race condition is detected. Please check the logs for more details.")
+			t.Fatalf("Failing because race condition is detected. " +
+				"Please check the logs for " + "more details.")
 		}
 		return
 	}

@@ -138,11 +138,7 @@ func DgraphBinaryPath() string {
 func DetectRaceConditionInZeros(prefix string) bool {
 	for i := 0; i <= 3; i++ {
 		in := GetContainerInstance(prefix, "zero"+strconv.Itoa(i))
-		raceDetected, err := DetectIfRaceConditionViolation(in)
-		if err != nil {
-			fmt.Printf("Error while detecting race condition %v\n", err)
-			continue
-		}
+		raceDetected := DetectIfRaceConditionViolation(in)
 		if raceDetected { return true }
 	}
 	return false
@@ -152,52 +148,40 @@ func DetectRaceConditionInZeros(prefix string) bool {
 func DetectRaceConditionInAlphas(prefix string) bool {
 	for i := 0; i <= 6; i++ {
 		in := GetContainerInstance(prefix, "alpha"+strconv.Itoa(i))
-		raceDetected, err := DetectIfRaceConditionViolation(in)
-		if err != nil {
-			fmt.Printf("Error while detecting race condition %v\n", err)
-			continue
-		}
+		raceDetected := DetectIfRaceConditionViolation(in)
 		if raceDetected { return true }
 	}
 	return false
 }
 
-func DetectIfRaceConditionViolation(instance ContainerInstance) (bool, error) {
+func DetectIfRaceConditionViolation(instance ContainerInstance) bool {
 	c := instance.GetContainer()
 	if c == nil {
-		return false, nil
+		return false
 	}
 
 	logCmd := exec.Command("docker", "logs", c.ID)
+	out, err := logCmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Error: while getting docker logs %v\n", err)
+		return false
+	}
+
+	return CheckIfRace(out)
+}
+
+func CheckIfRace(output []byte) bool {
 	awkCmd := exec.Command("awk", "/WARNING: DATA RACE/{flag=1}flag;/==================/{flag=0}")
+	awkCmd.Stdin = bytes.NewReader(output)
+	out, err := awkCmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Error: while getting race content %v\n", err)
+		return false
+	}
 
-	reader, writer := io.Pipe()
-	logCmd.Stdout = writer
-	logCmd.Stderr = writer
-	awkCmd.Stdin = reader
-
-	var b bytes.Buffer
-	awkCmd.Stdout = &b
-	awkCmd.Stderr = &b
-
-	if err := logCmd.Start(); err != nil {
-		return false, err
+	if len(out) > 0 {
+		fmt.Printf("DATA RACE DETECTED %s\n", string(out))
+		return true
 	}
-	if err := awkCmd.Start(); err != nil {
-		return false, err
-	}
-	if err := logCmd.Wait(); err != nil {
-		return false, err
-	}
-	if err := writer.Close(); err != nil {
-		return false, err
-	}
-	if err := awkCmd.Wait(); err != nil {
-		return false, err
-	}
-	if len(b.Bytes()) > 0 {
-		fmt.Printf("DATA RACE DETECTED %s\n", string(b.Bytes()))
-		return true, nil
-	}
-	return false, nil
+	return false
 }
