@@ -84,7 +84,7 @@ var (
 	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
-	race = pflag.Bool("race", false, "set to true to build with race")
+	race = pflag.Bool("race", false, "Set true to build with race")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -144,7 +144,7 @@ func detectRaceCondition(prefix string) bool {
 	return zeroRaceDetected || alphaRaceDetected
 }
 
-func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) error {
+func stopAndDetectRaceInCluster(composeFile, prefix string, wg *sync.WaitGroup) error {
 	stop := func() {
 		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
 		cmd.Stderr = nil
@@ -257,13 +257,12 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		started = true
 	}
 
-	// todo check how to stop gracefully
 	stop := func() {
 		if *keepCluster || stopped {
 			return
 		}
 		wg.Add(1)
-		err := stopCluster(defaultCompose, prefix, wg)
+		err := stopAndDetectRaceInCluster(defaultCompose, prefix, wg)
 		if err != nil {
 			closer.Signal()
 		}
@@ -325,7 +324,7 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup, c
 	if !*keepCluster {
 		wg.Add(1)
 		defer func() {
-			err := stopCluster(compose, prefix, wg)
+			err := stopAndDetectRaceInCluster(compose, prefix, wg)
 			if err != nil {
 				closer.Signal()
 			}

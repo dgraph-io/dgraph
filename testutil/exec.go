@@ -195,13 +195,6 @@ func DetectIfRaceConditionViolation(instance ContainerInstance) (bool, error) {
 	if err := awkCmd.Wait(); err != nil {
 		return false, err
 	}
-	// Todo do we need to kill the process?
-	//var timer *time.Timer
-	//timer = time.AfterFunc(10 * time.Second, func() {
-	//	timer.Stop()
-	//	_ = logCmd.Process.Kill()
-	//	_ = awkCmd.Process.Kill()
-	//})
 	if len(b.Bytes()) > 0 {
 		fmt.Printf("DATA RACE DETECTED %s\n", string(b.Bytes()))
 		return true, nil

@@ -166,25 +166,6 @@ func getContainer(name string) types.Container {
 	return types.Container{}
 }
 
-func GetContainer(prefix string, name string) *types.Container {
-	cli, err := client.NewEnvClient()
-	x.Check(err)
-
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
-	if err != nil {
-		log.Fatalf("While listing container: %v\n", err)
-	}
-	for _, c := range containers {
-		for _, n := range c.Names {
-			if strings.HasPrefix(n, "/"+prefix + name) {
-				return &c
-			}
-		}
-	}
-
-	return nil
-}
-
 func AllContainers(prefix string) []types.Container {
 	cli, err := client.NewEnvClient()
 	x.Check(err)

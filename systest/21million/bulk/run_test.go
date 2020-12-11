@@ -55,7 +55,11 @@ func TestMain(m *testing.M) {
 }
 
 func cleanupAndExit(exitCode int) {
-	testutil.StopAlphas("./alpha.yml")
+	isRace := testutil.StopAlphasAndDetectRaceIfNecessary("./alpha.yml")
+	if isRace {
+		// if there is race dont exit gracefully
+		exitCode = 1
+	}
 	_ = os.RemoveAll("out")
 	os.Exit(exitCode)
 }

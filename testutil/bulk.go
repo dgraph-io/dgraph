@@ -24,8 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-
-	"github.com/dgraph-io/dgo/v200/protos/api"
 )
 
 type LiveOpts struct {
@@ -137,21 +135,14 @@ func StartAlphas(compose string) error {
 	return nil
 }
 
-func StopAlphas(compose string) {
+func StopAlphasAndDetectRaceIfNecessary(compose string) (raceDetected bool) {
 	if DetectRaceCondition {
-		DetectRaceConditionInAlphas(DockerPrefix)
+		raceDetected = DetectRaceConditionInAlphas(DockerPrefix)
 	}
-
-	dg, err := DgraphClient(ContainerAddr("alpha1", 9080))
-	if err == nil {
-		_ = dg.Alter(context.Background(), &api.Operation{
-			DropAll: true,
-		})
-	}
-
 	cmd := exec.CommandContext(context.Background(), "docker-compose", "-f", compose,
 		"-p", DockerPrefix, "rm", "-f", "-s", "-v")
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
 	}
+	return raceDetected
 }

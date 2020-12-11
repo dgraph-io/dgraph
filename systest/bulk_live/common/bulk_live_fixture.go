@@ -131,12 +131,15 @@ func makeDirEmpty(dir string) error {
 	return os.MkdirAll(dir, 0755)
 }
 
-func (s *suite) cleanup() {
+func (s *suite) cleanup(t *testing.T) {
 	// NOTE: Shouldn't raise any errors here or fail a test, since this is
 	// called when we detect an error (don't want to mask the original problem).
 	if s.opts.bulkSuite {
-		testutil.StopAlphas("../bulk/alpha.yml")
+		isRace := testutil.StopAlphasAndDetectRaceIfNecessary("../bulk/alpha.yml")
 		_ = os.RemoveAll(rootDir)
+		if isRace {
+			t.Fatalf("Failing because race condition is detected. Please check the logs for more details.")
+		}
 		return
 	}
 	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
