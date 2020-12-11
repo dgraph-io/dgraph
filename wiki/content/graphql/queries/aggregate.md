@@ -55,8 +55,7 @@ Example: Fetch the number of `posts` whose titles contain `GraphQL`.
 
 Dgraph also defines `<field name>Aggregate` fields for every field which
 is of type `List[Type/Interface]` inside `query<type name>` queries, allowing
-you to do a `count` on fields, or to use the advanced aggregate queries
-discussed below.
+you to do a `count` on fields, or to use the [advanced aggregate queries](#advanced-aggregate-queries-for-child-nodes).
 
 #### Examples
 
