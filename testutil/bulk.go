@@ -59,13 +59,9 @@ func LiveLoad(opts LiveOpts) error {
 		fmt.Printf("Output %v\n", string(out))
 		return err
 	}
-	if DetectRaceCondition {
-		isRace := CheckIfRace(out)
-		if isRace {
-			return errors.New("race condition detected. check logs for more details")
-		}
+	if CheckIfRace(out) {
+		return errors.New("race condition detected. check logs for more details")
 	}
-
 	return nil
 }
 
@@ -100,11 +96,8 @@ func BulkLoad(opts BulkOpts) error {
 		return err
 	}
 
-	if DetectRaceCondition {
-		isRace:= CheckIfRace(out)
-		if isRace {
-			return errors.New("race condition detected. check logs for more details")
-		}
+	if CheckIfRace(out) {
+		return errors.New("race condition detected. check logs for more details")
 	}
 	return nil
 }
@@ -157,9 +150,7 @@ func StartAlphas(compose string) error {
 }
 
 func StopAlphasAndDetectRaceIfNecessary(compose string) (raceDetected bool) {
-	if DetectRaceCondition {
-		raceDetected = DetectRaceConditionInAlphas(DockerPrefix)
-	}
+	raceDetected = DetectRaceConditionInAlphas(DockerPrefix)
 	cmd := exec.CommandContext(context.Background(), "docker-compose", "-f", compose,
 		"-p", DockerPrefix, "rm", "-f", "-s", "-v")
 	if err := cmd.Run(); err != nil {

@@ -181,7 +181,6 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 		return fmt.Errorf("while getting absolute path of tmp directory: %v Error: %v\n", *tmp, err)
 	}
 	cmd.Env = append(cmd.Env, "TEST_DATA_DIRECTORY="+abs)
-	cmd.Env = append(cmd.Env, "TEST_DETECT_RACE_ENABLED="+strconv.FormatBool(*race))
 	// Use failureCatcher.
 	cmd.Stdout = oc
 
@@ -285,7 +284,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				return err
 			}
 		} else {
-			if err := runCustomClusterTest(ctx, task.pkg.ID, wg, closer); err != nil {
+			if err := runCustomClusterTest(ctx, task.pkg.ID, wg); err != nil {
 				return err
 			}
 		}
@@ -309,7 +308,7 @@ func getClusterPrefix() string {
 	return fmt.Sprintf("%s%03d-%d", getGlobalPrefix(), procId, id)
 }
 
-func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup, closer *z.Closer) error {
+func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
 
 	compose := composeFileFor(pkg)
@@ -317,9 +316,7 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup, c
 	startCluster(compose, prefix)
 	if !*keepCluster {
 		wg.Add(1)
-		defer func() {
-			stopCluster(compose, prefix, wg)
-		} ()
+		defer stopCluster(compose, prefix, wg)
 	}
 
 	return runTestsFor(ctx, pkg, prefix)
