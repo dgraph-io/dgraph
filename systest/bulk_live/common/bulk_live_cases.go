@@ -55,6 +55,10 @@ func RunBulkCases(t *testing.T) {
 	testCountIndex(t)
 	suite.cleanup()
 
+	suite = indexedPredicateSetup(t, true)
+	testIndexedPredicate(t)
+	suite.cleanup()
+
 	suite = loadTypesSetup(t, true)
 	testLoadTypes(t)
 	suite.cleanup()
@@ -76,6 +80,10 @@ func RunLiveCases(t *testing.T) {
 
 	suite = facetsSetup(t, false)
 	testFacets(t)
+	suite.cleanup()
+
+	suite = indexedPredicateSetup(t, false)
+	testIndexedPredicate(t)
 	suite.cleanup()
 
 	suite = countIndexSetup(t, false)
@@ -212,6 +220,42 @@ func testFacets(t *testing.T) {
 					}
 				]
 			}
+		]
+	}
+	`))
+}
+
+func indexedPredicateSetup(t *testing.T, isBulkLoader bool) *suite {
+	if isBulkLoader {
+		s := newBulkOnlySuite(t, `
+		name: string @index(exact) .
+	`, `
+		_:a <name> "alice" .
+		_:b <name> "alice" .
+	`, "")
+		return s
+	}
+
+	s := newLiveOnlySuite(t, `
+		name: string @index(exact) .
+	`, `
+		_:a <name> "alice" .
+		_:b <name> "alice" .
+	`, "")
+	return s
+}
+
+func testIndexedPredicate(t *testing.T) {
+	t.Run("Count query", testCase(`
+	{
+		get_count(func: eq(name, "alice")) {
+			count(uid)
+		},
+	}
+	`, `
+	{
+		"get_count": [
+			{ "count": 2 }
 		]
 	}
 	`))
