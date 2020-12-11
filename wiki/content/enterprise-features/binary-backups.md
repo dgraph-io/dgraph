@@ -427,6 +427,11 @@ leases are updated accordingly. The latest backup to be restored should contain
 the same number of groups in its manifest.json file as the cluster to which it
 is being restored.
 
+{{% notice "note" %}}
+Only restore once. If you run same restore on a different node at the same time, 
+then that request will also be accepted.
+{{% /notice %}}
+
 Restore can be performed from Amazon S3 / Minio or from a local directory. Below
 is the documentation for the fields inside `RestoreInput` that can be passed into
 the mutation.
