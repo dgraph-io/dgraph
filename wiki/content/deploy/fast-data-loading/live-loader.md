@@ -138,10 +138,10 @@ The schema has the required fields in addition to a field named `xid`. This fiel
 **File** `customerNames.rdf` - Basic information like customer's first and last name:
 
 ```
-<my.org/customer/1>       <firstName>  "John"     .
-<my.org/customer/1>       <lastName>  "Doe"     .
-<my.org/customer/2>       <firstName>  "James"     .
-<my.org/customer/2>       <lastName>  "Doe"     .
+<_:my.org/customer/1>       <firstName>  "John"     .
+<_:my.org/customer/1>       <lastName>  "Doe"     .
+<_:my.org/customer/2>       <firstName>  "James"     .
+<_:my.org/customer/2>       <lastName>  "Doe"     .
 ```
 
 You can load the customer information with the following command:
@@ -194,8 +194,8 @@ The `xid` field holds a reference to the externally provided id.
 **File** `customer_income.rdf` - Income information about the customer:
 
 ```
-<my.org/customer/1>       <annualIncome> "90000"    .
-<my.org/customer/2>       <annualIncome> "75000"    .
+<_:my.org/customer/1>       <annualIncome> "90000"    .
+<_:my.org/customer/2>       <annualIncome> "75000"    .
 ```
 
 You can load the income information by running:
@@ -248,15 +248,15 @@ Note that the corresponding nodes have been correctly updated with the `annualIn
 **File** `customer_address.rdf` - Address information:
 
 ```
-<my.org/customer/1>     <address> <my.org/customer/1/address/1>    .
-<my.org/customer/1/address/1>  <street> "One High Street" .
-<my.org/customer/1/address/1>  <city> "London" .
-<my.org/customer/2>        <address> <my.org/customer/2/address/1>   .
-<my.org/customer/2/address/1>  <street> "Two Main Street" .
-<my.org/customer/2/address/1>  <city> "New York" .
-<my.org/customer/2>     <address> <my.org/customer/2/address/2>   .
-<my.org/customer/2/address/2>  <street> "Ten Main Street" .
-<my.org/customer/2/address/2>  <city> "Mumbai" .
+<_:my.org/customer/1>     <address> <_:my.org/customer/1/address/1>    .
+<_:my.org/customer/1/address/1>  <street> "One High Street" .
+<_:my.org/customer/1/address/1>  <city> "London" .
+<_:my.org/customer/2>        <address> <_:my.org/customer/2/address/1>   .
+<_:my.org/customer/2/address/1>  <street> "Two Main Street" .
+<_:my.org/customer/2/address/1>  <city> "New York" .
+<_:my.org/customer/2>     <address> <_:my.org/customer/2/address/2>   .
+<_:my.org/customer/2/address/2>  <street> "Ten Main Street" .
+<_:my.org/customer/2/address/2>  <city> "Mumbai" .
 ```
 
 You can extend the same approach to update `uid` predicates. 
