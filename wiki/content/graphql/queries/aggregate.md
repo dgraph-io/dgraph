@@ -22,7 +22,7 @@ aggregate queries, as shown in some of the examples provided below.
 
 For every `type` defined in a GraphQL schema, Dgraph generates an aggregate query
 `aggregate<type name>`. This query includes a `count` field, as well as
-advanced aggregate query fields, discussed below.
+[advanced aggregate query fields](#advanced-aggregate-queries-at-root).
 
 #### Examples
 
