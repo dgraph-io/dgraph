@@ -1,6 +1,6 @@
 +++
 title = "Cascade"
-weight = 5
+weight = 8
 [menu.main]
     parent = "graphql-queries"
     name = "Cascade"
