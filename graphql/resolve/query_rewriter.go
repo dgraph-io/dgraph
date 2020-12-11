@@ -206,6 +206,7 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 	finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
 
 	for _, f := range query.SelectionSet() {
+		// fldName stores Name of the field f.
 		fldName := f.Name()
 		if _, visited := isAggregateFunctionVisited[fldName]; visited {
 			continue
