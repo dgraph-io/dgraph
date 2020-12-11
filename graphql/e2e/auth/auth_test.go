@@ -1620,12 +1620,7 @@ func TestChildAggregateQueryWithDeepRBAC(t *testing.T) {
 							[
 								{
 									"username": "user1",
-									"issuesAggregate":
-										{
-											"count": null,
-											"msgMax": null,
-											"msgMin": null
-										}
+									"issuesAggregate": null
 								}
 							]
 					}`},
@@ -1687,12 +1682,7 @@ func TestChildAggregateQueryWithOtherFields(t *testing.T) {
 								{
 									"username": "user1",
 									"issues":[],
-									"issuesAggregate":
-										{
-											"count": null,
-											"msgMin": null,
-											"msgMax": null
-										}
+									"issuesAggregate": null
 								}
 							]
 					}`},
