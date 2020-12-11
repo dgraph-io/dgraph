@@ -109,6 +109,16 @@ Fields typed as `String` and `Datetime` only get the `<field name>Max`,
 
 #### Examples
 
+Example: Fetch the average number of `posts` written by all authors:
+
+```graphql
+   query {
+     aggregateAuthor {
+       numPostsAvg
+     }
+   }
+```
+
 Example: Fetch the total number of `posts` by all authors, and the maximum
 number of `posts` by any single `Author`:
 
