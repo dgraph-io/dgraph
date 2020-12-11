@@ -950,10 +950,10 @@ func buildCommonAuthQueries(
 	auth *authRewriter,
 	parentSelectionName string) commonAuthQueryVars {
 	// This adds the following query.
-	//	var(func: uid(Ticket)) {
-	//		User as Ticket.assignedTo
+	//	var(func: uid(Ticket1)) {
+	//		User4 as Ticket.assignedTo
 	//	}
-	// where `Ticket` is the nodes selected at parent level after applying auth and `User` is the
+	// where `Ticket1` is the nodes selected at parent level after applying auth and `User4` is the
 	// nodes we need on the current level.
 	parentQry := &gql.GraphQuery{
 		Func: &gql.Function{
@@ -966,7 +966,7 @@ func buildCommonAuthQueries(
 
 	// This query aggregates all filters and auth rules and is used by root query to filter
 	// the final nodes for the current level.
-	// User6 as var(func: uid(User2), orderasc: ...) @filter((eq(User.username, "User1") AND (...Auth Filter))))
+	// User3 as var(func: uid(User4)) @filter((eq(User.username, "User1") AND (...Auth Filter))))
 	selectionQry := &gql.GraphQuery{
 		Var:  auth.parentVarName,
 		Attr: "var",
