@@ -440,7 +440,7 @@ func TestAuthOnInterfaces(t *testing.T) {
 			result: `{"queryFbPost": [{"text": "B FbPost"}]}`,
 		},
 		{
-			name: "Query Interface should interhit auth rules from all the interfaces",
+			name: "Query Interface should inherit auth rules from all the interfaces",
 			query: `
 			query{
 				queryPost(order: {asc: text}){
@@ -603,12 +603,28 @@ func TestOrderAndOffset(t *testing.T) {
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
 			},
 		},
+		Task{
+			Name: "Fifth one, two occurrences",
+			Occurrences: []*TaskOccurrence{
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+			},
+		},
+		Task{
+			Name: "Sixth Task four occurrences",
+			Occurrences: []*TaskOccurrence{
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+			},
+		},
 	}
 	tasks.add(t)
 
 	query := `
 	query {
-	  queryTask(first: 4, order: {asc : name}) {
+	  queryTask(filter: {name: {anyofterms: "Task"}}, first: 4, offset: 1, order: {asc : name}) {
 		name
 		occurrences(first: 2) {
 		  due
@@ -623,19 +639,6 @@ func TestOrderAndOffset(t *testing.T) {
 		result: `
 		{
 		"queryTask": [
-		  {
-			"name": "First Task four occurrence",
-			"occurrences": [
-			  {
-				"due": "2020-07-19T08:00:00Z",
-				"comp": "2020-07-19T08:00:00Z"
-			  },
-			  {
-				"due": "2020-07-19T08:00:00Z",
-				"comp": "2020-07-19T08:00:00Z"
-			  }
-			]
-		  },
 		  {
 			"name": "Fourth Task two occurrences",
 			"occurrences": [
@@ -652,6 +655,19 @@ func TestOrderAndOffset(t *testing.T) {
 		  {
 			"name": "Second Task single occurrence",
 			"occurrences": [
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  }
+			]
+		  },
+		  {
+			"name": "Sixth Task four occurrences",
+			"occurrences": [
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  },
 			  {
 				"due": "2020-07-19T08:00:00Z",
 				"comp": "2020-07-19T08:00:00Z"
@@ -677,7 +693,7 @@ func TestOrderAndOffset(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 

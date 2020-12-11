@@ -716,7 +716,7 @@ func (authRw *authRewriter) addAuthQueries(
 	// build a query like
 	//   Todo1 as var(func: ... ) @filter(...)
 	// that has the filter from the user query in it.  This is then used as
-	// the starting point for both the user query and the auth query.
+	// the starting point for other auth queries.
 	//
 	// We already have the query, so just copy it and modify the original
 	varQry := &gql.GraphQuery{
@@ -726,6 +726,11 @@ func (authRw *authRewriter) addAuthQueries(
 		Filter: dgQuery[0].Filter,
 	}
 
+	// build the root auth query like
+	//   TodoRoot as var(func: uid(Todo1), orderasc: ..., first: ..., offset: ...) @filter(... type auth queries ...)
+	// that has the order and pagination params from user query in it and filter set to auth
+	// queries built for this type. This is then used as the starting point for user query and
+	// auth queries for children.
 	rootQry := &gql.GraphQuery{
 		Var:  authRw.parentVarName,
 		Attr: "var",
@@ -734,15 +739,20 @@ func (authRw *authRewriter) addAuthQueries(
 			Args: []gql.Arg{{Value: authRw.varName}},
 		},
 		Filter: filter,
-		Args:   dgQuery[0].Args,
+		Order:  dgQuery[0].Order, // we need the order here for pagination to work correctly
+		Args:   dgQuery[0].Args,  // this gets pagination from user query to root query
 	}
 
+	// The user query doesn't need the filter and pagination parameters anymore,
+	// as they have been taken care of by the var and root queries generated above.
+	// But, tt still needs the order parameter, even though it is also applied in root query.
+	// So, not setting order to nil.
 	dgQuery[0].Filter = nil
 	dgQuery[0].Args = nil
 
-	// The user query starts from the var query generated above and is filtered
-	// by the the filter generated from auth processing, so now we build
-	//   queryTodo(func: uid(Todo1)) @filter(...auth-queries...) { ... }
+	// The user query starts from the root query generated above and so gets filtered
+	// input from auth processing, so now we build
+	//   queryTodo(func: uid(TodoRoot), ...) { ... }
 	dgQuery[0].Func = &gql.Function{
 		Name: "uid",
 		Args: []gql.Arg{{Value: authRw.parentVarName}},
