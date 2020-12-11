@@ -1,0 +1,15 @@
+repositories:
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+  - name: stable
+    url: https://charts.helm.sh/stable
+
+releases:
+  - name: prometheus
+    namespace: default
+    chart: prometheus-community/kube-prometheus-stack
+    values:
+      - ./dgraph-prometheus-operator.yaml
+      - grafana:
+          adminPassword: {{ requiredEnv "GRAFANA_ADMIN_PASSWORD" }}
+    disableValidation: true
