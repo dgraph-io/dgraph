@@ -16,6 +16,7 @@ import (
 	"compress/gzip"
 	"context"
 	"io"
+	"math/rand"
 	"net/url"
 	"strings"
 	"time"
@@ -80,24 +81,17 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 		}()
 	}
 
-	restoreId, err := rt.Add()
-	if err != nil {
-		return 0, errors.Wrapf(err, "cannot assign ID to restore operation")
+	var rerr error
+	for range currentGroups {
+		if err := <-errCh; err != nil {
+			glog.Errorf("Error while doing restore: %v\n", err)
+			rerr = err
+		}
 	}
-	go func(restoreId int) {
-		errs := make([]error, 0)
-		for range currentGroups {
-			if err := <-errCh; err != nil {
-				errs = append(errs, err)
-			}
-		}
-		if err := rt.Done(restoreId, errs); err != nil {
-			glog.Warningf("Could not mark restore operation with ID %d as done. Error: %s",
-				restoreId, err)
-		}
-	}(restoreId)
 
-	return restoreId, nil
+	// TODO: Remove restoreId.
+	restoreId := rand.Int()
+	return restoreId, rerr
 }
 
 func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
@@ -351,8 +345,4 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(res.Err, "cannot write backup")
 	}
 	return nil
-}
-
-func ProcessRestoreStatus(ctx context.Context, restoreId int) (*RestoreStatus, error) {
-	return rt.Status(restoreId), nil
 }
