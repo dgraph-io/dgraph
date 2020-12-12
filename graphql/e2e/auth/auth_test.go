@@ -1894,152 +1894,67 @@ func TestAuthWithSecretDirective(t *testing.T) {
 }
 
 func TestAuthRBACEvaluation(t *testing.T) {
+	query := `query {
+			  queryBook{
+				bookId
+				name
+				desc
+			  }
+			}`
 	tcs := []struct {
 		name   string
 		header http.Header
-		query  string
 	}{
 		{
-			name: "Test Auth Eq Filter With Object As Token Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth Eq Filter With Object As Token Val",
 			header: common.GetJWT(t, map[string]interface{}{"a": "b"}, nil, metaInfo),
 		},
 		{
-			name: "Test Auth Eq Filter With Float Token Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth Eq Filter With Float Token Val",
 			header: common.GetJWT(t, 123.12, nil, metaInfo),
 		},
 		{
-			name: "Test Auth Eq Filter With Int64 Token Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth Eq Filter With Int64 Token Val",
 			header: common.GetJWT(t, 1237890123456, nil, metaInfo),
 		},
 		{
-			name: "Test Auth Eq Filter With Int Token Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth Eq Filter With Int Token Val",
 			header: common.GetJWT(t, 1234, nil, metaInfo),
 		},
 		{
-			name: "Test Auth Eq Filter With Bool Token Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth Eq Filter With Bool Token Val",
 			header: common.GetJWT(t, true, nil, metaInfo),
 		},
 		{
-			name: "Test Auth In Filter With Object As Token Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth In Filter With Object As Token Val",
 			header: common.GetJWT(t, map[string]interface{}{"e": "f"}, nil, metaInfo),
 		},
 		{
-			name: "Test Auth In Filter With Float Token Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth In Filter With Float Token Val",
 			header: common.GetJWT(t, 312.124, nil, metaInfo),
 		},
 		{
-			name: "Test Auth In Filter With Int64 Token Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth In Filter With Int64 Token Val",
 			header: common.GetJWT(t, 1246879976444232435, nil, metaInfo),
 		},
 		{
-			name: "Test Auth In Filter With Int Token Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth In Filter With Int Token Val",
 			header: common.GetJWT(t, 6872, nil, metaInfo),
 		},
 		{
-			name: "Test Auth Eq Filter From Token With Array Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth Eq Filter From Token With Array Val",
 			header: common.GetJWT(t, []int{456, 1234}, nil, metaInfo),
 		},
 		{
-			name: "Test Auth In Filter From Token With Array Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth In Filter From Token With Array Val",
 			header: common.GetJWT(t, []int{124324, 6872}, nil, metaInfo),
 		},
 		{
-			name: "Test Auth Regex Filter",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth Regex Filter",
 			header: common.GetJWT(t, "xyz@dgraph.io", nil, metaInfo),
 		},
 		{
-			name: "Test Auth Regex Filter From Token With Array Val",
-			query: `query {
-			  queryBook{
-				bookId
-				name
-				desc
-			  }
-			}`,
+			name:   "Test Auth Regex Filter From Token With Array Val",
 			header: common.GetJWT(t, []string{"abc@def.com", "xyz@dgraph.io"}, nil, metaInfo),
 		},
 	}
@@ -2048,7 +1963,7 @@ func TestAuthRBACEvaluation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			queryParams := &common.GraphQLParams{
 				Headers: tc.header,
-				Query:   tc.query,
+				Query:   query,
 			}
 
 			gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)

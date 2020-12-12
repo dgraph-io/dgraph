@@ -95,8 +95,8 @@ func (rq *RBACQuery) checkIfMatch(value interface{}) RuleResult {
 
 func evaluate(operand interface{}, value interface{}, regex *regexp.Regexp) RuleResult {
 	if regex != nil {
-		strv, ok := value.(string)
-		if ok && regex.MatchString(strv) {
+		sval, ok := value.(string)
+		if ok && regex.MatchString(sval) {
 			return Positive
 		}
 		return Negative
@@ -115,37 +115,18 @@ func evaluate(operand interface{}, value interface{}, regex *regexp.Regexp) Rule
 // 2. Auth token has non-array value for the variable.
 // match would be deep equal except for regex match in case of regexp operator.
 // In case array one match would made the rule positive.
-// For example, Rule {$USER: { eq:"uid"}} and token $USER:["u", "id", "uid"] would result in match.
-// also Rule {$USER: { in: ["uid", "xid"]}} and token $USER:["u", "id", "uid"] would also result in match.
+// For example, Rule {$USER: { eq:"uid"}} and token $USER:["u", "id", "uid"] result in match.
+// Rule {$USER: { in: ["uid", "xid"]}} and token $USER:["u", "id", "uid"]  result in match
 func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 	tokenValues, tokenCastErr := cast.ToSliceE(av[rq.Variable])
-	switch rq.Operator {
-	case "eq":
-		// if eq, auth rule value will be matched completely
-		if tokenCastErr != nil {
-			// this means value for variable in token in not an array
-			return rq.checkIfMatch(av[rq.Variable])
-		}
-		return rq.checkIfMatchInArray(tokenValues)
-	case "regexp":
-		// if regexp, auth rule value should always be string and so as token values
-		if tokenCastErr != nil {
-			// this means value for variable in token in not an array
-			return rq.checkIfMatch(av[rq.Variable])
-		}
-		return rq.checkIfMatchInArray(tokenValues)
-
-	case "in":
-		// if in, auth rule will only have array as the value
-		// check has to consider that
-		if tokenCastErr != nil {
-			// this means value for variable in token in not an array
-			return rq.checkIfMatch(av[rq.Variable])
-		}
-
-		return rq.checkIfMatchInArray(tokenValues)
+	// if eq, auth rule value will be matched completely
+	// if regexp, auth rule value should always be string and so as token values
+	// if in, auth rule will only have array as the value check has to consider that
+	if tokenCastErr != nil {
+		// this means value for variable in token in not an array
+		return rq.checkIfMatch(av[rq.Variable])
 	}
-	return Negative
+	return rq.checkIfMatchInArray(tokenValues)
 }
 
 func (node *RuleNode) staticEvaluation(av map[string]interface{}) RuleResult {
@@ -263,7 +244,11 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 			for _, intrface := range typ.Interfaces {
 				interfaceName := typeName(s.Types[intrface])
 				if authRules[interfaceName] != nil && authRules[interfaceName].Rules != nil {
-					authRules[name].Rules = mergeAuthRules(authRules[name].Rules, authRules[interfaceName].Rules, mergeAuthNodeWithAnd)
+					authRules[name].Rules = mergeAuthRules(
+						authRules[name].Rules,
+						authRules[interfaceName].Rules,
+						mergeAuthNodeWithAnd,
+					)
 				}
 			}
 		}
@@ -310,7 +295,11 @@ func mergeAuthNodeWithAnd(objectAuth, interfaceAuth *RuleNode) *RuleNode {
 	return ruleNode
 }
 
-func mergeAuthRules(objectAuthRules, interfaceAuthRules *AuthContainer, mergeAuthNode func(*RuleNode, *RuleNode) *RuleNode) *AuthContainer {
+func mergeAuthRules(
+	objectAuthRules,
+	interfaceAuthRules *AuthContainer,
+	mergeAuthNode func(*RuleNode, *RuleNode) *RuleNode,
+) *AuthContainer {
 	// return copy of interfaceAuthRules since it is a pointer and otherwise it will lead
 	// to unnecessary errors
 	if objectAuthRules == nil {
@@ -511,26 +500,26 @@ func validateRBACOperators(typ *ast.Definition, query *RBACQuery) (bool, string)
 		// They are handled in a different way to manage all possible situations
 		_, isArray := query.Operand.([]interface{})
 		if isArray {
-			return false, fmt.Sprintf("Type %s: @auth: `%s` operator has invalid value `%v` in "+
-				"this rule. Reason: Array values in eq operator will not be supported.",
+			return false, fmt.Sprintf("Type %s: @auth: `%s` operator has invalid value `%v`."+
+				" Array values in eq operator will not be supported.",
 				typ.Name, query.Operator, query.Operand)
 		}
 	case "regexp":
 		_, ok := query.Operand.(string)
 		if !ok {
-			return false, fmt.Sprintf("Type %s: @auth: `%s` operator has invalid value `%v` in "+
-				"this rule. Reason: Value should be of type String.", typ.Name, query.Operator, query.Operand)
+			return false, fmt.Sprintf("Type %s: @auth: `%s` operator has invalid value `%v`."+
+				" Value should be of type String.", typ.Name, query.Operator, query.Operand)
 		}
 	case "in":
 		// auth rule value should be of array type
 		_, ok := query.Operand.([]interface{})
 		if !ok {
-			return false, fmt.Sprintf("Type %s: @auth: `%s` operator has invalid value `%v` in "+
-				"this rule. Reason: Value should be an array.", typ.Name, query.Operator, query.Operand)
+			return false, fmt.Sprintf("Type %s: @auth: `%s` operator has invalid value `%v`."+
+				" Value should be an array.", typ.Name, query.Operator, query.Operand)
 		}
 	default:
-		return false, fmt.Sprintf("Type %s: @auth: `%s` operator is not supported in "+
-			"this rule.", typ.Name, query.Operator)
+		return false, fmt.Sprintf("Type %s: @auth: `%s` operator is not supported ",
+			typ.Name, query.Operator)
 	}
 
 	return true, ""

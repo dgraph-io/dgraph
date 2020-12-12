@@ -36,8 +36,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `in` operator has invalid value `xyz@dgraph.io` in this rule.
-      Reason: Value should be an array." }
+      { "message": "Type X: @auth: `in` operator has invalid value `xyz@dgraph.io`.
+      Value should be an array." }
     ]
 
   - name: "Invalid RBAC rule: in filter not array variable 2"
@@ -49,8 +49,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `in` operator has invalid value `true` in this rule.
-      Reason: Value should be an array."}
+      { "message": "Type X: @auth: `in` operator has invalid value `true`.
+      Value should be an array."}
     ]
 
   - name: "Invalid RBAC rule: nil as the value"
@@ -86,8 +86,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      { "message": "Type X: @auth: `regexp` operator has invalid value `12345` in this rule.
-      Reason: Value should be of type String." }
+      { "message": "Type X: @auth: `regexp` operator has invalid value `12345`.
+      Value should be of type String." }
     ]
 
   - name: "RBAC rule invalid variable"
