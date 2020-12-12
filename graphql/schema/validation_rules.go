@@ -18,11 +18,34 @@ package schema
 
 import (
 	"errors"
+	"github.com/golang/glog"
 	"strconv"
 
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/validator"
 )
+
+func listInputCoercion(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
+		if value.Definition == nil || value.ExpectedType == nil {
+			return
+		}
+
+		if value.Kind == ast.Variable {
+			return
+		}
+		// ExpectedType.Elem will be not nil if it is of list type. Otherwise
+		// it will be nil. So it's safe to say that value.Kind should be list
+		if !(value.ExpectedType.Elem != nil && value.Kind != ast.ListValue) {
+			return
+		}
+		val := *value
+		child := &ast.ChildValue{Value: &val}
+		valueNew := ast.Value{Children: []*ast.ChildValue{child}, Kind: ast.ListValue, Position: val.Position, Definition: val.Definition}
+		*value = valueNew
+		glog.Infof("%v", value)
+	})
+}
 
 func variableTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
