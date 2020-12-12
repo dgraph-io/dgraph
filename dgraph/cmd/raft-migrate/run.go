@@ -71,6 +71,9 @@ func parseAndConvertKey(ketFormat, key string) uint64 {
 }
 
 func updateProposalData(entry raftpb.Entry) raftpb.Entry {
+	if entry.Type == raftpb.EntryConfChange {
+		return entry
+	}
 
 	var oldProposal Proposal
 	oldProposal.Unmarshal(entry.Data)
@@ -101,6 +104,9 @@ func updateProposalData(entry raftpb.Entry) raftpb.Entry {
 }
 
 func updateZeroProposalData(entry raftpb.Entry) raftpb.Entry {
+	if entry.Type == raftpb.EntryConfChange {
+		return entry
+	}
 	var oldProposal ZeroProposal
 	oldProposal.Unmarshal(entry.Data)
 	newKey := parseAndConvertKey("z%x-%d", oldProposal.Key)
