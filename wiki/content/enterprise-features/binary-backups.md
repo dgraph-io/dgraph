@@ -427,12 +427,6 @@ leases are updated accordingly. The latest backup to be restored should contain
 the same number of groups in its manifest.json file as the cluster to which it
 is being restored.
 
-{{% notice "note" %}}
-When running a live restore, you only need to send the request to a single Alpha. 
-If you run the same restore on a different Alpha at the same time, 
-then another restore operation will be started.
-{{% /notice %}}
-
 Restore can be performed from Amazon S3 / Minio or from a local directory. Below
 is the documentation for the fields inside `RestoreInput` that can be passed into
 the mutation.
