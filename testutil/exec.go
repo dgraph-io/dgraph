@@ -138,8 +138,7 @@ func DgraphBinaryPath() string {
 func DetectRaceConditionInZeros(prefix string) bool {
 	for i := 0; i <= 3; i++ {
 		in := GetContainerInstance(prefix, "zero"+strconv.Itoa(i))
-		raceDetected := DetectIfRaceConditionViolation(in)
-		if raceDetected { return true }
+		if DetectIfRaceConditionViolation(in) { return true }
 	}
 	return false
 }
@@ -148,8 +147,7 @@ func DetectRaceConditionInZeros(prefix string) bool {
 func DetectRaceConditionInAlphas(prefix string) bool {
 	for i := 0; i <= 6; i++ {
 		in := GetContainerInstance(prefix, "alpha"+strconv.Itoa(i))
-		raceDetected := DetectIfRaceConditionViolation(in)
-		if raceDetected { return true }
+		if DetectIfRaceConditionViolation(in) { return true }
 	}
 	return false
 }

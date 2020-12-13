@@ -50,8 +50,8 @@ var (
 	DockerPrefix string
 	// Global test data directory used to store resources
 	TestDataDirectory string
-	Instance            string
-	MinioInstance       string
+	Instance          string
+	MinioInstance     string
 	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
 	SockAddr string
 	// SockAddrHttp is the address to the HTTP of alpha used during tests.
