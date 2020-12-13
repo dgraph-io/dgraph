@@ -1,3 +1,4 @@
+baseURL = "https://dgraph.io/docs/"
 canonifyURLs = true
 languageCode = "en-us"
 theme = "hugo-docs"
