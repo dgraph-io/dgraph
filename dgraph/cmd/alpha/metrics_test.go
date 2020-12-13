@@ -61,17 +61,17 @@ func TestMetricTxnAborts(t *testing.T) {
 }
 
 func retryableFetchMetrics(t *testing.T, expected int) error {
-	var txnAbort2 int
+	var txnMetric int
 	for i := 0; i < 10; i++ {
-		txnAbort2 = fetchMetric(t)
-		if expected == txnAbort2 {
+		txnMetric = fetchMetric(t)
+		if expected == txnMetric {
 			return nil
 		}
 		time.Sleep(2 * time.Second)
 	}
 
 	return fmt.Errorf("txnAbort was not incremented. wanted %d, Got %d", expected,
-		txnAbort2)
+		txnMetric)
 }
 
 func fetchMetric(t *testing.T) int {
