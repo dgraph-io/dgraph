@@ -18,13 +18,14 @@ package common
 
 import (
 	"context"
-	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
 )
@@ -135,7 +136,7 @@ func (s *suite) cleanup(t *testing.T) {
 	// NOTE: Shouldn't raise any errors here or fail a test, since this is
 	// called when we detect an error (don't want to mask the original problem).
 	if s.opts.bulkSuite {
-		isRace := testutil.StopAlphasAndDetectRaceIfNecessary("../bulk/alpha.yml")
+		isRace := testutil.StopAlphasAndDetectRace("../bulk/alpha.yml")
 		_ = os.RemoveAll(rootDir)
 		if isRace {
 			t.Fatalf("Failing because race condition is detected. " +

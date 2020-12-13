@@ -33,7 +33,7 @@ type LiveOpts struct {
 	RdfFile    string
 	SchemaFile string
 	Dir        string
-	Ludicrous bool
+	Ludicrous  bool
 }
 
 func LiveLoad(opts LiveOpts) error {
@@ -149,8 +149,8 @@ func StartAlphas(compose string) error {
 	return nil
 }
 
-func StopAlphasAndDetectRaceIfNecessary(compose string) (raceDetected bool) {
-	raceDetected = DetectRaceConditionInAlphas(DockerPrefix)
+func StopAlphasAndDetectRace(compose string) (raceDetected bool) {
+	raceDetected = DetectRaceInAlphas(DockerPrefix)
 	cmd := exec.CommandContext(context.Background(), "docker-compose", "-f", compose,
 		"-p", DockerPrefix, "rm", "-f", "-s", "-v")
 	if err := cmd.Run(); err != nil {

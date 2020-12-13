@@ -135,12 +135,12 @@ func startCluster(composeFile, prefix string) {
 	}
 }
 
-func detectRaceCondition(prefix string) bool {
+func detectRace(prefix string) bool {
 	if !*race {
 		return false
 	}
-	zeroRaceDetected := testutil.DetectRaceConditionInZeros(prefix)
-	alphaRaceDetected := testutil.DetectRaceConditionInAlphas(prefix)
+	zeroRaceDetected := testutil.DetectRaceInZeros(prefix)
+	alphaRaceDetected := testutil.DetectRaceInAlphas(prefix)
 	return zeroRaceDetected || alphaRaceDetected
 }
 
@@ -155,7 +155,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 			fmt.Printf("CLUSTER DOWN: %s\n", prefix)
 		}
 		wg.Done()
-	} ()
+	}()
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
@@ -199,7 +199,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	tid, _ := ctx.Value("threadId").(int32)
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
-	if detectRaceCondition(prefix) {
+	if detectRace(prefix) {
 		return errors.New("race condition detected. check logs for more details")
 	}
 	return nil

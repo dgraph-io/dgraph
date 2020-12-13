@@ -19,12 +19,13 @@ package testutil
 import (
 	"bytes"
 	"fmt"
-	"github.com/dgraph-io/dgraph/x"
 	"go/build"
 	"io"
 	"os"
 	"os/exec"
 	"strconv"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // These are exported so they can also be set directly from outside this package.
@@ -135,24 +136,27 @@ func DgraphBinaryPath() string {
 	return os.ExpandEnv(gopath + "/bin/dgraph")
 }
 
-func DetectRaceConditionInZeros(prefix string) bool {
+func DetectRaceInZeros(prefix string) bool {
 	for i := 0; i <= 3; i++ {
 		in := GetContainerInstance(prefix, "zero"+strconv.Itoa(i))
-		if DetectIfRaceConditionViolation(in) { return true }
+		if DetectIfRaceViolation(in) {
+			return true
+		}
 	}
 	return false
 }
 
-
-func DetectRaceConditionInAlphas(prefix string) bool {
+func DetectRaceInAlphas(prefix string) bool {
 	for i := 0; i <= 6; i++ {
 		in := GetContainerInstance(prefix, "alpha"+strconv.Itoa(i))
-		if DetectIfRaceConditionViolation(in) { return true }
+		if DetectIfRaceViolation(in) {
+			return true
+		}
 	}
 	return false
 }
 
-func DetectIfRaceConditionViolation(instance ContainerInstance) bool {
+func DetectIfRaceViolation(instance ContainerInstance) bool {
 	c := instance.GetContainer()
 	if c == nil {
 		return false

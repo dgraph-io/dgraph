@@ -9329,7 +9329,7 @@ func TestMain(m *testing.M) {
 }
 
 func cleanupAndExit(exitCode int) {
-	if testutil.StopAlphasAndDetectRaceIfNecessary("./alpha.yml") {
+	if testutil.StopAlphasAndDetectRace("./alpha.yml") {
 		// if there is race fail the test
 		exitCode = 1
 	}
