@@ -3051,7 +3051,7 @@
     }
 
 -
-  name: "query filter with single ID"
+  name: "query using single ID in filter"
   gqlquery: |
       query {
         queryAuthor(filter:{id: "0x1"}) {

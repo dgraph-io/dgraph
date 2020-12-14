@@ -3261,7 +3261,7 @@ func passwordTest(t *testing.T) {
 	deleteUser(t, *newUser)
 }
 
-func queryFilterSingleID(t *testing.T) {
+func queryFilterSingleIDListCoercion(t *testing.T) {
 	// for testing filter with AND,OR connectives
 	authors := addMultipleAuthorFromRef(t, []*author{
 		{
@@ -3286,7 +3286,7 @@ func queryFilterSingleID(t *testing.T) {
 		respData  string
 	}{
 
-		name: "Query filter with single ID as a string",
+		name: "Query using single ID in a filter",
 		query: `query($filter:AuthorFilter){
                       queryAuthor(filter:$filter){
                         name
