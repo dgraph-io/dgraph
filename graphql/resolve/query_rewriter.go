@@ -1170,14 +1170,14 @@ func buildAggregateFields(
 
 // Generate Unique Dgraph Alias for the field based on number of time it has been
 // seen till now in the given query at current level. If it is seen first time then simply returns the field's DgraphAlias,
-// and if  it is seen let's say 3rd time  then return "fieldAlias3" where "fieldAlias"
+// and if  it is seen let's say 3rd time  then return "fieldAlias.3" where "fieldAlias"
 // is the  DgraphAlias of the field.
 func generateUniqueDgraphAlias(f schema.Field, fieldSeenCount map[string]int) string {
 	alias := f.DgraphAlias()
 	if fieldSeenCount[alias] == 0 {
 		return alias
 	}
-	return alias + strconv.Itoa(fieldSeenCount[alias])
+	return alias + "." + strconv.Itoa(fieldSeenCount[alias])
 }
 
 // TODO(GRAPHQL-874), Optimise Query rewriting in case of multiple alias with same filter.
