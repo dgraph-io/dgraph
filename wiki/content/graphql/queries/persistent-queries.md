@@ -1,6 +1,6 @@
 +++
 title = "Persistent Queries"
-weight = 3
+weight = 4
 [menu.main]
     parent = "graphql-queries"
 +++
@@ -34,7 +34,7 @@ To create a Persistent Query, both `query` and `sha256` must be provided.
 
 Dgraph will verify the hash and perform a lookup. If the query doesn't exist, Dgraph will store the query, provided that the `sha256` of the query is correct. Finally, Dgraph will process the query and return the results.
 
-Example: 
+Example:
 
 ```sh
 curl -g 'http://localhost:8080/graphql/?query={sample_query}&extensions={"persistedQuery":{"sha256Hash":"b952c19b894e1aa89dc05b7d53e15ab34ee0b3a3f11cdf3486acef4f0fe85c52"}}'
@@ -44,7 +44,7 @@ curl -g 'http://localhost:8080/graphql/?query={sample_query}&extensions={"persis
 
 If only a `sha256` is provided, Dgraph will do a look-up, and process the query if found. Otherwise you'll get a `PersistedQueryNotFound` error.
 
-Example: 
+Example:
 
 ```sh
 curl -g 'http://localhost:8080/graphql/?extensions={"persistedQuery":{"sha256Hash":"b952c19b894e1aa89dc05b7d53e15ab34ee0b3a3f11cdf3486acef4f0fe85c52"}}'
