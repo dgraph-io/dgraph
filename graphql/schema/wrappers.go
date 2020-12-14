@@ -1061,13 +1061,14 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 	if xidArgName != "" {
 		var ok bool
 		var xidArgVal string
-		switch f.ArgValue(xidArgName).(type) {
+		switch v := f.ArgValue(xidArgName).(type) {
 		case int64:
-			xidArgVal = strconv.FormatInt(f.ArgValue(xidArgName).(int64), 10)
+			xidArgVal = strconv.FormatInt(v, 10)
 		case float64:
-			xidArgVal = strconv.FormatFloat(f.ArgValue(xidArgName).(float64), 'f', -1, 64)
+			xidArgVal = strconv.FormatFloat(v, 'f', -1, 64)
+		case string:
+			xidArgVal = v
 		default:
-			xidArgVal, ok = f.ArgValue(xidArgName).(string)
 			pos := f.field.GetPosition()
 			if !ok {
 				err = x.GqlErrorf("Argument (%s) of %s was not able to be parsed as a string",

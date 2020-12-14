@@ -4594,7 +4594,7 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, response)
-	var expected = `{
+	expected := `{
 		  	"addBook": {
 			  "numUids": 1
 			}
