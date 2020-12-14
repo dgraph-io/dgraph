@@ -53,7 +53,6 @@ func init() {
 	flag := RaftMigrate.Cmd.Flags()
 	flag.StringP("old-dir", "", "", "Path to the old (z)w directory.")
 	flag.StringP("new-dir", "", "", "Path to the new (z)w directory.")
-	flag.BoolP("is-alpha", "", false, "Set it to true if migrating alpha raftwal (default: false)")
 	enc.RegisterFlags(flag)
 }
 
@@ -138,7 +137,6 @@ func updateZeroProposalData(entry raftpb.Entry) raftpb.Entry {
 func run(conf *viper.Viper) error {
 	oldDir := conf.GetString("old-dir")
 	newDir := conf.GetString("new-dir")
-	isAlpha := conf.GetBool("is-alpha")
 	if len(oldDir) == 0 {
 		log.Fatal("--old-dir not specified.")
 	}
@@ -150,6 +148,8 @@ func run(conf *viper.Viper) error {
 	oldWal, err := raftwal.InitEncrypted(oldDir, encKey)
 	x.Checkf(err, "failed to initialize old wal: %s", err)
 	defer oldWal.Close()
+
+	isZero := oldWal.Uint(raftwal.GroupId) == 0
 
 	firstIndex, err := oldWal.FirstIndex()
 	x.Checkf(err, "failed to read FirstIndex from old wal: %s", err)
@@ -163,13 +163,13 @@ func run(conf *viper.Viper) error {
 	x.AssertTrue(len(oldEntries) == oldWal.NumEntries())
 
 	newEntries := make([]raftpb.Entry, len(oldEntries))
-	if isAlpha {
+	if isZero {
 		for i, entry := range oldEntries {
-			newEntries[i] = updateProposalData(entry)
+			newEntries[i] = updateZeroProposalData(entry)
 		}
 	} else {
 		for i, entry := range oldEntries {
-			newEntries[i] = updateZeroProposalData(entry)
+			newEntries[i] = updateProposalData(entry)
 		}
 	}
 
@@ -177,7 +177,7 @@ func run(conf *viper.Viper) error {
 
 	snapshot, err := oldWal.Snapshot()
 	x.Checkf(err, "failed to read snaphot %s", err)
-	if !isAlpha {
+	if isZero {
 		// We earlier used to store MembershipState in raftpb.Snapshot. Now we store ZeroSnapshot in
 		// case of zero.
 		fmt.Println("Parsing and converting zero-snapshot")
