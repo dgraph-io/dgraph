@@ -2982,15 +2982,15 @@
         count_statesAggregate : count(Country.states)
         nameMin_statesAggregate : min(val(statesAggregate_nameVar))
         nameMax_statesAggregate : max(val(statesAggregate_nameVar))
-        statesAggregate1 : Country.states @filter(eq(State.code, "state code")) {
-          statesAggregate1_nameVar as State.name
-          statesAggregate1_capitalVar as State.capital
+        statesAggregate.1 : Country.states @filter(eq(State.code, "state code")) {
+          statesAggregate.1_nameVar as State.name
+          statesAggregate.1_capitalVar as State.capital
           dgraph.uid : uid
         }
-        count_statesAggregate1 : count(Country.states) @filter(eq(State.code, "state code"))
-        nameMin_statesAggregate1 : min(val(statesAggregate1_nameVar))
-        nameMax_statesAggregate1 : max(val(statesAggregate1_nameVar))
-        capitalMin_statesAggregate1 : min(val(statesAggregate1_capitalVar))
+        count_statesAggregate.1 : count(Country.states) @filter(eq(State.code, "state code"))
+        nameMin_statesAggregate.1 : min(val(statesAggregate.1_nameVar))
+        nameMax_statesAggregate.1 : max(val(statesAggregate.1_nameVar))
+        capitalMin_statesAggregate.1 : min(val(statesAggregate.1_capitalVar))
         dgraph.uid : uid
       }
     }
@@ -3023,15 +3023,15 @@
         count_statesAggregate : count(Country.states)
         nameMin_statesAggregate : min(val(statesAggregate_nameVar))
         nameMax_statesAggregate : max(val(statesAggregate_nameVar))
-        statesAggregate1 : Country.states @filter(eq(State.code, "state code")) {
-          statesAggregate1_nameVar as State.name
-          statesAggregate1_capitalVar as State.capital
+        statesAggregate.1 : Country.states @filter(eq(State.code, "state code")) {
+          statesAggregate.1_nameVar as State.name
+          statesAggregate.1_capitalVar as State.capital
           dgraph.uid : uid
         }
-        count_statesAggregate1 : count(Country.states) @filter(eq(State.code, "state code"))
-        nameMin_statesAggregate1 : min(val(statesAggregate1_nameVar))
-        nameMax_statesAggregate1 : max(val(statesAggregate1_nameVar))
-        capitalMin_statesAggregate1 : min(val(statesAggregate1_capitalVar))
+        count_statesAggregate.1 : count(Country.states) @filter(eq(State.code, "state code"))
+        nameMin_statesAggregate.1 : min(val(statesAggregate.1_nameVar))
+        nameMax_statesAggregate.1 : max(val(statesAggregate.1_nameVar))
+        capitalMin_statesAggregate.1 : min(val(statesAggregate.1_capitalVar))
         dgraph.uid : uid
       }
     }
