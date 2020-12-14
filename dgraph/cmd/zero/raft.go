@@ -546,11 +546,11 @@ func (n *node) initAndStartNode() error {
 			// It is important that we pick up the conf state here.
 			n.SetConfState(&sp.Metadata.ConfState)
 
-			var state pb.MembershipState
-			x.Check(state.Unmarshal(sp.Data))
-			n.server.SetMembershipState(&state)
+			var zs pb.ZeroSnapshot
+			x.Check(zs.Unmarshal(sp.Data))
+			n.server.SetMembershipState(zs.State)
 			for _, id := range sp.Metadata.ConfState.Nodes {
-				n.Connect(id, state.Zeros[id].Addr)
+				n.Connect(id, zs.State.Zeros[id].Addr)
 			}
 		}
 
