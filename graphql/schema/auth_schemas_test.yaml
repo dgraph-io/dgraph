@@ -27,6 +27,69 @@ invalid_schemas:
       Did you mean userRole or username?]"}
     ]
 
+  - name: "Invalid RBAC rule: in filter not array variable 1"
+    input: |
+      type X @auth(
+          query: { rule:  "{$USER: { in: \"xyz@dgraph.io\" } }"}
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      { "message": "Type X: @auth: `in` operator has invalid value `xyz@dgraph.io`.
+      Value should be an array." }
+    ]
+
+  - name: "Invalid RBAC rule: in filter not array variable 2"
+    input: |
+      type X @auth(
+        query: { rule:  "{$USER: { in: true } }"}
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      { "message": "Type X: @auth: `in` operator has invalid value `true`.
+      Value should be an array."}
+    ]
+
+  - name: "Invalid RBAC rule: nil as the value"
+    input: |
+      type X @auth(
+        query: { rule:  "{$USER: { eq: nil } }"}
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      { "message": "Type X: @auth: `$USER` is not a valid GraphQL variable." }
+    ]
+
+  - name: "Invalid RBAC rule: null as the value"
+    input: |
+      type X @auth(
+        query: { rule:  "{$USER: { eq: null } }"}
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      { "message": "Type X: @auth: `eq` operator has invalid value. null values aren't supported." }
+    ]
+
+  - name: "Invalid RBAC rule: regexp filter not string variable"
+    input: |
+      type X @auth(
+        query: { rule:  "{$USER: { regexp: 12345 } }"}
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      { "message": "Type X: @auth: `regexp` operator has invalid value `12345`.
+      Value should be of type String." }
+    ]
+
   - name: "RBAC rule invalid variable"
     input: |
       type X @auth(
@@ -47,7 +110,7 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [{"message": "Type X: @auth: `xyz` operator is not supported in this rule."}]
+    errlist: [{"message": "Type X: @auth: `xyz` operator is not supported."}]
 
   - name: "Invalid RBAC rule"
     input: |
