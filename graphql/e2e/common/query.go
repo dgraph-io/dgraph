@@ -2833,8 +2833,10 @@ func queryAggregateWithFilter(t *testing.T) {
 						}
 				}`,
 		string(gqlResponse.Data))
+}
 
-	queryPostParams = &GraphQLParams{
+func queryAggregateOnEmptyData(t *testing.T) {
+	queryPostParams := &GraphQLParams{
 		Query: `query {
 			aggregatePost (filter: {title : { anyofterms : "Nothing" }} ) {
 				count
@@ -2844,16 +2846,11 @@ func queryAggregateWithFilter(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse = queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
 		`{
-					"aggregatePost":
-						{
-							"count":0,
-							"numLikesMax": 0,
-							"titleMin": "0.000000"
-						}
+					"aggregatePost": null
 				}`,
 		string(gqlResponse.Data))
 }
@@ -3006,6 +3003,32 @@ func queryAggregateAtChildLevelWithFilter(t *testing.T) {
 					"count" : 2,
 					"nameMin" : "Karnataka"
 				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query 
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate(filter: {xcode: {in: ["nothing"]}}) {
+                	count
+					nameMin
+                }
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": null
 			}]
 		}`,
 		string(gqlResponse.Data))

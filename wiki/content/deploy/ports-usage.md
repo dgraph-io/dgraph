@@ -36,7 +36,7 @@ follows:
 
 
 <sup>1</sup>: Dgraph Zero uses port 5080 for internal communication within the
- cluster, and to support the [fast data loading]({{< relref "deploy/fast-data-loading.md" >}})
+ cluster, and to support the [fast data loading]({{< relref "deploy/fast-data-loading/overview.md" >}})
  tools: Dgraph Live Loader and Dgraph Bulk Loader.
 
 <sup>2</sup>: Dgraph Zero uses port 6080 for

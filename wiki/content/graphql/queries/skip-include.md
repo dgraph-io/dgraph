@@ -1,6 +1,6 @@
 +++
 title = "Skip and Include"
-weight = 6
+weight = 9
 [menu.main]
     parent = "graphql-queries"
     name = "Skip and Include"

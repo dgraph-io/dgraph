@@ -1,6 +1,6 @@
 +++
 title = "Order and Pagination"
-weight = 4
+weight = 7
 [menu.main]
     parent = "graphql-queries"
     name = "Order and Pagination"
