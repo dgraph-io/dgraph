@@ -17,9 +17,7 @@
 package bulk
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
 	"path"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -36,16 +34,13 @@ func TestMain(m *testing.M) {
 	schemaFile := path.Join(testutil.TestDataDirectory, "21million.schema")
 	rdfFile := path.Join(testutil.TestDataDirectory, "21million.rdf.gz")
 
-	liveCmd := exec.Command(testutil.DgraphBinaryPath(), "live",
-		"--files", rdfFile,
-		"--schema", schemaFile,
-		"--alpha", testutil.SockAddr,
-		"--zero", testutil.SockAddrZero,
-		"--ludicrous_mode",
-	)
-	if out, err := liveCmd.CombinedOutput(); err != nil {
-		fmt.Printf("error %v\n", err)
-		fmt.Printf("output %v\n", out)
+	if err := testutil.LiveLoad(testutil.LiveOpts{
+		Alpha:      testutil.ContainerAddr("alpha1", 9080),
+		Zero:       testutil.SockAddrZero,
+		RdfFile:    rdfFile,
+		SchemaFile: schemaFile,
+		Ludicrous:  true,
+	}); err != nil {
 		cleanupAndExit(1)
 	}
 
