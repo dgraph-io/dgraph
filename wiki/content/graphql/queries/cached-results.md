@@ -1,6 +1,6 @@
 +++
 title = "Cached Results"
-weight = 4
+weight = 6
 [menu.main]
     parent = "graphql-queries"
 +++

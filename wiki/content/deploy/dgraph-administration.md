@@ -221,7 +221,7 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 2. Ensure it is successful
 3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
 4. Start a new Dgraph cluster using new data directories (this can be done by passing empty directories to the options `-p` and `-w` for Alphas and `-w` for Zeros)
-5. Reload the data via [bulk loader]({{< relref "deploy/fast-data-loading.md#bulk-loader" >}})
+5. Reload the data via [bulk loader]({{< relref "deploy/fast-data-loading/bulk-loader.md" >}})
 6. Verify the correctness of the new Dgraph cluster. If all looks good, you can delete the old directories (export serves as an insurance)
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.

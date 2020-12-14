@@ -81,7 +81,8 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 }
 
 func (in ContainerInstance) publicPort(privatePort uint16) string {
-	c := in.getContainer()
+	c := in.GetContainer()
+	if c == nil { return "" }
 	for _, p := range c.Ports {
 		if p.PrivatePort == privatePort {
 			return strconv.Itoa(int(p.PublicPort))
@@ -130,18 +131,18 @@ func (in ContainerInstance) bestEffortTryLogin() error {
 	return fmt.Errorf("Unable to login to %s\n", in)
 }
 
-func (in ContainerInstance) getContainer() types.Container {
+func (in ContainerInstance) GetContainer() *types.Container {
 	containers := AllContainers(in.Prefix)
 
 	q := fmt.Sprintf("/%s_%s_", in.Prefix, in.Name)
 	for _, container := range containers {
 		for _, name := range container.Names {
 			if strings.HasPrefix(name, q) {
-				return container
+				return &container
 			}
 		}
 	}
-	return types.Container{}
+	return nil
 }
 
 func getContainer(name string) types.Container {
