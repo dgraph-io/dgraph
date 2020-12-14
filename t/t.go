@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -83,6 +84,7 @@ var (
 	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
+	race = pflag.Bool("race", false, "Set true to build with race")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -132,6 +134,16 @@ func startCluster(composeFile, prefix string) {
 		}
 	}
 }
+
+func detectRace(prefix string) bool {
+	if !*race {
+		return false
+	}
+	zeroRaceDetected := testutil.DetectRaceInZeros(prefix)
+	alphaRaceDetected := testutil.DetectRaceInAlphas(prefix)
+	return zeroRaceDetected || alphaRaceDetected
+}
+
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	go func() {
 		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
@@ -157,6 +169,10 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if isTeamcity {
 		args = append(args, "-json")
 	}
+	// Todo: There are few race errors in tests itself. Enable this once that is fixed.
+	//if *race {
+	//	args = append(args, "-race")
+	//}
 	args = append(args, pkg)
 	cmd := commandWithContext(ctx, args...)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
@@ -183,6 +199,9 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	tid, _ := ctx.Value("threadId").(int32)
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
+	if detectRace(prefix) {
+		return errors.New("race condition detected. check logs for more details")
+	}
 	return nil
 }
 
@@ -605,8 +624,12 @@ func run() error {
 	oc.Took(0, "START", time.Millisecond)
 
 	if *rebuildBinary {
-		// cmd := command("make", "BUILD_RACE=y", "install")
-		cmd := command("make", "install")
+		var cmd *exec.Cmd
+		if *race {
+			cmd = command("make", "BUILD_RACE=y", "install")
+		} else {
+			cmd = command("make", "install")
+		}
 		cmd.Dir = *baseDir
 		if err := cmd.Run(); err != nil {
 			return err

@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -133,4 +134,56 @@ func DgraphBinaryPath() string {
 	}
 
 	return os.ExpandEnv(gopath + "/bin/dgraph")
+}
+
+func DetectRaceInZeros(prefix string) bool {
+	for i := 0; i <= 3; i++ {
+		in := GetContainerInstance(prefix, "zero"+strconv.Itoa(i))
+		if DetectIfRaceViolation(in) {
+			return true
+		}
+	}
+	return false
+}
+
+func DetectRaceInAlphas(prefix string) bool {
+	for i := 0; i <= 6; i++ {
+		in := GetContainerInstance(prefix, "alpha"+strconv.Itoa(i))
+		if DetectIfRaceViolation(in) {
+			return true
+		}
+	}
+	return false
+}
+
+func DetectIfRaceViolation(instance ContainerInstance) bool {
+	c := instance.GetContainer()
+	if c == nil {
+		return false
+	}
+
+	logCmd := exec.Command("docker", "logs", c.ID)
+	out, err := logCmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Error: while getting docker logs %v\n", err)
+		return false
+	}
+
+	return CheckIfRace(out)
+}
+
+func CheckIfRace(output []byte) bool {
+	awkCmd := exec.Command("awk", "/WARNING: DATA RACE/{flag=1}flag;/==================/{flag=0}")
+	awkCmd.Stdin = bytes.NewReader(output)
+	out, err := awkCmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Error: while getting race content %v\n", err)
+		return false
+	}
+
+	if len(out) > 0 {
+		fmt.Printf("DATA RACE DETECTED %s\n", string(out))
+		return true
+	}
+	return false
 }

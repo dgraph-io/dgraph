@@ -17,11 +17,13 @@
 package alpha
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -44,15 +46,7 @@ func TestMetricTxnAborts(t *testing.T) {
 	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
 
 	// Fetch Metrics
-	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
-	require.NoError(t, err)
-	_, body, err := runRequest(req)
-	require.NoError(t, err)
-	metricsMap, err := extractMetrics(string(body))
-	requiredMetric := "dgraph_txn_aborts_total"
-	txnAbort, ok := metricsMap[requiredMetric]
-	require.True(t, ok, "the required metric '%s' is not found", requiredMetric)
-	txnAbort1, _ := strconv.Atoi(txnAbort.(string))
+	txnAbort1 := fetchMetric(t)
 
 	// Create second 'dgraph_txn_aborts_total' metric
 	mr1, err = mutationWithTs(mt, "application/rdf", false, false, 0)
@@ -62,17 +56,37 @@ func TestMetricTxnAborts(t *testing.T) {
 	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
 	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
 
-	// Fetch Updated Metrics
-	req, err = http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
-	require.NoError(t, err)
-	_, body, err = runRequest(req)
-	require.NoError(t, err)
-	metricsMap, err = extractMetrics(string(body))
-	requiredMetric = "dgraph_txn_aborts_total"
-	txnAbort, ok = metricsMap["dgraph_txn_aborts_total"]
-	txnAbort2, _ := strconv.Atoi(txnAbort.(string))
+	// Fetch and check updated metrics
+	require.NoError(t, retryableFetchMetrics(t, txnAbort1+1))
+}
 
-	require.Equal(t, txnAbort1+1, txnAbort2, "txnAbort was not incremented")
+func retryableFetchMetrics(t *testing.T, expected int) error {
+	var txnMetric int
+	for i := 0; i < 10; i++ {
+		txnMetric = fetchMetric(t)
+		if expected == txnMetric {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	return fmt.Errorf("txnAbort was not incremented. wanted %d, Got %d", expected,
+		txnMetric)
+}
+
+func fetchMetric(t *testing.T) int {
+	requiredMetric := "dgraph_txn_aborts_total"
+	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
+	require.NoError(t, err)
+	_, body, err := runRequest(req)
+	require.NoError(t, err)
+	metricsMap, err := extractMetrics(string(body))
+	require.NoError(t, err)
+
+	txnAbort, ok := metricsMap[requiredMetric]
+	require.True(t, ok, "the required metric '%s' is not found", requiredMetric)
+	m, _ := strconv.Atoi(txnAbort.(string))
+	return m
 }
 
 func TestMetrics(t *testing.T) {
