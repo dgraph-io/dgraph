@@ -3262,7 +3262,6 @@ func passwordTest(t *testing.T) {
 }
 
 func queryFilterSingleIDListCoercion(t *testing.T) {
-	// for testing filter with AND,OR connectives
 	authors := addMultipleAuthorFromRef(t, []*author{
 		{
 			Name:          "George",
