@@ -223,22 +223,6 @@ func GetOngoingTasks() []string {
 	return tasks
 }
 
-func isTaskRunning(operation op) bool {
-	n := groups().Node
-	if n == nil {
-		return false
-	}
-
-	n.opsLock.Lock()
-	defer n.opsLock.Unlock()
-	for id := range n.ops {
-		if id == operation {
-			return true
-		}
-	}
-	return false
-}
-
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
 // sufficient. We don't need to wait for proposals to be applied.
 

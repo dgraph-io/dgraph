@@ -80,7 +80,16 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 	// Like two concurrent restore operation on different nodes.
 	// Considering Restore as admin operation, solving all those complexities has low gains
 	// than to sacrifice the simplicity.
-	if isTaskRunning(opRestore) {
+	isRestoreRunning := func() bool {
+		tasks := GetOngoingTasks()
+		for _, t := range tasks {
+			if t == opRestore.String() {
+				return true
+			}
+		}
+		return false
+	}
+	if isRestoreRunning() {
 		return 0, errors.Errorf("another restore operation is already running. " +
 			"Please retry later.")
 	}
