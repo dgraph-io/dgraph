@@ -2359,11 +2359,10 @@ func filterInQueriesWithArrayForAndOr(t *testing.T) {
 	testutil.CompareJSON(t, `{"addState":{"numUids":2}}`, string(resp.Data))
 
 	tcases := []struct {
-		name         string
-		query        string
-		variables    string
-		variablesMap map[string]interface{}
-		respData     string
+		name      string
+		query     string
+		variables string
+		respData  string
 	}{
 		{
 			name: "Filter with only AND key at top level",
@@ -3287,7 +3286,7 @@ func queryFilterSingleID(t *testing.T) {
 		respData  string
 	}{
 
-		name: "Filter with only AND key at top level",
+		name: "Query filter with single ID as a string",
 		query: `query($filter:AuthorFilter){
                       queryAuthor(filter:$filter){
                         name
