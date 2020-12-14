@@ -34,7 +34,7 @@ func listInputCoercion(observers *validator.Events, addError validator.AddErrFun
 			return
 		}
 		// ExpectedType.Elem will be not nil if it is of list type. Otherwise
-		// it will be nil. So it's safe to say that value.Kind should be list
+		// it will be nil. So it's safe to coerce it to list
 		if !(value.ExpectedType.Elem != nil && value.Kind != ast.ListValue) {
 			return
 		}
