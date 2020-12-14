@@ -22,7 +22,6 @@ import (
 	"math"
 	"os"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -62,22 +61,33 @@ func init() {
 	enc.RegisterFlags(flag)
 }
 
-func parseAndConvertKey(ketFormat, key string) uint64 {
-	keyFormat := "z%x-%d"
+func parseAndConvertKey(key, keyFormat string) uint64 {
 	var random uint64
 	var parsedKey uint32
 	fmt.Sscanf(key, keyFormat, &parsedKey, &random)
 	return uint64(uint64(parsedKey)<<32 | random>>32)
 }
 
+func parseAndConvertSnapshot(snap *raftpb.Snapshot) {
+	var ms pb.MembershipState
+	var zs pb.ZeroSnapshot
+	var err error
+	x.Check(ms.Unmarshal(snap.Data))
+	zs.State = &ms
+	zs.Index = snap.Metadata.Index
+	// It is okay to not set zs.CheckpointTs as it is used for purgeBelow.
+	snap.Data, err = zs.Marshal()
+	x.Check(err)
+}
+
 func updateProposalData(entry raftpb.Entry) raftpb.Entry {
 	if entry.Type == raftpb.EntryConfChange {
 		return entry
 	}
-
 	var oldProposal Proposal
 	oldProposal.Unmarshal(entry.Data)
-	newKey := parseAndConvertKey("%02d-%d", oldProposal.Key)
+	newKey := parseAndConvertKey(oldProposal.Key, "%02d-%d")
+
 	var newProposal pb.Proposal
 	newProposal.Mutations = oldProposal.Mutations
 	newProposal.Kv = oldProposal.Kv
@@ -88,18 +98,14 @@ func updateProposalData(entry raftpb.Entry) raftpb.Entry {
 	newProposal.Index = oldProposal.Index
 	newProposal.ExpectedChecksum = oldProposal.ExpectedChecksum
 	newProposal.Restore = oldProposal.Restore
+
 	data := make([]byte, 8+newProposal.Size())
 	binary.BigEndian.PutUint64(data, newKey)
 	sz, err := newProposal.MarshalToSizedBuffer(data[8:])
 	data = data[:8+sz]
-
-	fmt.Println("old------------------")
-	spew.Dump(oldProposal)
-	fmt.Println("new-------------------")
-	spew.Dump(newProposal)
-
 	x.Checkf(err, "Failed to marshal proposal to buffer")
 	entry.Data = data
+
 	return entry
 }
 
@@ -109,9 +115,9 @@ func updateZeroProposalData(entry raftpb.Entry) raftpb.Entry {
 	}
 	var oldProposal ZeroProposal
 	oldProposal.Unmarshal(entry.Data)
-	newKey := parseAndConvertKey("z%x-%d", oldProposal.Key)
-	var newProposal pb.ZeroProposal
+	newKey := parseAndConvertKey(oldProposal.Key, "z%x-%d")
 
+	var newProposal pb.ZeroProposal
 	newProposal.SnapshotTs = oldProposal.SnapshotTs
 	newProposal.Member = oldProposal.Member
 	newProposal.Tablet = oldProposal.Tablet
@@ -121,19 +127,15 @@ func updateZeroProposalData(entry raftpb.Entry) raftpb.Entry {
 	newProposal.Txn = oldProposal.Txn
 	newProposal.Cid = oldProposal.Cid
 	newProposal.License = oldProposal.License
-
-	fmt.Println("old------------------")
-	spew.Dump(oldProposal)
-	fmt.Println("new-------------------")
-	spew.Dump(newProposal)
 	// Snapshot is a newly added field hence skipped
+
 	data := make([]byte, 8+newProposal.Size())
 	binary.BigEndian.PutUint64(data[:8], newKey)
 	sz, err := newProposal.MarshalToSizedBuffer(data[8:])
 	data = data[:8+sz]
-
 	x.Checkf(err, "Failed to marshal proposal to buffer")
 	entry.Data = data
+
 	return entry
 }
 
@@ -153,7 +155,7 @@ func run(conf *viper.Viper) error {
 	//nodeId := conf.GetInt("old-node-id")
 	//groupId := conf.GetInt("old-group-id")
 
-	oldWal := raftwal.Init(oldDir) //Init(kv, uint64(nodeId), uint32(groupId))
+	oldWal := raftwal.Init(oldDir)
 	defer oldWal.Close()
 
 	firstIndex, err := oldWal.FirstIndex()
@@ -182,6 +184,12 @@ func run(conf *viper.Viper) error {
 
 	snapshot, err := oldWal.Snapshot()
 	x.Checkf(err, "failed to read snaphot %s", err)
+	if !isAlpha {
+		// We earlier used to store MembershipState in raftpb.Snapshot. Now we store ZeroSnapshot in
+		// case of zero.
+		fmt.Println("Parsing and converting zero-snapshot")
+		parseAndConvertSnapshot(&snapshot)
+	}
 
 	hs, err := oldWal.HardState()
 	x.Checkf(err, "failed to read hardstate %s", err)
