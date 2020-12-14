@@ -518,7 +518,7 @@ func validateRBACOperators(typ *ast.Definition, query *RBACQuery) (bool, string)
 				" Value should be an array.", typ.Name, query.Operator, query.Operand)
 		}
 	default:
-		return false, fmt.Sprintf("Type %s: @auth: `%s` operator is not supported ",
+		return false, fmt.Sprintf("Type %s: @auth: `%s` operator is not supported.",
 			typ.Name, query.Operator)
 	}
 

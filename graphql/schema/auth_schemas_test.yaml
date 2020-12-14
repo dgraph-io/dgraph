@@ -110,7 +110,7 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [{"message": "Type X: @auth: `xyz` operator is not supported in this rule."}]
+    errlist: [{"message": "Type X: @auth: `xyz` operator is not supported."}]
 
   - name: "Invalid RBAC rule"
     input: |
