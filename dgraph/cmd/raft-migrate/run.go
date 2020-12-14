@@ -53,11 +53,8 @@ func init() {
 
 	flag := RaftMigrate.Cmd.Flags()
 	flag.StringP("old-dir", "", "", "Path to the old (z)w directory.")
-	flag.IntP("old-node-id", "", 1,
-		"Node ID of the old node. This will be the node ID of the new node.")
-	flag.IntP("old-group-id", "", 0, "Group ID of the old node. This is used to open the old wal.")
 	flag.StringP("new-dir", "", "", "Path to the new (z)w directory.")
-	flag.BoolP("is-alpha", "", true, "true if alpha directory false if zeros")
+	flag.BoolP("is-alpha", "", false, "Set it to true if migrating alpha raftwal (default: false)")
 	enc.RegisterFlags(flag)
 }
 
@@ -151,11 +148,8 @@ func run(conf *viper.Viper) error {
 		log.Fatal("--new-dir not specified.")
 	}
 
-	// TODO(rahul): Maybe uncomment following
-	//nodeId := conf.GetInt("old-node-id")
-	//groupId := conf.GetInt("old-group-id")
-
-	oldWal := raftwal.Init(oldDir)
+	oldWal, err := raftwal.InitEncrypted(oldDir, encKey)
+	x.Checkf(err, "failed to initialize old wal: %s", err)
 	defer oldWal.Close()
 
 	firstIndex, err := oldWal.FirstIndex()
@@ -194,9 +188,6 @@ func run(conf *viper.Viper) error {
 	hs, err := oldWal.HardState()
 	x.Checkf(err, "failed to read hardstate %s", err)
 
-	checkPoint, err := oldWal.Checkpoint()
-	x.Checkf(err, "failed to read checkpoint %s", err)
-
 	if _, err := os.Stat(newDir); os.IsNotExist(err) {
 		os.Mkdir(newDir, 0777)
 	}
@@ -209,6 +200,14 @@ func run(conf *viper.Viper) error {
 	fmt.Printf("Setting raftID to: %+v\n", raftID)
 	newWal.SetUint(raftwal.RaftId, raftID)
 
+	// Set the Group ID
+	groupID := oldWal.Uint(raftwal.GroupId)
+	fmt.Printf("Setting GroupID to: %+v\n", groupID)
+	newWal.SetUint(raftwal.GroupId, groupID)
+
+	// Set the checkpoint index
+	checkPoint, err := oldWal.Checkpoint()
+	x.Checkf(err, "failed to read checkpoint %s", err)
 	newWal.SetUint(raftwal.CheckpointIndex, checkPoint)
 
 	fmt.Printf("Saving num of oldEntries:%+v\nsnapshot %+v\nhardstate = %+v\n",
