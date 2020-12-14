@@ -653,7 +653,7 @@ func RunAll(t *testing.T) {
 	t.Run("query aggregate and other fields at child level", queryAggregateAndOtherFieldsAtChildLevel)
 	t.Run("query at child level with multiple alias on scalar field", queryChildLevelWithMultipleAliasOnScalarField)
 	t.Run("checkUserPassword query", passwordTest)
-	t.Run("query filter with single ID", queryFilterSingleID)
+	t.Run("query using single ID in a filter that will be coerced to list", queryFilterSingleIDListCoercion)
 	// mutation tests
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)
