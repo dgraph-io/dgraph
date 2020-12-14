@@ -81,7 +81,6 @@ func updateProposalData(entry raftpb.Entry) raftpb.Entry {
 	}
 	var oldProposal Proposal
 	oldProposal.Unmarshal(entry.Data)
-	newKey := parseAndConvertKey(oldProposal.Key, "%02d-%d")
 
 	var newProposal pb.Proposal
 	newProposal.Mutations = oldProposal.Mutations
@@ -95,7 +94,8 @@ func updateProposalData(entry raftpb.Entry) raftpb.Entry {
 	newProposal.Restore = oldProposal.Restore
 
 	data := make([]byte, 8+newProposal.Size())
-	binary.BigEndian.PutUint64(data, newKey)
+	newKey := parseAndConvertKey(oldProposal.Key, "%02d-%d")
+	binary.BigEndian.PutUint64(data[:8], newKey)
 	sz, err := newProposal.MarshalToSizedBuffer(data[8:])
 	data = data[:8+sz]
 	x.Checkf(err, "Failed to marshal proposal to buffer")
@@ -110,7 +110,6 @@ func updateZeroProposalData(entry raftpb.Entry) raftpb.Entry {
 	}
 	var oldProposal ZeroProposal
 	oldProposal.Unmarshal(entry.Data)
-	newKey := parseAndConvertKey(oldProposal.Key, "z%x-%d")
 
 	var newProposal pb.ZeroProposal
 	newProposal.SnapshotTs = oldProposal.SnapshotTs
@@ -125,6 +124,7 @@ func updateZeroProposalData(entry raftpb.Entry) raftpb.Entry {
 	// Snapshot is a newly added field hence skipped
 
 	data := make([]byte, 8+newProposal.Size())
+	newKey := parseAndConvertKey(oldProposal.Key, "z%x-%d")
 	binary.BigEndian.PutUint64(data[:8], newKey)
 	sz, err := newProposal.MarshalToSizedBuffer(data[8:])
 	data = data[:8+sz]

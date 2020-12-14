@@ -327,6 +327,7 @@ func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
 
 func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 	x.AssertTrue(len(e.Data) > 0)
+
 	var p pb.ZeroProposal
 	key := binary.BigEndian.Uint64(e.Data[:8])
 	if err := p.Unmarshal(e.Data[8:]); err != nil {
