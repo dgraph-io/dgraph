@@ -2584,7 +2584,7 @@
           text : Post.text
           dgraph.uid : uid
         }
-        posts1 : Author.posts @filter(eq(Post.isPublished, false)) {
+        posts.1 : Author.posts @filter(eq(Post.isPublished, false)) {
           title : Post.title
           text : Post.text
           dgraph.uid : uid
@@ -2618,7 +2618,7 @@
           text : Post.text
           dgraph.uid : uid
         }
-        posts1 : Author.posts @filter(eq(Post.isPublished, true)) {
+        posts.1 : Author.posts @filter(eq(Post.isPublished, true)) {
           title : Post.title
           text : Post.text
           dgraph.uid : uid
@@ -2674,8 +2674,8 @@
     query {
       queryAuthor(func: type(Author)) {
         count_postsAggregate : count(Author.posts)
-        count_postsAggregate1 : count(Author.posts) @filter(gt(Post.tags, "abc"))
-        count_postsAggregate2 : count(Author.posts) @filter(le(Post.tags, "xyz"))
+        count_postsAggregate.1 : count(Author.posts) @filter(gt(Post.tags, "abc"))
+        count_postsAggregate.2 : count(Author.posts) @filter(le(Post.tags, "xyz"))
         dgraph.uid : uid
       }
     }
