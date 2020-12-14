@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Python"
+weight = 6
 [menu.main]
     parent = "clients"
-    weight = 6
 +++
 
 The official Python client [can be found here](https://github.com/dgraph-io/pydgraph). 

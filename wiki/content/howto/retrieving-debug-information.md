@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Retrieving Debug Information"
+weight = 1
 [menu.main]
     parent = "howto"
-    weight = 1
 +++
 
 Each Dgraph data node exposes profile over `/debug/pprof` endpoint and metrics over `/debug/vars` endpoint. Each Dgraph data node has it's own profiling and metrics information. Below is a list of debugging information exposed by Dgraph and the corresponding commands to retrieve them.

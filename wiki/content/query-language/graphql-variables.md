@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "GraphQL Variables"
+weight = 26
 [menu.main]
     parent = "query-language"
-    weight = 26
 +++
 
 `Variables` can be defined and used in queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a `$` symbol.

@@ -1,8 +1,8 @@
 +++
-title = "The `@auth` directive"
+title = "The @auth directive"
+weight = 2
 [menu.main]
     parent = "authorization"
-    weight = 2   
 +++
 
 Given an authentication mechanism and signed JWT, it's the `@auth` directive that tells Dgraph how to apply authorization.  The directive can be used on any type (that isn't a `@remote` type) and specifies the authorization for `query` as well as `add`, `update` and `delete` mutations.

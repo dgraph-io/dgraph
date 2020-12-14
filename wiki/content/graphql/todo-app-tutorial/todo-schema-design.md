@@ -1,8 +1,8 @@
 +++
 title = "Schema Design"
+weight = 2
 [menu.main]
     parent = "todo-app-tutorial"
-    weight = 2   
 +++
 
 Let's start with listing down the entities that are involved in a basic todo app.

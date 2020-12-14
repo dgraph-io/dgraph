@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Using the Increment Tool"
+weight = 4
 [menu.main]
     parent = "howto"
-    weight = 4
 +++
 
 The `dgraph increment` tool increments a counter value transactionally. The

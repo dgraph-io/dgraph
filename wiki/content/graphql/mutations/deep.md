@@ -1,9 +1,9 @@
 +++
 title = "Deep Mutations"
+weight = 5
 [menu.main]
     parent = "graphql-mutations"
     name = "Deep"
-    weight = 5   
 +++
 
 Mutations also allows to perform deep mutation at multiple levels.

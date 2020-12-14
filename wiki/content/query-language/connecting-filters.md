@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Connecting Filters"
+weight = 3
 [menu.main]
     parent = "query-language"
-    weight = 3
 +++
 
 Within `@filter` multiple functions can be used with boolean connectives.

@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Multiple Query Blocks"
+weight = 8
 [menu.main]
     parent = "query-language"
-    weight = 8
 +++
 
 Inside a single query, multiple query blocks are allowed.  The result is all blocks with corresponding block names.
