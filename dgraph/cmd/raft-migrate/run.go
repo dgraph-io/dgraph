@@ -22,7 +22,6 @@ import (
 	"math"
 	"os"
 
-	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -161,7 +160,7 @@ func run(conf *viper.Viper) error {
 	fmt.Printf("Fetching entries from low: %d to high: %d\n", firstIndex, lastIndex)
 	// Should we batch this up?
 	oldEntries, err := oldWal.Entries(1, lastIndex+1, math.MaxUint64)
-	y.AssertTrue(len(oldEntries) == oldWal.NumEntries())
+	x.AssertTrue(len(oldEntries) == oldWal.NumEntries())
 
 	newEntries := make([]raftpb.Entry, len(oldEntries))
 	if isAlpha {
