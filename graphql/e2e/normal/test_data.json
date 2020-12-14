@@ -130,5 +130,33 @@
         "dgraph.type": "Country",
         "Country.name": "India",
         "Country.states": [{ "uid": "_:mh" }, { "uid": "_:gj" }, { "uid":  "_:ka"}]
+    },
+    {
+        "uid": "_:book1",
+        "dgraph.type": "Book",
+        "Book.bookId": 1234567890,
+        "Book.name": "Dgraph and Graphql",
+        "Book.desc": "All love between dgraph and graphql"
+    },
+    {
+        "uid": "_:chapter1",
+        "dgraph.type": "Chapter",
+        "Chapter.bookId": 1234567890,
+        "Chapter.chapterId": 1,
+        "Chapter.name": "How Dgraph Works"
+    },
+    {
+        "uid": "_:section1",
+        "dgraph.type": "Section",
+        "Section.chapterId": 1,
+        "Section.sectionId": 1.1,
+        "Section.name": "How to define dgraph schema"
+    },
+    {
+        "uid": "_:section2",
+        "dgraph.type": "Section",
+        "Section.chapterId": 1,
+        "Section.sectionId": 1.2,
+        "Section.name": "Dgraph Data Types"
     }
 ]

@@ -3283,3 +3283,72 @@ func passwordTest(t *testing.T) {
 
 	deleteUser(t, *newUser)
 }
+
+func idDirectiveWithInt64(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  getBook(bookId: 1234567890) {
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+			"getBook": {
+				"bookId": 1234567890,
+				"name": "Dgraph and Graphql",
+				"desc": "All love between dgraph and graphql"
+			  }
+		 }`
+	require.JSONEq(t, expected, string(response.Data))
+}
+
+func idDirectiveWithInt(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  getChapter(chapterId: 1) {
+			bookId
+			chapterId
+			name
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+	  	"getChapter": {
+			"bookId": 1234567890,
+			"chapterId": 1,
+			"name": "How Dgraph Works"
+		  }
+	}`
+	require.JSONEq(t, expected, string(response.Data))
+}
+
+func idDirectiveWithFloat(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  getSection(sectionId: 1.1) {
+			chapterId
+			sectionId
+			name
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+	 	"getSection": {
+			"chapterId": 1,
+			"sectionId": 1.1,
+			"name": "How to define dgraph schema"
+		  }
+	}`
+	require.JSONEq(t, expected, string(response.Data))
+}

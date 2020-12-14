@@ -992,11 +992,36 @@ func rewriteObject(
 	xidEncounteredFirstTime := false
 	if xid != nil {
 		if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
-			xidString, ok = xidVal.(string)
-			if !ok {
+			errResponse := func(err error) *mutationRes {
 				errFrag := newFragment(nil)
-				errFrag.err = errors.New("encountered an XID that isn't a string")
+				errFrag.err = err
 				return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+			}
+			switch xid.Type().Name() {
+			case "Int":
+				val, ok := xidVal.(int64)
+				if !ok {
+					return errResponse(errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+						"a Int but data type in schema is Int", xid.Name(), xid.Type().Name())))
+				}
+				xidString = strconv.FormatInt(val, 10)
+			case "Float":
+				val, ok := xidVal.(float64)
+				if !ok {
+					return errResponse(errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+						"a Float but data type in schema is Float", xid.Name(), xid.Type().Name())))
+				}
+				xidString = strconv.FormatFloat(val, 'f', -1, 64)
+			case "Int64":
+				fallthrough
+			default:
+				xidString, ok = xidVal.(string)
+				if !ok {
+					errFrag := newFragment(nil)
+					errFrag.err = errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+						"a String or Int64", xid.Name(), xid.Type().Name()))
+					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+				}
 			}
 			// if the object has an xid, the variable name will be formed from the xidValue in order
 			// to handle duplicate object addition/updation

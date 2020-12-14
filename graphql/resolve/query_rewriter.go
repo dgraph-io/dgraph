@@ -1857,6 +1857,8 @@ func maybeQuoteArg(fn string, arg interface{}) string {
 			return arg
 		}
 		return fmt.Sprintf("%q", arg)
+	case float64, float32:
+		return fmt.Sprintf("\"%v\"", arg)
 	default:
 		return fmt.Sprintf("%v", arg)
 	}

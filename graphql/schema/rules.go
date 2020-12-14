@@ -1990,12 +1990,15 @@ func idValidation(sch *ast.Schema,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
-	if field.Type.String() == "String!" {
+	if field.Type.String() == "String!" ||
+		field.Type.String() == "Int!" ||
+		field.Type.String() == "Int64!" ||
+		field.Type.String() == "Float!" {
 		return nil
 	}
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		dir.Position,
-		"Type %s; Field %s: with @id directive must be of type String!, not %s",
+		"Type %s; Field %s: with @id directive must be of type String!, Int!, Int64! or Float!, not %s",
 		typ.Name, field.Name, field.Type.String())}
 }
 

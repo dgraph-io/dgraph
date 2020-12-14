@@ -283,3 +283,22 @@ type University @generate(
     name: String!
     numStudents: Int
 }
+
+# @id directive with multiple data types
+type Book {
+    bookId: Int64! @id
+    name: String!
+    desc: String
+}
+
+type Chapter {
+    chapterId: Int! @id
+    name: String!
+    bookId: Int64! @search
+}
+
+type Section {
+    sectionId: Float! @id
+    name: String!
+    chapterId: Int! @search
+}

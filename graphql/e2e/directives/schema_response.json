@@ -500,6 +500,65 @@
         {
             "predicate": "职业",
             "type": "string"
+        },
+        {
+            "predicate": "Book.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Book.desc",
+            "type": "string"
+        },
+        {
+            "predicate": "Section.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Chapter.name",
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "Section.sectionId",
+            "tokenizer": [
+                "float"
+            ],
+            "type": "float",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "Chapter.bookId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int"
+        },
+        {
+            "index": true,
+            "predicate": "Chapter.chapterId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "Book.bookId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "Section.chapterId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int"
         }
     ],
     "types": [
@@ -968,6 +1027,48 @@
                 }
             ],
             "name": "test.dgraph.employee.en"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Book.name"
+                },
+                {
+                    "name": "Book.desc"
+                },
+                {
+                    "name": "Book.bookId"
+                }
+            ],
+            "name": "Book"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Chapter.name"
+                },
+                {
+                    "name": "Chapter.bookId"
+                },
+                {
+                    "name": "Chapter.chapterId"
+                }
+            ],
+            "name": "Chapter"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Section.sectionId"
+                },
+                {
+                    "name": "Section.chapterId"
+                },
+                {
+                    "name": "Section.name"
+                }
+            ],
+            "name": "Section"
         }
     ]
 }
