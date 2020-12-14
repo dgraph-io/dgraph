@@ -263,15 +263,7 @@ func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 // }
 func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*UpsertMutation, error) {
 	mutatedType := m.MutatedType()
-	//var val []interface{}
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
-	//switch v := m.ArgValue(schema.InputArgName).(type) {
-	//case []interface{}:
-	//	val = v
-	//case interface{}:
-	//	val = append(val, v)
-	//}
-
 	varGen := NewVariableGenerator()
 	xidMd := newXidMetadata()
 	var errs error

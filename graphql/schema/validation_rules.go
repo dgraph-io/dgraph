@@ -18,7 +18,6 @@ package schema
 
 import (
 	"errors"
-	"github.com/golang/glog"
 	"strconv"
 
 	"github.com/dgraph-io/gqlparser/v2/ast"
@@ -43,7 +42,6 @@ func listInputCoercion(observers *validator.Events, addError validator.AddErrFun
 		child := &ast.ChildValue{Value: &val}
 		valueNew := ast.Value{Children: []*ast.ChildValue{child}, Kind: ast.ListValue, Position: val.Position, Definition: val.Definition}
 		*value = valueNew
-		glog.Infof("%v", value)
 	})
 }
 

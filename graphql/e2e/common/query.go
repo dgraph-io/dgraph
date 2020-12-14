@@ -2359,10 +2359,11 @@ func filterInQueriesWithArrayForAndOr(t *testing.T) {
 	testutil.CompareJSON(t, `{"addState":{"numUids":2}}`, string(resp.Data))
 
 	tcases := []struct {
-		name      string
-		query     string
-		variables string
-		respData  string
+		name         string
+		query        string
+		variables    string
+		variablesMap map[string]interface{}
+		respData     string
 	}{
 		{
 			name: "Filter with only AND key at top level",
@@ -3259,4 +3260,71 @@ func passwordTest(t *testing.T) {
 	})
 
 	deleteUser(t, *newUser)
+}
+
+func queryFilterSingleID(t *testing.T) {
+	// for testing filter with AND,OR connectives
+	authors := addMultipleAuthorFromRef(t, []*author{
+		{
+			Name:          "George",
+			Reputation:    4.5,
+			Qualification: "Phd in CSE",
+			Posts:         []*post{{Title: "A show about nothing", Text: "Got ya!", Tags: []string{}}},
+		}, {
+			Name:       "Jerry",
+			Reputation: 4.6,
+			Country:    &country{Name: "outer Galaxy2"},
+			Posts:      []*post{{Title: "Outside", Tags: []string{}}},
+		},
+	}, postExecutor)
+	authorIds := []string{authors[0].ID, authors[1].ID}
+	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID}
+	countryIds := []string{authors[1].Country.ID}
+	tcase := struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		respData  string
+	}{
+
+		name: "Filter with only AND key at top level",
+		query: `query($filter:AuthorFilter){
+                      queryAuthor(filter:$filter){
+                        name
+						reputation
+                        posts {
+                          text
+                        }
+                      }
+				    }`,
+		variables: map[string]interface{}{"filter": map[string]interface{}{"id": authors[0].ID}},
+		respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+	}
+
+	t.Run(tcase.name, func(t *testing.T) {
+		params := &GraphQLParams{
+			Query:     tcase.query,
+			Variables: tcase.variables,
+		}
+		resp := params.ExecuteAsPost(t, GraphqlURL)
+		RequireNoGQLErrors(t, resp)
+		testutil.CompareJSON(t, tcase.respData, string(resp.Data))
+	})
+
+	// cleanup
+	deleteAuthors(t, authorIds, nil)
+	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
+	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
 }
