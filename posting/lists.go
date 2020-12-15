@@ -154,7 +154,7 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
-	getNewIfNil := func() (*List, error){
+	getNewPlistNil := func() (*List, error){
 		lc.RLock()
 		defer lc.RUnlock()
 		if lc.plists == nil {
@@ -162,8 +162,8 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 		}
 		return nil, nil
 	}
-	l, err := getNewIfNil()
-	if l != nil || err != nil {
+
+	if l, err := getNewPlistNil(); l != nil || err != nil {
 		return l, err
 	}
 
