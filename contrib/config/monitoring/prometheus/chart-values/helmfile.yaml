@@ -12,4 +12,9 @@ releases:
       - ./dgraph-prometheus-operator.yaml
       - grafana:
           adminPassword: {{ requiredEnv "GRAFANA_ADMIN_PASSWORD" }}
+      {{/* Dgraph Kubernetes CronJob Monitoring Support */}}
+      {{/* export DGRAPH_BACKUPS_ENABLED=1 to enabled this feature */}}
+      {{- if env "DGRAPH_BACKUPS_ENABLED" }}
+      - ./dgraph-backup-alert-rules.yaml
+      {{- end }}
     disableValidation: true

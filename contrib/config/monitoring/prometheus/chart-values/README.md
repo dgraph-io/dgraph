@@ -22,11 +22,13 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo add stable https://charts.helm.sh/stable
 helm repo update
 
-export GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
+GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
+NAMESPACE="monitoring"  # specify desired namespace
 
 helm install my-prometheus-release \
   --values ./dgraph-prometheus-operator.yaml \
   --set grafana.adminPassword=$GRAFANA_ADMIN_PASSWORD \
+  --namespace $NAMESPACE \
   prometheus-community/kube-prometheus-stack
 ```
 
@@ -37,8 +39,9 @@ You can use helmfile to manage multiple helm charts and corresponding helmcharts
 To use this, run the following:
 
 ```bash
-export GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
-helmfile apply
+NAMESPACE="monitoring"  # specify desired namespace
+GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
+helmfile --namespace $NAMESPACE apply
 ```
 
 ## Grafana Dashboards
