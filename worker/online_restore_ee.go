@@ -38,13 +38,13 @@ const (
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, error) {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 	if req == nil {
-		return 0, errors.Errorf("restore request cannot be nil")
+		return errors.Errorf("restore request cannot be nil")
 	}
 
 	if err := UpdateMembershipState(ctx); err != nil {
-		return 0, errors.Wrapf(err, "cannot update membership state before restore")
+		return errors.Wrapf(err, "cannot update membership state before restore")
 	}
 	memState := GetMembershipState()
 
@@ -60,10 +60,10 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 		Anonymous:    req.Anonymous,
 	}
 	if err := VerifyBackup(req, &creds, currentGroups); err != nil {
-		return 0, errors.Wrapf(err, "failed to verify backup")
+		return errors.Wrapf(err, "failed to verify backup")
 	}
 	if err := FillRestoreCredentials(req.Location, req); err != nil {
-		return 0, errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
+		return errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
 	}
 	// Restore Tracker keeps tracks of ongoing restore operation initiated on the node.
 	// Restore Tracker are node specific. They manage restore operation initiated on the node.
@@ -108,20 +108,15 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 		}()
 	}
 
-	go func(restoreId int) {
-		errs := make([]error, 0)
+	go func() {
 		for range currentGroups {
 			if err := <-errCh; err != nil {
-				errs = append(errs, err)
+				glog.Errorf("Error while restoring %v", err)
 			}
 		}
-		if err := rt.Done(restoreId, errs); err != nil {
-			glog.Warningf("Could not mark restore operation with ID %d as done. Error: %s",
-				restoreId, err)
-		}
-	}(restoreId)
+	}()
 
-	return restoreId, nil
+	return nil
 }
 
 func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
@@ -377,6 +372,6 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	return nil
 }
 
-func ProcessRestoreStatus(ctx context.Context, restoreId int) (*RestoreStatus, error) {
-	return rt.Status(restoreId), nil
-}
+//func ProcessRestoreStatus(ctx context.Context, restoreId int) (*RestoreStatus, error) {
+//	return rt.Status(restoreId), nil
+//}

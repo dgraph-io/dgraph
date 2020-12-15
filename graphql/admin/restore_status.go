@@ -17,7 +17,6 @@
 package admin
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -54,35 +53,35 @@ func getRestoreStatusInput(q schema.Query) (int64, error) {
 
 }
 
-func resolveRestoreStatus(ctx context.Context, q schema.Query) *resolve.Resolved {
-	restoreId, err := getRestoreStatusInput(q)
-	if err != nil {
-		return unknownStatus(q, err)
-	}
-	status, err := worker.ProcessRestoreStatus(ctx, int(restoreId))
-	if err != nil {
-		return unknownStatus(q, err)
-	}
-	if status == nil {
-		return unknownStatus(q, err)
-	}
-	convertedStatus := convertStatus(status)
-
-	b, err := json.Marshal(convertedStatus)
-	if err != nil {
-		return unknownStatus(q, err)
-	}
-	result := make(map[string]interface{})
-	err = json.Unmarshal(b, &result)
-	if err != nil {
-		return unknownStatus(q, err)
-	}
-
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{q.Name(): result},
-		Field: q,
-	}
-}
+//func resolveRestoreStatus(ctx context.Context, q schema.Query) *resolve.Resolved {
+//	restoreId, err := getRestoreStatusInput(q)
+//	if err != nil {
+//		return unknownStatus(q, err)
+//	}
+//	status, err := worker.ProcessRestoreStatus(ctx, int(restoreId))
+//	if err != nil {
+//		return unknownStatus(q, err)
+//	}
+//	if status == nil {
+//		return unknownStatus(q, err)
+//	}
+//	convertedStatus := convertStatus(status)
+//
+//	b, err := json.Marshal(convertedStatus)
+//	if err != nil {
+//		return unknownStatus(q, err)
+//	}
+//	result := make(map[string]interface{})
+//	err = json.Unmarshal(b, &result)
+//	if err != nil {
+//		return unknownStatus(q, err)
+//	}
+//
+//	return &resolve.Resolved{
+//		Data:  map[string]interface{}{q.Name(): result},
+//		Field: q,
+//	}
+//}
 
 func convertStatus(status *worker.RestoreStatus) *restoreStatus {
 	if status == nil {

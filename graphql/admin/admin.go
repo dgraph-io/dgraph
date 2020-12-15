@@ -592,9 +592,9 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
 		}).
-		WithQueryResolver("restoreStatus", func(q schema.Query) resolve.QueryResolver {
-			return resolve.QueryResolverFunc(resolveRestoreStatus)
-		}).
+		//WithQueryResolver("restoreStatus", func(q schema.Query) resolve.QueryResolver {
+		//	return resolve.QueryResolverFunc(resolveRestoreStatus)
+		//}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
 				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
