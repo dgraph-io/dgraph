@@ -187,7 +187,6 @@ type Figure implements Shape & Color {
 }
 ```
 
-
 ### Union type
 
 GraphQL Unions represent an object that could be one of a list of GraphQL Object types, but provides for no guaranteed fields between those types. So no fields may be queried on this type without the use of type refining fragments or inline fragments.
