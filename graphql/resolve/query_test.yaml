@@ -1257,7 +1257,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter((gt(Author.reputation, "1.1") OR ((ge(Author.reputation, 1.1) OR ((lt(Author.reputation, "1.1") OR ((le(Author.reputation, "1.1") OR (eq(Author.reputation, "1.1")))))))))) {
+      queryAuthor(func: type(Author)) @filter((gt(Author.reputation, "1.1") OR ((ge(Author.reputation, "1.1") OR ((lt(Author.reputation, "1.1") OR ((le(Author.reputation, "1.1") OR (eq(Author.reputation, "1.1")))))))))) {
         name : Author.name
         dgraph.uid : uid
       }
