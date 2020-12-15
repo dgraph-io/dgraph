@@ -1,11 +1,11 @@
 +++
 title = "Quick Start"
+weight = 1
 [menu.main]
   url = "/graphql/quick-start/"
   name = "Quick Start"
   identifier = "graphql-quick-start"
   parent = "graphql"
-  weight = 1
 +++
 
 Let's go from nothing to a running GraphQL API in just two steps.

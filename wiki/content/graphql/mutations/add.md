@@ -1,9 +1,9 @@
 +++
 title = "Add Mutations"
+weight = 2
 [menu.main]
     parent = "graphql-mutations"
     name = "Add"
-    weight = 2   
 +++
 
 Add Mutations allows you to add new objects of a particular type.

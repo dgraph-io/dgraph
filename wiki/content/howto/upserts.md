@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Upserts"
+weight = 9
 [menu.main]
     parent = "howto"
-    weight = 9
 +++
 
 Upsert-style operations are operations where:

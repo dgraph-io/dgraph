@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "JSON Mutation Format"
+weight = 10
 [menu.main]
     parent = "mutations"
-    weight = 10
 +++
 
 Mutations can also be specified using JSON objects. This can allow mutations to

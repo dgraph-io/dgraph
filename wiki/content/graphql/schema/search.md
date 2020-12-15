@@ -1,9 +1,9 @@
 +++
 title = "Search and Filtering"
+weight = 5
 [menu.main]
     parent = "schema"
     identifier = "schema-search"
-    weight = 5   
 +++
 
 The `@search` directive tells Dgraph what search to build into your GraphQL API.

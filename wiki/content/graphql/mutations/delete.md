@@ -1,10 +1,10 @@
 +++
 title = "Delete Mutations"
+weight = 4
 [menu.main]
     parent = "graphql-mutations"
     name = "Delete"
     identifier = "graphql-delete"
-    weight = 4   
 +++
 
 Delete Mutations allows you to delete objects of a particular type.

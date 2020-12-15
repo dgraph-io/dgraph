@@ -1,9 +1,9 @@
 +++
 title = "Overview"
+weight = 1
 [menu.main]
     parent = "todo-app-tutorial"
     identifier = "todo-overview"
-    weight = 1   
 +++
 
 This is a simple tutorial which will take you through making a basic todo app using Dgraph's GraphQL API and integrating it with Auth0.

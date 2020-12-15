@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Run Jepsen tests"
+weight = 10
 [menu.main]
     parent = "howto"
-    weight = 10
 +++
 
 1. Clone the jepsen repo at [https://github.com/jepsen-io/jepsen](https://github.com/jepsen-io/jepsen).

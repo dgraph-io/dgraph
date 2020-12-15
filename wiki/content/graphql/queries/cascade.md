@@ -1,9 +1,9 @@
 +++
 title = "Cascade"
+weight = 5
 [menu.main]
     parent = "graphql-queries"
     name = "Cascade"
-    weight = 5   
 +++
 
 `@cascade` is available as a directive which can be applied on fields. With the @cascade

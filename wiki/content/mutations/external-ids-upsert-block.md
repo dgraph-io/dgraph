@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "External IDs and Upsert Block"
+weight = 4
 [menu.main]
     parent = "mutations"
-    weight = 4
 +++
 
 The upsert block makes managing external IDs easy.

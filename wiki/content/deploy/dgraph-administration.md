@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Dgraph Administration"
+weight = 18
 [menu.main]
     parent = "deploy"
-    weight = 18
 +++
 
 Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.

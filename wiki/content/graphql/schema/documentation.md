@@ -1,8 +1,8 @@
 +++
 title = "Documentation and Comments"
+weight = 6
 [menu.main]
     parent = "schema"
-    weight = 6   
 +++
 
 More documentation about documentation comments coming soon :-)

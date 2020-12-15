@@ -1,8 +1,8 @@
 +++
 title = "Custom Fields"
+weight = 5
 [menu.main]
     parent = "custom"
-    weight = 5   
 +++
 
 Custom fields allow you to extend your types with custom logic as well as make joins between your local data and remote data.
