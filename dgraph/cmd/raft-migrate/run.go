@@ -160,7 +160,6 @@ func run(conf *viper.Viper) error {
 	fmt.Printf("Fetching entries from low: %d to high: %d\n", firstIndex, lastIndex)
 	// Should we batch this up?
 	oldEntries, err := oldWal.Entries(firstIndex, lastIndex+1, math.MaxUint64)
-	x.AssertTrue(len(oldEntries) == oldWal.NumEntries())
 
 	newEntries := make([]raftpb.Entry, len(oldEntries))
 	if isZero {
@@ -193,7 +192,6 @@ func run(conf *viper.Viper) error {
 
 	newWal, err := raftwal.InitEncrypted(newDir, encKey)
 	x.Check(err)
-	defer newWal.Close()
 
 	// Set the raft ID
 	raftID := oldWal.Uint(raftwal.RaftId)
@@ -215,6 +213,9 @@ func run(conf *viper.Viper) error {
 	if err := newWal.Save(&hs, newEntries, &snapshot); err != nil {
 		log.Fatalf("failed to save new state. hs: %+v, snapshot: %+v, oldEntries: %+v, err: %s",
 			hs, oldEntries, snapshot, err)
+	}
+	if err := newWal.Close(); err != nil {
+		log.Fatalf("Failed to close new wal: %s", err)
 	}
 	fmt.Println("Succesfully completed migrating.")
 	return nil
