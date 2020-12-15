@@ -103,11 +103,31 @@ type Author {
 
 GraphQL interfaces allow you to define a generic pattern that multiple types follow.  When a type implements an interface, that means it has all fields of the interface and some extras.  
 
-{{% notice "note" %}}
-When a type implements an interface, GraphQL requires that the type repeats all the fields from the interface.
+When a type implements an interface, GraphQL requires that the type repeats all the fields from the interface. For example:
+
+```graphql
+interface Fruit {
+    id: ID!
+    price: Int!
+}
+
+type Apple implements Fruit {
+    id: ID!
+    price: Int!
+    color: String!
+}
+
+type Banana implements Fruit {
+    id: ID!
+    price: Int!
+}
+```
+
+{{% notice "tip" %}}
+Dgraph doesn't need that repetition in the input schema and will generate the correct GraphQL for you.
 {{% /notice %}}
 
-The following example defines the schema for posts with comment threads. As mentioned, GraphQL requires that the `Question` and `Comment` types repeat the fields from the `Post` interface.
+The following example defines the schema for posts with comment threads. As mentioned, Dgraph will fill in the `Question` and `Comment` types to make the full GraphQL types.
 
 ```graphql
 interface Post {
@@ -116,6 +136,17 @@ interface Post {
     datePublished: DateTime
 }
 
+type Question implements Post {
+    title: String!
+}
+type Comment implements Post {
+    commentsOn: Post!
+}
+```
+
+The generated GraphQL will contain the full types, for example, `Question` and `Comment` get expanded as:
+
+```graphql
 type Question implements Post {
     id: ID!
     text: String
@@ -130,6 +161,32 @@ type Comment implements Post {
     commentsOn: Post!
 }
 ```
+
+{{% notice "note" %}}
+If you have a type that implements two interfaces, Dgraph won't allow a field of the same name in both interfaces, except for the `ID` field.
+{{% /notice %}}
+
+Dgraph currently allows this behavior for `ID` type fields, since the `ID` type field is not actually a predicate. For example:
+
+```graphql
+interface Shape {
+    id: ID!
+    shape: String!
+}
+
+interface Color {
+    id: ID!
+    color: String!
+}
+
+type Figure implements Shape & Color {
+    id: ID!
+    shape: String!
+    color: String!
+    size: Int!
+}
+```
+
 
 ### Union type
 
