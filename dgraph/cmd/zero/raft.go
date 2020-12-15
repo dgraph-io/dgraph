@@ -311,7 +311,7 @@ func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
 	}
 	n.server.orc.purgeBelow(snap.CheckpointTs)
 
-	data, err := snap.Marshal()
+	data, err := snap.GetState().Marshal()
 	x.Check(err)
 
 	for {
@@ -546,11 +546,11 @@ func (n *node) initAndStartNode() error {
 			// It is important that we pick up the conf state here.
 			n.SetConfState(&sp.Metadata.ConfState)
 
-			var zs pb.ZeroSnapshot
-			x.Check(zs.Unmarshal(sp.Data))
-			n.server.SetMembershipState(zs.State)
+			var ms pb.MembershipState
+			x.Check(ms.Unmarshal(sp.Data))
+			n.server.SetMembershipState(&ms)
 			for _, id := range sp.Metadata.ConfState.Nodes {
-				n.Connect(id, zs.State.Zeros[id].Addr)
+				n.Connect(id, ms.Zeros[id].Addr)
 			}
 		}
 
