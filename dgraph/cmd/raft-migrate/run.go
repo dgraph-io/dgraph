@@ -54,7 +54,7 @@ func init() {
 	enc.RegisterFlags(flag)
 }
 
-func updateProposal(entry raftpb.Entry) raftpb.Entry {
+func updateEntry(entry raftpb.Entry) raftpb.Entry {
 	// Raft commits an empty entry on becoming leader.
 	if entry.Type == raftpb.EntryConfChange || len(entry.Data) == 0 {
 		return entry
@@ -93,7 +93,7 @@ func run(conf *viper.Viper) error {
 
 	newEntries := make([]raftpb.Entry, len(oldEntries))
 	for i, entry := range oldEntries {
-		newEntries[i] = updateProposal(entry)
+		newEntries[i] = updateEntry(entry)
 	}
 
 	x.Checkf(err, "failed to read entries from low:%d high:%d err:%s", firstIndex, lastIndex, err)
