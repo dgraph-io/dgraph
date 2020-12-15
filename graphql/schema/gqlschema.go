@@ -1500,17 +1500,23 @@ func getDefaultSearchIndex(fldName string) string {
 func getSearchArgs(fld *ast.FieldDefinition) []string {
 	search := fld.Directives.ForName(searchDirective)
 	id := fld.Directives.ForName(idDirective)
+	fldType := fld.Type.Name()
 	if search == nil {
 		if id == nil {
 			return nil
 		}
+		switch fldType {
 		// If search directive wasn't supplied but id was, then hash is the only index
-		// that we apply.
-		return []string{"hash"}
+		// that we apply for string.
+		case "String":
+			return []string{"hash"}
+		default:
+			return []string{getDefaultSearchIndex(fldType)}
+		}
 	}
 	if len(search.Arguments) == 0 ||
 		len(search.Arguments.ForName(searchArgs).Value.Children) == 0 {
-		return []string{getDefaultSearchIndex(fld.Type.Name())}
+		return []string{getDefaultSearchIndex(fldType)}
 	}
 	val := search.Arguments.ForName(searchArgs).Value
 	res := make([]string, len(val.Children))
@@ -1750,11 +1756,11 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 		})
 	}
 	if hasXIDField {
-		name := xidTypeFor(defn)
+		name, dtype := xidTypeFor(defn)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 			Name: name,
 			Type: &ast.Type{
-				NamedType: "String",
+				NamedType: dtype,
 				NonNull:   !hasIDField,
 			},
 		})
@@ -2363,13 +2369,13 @@ func idTypeFor(defn *ast.Definition) string {
 	return "ID"
 }
 
-func xidTypeFor(defn *ast.Definition) string {
+func xidTypeFor(defn *ast.Definition) (string, string) {
 	for _, fld := range defn.Fields {
 		if hasIDDirective(fld) {
-			return fld.Name
+			return fld.Name, fld.Type.Name()
 		}
 	}
-	return ""
+	return "", ""
 }
 
 func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List {

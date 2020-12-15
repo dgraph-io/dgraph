@@ -29,7 +29,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prometheus/common/log"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -509,7 +509,7 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
 		}
 
 		if containsRetryableUpdateGQLSchemaError(err.Error()) {
-			log.Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
+			glog.Infof("Got error while addSchemaAndData: %v. Retrying...\n", err)
 			time.Sleep(time.Second)
 			continue
 		}
@@ -655,6 +655,9 @@ func RunAll(t *testing.T) {
 	t.Run("query aggregate and other fields at child level", queryAggregateAndOtherFieldsAtChildLevel)
 	t.Run("query at child level with multiple alias on scalar field", queryChildLevelWithMultipleAliasOnScalarField)
 	t.Run("checkUserPassword query", passwordTest)
+	t.Run("query id directive with int", idDirectiveWithInt)
+	t.Run("query id directive with int64", idDirectiveWithInt64)
+	t.Run("query id directive with float", idDirectiveWithFloat)
 	t.Run("query using single ID in a filter that will be coerced to list", queryFilterSingleIDListCoercion)
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -702,6 +705,9 @@ func RunAll(t *testing.T) {
 	t.Run("Geo - MultiPolygon type", mutationMultiPolygonType)
 	t.Run("filter in mutations with array for AND/OR", filterInMutationsWithArrayForAndOr)
 	t.Run("filter in update mutations with array for AND/OR", filterInUpdateMutationsWithFilterAndOr)
+	t.Run("mutation id directive with int", idDirectiveWithIntMutation)
+	t.Run("mutation id directive with int64", idDirectiveWithInt64Mutation)
+	t.Run("mutation id directive with float", idDirectiveWithFloatMutation)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -1158,13 +1164,13 @@ func addSchema(url, schema string) error {
 	return nil
 }
 
-func GetJWT(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) http.Header {
+func GetJWT(t *testing.T, user, role interface{}, metaInfo *testutil.AuthMeta) http.Header {
 	metaInfo.AuthVars = map[string]interface{}{}
-	if user != "" {
+	if user != nil {
 		metaInfo.AuthVars["USER"] = user
 	}
 
-	if role != "" {
+	if role != nil {
 		metaInfo.AuthVars["ROLE"] = role
 	}
 
