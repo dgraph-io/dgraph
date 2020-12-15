@@ -76,7 +76,8 @@ func parseAndConvertSnapshot(snap *raftpb.Snapshot) {
 }
 
 func updateProposalData(entry raftpb.Entry) raftpb.Entry {
-	if entry.Type == raftpb.EntryConfChange {
+	// Raft commits an empty entry on becoming leader.
+	if entry.Type == raftpb.EntryConfChange || len(entry.Data) == 0 {
 		return entry
 	}
 	var oldProposal Proposal
@@ -105,7 +106,8 @@ func updateProposalData(entry raftpb.Entry) raftpb.Entry {
 }
 
 func updateZeroProposalData(entry raftpb.Entry) raftpb.Entry {
-	if entry.Type == raftpb.EntryConfChange {
+	// Raft commits an empty entry on becoming leader.
+	if entry.Type == raftpb.EntryConfChange || len(entry.Data) == 0 {
 		return entry
 	}
 	var oldProposal ZeroProposal
