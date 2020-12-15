@@ -435,7 +435,7 @@ type adminServer struct {
 	resolver *resolve.RequestResolver
 
 	// The mutex that locks schema update operations
-	mux sync.Mutex
+	mux sync.RWMutex
 
 	// The GraphQL server that's being admin'd
 	gqlServer web.IServeGraphQL

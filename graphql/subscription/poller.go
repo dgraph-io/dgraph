@@ -34,7 +34,7 @@ import (
 
 // Poller is used to poll user subscription query.
 type Poller struct {
-	sync.Mutex
+	sync.RWMutex
 	resolver       *resolve.RequestResolver
 	pollRegistry   map[uint64]map[uint64]subscriber
 	subscriptionID uint64
@@ -151,7 +151,10 @@ type pollRequest struct {
 }
 
 func (p *Poller) poll(req *pollRequest) {
+	p.RLock()
 	resolver := p.resolver
+	p.RUnlock()
+
 	pollID := uint64(0)
 	for {
 		pollID++

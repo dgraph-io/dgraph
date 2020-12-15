@@ -66,7 +66,10 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 		return resolve.EmptyResult(m, err), false
 	}
 
+	usr.admin.mux.Lock()
 	oldSchemaHash := farm.Fingerprint64([]byte(usr.admin.schema.Schema))
+	usr.admin.mux.Unlock()
+
 	newSchemaHash := farm.Fingerprint64([]byte(input.Set.Schema))
 	updateHistory := oldSchemaHash != newSchemaHash
 
