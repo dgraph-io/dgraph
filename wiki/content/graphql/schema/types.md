@@ -103,9 +103,11 @@ type Author {
 
 GraphQL interfaces allow you to define a generic pattern that multiple types follow.  When a type implements an interface, that means it has all fields of the interface and some extras.  
 
-When a type implements an interface, GraphQL requires that the type repeats all the fields from the interface, but that's just boilerplate and a maintenance problem, so Dgraph doesn't need that repetition in the input schema and will generate the correct GraphQL for you.
+{{% notice "note" %}}
+When a type implements an interface, GraphQL requires that the type repeats all the fields from the interface.
+{{% /notice %}}
 
-For example, the following defines the schema for posts with comment threads; Dgraph will fill in the `Question` and `Comment` types to make the full GraphQL types.
+The following example defines the schema for posts with comment threads. As mentioned, GraphQL requires that the `Question` and `Comment` types repeat the fields from the `Post` interface.
 
 ```graphql
 interface Post {
@@ -115,28 +117,12 @@ interface Post {
 }
 
 type Question implements Post {
-    title: String!
-}
-
-type Comment implements Post {
-    commentsOn: Post!
-}
-```
-
-The generated GraphQL will contain the full types, for example, `Question` gets expanded as:
-
-```graphql
-type Question implements Post {
     id: ID!
     text: String
     datePublished: DateTime
     title: String!
 }
-```
 
-while `Comment` gets expanded as:
-
-```graphql
 type Comment implements Post {
     id: ID!
     text: String
