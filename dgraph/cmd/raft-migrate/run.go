@@ -16,14 +16,12 @@
 package raftmigrate
 
 import (
-	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
 	"os"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -56,83 +54,15 @@ func init() {
 	enc.RegisterFlags(flag)
 }
 
-func parseAndConvertKey(key, keyFormat string) uint64 {
-	var random uint64
-	var parsedKey uint32
-	fmt.Sscanf(key, keyFormat, &parsedKey, &random)
-	return uint64(uint64(parsedKey)<<32 | random>>32)
-}
-
-func parseAndConvertSnapshot(snap *raftpb.Snapshot) {
-	var ms pb.MembershipState
-	var zs pb.ZeroSnapshot
-	var err error
-	x.Check(ms.Unmarshal(snap.Data))
-	zs.State = &ms
-	zs.Index = snap.Metadata.Index
-	// It is okay to not set zs.CheckpointTs as it is used for purgeBelow.
-	snap.Data, err = zs.Marshal()
-	x.Check(err)
-}
-
-func updateProposalData(entry raftpb.Entry) raftpb.Entry {
+func updateProposal(entry raftpb.Entry) raftpb.Entry {
 	// Raft commits an empty entry on becoming leader.
 	if entry.Type == raftpb.EntryConfChange || len(entry.Data) == 0 {
 		return entry
 	}
-	var oldProposal Proposal
-	oldProposal.Unmarshal(entry.Data)
 
-	var newProposal pb.Proposal
-	newProposal.Mutations = oldProposal.Mutations
-	newProposal.Kv = oldProposal.Kv
-	newProposal.State = oldProposal.State
-	newProposal.CleanPredicate = oldProposal.CleanPredicate
-	newProposal.Delta = oldProposal.Delta
-	newProposal.Snapshot = oldProposal.Snapshot
-	newProposal.Index = oldProposal.Index
-	newProposal.ExpectedChecksum = oldProposal.ExpectedChecksum
-	newProposal.Restore = oldProposal.Restore
-
-	data := make([]byte, 8+newProposal.Size())
-	newKey := parseAndConvertKey(oldProposal.Key, "%02d-%d")
-	binary.BigEndian.PutUint64(data[:8], newKey)
-	sz, err := newProposal.MarshalToSizedBuffer(data[8:])
-	data = data[:8+sz]
-	x.Checkf(err, "Failed to marshal proposal to buffer")
+	data := make([]byte, 8+len(entry.Data))
+	copy(data[8:], entry.Data)
 	entry.Data = data
-
-	return entry
-}
-
-func updateZeroProposalData(entry raftpb.Entry) raftpb.Entry {
-	// Raft commits an empty entry on becoming leader.
-	if entry.Type == raftpb.EntryConfChange || len(entry.Data) == 0 {
-		return entry
-	}
-	var oldProposal ZeroProposal
-	oldProposal.Unmarshal(entry.Data)
-
-	var newProposal pb.ZeroProposal
-	newProposal.SnapshotTs = oldProposal.SnapshotTs
-	newProposal.Member = oldProposal.Member
-	newProposal.Tablet = oldProposal.Tablet
-	newProposal.MaxLeaseId = oldProposal.MaxLeaseId
-	newProposal.MaxTxnTs = oldProposal.MaxTxnTs
-	newProposal.MaxRaftId = oldProposal.MaxRaftId
-	newProposal.Txn = oldProposal.Txn
-	newProposal.Cid = oldProposal.Cid
-	newProposal.License = oldProposal.License
-	// Snapshot is a newly added field hence skipped
-
-	data := make([]byte, 8+newProposal.Size())
-	newKey := parseAndConvertKey(oldProposal.Key, "z%x-%d")
-	binary.BigEndian.PutUint64(data[:8], newKey)
-	sz, err := newProposal.MarshalToSizedBuffer(data[8:])
-	data = data[:8+sz]
-	x.Checkf(err, "Failed to marshal proposal to buffer")
-	entry.Data = data
-
 	return entry
 }
 
@@ -151,8 +81,6 @@ func run(conf *viper.Viper) error {
 	x.Checkf(err, "failed to initialize old wal: %s", err)
 	defer oldWal.Close()
 
-	isZero := oldWal.Uint(raftwal.GroupId) == 0
-
 	firstIndex, err := oldWal.FirstIndex()
 	x.Checkf(err, "failed to read FirstIndex from old wal: %s", err)
 
@@ -164,26 +92,14 @@ func run(conf *viper.Viper) error {
 	oldEntries, err := oldWal.Entries(firstIndex, lastIndex+1, math.MaxUint64)
 
 	newEntries := make([]raftpb.Entry, len(oldEntries))
-	if isZero {
-		for i, entry := range oldEntries {
-			newEntries[i] = updateZeroProposalData(entry)
-		}
-	} else {
-		for i, entry := range oldEntries {
-			newEntries[i] = updateProposalData(entry)
-		}
+	for i, entry := range oldEntries {
+		newEntries[i] = updateProposal(entry)
 	}
 
 	x.Checkf(err, "failed to read entries from low:%d high:%d err:%s", firstIndex, lastIndex, err)
 
 	snapshot, err := oldWal.Snapshot()
 	x.Checkf(err, "failed to read snaphot %s", err)
-	if isZero {
-		// We earlier used to store MembershipState in raftpb.Snapshot. Now we store ZeroSnapshot in
-		// case of zero.
-		fmt.Println("Parsing and converting zero-snapshot")
-		parseAndConvertSnapshot(&snapshot)
-	}
 
 	hs, err := oldWal.HardState()
 	x.Checkf(err, "failed to read hardstate %s", err)
@@ -194,6 +110,12 @@ func run(conf *viper.Viper) error {
 
 	newWal, err := raftwal.InitEncrypted(newDir, encKey)
 	x.Check(err)
+	fmt.Printf("Saving num of oldEntries:%+v\nsnapshot %+v\nhardstate = %+v\n",
+		len(newEntries), snapshot, hs)
+	if err := newWal.Save(&hs, newEntries, &snapshot); err != nil {
+		log.Fatalf("failed to save new state. hs: %+v, snapshot: %+v, oldEntries: %+v, err: %s",
+			hs, oldEntries, snapshot, err)
+	}
 
 	// Set the raft ID
 	raftID := oldWal.Uint(raftwal.RaftId)
@@ -210,12 +132,6 @@ func run(conf *viper.Viper) error {
 	x.Checkf(err, "failed to read checkpoint %s", err)
 	newWal.SetUint(raftwal.CheckpointIndex, checkPoint)
 
-	fmt.Printf("Saving num of oldEntries:%+v\nsnapshot %+v\nhardstate = %+v\n",
-		len(newEntries), snapshot, hs)
-	if err := newWal.Save(&hs, newEntries, &snapshot); err != nil {
-		log.Fatalf("failed to save new state. hs: %+v, snapshot: %+v, oldEntries: %+v, err: %s",
-			hs, oldEntries, snapshot, err)
-	}
 	if err := newWal.Close(); err != nil {
 		log.Fatalf("Failed to close new wal: %s", err)
 	}
