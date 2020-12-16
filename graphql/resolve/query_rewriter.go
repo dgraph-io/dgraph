@@ -1563,11 +1563,6 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					ft := buildFilter(typ, obj.(map[string]interface{}))
 					ands = append(ands, ft)
 				}
-			case []map[string]interface{}:
-				for _, obj := range v {
-					ft := buildFilter(typ, obj)
-					ands = append(ands, ft)
-				}
 			}
 		case "or":
 			// title: { anyofterms: "GraphQL" }, or: { ... }
@@ -1587,16 +1582,6 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 				for _, obj := range v {
 					ft := buildFilter(typ, obj.(map[string]interface{}))
 					ors = append(ors, ft)
-				}
-				or = &gql.FilterTree{
-					Child: ors,
-					Op:    "or",
-				}
-			case []map[string]interface{}:
-				ors := make([]*gql.FilterTree, 0, len(v))
-				for _, obj := range v {
-					ft := buildFilter(typ, obj)
-					ors = append(ands, ft)
 				}
 				or = &gql.FilterTree{
 					Child: ors,
