@@ -125,8 +125,6 @@ func init() {
 
 func run() {
 	ctype, clevel := x.ParseCompression(Bulk.Conf.GetString("badger.compression"))
-	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
-	x.Check(err)
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
@@ -192,6 +190,8 @@ func run() {
 			os.Exit(1)
 		}
 
+		tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
+		x.Check(err)
 		// Need to set zero addr in WorkerConfig before checking the license.
 		x.WorkerConfig.ZeroAddr = []string{opt.ZeroAddr}
 		x.WorkerConfig.TLSClientConfig = tlsConf
