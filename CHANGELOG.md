@@ -120,7 +120,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(worker): Flush the stream writer on error (DGRAPH-2499) ([#6609][])
   - Fix(export): don't return an error if there was no GraphQL schema ([#6815][])
   - Fix pointer misalignment ([#6795][])
-  - stability(zero): add mmaped keyCommit map ([#6804][])
   - Fix(metrics): Show memory metrics for zero ([#6743][])
   - feat(Query): Allow filters in expand(_all_) queries on predicates pointing to nodes ([#6752][])
   - Fix(Ludicrous): Upserts on list type in Dgraph ([#6754][])
@@ -246,7 +245,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6609]: https://github.com/dgraph-io/dgraph/issues/6609
 [#6815]: https://github.com/dgraph-io/dgraph/issues/6815
 [#6795]: https://github.com/dgraph-io/dgraph/issues/6795
-[#6804]: https://github.com/dgraph-io/dgraph/issues/6804
 [#6743]: https://github.com/dgraph-io/dgraph/issues/6743
 [#6752]: https://github.com/dgraph-io/dgraph/issues/6752
 [#6754]: https://github.com/dgraph-io/dgraph/issues/6754
