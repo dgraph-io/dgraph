@@ -103,7 +103,11 @@ type Author {
 
 GraphQL interfaces allow you to define a generic pattern that multiple types follow.  When a type implements an interface, that means it has all fields of the interface and some extras.  
 
-When a type implements an interface, GraphQL requires that the type repeats all the fields from the interface. For example:
+According to GraphQL specifications, you can have the same fields in implementing types as the interface. In such cases, the generated Dgraph schema will have the correct schema without field duplications.
+
+If you repeat a field name in a type, it must be of the same type (including list or scalar types), and it must have the same nullable condition as the interface's field. Note that if the interface's field has a directory like `@search` then it will be inherited by the implementing type's field.
+
+For example:
 
 ```graphql
 interface Fruit {
@@ -124,7 +128,7 @@ type Banana implements Fruit {
 ```
 
 {{% notice "tip" %}}
-Dgraph doesn't need that repetition in the input schema and will generate the correct GraphQL for you.
+GraphQL will generate the correct Dgraph schema where fields occur only once.
 {{% /notice %}}
 
 The following example defines the schema for posts with comment threads. As mentioned, Dgraph will fill in the `Question` and `Comment` types to make the full GraphQL types.
@@ -166,7 +170,7 @@ type Comment implements Post {
 If you have a type that implements two interfaces, Dgraph won't allow a field of the same name in both interfaces, except for the `ID` field.
 {{% /notice %}}
 
-Dgraph currently allows this behavior for `ID` type fields, since the `ID` type field is not actually a predicate. For example:
+Dgraph currently allows this behavior for `ID` type fields since the `ID` type field is not a predicate. Note that in both interfaces and the implementing type, the nullable condition and type (list or scalar) for the `ID` field should be the same. For example:
 
 ```graphql
 interface Shape {
