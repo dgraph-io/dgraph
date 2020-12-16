@@ -17,4 +17,7 @@ releases:
       {{- if env "DGRAPH_BACKUPS_ENABLED" }}
       - ./dgraph-backup-alert-rules.yaml
       {{- end }}
+      {{- if env "DGRAPH_PAGERDUTY_ENABLED" }}
+      - ./alertmanager-pagerduty.yaml.gotmpl
+      {{- end }}
     disableValidation: true
