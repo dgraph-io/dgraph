@@ -17,11 +17,10 @@
 package testutil
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -63,28 +62,15 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	return badger.OpenManaged(opt)
 }
 
-func WaitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
-	query := fmt.Sprintf(`query status() {
-		restoreStatus(restoreId: %d) {
-		   status
-		   errors
-	   }
-   }`, restoreId)
-	params := GraphQLParams{
-		Query: query,
-	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
+func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
 	restoreDone := false
-	client := GetHttpsClient(t)
 	for i := 0; i < 15; i++ {
-		resp, err := client.Post(AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
+		resp, err := http.Get("http://" + SockAddrHttp + "/health")
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)
 		sbuf := string(buf)
-		if strings.Contains(sbuf, "OK") {
+		if !strings.Contains(sbuf, "opRestore") {
 			restoreDone = true
 			break
 		}
@@ -100,7 +86,7 @@ func WaitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	numSuccess := 0
 	for {
 		// This is a dummy query that returns no results.
-		_, err = dg.NewTxn().Query(context.Background(), `{
+		_, err := dg.NewTxn().Query(context.Background(), `{
 	   q(func: has(invalid_pred)) {
 		   invalid_pred
 	   }}`)

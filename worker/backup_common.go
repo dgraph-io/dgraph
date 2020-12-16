@@ -86,10 +86,3 @@ func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
 		Anonymous:    req.GetAnonymous(),
 	}
 }
-
-type RestoreStatus struct {
-	// Status is a string representing the Status, one of "UNKNOWN", "IN_PROGRESS", "OK",
-	// or "ERR".
-	Status string
-	Errors []error
-}
