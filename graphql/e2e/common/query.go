@@ -3283,3 +3283,138 @@ func passwordTest(t *testing.T) {
 
 	deleteUser(t, *newUser)
 }
+
+func queryFilterSingleIDListCoercion(t *testing.T) {
+	authors := addMultipleAuthorFromRef(t, []*author{
+		{
+			Name:          "George",
+			Reputation:    4.5,
+			Qualification: "Phd in CSE",
+			Posts:         []*post{{Title: "A show about nothing", Text: "Got ya!", Tags: []string{}}},
+		}, {
+			Name:       "Jerry",
+			Reputation: 4.6,
+			Country:    &country{Name: "outer Galaxy2"},
+			Posts:      []*post{{Title: "Outside", Tags: []string{}}},
+		},
+	}, postExecutor)
+	authorIds := []string{authors[0].ID, authors[1].ID}
+	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID}
+	countryIds := []string{authors[1].Country.ID}
+	tcase := struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		respData  string
+	}{
+
+		name: "Query using single ID in a filter",
+		query: `query($filter:AuthorFilter){
+                      queryAuthor(filter:$filter){
+                        name
+						reputation
+                        posts {
+                          text
+                        }
+                      }
+				    }`,
+		variables: map[string]interface{}{"filter": map[string]interface{}{"id": authors[0].ID}},
+		respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+	}
+
+	t.Run(tcase.name, func(t *testing.T) {
+		params := &GraphQLParams{
+			Query:     tcase.query,
+			Variables: tcase.variables,
+		}
+		resp := params.ExecuteAsPost(t, GraphqlURL)
+		RequireNoGQLErrors(t, resp)
+		testutil.CompareJSON(t, tcase.respData, string(resp.Data))
+	})
+
+	// cleanup
+	deleteAuthors(t, authorIds, nil)
+	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
+	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
+}
+
+func idDirectiveWithInt64(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  getBook(bookId: 1234567890) {
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+			"getBook": {
+				"bookId": 1234567890,
+				"name": "Dgraph and Graphql",
+				"desc": "All love between dgraph and graphql"
+			  }
+		 }`
+	require.JSONEq(t, expected, string(response.Data))
+}
+
+func idDirectiveWithInt(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  getChapter(chapterId: 1) {
+			bookId
+			chapterId
+			name
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+	  	"getChapter": {
+			"bookId": 1234567890,
+			"chapterId": 1,
+			"name": "How Dgraph Works"
+		  }
+	}`
+	require.JSONEq(t, expected, string(response.Data))
+}
+
+func idDirectiveWithFloat(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  getSection(sectionId: 1.1) {
+			chapterId
+			sectionId
+			name
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+	 	"getSection": {
+			"chapterId": 1,
+			"sectionId": 1.1,
+			"name": "How to define dgraph schema"
+		  }
+	}`
+	require.JSONEq(t, expected, string(response.Data))
+}
