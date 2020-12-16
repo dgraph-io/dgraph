@@ -311,6 +311,8 @@ func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
 	}
 	n.server.orc.purgeBelow(snap.CheckpointTs)
 
+	// We are storing only the MembershipState in the meta file. The other 2 fields of ZeroSnapshot;
+	// Index and CheckpointTs need not be persisted as they are used only for in-memory operations.
 	data, err := snap.GetState().Marshal()
 	x.Check(err)
 
