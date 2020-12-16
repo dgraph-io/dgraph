@@ -6,7 +6,7 @@ weight = 5
     name = "Deep"
 +++
 
-Mutations also allows to perform deep mutation at multiple levels.
+Mutations also allows to perform deep mutation at multiple levels. Deep mutations do not alter linked objects, but can add deeply nested new or existing objects. In the case where you wish to update a nested existing object, you will need to use the update mutation for it's type.
 
 We use the following schema to demonstrate some examples.
 
@@ -27,10 +27,10 @@ type Post {
 }
 ```
 
-### **Example**: Deep Deep mutation using variables
+### **Example**: Add new nested object
 ```graphql
-mutation DeepAuthor($author: DeepAuthorInput!) {
-  DeepAuthor(input: [$author]) {
+mutation updateAuthorWithNewPost($author: DeepAuthorInput!) {
+  updateAuthor(input: [$author]) {
     author {
       id
       name
@@ -57,9 +57,14 @@ Variables:
 }
 ```
 
-### **Example**: Deep update mutation using variables
+### **Example**: Link existing nested object
+
+The following assumes that the post with the postID of `0x456` already exists, and is not currently nested under the author having the id of `0x123`.
+
+Note: this syntax does not remove any other existing posts, but rather adds the existing post to any that may already be nested.
+
 ```graphql
-mutation updateAuthor($patch: UpdateAuthorInput!) {
+mutation updateAuthorWithExitingPost($patch: UpdateAuthorInput!) {
   updateAuthor(input: $patch) {
     author {
       id
@@ -78,12 +83,14 @@ Variables:
       "id": ["0x123"]
     },
     "set": {
-      "posts": [ {
-        "postID": "0x456",
-        "title": "A new title",
-        "text": "Some edited text"
-      } ]
+      "posts": [
+        {
+          "postID": "0x456"
+        } 
+      ]
     }
   }
 }
 ```
+
+In this example above, we could not have effectively modified the existing post's title or text in this query. If we need to modify the post's title or text, we would need to use the `updatePost` mutation either along side the mutation above or as a separate transaction.
