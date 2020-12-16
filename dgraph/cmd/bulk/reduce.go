@@ -42,7 +42,6 @@ import (
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
@@ -126,18 +125,6 @@ func (r *reducer) run() error {
 }
 
 func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB {
-	if r.opt.EncryptionKey != nil {
-		// Need to set zero addr in WorkerConfig before checking the license.
-		x.WorkerConfig.ZeroAddr = []string{r.opt.ZeroAddr}
-
-		if !worker.EnterpriseEnabled() {
-			// Crash since the enterprise license is not enabled..
-			log.Fatal("Enterprise License needed for the Encryption feature.")
-		} else {
-			log.Printf("Encryption feature enabled.")
-		}
-	}
-
 	key := r.opt.EncryptionKey
 	if !r.opt.EncryptedOut {
 		key = nil
