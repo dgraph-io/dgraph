@@ -123,6 +123,8 @@ func init() {
 
 func run() {
 	ctype, clevel := x.ParseCompression(Bulk.Conf.GetString("badger.compression"))
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
+	x.Check(err)
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
@@ -142,6 +144,7 @@ func run() {
 		Version:          Bulk.Conf.GetBool("version"),
 		StoreXids:        Bulk.Conf.GetBool("store_xids"),
 		ZeroAddr:         Bulk.Conf.GetString("zero"),
+		ClientTLSConfig:  tlsConf,
 		HttpAddr:         Bulk.Conf.GetString("http"),
 		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
 		MapShards:        Bulk.Conf.GetInt("map_shards"),

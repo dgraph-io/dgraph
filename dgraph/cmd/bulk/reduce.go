@@ -129,6 +129,7 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 	if r.opt.EncryptionKey != nil {
 		// Need to set zero addr in WorkerConfig before checking the license.
 		x.WorkerConfig.ZeroAddr = []string{r.opt.ZeroAddr}
+		x.WorkerConfig.TLSClientConfig = r.opt.ClientTLSConfig
 
 		if !worker.EnterpriseEnabled() {
 			// Crash since the enterprise license is not enabled..

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"hash/adler32"
 	"io"
@@ -64,6 +65,7 @@ type options struct {
 	Version          bool
 	StoreXids        bool
 	ZeroAddr         string
+	ClientTLSConfig  *tls.Config `json:"-"`
 	HttpAddr         string
 	IgnoreErrors     bool
 	CustomTokenizers string
