@@ -6,7 +6,7 @@ weight = 5
     name = "Deep"
 +++
 
-Mutations also allows to perform deep mutation at multiple levels. Deep mutations do not alter linked objects, but can add deeply nested new or existing objects. In the case where you wish to update a nested existing object, you will need to use the update mutation for it's type.
+Mutations also allows to perform deep mutation at multiple levels. Deep mutations do not alter linked objects, but they can add deeply-nested new or existing objects. To update an existing nested object, use the update mutation for its type.
 
 We use the following schema to demonstrate some examples.
 
@@ -59,9 +59,11 @@ Variables:
 
 ### **Example**: Link existing nested object
 
-The following assumes that the post with the postID of `0x456` already exists, and is not currently nested under the author having the id of `0x123`.
+The following example assumes that the post with the postID of `0x456` already exists, and is not currently nested under the author having the id of `0x123`.
 
-Note: this syntax does not remove any other existing posts, but rather adds the existing post to any that may already be nested.
+{{% notice "note" %}}
+This syntax does not remove any other existing posts, it just adds the existing post to any that may already be nested.
+{{% /notice %}}
 
 ```graphql
 mutation updateAuthorWithExitingPost($patch: UpdateAuthorInput!) {
@@ -93,4 +95,4 @@ Variables:
 }
 ```
 
-In this example above, we could not have effectively modified the existing post's title or text in this query. If we need to modify the post's title or text, we would need to use the `updatePost` mutation either along side the mutation above or as a separate transaction.
+The example query above can't modify the existing post's title or text. To modify the post's title or text, use the `updatePost` mutation either alongside the mutation above, or as a separate transaction.
