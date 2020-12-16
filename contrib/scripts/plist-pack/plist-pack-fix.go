@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -87,8 +88,15 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 }
 func populatePackForPList(plist *pb.PostingList) {
 	enc := codec.Encoder{BlockSize: blockSize}
+	var uids []uint64
 	for _, posting := range plist.Postings {
-		enc.Add(posting.Uid)
+		uids = append(uids, posting.Uid)
+	}
+	sort.Slice(uids, func(i, j int) bool {
+		return uids[i] < uids[j]
+	})
+	for _, uid := range uids {
+		enc.Add(uid)
 	}
 	plist.Pack = enc.Done()
 }
