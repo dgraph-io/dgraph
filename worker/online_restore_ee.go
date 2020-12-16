@@ -65,13 +65,6 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 	if err := FillRestoreCredentials(req.Location, req); err != nil {
 		return errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
 	}
-	// Restore Tracker keeps tracks of ongoing restore operation initiated on the node.
-	// Restore Tracker are node specific. They manage restore operation initiated on the node.
-	// If already initiated on this node, rt.Add() will return already running operation error.
-	restoreId, err := rt.Add()
-	if err != nil {
-		return 0, errors.Wrapf(err, "cannot assign ID to restore operation")
-	}
 
 	// This check if any restore operation running on the node.
 	// Operation initiated on other nodes doesn't have record in the record tracker.
@@ -90,7 +83,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		return false
 	}
 	if isRestoreRunning() {
-		return 0, errors.Errorf("another restore operation is already running. " +
+		return errors.Errorf("another restore operation is already running. " +
 			"Please retry later.")
 	}
 
