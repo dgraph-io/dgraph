@@ -29,6 +29,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/worker"
+
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
@@ -144,7 +146,6 @@ func run() {
 		Version:          Bulk.Conf.GetBool("version"),
 		StoreXids:        Bulk.Conf.GetBool("store_xids"),
 		ZeroAddr:         Bulk.Conf.GetString("zero"),
-		ClientTLSConfig:  tlsConf,
 		HttpAddr:         Bulk.Conf.GetString("http"),
 		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
 		MapShards:        Bulk.Conf.GetInt("map_shards"),
@@ -189,6 +190,16 @@ func run() {
 		if !opt.Encrypted && !opt.EncryptedOut {
 			fmt.Fprint(os.Stderr, "Must set --encrypted and/or --encrypted_out to true when providing encryption key.\n")
 			os.Exit(1)
+		}
+
+		// Need to set zero addr in WorkerConfig before checking the license.
+		x.WorkerConfig.ZeroAddr = []string{opt.ZeroAddr}
+		x.WorkerConfig.TLSClientConfig = tlsConf
+		if !worker.EnterpriseEnabled() {
+			// Crash since the enterprise license is not enabled..
+			log.Fatal("Enterprise License needed for the Encryption feature.")
+		} else {
+			log.Printf("Encryption feature enabled.")
 		}
 	}
 	fmt.Printf("Encrypted input: %v; Encrypted output: %v\n", opt.Encrypted, opt.EncryptedOut)
