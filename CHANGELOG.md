@@ -12,6 +12,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - [BREAKING] Feat: Use snappy compression by default. ([#6697][])
 - [BREAKING] Fix(OOM): Don't unmarshal pb.Proposals until we need them ([#7059][])
 - [BREAKING] Feat(Dgraph): Use Badger with new WAL format. ([#6643][])
+- [BREAKING] Switch Raft WAL to use simple files ([#6572][])
 - Feat(tls):  splitting tls_dir + making health point available on HTTP ([#6821][])
 
 ### Added
@@ -36,23 +37,21 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Feat(GraphQL): Add support for Geo point type in Graphql. ([#6481][])
   - Feat(GraphQL): GraphQL now has lambda resolvers ([#6574][])
   - Feat(GraphQL): Support authorization with jwk_url ([#6564][])
-  - Feat(graphql): GQL Logging MW for admin query/mutation ([#6562][])
+  - Feat(GraphQL): GQL Logging MW for admin query/mutation ([#6562][])
   - Feat: add schema history to graphql ([#6324][])
   - Feat(GraphQL): Add GraphQL schema validation Endpoint. ([#6250][])
   - Feat(GraphQL): This PR adds parameterised cascade in graphql. ([#6251][])
   - Feat(GraphQL): add has filter support ([#6258][])
   - Feat(GraphQL): GraphQL now has Int64 as scalar type ([#6200][])
   - Feat(GraphQL): @custom HTTP body now supports hardcoded scalars ([#6157][])
-  - Feat(dgraph): Add suport for RDF query. ([#6038][])
   - Feat(GraphQL): Custom logic now supports DQL queries ([#6115][])
   - Feat(GraphQL): This PR allows to return errors from custom REST endpoint. ([#6604][])
 
 - Core Dgraph
+  - Feat(dgraph): Add suport for RDF query. ([#6038][])
   - perf(xidmap): Use btree with hash of keys for xidmap ([#6902][])
   - Feat(Query): Enable persistent queries in dgraph ([#6788][])
-  - Fix(ludicrous mode): Handle deletes correctly ([#6773][])
   - Feat(Dgraph): Add ability to change size of caches through the admin interface. ([#6644][])
-  - Switch Raft WAL to use simple files ([#6572][])
   - Feat(query): Support for between func with count at root ([#6556][])
   - Feat(querylang): language support for term tokenization ([#6269][])
   - Feat(ludicrous): Run mutations from the same predicate concurrently in ludicrous mode ([#6060][])
@@ -75,17 +74,17 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
    interface and allow to inherit field of same name of type ID  from multiple interfaces. ([#7053][])
   - Fix(GraphQL): Fix password query rewriting in release/v20.11 ([#7012][])
   - Fix(GraphQL): Fix bug with password query rewriting ([#7011][])
-  - Fix(GraphQL):This PR allows to use fragments on interfaces while querying other interface.  ([#6964][])
+  - Fix(GraphQL): Use fragments on interfaces while querying other interface.  ([#6964][])
   - Fix(GraphQL): Fix multiple alias in query ([#6940][])
   - Fix(GraphQL): Add support for using auth with secret directive ([#6920][])
   - Fix(GraphQL): Fix exclusion of filters in Query generation ([#6917][])
   - Fix(GraphQL): handle filters for enum properly ([#6916][])
-  - Fix(GraphQL): This PR Fixes issue of multiple responses in a subscription for an update. ([#6868][])
+  - Fix(GraphQL): Fixes issue of multiple responses in a subscription for an update. ([#6868][])
   - Fix(GraphQL): Fix panic caused when trying to delete a nested object which doesn't have id/xid ([#6810][])
   - Fix(GraphQL): Fix between filter bugs ([#6822][])
-  - Fix(GraphQL): This PR Fix panic error when we give null value in filter connectives. ([#6707][])
-  - Fix(GraphQL Query): Remove extra fields when querying interfaces ([#6596][])
-  - Fix (graphql): disallowing field names with as ([#6579][])
+  - Fix(GraphQL): Fix panic error when we give null value in filter connectives. ([#6707][])
+  - Fix(GraphQL): Remove extra fields when querying interfaces ([#6596][])
+  - Fix(GraphQL): disallowing field names with as ([#6579][])
   - Fix(GraphQL): Fix object Linking with `hasInverse` ([#6557][])
   - Fix(GraphQL): Fix cascade with auth query when RBAC is false ([#6444][])
   - Fix(GraphQL): Generate correct schema when no orderable field in a type ([#6456][])
@@ -93,7 +92,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(GraphQL): Fix for deletion on interfaces with no non Id field ([#6387][])
   - Fix(GraphQL): don't generate orderable enum value for list fields ([#6392][])
   - Fix(GraphQL): Fix introspection completion bug ([#6385][])
-  - Fix(GraphQL): This PR  extend int64 range to 64-bit numeric values and adds input coercing and validation for integers. ([#6275][])
+  - Fix(GraphQL): Extend int64 range to 64-bit numeric values and adds input coercing and
+   validation for integers. ([#6275][])
   - Fix(GraphQL): Remove auth error from mutation. ([#6329][])
   - Fix(GraphQL): Fix query rewriting for auth delete when deleting types with inverse field. ([#6350][])
   - Fix(GraphQL): incorrect generatedSchema in updateGQLSchema ([#6349][])
@@ -113,6 +113,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(GraphQL): Fix getType queries when id was used as a name for types other than ID ([#6130][])
 
 - Core Dgraph
+  - Fix(ludicrous mode): Handle deletes correctly ([#6773][])
   - Fix(Zero): Fix how Zero snapshots and purge works ([#7096][])
   - Fix: Check for nil ServerCloser in shutdown handler ([#7048][])
   - Fix(health): Update health only after upserting schema and types ([#7006][])
@@ -140,7 +141,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(Dgraph): Don't store start_ts in postings. ([#6206][])
   - Fix(Dgraph): Perform rollups more aggresively. ([#6143][])
   - Fix(rollups): rollup a batch if more than 2 seconds elapsed since last batch ([#6118][])
-  - Fix(Dgraph): Don't store start_ts in postings. ([#6127][])
 
 - Enterprise Features
   - Fix(enterprise): Set version correctly post marshalling during restore ([#7018][])
@@ -154,6 +154,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6697]: https://github.com/dgraph-io/dgraph/issues/6697
 [#7059]: https://github.com/dgraph-io/dgraph/issues/7059
 [#6643]: https://github.com/dgraph-io/dgraph/issues/6643
+[#6572]: https://github.com/dgraph-io/dgraph/issues/6572
 [#6821]: https://github.com/dgraph-io/dgraph/issues/6821
 [#7022]: https://github.com/dgraph-io/dgraph/issues/7022
 [#6985]: https://github.com/dgraph-io/dgraph/issues/6985
@@ -188,7 +189,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6788]: https://github.com/dgraph-io/dgraph/issues/6788
 [#6773]: https://github.com/dgraph-io/dgraph/issues/6773
 [#6644]: https://github.com/dgraph-io/dgraph/issues/6644
-[#6572]: https://github.com/dgraph-io/dgraph/issues/6572
 [#6556]: https://github.com/dgraph-io/dgraph/issues/6556
 [#6269]: https://github.com/dgraph-io/dgraph/issues/6269
 [#6060]: https://github.com/dgraph-io/dgraph/issues/6060
@@ -267,7 +267,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6206]: https://github.com/dgraph-io/dgraph/issues/6206
 [#6143]: https://github.com/dgraph-io/dgraph/issues/6143
 [#6118]: https://github.com/dgraph-io/dgraph/issues/6118
-[#6127]: https://github.com/dgraph-io/dgraph/issues/6127
 [#7018]: https://github.com/dgraph-io/dgraph/issues/7018
 [#6987]: https://github.com/dgraph-io/dgraph/issues/6987
 [#6844]: https://github.com/dgraph-io/dgraph/issues/6844
