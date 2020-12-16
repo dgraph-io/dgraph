@@ -22,6 +22,7 @@ import (
 	"os"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -61,9 +62,24 @@ func updateEntry(entry raftpb.Entry) raftpb.Entry {
 	}
 
 	data := make([]byte, 8+len(entry.Data))
+	// First 8 bytes are used to store key in current raftwal format. We don't need the key in
+	// migrate tool. In zero, we don't use the key and in alpha the key used for not applying the
+	// same proposal twice.
 	copy(data[8:], entry.Data)
 	entry.Data = data
 	return entry
+}
+
+func parseAndConvertSnapshot(snap *raftpb.Snapshot) {
+	var ms pb.MembershipState
+	var zs pb.ZeroSnapshot
+	var err error
+	x.Check(ms.Unmarshal(snap.Data))
+	zs.State = &ms
+	zs.Index = snap.Metadata.Index
+	// It is okay to not set zs.CheckpointTs as it is used for purgeBelow.
+	snap.Data, err = zs.Marshal()
+	x.Check(err)
 }
 
 func run(conf *viper.Viper) error {
@@ -98,24 +114,12 @@ func run(conf *viper.Viper) error {
 
 	x.Checkf(err, "failed to read entries from low:%d high:%d err:%s", firstIndex, lastIndex, err)
 
-	snapshot, err := oldWal.Snapshot()
-	x.Checkf(err, "failed to read snaphot %s", err)
-
-	hs, err := oldWal.HardState()
-	x.Checkf(err, "failed to read hardstate %s", err)
-
 	if _, err := os.Stat(newDir); os.IsNotExist(err) {
 		os.Mkdir(newDir, 0777)
 	}
 
 	newWal, err := raftwal.InitEncrypted(newDir, encKey)
 	x.Check(err)
-	fmt.Printf("Saving num of oldEntries:%+v\nsnapshot %+v\nhardstate = %+v\n",
-		len(newEntries), snapshot, hs)
-	if err := newWal.Save(&hs, newEntries, &snapshot); err != nil {
-		log.Fatalf("failed to save new state. hs: %+v, snapshot: %+v, oldEntries: %+v, err: %s",
-			hs, oldEntries, snapshot, err)
-	}
 
 	// Set the raft ID
 	raftID := oldWal.Uint(raftwal.RaftId)
@@ -131,6 +135,25 @@ func run(conf *viper.Viper) error {
 	checkPoint, err := oldWal.Checkpoint()
 	x.Checkf(err, "failed to read checkpoint %s", err)
 	newWal.SetUint(raftwal.CheckpointIndex, checkPoint)
+
+	snapshot, err := oldWal.Snapshot()
+	x.Checkf(err, "failed to read snaphot %s", err)
+	if groupID == 0 {
+		// We earlier used to store MembershipState in raftpb.Snapshot. Now we store ZeroSnapshot in
+		// case of zero.
+		fmt.Println("Parsing and converting zero-snapshot")
+		parseAndConvertSnapshot(&snapshot)
+	}
+
+	hs, err := oldWal.HardState()
+	x.Checkf(err, "failed to read hardstate %s", err)
+
+	fmt.Printf("Saving num of oldEntries:%+v\nsnapshot %+v\nhardstate = %+v\n",
+		len(newEntries), snapshot, hs)
+	if err := newWal.Save(&hs, newEntries, &snapshot); err != nil {
+		log.Fatalf("failed to save new state. hs: %+v, snapshot: %+v, oldEntries: %+v, err: %s",
+			hs, oldEntries, snapshot, err)
+	}
 
 	if err := newWal.Close(); err != nil {
 		log.Fatalf("Failed to close new wal: %s", err)
