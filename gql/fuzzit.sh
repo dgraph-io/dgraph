@@ -18,7 +18,7 @@ wget -O fuzzit https://github.com/fuzzitdev/fuzzit/releases/latest/download/fuzz
 chmod a+x fuzzit
 
 ## Create a target on fuzzit servers
-./fuzzit create target --skip-if-exists --seed ./gql/fuzz-data/corpus.tar.gz parser-fuzz-target
+#./fuzzit create target --skip-if-exists --seed ./gql/fuzz-data/corpus.tar.gz parser-fuzz-target
 ## Start a job (${1} = [fuzzing][local-regression]).
 ./fuzzit create job --type "${1}" dgraph-io-gh/parser-fuzz-target parser-fuzz-target
 
