@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -200,7 +199,8 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
 	if detectRace(prefix) {
-		return errors.New("race condition detected. check logs for more details")
+		return fmt.Errorf("race condition detected for test package %s and cluster with prefix" +
+			" %s. check logs for more details", pkg, prefix)
 	}
 	return nil
 }

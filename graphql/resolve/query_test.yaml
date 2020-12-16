@@ -916,7 +916,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR le(Author.dob, "2001-01-01"))) {
+      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR (le(Author.dob, "2001-01-01")))) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -948,7 +948,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter(eq(Author.name, "A. N. Author")) {
+      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author"))) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -965,7 +965,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter(((eq(Author.name, "A. N. Author") AND gt(Author.reputation, "2.5")) OR le(Author.dob, "2001-01-01"))) {
+      queryAuthor(func: type(Author)) @filter(((eq(Author.name, "A. N. Author") AND gt(Author.reputation, "2.5")) OR (le(Author.dob, "2001-01-01")))) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -981,7 +981,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR (le(Author.dob, "2001-01-01") AND gt(Author.reputation, "2.5")))) {
+      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR ((le(Author.dob, "2001-01-01") AND gt(Author.reputation, "2.5"))))) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -997,7 +997,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR (gt(Author.reputation, "2.5") OR le(Author.dob, "2001-01-01")))) {
+      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR ((gt(Author.reputation, "2.5") OR (le(Author.dob, "2001-01-01")))))) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -1257,7 +1257,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter((gt(Author.reputation, "1.1") OR (ge(Author.reputation, "1.1") OR (lt(Author.reputation, "1.1") OR (le(Author.reputation, "1.1") OR eq(Author.reputation, "1.1")))))) {
+      queryAuthor(func: type(Author)) @filter((gt(Author.reputation, "1.1") OR ((ge(Author.reputation, "1.1") OR ((lt(Author.reputation, "1.1") OR ((le(Author.reputation, "1.1") OR (eq(Author.reputation, "1.1")))))))))) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -1273,7 +1273,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter((gt(Author.dob, "2000-01-01") OR (ge(Author.dob, "2000-01-01") OR (lt(Author.dob, "2000-01-01") OR (le(Author.dob, "2000-01-01") OR eq(Author.dob, "2000-01-01")))))) {
+      queryAuthor(func: type(Author)) @filter((gt(Author.dob, "2000-01-01") OR ((ge(Author.dob, "2000-01-01") OR ((lt(Author.dob, "2000-01-01") OR ((le(Author.dob, "2000-01-01") OR (eq(Author.dob, "2000-01-01")))))))))) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -1289,7 +1289,7 @@
     }
   dgquery: |-
     query {
-      queryPost(func: type(Post)) @filter((gt(Post.numLikes, 10) OR (ge(Post.numLikes, 10) OR (lt(Post.numLikes, 10) OR (le(Post.numLikes, 10) OR eq(Post.numLikes, 10)))))) {
+      queryPost(func: type(Post)) @filter((gt(Post.numLikes, 10) OR ((ge(Post.numLikes, 10) OR ((lt(Post.numLikes, 10) OR ((le(Post.numLikes, 10) OR (eq(Post.numLikes, 10)))))))))) {
         title : Post.title
         dgraph.uid : uid
       }
@@ -1321,7 +1321,7 @@
     }
   dgquery: |-
     query {
-      queryCountry(func: type(Country)) @filter((gt(Country.name, "AAA") OR (ge(Country.name, "AAA") OR (lt(Country.name, "AAA") OR (le(Country.name, "AAA") OR eq(Country.name, "AAA")))))) {
+      queryCountry(func: type(Country)) @filter((gt(Country.name, "AAA") OR ((ge(Country.name, "AAA") OR ((lt(Country.name, "AAA") OR ((le(Country.name, "AAA") OR (eq(Country.name, "AAA")))))))))) {
         name : Country.name
         dgraph.uid : uid
       }
@@ -1370,7 +1370,7 @@
     }
   dgquery: |-
     query {
-      queryCountry(func: type(Country)) @filter(((gt(Country.name, "AAA") OR lt(Country.name, "XXX")) AND (gt(Country.name, "CCC") OR lt(Country.name, "MMM")))) {
+      queryCountry(func: type(Country)) @filter(((gt(Country.name, "AAA") OR (lt(Country.name, "XXX"))) AND (gt(Country.name, "CCC") OR (lt(Country.name, "MMM"))))) {
         name : Country.name
         dgraph.uid : uid
       }
@@ -1386,7 +1386,7 @@
     }
   dgquery: |-
     query {
-      queryPost(func: type(Post)) @filter((anyofterms(Post.title, "GraphQL") OR allofterms(Post.title, "GraphQL"))) {
+      queryPost(func: type(Post)) @filter((anyofterms(Post.title, "GraphQL") OR (allofterms(Post.title, "GraphQL")))) {
         title : Post.title
         dgraph.uid : uid
       }
@@ -1403,7 +1403,7 @@
     }
   dgquery: |-
     query {
-      queryPost(func: type(Post)) @filter((anyoftext(Post.text, "GraphQL") OR alloftext(Post.text, "GraphQL"))) {
+      queryPost(func: type(Post)) @filter((anyoftext(Post.text, "GraphQL") OR (alloftext(Post.text, "GraphQL")))) {
         title : Post.title
         dgraph.uid : uid
       }
@@ -3127,5 +3127,21 @@
       var(func: type(Tweets)) {
         countVar as count(uid)
         scoreVar as Tweets.score
+      }
+    }
+
+-
+  name: "query using single ID in filter"
+  gqlquery: |
+      query {
+        queryAuthor(filter:{id: "0x1"}) {
+          name
+          }
+        }
+  dgquery: |-
+    query {
+      queryAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+        dgraph.uid : uid
       }
     }
