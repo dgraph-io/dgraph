@@ -28,7 +28,7 @@ import (
 
 func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 	glog.Warningf("Restore failed: %v", x.ErrNotSupported)
-	return 0, x.ErrNotSupported
+	return x.ErrNotSupported
 }
 
 // Restore implements the Worker interface.
