@@ -238,6 +238,8 @@ func (rf *resolverFactory) WithQueryResolver(
 
 func (rf *resolverFactory) WithMutationResolver(
 	name string, resolver func(schema.Mutation) MutationResolver) ResolverFactory {
+	rf.Lock()
+	defer rf.Unlock()
 	rf.mutationResolvers[name] = resolver
 	return rf
 }

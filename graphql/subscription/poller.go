@@ -66,9 +66,12 @@ type subscriber struct {
 // If it doesn't exist, then it creates a new polling goroutine for the given request.
 func (p *Poller) AddSubscriber(
 	req *schema.Request, customClaims *authorization.CustomClaims) (*SubscriberResponse, error) {
+	p.RLock()
+	resolver := p.resolver
+	p.RUnlock()
 
 	localEpoch := atomic.LoadUint64(p.globalEpoch)
-	err := p.resolver.ValidateSubscription(req)
+	err := resolver.ValidateSubscription(req)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +94,7 @@ func (p *Poller) AddSubscriber(
 	defer p.Unlock()
 
 	ctx := context.WithValue(context.Background(), authorization.AuthVariables, customClaims.AuthVariables)
-	res := p.resolver.Resolve(ctx, req)
+	res := resolver.Resolve(ctx, req)
 	if len(res.Errors) != 0 {
 		return nil, res.Errors
 	}
