@@ -276,6 +276,8 @@ func (m *XidMap) AllocateUid() uint64 {
 
 // Flush must be called if DB is provided to XidMap.
 func (m *XidMap) Flush() error {
+	// Make shards nil so that the memory held by the btree can be GCed.
+	m.shards = nil
 	if m.writer == nil {
 		return nil
 	}
