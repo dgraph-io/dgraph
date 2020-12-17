@@ -435,7 +435,7 @@ type adminServer struct {
 	resolver *resolve.RequestResolver
 
 	// The mutex that locks schema update operations
-	mux sync.Mutex
+	mux sync.RWMutex
 
 	// The GraphQL server that's being admin'd
 	gqlServer web.IServeGraphQL
@@ -534,13 +534,13 @@ func newAdminResolver(
 			ID:     query.UidToHex(pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
-		server.mux.Lock()
+		server.mux.RLock()
 		if newSchema.Schema == server.schema.Schema {
 			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
-			server.mux.Unlock()
+			server.mux.RUnlock()
 			return
 		}
-		server.mux.Unlock()
+		server.mux.RUnlock()
 		var gqlSchema schema.Schema
 		// on drop_all, we will receive an empty string as the schema update
 		if newSchema.Schema != "" {
