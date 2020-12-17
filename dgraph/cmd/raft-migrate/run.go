@@ -121,17 +121,17 @@ func run(conf *viper.Viper) error {
 	newWal, err := raftwal.InitEncrypted(newDir, encKey)
 	x.Check(err)
 
-	// Set the raft ID
+	// Set the raft ID.
 	raftID := oldWal.Uint(raftwal.RaftId)
 	fmt.Printf("Setting raftID to: %+v\n", raftID)
 	newWal.SetUint(raftwal.RaftId, raftID)
 
-	// Set the Group ID
+	// Set the Group ID.
 	groupID := oldWal.Uint(raftwal.GroupId)
 	fmt.Printf("Setting GroupID to: %+v\n", groupID)
 	newWal.SetUint(raftwal.GroupId, groupID)
 
-	// Set the checkpoint index
+	// Set the checkpoint index.
 	checkPoint, err := oldWal.Checkpoint()
 	x.Checkf(err, "failed to read checkpoint %s", err)
 	newWal.SetUint(raftwal.CheckpointIndex, checkPoint)
