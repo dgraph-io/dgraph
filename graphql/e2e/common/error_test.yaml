@@ -349,3 +349,19 @@
   errors:
     [ { "message": "Out of range value '2147483648', for type `Int`",
         "locations": [ { "line": 2, "column": 53 } ] } ]
+
+- name: "Error for int value given in list"
+  gqlrequest: |
+    mutation {
+      addpost1(input:[{title:"Dgraph",commentsByMonth: [2147483648,33,1,66]}]){
+        post1{
+          title
+          commentsByMonth
+        }
+      }
+    }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Out of range value '2147483648', for type `Int`",
+        "locations": [ { "line": 2, "column": 53 } ] } ]

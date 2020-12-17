@@ -1749,7 +1749,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 			},
 		})
 	}
-	if hasXIDField {
+	if hasXIDField && defn.Kind != "INTERFACE" {
 		name := xidTypeFor(defn)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 			Name: name,
