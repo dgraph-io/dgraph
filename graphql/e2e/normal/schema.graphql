@@ -209,6 +209,10 @@ type Person1 {
     friends: [Person1] @hasInverse(field: friends)
 }
 
+interface People1 {
+        xid: String! @id
+        name: String!
+}
 # union testing - start
 enum AnimalCategory {
         Fish

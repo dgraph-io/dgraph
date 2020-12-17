@@ -350,18 +350,28 @@
     [ { "message": "Out of range value '2147483648', for type `Int`",
         "locations": [ { "line": 2, "column": 53 } ] } ]
 
-- name: "Error for int value given in list"
+- name: "Error for get query on interface when querying field of type @id"
   gqlrequest: |
-    mutation {
-      addpost1(input:[{title:"Dgraph",commentsByMonth: [2147483648,33,1,66]}]){
-        post1{
-          title
-          commentsByMonth
-        }
+    query {
+      getPeople(xid:"xyz"){
+          xid
       }
     }
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Out of range value '2147483648', for type `Int`",
-        "locations": [ { "line": 2, "column": 53 } ] } ]
+    [ { "message": "Unknown argument \"xid\" on field \"getPeople\" of type \"Query\". Did you mean \"id\"?",
+        "locations": [ { "line": 2, "column": 3 } ] } ]
+
+- name: "Error for get query on interface when it doesn't have field of type ID"
+  gqlrequest: |
+    query {
+      getPeople1(xid:"xyz"){
+          xid
+      }
+    }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Cannot query field \"getPeople1\" on type \"Query\". Did you mean \"getPeople\", \"queryPeople1\", \"getPerson1\", \"getpost1\", or \"getPost1\"?",
+        "locations": [ { "line": 2, "column": 3 } ] } ]

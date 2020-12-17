@@ -105,6 +105,19 @@
             ]
         },
         {
+            "predicate": "People1.name",
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "People1.xid",
+            "tokenizer": [
+                 "hash"
+               ],
+            "type": "string",
+            "upsert": true
+        },
+        {
             "predicate": "Country.states",
             "type": "uid",
             "list": true
@@ -555,6 +568,17 @@
                 }
             ],
             "name": "Character"
+        },
+        {
+              "fields": [
+                  {
+                      "name": "People1.name"
+                  },
+                  {
+                    "name": "People1.xid"
+                  }
+              ],
+             "name": "People1"
         },
         {
             "fields": [
