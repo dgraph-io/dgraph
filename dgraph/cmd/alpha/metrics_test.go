@@ -78,7 +78,7 @@ func fetchMetric(t *testing.T) int {
 	requiredMetric := "dgraph_txn_aborts_total"
 	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
 	require.NoError(t, err)
-	_, body, err := runRequest(req)
+	_, body, _, err := runRequest(req)
 	require.NoError(t, err)
 	metricsMap, err := extractMetrics(string(body))
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestMetrics(t *testing.T) {
 	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
 	require.NoError(t, err)
 
-	_, body, err := runRequest(req)
+	_, body, _, err := runRequest(req)
 	require.NoError(t, err)
 	metricsMap, err := extractMetrics(string(body))
 	require.NoError(t, err, "Unable to get the metrics map: %v", err)
