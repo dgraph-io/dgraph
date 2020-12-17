@@ -145,6 +145,7 @@ type Field interface {
 	ConstructedForDgraphPredicate() string
 	DgraphPredicateForAggregateField() string
 	IsAggregateField() bool
+	BuildError(message string, path []interface{}) *x.GqlError
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -879,6 +880,16 @@ func (f *field) IsAggregateField() bool {
 		strings.HasSuffix(f.Type().Name(), "AggregateResult")
 }
 
+func (f *field) BuildError(message string, path []interface{}) *x.GqlError {
+	pathCopy := make([]interface{}, len(path))
+	copy(pathCopy, path)
+	return &x.GqlError{
+		Message:   message,
+		Locations: []x.Location{f.Location()},
+		Path:      pathCopy,
+	}
+}
+
 func (f *field) Arguments() map[string]interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
@@ -1347,6 +1358,10 @@ func (q *query) IsAggregateField() bool {
 	return (*field)(q).IsAggregateField()
 }
 
+func (q *query) BuildError(message string, path []interface{}) *x.GqlError {
+	return (*field)(q).BuildError(message, path)
+}
+
 func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
 	// copy the template, so that multiple queries can run rewriting for the rule.
 	return &query{
@@ -1767,6 +1782,10 @@ func (m *mutation) IsAuthQuery() bool {
 
 func (m *mutation) IsAggregateField() bool {
 	return (*field)(m).IsAggregateField()
+}
+
+func (m *mutation) BuildError(message string, path []interface{}) *x.GqlError {
+	return (*field)(m).BuildError(message, path)
 }
 
 func (t *astType) AuthRules() *TypeAuth {

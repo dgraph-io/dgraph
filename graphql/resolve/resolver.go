@@ -574,18 +574,22 @@ func addResult(resp *schema.Response, res *Resolved) {
 	// - q { f { g } }
 	// a path to the 2nd item in the f list would look like:
 	// - [ "q", "f", 2, "g" ]
-	path := make([]interface{}, 0, maxPathLength(res.Field))
-	var b []byte
-	var gqlErr x.GqlErrorList
+	if b, ok := res.Data.([]byte); ok {
+		resp.AddData(b)
+	} else {
+		path := make([]interface{}, 0, maxPathLength(res.Field))
+		//var b []byte
+		var gqlErr x.GqlErrorList
 
-	if res.Data != nil {
-		b, gqlErr = completeObject(path, []schema.Field{res.Field},
-			res.Data.(map[string]interface{}))
+		if res.Data != nil {
+			b, gqlErr = completeObject(path, []schema.Field{res.Field},
+				res.Data.(map[string]interface{}))
+		}
+		resp.WithError(gqlErr)
+		resp.AddData(b)
 	}
 
 	resp.WithError(res.Err)
-	resp.WithError(gqlErr)
-	resp.AddData(b)
 	resp.MergeExtensions(res.Extensions)
 }
 

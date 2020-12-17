@@ -29,6 +29,8 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
+	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
+
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
@@ -45,7 +47,7 @@ import (
 )
 
 // ToJson converts the list of subgraph into a JSON response by calling toFastJSON.
-func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
+func ToJson(l *Latency, sgl []*SubGraph, field gqlSchema.Field) ([]byte, error) {
 	sgr := &SubGraph{}
 	for _, sg := range sgl {
 		if sg.Params.Alias == "var" || sg.Params.Alias == "shortest" {
@@ -56,7 +58,7 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}
-	data, err := sgr.toFastJSON(l)
+	data, err := sgr.toFastJSON(l, field)
 	if err != nil {
 		glog.Errorf("while running ToJson: %v\n", err)
 	}
@@ -1045,7 +1047,7 @@ type Extensions struct {
 	Metrics *api.Metrics    `json:"metrics,omitempty"`
 }
 
-func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
+func (sg *SubGraph) toFastJSON(l *Latency, field gqlSchema.Field) ([]byte, error) {
 	encodingStart := time.Now()
 	defer func() {
 		l.Json = time.Since(encodingStart)
@@ -1053,6 +1055,8 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 
 	enc := newEncoder()
 	defer func() {
+		// Put encoder's arena back to arena pool.
+		arenaPool.Put(enc.arena)
 		enc.alloc.Release()
 	}()
 
@@ -1071,12 +1075,18 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	// https://facebook.github.io/graphql/#sec-Response-Format
 
 	var bufw bytes.Buffer
-	if enc.children(n) == nil {
-		if _, err := bufw.WriteString(`{}`); err != nil {
-			return nil, err
+	if field == nil {
+		if enc.children(n) == nil {
+			if _, err := bufw.WriteString(`{}`); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := enc.encode(n, &bufw); err != nil {
+				return nil, err
+			}
 		}
 	} else {
-		if err := enc.encode(n, &bufw); err != nil {
+		if err := enc.encodeGraphQL(n, &bufw, []gqlSchema.Field{field}); err != nil {
 			return nil, err
 		}
 	}
@@ -1087,8 +1097,6 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 			" is bigger than threshold: %d", bufw.Len(), maxEncodedSize)
 	}
 
-	// Put encoder's arena back to arena pool.
-	arenaPool.Put(enc.arena)
 	return bufw.Bytes(), nil
 }
 

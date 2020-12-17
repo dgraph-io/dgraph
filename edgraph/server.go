@@ -49,6 +49,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/gql"
+	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -300,8 +301,8 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 // then restoring from the incremental backup of such a DB would restore even the dropped
 // data back.
 func insertDropRecord(ctx context.Context, dropOp string) error {
-	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true),
-		&api.Request{
+	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), &RequestWithContext{
+		req: &api.Request{
 			Mutations: []*api.Mutation{{
 				Set: []*api.NQuad{{
 					Subject:     "_:r",
@@ -310,7 +311,7 @@ func insertDropRecord(ctx context.Context, dropOp string) error {
 				}},
 			}},
 			CommitNow: true,
-		}, NoAuthorize)
+		}, doAuth: NoAuthorize})
 	return err
 }
 
@@ -911,11 +912,19 @@ type queryContext struct {
 	span *trace.Span
 	// graphql indicates whether the given request is from graphql admin or not.
 	graphql bool
+	// gqlField stores the GraphQL field for which the query is being processed.
+	gqlField gqlSchema.Field
 	// nquadsCount maintains numbers of nquads which would be inserted as part of this request.
 	// In some cases(mostly upserts), numbers of nquads to be inserted can to huge(we have seen upto
 	// 1B) and resulting in OOM. We are limiting number of nquads which can be inserted in
 	// a single request.
 	nquadsCount int
+}
+
+type RequestWithContext struct {
+	req      *api.Request
+	gqlField gqlSchema.Field
+	doAuth   AuthMode
 }
 
 // Health handles /health and /health?all requests.
@@ -985,19 +994,28 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 	return &api.Response{Json: jsonState.Bytes()}, nil
 }
 
-// Query handles queries or mutations
-func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	auth := ctx.Value(Authorize)
-	if auth == nil || auth.(bool) {
-		return s.doQuery(ctx, req, NeedAuthorize)
+func getAuthMode(ctx context.Context) AuthMode {
+	if auth := ctx.Value(Authorize); auth == nil || auth.(bool) {
+		return NeedAuthorize
 	}
-	return s.doQuery(ctx, req, NoAuthorize)
+	return NoAuthorize
 }
 
-func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
+// QueryGraphQL handles only GraphQL queries, neither mutations nor DQL.
+func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
+	field gqlSchema.Field) (*api.Response, error) {
+	return s.doQuery(ctx, &RequestWithContext{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
+}
+
+// Query handles queries or mutations
+func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	return s.doQuery(ctx, &RequestWithContext{req: req, doAuth: getAuthMode(ctx)})
+}
+
+func (s *Server) doQuery(ctx context.Context, reqCtx *RequestWithContext) (
 	resp *api.Response, rerr error) {
 	if bool(glog.V(3)) || worker.LogRequestEnabled() {
-		glog.Infof("Got a query: %+v", req)
+		glog.Infof("Got a query: %+v", reqCtx.req)
 	}
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
@@ -1013,7 +1031,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	l := &query.Latency{}
 	l.Start = time.Now()
 
-	isMutation := len(req.Mutations) > 0
+	isMutation := len(reqCtx.req.Mutations) > 0
 	methodRequest := methodQuery
 	if isMutation {
 		methodRequest = methodMutate
@@ -1038,14 +1056,14 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		return
 	}
 
-	req.Query = strings.TrimSpace(req.Query)
-	isQuery := len(req.Query) != 0
+	reqCtx.req.Query = strings.TrimSpace(reqCtx.req.Query)
+	isQuery := len(reqCtx.req.Query) != 0
 	if !isQuery && !isMutation {
 		span.Annotate(nil, "empty request")
 		return nil, errors.Errorf("empty request")
 	}
 
-	span.Annotatef(nil, "Request received: %v", req)
+	span.Annotatef(nil, "Request received: %v", reqCtx.req)
 	if isQuery {
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
 		defer func() {
@@ -1056,12 +1074,13 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
+	qc := &queryContext{req: reqCtx.req, latency: l, span: span, graphql: isGraphQL,
+		gqlField: reqCtx.gqlField}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
 
-	if doAuth == NeedAuthorize {
+	if reqCtx.doAuth == NeedAuthorize {
 		if rerr = authorizeRequest(ctx, qc); rerr != nil {
 			return
 		}
@@ -1071,12 +1090,12 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
-	if isMutation && req.StartTs == 0 {
+	if isMutation && reqCtx.req.StartTs == 0 {
 		if x.WorkerConfig.LudicrousMode {
-			req.StartTs = posting.Oracle().MaxAssigned()
+			reqCtx.req.StartTs = posting.Oracle().MaxAssigned()
 		} else {
 			start := time.Now()
-			req.StartTs = worker.State.GetTimestamp(false)
+			reqCtx.req.StartTs = worker.State.GetTimestamp(false)
 			qc.latency.AssignTimestamp = time.Since(start)
 		}
 	}
@@ -1182,7 +1201,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	} else if qc.req.RespFormat == api.Request_RDF {
 		resp.Rdf, err = query.ToRDF(qc.latency, er.Subgraphs)
 	} else {
-		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs)
+		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs, qc.gqlField)
 	}
 	if err != nil {
 		return resp, err
