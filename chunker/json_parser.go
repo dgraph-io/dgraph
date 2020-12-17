@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	simdjson "github.com/minio/simdjson-go"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -413,7 +414,6 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			// Delete operations with a non-nil value must have a uid specified.
 			return mr, errors.Errorf("UID must be present and non-zero while deleting edges.")
 		}
-
 		mr.uid = getNextBlank()
 	}
 
@@ -588,6 +588,38 @@ const (
 	DeleteNquads
 )
 
+func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
+	parsed, err := simdjson.Parse(b, nil)
+	if err != nil {
+		return err
+	}
+	i := parsed.Iter()
+	r := 0
+
+	out := make(map[string]interface{}, 0)
+
+	for tag := i.AdvanceInto(); i.Type() != simdjson.TypeNone; tag = i.AdvanceInto() {
+		if tag == simdjson.TagRoot {
+			continue
+		}
+		r++
+
+		if r == 2 {
+			obj, err := i.Object(nil)
+			if err != nil {
+				return err
+			}
+			_, err = obj.Map(out)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	_, err = buf.mapToNquads(out, op, "")
+	return err
+}
+
 // ParseJSON parses the given byte slice and pushes the parsed NQuads into the buffer.
 func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 	buffer := bytes.NewBuffer(b)
@@ -597,7 +629,6 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 	var list []interface{}
 	if err := dec.Decode(&ms); err != nil {
 		// Couldn't parse as map, lets try to parse it as a list.
-
 		buffer.Reset() // The previous contents are used. Reset here.
 		// Rewrite b into buffer, so it can be consumed.
 		if _, err := buffer.Write(b); err != nil {
@@ -607,11 +638,9 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 			return err
 		}
 	}
-
 	if len(list) == 0 && len(ms) == 0 {
 		return nil
 	}
-
 	if len(list) > 0 {
 		for _, obj := range list {
 			if _, ok := obj.(map[string]interface{}); !ok {
@@ -635,11 +664,10 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 // to high memory usage. So be careful using this.
 func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.Metadata, error) {
 	buf := NewNQuadBuffer(-1)
-	err := buf.ParseJSON(b, op)
+	err := buf.FastParseJSON(b, op)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	buf.Flush()
 	nqs := <-buf.Ch()
 	metadata := buf.Metadata()
