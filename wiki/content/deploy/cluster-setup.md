@@ -44,7 +44,7 @@ groups and move them to the new node.
 
 ### Consistent Replication
 
-When you start the first Zero node, you can pass the `--replicas` flag to assign
+When starting Zero nodes, you can pass, to each one, the `--replicas` flag to assign
 the same group to multiple nodes. The number passed to the `--replicas` flag
 causes that Zero node to assign the same group to the specified number of nodes.
 These nodes will then form a Raft group (or quorum), and every write will be

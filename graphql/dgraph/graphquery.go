@@ -27,16 +27,30 @@ import (
 // AsString writes query as an indented dql query string.  AsString doesn't
 // validate query, and so doesn't return an error if query is 'malformed' - it might
 // just write something that wouldn't parse as a Dgraph query.
-func AsString(query *gql.GraphQuery) string {
-	if query == nil {
+func AsString(queries []*gql.GraphQuery) string {
+	if queries == nil {
 		return ""
 	}
 
 	var b strings.Builder
 	x.Check2(b.WriteString("query {\n"))
-	writeQuery(&b, query, "  ")
+	numRewrittenQueries := 0
+	for _, q := range queries {
+		if q == nil {
+			// Don't call writeQuery on a nil query
+			continue
+		}
+		writeQuery(&b, q, "  ")
+		numRewrittenQueries++
+	}
 	x.Check2(b.WriteString("}"))
 
+	if numRewrittenQueries == 0 {
+		// In case writeQuery has not been called on any query or all queries
+		// are nil. Then, return empty string. This case needs to be considered as
+		// we don't want to return query{} in this case.
+		return ""
+	}
 	return b.String()
 }
 
