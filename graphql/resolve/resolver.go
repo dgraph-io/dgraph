@@ -380,6 +380,8 @@ func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
 }
 
 func (rf *resolverFactory) mutationResolverFor(mutation schema.Mutation) MutationResolver {
+	rf.RLock()
+	defer rf.RUnlock()
 	mws := rf.mutationMiddlewareConfig[mutation.Name()]
 	if resolver, ok := rf.mutationResolvers[mutation.Name()]; ok {
 		return mws.Then(resolver(mutation))
