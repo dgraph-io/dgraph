@@ -1726,9 +1726,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
-	if !hasIDField && defn.Kind == "INTERFACE" {
-		return
-	} else if !hasIDField && !hasXIDField {
+	if (!hasIDField && defn.Kind == "INTERFACE") || (!hasIDField && !hasXIDField) {
 		return
 	}
 
