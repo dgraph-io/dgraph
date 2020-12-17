@@ -64,6 +64,12 @@ const (
 	cacheControlDirective = "cacheControl"
 	CacheControlHeader    = "Cache-Control"
 
+	// Directives to support Apollo Federation
+	apolloKeyDirective      = "key"
+	apolloKeyArg            = "fields"
+	apolloExternalDirective = "external"
+	apolloExtendsDirective  = "extends"
+
 	// custom directive args and fields
 	dqlArg      = "dql"
 	httpArg     = "http"
@@ -260,6 +266,8 @@ input GenerateMutationParams {
 	delete: Boolean
 }
 
+directive @key(fields: String!) on OBJECT
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -345,6 +353,18 @@ input StringExactFilter {
 input StringHashFilter {
 	eq: String
 	in: [String]
+}
+`
+
+	apolloFederationExtras = `
+directive @key(fields: String!) on OBJECT | INTERFACE
+directive @extends on OBJECT | INTERFACE
+directive @external on OBJECT | FIELD_DEFINITION
+directive @requires(fields: String!) on FIELD_DEFINITION
+directive @provides(fields: String!) on FIELD_DEFINITION
+scalar _Any
+type _Service {
+  sdl: String
 }
 `
 )

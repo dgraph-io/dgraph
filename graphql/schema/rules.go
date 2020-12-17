@@ -39,7 +39,7 @@ func init() {
 	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
 		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck,
-		remoteTypeValidation, generateDirectiveValidation)
+		remoteTypeValidation, generateDirectiveValidation, apolloKeyValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList, hasAuthDirective)
 
@@ -2001,6 +2001,33 @@ func idValidation(sch *ast.Schema,
 		dir.Position,
 		"Type %s; Field %s: with @id directive must be of type String!, Int!, Int64! or Float!, not %s",
 		typ.Name, field.Name, field.Type.String())}
+}
+
+func apolloKeyValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
+	dir := typ.Directives.ForName(apolloKeyDirective)
+	if dir == nil {
+		return nil
+	}
+
+	arg := dir.Arguments.ForName(apolloKeyArg)
+	if arg == nil || arg.Value.Raw == "" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Argument %s: with @key directive should be defined.", typ.Name, apolloKeyArg)}
+	} else if typ.Fields.ForName(arg.Value.Raw) == nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			arg.Position,
+			"Type %s; Field %s: with @key directive is not a valid field.", typ.Name, arg.Value.Raw)}
+	}
+
+	fld := typ.Fields.ForName(arg.Value.Raw)
+	if isID(fld) || hasIDDirective(fld) {
+		return nil
+	}
+
+	return []*gqlerror.Error{gqlerror.ErrorPosf(
+		arg.Position,
+		"Type %s: Field %s: with @key directive should be of type ID or have @id directive.", typ.Name, fld.Name)}
 }
 
 func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
