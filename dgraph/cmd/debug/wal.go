@@ -33,25 +33,34 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
-func printEntry(es raftpb.Entry, pending map[uint64]bool) {
+func printEntry(es raftpb.Entry, pending map[uint64]bool, isZero bool) {
 	var buf bytes.Buffer
+	defer func() {
+		fmt.Printf("%s\n", buf.Bytes())
+	}()
 	fmt.Fprintf(&buf, "%d . %d . %v . %-6s .", es.Term, es.Index, es.Type,
 		humanize.Bytes(uint64(es.Size())))
 	if es.Type == raftpb.EntryConfChange {
-		fmt.Printf("%s\n", buf.Bytes())
 		return
 	}
-	var pr pb.Proposal
-	var zpr pb.ZeroProposal
-	if err := pr.Unmarshal(es.Data); err == nil {
-		printAlphaProposal(&buf, &pr, pending)
-	} else if err := zpr.Unmarshal(es.Data); err == nil {
-		printZeroProposal(&buf, &zpr)
+	if len(es.Data) == 0 {
+		return
+	}
+	var err error
+	if isZero {
+		var zpr pb.ZeroProposal
+		if err = zpr.Unmarshal(es.Data[8:]); err == nil {
+			printZeroProposal(&buf, &zpr)
+			return
+		}
 	} else {
-		fmt.Printf("%s Unable to parse Proposal: %v\n", buf.Bytes(), err)
-		return
+		var pr pb.Proposal
+		if err = pr.Unmarshal(es.Data[8:]); err == nil {
+			printAlphaProposal(&buf, &pr, pending)
+			return
+		}
 	}
-	fmt.Printf("%s\n", buf.Bytes())
+	fmt.Fprintf(&buf, " Unable to parse Proposal: %v", err)
 }
 
 type RaftStore interface {
@@ -68,11 +77,11 @@ func printBasic(store RaftStore) (uint64, uint64) {
 	} else {
 		fmt.Printf("Snapshot Metadata: %+v\n", snap.Metadata)
 		var ds pb.Snapshot
-		var ms pb.MembershipState
+		var zs pb.ZeroSnapshot
 		if err := ds.Unmarshal(snap.Data); err == nil {
 			fmt.Printf("Snapshot Alpha: %+v\n", ds)
-		} else if err := ms.Unmarshal(snap.Data); err == nil {
-			for gid, group := range ms.GetGroups() {
+		} else if err := zs.Unmarshal(snap.Data); err == nil {
+			for gid, group := range zs.State.GetGroups() {
 				fmt.Printf("\nGROUP: %d\n", gid)
 				for _, member := range group.GetMembers() {
 					fmt.Printf("Member: %+v .\n", member)
@@ -84,8 +93,8 @@ func printBasic(store RaftStore) (uint64, uint64) {
 				group.Tablets = nil
 				fmt.Printf("Group: %d %+v .\n", gid, group)
 			}
-			ms.Groups = nil
-			fmt.Printf("\nSnapshot Zero: %+v\n", ms)
+			zs.State.Groups = nil
+			fmt.Printf("\nSnapshot Zero: %+v\n", zs)
 		} else {
 			fmt.Printf("Unable to unmarshal Dgraph snapshot: %v", err)
 		}
@@ -113,7 +122,7 @@ func printBasic(store RaftStore) (uint64, uint64) {
 	return startIdx, lastIdx
 }
 
-func printRaft(db *badger.DB, store *raftmigrate.OldDiskStorage) {
+func printRaft(db *badger.DB, store *raftmigrate.OldDiskStorage, groupId uint32) {
 	startIdx, lastIdx := printBasic(store)
 
 	commitTs := db.MaxVersion()
@@ -146,7 +155,7 @@ func printRaft(db *badger.DB, store *raftmigrate.OldDiskStorage) {
 					log.Fatalf("Unable to set data: %+v", err)
 				}
 			default:
-				printEntry(ent, pending)
+				printEntry(ent, pending, groupId == 0)
 			}
 			startIdx = x.Max(startIdx, ent.Index)
 		}
@@ -283,7 +292,7 @@ func handleWal(db *badger.DB) error {
 				return err
 
 			default:
-				printRaft(db, store)
+				printRaft(db, store, gid)
 			}
 			store.Closer.SignalAndWait()
 		}

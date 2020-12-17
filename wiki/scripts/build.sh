@@ -37,8 +37,9 @@ NEW_THEME="${NEW_THEME:-master}"
 
 # these versions use new theme
 NEW_VERSIONS=(
+        'v20.11'
+        'master'
         'v20.07'
-	'master'
 )
 
 # these versions use old theme

@@ -1429,6 +1429,35 @@ func completeObject(
 				}}
 			}
 		}
+
+		// Handle the case of empty data in Aggregate Queries. If count of data is equal
+		// to 0, set the val map to nil. This makes the aggregateField return null instead
+		// of returning "0.0000" for Min, Max function on strings and 0 for Min, Max functions
+		// on integers/float.
+		if strings.HasSuffix(f.Type().Name(), "AggregateResult") && val != nil {
+			var count json.Number
+			countVal := val.(map[string]interface{})["count"]
+			if countVal == nil {
+				// This case may happen in case of auth queries when the user does not have
+				// sufficient permission to query aggregate fields. We set val to nil in this
+				// case
+				val = nil
+			} else {
+				if count, ok = countVal.(json.Number); !ok {
+					// This is to handle case in which countVal is of any other type than
+					// json.Number. This should never happen. We return an error.
+					return nil, x.GqlErrorList{&x.GqlError{
+						Message:   "Expected count field of type json.Number inside Aggregate Field",
+						Locations: []x.Location{f.Location()},
+						Path:      copyPath(path),
+					}}
+				}
+				if count == "0" {
+					val = nil
+				}
+			}
+		}
+
 		completed, err := completeValue(append(path, f.ResponseName()), f, val)
 		errs = append(errs, err...)
 		if completed == nil {

@@ -40,10 +40,10 @@
     USER: "user1"
   variables: |
     { "upd":
-      { 
+      {
         "filter": { "colID": [ "0x123" ] },
-        "set": { 
-          "name": "new name", 
+        "set": {
+          "name": "new name",
           "tickets": [ { "title": "a ticket" } ]
         }
       }
@@ -59,11 +59,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   uids: |
@@ -81,19 +78,15 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   authjson: |
-    { 
-      "Ticket": [ { "uid": "0x789" } ] 
-    }  
+    {
+      "Ticket": [ { "uid": "0x789" } ]
+    }
 
 
 - name: "Update a node that does a deep add and fails auth"
@@ -109,10 +102,10 @@
     USER: "user1"
   variables: |
     { "upd":
-      { 
+      {
         "filter": { "colID": [ "0x123" ] },
-        "set": { 
-          "name": "new name", 
+        "set": {
+          "name": "new name",
           "tickets": [ { "title": "a ticket" } ]
         }
       }
@@ -128,11 +121,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   uids: |
@@ -150,22 +140,18 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   authjson: |
-    { }  
+    { }
   error:
     { "message": "mutation failed because authorization failed" }
 
 # See comments about additional deletes in update_mutation_test.yaml.
-# Because of those additional deletes, for example, when we update a column and 
+# Because of those additional deletes, for example, when we update a column and
 # link it to an existing ticket, we might remove that ticket from the column it was
 # attached to ... so we need authorization to update that column as well.
 - name: "update with auth on additional delete (updt list edge)"
@@ -181,10 +167,10 @@
     USER: "user1"
   variables: |
     { "upd":
-      { 
+      {
         "filter": { "colID": [ "0x123" ] },
-        "set": { 
-          "name": "new name", 
+        "set": {
+          "name": "new name",
           "tickets": [ { "id": "0x789" } ]
         }
       }
@@ -200,11 +186,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Ticket4 as Ticket4(func: uid(0x789)) @filter(type(Ticket)) {
         uid
@@ -222,21 +205,18 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   json: |
-    { 
+    {
       "Column1": [ { "uid": "0x123" } ],
       "Ticket4": [ { "uid": "0x789" } ],
       "Column5":  [ { "uid": "0x456" } ],
       "Column5.auth": [ { "uid": "0x456" } ]
     }
-  
+
 - name: "update with auth on additional delete that fails (updt list edge)"
   gqlquery: |
     mutation updateColumn($upd: UpdateColumnInput!) {
@@ -250,10 +230,10 @@
     USER: "user1"
   variables: |
     { "upd":
-      { 
+      {
         "filter": { "colID": [ "0x123" ] },
-        "set": { 
-          "name": "new name", 
+        "set": {
+          "name": "new name",
           "tickets": [ { "id": "0x789" } ]
         }
       }
@@ -269,11 +249,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Ticket4 as Ticket4(func: uid(0x789)) @filter(type(Ticket)) {
         uid
@@ -291,15 +268,12 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   json: |
-    { 
+    {
       "Column1": [ { "uid": "0x123" } ],
       "Ticket4": [ { "uid": "0x789" } ],
       "Column5":  [ { "uid": "0x456" } ]
@@ -320,10 +294,10 @@
     USER: "user1"
   variables: |
     { "upd":
-      { 
+      {
         "filter": { "id": [ "0x123" ] },
-        "set": { 
-          "title": "new title", 
+        "set": {
+          "title": "new title",
           "onColumn": { "colID": "0x456" }
         }
       }
@@ -340,13 +314,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Column4 as Column4(func: uid(0x456)) @filter(type(Column)) {
         uid
@@ -364,20 +334,17 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   json: |
-    { 
+    {
       "Column4": [ { "uid": "0x456" } ],
       "Column5":  [ { "uid": "0x499" } ],
       "Column5.auth": [ { "uid": "0x499" } ]
     }
-  
+
 - name: "update with auth on additional delete that fails (updt single edge)"
   gqlquery: |
     mutation updateTicket($upd: UpdateTicketInput!) {
@@ -391,10 +358,10 @@
     USER: "user1"
   variables: |
     { "upd":
-      { 
+      {
         "filter": { "id": [ "0x123" ] },
-        "set": { 
-          "title": "new title", 
+        "set": {
+          "title": "new title",
           "onColumn": { "colID": "0x456" }
         }
       }
@@ -411,13 +378,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Column4 as Column4(func: uid(0x456)) @filter(type(Column)) {
         uid
@@ -435,15 +398,12 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   json: |
-    { 
+    {
       "Column4": [ { "uid": "0x456" } ],
       "Column5":  [ { "uid": "0x499" } ]
     }
@@ -539,9 +499,7 @@
       ProjectAuth2 as var(func: uid(Project1)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -605,7 +563,6 @@
       Issue1 as var(func: uid(0x123)) @filter(type(Issue))
       IssueAuth2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
     }
 
@@ -700,7 +657,7 @@
         }
       }
     }
-  jwtvar: 
+  jwtvar:
     USER: "user1"
     ANS: "true"
   variables: |
@@ -727,9 +684,7 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -766,7 +721,7 @@
         }
       }
     }
-  jwtvar: 
+  jwtvar:
     ROLE: "ADMIN"
     USER: "user1"
   variables: |
@@ -790,9 +745,7 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -805,7 +758,7 @@
         }
       }
     }
-  jwtvar: 
+  jwtvar:
     ROLE: "USER"
     USER: "user1"
   variables: |
@@ -861,27 +814,21 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       FbPost1 as var(func: type(FbPost))
       FbPostAuth4 as var(func: uid(FbPost1)) @cascade {
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Answer1 as var(func: type(Answer))
       AnswerAuth5 as var(func: uid(Answer1)) @cascade {
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -919,18 +866,14 @@
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Answer1 as var(func: type(Answer))
       AnswerAuth3 as var(func: uid(Answer1)) @cascade {
         dgraph.type
         author : Post.author @filter(eq(Author.name, "user1")) {
           name : Author.name
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 

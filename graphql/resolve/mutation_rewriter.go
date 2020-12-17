@@ -336,14 +336,14 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*Upse
 
 	if len(mutationsAll) > 0 {
 		result = append(result, &UpsertMutation{
-			Query:     queries,
+			Query:     []*gql.GraphQuery{queries},
 			Mutations: mutationsAll,
 		})
 	}
 
 	if len(mutationsAllSec) > 0 {
 		result = append(result, &UpsertMutation{
-			Query:     queriesSec,
+			Query:     []*gql.GraphQuery{queriesSec},
 			Mutations: mutationsAllSec,
 			NewNodes:  newNodes,
 		})
@@ -357,7 +357,7 @@ func (mrw *AddRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
+	result map[string]interface{}) ([]*gql.GraphQuery, error) {
 
 	var errs error
 
@@ -466,7 +466,7 @@ func (urw *UpdateRewriter) Rewrite(
 
 	buildMutation := func(setFrag, delFrag []*mutationFragment) *UpsertMutation {
 		var mutSet, mutDel []*dgoapi.Mutation
-		queries := []*gql.GraphQuery{upsertQuery}
+		queries := upsertQuery
 
 		if setArg != nil {
 			addUpdateCondition(setFrag)
@@ -522,7 +522,7 @@ func (urw *UpdateRewriter) Rewrite(
 		}
 
 		return &UpsertMutation{
-			Query:     &gql.GraphQuery{Children: queries},
+			Query:     queries,
 			Mutations: append(mutSet, mutDel...),
 			NewNodes:  newNodes,
 		}
@@ -565,7 +565,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
+	result map[string]interface{}) ([]*gql.GraphQuery, error) {
 
 	err := checkResult(urw.setFrags, result)
 	if err != nil {
@@ -667,16 +667,18 @@ func extractMutationFilter(m schema.Mutation) map[string]interface{} {
 	return filter
 }
 
-func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gql.GraphQuery {
+func RewriteUpsertQueryFromMutation(
+	m schema.Mutation,
+	authRw *authRewriter) []*gql.GraphQuery {
 	// The query needs to assign the results to a variable, so that the mutation can use them.
-	dgQuery := &gql.GraphQuery{
+	dgQuery := []*gql.GraphQuery{{
 		Var:  MutationQueryVar,
 		Attr: m.Name(),
-	}
+	}}
 
 	rbac := authRw.evaluateStaticRules(m.MutatedType())
 	if rbac == schema.Negative {
-		dgQuery.Attr = m.ResponseName() + "()"
+		dgQuery[0].Attr = m.ResponseName() + "()"
 		return dgQuery
 	}
 
@@ -692,25 +694,25 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 		}
 
 		if !implementingTypesHasFailedRules {
-			dgQuery.Attr = m.ResponseName() + "()"
+			dgQuery[0].Attr = m.ResponseName() + "()"
 			return dgQuery
 		}
 	}
 
 	// Add uid child to the upsert query, so that we can get the list of nodes upserted.
-	dgQuery.Children = append(dgQuery.Children, &gql.GraphQuery{
+	dgQuery[0].Children = append(dgQuery[0].Children, &gql.GraphQuery{
 		Attr: "uid",
 	})
 
 	// TODO - Cache this instead of this being a loop to find the IDField.
 	filter := extractMutationFilter(m)
 	if ids := idFilter(filter, m.MutatedType().IDField()); ids != nil {
-		addUIDFunc(dgQuery, ids)
+		addUIDFunc(dgQuery[0], ids)
 	} else {
-		addTypeFunc(dgQuery, m.MutatedType().DgraphName())
+		addTypeFunc(dgQuery[0], m.MutatedType().DgraphName())
 	}
 
-	_ = addFilter(dgQuery, m.MutatedType(), filter)
+	_ = addFilter(dgQuery[0], m.MutatedType(), filter)
 
 	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery, rbac)
 
@@ -780,11 +782,7 @@ func (drw *deleteRewriter) Rewrite(
 	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
 	dgQry := RewriteUpsertQueryFromMutation(m, authRw)
-	qry := dgQry
-	if qry.Attr == "" {
-		// Auth queries must have been added to the query, first query is the actual delete
-		qry = dgQry.Children[0]
-	}
+	qry := dgQry[0]
 
 	deletes := []interface{}{map[string]interface{}{"uid": "uid(x)"}}
 	// We need to remove node reference only if auth rule succeeds.
@@ -795,7 +793,7 @@ func (drw *deleteRewriter) Rewrite(
 	}
 
 	b, err := json.Marshal(deletes)
-	var finalQry *gql.GraphQuery
+	var finalQry []*gql.GraphQuery
 	// This rewrites the Upsert mutation so we can query the nodes before deletion. The query result
 	// is later added to delete mutation result.
 	if queryField := m.QueryField(); queryField.SelectionSet() != nil {
@@ -812,7 +810,7 @@ func (drw *deleteRewriter) Rewrite(
 
 		queryDel := rewriteAsQuery(queryField, queryAuthRw)
 
-		finalQry = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQry}, queryDel)}
+		finalQry = append(dgQry, queryDel...)
 	} else {
 		finalQry = dgQry
 	}
@@ -829,7 +827,7 @@ func (drw *deleteRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
+	result map[string]interface{}) ([]*gql.GraphQuery, error) {
 
 	// There's no query that follows a delete
 	return nil, nil

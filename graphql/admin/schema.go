@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -94,7 +95,7 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 }
 
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
-	gqlQuery schema.Query) (*gql.GraphQuery, error) {
+	gqlQuery schema.Query) ([]*gql.GraphQuery, error) {
 	gsr.gqlQuery = gqlQuery
 	return nil, nil
 }

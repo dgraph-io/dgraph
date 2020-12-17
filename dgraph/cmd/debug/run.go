@@ -907,6 +907,7 @@ func run() {
 		store, err := raftwal.InitEncrypted(dir, opt.key)
 		x.Check(err)
 		fmt.Printf("RaftID: %+v\n", store.Uint(raftwal.RaftId))
+		isZero := store.Uint(raftwal.GroupId) == 0
 
 		// TODO: Fix the pending logic.
 		pending := make(map[uint64]bool)
@@ -916,7 +917,7 @@ func run() {
 			entries, err := store.Entries(start, last+1, 64<<20)
 			x.Check(err)
 			for _, e := range entries {
-				printEntry(e, pending)
+				printEntry(e, pending, isZero)
 				start = x.Max(start, e.Index)
 			}
 		}
