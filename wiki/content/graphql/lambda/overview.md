@@ -194,7 +194,7 @@ You should see a response such as
 
 Find out more about the  `@lambda` directive, or check out:
 
-* [lambda fields](/graphql/lambda/directive)
+* [lambda fields](/graphql/lambda/field)
 * [lambda queries](/graphql/lambda/query)
 * [lambda mutations](/graphql/lambda/mutation)
 * [lambda server setup](/graphql/lambda/server)
