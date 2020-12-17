@@ -103,7 +103,7 @@ type Author {
 
 GraphQL interfaces allow you to define a generic pattern that multiple types follow.  When a type implements an interface, that means it has all fields of the interface and some extras.  
 
-According to GraphQL specifications, you can have the same fields in implementing types as the interface. In such cases, the generated Dgraph schema will have the correct schema without field duplications.
+According to GraphQL specifications, you can have the same fields in implementing types as the interface. In such cases, the GraphQL layer will generate the correct Dgraph schema without duplicate fields.
 
 If you repeat a field name in a type, it must be of the same type (including list or scalar types), and it must have the same nullable condition as the interface's field. Note that if the interface's field has a directory like `@search` then it will be inherited by the implementing type's field.
 
@@ -148,7 +148,7 @@ type Comment implements Post {
 }
 ```
 
-The generated GraphQL will contain the full types, for example, `Question` and `Comment` get expanded as:
+The generated schema will contain the full types, for example, `Question` and `Comment` get expanded as:
 
 ```graphql
 type Question implements Post {
