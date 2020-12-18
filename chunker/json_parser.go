@@ -28,7 +28,6 @@ import (
 	"text/tabwriter"
 	"unicode"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -151,9 +150,6 @@ func parseMapFacets(m map[string]interface{}, prefix string) ([]map[int]*api.Fac
 		mapSlice = append(mapSlice, idxMap)
 	}
 
-	fmt.Print("map: ")
-	spew.Dump(mapSlice)
-
 	return mapSlice, nil
 }
 
@@ -181,9 +177,6 @@ func parseScalarFacets(m map[string]interface{}, prefix string) ([]*api.Facet, e
 		}
 		facetsForPred = append(facetsForPred, facet)
 	}
-
-	fmt.Print("scalar: ")
-	spew.Dump(facetsForPred)
 
 	return facetsForPred, nil
 }
@@ -480,7 +473,6 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			return mr, err
 		}
 	}
-	show(o)
 
 	// Check field in map.
 	if uidVal, ok := m["uid"]; ok {
@@ -555,15 +547,15 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 
 		prefix := pred + x.FacetDelimeter
-		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
-		// to call parseFacets everytime.
-		// Only call parseScalarFacets when value type for the predicate is not list.
 		if _, ok := v.([]interface{}); !ok {
-			fts, err := parseScalarFacets(m, prefix)
-			if err != nil {
-				return mr, err
+			for p, _ := range o[pred] {
+				for _, f := range o[pred][p] {
+					if nq.Facets == nil {
+						nq.Facets = make([]*api.Facet, 0)
+					}
+					nq.Facets = append(nq.Facets, f)
+				}
 			}
-			nq.Facets = fts
 		}
 
 		// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON

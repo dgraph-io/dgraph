@@ -720,9 +720,7 @@ func TestNquadsFromJsonFacets4(t *testing.T) {
 	}
 
 	for _, input := range inputs {
-		fmt.Println(input.Name)
 		_, err := Parse([]byte(input.Json), SetNquads)
-		fmt.Println()
 		if input.ErrorOut {
 			require.Error(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
 		} else {
@@ -1112,9 +1110,6 @@ func TestWalk(t *testing.T) {
 				break
 			}
 		}
-		fmt.Println(input.Name)
-		show(o)
-		fmt.Println()
 
 		if input.ErrorOut {
 			require.Error(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
