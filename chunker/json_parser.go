@@ -21,11 +21,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"text/tabwriter"
 	"unicode"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -33,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	simdjson "github.com/minio/simdjson-go"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -376,89 +373,99 @@ func getNextBlank() string {
 	return fmt.Sprintf("_:dg.%d.%d", randomID, id)
 }
 
-func walkAdd(o map[string]map[string]map[int]*api.Facet, p []string, k string, v interface{}, n int) error {
-	if _, ok := o[p[0]]; !ok {
-		o[p[0]] = make(map[string]map[int]*api.Facet, 0)
+type facetWalk struct {
+	facets map[string]map[string]map[int]*api.Facet
+	source map[string]interface{}
+}
+
+func newFacetWalk(source map[string]interface{}) *facetWalk {
+	return &facetWalk{
+		facets: make(map[string]map[string]map[int]*api.Facet),
+		source: source,
 	}
-	if _, ok := o[p[0]][p[1]]; !ok {
-		o[p[0]][p[1]] = make(map[int]*api.Facet, 0)
+}
+
+func (w *facetWalk) Add(p []string, k string, v interface{}, n int) error {
+	if _, ok := w.facets[p[0]]; !ok {
+		w.facets[p[0]] = make(map[string]map[int]*api.Facet, 0)
 	}
-	f, err := handleBasicFacetsType(k, v)
+	if _, ok := w.facets[p[0]][p[1]]; !ok {
+		w.facets[p[0]][p[1]] = make(map[int]*api.Facet, 0)
+	}
+	facet, err := handleBasicFacetsType(k, v)
 	if err != nil {
 		return err
 	}
 	if n >= 0 {
-		o[p[0]][p[1]][n] = f
+		w.facets[p[0]][p[1]][n] = facet
 	} else {
-		o[p[0]][p[1]][len(o[p[0]][p[1]])] = f
+		w.facets[p[0]][p[1]][len(w.facets[p[0]][p[1]])] = facet
 	}
 	return nil
 }
 
-// walk traverses the whole interface hashmap (param s) and collects every facet, as an initial
-// pass.
-func walk(o map[string]map[string]map[int]*api.Facet, s map[string]interface{}, k string, v interface{}) error {
+func (w *facetWalk) Go(k string, v interface{}) error {
+	// if this item is a facet, len(p) == 2
 	p := strings.Split(k, x.FacetDelimeter)
 	switch v.(type) {
 	case []interface{}:
+		// facet values can only be scalars, so we go deeper
 		for _, e := range v.([]interface{}) {
-			if err := walk(o, s, k, e); err != nil {
+			if err := w.Go(k, e); err != nil {
 				return err
 			}
 		}
 	case map[string]interface{}:
 		if len(p) == 2 {
+			// we know this item is a facet map, but we need to verify that the facet keys are valid
 			for i, a := range v.(map[string]interface{}) {
+				// facet maps can only have numerical keys
 				n, err := strconv.Atoi(i)
 				if err != nil {
 					return errors.New("invalid key in facet map")
 				}
-				if _, ok := s[p[0]].([]interface{}); !ok {
-					if s[p[0]] != nil {
+				// facet maps can only refer to predicate lists
+				if _, ok := w.source[p[0]].([]interface{}); !ok {
+					if w.source[p[0]] != nil {
 						return errors.New("pred should be list")
 					}
 					return nil
 				}
-				if err := walkAdd(o, p, i, a, n); err != nil {
+				// passed checks, try to add to the global facet collection
+				if err := w.Add(p, i, a, n); err != nil {
 					return err
 				}
 			}
 		} else {
+			// this item isn't a facet, so we go deeper
 			for i, a := range v.(map[string]interface{}) {
-				if err := walk(o, s, i, a); err != nil {
+				if err := w.Go(i, a); err != nil {
 					return err
 				}
 			}
 		}
+	// all items with scalar values
 	default:
 		if len(p) == 2 && v != nil {
-			if _, ok := s[p[0]]; ok {
-				if _, ok = s[p[0]].([]interface{}); ok {
-					b := s[p[0]].([]interface{})
+			// if the predicate exists
+			if _, ok := w.source[p[0]]; ok {
+				// if scalarlist predicates
+				if _, ok = w.source[p[0]].([]interface{}); ok {
+					// check that the facet format is a map
+					b := w.source[p[0]].([]interface{})
 					if _, ok = b[0].(map[string]interface{}); !ok {
 						return errors.Errorf("facets format should be of type map for "+
 							"scalarlist predicates, found: %v for facet: %v", v, k)
 					}
 				}
-				if err := walkAdd(o, p, p[1], v, -1); err != nil {
+				// passed checks, try to add to the global facet collection
+				if err := w.Add(p, p[1], v, -1); err != nil {
 					return err
 				}
 			}
 		}
 	}
 	return nil
-}
-
-func show(o map[string]map[string]map[int]*api.Facet) {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-	for p, f := range o {
-		for i, v := range f {
-			for j, k := range v {
-				fmt.Fprintf(w, "%s\t%s\t%d\t%v\n", p, i, j, k)
-			}
-		}
-	}
-	w.Flush()
 }
 
 // TODO - Abstract these parameters to a struct.
@@ -466,10 +473,10 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 	mapResponse, error) {
 	var mr mapResponse
 
-	// o[predicate][facetKey]
-	o := make(map[string]map[string]map[int]*api.Facet, 0)
+	// create a map of all facets found in m
+	walk := newFacetWalk(m)
 	for k, v := range m {
-		if err := walk(o, m, k, v); err != nil {
+		if err := walk.Go(k, v); err != nil {
 			return mr, err
 		}
 	}
@@ -548,8 +555,8 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 		prefix := pred + x.FacetDelimeter
 		if _, ok := v.([]interface{}); !ok {
-			for p, _ := range o[pred] {
-				for _, f := range o[pred][p] {
+			for p, _ := range walk.facets[pred] {
+				for _, f := range walk.facets[pred][p] {
 					if nq.Facets == nil {
 						nq.Facets = make([]*api.Facet, 0)
 					}
@@ -684,35 +691,6 @@ const (
 	// deleted.
 	DeleteNquads
 )
-
-// TODO: documentation and safety
-func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
-	parsed, err := simdjson.Parse(b, nil)
-	if err != nil {
-		return err
-	}
-	i := parsed.Iter()
-	r := 0
-	out := make(map[string]interface{}, 0)
-	for tag := i.AdvanceInto(); i.Type() != simdjson.TypeNone; tag = i.AdvanceInto() {
-		if tag == simdjson.TagRoot {
-			continue
-		}
-		r++
-		if r == 2 {
-			obj, err := i.Object(nil)
-			if err != nil {
-				return err
-			}
-			_, err = obj.Map(out)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	_, err = buf.mapToNquads(out, op, "")
-	return err
-}
 
 // ParseJSON parses the given byte slice and pushes the parsed NQuads into the buffer.
 func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
