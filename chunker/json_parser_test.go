@@ -1105,7 +1105,7 @@ func TestWalk(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		o := make(map[string]map[string][]*api.Facet, 0)
+		o := make(map[string]map[string]map[int]*api.Facet, 0)
 		for k, v := range m[0].(map[string]interface{}) {
 			err = walk(o, m[0].(map[string]interface{}), k, v)
 			if err != nil {

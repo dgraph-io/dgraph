@@ -383,25 +383,28 @@ func getNextBlank() string {
 	return fmt.Sprintf("_:dg.%d.%d", randomID, id)
 }
 
-func walkAdd(o map[string]map[string][]*api.Facet, p []string, k string, v interface{}) error {
+func walkAdd(o map[string]map[string]map[int]*api.Facet, p []string, k string, v interface{}, n int) error {
 	if _, ok := o[p[0]]; !ok {
-		o[p[0]] = make(map[string][]*api.Facet, 0)
+		o[p[0]] = make(map[string]map[int]*api.Facet, 0)
 	}
 	if _, ok := o[p[0]][p[1]]; !ok {
-		o[p[0]][p[1]] = make([]*api.Facet, 0)
+		o[p[0]][p[1]] = make(map[int]*api.Facet, 0)
 	}
-
 	f, err := handleBasicFacetsType(k, v)
 	if err != nil {
 		return err
 	}
-	o[p[0]][p[1]] = append(o[p[0]][p[1]], f)
+	if n >= 0 {
+		o[p[0]][p[1]][n] = f
+	} else {
+		o[p[0]][p[1]][len(o[p[0]][p[1]])] = f
+	}
 	return nil
 }
 
 // walk traverses the whole interface hashmap (param s) and collects every facet, as an initial
 // pass.
-func walk(o map[string]map[string][]*api.Facet, s map[string]interface{}, k string, v interface{}) error {
+func walk(o map[string]map[string]map[int]*api.Facet, s map[string]interface{}, k string, v interface{}) error {
 	p := strings.Split(k, x.FacetDelimeter)
 	switch v.(type) {
 	case []interface{}:
@@ -413,7 +416,8 @@ func walk(o map[string]map[string][]*api.Facet, s map[string]interface{}, k stri
 	case map[string]interface{}:
 		if len(p) == 2 {
 			for i, a := range v.(map[string]interface{}) {
-				if _, err := strconv.Atoi(i); err != nil {
+				n, err := strconv.Atoi(i)
+				if err != nil {
 					return errors.New("invalid key in facet map")
 				}
 				if _, ok := s[p[0]].([]interface{}); !ok {
@@ -422,7 +426,7 @@ func walk(o map[string]map[string][]*api.Facet, s map[string]interface{}, k stri
 					}
 					return nil
 				}
-				if err := walkAdd(o, p, i, a); err != nil {
+				if err := walkAdd(o, p, i, a, n); err != nil {
 					return err
 				}
 			}
@@ -443,7 +447,7 @@ func walk(o map[string]map[string][]*api.Facet, s map[string]interface{}, k stri
 							"scalarlist predicates, found: %v for facet: %v", v, k)
 					}
 				}
-				if err := walkAdd(o, p, p[1], v); err != nil {
+				if err := walkAdd(o, p, p[1], v, -1); err != nil {
 					return err
 				}
 			}
@@ -452,7 +456,7 @@ func walk(o map[string]map[string][]*api.Facet, s map[string]interface{}, k stri
 	return nil
 }
 
-func show(o map[string]map[string][]*api.Facet) {
+func show(o map[string]map[string]map[int]*api.Facet) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 	for p, f := range o {
 		for i, v := range f {
@@ -470,14 +474,13 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 	var mr mapResponse
 
 	// o[predicate][facetKey]
-	o := make(map[string]map[string][]*api.Facet, 0)
+	o := make(map[string]map[string]map[int]*api.Facet, 0)
 	for k, v := range m {
 		if err := walk(o, m, k, v); err != nil {
 			return mr, err
 		}
 	}
 	show(o)
-	fmt.Println()
 
 	// Check field in map.
 	if uidVal, ok := m["uid"]; ok {
@@ -517,8 +520,6 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 		mr.uid = getNextBlank()
 	}
-
-	//look(m, nil)
 
 	for pred, v := range m {
 		// We have already extracted the uid above so we skip that edge.
