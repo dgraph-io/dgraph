@@ -387,10 +387,10 @@ func newFacetWalk(source map[string]interface{}) *facetWalk {
 
 func (w *facetWalk) Add(p []string, k string, v interface{}, n int) error {
 	if _, ok := w.facets[p[0]]; !ok {
-		w.facets[p[0]] = make(map[string]map[int]*api.Facet, 0)
+		w.facets[p[0]] = make(map[string]map[int]*api.Facet)
 	}
 	if _, ok := w.facets[p[0]][p[1]]; !ok {
-		w.facets[p[0]][p[1]] = make(map[int]*api.Facet, 0)
+		w.facets[p[0]][p[1]] = make(map[int]*api.Facet)
 	}
 	facet, err := handleBasicFacetsType(k, v)
 	if err != nil {
@@ -407,10 +407,10 @@ func (w *facetWalk) Add(p []string, k string, v interface{}, n int) error {
 func (w *facetWalk) Go(k string, v interface{}) error {
 	// if this item is a facet, len(p) == 2
 	p := strings.Split(k, x.FacetDelimeter)
-	switch v.(type) {
+	switch t := v.(type) {
 	case []interface{}:
 		// facet values can only be scalars, so we go deeper
-		for _, e := range v.([]interface{}) {
+		for _, e := range t {
 			if err := w.Go(k, e); err != nil {
 				return err
 			}
@@ -418,7 +418,7 @@ func (w *facetWalk) Go(k string, v interface{}) error {
 	case map[string]interface{}:
 		if len(p) == 2 {
 			// we know this item is a facet map, but we need to verify that the facet keys are valid
-			for i, a := range v.(map[string]interface{}) {
+			for i, a := range t {
 				// facet maps can only have numerical keys
 				n, err := strconv.Atoi(i)
 				if err != nil {
@@ -438,7 +438,7 @@ func (w *facetWalk) Go(k string, v interface{}) error {
 			}
 		} else {
 			// this item isn't a facet, so we go deeper
-			for i, a := range v.(map[string]interface{}) {
+			for i, a := range t {
 				if err := w.Go(i, a); err != nil {
 					return err
 				}
@@ -555,7 +555,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 		prefix := pred + x.FacetDelimeter
 		if _, ok := v.([]interface{}); !ok {
-			for p, _ := range walk.facets[pred] {
+			for p := range walk.facets[pred] {
 				for _, f := range walk.facets[pred][p] {
 					if nq.Facets == nil {
 						nq.Facets = make([]*api.Facet, 0)

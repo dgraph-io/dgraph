@@ -260,10 +260,7 @@ func (jc *jsonChunker) consumeMap(r *bufio.Reader, out *bytes.Buffer) error {
 		if depth == 0 && ch != '{' {
 			// We encountered a beginning rune that's not {,
 			// unread the char and return without consuming anything.
-			if err := r.UnreadRune(); err != nil {
-				return err
-			}
-			return nil
+			return err
 		}
 
 		if _, err := out.WriteRune(ch); err != nil {
