@@ -6,7 +6,7 @@ weight = 5
     name = "Deep"
 +++
 
-Mutations also allows to perform deep mutation at multiple levels. Deep mutations do not alter linked objects, but they can add deeply-nested new or existing objects. To update an existing nested object, use the update mutation for its type.
+Mutations also let you perform deep mutations at multiple levels. Deep mutations do not alter linked objects, but they can add deeply-nested new objects or link to existing objects. To update an existing nested object, use the update mutation for its type.
 
 We use the following schema to demonstrate some examples.
 
@@ -28,6 +28,7 @@ type Post {
 ```
 
 ### **Example**: Add new nested object
+
 ```graphql
 mutation updateAuthorWithNewPost($author: DeepAuthorInput!) {
   updateAuthor(input: [$author]) {
@@ -42,7 +43,9 @@ mutation updateAuthorWithNewPost($author: DeepAuthorInput!) {
   }
 }
 ```
+
 Variables:
+
 ```json
 { "author":
   { "name": "A.N. Author",
@@ -66,7 +69,7 @@ This syntax does not remove any other existing posts, it just adds the existing 
 {{% /notice %}}
 
 ```graphql
-mutation updateAuthorWithExitingPost($patch: UpdateAuthorInput!) {
+mutation updateAuthorWithExistingPost($patch: UpdateAuthorInput!) {
   updateAuthor(input: $patch) {
     author {
       id
@@ -88,7 +91,7 @@ Variables:
       "posts": [
         {
           "postID": "0x456"
-        } 
+        }
       ]
     }
   }
