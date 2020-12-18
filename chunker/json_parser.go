@@ -21,11 +21,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"text/tabwriter"
 	"unicode"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -376,7 +374,7 @@ func getNextBlank() string {
 	return fmt.Sprintf("_:dg.%d.%d", randomID, id)
 }
 
-func walkAdd(o map[string]map[string][]*api.Facet, p []string, k string, v interface{}) {
+func walkAdd(o map[string]map[string][]*api.Facet, p []string, k string, v interface{}) error {
 	if _, ok := o[p[0]]; !ok {
 		o[p[0]] = make(map[string][]*api.Facet, 0)
 	}
@@ -385,35 +383,54 @@ func walkAdd(o map[string]map[string][]*api.Facet, p []string, k string, v inter
 	}
 	f, err := handleBasicFacetsType(k, v)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	o[p[0]][p[1]] = append(o[p[0]][p[1]], f)
+	return nil
 }
 
-func walk(o map[string]map[string][]*api.Facet, k string, v interface{}) {
+// walk traverses the whole interface hashmap (param s) and collects every facet, as an initial
+// pass.
+func walk(o map[string]map[string][]*api.Facet, s map[string]interface{}, k string, v interface{}) error {
 	p := strings.Split(k, x.FacetDelimeter)
 	switch v.(type) {
 	case []interface{}:
 		for _, e := range v.([]interface{}) {
-			walk(o, k, e)
+			if err := walk(o, s, k, e); err != nil {
+				return err
+			}
 		}
 	case map[string]interface{}:
 		if len(p) == 2 {
 			for i, a := range v.(map[string]interface{}) {
-				walkAdd(o, p, i, a)
+				if err := walkAdd(o, p, i, a); err != nil {
+					return err
+				}
 			}
 		} else {
 			for i, a := range v.(map[string]interface{}) {
-				walk(o, i, a)
+				if err := walk(o, s, i, a); err != nil {
+					return err
+				}
 			}
 		}
 	default:
 		if len(p) == 2 {
-			walkAdd(o, p, p[1], v)
+			if _, ok := s[p[0]]; ok && s[p[0]] != nil {
+				if _, ok = s[p[0]].([]interface{}); ok {
+					return errors.Errorf("facets format should be of type map for "+
+						"scalarlist predicates, found: %v for facet: %v", v, k)
+				}
+				if err := walkAdd(o, p, p[1], v); err != nil {
+					return err
+				}
+			}
 		}
 	}
+	return nil
 }
 
+/*
 func show(o map[string]map[string][]*api.Facet) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 	for p, f := range o {
@@ -425,17 +442,22 @@ func show(o map[string]map[string][]*api.Facet) {
 	}
 	w.Flush()
 }
+*/
 
 // TODO - Abstract these parameters to a struct.
 func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (
 	mapResponse, error) {
 	var mr mapResponse
 
-	o := make(map[string]map[string][]*api.Facet, 0)
-	for k, v := range m {
-		walk(o, k, v)
-	}
-	show(o)
+	/*
+		// o[predicate][facetKey]
+		o := make(map[string]map[string][]*api.Facet, 0)
+		for k, v := range m {
+			if err := walk(o, m, k, v); err != nil {
+				return mr, err
+			}
+		}
+	*/
 
 	// Check field in map.
 	if uidVal, ok := m["uid"]; ok {
