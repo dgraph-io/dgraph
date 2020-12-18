@@ -21,7 +21,7 @@ require (
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.1.2
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
-	github.com/dgraph-io/ristretto v0.0.4-0.20201207174236-c72a155bcf05
+	github.com/dgraph-io/ristretto v0.0.4-0.20201218073023-6a5070bff779
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
@@ -49,7 +49,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.2.1
 	github.com/prometheus/client_golang v0.9.3
-	github.com/prometheus/common v0.4.1
+	github.com/prometheus/common v0.4.1 // indirect
 	github.com/prometheus/procfs v0.0.0-20190517135640-51af30a78b0e // indirect
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cast v1.3.0
