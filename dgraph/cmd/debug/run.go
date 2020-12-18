@@ -906,22 +906,9 @@ func run() {
 	if isWal && !opt.oldWalFormat {
 		store, err := raftwal.InitEncrypted(dir, opt.key)
 		x.Check(err)
-		fmt.Printf("RaftID: %+v\n", store.Uint(raftwal.RaftId))
-		isZero := store.Uint(raftwal.GroupId) == 0
-
-		// TODO: Fix the pending logic.
-		pending := make(map[uint64]bool)
-
-		start, last := printBasic(store)
-		for start < last-1 {
-			entries, err := store.Entries(start, last+1, 64<<20)
-			x.Check(err)
-			for _, e := range entries {
-				printEntry(e, pending, isZero)
-				start = x.Max(start, e.Index)
-			}
+		if err := handleWal2(store); err != nil {
+			fmt.Printf("\nGot error while handling WAL: %v\n", err)
 		}
-		fmt.Println("Done")
 		return
 	}
 

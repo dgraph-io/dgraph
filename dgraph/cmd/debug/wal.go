@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	raftmigrate "github.com/dgraph-io/dgraph/dgraph/cmd/raft-migrate"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
 	"go.etcd.io/etcd/raft"
@@ -122,6 +123,43 @@ func printBasic(store RaftStore) (uint64, uint64) {
 	return startIdx, lastIdx
 }
 
+func printRaft2(store *raftwal.DiskStorage) {
+	isZero := store.Uint(raftwal.GroupId) == 0
+
+	// TODO: Fix the pending logic.
+	pending := make(map[uint64]bool)
+	startIdx, lastIdx := printBasic(store)
+	numTruncates := 0
+
+	for startIdx < lastIdx-1 {
+		entries, err := store.Entries(startIdx, lastIdx+1, 64<<20)
+		x.Check(err)
+		for _, ent := range entries {
+			switch {
+			case ent.Type == raftpb.EntryNormal && ent.Index < opt.wtruncateUntil:
+				if len(ent.Data) == 0 {
+					continue
+				}
+				ent.Data = nil
+				numTruncates++
+
+				// TODO(ajeet)
+				// k := store.EntryKey(ent.Index)
+				// data, err := ent.Marshal()
+				// if err != nil {
+				// 	log.Fatalf("Unable to marshal entry: %+v. Error: %v", ent, err)
+				// }
+				// if err := batch.Set(k, data); err != nil {
+				// 	log.Fatalf("Unable to set data: %+v", err)
+				// }
+			default:
+				printEntry(ent, pending, isZero)
+			}
+			startIdx = x.Max(startIdx, ent.Index)
+		}
+	}
+}
+
 func printRaft(db *badger.DB, store *raftmigrate.OldDiskStorage, groupId uint32) {
 	startIdx, lastIdx := printBasic(store)
 
@@ -170,7 +208,7 @@ func printRaft(db *badger.DB, store *raftmigrate.OldDiskStorage, groupId uint32)
 	}
 }
 
-func overwriteSnapshot(db *badger.DB, store *raftmigrate.OldDiskStorage) error {
+func overwriteSnapshot(store *raftwal.DiskStorage) error {
 	snap, err := store.Snapshot()
 	x.Checkf(err, "Unable to get snapshot")
 	cs := snap.Metadata.ConfState
@@ -210,20 +248,7 @@ func overwriteSnapshot(db *badger.DB, store *raftmigrate.OldDiskStorage) error {
 		Commit: ent.Index,
 	}
 	fmt.Printf("Setting hard state: %+v\n", hs)
-	err = db.Update(func(txn *badger.Txn) error {
-		data, err := ent.Marshal()
-		if err != nil {
-			return err
-		}
-		if err = txn.Set(store.EntryKey(ent.Index), data); err != nil {
-			return err
-		}
-		data, err = hs.Marshal()
-		if err != nil {
-			return err
-		}
-		return txn.Set(store.HardStateKey(), data)
-	})
+	err = store.Save(&hs, []raftpb.Entry{ent}, &snap)
 	x.Check(err)
 
 	dsnap.Index = ent.Index
@@ -236,6 +261,26 @@ func overwriteSnapshot(db *badger.DB, store *raftmigrate.OldDiskStorage) error {
 		fmt.Printf("Created snapshot with error: %v\n", err)
 	}
 	return err
+}
+
+func handleWal2(store *raftwal.DiskStorage) error {
+	_, err := store.HardState()
+	if err != nil {
+		return err
+	}
+
+	rid := store.Uint(raftwal.RaftId)
+	gid := store.Uint(raftwal.GroupId)
+
+	fmt.Printf("Raft Id = %d Groupd Id = %d\n", rid, gid)
+	switch {
+	case len(opt.wsetSnapshot) > 0:
+		return overwriteSnapshot(store)
+	default:
+		printBasic(store)
+	}
+
+	return nil
 }
 
 func handleWal(db *badger.DB) error {
@@ -287,9 +332,10 @@ func handleWal(db *badger.DB) error {
 			store := raftmigrate.Init(db, rid, gid)
 			switch {
 			case len(opt.wsetSnapshot) > 0:
-				err := overwriteSnapshot(db, store)
-				store.Closer.SignalAndWait()
-				return err
+				// TODO(ajeet)
+				// err := overwriteSnapshot(store)
+				// store.Closer.SignalAndWait()
+				// return err
 
 			default:
 				printRaft(db, store, gid)
