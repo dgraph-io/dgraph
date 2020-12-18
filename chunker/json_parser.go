@@ -21,11 +21,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"text/tabwriter"
 	"unicode"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -148,6 +151,9 @@ func parseMapFacets(m map[string]interface{}, prefix string) ([]map[int]*api.Fac
 		mapSlice = append(mapSlice, idxMap)
 	}
 
+	fmt.Print("map: ")
+	spew.Dump(mapSlice)
+
 	return mapSlice, nil
 }
 
@@ -175,6 +181,9 @@ func parseScalarFacets(m map[string]interface{}, prefix string) ([]*api.Facet, e
 		}
 		facetsForPred = append(facetsForPred, facet)
 	}
+
+	fmt.Print("scalar: ")
+	spew.Dump(facetsForPred)
 
 	return facetsForPred, nil
 }
@@ -381,6 +390,7 @@ func walkAdd(o map[string]map[string][]*api.Facet, p []string, k string, v inter
 	if _, ok := o[p[0]][p[1]]; !ok {
 		o[p[0]][p[1]] = make([]*api.Facet, 0)
 	}
+
 	f, err := handleBasicFacetsType(k, v)
 	if err != nil {
 		return err
@@ -403,6 +413,15 @@ func walk(o map[string]map[string][]*api.Facet, s map[string]interface{}, k stri
 	case map[string]interface{}:
 		if len(p) == 2 {
 			for i, a := range v.(map[string]interface{}) {
+				if _, err := strconv.Atoi(i); err != nil {
+					return errors.New("invalid key in facet map")
+				}
+				if _, ok := s[p[0]].([]interface{}); !ok {
+					if s[p[0]] != nil {
+						return errors.New("pred should be list")
+					}
+					return nil
+				}
 				if err := walkAdd(o, p, i, a); err != nil {
 					return err
 				}
@@ -415,11 +434,14 @@ func walk(o map[string]map[string][]*api.Facet, s map[string]interface{}, k stri
 			}
 		}
 	default:
-		if len(p) == 2 {
-			if _, ok := s[p[0]]; ok && s[p[0]] != nil {
+		if len(p) == 2 && v != nil {
+			if _, ok := s[p[0]]; ok {
 				if _, ok = s[p[0]].([]interface{}); ok {
-					return errors.Errorf("facets format should be of type map for "+
-						"scalarlist predicates, found: %v for facet: %v", v, k)
+					b := s[p[0]].([]interface{})
+					if _, ok = b[0].(map[string]interface{}); !ok {
+						return errors.Errorf("facets format should be of type map for "+
+							"scalarlist predicates, found: %v for facet: %v", v, k)
+					}
 				}
 				if err := walkAdd(o, p, p[1], v); err != nil {
 					return err
@@ -430,7 +452,6 @@ func walk(o map[string]map[string][]*api.Facet, s map[string]interface{}, k stri
 	return nil
 }
 
-/*
 func show(o map[string]map[string][]*api.Facet) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 	for p, f := range o {
@@ -442,22 +463,21 @@ func show(o map[string]map[string][]*api.Facet) {
 	}
 	w.Flush()
 }
-*/
 
 // TODO - Abstract these parameters to a struct.
 func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (
 	mapResponse, error) {
 	var mr mapResponse
 
-	/*
-		// o[predicate][facetKey]
-		o := make(map[string]map[string][]*api.Facet, 0)
-		for k, v := range m {
-			if err := walk(o, m, k, v); err != nil {
-				return mr, err
-			}
+	// o[predicate][facetKey]
+	o := make(map[string]map[string][]*api.Facet, 0)
+	for k, v := range m {
+		if err := walk(o, m, k, v); err != nil {
+			return mr, err
 		}
-	*/
+	}
+	show(o)
+	fmt.Println()
 
 	// Check field in map.
 	if uidVal, ok := m["uid"]; ok {
