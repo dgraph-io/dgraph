@@ -16,6 +16,7 @@ require (
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
+	github.com/davecgh/go-spew v1.1.1
 	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201214114056-bcfae6104545
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6
 	github.com/dgraph-io/gqlgen v0.13.2
@@ -44,6 +45,7 @@ require (
 	github.com/graph-gophers/graphql-transport-ws v0.0.0-20190611222414-40c048432299 // indirect
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/minio/minio-go/v6 v6.0.55
+	github.com/minio/simdjson-go v0.1.5
 	github.com/mitchellh/panicwrap v1.0.0
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
 	github.com/pkg/errors v0.9.1

@@ -21,9 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"text/tabwriter"
 	"unicode"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -374,10 +376,67 @@ func getNextBlank() string {
 	return fmt.Sprintf("_:dg.%d.%d", randomID, id)
 }
 
+func walkAdd(o map[string]map[string][]*api.Facet, p []string, k string, v interface{}) {
+	if _, ok := o[p[0]]; !ok {
+		o[p[0]] = make(map[string][]*api.Facet, 0)
+	}
+	if _, ok := o[p[0]][p[1]]; !ok {
+		o[p[0]][p[1]] = make([]*api.Facet, 0)
+	}
+	f, err := handleBasicFacetsType(k, v)
+	if err != nil {
+		panic(err)
+	}
+	o[p[0]][p[1]] = append(o[p[0]][p[1]], f)
+}
+
+func walk(o map[string]map[string][]*api.Facet, k string, v interface{}) {
+	p := strings.Split(k, x.FacetDelimeter)
+	switch v.(type) {
+	case []interface{}:
+		for _, e := range v.([]interface{}) {
+			walk(o, k, e)
+		}
+	case map[string]interface{}:
+		if len(p) == 2 {
+			for i, a := range v.(map[string]interface{}) {
+				walkAdd(o, p, i, a)
+			}
+		} else {
+			for i, a := range v.(map[string]interface{}) {
+				walk(o, i, a)
+			}
+		}
+	default:
+		if len(p) == 2 {
+			walkAdd(o, p, p[1], v)
+		}
+	}
+}
+
+func show(o map[string]map[string][]*api.Facet) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+	for p, f := range o {
+		for i, v := range f {
+			for j, k := range v {
+				fmt.Fprintf(w, "%s\t%s\t%d\t%v\n", p, i, j, k)
+			}
+		}
+	}
+	w.Flush()
+}
+
 // TODO - Abstract these parameters to a struct.
 func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (
 	mapResponse, error) {
 	var mr mapResponse
+
+	o := make(map[string]map[string][]*api.Facet, 0)
+	for k, v := range m {
+		walk(o, k, v)
+	}
+	show(o)
+
 	// Check field in map.
 	if uidVal, ok := m["uid"]; ok {
 		var uid uint64
@@ -417,6 +476,8 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		mr.uid = getNextBlank()
 	}
 
+	//look(m, nil)
+
 	for pred, v := range m {
 		// We have already extracted the uid above so we skip that edge.
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
@@ -453,7 +514,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		prefix := pred + x.FacetDelimeter
 		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
 		// to call parseFacets everytime.
-		// Only call parseBasicFacets when value type for the predicate is not list.
+		// Only call parseScalarFacets when value type for the predicate is not list.
 		if _, ok := v.([]interface{}); !ok {
 			fts, err := parseScalarFacets(m, prefix)
 			if err != nil {
@@ -577,6 +638,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 	fts, err := parseScalarFacets(m, parentPred+x.FacetDelimeter)
 	mr.fcts = fts
+
 	return mr, err
 }
 
@@ -588,6 +650,7 @@ const (
 	DeleteNquads
 )
 
+// TODO: documentation and safety
 func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	parsed, err := simdjson.Parse(b, nil)
 	if err != nil {
@@ -595,15 +658,12 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	}
 	i := parsed.Iter()
 	r := 0
-
 	out := make(map[string]interface{}, 0)
-
 	for tag := i.AdvanceInto(); i.Type() != simdjson.TypeNone; tag = i.AdvanceInto() {
 		if tag == simdjson.TagRoot {
 			continue
 		}
 		r++
-
 		if r == 2 {
 			obj, err := i.Object(nil)
 			if err != nil {
@@ -615,7 +675,6 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 			}
 		}
 	}
-
 	_, err = buf.mapToNquads(out, op, "")
 	return err
 }
@@ -654,7 +713,6 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 		}
 		return nil
 	}
-
 	mr, err := buf.mapToNquads(ms, op, "")
 	buf.checkForDeletion(mr, ms, op)
 	return err
@@ -664,7 +722,7 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 // to high memory usage. So be careful using this.
 func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.Metadata, error) {
 	buf := NewNQuadBuffer(-1)
-	err := buf.FastParseJSON(b, op)
+	err := buf.ParseJSON(b, op)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -21,9 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"testing"
-	"text/tabwriter"
 	"time"
 
 	"github.com/dgraph-io/dgraph/tok"
@@ -502,7 +500,6 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 
 	for _, n := range nq {
 		glog.Infof("%v", n)
-
 	}
 
 	checkFacets(t, nq, "mobile", []*api.Facet{
@@ -959,6 +956,7 @@ func BenchmarkDebug(b *testing.B) {
 	}
 }
 
+/*
 func TestDebug(t *testing.T) {
 	json := `[
 	{
@@ -1104,3 +1102,4 @@ func TestDebug(t *testing.T) {
 	}
 	w.Flush()
 }
+*/
