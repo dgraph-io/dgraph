@@ -460,16 +460,6 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 		prefix := pred + x.FacetDelimeter
 		if _, ok := v.([]interface{}); !ok {
-			/*
-				for p := range walk.facets[pred] {
-					for _, f := range walk.facets[pred][p] {
-						if nq.Facets == nil {
-							nq.Facets = make([]*api.Facet, 0)
-						}
-						nq.Facets = append(nq.Facets, f)
-					}
-				}
-			*/
 			fts, err := parseScalarFacets(mf, prefix)
 			if err != nil {
 				return mr, err
