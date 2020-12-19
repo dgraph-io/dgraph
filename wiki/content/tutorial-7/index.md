@@ -299,4 +299,4 @@ to get the latest tutorial right to your inbox.
 
 ## Need Help
 
-* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests, bugs and discussions.
+* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests, bugs, and discussions.
