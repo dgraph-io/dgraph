@@ -373,111 +373,16 @@ func getNextBlank() string {
 	return fmt.Sprintf("_:dg.%d.%d", randomID, id)
 }
 
-type facetWalk struct {
-	facets map[string]map[string]map[int]*api.Facet
-	source map[string]interface{}
-}
-
-func newFacetWalk(source map[string]interface{}) *facetWalk {
-	return &facetWalk{
-		facets: make(map[string]map[string]map[int]*api.Facet),
-		source: source,
-	}
-}
-
-func (w *facetWalk) Add(p []string, k string, v interface{}, n int) error {
-	if _, ok := w.facets[p[0]]; !ok {
-		w.facets[p[0]] = make(map[string]map[int]*api.Facet)
-	}
-	if _, ok := w.facets[p[0]][p[1]]; !ok {
-		w.facets[p[0]][p[1]] = make(map[int]*api.Facet)
-	}
-	facet, err := handleBasicFacetsType(k, v)
-	if err != nil {
-		return err
-	}
-	if n >= 0 {
-		w.facets[p[0]][p[1]][n] = facet
-	} else {
-		w.facets[p[0]][p[1]][len(w.facets[p[0]][p[1]])] = facet
-	}
-	return nil
-}
-
-func (w *facetWalk) Go(k string, v interface{}) error {
-	// if this item is a facet, len(p) == 2
-	p := strings.Split(k, x.FacetDelimeter)
-	switch t := v.(type) {
-	case []interface{}:
-		// facet values can only be scalars, so we go deeper
-		for _, e := range t {
-			if err := w.Go(k, e); err != nil {
-				return err
-			}
-		}
-	case map[string]interface{}:
-		if len(p) == 2 {
-			// we know this item is a facet map, but we need to verify that the facet keys are valid
-			for i, a := range t {
-				// facet maps can only have numerical keys
-				n, err := strconv.Atoi(i)
-				if err != nil {
-					return errors.New("invalid key in facet map")
-				}
-				// facet maps can only refer to predicate lists
-				if _, ok := w.source[p[0]].([]interface{}); !ok {
-					if w.source[p[0]] != nil {
-						return errors.New("pred should be list")
-					}
-					return nil
-				}
-				// passed checks, try to add to the global facet collection
-				if err := w.Add(p, i, a, n); err != nil {
-					return err
-				}
-			}
-		} else {
-			// this item isn't a facet, so we go deeper
-			for i, a := range t {
-				if err := w.Go(i, a); err != nil {
-					return err
-				}
-			}
-		}
-	// all items with scalar values
-	default:
-		if len(p) == 2 && v != nil {
-			// if the predicate exists
-			if _, ok := w.source[p[0]]; ok {
-				// if scalarlist predicates
-				if _, ok = w.source[p[0]].([]interface{}); ok {
-					// check that the facet format is a map
-					b := w.source[p[0]].([]interface{})
-					if _, ok = b[0].(map[string]interface{}); !ok {
-						return errors.Errorf("facets format should be of type map for "+
-							"scalarlist predicates, found: %v for facet: %v", v, k)
-					}
-				}
-				// passed checks, try to add to the global facet collection
-				if err := w.Add(p, p[1], v, -1); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
-}
-
 // TODO - Abstract these parameters to a struct.
 func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (
 	mapResponse, error) {
 	var mr mapResponse
 
-	// create a map of all facets found in m
-	walk := newFacetWalk(m)
+	// move all facets from global map to smaller mf map
+	mf := make(map[string]interface{})
 	for k, v := range m {
-		if err := walk.Go(k, v); err != nil {
-			return mr, err
+		if strings.Contains(k, x.FacetDelimeter) {
+			mf[k] = v
 		}
 	}
 
@@ -555,14 +460,21 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 		prefix := pred + x.FacetDelimeter
 		if _, ok := v.([]interface{}); !ok {
-			for p := range walk.facets[pred] {
-				for _, f := range walk.facets[pred][p] {
-					if nq.Facets == nil {
-						nq.Facets = make([]*api.Facet, 0)
+			/*
+				for p := range walk.facets[pred] {
+					for _, f := range walk.facets[pred][p] {
+						if nq.Facets == nil {
+							nq.Facets = make([]*api.Facet, 0)
+						}
+						nq.Facets = append(nq.Facets, f)
 					}
-					nq.Facets = append(nq.Facets, f)
 				}
+			*/
+			fts, err := parseScalarFacets(mf, prefix)
+			if err != nil {
+				return mr, err
 			}
+			nq.Facets = fts
 		}
 
 		// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
@@ -605,7 +517,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			buf.PushPredHint(pred, pb.Metadata_LIST)
 			// TODO(Ashish): We need to call this only in case of scalarlist, for other lists
 			// this can be avoided.
-			facetsMapSlice, err := parseMapFacets(m, prefix)
+			facetsMapSlice, err := parseMapFacets(mf, prefix)
 			if err != nil {
 				return mr, err
 			}
@@ -678,7 +590,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
-	fts, err := parseScalarFacets(m, parentPred+x.FacetDelimeter)
+	fts, err := parseScalarFacets(mf, parentPred+x.FacetDelimeter)
 	mr.fcts = fts
 
 	return mr, err
