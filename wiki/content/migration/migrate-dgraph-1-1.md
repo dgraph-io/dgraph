@@ -3,7 +3,7 @@ date = "2017-03-20T22:25:17+11:00"
 title = "Migrate to Dgraph v1.1"
 weight = 11
 [menu.main]
-    parent = "howto"
+    parent = "migration"
 +++
 
 ## Schema types: scalar `uid` and list `[uid]`
