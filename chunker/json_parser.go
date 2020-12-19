@@ -383,6 +383,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 	for k, v := range m {
 		if strings.Contains(k, x.FacetDelimeter) {
 			mf[k] = v
+			delete(m, k)
 		}
 	}
 
@@ -430,7 +431,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
 		// We also skip facets here because we parse them with the corresponding predicate.
-		if pred == "uid" || strings.Index(pred, x.FacetDelimeter) > 0 {
+		if pred == "uid" {
 			continue
 		}
 
