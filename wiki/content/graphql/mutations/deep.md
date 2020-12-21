@@ -59,7 +59,7 @@ Variables:
 }
 ```
 
-### **Example**: Link existing nested object
+### **Example**: Update mutation on deeply nested post and link to an existing author using variables
 
 The following example assumes that the post with the postID of `0x456` already exists, and is not currently nested under the author having the id of `0x123`.
 
