@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -181,6 +180,12 @@ func NewLocalCache(startTs uint64) *LocalCache {
 	}
 }
 
+// NoCache returns a new LocalCache instance, which won't cache anything. Useful to pass startTs
+// around.
+func NoCache(startTs uint64) *LocalCache {
+	return &LocalCache{startTs: startTs}
+}
+
 func (lc *LocalCache) getNoStore(key string) *List {
 	lc.RLock()
 	defer lc.RUnlock()
@@ -205,8 +210,8 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
-	if lc == nil {
-		return getNew(key, pstore, math.MaxUint64)
+	if lc.plists == nil {
+		return getNew(key, pstore, lc.startTs)
 	}
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {

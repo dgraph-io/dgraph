@@ -7,7 +7,7 @@
         adminTasks {
           id
           name
-          occurrances {
+          occurrences {
             due
             comp
           }
@@ -26,9 +26,9 @@
         adminTasks : Contact.adminTasks @filter(uid(AdminTask5)) {
           id : uid
           name : AdminTask.name
-          occurrances : AdminTask.occurrances @filter(uid(TaskOccurance4)) {
-            due : TaskOccurance.due
-            comp : TaskOccurance.comp
+          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence4)) {
+            due : TaskOccurrence.due
+            comp : TaskOccurrence.comp
             dgraph.uid : uid
           }
         }
@@ -40,10 +40,10 @@
       }
       AdminTask5 as var(func: uid(AdminTask1))
       var(func: uid(AdminTask1)) {
-        TaskOccurance2 as AdminTask.occurrances
+        TaskOccurrence2 as AdminTask.occurrences
       }
-      TaskOccurance4 as var(func: uid(TaskOccurance2)) @filter(uid(TaskOccuranceAuth3))
-      TaskOccuranceAuth3 as var(func: uid(TaskOccurance2)) @filter(eq(TaskOccurance.role, "ADMINISTRATOR")) @cascade
+      TaskOccurrence4 as var(func: uid(TaskOccurrence2)) @filter(uid(TaskOccurrenceAuth3))
+      TaskOccurrenceAuth3 as var(func: uid(TaskOccurrence2)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
     }
 
 - name: "Deep RBAC rule - Level 0 false"
@@ -55,7 +55,7 @@
         adminTasks {
           id
           name
-          occurrances {
+          occurrences {
             due
             comp
           }
@@ -80,7 +80,7 @@
         adminTasks {
           id
           name
-          occurrances {
+          occurrences {
             due
             comp
           }
@@ -101,6 +101,55 @@
       Contact5 as var(func: type(Contact))
     }
 
+- name: "Deep RBAC rule with cascade - Level 1 false"
+  gqlquery: |
+    query {
+      queryContact @cascade {
+        id
+        nickName
+        adminTasks {
+          id
+          name
+          occurrences {
+            due
+            comp
+          }
+        }
+      }
+    }
+  jwtvar:
+    ContactRole: ADMINISTRATOR
+    TaskRole: User
+    TaskOccuranceRole: ADMINISTRATOR
+  dgquery: |-
+    query {
+      queryContact(func: uid(ContactRoot)) @cascade {
+        id : uid
+        nickName : Contact.nickName
+        adminTasks : Contact.adminTasks @filter(uid(AdminTask6)) {
+          id : uid
+          name : AdminTask.name
+          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence4)) {
+            due : TaskOccurrence.due
+            comp : TaskOccurrence.comp
+            dgraph.uid : uid
+          }
+        }
+      }
+      ContactRoot as var(func: uid(Contact7))
+      Contact7 as var(func: type(Contact))
+      var(func: uid(ContactRoot)) {
+        AdminTask1 as Contact.adminTasks
+      }
+      AdminTask6 as var(func: uid(AdminTask1)) @filter(uid(AdminTask5))
+      var(func: uid(AdminTask1)) {
+        TaskOccurrence2 as AdminTask.occurrences
+      }
+      TaskOccurrence4 as var(func: uid(TaskOccurrence2)) @filter(uid(TaskOccurrenceAuth3))
+      TaskOccurrenceAuth3 as var(func: uid(TaskOccurrence2)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
+      AdminTask5 as var(func: uid())
+    }
+
 - name: "Deep RBAC rule - Level 2 false"
   gqlquery: |
     query {
@@ -110,7 +159,7 @@
         adminTasks {
           id
           name
-          occurrances {
+          occurrences {
             due
             comp
           }
@@ -148,7 +197,7 @@
         tasks {
           id
           name
-          occurrances {
+          occurrences {
             due
             comp
           }
@@ -167,9 +216,9 @@
         tasks : Contact.tasks @filter(uid(Task5)) {
           id : uid
           name : Task.name
-          occurrances : Task.occurrances @filter(uid(TaskOccurance4)) {
-            due : TaskOccurance.due
-            comp : TaskOccurance.comp
+          occurrences : Task.occurrences @filter(uid(TaskOccurrence4)) {
+            due : TaskOccurrence.due
+            comp : TaskOccurrence.comp
             dgraph.uid : uid
           }
         }
@@ -181,10 +230,10 @@
       }
       Task5 as var(func: uid(Task1))
       var(func: uid(Task1)) {
-        TaskOccurance2 as Task.occurrances
+        TaskOccurrence2 as Task.occurrences
       }
-      TaskOccurance4 as var(func: uid(TaskOccurance2)) @filter(uid(TaskOccuranceAuth3))
-      TaskOccuranceAuth3 as var(func: uid(TaskOccurance2)) @filter(eq(TaskOccurance.role, "ADMINISTRATOR")) @cascade
+      TaskOccurrence4 as var(func: uid(TaskOccurrence2)) @filter(uid(TaskOccurrenceAuth3))
+      TaskOccurrenceAuth3 as var(func: uid(TaskOccurrence2)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
     }
 
 - name: "Auth query with @dgraph pred."
@@ -584,11 +633,11 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryUserSecret(func: uid(UserSecretRoot), orderasc: UserSecret.aSecret) {
+      queryUserSecret(func: uid(UserSecretRoot), orderasc: UserSecret.aSecret, first: 1) {
         id : uid
         ownedBy : UserSecret.ownedBy
       }
-      UserSecretRoot as var(func: uid(UserSecret1), orderasc: UserSecret.aSecret, first: 1) @filter(uid(UserSecretAuth2))
+      UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
       UserSecret1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
@@ -725,11 +774,11 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) {
         content : Movie.content
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie1), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(MovieAuth2)) AND (uid(MovieAuth3) OR uid(MovieAuth4))))
+      MovieRoot as var(func: uid(Movie1)) @filter((NOT (uid(MovieAuth2)) AND (uid(MovieAuth3) OR uid(MovieAuth4))))
       Movie1 as var(func: type(Movie)) @filter(eq(Movie.content, "A. N. Author"))
       MovieAuth2 as var(func: uid(Movie1)) @filter(eq(Movie.hidden, true)) @cascade
       MovieAuth3 as var(func: uid(Movie1)) @cascade {
@@ -760,16 +809,16 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) @cascade {
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) @cascade {
         content : Movie.content
-        regionsAvailable : Movie.regionsAvailable @filter(uid(Region2)) (orderasc: Region.name) {
+        regionsAvailable : Movie.regionsAvailable @filter(uid(Region2)) (orderasc: Region.name, first: 10, offset: 10) {
           name : Region.name
           global : Region.global
           dgraph.uid : uid
         }
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie3), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(MovieAuth4)) AND (uid(MovieAuth5) OR uid(MovieAuth6))))
+      MovieRoot as var(func: uid(Movie3)) @filter((NOT (uid(MovieAuth4)) AND (uid(MovieAuth5) OR uid(MovieAuth6))))
       Movie3 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
       MovieAuth4 as var(func: uid(Movie3)) @filter(eq(Movie.hidden, true)) @cascade
       MovieAuth5 as var(func: uid(Movie3)) @cascade {
@@ -786,7 +835,7 @@
       var(func: uid(MovieRoot)) {
         Region1 as Movie.regionsAvailable
       }
-      Region2 as var(func: uid(Region1), orderasc: Region.name, first: 10, offset: 10) @filter(eq(Region.name, "Region123"))
+      Region2 as var(func: uid(Region1)) @filter(eq(Region.name, "Region123"))
     }
 
 - name: "Auth deep query - 3 level"
@@ -813,16 +862,16 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) {
         content : Movie.content
-        regionsAvailable : Movie.regionsAvailable @filter(uid(Region7)) (orderasc: Region.name) @cascade {
+        regionsAvailable : Movie.regionsAvailable @filter(uid(Region7)) (orderasc: Region.name, first: 10, offset: 10) @cascade {
           name : Region.name
           global : Region.global
-          users : Region.users @filter(uid(User6)) (orderasc: User.username) {
+          users : Region.users @filter(uid(User6)) (orderasc: User.username, first: 10, offset: 10) {
             username : User.username
             age : User.age
             isPublic : User.isPublic
-            secrets : User.secrets @filter(uid(UserSecret5)) (orderasc: UserSecret.aSecret) {
+            secrets : User.secrets @filter(uid(UserSecret5)) (orderasc: UserSecret.aSecret, first: 10, offset: 10) {
               aSecret : UserSecret.aSecret
               ownedBy : UserSecret.ownedBy
               dgraph.uid : uid
@@ -833,7 +882,7 @@
         }
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie8), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(MovieAuth9)) AND (uid(MovieAuth10) OR uid(MovieAuth11))))
+      MovieRoot as var(func: uid(Movie8)) @filter((NOT (uid(MovieAuth9)) AND (uid(MovieAuth10) OR uid(MovieAuth11))))
       Movie8 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
       MovieAuth9 as var(func: uid(Movie8)) @filter(eq(Movie.hidden, true)) @cascade
       MovieAuth10 as var(func: uid(Movie8)) @cascade {
@@ -850,15 +899,15 @@
       var(func: uid(MovieRoot)) {
         Region1 as Movie.regionsAvailable
       }
-      Region7 as var(func: uid(Region1), orderasc: Region.name, first: 10, offset: 10) @filter(eq(Region.name, "Region123"))
+      Region7 as var(func: uid(Region1)) @filter(eq(Region.name, "Region123"))
       var(func: uid(Region1)) {
         User2 as Region.users
       }
-      User6 as var(func: uid(User2), orderasc: User.username, first: 10, offset: 10) @filter(eq(User.username, "User321"))
+      User6 as var(func: uid(User2)) @filter(eq(User.username, "User321"))
       var(func: uid(User2)) {
         UserSecret3 as User.secrets
       }
-      UserSecret5 as var(func: uid(UserSecret3), orderasc: UserSecret.aSecret, first: 10, offset: 10) @filter((allofterms(UserSecret.aSecret, "Secret132") AND uid(UserSecretAuth4)))
+      UserSecret5 as var(func: uid(UserSecret3)) @filter((allofterms(UserSecret.aSecret, "Secret132") AND uid(UserSecretAuth4)))
       UserSecretAuth4 as var(func: uid(UserSecret3)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 

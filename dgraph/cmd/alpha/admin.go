@@ -45,6 +45,10 @@ func hasPoormansAuth(r *http.Request) bool {
 func allowedMethodsHandler(allowedMethods allowedMethods, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := allowedMethods[r.Method]; !ok {
+			x.AddCorsHeaders(w)
+			if r.Method == http.MethodOptions {
+				return
+			}
 			x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -59,6 +63,7 @@ func allowedMethodsHandler(allowedMethods allowedMethods, next http.Handler) htt
 func adminAuthHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !hasPoormansAuth(r) {
+			x.AddCorsHeaders(w)
 			x.SetStatus(w, x.ErrorUnauthorized, "Invalid X-Dgraph-AuthToken")
 			return
 		}

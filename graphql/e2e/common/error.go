@@ -78,7 +78,7 @@ func graphQLCompletionOn(t *testing.T) {
 			}
 
 			// Check that the error is valid
-			gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := queryCountry.ExecuteAsPost(t, GraphqlURL)
 			require.NotNil(t, gqlResponse.Errors)
 			require.Equal(t, 1, len(gqlResponse.Errors))
 			require.Contains(t, gqlResponse.Errors[0].Error(),
@@ -166,7 +166,7 @@ func deepMutationErrors(t *testing.T) {
 				},
 			}
 
-			gqlResponse := executeRequest(t, graphqlURL, updateCountryParams)
+			gqlResponse := executeRequest(t, GraphqlURL, updateCountryParams)
 			require.NotNil(t, gqlResponse.Errors)
 			require.Equal(t, 1, len(gqlResponse.Errors))
 			require.EqualError(t, gqlResponse.Errors[0], tcase.exp)
@@ -192,7 +192,7 @@ func requestValidationErrors(t *testing.T) {
 				Query:     tcase.GQLRequest,
 				Variables: tcase.variables,
 			}
-			gqlResponse := test.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := test.ExecuteAsPost(t, GraphqlURL)
 
 			require.Nil(t, gqlResponse.Data)
 			if diff := cmp.Diff(tcase.Errors, gqlResponse.Errors); diff != "" {

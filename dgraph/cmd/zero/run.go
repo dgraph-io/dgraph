@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -32,6 +33,7 @@ import (
 	"go.opencensus.io/zpages"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/badger/v2"
 	bopt "github.com/dgraph-io/badger/v2/options"
@@ -58,6 +60,7 @@ type options struct {
 
 	totalCache      int64
 	cachePercentage string
+	tlsClientConfig *tls.Config
 }
 
 var opts options
@@ -104,7 +107,6 @@ instances to achieve high-availability.
 		" exporter does not support annotation logs and would discard them.")
 	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-
 	// Cache flags
 	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in zero.")
 	flag.String("cache_percentage", "100,0",
@@ -120,6 +122,8 @@ instances to achieve high-availability.
 			"log directory. mmap consumes more RAM, but provides better performance.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
+	// TLS configurations
+	x.RegisterServerTLSFlags(flag)
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -136,15 +140,25 @@ type state struct {
 
 func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	x.RegisterExporters(Zero.Conf, "dgraph.zero")
-
-	s := grpc.NewServer(
+	grpcOpts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
-		grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+	}
+
+	tlsConf, err := x.LoadServerTLSConfigForInternalPort(
+		Zero.Conf.GetBool("tls_internal_port_enabled"),
+		Zero.Conf.GetString("tls_dir"),
+		Zero.Conf.GetString("tls_min_version"))
+	x.Check(err)
+	if tlsConf != nil {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))
+	}
+	s := grpc.NewServer(grpcOpts...)
 
 	rc := pb.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
-	m := conn.NewNode(&rc, store)
+	m := conn.NewNode(&rc, store, opts.tlsClientConfig)
 
 	// Zero followers should not be forwarding proposals to the leader, to avoid txn commits which
 	// were calculated in a previous Zero leader.
@@ -152,7 +166,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	st.rs = conn.NewRaftServer(m)
 
 	st.node = &node{Node: m, ctx: context.Background(), closer: z.NewCloser(1)}
-	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node}
+	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node, tlsClientConfig: opts.tlsClientConfig}
 	st.zero.Init()
 	st.node.server = st.zero
 
@@ -192,6 +206,8 @@ func run() {
 	}
 
 	x.PrintVersion()
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
+	x.Check(err)
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		myAddr:            Zero.Conf.GetString("my"),
@@ -204,6 +220,7 @@ func run() {
 		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 		totalCache:        int64(Zero.Conf.GetInt("cache_mb")),
 		cachePercentage:   Zero.Conf.GetString("cache_percentage"),
+		tlsClientConfig:   tlsConf,
 	}
 
 	if opts.nodeId == 0 {
@@ -297,7 +314,7 @@ func run() {
 	}
 	glog.Infof("Opening zero BadgerDB with options: %+v\n", kvOpt)
 
-	kv, err := badger.Open(kvOpt)
+	kv, err := badger.OpenManaged(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
 
@@ -310,7 +327,9 @@ func run() {
 	// Initialize the servers.
 	var st state
 	st.serveGRPC(grpcListener, store)
-	st.serveHTTP(httpListener)
+	tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf, "node.crt", "node.key")
+	x.Check(err)
+	st.startListenHttpAndHttps(httpListener, tlsCfg)
 
 	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)

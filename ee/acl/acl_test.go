@@ -1184,14 +1184,13 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	query := "{me(func: has(name)){expand(_all_)}}"
-	
+
 	// Test that groot has access to all the predicates
 	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
 	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
 		string(resp.GetJson()))
 
-	
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
 	time.Sleep(6 * time.Second)
@@ -1199,10 +1198,10 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
 
-	// Query via user when user has no permissions 
+	// Query via user when user has no permissions
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
-	testutil.CompareJSON(t, `{}`,string(resp.GetJson()))
+	testutil.CompareJSON(t, `{}`, string(resp.GetJson()))
 
 	// Login to groot to modify accesses (1)
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
@@ -1214,7 +1213,7 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 
 	// Give read access of <name>, write access of <age> to dev
 	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}})
-	time.Sleep(6 * time.Second) 
+	time.Sleep(6 * time.Second)
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err, "Error while querying data")
 	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
@@ -2081,6 +2080,10 @@ func TestSchemaQueryWithACL(t *testing.T) {
       "type": "uid",
       "list": true
     },
+	{
+		"predicate": "dgraph.drop.op",
+		"type": "string"
+	},
     {
       "predicate": "dgraph.graphql.schema",
       "type": "string"
@@ -2977,4 +2980,129 @@ func TestCrossGroupPermission(t *testing.T) {
 		dgMutation(userClient, i&2 == 0, "user"+userIdx)
 		dgAlter(userClient, i&1 == 0, "user"+userIdx)
 	}
+}
+
+func TestMutationWithValueVar(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	err = dg.Alter(ctx, &api.Operation{
+		Schema: `
+			name	: string @index(exact) .
+			nickname: string .
+			age     : int .
+		`,
+	})
+	require.NoError(t, err)
+
+	data := &api.Mutation{
+		SetNquads: []byte(`
+			_:u1 <name> "RandomGuy" .
+			_:u1 <nickname> "r1" .
+		`),
+		CommitNow: true,
+	}
+	_, err = dg.NewTxn().Mutate(ctx, data)
+	require.NoError(t, err)
+
+	resetUser(t)
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err)
+	createUser(t, accessJwt, userid, userpassword)
+	createGroup(t, accessJwt, devGroup)
+	addToGroup(t, accessJwt, userid, devGroup)
+	addRulesToGroup(t, accessJwt, devGroup, []rule{
+		{
+			Predicate:  "name",
+			Permission: Read.Code | Write.Code,
+		},
+		{
+			Predicate:  "nickname",
+			Permission: Read.Code,
+		},
+		{
+			Predicate:  "age",
+			Permission: Write.Code,
+		},
+	})
+	time.Sleep(5 * time.Second)
+
+	query := `
+		{
+			u1 as var(func: has(name)) {
+				nick1 as nickname
+				age1 as age
+			}
+		}
+	`
+
+	mutation1 := &api.Mutation{
+		SetNquads: []byte(`
+			uid(u1) <name> val(nick1) .
+			uid(u1) <name> val(age1) .
+		`),
+		CommitNow: true,
+	}
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	_, err = userClient.NewTxn().Do(ctx, &api.Request{
+		Query:     query,
+		Mutations: []*api.Mutation{mutation1},
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	query = `
+		{
+			me(func: has(name)) {
+				nickname
+				name
+				age
+			}
+		}
+	`
+
+	resp, err := userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+
+	testutil.CompareJSON(t, `{"me": [{"name":"r1","nickname":"r1"}]}`, string(resp.GetJson()))
+}
+
+func TestFailedLogin(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+
+	grootClient, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	op := api.Operation{DropAll: true}
+	if err := grootClient.Alter(ctx, &op); err != nil {
+		t.Fatalf("Unable to cleanup db:%v", err)
+	}
+	require.NoError(t, err)
+
+	client, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+
+	// User is not present
+	err = client.Login(ctx, userid, "simplepassword")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
+
+	resetUser(t)
+	// User is present
+	err = client.Login(ctx, userid, "randomstring")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), x.ErrorInvalidLogin.Error())
+
 }

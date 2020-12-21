@@ -63,11 +63,6 @@ import (
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 )
 
-const (
-	tlsNodeCert = "node.crt"
-	tlsNodeKey  = "node.key"
-)
-
 var (
 	bindall bool
 
@@ -117,8 +112,13 @@ they form a Raft group and provide synchronous replication.
 			"log directory. mmap consumes more RAM, but provides better performance. If you pass "+
 			"two values separated by a comma the first value will be used for the postings "+
 			"directory and the second for the w directory.")
-	flag.Int("badger.compression_level", 3,
-		"The compression level for Badger. A higher value uses more resources.")
+	flag.String("badger.compression_level", "3,0",
+		"Specifies the compression level for the postings and write-ahead log "+
+			"directory. A higher value uses more resources. The value of 0 disables "+
+			"compression. If you pass two values separated by a comma the first "+
+			"value will be used for the postings directory (p) and the second for "+
+			"the wal directory (w). If a single value is passed the value is used "+
+			"as compression level for both directories.")
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -156,7 +156,7 @@ they form a Raft group and provide synchronous replication.
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
 	flag.String("auth_token", "",
-		"If set, all Alter requests to Dgraph would need to have this token."+
+		"If set, all Admin requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
 	flag.Bool("enable_sentry", true, "Turn on/off sending events to Sentry. (default on)")
@@ -187,12 +187,6 @@ they form a Raft group and provide synchronous replication.
 	flag.Uint64("normalize_node_limit", 1e4,
 		"Limit for the maximum number of nodes that can be returned in a query that uses the "+
 			"normalize directive.")
-
-	// TLS configurations
-	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
-	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
-	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
@@ -201,12 +195,14 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
+	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. "+
+		"This returns auth errors to clients. We do not recommend turning it on for production.")
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
 
 	// Cache flags
-	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in alpha.")
+	flag.Int64("cache_mb", 2048, "Total size of cache (in MB) to be used in alpha.")
 	// TODO(Naman): The PostingListCache is a no-op for now. Once the posting list cache is
 	// added in release branch, use it.
 	flag.String("cache_percentage", "0,65,25,0,10",
@@ -214,6 +210,8 @@ they form a Raft group and provide synchronous replication.
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).
 		PostingListCache should be 0 and is a no-op.
 		`)
+	// TLS configurations
+	x.RegisterServerTLSFlags(flag)
 }
 
 func setupCustomTokenizers() {
@@ -444,7 +442,7 @@ func setupServer(closer *z.Closer) {
 		laddr = "0.0.0.0"
 	}
 
-	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, tlsNodeCert, tlsNodeKey)
+	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, x.TLSNodeCert, x.TLSNodeKey)
 	if err != nil {
 		log.Fatalf("Failed to setup TLS: %v\n", err)
 	}
@@ -603,14 +601,21 @@ func run() {
 	wstoreBlockCacheSize := (cachePercent[3] * (totalCache << 20)) / 100
 	wstoreIndexCacheSize := (cachePercent[4] * (totalCache << 20)) / 100
 
+	compressionLevelString := Alpha.Conf.GetString("badger.compression_level")
+	compressionLevels, err := x.GetCompressionLevels(compressionLevelString)
+	x.Check(err)
+	postingDirCompressionLevel := compressionLevels[0]
+	walDirCompressionLevel := compressionLevels[1]
+
 	opts := worker.Options{
-		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-		PostingDir:             Alpha.Conf.GetString("postings"),
-		WALDir:                 Alpha.Conf.GetString("wal"),
-		PBlockCacheSize:        pstoreBlockCacheSize,
-		PIndexCacheSize:        pstoreIndexCacheSize,
-		WBlockCacheSize:        wstoreBlockCacheSize,
-		WIndexCacheSize:        wstoreIndexCacheSize,
+		PostingDir:                 Alpha.Conf.GetString("postings"),
+		WALDir:                     Alpha.Conf.GetString("wal"),
+		PostingDirCompressionLevel: postingDirCompressionLevel,
+		WALDirCompressionLevel:     walDirCompressionLevel,
+		PBlockCacheSize:            pstoreBlockCacheSize,
+		PIndexCacheSize:            pstoreIndexCacheSize,
+		WBlockCacheSize:            wstoreBlockCacheSize,
+		WIndexCacheSize:            wstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
@@ -681,6 +686,8 @@ func run() {
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
+	x.Check(err)
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:          Alpha.Conf.GetString("export"),
 		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
@@ -696,6 +703,10 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
+		TLSClientConfig:     tlsConf,
+		TLSDir:              Alpha.Conf.GetString("tls_dir"),
+		TLSInterNodeEnabled: Alpha.Conf.GetBool("tls_internal_port_enabled"),
+		TLSMinVersion:       Alpha.Conf.GetString("tls_min_version"),
 	}
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
@@ -709,6 +720,7 @@ func run() {
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 	x.Config.GraphqlExtension = Alpha.Conf.GetBool("graphql_extensions")
+	x.Config.GraphqlDebug = Alpha.Conf.GetBool("graphql_debug")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

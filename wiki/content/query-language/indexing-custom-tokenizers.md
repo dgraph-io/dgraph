@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Indexing with Custom Tokenizers"
+weight = 27
 [menu.main]
     parent = "query-language"
-    weight = 27
 +++
 
 Dgraph comes with a large toolkit of builtin indexes, but sometimes for niche

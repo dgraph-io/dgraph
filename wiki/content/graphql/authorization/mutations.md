@@ -1,8 +1,8 @@
 +++
 title = "Mutations"
+weight = 3
 [menu.main]
     parent = "authorization"
-    weight = 3   
 +++
 
 Mutations with auth work similarly to query.  However, mutations involve a state change in the database, so it's important to understand when the rules are applied and what they mean.
@@ -24,12 +24,11 @@ type Todo @auth(
             } 
         }"""
     }
-){{
+){
     id: ID!
     text: String!
     owner: User
 }
-
 type User {
     username: String! @id
     todos: [Todo]
@@ -58,7 +57,7 @@ type Todo @auth(
         },
         { rule:  "{$ROLE: { eq: \"ADMIN\" } }"}
     ]}
-){{
+){
     id: ID!
     text: String! @search(by: [term])
     owner: User

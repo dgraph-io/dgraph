@@ -102,39 +102,43 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// Options around how to set up Badger.
-	flag.Int("badger.compression_level", 1,
+	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
-
+	flag.Int64("badger.cache_mb", 0, "Total size of cache (in MB) per shard in reducer.")
+	flag.String("badger.cache_percentage", "0,100",
+		"Cache percentages summing up to 100 for various caches"+
+			" (FORMAT: BlockCacheSize, IndexCacheSize).")
+	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
 }
 
 func run() {
-	var err error
 	opt := options{
-		DataFiles:              Bulk.Conf.GetString("files"),
-		DataFormat:             Bulk.Conf.GetString("format"),
-		SchemaFile:             Bulk.Conf.GetString("schema"),
-		GqlSchemaFile:          Bulk.Conf.GetString("graphql_schema"),
-		Encrypted:              Bulk.Conf.GetBool("encrypted"),
-		OutDir:                 Bulk.Conf.GetString("out"),
-		ReplaceOutDir:          Bulk.Conf.GetBool("replace_out"),
-		TmpDir:                 Bulk.Conf.GetString("tmp"),
-		NumGoroutines:          Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:             uint64(Bulk.Conf.GetInt("mapoutput_mb")),
-		SkipMapPhase:           Bulk.Conf.GetBool("skip_map_phase"),
-		CleanupTmp:             Bulk.Conf.GetBool("cleanup_tmp"),
-		NumReducers:            Bulk.Conf.GetInt("reducers"),
-		Version:                Bulk.Conf.GetBool("version"),
-		StoreXids:              Bulk.Conf.GetBool("store_xids"),
-		ZeroAddr:               Bulk.Conf.GetString("zero"),
-		HttpAddr:               Bulk.Conf.GetString("http"),
-		IgnoreErrors:           Bulk.Conf.GetBool("ignore_errors"),
-		MapShards:              Bulk.Conf.GetInt("map_shards"),
-		ReduceShards:           Bulk.Conf.GetInt("reduce_shards"),
-		CustomTokenizers:       Bulk.Conf.GetString("custom_tokenizers"),
-		NewUids:                Bulk.Conf.GetBool("new_uids"),
-		ClientDir:              Bulk.Conf.GetString("xidmap"),
+		DataFiles:        Bulk.Conf.GetString("files"),
+		DataFormat:       Bulk.Conf.GetString("format"),
+		SchemaFile:       Bulk.Conf.GetString("schema"),
+		GqlSchemaFile:    Bulk.Conf.GetString("graphql_schema"),
+		Encrypted:        Bulk.Conf.GetBool("encrypted"),
+		OutDir:           Bulk.Conf.GetString("out"),
+		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
+		TmpDir:           Bulk.Conf.GetString("tmp"),
+		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
+		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
+		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
+		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
+		NumReducers:      Bulk.Conf.GetInt("reducers"),
+		Version:          Bulk.Conf.GetBool("version"),
+		StoreXids:        Bulk.Conf.GetBool("store_xids"),
+		ZeroAddr:         Bulk.Conf.GetString("zero"),
+		HttpAddr:         Bulk.Conf.GetString("http"),
+		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
+		MapShards:        Bulk.Conf.GetInt("map_shards"),
+		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
+		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
+		NewUids:          Bulk.Conf.GetBool("new_uids"),
+		ClientDir:        Bulk.Conf.GetString("xidmap"),
+		// Badger options
 		BadgerCompressionLevel: Bulk.Conf.GetInt("badger.compression_level"),
 	}
 
@@ -142,6 +146,19 @@ func run() {
 	if opt.Version {
 		os.Exit(0)
 	}
+	if opt.BadgerCompressionLevel < 0 {
+		fmt.Printf("Invalid compression level: %d. It should be non-negative",
+			opt.BadgerCompressionLevel)
+	}
+
+	totalCache := int64(Bulk.Conf.GetInt("badger.cache_mb"))
+	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
+	cachePercent, err := x.GetCachePercentages(Bulk.Conf.GetString("badger.cache_percentage"), 2)
+	x.Check(err)
+	totalCache <<= 20 // Convert to MB.
+	opt.BlockCacheSize = (cachePercent[0] * totalCache) / 100
+	opt.IndexCacheSize = (cachePercent[1] * totalCache) / 100
+
 	if opt.EncryptionKey, err = enc.ReadKey(Bulk.Conf); err != nil {
 		fmt.Printf("unable to read key %v", err)
 		return

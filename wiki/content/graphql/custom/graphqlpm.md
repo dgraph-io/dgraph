@@ -1,8 +1,8 @@
 +++
 title = "Custom DQL"
+weight = 6
 [menu.main]
     parent = "custom"
-    weight = 6   
 +++
 
 At present, it is an experimental feature in master. You can specify the DQL (aka GraphQL+-) query you want to execute

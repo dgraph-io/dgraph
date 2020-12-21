@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Language and RDF Types"
+weight = 5
 [menu.main]
     parent = "mutations"
-    weight = 5
 +++
 
 RDF N-Quad allows specifying a language for string values and an RDF type.  Languages are written using `@lang`. For example
@@ -46,4 +46,4 @@ The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Data
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;            | `float`          |
 
 
-See the section on [RDF schema types]({{< relref "#rdf-types" >}}) to understand how RDF types affect mutations and storage.
+See the section on [RDF schema types]({{< relref "query-language/schema.md#rdf-types" >}}) to understand how RDF types affect mutations and storage.

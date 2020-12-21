@@ -361,3 +361,69 @@ func TestDeleteNestedFilter(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteRBACRuleInverseField(t *testing.T) {
+	mutation := `
+	mutation addTweets($tweet: AddTweetsInput!){
+      addTweets(input: [$tweet]) {
+        numUids
+      }
+    }
+	`
+
+	addTweetsParams := &common.GraphQLParams{
+		Headers: getJWT(t, "foo", ""),
+		Query:   mutation,
+		Variables: map[string]interface{}{"tweet": common.Tweets{
+			Id:        "tweet1",
+			Text:      "abc",
+			Timestamp: "2020-10-10",
+			User: &common.User{
+				Username: "foo",
+			},
+		}},
+	}
+
+	gqlResponse := addTweetsParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	testCases := []TestCase{
+		{
+			user:   "foobar",
+			role:   "admin",
+			result: `{"deleteTweets":{"numUids":0,"tweets":[]}}`,
+		},
+		{
+			user:   "foo",
+			role:   "admin",
+			result: `{"deleteTweets":{"numUids":1,"tweets":[ {"text": "abc"}]}}`,
+		},
+	}
+
+	mutation = `
+	mutation {
+      deleteTweets(
+        filter: {
+          text: {anyoftext: "abc"}
+        }) {
+		numUids
+        tweets {
+          text
+        }
+      }
+    }
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			deleteTweetsParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   mutation,
+			}
+
+			gqlResponse := deleteTweetsParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}

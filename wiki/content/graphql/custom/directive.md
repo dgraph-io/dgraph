@@ -1,8 +1,8 @@
 +++
-title = "The `@custom` directive"
+title = "The @custom directive"
+weight = 2
 [menu.main]
     parent = "custom"
-    weight = 2   
 +++
 
 The `@custom` directive is used to define custom queries, mutations and fields.

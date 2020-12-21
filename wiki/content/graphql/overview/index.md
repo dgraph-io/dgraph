@@ -1,11 +1,11 @@
 +++
 title = "Overview"
+weight = 1
 [menu.main]
   url = "/graphql/overview/"
   name = "Overview"
   identifier = "graphql-overview"
   parent = "graphql"
-  weight = 1
 +++
 
 **Welcome to the official GraphQL documentation for Dgraph.**

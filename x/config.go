@@ -17,6 +17,7 @@
 package x
 
 import (
+	"crypto/tls"
 	"net"
 	"time"
 )
@@ -34,6 +35,8 @@ type Options struct {
 	PollInterval time.Duration
 	//GraphqlExtension wiil be set to see extensions in graphql results
 	GraphqlExtension bool
+	// GraphqlDebug will enable debug mode in GraphQL
+	GraphqlDebug bool
 }
 
 // Config stores the global instance of this package's options.
@@ -61,6 +64,14 @@ type WorkerOptions struct {
 	// Alpha would communicate via only one zero address from the list. All
 	// the other addresses serve as fallback.
 	ZeroAddr []string
+	// TLS client config which will be used to connect with zero and alpha internally
+	TLSClientConfig *tls.Config
+	// Directory where tls certs are present to connect with zero and alpha internally
+	TLSDir string
+	// Set to true if inter node tls is enabled for the cluster
+	TLSInterNodeEnabled bool
+	// min TLS version supported
+	TLSMinVersion string
 	// RaftId represents the id of this alpha instance for participating in the RAFT
 	// consensus protocol.
 	RaftId uint64

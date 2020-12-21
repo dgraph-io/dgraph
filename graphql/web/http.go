@@ -200,11 +200,12 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
+	// Pass in GraphQL @auth information
 	ctx = authorization.AttachAuthorizationJwt(ctx, r)
+	// Pass in PoorMan's auth, ACL and IP information if present.
 	ctx = x.AttachAccessJwt(ctx, r)
-	// Add remote addr as peer info so that the remote address can be logged
-	// inside Server.Login
 	ctx = x.AttachRemoteIP(ctx, r)
+	ctx = x.AttachAuthToken(ctx, r)
 
 	var res *schema.Response
 	gqlReq, err := getRequest(ctx, r)

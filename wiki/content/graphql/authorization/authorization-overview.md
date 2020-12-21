@@ -1,9 +1,9 @@
 +++
 title = "Overview"
+weight = 1
 [menu.main]
     parent = "authorization"
     identifier = "authorization-overview"
-    weight = 1   
 +++
 
 Dgraph GraphQL comes with inbuilt authorization.  It allows you to annotate your schema with rules that determine who can access or mutate what data.

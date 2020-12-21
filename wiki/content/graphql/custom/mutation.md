@@ -1,8 +1,8 @@
 +++
 title = "Custom Mutations"
+weight = 4
 [menu.main]
     parent = "custom"
-    weight = 4   
 +++
 
 Let's say we have an application about authors and posts.  Logged in authors can add posts, but we want to do some input validation and add extra value when a post is added.  The key types might be as follows.

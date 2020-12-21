@@ -19,6 +19,7 @@ package raftwal
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"sync"
 
@@ -34,12 +35,16 @@ import (
 	"golang.org/x/net/trace"
 )
 
+// versionKey is hardcoded into the special key used to fetch the maximum version from the DB.
+const versionKey = 1
+
 // DiskStorage handles disk access and writing for the RAFT write-ahead log.
 type DiskStorage struct {
-	db   *badger.DB
-	id   uint64
-	gid  uint32
-	elog trace.EventLog
+	db       *badger.DB
+	commitTs uint64
+	id       uint64
+	gid      uint32
+	elog     trace.EventLog
 
 	cache          *sync.Map
 	Closer         *z.Closer
@@ -60,6 +65,8 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 		Closer:         z.NewCloser(1),
 		indexRangeChan: make(chan indexRange, 16),
 	}
+
+	w.fetchMaxVersion()
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
@@ -88,6 +95,35 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	return w
 }
 
+// fetchMaxVersion fetches the commitTs to be used in the raftwal. The version is
+// fetched from the special key "maxVersion-id" or from db.MaxVersion
+// API which uses the stream framework.
+func (w *DiskStorage) fetchMaxVersion() {
+	// This is a special key that is used to fetch the latest version.
+	key := []byte(fmt.Sprintf("maxVersion-%d", versionKey))
+
+	txn := w.db.NewTransactionAt(math.MaxUint64, true)
+	defer txn.Discard()
+
+	item, err := txn.Get(key)
+	if err == nil {
+		w.commitTs = item.Version()
+		return
+	}
+	if err == badger.ErrKeyNotFound {
+		// We don't have the special key so get it using the MaxVersion API.
+		version, err := w.db.MaxVersion()
+		x.Check(err)
+
+		w.commitTs = version + 1
+		// Insert the same key back into badger for reuse.
+		x.Check(txn.Set(key, nil))
+		x.Check(txn.CommitAt(w.commitTs, nil))
+	} else {
+		x.Check(err)
+	}
+}
+
 func (w *DiskStorage) processIndexRange() {
 	defer w.Closer.Done()
 
@@ -95,7 +131,7 @@ func (w *DiskStorage) processIndexRange() {
 		if r.from == r.until {
 			return
 		}
-		batch := w.db.NewWriteBatch()
+		batch := w.db.NewWriteBatchAt(w.commitTs)
 		if err := w.deleteRange(batch, r.from, r.until); err != nil {
 			glog.Errorf("deleteRange failed with error: %v, from: %d, until: %d\n",
 				err, r.from, r.until)
@@ -192,9 +228,18 @@ func (w *DiskStorage) entryPrefix() []byte {
 	return b
 }
 
+func (w *DiskStorage) update(cb func(txn *badger.Txn) error) error {
+	txn := w.db.NewTransactionAt(math.MaxUint64, true)
+	defer txn.Discard()
+	if err := cb(txn); err != nil {
+		return err
+	}
+	return txn.CommitAt(w.commitTs, nil)
+}
+
 // StoreRaftId stores the given RAFT ID in disk.
 func (w *DiskStorage) StoreRaftId(id uint64) error {
-	return w.db.Update(func(txn *badger.Txn) error {
+	return w.update(func(txn *badger.Txn) error {
 		var b [8]byte
 		binary.BigEndian.PutUint64(b[:], id)
 		return txn.Set(idKey, b[:])
@@ -203,7 +248,7 @@ func (w *DiskStorage) StoreRaftId(id uint64) error {
 
 // UpdateCheckpoint writes the given snapshot to disk.
 func (w *DiskStorage) UpdateCheckpoint(snap *pb.Snapshot) error {
-	return w.db.Update(func(txn *badger.Txn) error {
+	return w.update(func(txn *badger.Txn) error {
 		data, err := snap.Marshal()
 		if err != nil {
 			return err
@@ -453,7 +498,7 @@ func (w *DiskStorage) reset(es []raftpb.Entry) error {
 	w.cache = new(sync.Map) // reset cache.
 
 	// Clean out the state.
-	batch := w.db.NewWriteBatch()
+	batch := w.db.NewWriteBatchAt(w.commitTs)
 	defer batch.Cancel()
 
 	if err := w.deleteFrom(batch, 0); err != nil {
@@ -679,7 +724,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 	snap.Metadata.ConfState = *cs
 	snap.Data = data
 
-	batch := w.db.NewWriteBatch()
+	batch := w.db.NewWriteBatchAt(w.commitTs)
 	defer batch.Cancel()
 	if err := w.setSnapshot(batch, &snap); err != nil {
 		return err
@@ -701,7 +746,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 // writes then all of them can be written together. Note that when writing an Entry with Index i,
 // any previously-persisted entries with Index >= i must be discarded.
 func (w *DiskStorage) Save(h *raftpb.HardState, es []raftpb.Entry, snap *raftpb.Snapshot) error {
-	batch := w.db.NewWriteBatch()
+	batch := w.db.NewWriteBatchAt(w.commitTs)
 	defer batch.Cancel()
 
 	if err := w.addEntries(batch, es); err != nil {

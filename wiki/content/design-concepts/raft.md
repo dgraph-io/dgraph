@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "RAFT"
+weight = 5
 [menu.main]
     parent = "design-concepts"
-    weight = 5
 +++
 
 

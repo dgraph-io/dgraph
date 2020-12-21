@@ -1982,6 +1982,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
 			})
 		}
+		if sg.Params.AfterUID > 0 {
+			i := sort.Search(len(sg.DestUIDs.Uids), func(i int) bool { return sg.DestUIDs.Uids[i] > sg.Params.AfterUID })
+			sg.DestUIDs.Uids = sg.DestUIDs.Uids[i:]
+		}
+
 	case sg.Attr == "":
 		// This is when we have uid function in children.
 		if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid" {

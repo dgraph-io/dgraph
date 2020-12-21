@@ -188,6 +188,9 @@ const (
 	}
 
 	input ExportInput {
+		"""
+		Data format for the export, e.g. "rdf" or "json" (default: "rdf")
+		"""
 		format: String
 	}
 
@@ -465,7 +468,13 @@ func newAdminResolver(
 			ID:     query.UidToHex(pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
-
+		server.mux.Lock()
+		if newSchema.Schema == server.schema.Schema {
+			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
+			server.mux.Unlock()
+			return
+		}
+		server.mux.Unlock()
 		var gqlSchema schema.Schema
 		// on drop_all, we will receive an empty string as the schema update
 		if newSchema.Schema != "" {
@@ -742,13 +751,18 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	// set status as updating schema
 	mainHealthStore.updatingSchema()
 
-	resolverFactory := resolverFactoryWithErrorMsg(errResolverNotFound)
-	// it is nil after drop_all
-	if gqlSchema != nil {
-		resolverFactory = resolverFactory.WithConventionResolvers(gqlSchema, as.fns)
-	}
-	if as.withIntrospection {
-		resolverFactory.WithSchemaIntrospection()
+	var resolverFactory resolve.ResolverFactory
+	// If schema is nil (which becomes after drop_all) then do not attach Resolver for
+	// introspection operations, and set GQL schema to empty.
+	if gqlSchema == nil {
+		resolverFactory = resolverFactoryWithErrorMsg(errNoGraphQLSchema)
+		gqlSchema, _ = schema.FromString("")
+	} else {
+		resolverFactory = resolverFactoryWithErrorMsg(errResolverNotFound).
+			WithConventionResolvers(gqlSchema, as.fns)
+		if as.withIntrospection {
+			resolverFactory.WithSchemaIntrospection()
+		}
 	}
 
 	// Increment the Epoch when you get a new schema. So, that subscription's local epoch

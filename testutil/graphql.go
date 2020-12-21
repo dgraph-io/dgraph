@@ -61,7 +61,7 @@ type GraphQLResponse struct {
 
 func (resp *GraphQLResponse) RequireNoGraphQLErrors(t *testing.T) {
 	if resp == nil {
-		return
+		require.Fail(t, "got nil response")
 	}
 	require.Nil(t, resp.Errors, "required no GraphQL errors, but received :\n%s",
 		resp.Errors.Error())
@@ -145,11 +145,12 @@ func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
 }
 
 type AuthMeta struct {
-	PublicKey string
-	Namespace string
-	Algo      string
-	Header    string
-	AuthVars  map[string]interface{}
+	PublicKey      string
+	Namespace      string
+	Algo           string
+	Header         string
+	AuthVars       map[string]interface{}
+	PrivateKeyPath string
 }
 
 func (a *AuthMeta) GetSignedToken(privateKeyFile string,

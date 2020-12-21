@@ -5,7 +5,7 @@ go 1.12
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
-	github.com/99designs/gqlgen v0.12.2
+	github.com/99designs/gqlgen v0.13.1-0.20200928230741-819e751c2416
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
 	github.com/DataDog/zstd v1.4.5 // indirect
@@ -16,9 +16,9 @@ require (
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v2 v2.2007.2-0.20200827131741-d5a25b83fbf4
+	github.com/dgraph-io/badger/v2 v2.2007.3-0.20200927102853-5e3d4b9926a7
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200401175452-e463f9234453
-	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200715131837-c0460019ead2
+	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
 	github.com/dgraph-io/ristretto v0.0.4-0.20200904131139-4dec2770af66
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
@@ -49,6 +49,7 @@ require (
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
 	github.com/prometheus/common v0.4.1 // indirect
 	github.com/prometheus/procfs v0.0.0-20190517135640-51af30a78b0e // indirect
+	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cast v1.3.0
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.3
@@ -56,7 +57,7 @@ require (
 	github.com/stretchr/testify v1.4.0
 	github.com/tinylib/msgp v0.0.0-20190103190839-ade0ca4ace05 // indirect
 	github.com/twpayne/go-geom v1.0.5
-	github.com/vektah/gqlparser/v2 v2.0.1
+	github.com/vektah/gqlparser/v2 v2.1.0
 	github.com/willf/bitset v0.0.0-20181014161241-71fa2377963f // indirect
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.21.0

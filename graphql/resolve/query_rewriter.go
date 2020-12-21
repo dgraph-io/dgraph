@@ -46,6 +46,8 @@ type authRewriter struct {
 	parentVarName string
 	// `hasAuthRules` indicates if any of fields in the complete query hierarchy has auth rules.
 	hasAuthRules bool
+	// `hasCascade` indicates if any of fields in the complete query hierarchy has cascade directive.
+	hasCascade bool
 }
 
 // NewQueryRewriter returns a new QueryRewriter.
@@ -61,6 +63,19 @@ func hasAuthRules(field schema.Field, authRw *authRewriter) bool {
 
 	for _, childField := range field.SelectionSet() {
 		if authRules := hasAuthRules(childField, authRw); authRules {
+			return true
+		}
+	}
+	return false
+}
+
+func hasCascadeDirective(field schema.Field) bool {
+	if c := field.Cascade(); c {
+		return true
+	}
+
+	for _, childField := range field.SelectionSet() {
+		if res := hasCascadeDirective(childField); res {
 			return true
 		}
 	}
@@ -93,13 +108,14 @@ func (qr *queryRewriter) Rewrite(
 		parentVarName: gqlQuery.Type().Name() + "Root",
 	}
 	authRw.hasAuthRules = hasAuthRules(gqlQuery, authRw)
+	authRw.hasCascade = hasCascadeDirective(gqlQuery)
 
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:
 
 		// TODO: The only error that can occur in query rewriting is if an ID argument
 		// can't be parsed as a uid: e.g. the query was something like:
-		//
+		//UserSecret
 		// getT(id: "HI") { ... }
 		//
 		// But that's not a rewriting error!  It should be caught by validation
@@ -266,6 +282,11 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	addFilter(dgQuery, field.Type(), filter)
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
+}
+
+func addFilterToField(dgQuery *gql.GraphQuery, field schema.Field) {
+	filter, _ := field.ArgValue("filter").(map[string]interface{})
+	addFilter(dgQuery, field.Type(), filter)
 }
 
 func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
@@ -453,12 +474,9 @@ func (authRw *authRewriter) addAuthQueries(
 			Args: []gql.Arg{{Value: authRw.varName}},
 		},
 		Filter: filter,
-		Order:  dgQuery.Order,
-		Args:   dgQuery.Args,
 	}
 
 	dgQuery.Filter = nil
-	dgQuery.Args = nil
 
 	// The user query starts from the var query generated above and is filtered
 	// by the the filter generated from auth processing, so now we build
@@ -746,14 +764,34 @@ func addSelectionSetFrom(
 			q.Children = append(q.Children, child)
 		}
 
-		// If RBAC rules are evaluated to Negative, we don't write queries for deeper levels.
-		// Hence we don't need to do any further processing for this field.
-		if rbac == schema.Negative {
+		var fieldAuth []*gql.GraphQuery
+		var authFilter *gql.FilterTree
+		if rbac == schema.Negative && auth.hasAuthRules && auth.hasCascade && !auth.isWritingAuth {
+			// If RBAC rules are evaluated to Negative but we have cascade directive we continue
+			// to write the query and add a dummy filter that doesn't return anything.
+			// Example: AdminTask5 as var(func: uid())
+			q.Children = append(q.Children, child)
+			varName := auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+			fieldAuth = append(fieldAuth, &gql.GraphQuery{
+				Var:  varName,
+				Attr: "var",
+				Func: &gql.Function{
+					Name: "uid",
+				},
+			})
+			authFilter = &gql.FilterTree{
+				Func: &gql.Function{
+					Name: "uid",
+					Args: []gql.Arg{{Value: varName}},
+				},
+			}
+			rbac = schema.Positive
+		} else if rbac == schema.Negative {
+			// If RBAC rules are evaluated to Negative, we don't write queries for deeper levels.
+			// Hence we don't need to do any further processing for this field.
 			continue
 		}
 
-		var fieldAuth []*gql.GraphQuery
-		var authFilter *gql.FilterTree
 		// If RBAC rules are evaluated to `Uncertain` then we add the Auth rules.
 		if rbac == schema.Uncertain {
 			fieldAuth, authFilter = auth.rewriteAuthQueries(f.Type())
@@ -799,7 +837,7 @@ func addSelectionSetFrom(
 				},
 			}
 
-			addArgumentsToField(selectionQry, f)
+			addFilterToField(selectionQry, f)
 			selectionQry.Filter = child.Filter
 			authQueries = append(authQueries, parentQry, selectionQry)
 			child.Filter = &gql.FilterTree{
@@ -808,10 +846,6 @@ func addSelectionSetFrom(
 					Args: []gql.Arg{{Value: filtervarName}},
 				},
 			}
-
-			// We already apply the following to `selectionQry` by calling addArgumentsToField()
-			// hence they are no longer required.
-			child.Args = nil
 		}
 		authQueries = append(authQueries, selectionAuth...)
 		authQueries = append(authQueries, fieldAuth...)
@@ -980,6 +1014,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	// Each key in filter is either "and", "or", "not" or the field name it
 	// applies to such as "title" in: `title: { anyofterms: "GraphQL" }``
 	for _, field := range keys {
+		if filter[field] == nil {
+			continue
+		}
 		switch field {
 
 		// In 'and', 'or' and 'not' cases, filter[field] must be a map[string]interface{}

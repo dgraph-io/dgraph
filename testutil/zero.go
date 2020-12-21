@@ -31,17 +31,19 @@ import (
 	"google.golang.org/grpc"
 )
 
+type Member struct {
+	Addr       string `json:"addr"`
+	GroupID    int    `json:"groupId"`
+	ID         string `json:"id"`
+	LastUpdate string `json:"lastUpdate"`
+	Leader     bool   `json:"leader"`
+}
+
 // StateResponse represents the structure of the JSON object returned by calling
 // the /state endpoint in zero.
 type StateResponse struct {
 	Groups map[string]struct {
-		Members map[string]struct {
-			Addr       string `json:"addr"`
-			GroupID    int    `json:"groupId"`
-			ID         string `json:"id"`
-			LastUpdate string `json:"lastUpdate"`
-			Leader     bool   `json:"leader"`
-		} `json:"members"`
+		Members map[string]Member `json:"members"`
 		Tablets map[string]struct {
 			GroupID   int    `json:"groupId"`
 			Predicate string `json:"predicate"`
@@ -79,22 +81,27 @@ func GetState() (*StateResponse, error) {
 }
 
 // GetClientToGroup returns a dgraph client connected to an alpha in the given group.
-func GetClientToGroup(groupID string) (*dgo.Dgraph, error) {
+func GetClientToGroup(gid string) (*dgo.Dgraph, error) {
 	state, err := GetState()
 	if err != nil {
 		return nil, err
 	}
 
-	group, ok := state.Groups[groupID]
+	group, ok := state.Groups[gid]
 	if !ok {
-		return nil, errors.Errorf("group %s does not exist", groupID)
+		return nil, errors.Errorf("group %s does not exist", gid)
 	}
 
 	if len(group.Members) == 0 {
-		return nil, errors.Errorf("the group %s has no members", groupID)
+		return nil, errors.Errorf("the group %s has no members", gid)
 	}
 
-	member := group.Members["1"]
+	// Select the first member found in the iteration.
+	var member Member
+	for _, m := range group.Members {
+		member = m
+		break
+	}
 	parts := strings.Split(member.Addr, ":")
 	if len(parts) != 2 {
 		return nil, errors.Errorf("the member has an invalid address: %v", member.Addr)
@@ -113,4 +120,26 @@ func GetClientToGroup(groupID string) (*dgo.Dgraph, error) {
 		return nil, err
 	}
 	return dgo.NewDgraphClient(api.NewDgraphClient(conn)), nil
+}
+
+func GetNodesInGroup(gid string) ([]string, error) {
+	state, err := GetState()
+	if err != nil {
+		return nil, err
+	}
+
+	group, ok := state.Groups[gid]
+	if !ok {
+		return nil, errors.Errorf("group %s does not exist", gid)
+	}
+
+	if len(group.Members) == 0 {
+		return nil, errors.Errorf("the group %s has no members", gid)
+	}
+
+	nodes := make([]string, 0)
+	for id := range group.Members {
+		nodes = append(nodes, id)
+	}
+	return nodes, nil
 }

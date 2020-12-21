@@ -1,8 +1,8 @@
 +++
-title = "The `@auth` directive"
+title = "The @auth directive"
+weight = 2
 [menu.main]
     parent = "authorization"
-    weight = 2   
 +++
 
 Given an authentication mechanism and signed JWT, it's the `@auth` directive that tells Dgraph how to apply authorization.  The directive can be used on any type (that isn't a `@remote` type) and specifies the authorization for `query` as well as `add`, `update` and `delete` mutations.
@@ -27,15 +27,17 @@ type Todo @auth(
 ){
     id: ID!
     text: String! @search(by: [term])
-    owner: String!
+    owner: String! @search(by: [hash])
 }
 ```
+
+In addition to it, details of the authentication provider should be given in the last line of the schema, as discussed in section  [authorization-overview](/graphql/authorization/authorization-overview).
 
 Here we define a type `Todo`, that's got an `id`, the `text` of the todo and the username of the `owner` of the todo.  What todos can a user query?  Any `Todo` that the `query` rule would also return.
 
 The `query` rule in this case expects the JWT to contain a claim `"USER": "..."` giving the username of the logged in user, and says: you can query any todo that has your username as the owner.
 
-In this example we use the `queryTodo` query that will be auto generated after uploading this schema. When using a query in a rule, you can only use the `queryTypeName` query. Where `TypeName` matches the name of where the `@auth` directive is attached. In other words, we could not have used the `getTodo` query in our rule above to query by id only.
+In this example we use the `queryTodo` query that will be auto generated after uploading this schema. When using a query in a rule, you can only use the `queryTypeName` query. Where `TypeName` matches the name of the type, where the `@auth` directive is attached. In other words, we could not have used the `getTodo` query in our rule above to query by id only.
 
 This rule is applied automatically at query time.  For example, the query
 

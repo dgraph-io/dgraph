@@ -56,7 +56,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := openBadger(dir)
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := raftwal.Init(db, 0, 0)
 	defer ds.Closer.SignalAndWait()

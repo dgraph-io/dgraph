@@ -114,10 +114,9 @@ func (p *Poller) AddSubscriber(
 		expiry: customClaims.StandardClaims.ExpiresAt.Time, updateCh: updateCh}
 	p.pollRegistry[bucketID] = subscriptions
 
-	if len(subscriptions) != 1 {
-		// Already there is subscription for this bucket. So,no need to poll the server. We can
-		// use the existing polling routine to publish the update.
-
+	if ok {
+		// Already there is a running go routine for this bucket. So,no need to poll the server.
+		// We can use the existing polling routine to publish the update.
 		return &SubscriberResponse{
 			BucketID:       bucketID,
 			SubscriptionID: subscriptionID,
@@ -172,15 +171,16 @@ func (p *Poller) poll(req *pollRequest) {
 		currentHash := farm.Fingerprint64(res.Data.Bytes())
 
 		if req.prevHash == currentHash {
-			if pollID%30 != 0 {
+			if pollID%2 != 0 {
 				// Don't update if there is no change in response.
 				continue
 			}
-			// Every thirty poll. We'll check there is any active subscription for the
-			// current poll. If not we'll terminate this poll.
+			// Every second poll, we'll check if there is any active subscription for the
+			// current goroutine. If not we'll terminate this poll.
 			p.Lock()
 			subscribers, ok := p.pollRegistry[req.bucketID]
 			if !ok || len(subscribers) == 0 {
+				delete(p.pollRegistry, req.bucketID)
 				p.Unlock()
 				return
 			}
@@ -200,6 +200,7 @@ func (p *Poller) poll(req *pollRequest) {
 		if !ok || len(subscribers) == 0 {
 			// There is no subscribers to push the update. So, kill the current polling
 			// go routine.
+			delete(p.pollRegistry, req.bucketID)
 			p.Unlock()
 			return
 		}

@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Config"
+weight = 2
 [menu.main]
     parent = "deploy"
-    weight = 2
 +++
 
 {{% notice "tip" %}}

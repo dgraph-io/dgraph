@@ -282,3 +282,12 @@ type ThingTwo implements Thing {
     prop: String @dgraph(pred: "prop")
     owner: String
 }
+
+type Person {
+    id: ID!
+    name: String @search(by: [hash])
+    friends: [Person] @hasInverse(field: friends)
+}
+interface A {
+    name: String! @id
+}

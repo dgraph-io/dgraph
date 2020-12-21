@@ -62,6 +62,8 @@ var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
 	ErrNoJwt        = errors.New("no accessJwt available")
+	// ErrorInvalidLogin is returned when username or password is incorrect in login
+	ErrorInvalidLogin = errors.New("invalid username or password")
 )
 
 const (
@@ -111,31 +113,6 @@ const (
 	GrootId = "groot"
 	// GuardiansId is the ID of the admin group for ACLs.
 	GuardiansId = "guardians"
-	// AclPredicates is the JSON representation of the predicates reserved for use
-	// by the ACL system.
-	AclPredicates = `
-{"predicate":"dgraph.xid","type":"string", "index":true, "tokenizer":["exact"], "upsert":true},
-{"predicate":"dgraph.password","type":"password"},
-{"predicate":"dgraph.user.group","list":true, "reverse":true, "type":"uid"},
-{"predicate":"dgraph.acl.rule","type":"uid","list":true},
-{"predicate":"dgraph.rule.predicate","type":"string","index":true,"tokenizer":["exact"],"upsert":true},
-{"predicate":"dgraph.rule.permission","type":"int"}
-`
-
-	InitialTypes = `
-"types": [{
-	"fields": [{"name": "dgraph.graphql.schema"},{"name": "dgraph.graphql.xid"}],
-	"name": "dgraph.graphql"
-},{
-	"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],
-	"name": "dgraph.type.User"
-},{
-	"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],
-	"name": "dgraph.type.Group"
-},{
-	"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],
-	"name": "dgraph.type.Rule"
-}]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper
@@ -146,12 +123,6 @@ const (
 	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
-
-	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
-	GraphqlPredicates = `
-{"predicate":"dgraph.graphql.schema", "type": "string"},
-{"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
-`
 )
 
 var (
@@ -289,6 +260,7 @@ func (gqlErr *GqlError) WithPath(path []interface{}) *GqlError {
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
+	w.Header().Set("Content-Type", "application/json")
 	var qr queryRes
 	ext := make(map[string]interface{})
 	ext["code"] = code
@@ -362,6 +334,20 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+// AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
+func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
+	if authToken := r.Header.Get("X-Dgraph-AuthToken"); authToken != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("auth-token", authToken)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
 }
 
 // AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
@@ -441,7 +427,12 @@ func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error
 		out = gzw
 	}
 
-	return out.Write(b)
+	bytesWritten, err := out.Write(b)
+	if err != nil {
+		return 0, err
+	}
+	w.Header().Set("Content-Length", strconv.FormatInt(int64(bytesWritten), 10))
+	return bytesWritten, nil
 }
 
 // Min returns the minimum of the two given numbers.
@@ -740,7 +731,7 @@ func DivideAndRule(num int) (numGo, width int) {
 }
 
 // SetupConnection starts a secure gRPC connection to the given host.
-func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientConn, error) {
+func SetupConnection(host string, tlsCfg *tls.Config, useGz bool, dialOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	callOpts := append([]grpc.CallOption{},
 		grpc.MaxCallRecvMsgSize(GrpcMaxSize),
 		grpc.MaxCallSendMsgSize(GrpcMaxSize))
@@ -750,7 +741,7 @@ func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientC
 		callOpts = append(callOpts, grpc.UseCompressor(gzip.Name))
 	}
 
-	dialOpts := append([]grpc.DialOption{},
+	dialOpts = append(dialOpts,
 		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithBlock())
@@ -1073,4 +1064,39 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 	}
 
 	return cachePercent, nil
+}
+
+// ParseCompressionLevel returns compression level(int) given the compression level(string)
+func ParseCompressionLevel(compressionLevel string) (int, error) {
+	x, err := strconv.Atoi(compressionLevel)
+	if err != nil {
+		return 0, errors.Errorf("ERROR: unable to parse compression level(%s)", compressionLevel)
+	}
+	if x < 0 {
+		return 0, errors.Errorf("ERROR: compression level(%s) cannot be negative", compressionLevel)
+	}
+	return x, nil
+}
+
+// GetCompressionLevels returns the slice of compression levels given the "," (comma) separated
+// compression levels(integers) string.
+func GetCompressionLevels(compressionLevelsString string) ([]int, error) {
+	compressionLevels := strings.Split(compressionLevelsString, ",")
+	// Validity checks
+	if len(compressionLevels) != 1 && len(compressionLevels) != 2 {
+		return nil, errors.Errorf("ERROR: expected single integer or two comma separated integers")
+	}
+	var compressionLevelsInt []int
+	for _, cLevel := range compressionLevels {
+		x, err := ParseCompressionLevel(cLevel)
+		if err != nil {
+			return nil, err
+		}
+		compressionLevelsInt = append(compressionLevelsInt, x)
+	}
+	// Append the same compression level in case only one level was passed.
+	if len(compressionLevelsInt) == 1 {
+		compressionLevelsInt = append(compressionLevelsInt, compressionLevelsInt[0])
+	}
+	return compressionLevelsInt, nil
 }

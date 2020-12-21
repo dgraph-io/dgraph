@@ -50,7 +50,7 @@ func TestStorageTerm(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 	defer ds.Closer.SignalAndWait()
@@ -101,7 +101,7 @@ func TestStorageEntries(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 	defer ds.Closer.SignalAndWait()
@@ -147,7 +147,7 @@ func TestStorageLastIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 	defer ds.Closer.SignalAndWait()
@@ -178,7 +178,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 	defer ds.Closer.SignalAndWait()
@@ -194,7 +194,7 @@ func TestStorageFirstIndex(t *testing.T) {
 		t.Errorf("first = %d, want %d", first, 4)
 	}
 
-	batch := db.NewWriteBatch()
+	batch := db.NewWriteBatchAt(ds.commitTs)
 	require.NoError(t, ds.deleteRange(batch, 0, 4))
 	require.NoError(t, batch.Flush())
 	ds.cache.Store(firstKey, 0)
@@ -212,7 +212,7 @@ func TestStorageCompact(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 	defer ds.Closer.SignalAndWait()
@@ -237,7 +237,7 @@ func TestStorageCompact(t *testing.T) {
 	for i, tt := range tests {
 		first, err := ds.FirstIndex()
 		require.NoError(t, err)
-		batch := db.NewWriteBatch()
+		batch := db.NewWriteBatchAt(ds.commitTs)
 		err = ds.deleteRange(batch, first-1, tt.i)
 		require.NoError(t, batch.Flush())
 		if err != tt.werr {
@@ -264,7 +264,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 	defer ds.Closer.SignalAndWait()
@@ -302,7 +302,7 @@ func TestStorageAppend(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 	defer ds.Closer.SignalAndWait()
@@ -351,7 +351,7 @@ func TestStorageAppend(t *testing.T) {
 
 	for i, tt := range tests {
 		require.NoError(t, ds.reset(ents))
-		batch := db.NewWriteBatch()
+		batch := db.NewWriteBatchAt(ds.commitTs)
 		err := ds.addEntries(batch, tt.entries)
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)

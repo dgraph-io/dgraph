@@ -266,3 +266,29 @@
     query {
       x as deleteX()
     }
+
+-
+  name: "Deleting an interface with just a field with @id directive"
+  gqlmutation: |
+    mutation{
+      deleteA(filter:{name:{eq: "xyz"}}){
+        a{
+          name
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as deleteA(func: type(A)) @filter(eq(A.name, "xyz")) {
+        uid
+      }
+      a(func: uid(x)) {
+        dgraph.type
+        name : A.name
+        dgraph.uid : uid
+      }
+    }
+  dgmutations:
+    - deletejson: |
+        [{ "uid": "uid(x)"}]
+

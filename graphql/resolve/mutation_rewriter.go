@@ -670,6 +670,43 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	return dgQuery
 }
 
+// removeNodeReference removes any reference we know about (via @hasInverse) into a node.
+func removeNodeReference(m schema.Mutation, authRw *authRewriter,
+	qry *gql.GraphQuery) []interface{} {
+	var deletes []interface{}
+	for _, fld := range m.MutatedType().Fields() {
+		invField := fld.Inverse()
+		if invField == nil {
+			// This field be a reverse edge, in that case we need to delete the incoming connections
+			// to this node via its forward edges.
+			invField = fld.ForwardEdge()
+			if invField == nil {
+				continue
+			}
+		}
+		varName := authRw.varGen.Next(fld.Type(), "", "", false)
+
+		qry.Children = append(qry.Children,
+			&gql.GraphQuery{
+				Var:  varName,
+				Attr: invField.Type().DgraphPredicate(fld.Name()),
+			})
+
+		delFldName := fld.Type().DgraphPredicate(invField.Name())
+		del := map[string]interface{}{"uid": MutationQueryVarUID}
+		if invField.Type().ListType() == nil {
+			deletes = append(deletes, map[string]interface{}{
+				"uid":      fmt.Sprintf("uid(%s)", varName),
+				delFldName: del})
+		} else {
+			deletes = append(deletes, map[string]interface{}{
+				"uid":      fmt.Sprintf("uid(%s)", varName),
+				delFldName: []interface{}{del}})
+		}
+	}
+	return deletes
+}
+
 func (drw *deleteRewriter) Rewrite(
 	ctx context.Context,
 	m schema.Mutation) ([]*UpsertMutation, error) {
@@ -703,44 +740,14 @@ func (drw *deleteRewriter) Rewrite(
 	}
 
 	deletes := []interface{}{map[string]interface{}{"uid": "uid(x)"}}
-
-	// we need to delete this node with ^^ and then any reference we know about
-	// (via @hasInverse) into this node.
-	for _, fld := range m.MutatedType().Fields() {
-		invField := fld.Inverse()
-		if invField == nil {
-			// This field be a reverse edge, in that case we need to delete the incoming connections
-			// to this node via its forward edges.
-			invField = fld.ForwardEdge()
-			if invField == nil {
-				continue
-			}
-		}
-		varName := varGen.Next(fld.Type(), "", "", false)
-
-		qry.Children = append(qry.Children,
-			&gql.GraphQuery{
-				Var:  varName,
-				Attr: invField.Type().DgraphPredicate(fld.Name()),
-			})
-
-		delFldName := fld.Type().DgraphPredicate(invField.Name())
-		del := map[string]interface{}{"uid": MutationQueryVarUID}
-		if invField.Type().ListType() == nil {
-			deletes = append(deletes,
-				map[string]interface{}{
-					"uid":      fmt.Sprintf("uid(%s)", varName),
-					delFldName: del})
-		} else {
-			deletes = append(deletes,
-				map[string]interface{}{
-					"uid":      fmt.Sprintf("uid(%s)", varName),
-					delFldName: []interface{}{del}})
-		}
+	// We need to remove node reference only if auth rule succeeds.
+	if qry.Attr != m.ResponseName()+"()" {
+		// We need to delete the node and then any reference we know about (via @hasInverse)
+		// into this node.
+		deletes = append(deletes, removeNodeReference(m, authRw, qry)...)
 	}
 
 	b, err := json.Marshal(deletes)
-
 	var finalQry *gql.GraphQuery
 	// This rewrites the Upsert mutation so we can query the nodes before deletion. The query result
 	// is later added to delete mutation result.
@@ -989,6 +996,30 @@ func rewriteObject(
 		if xid != nil && xidString != "" {
 			xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
+
+			// Inverse Link is added as a Part of asXIDReference so we delete any provided
+			// Link to the object.
+			// Example: for this mutation
+			// mutation addCountry($inp: AddCountryInput!) {
+			// 	addCountry(input: [$inp]) {
+			// 	  country {
+			// 		id
+			// 	  }
+			// 	}
+			//  }
+			// with the input:
+			//{
+			// "inp": {
+			// 	"name": "A Country",
+			// 	"states": [
+			// 	  { "code": "abc", "name": "Alphabet" },
+			// 	  { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
+			// 	]
+			//   }
+			// }
+			// we delete the link of Second state to "B Country"
+			deleteInverseObject(obj, srcField)
+
 			if deepXID > 2 {
 				// Here we link the already existing node with an xid to the parent whose id is
 				// passed in srcUID. We do this linking only if there is a hasInverse relationship
@@ -1052,11 +1083,33 @@ func rewriteObject(
 		myUID = fmt.Sprintf("_:%s", variable)
 
 		if xid == nil || deepXID > 2 {
+			// If this object had an overwritten value for the inverse field, then we don't want to
+			// use that value as we will add the link to the inverse field in the below
+			// function call with the parent of this object
+			// for example, for this mutation:
+			// mutation addAuthor($auth: AddAuthorInput!) {
+			// addAuthor(input: [$auth]) {
+			// 	author {
+			// 		id
+			// 	}
+			// 	}
+			// }
+			// with the following input
+			//   {
+			// 	"auth": {
+			// 	  "name": "A.N. Author",
+			// 	  "posts": [ { "postID": "0x456" }, {"title": "New Post", "author": {"name": "Abhimanyu"}} ]
+			// 	}
+			//   }
+			// We delete the link of second input post with Author "name" : "Abhimanyu".
+			deleteInverseObject(obj, srcField)
+
 			// Lets link the new node that we are creating with the parent if a @hasInverse
 			// exists between the two.
 			// So for example if we had the addAuthor mutation which is also adding nested
 			// posts, then we add the link _:Post Post.author AuthorUID(srcUID) here.
 			addInverseLink(newObj, srcField, srcUID)
+
 		}
 	} else {
 		myUID = srcUID
@@ -1065,7 +1118,17 @@ func rewriteObject(
 	newObj["uid"] = myUID
 	frag := newFragment(newObj)
 	frag.newNodes[variable] = typ
+
 	results := &mutationRes{secondPass: []*mutationFragment{frag}}
+	if xid != nil && !atTopLevel && !xidEncounteredFirstTime && deepXID <= 2 {
+		// If this is an xid that has been encountered before, e.g. think add mutations with
+		// multiple objects as input. In that case we don't need to add the fragment to create this
+		// object, so we clear it out. We do need other fragments for linking this node to its
+		// parent which are added later.
+		// If deepXID > 2 then even if the xid has been encountered before we still keep it and
+		// build its mutation to cover all possible scenarios.
+		results.secondPass = results.secondPass[:0]
+	}
 
 	// if xidString != "", then we are adding with an xid.  In which case, we have to ensure
 	// as part of the upsert that the xid doesn't already exist.
@@ -1078,9 +1141,17 @@ func rewriteObject(
 			xidMetadata.queryExists[variable] = true
 		}
 		frag.conditions = []string{fmt.Sprintf("eq(len(%s), 0)", variable)}
-		frag.check = checkQueryResult(variable,
-			x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name()),
-			nil)
+
+		// We need to conceal the error because we might be leaking information to the user if it
+		// tries to add duplicate data to the field with @id.
+		var err error
+		if queryAuthSelector(typ) == nil {
+			err = x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
+		} else {
+			// This error will only be reported in debug mode.
+			err = x.GqlErrorf("GraphQL debug: id already exists for type %s", typ.Name())
+		}
+		frag.check = checkQueryResult(variable, err, nil)
 	}
 
 	if xid != nil && !atTopLevel {
@@ -1104,13 +1175,15 @@ func rewriteObject(
 	}
 
 	var childrenFirstPass []*mutationFragment
-
 	// we build the mutation to add object here. If XID != nil, we would then move it to
 	// firstPass from secondPass (frag).
 
 	// if this object has an xid, then we don't need to
 	// rewrite its children if we have encountered it earlier.
-	if xidString == "" || xidEncounteredFirstTime {
+
+	// For deepXIDs even if the xid has been encountered before, we should build the mutation for
+	// this object.
+	if xidString == "" || xidEncounteredFirstTime || deepXID > 2 {
 		var fields []string
 		for field := range obj {
 			fields = append(fields, field)
@@ -1209,11 +1282,6 @@ func rewriteObject(
 		results.firstPass = appendFragments(results.firstPass, []*mutationFragment{xidFrag})
 	} else if xidFrag != nil {
 		results.secondPass = appendFragments(results.secondPass, []*mutationFragment{xidFrag})
-	}
-
-	// if !xidEncounteredFirstTime, we have already seen the relevant fragments.
-	if xid != nil && !atTopLevel && !xidEncounteredFirstTime {
-		results.firstPass = []*mutationFragment{}
 	}
 
 	return results
@@ -1614,6 +1682,15 @@ func attachChild(res map[string]interface{}, parent schema.Type, child schema.Fi
 	}
 }
 
+func deleteInverseObject(obj map[string]interface{}, srcField schema.FieldDefinition) {
+	if srcField != nil {
+		invField := srcField.Inverse()
+		if invField != nil && invField.Type().ListType() == nil {
+			delete(obj, invField.Name())
+		}
+	}
+}
+
 func addInverseLink(obj map[string]interface{}, srcField schema.FieldDefinition, srcUID string) {
 	if srcField != nil {
 		invField := srcField.Inverse()
@@ -1713,7 +1790,27 @@ func squashIntoObject(label string) func(interface{}, interface{}, bool) interfa
 			}
 			asObject = cpy
 		}
-		asObject[label] = v
+
+		val := v
+
+		// If there is an existing value for the label in the object, then we should append to it
+		// instead of overwriting it if the existing value is a list. This can happen when there
+		// is @hasInverse and we are doing nested adds.
+		existing := asObject[label]
+		switch ev := existing.(type) {
+		case []interface{}:
+			switch vv := v.(type) {
+			case []interface{}:
+				ev = append(ev, vv...)
+				val = ev
+			case interface{}:
+				ev = append(ev, vv)
+				val = ev
+			default:
+			}
+		default:
+		}
+		asObject[label] = val
 		return asObject
 	}
 }

@@ -1,8 +1,8 @@
 +++
 title = "Types"
+weight = 2
 [menu.main]
     parent = "schema"
-    weight = 2   
 +++
 
 This page describes how you use GraphQL types to set the Dgraph GraphQL schema.
@@ -11,9 +11,11 @@ This page describes how you use GraphQL types to set the Dgraph GraphQL schema.
 
 Dgraph GraphQL comes with the standard GraphQL scalars: `Int`, `Float`, `String`, `Boolean` and `ID`.  There's also a `DateTime` scalar - represented as a string in RFC3339 format.
 
-Scalars `Int`, `Float`, `String` and `DateTime` can be used in lists.  All scalars may be nullable or non-nullable.
+Scalars `Int`, `Float`, `String` and `DateTime` can be used in lists. Note that lists behave like an unordered set in Dgraph. For example: `["e1", "e1", "e2"]` may get stored as `["e2", "e1"]`, i.e., duplicate values will not be stored and order may not be preserved.
 
-The `ID` type is special.  IDs are auto-generated, immutable, and can be treated as strings.  Fields of type `ID` can be listed as nullable in a schema, but Dgraph will never return null. 
+All scalars may be nullable or non-nullable.
+
+The `ID` type is special.  IDs are auto-generated, immutable, and can be treated as strings.  Fields of type `ID` can be listed as nullable in a schema, but Dgraph will never return null.
 
 * *Schema rule*: `ID` lists aren't allowed - e.g. `tags: [String]` is valid, but `ids: [ID]` is not.
 * *Schema rule*: Each type you define can have at most one field with type `ID`.  That includes IDs implemented through interfaces.
@@ -53,7 +55,7 @@ type Post {
 }
 ```
 
-### Types 
+### Types
 
 From the built-in scalars and the enums you add, you can generate types in the usual way for GraphQL.  For example:
 
@@ -127,5 +129,78 @@ type Comment implements Post {
     text: String
     datePublished: DateTime
     commentsOn: Post!
+}
+```
+
+### Password type
+A password for an entity is set with setting the schema for the node type with `@secret` directive. Passwords cannot be queried directly, only checked for a match using the `checkTypePassword` function where `Type` is the node type.
+The passwords are encrypted using [bcrypt](https://en.wikipedia.org/wiki/Bcrypt).
+
+For example, to set a password, first set schema:
+
+1. Cut-and-paste the following schema into a file called `schema.graphql`
+    ```graphql
+    type Author @secret(field: "pwd") {
+      name: String! @id
+    }
+    ```
+
+2. Run the following curl request:
+    ```bash
+    curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
+    ```
+
+3. Set the password by pointing to the `graphql` endpoint (http://localhost:8080/graphql):
+    ```graphql
+    mutation {
+      addAuthor(input: [{name:"myname", pwd:"mypassword"}]) {
+        author {
+          name
+        }
+      }
+    }
+    ```
+
+The output should look like:
+```json
+{
+  "data": {
+    "addAuthor": {
+      "author": [
+        {
+          "name": "myname"
+        }
+      ]
+    }
+  }
+}
+```
+
+You can check a password:
+```graphql
+query {
+  checkAuthorPassword(name: "myname", pwd: "mypassword") {
+   name
+  }
+}
+```
+
+output:
+```json
+{
+  "data": {
+    "checkAuthorPassword": {
+      "name": "myname"
+    }
+  }
+}
+```
+
+If the password is wrong you will get the following response:
+```json
+{
+  "data": {
+    "checkAuthorPassword": null
+  }
 }
 ```
