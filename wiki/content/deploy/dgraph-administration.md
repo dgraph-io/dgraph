@@ -300,7 +300,7 @@ new type name and copy data from old predicate name to new predicate name for al
 are affected. Then, you can drop the old types and predicates from DB.
 
 {{% notice "note" %}}
-If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section]({{< relref "howto/migrate-dgraph-1-1.md" >}}).
+If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section]({{< relref "/migration/migrate-dgraph-1-1.md" >}}).
 {{% /notice %}}
 
 ## Post Installation
