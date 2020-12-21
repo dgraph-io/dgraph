@@ -54,7 +54,7 @@ As you can see, we got the query that Alpha received, to read it in the original
 }
 ```
 
-You can also dynamically turn on/off query logging without restarting any Alpha node. This can be achieved by sending the following GraphQL mutation to the `/admin` endpoint of an Alpha node (e.g. `localhost:8080/admin`):
+You can also dynamically turn query logging on or off without restarting any Alpha node. To toggle query logging on or off, send the following GraphQL mutation to the `/admin` endpoint of an Alpha node (e.g. `localhost:8080/admin`):
 
 ```graphql
 mutation {
@@ -66,7 +66,7 @@ mutation {
   }
 }
 ```
-response should look like:
+The response should look like the following:
 
 ```json
 {
@@ -88,9 +88,9 @@ response should look like:
   }
 }
 ```
-also, Alpha node will print the following INFO message to confirm that the mutation has been applied:
+Also, the Alpha node will print the following INFO message to confirm that the mutation has been applied:
 ```
 I1207 14:53:28.240516   20143 config.go:39] Got config update through GraphQL admin API
 ```
 
-Similarly, you can turn off query logging, by setting `logRequest` to false in the above mutation.
+Similarly, you can turn off query logging by setting `logRequest` to `false` in the above mutation.
