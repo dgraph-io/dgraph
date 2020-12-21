@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	jsoniter "github.com/json-iterator/go"
 	simdjson "github.com/minio/simdjson-go"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
@@ -611,8 +612,8 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 		return err
 	}
 
-	// deep is a lifo stack for holding { and [ tags and keeping track of how
-	// deeply nested we are when reading the tape
+	// deep is a LIFO stack for holding '{' and '[' tags and keeping track of
+	// how deeply nested we are when reading the tape
 	deep := make([]simdjson.Tag, 0)
 	// open becomes true when we've parsed a key and are looking for a value
 	open := false
@@ -641,20 +642,42 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 		quad = &api.NQuad{}
 	}
 
+	geom := func() {
+		// verify that this is a geo object: should always have a "type" field
+		iter.Advance()
+		if t, _ := iter.String(); t != "type" {
+			return
+		}
+		iter.Advance()
+		geoType := ""
+		if geoType, _ = iter.String(); geoType != "Point" &&
+			geoType != "LineString" && geoType != "Polygon" && geoType != "MultiPoint" &&
+			geoType != "MultiLineString" && geoType != "MultiPolygon" && geoType != "GeometryCollection" {
+			return
+		}
+
+		for tag := iter.AdvanceInto(); ; tag = iter.AdvanceInto() {
+			switch tag {
+			case simdjson.TagString:
+				fmt.Println(iter.String())
+			case simdjson.TagObjectEnd:
+				return
+			}
+
+			fmt.Println("geom: ", tag, open, deep)
+		}
+	}
+
 	subject := getNextBlank()
 
 	for tag := iter.AdvanceInto(); ; tag = iter.AdvanceInto() {
-		next := iter.PeekNextTag()
-
 		switch tag {
 		case simdjson.TagString:
 			if !open {
-				if isScalar(next) {
-					open = true
-					quad.Subject = subject
-					quad.Predicate, _ = iter.String()
-					quad.Predicate, quad.Lang = x.PredicateLang(quad.Predicate)
-				}
+				open = true
+				quad.Subject = subject
+				quad.Predicate, _ = iter.String()
+				quad.Predicate, quad.Lang = x.PredicateLang(quad.Predicate)
 			} else {
 				stop(iter.String())
 			}
@@ -693,6 +716,9 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 
 		case simdjson.TagObjectStart:
 			deep = append(deep, tag)
+			if len(deep) > 1 {
+				geom()
+			}
 
 		case simdjson.TagObjectEnd:
 			deep = deep[:len(deep)-1]
@@ -708,11 +734,56 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 			goto done
 		}
 
-		fmt.Println(tag, next, open, deep)
+		fmt.Println(tag, iter.PeekNextTag(), open, deep)
 	}
 
 done:
 	return nil
+}
+
+// TestParseJSON uses github.com/json-iterator/go for parsing (supposed to be
+// compatible with encoding/json with better performance--but not as much
+// performance as simdjson) but right now it's throwing errors
+//
+// going to keep this here until i'm done with simdjson and we decide which
+// path to take
+func (buf *NQuadBuffer) TestParseJSON(b []byte, op int) error {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	buffer := bytes.NewBuffer(b)
+	dec := json.NewDecoder(buffer)
+	dec.UseNumber()
+	ms := make(map[string]interface{})
+	var list []interface{}
+	if err := dec.Decode(&ms); err != nil {
+		// Couldn't parse as map, lets try to parse it as a list.
+		buffer.Reset() // The previous contents are used. Reset here.
+		// Rewrite b into buffer, so it can be consumed.
+		if _, err := buffer.Write(b); err != nil {
+			return err
+		}
+		if err = dec.Decode(&list); err != nil {
+			return err
+		}
+	}
+	if len(list) == 0 && len(ms) == 0 {
+		return nil
+	}
+	if len(list) > 0 {
+		for _, obj := range list {
+			if _, ok := obj.(map[string]interface{}); !ok {
+				return errors.Errorf("Only array of map allowed at root.")
+			}
+			mr, err := buf.mapToNquads(obj.(map[string]interface{}), op, "")
+			if err != nil {
+				return err
+			}
+			buf.checkForDeletion(mr, obj.(map[string]interface{}), op)
+		}
+		return nil
+	}
+	mr, err := buf.mapToNquads(ms, op, "")
+	buf.checkForDeletion(mr, ms, op)
+	return err
 }
 
 // ParseJSON parses the given byte slice and pushes the parsed NQuads into the buffer.
