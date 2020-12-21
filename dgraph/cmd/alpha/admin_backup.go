@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/web"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 func init() {
@@ -55,6 +56,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServ
 			"forceFull":    r.FormValue("force_full") == "true",
 		}},
 	}
+	glog.Infof("gqlReq %+v, r %+v adminServer %+v", gqlReq, r, adminServer)
 	resp := resolveWithAdminServer(gqlReq, r, adminServer)
 	if resp.Errors != nil {
 		x.SetStatus(w, resp.Errors.Error(), "Backup failed.")

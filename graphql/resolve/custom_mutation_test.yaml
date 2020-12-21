@@ -43,7 +43,7 @@
         { "name": "Mov2" }
       ]
     }
-  headers: { "X-App-Token": ["val"], "Auth0-Token": ["tok"] }
+  headers: { "X-App-Token": ["val"], "Auth0-Token": ["tok"], "Content-type": ["application/json"] }
   resolvedresponse: |
     {
       "createMyFavouriteMovies": [
@@ -104,6 +104,7 @@
         "director": [ { "name": "Dir1" } ]
       }
     }
+  headers: { "Content-type": ["application/json"] }
   resolvedresponse: |
     {
       "updateMyFavouriteMovie": {
@@ -147,6 +148,7 @@
     }
   url: http://myapi.com/favMovies/0x01
   method: DELETE
+  headers: { "Content-type": ["application/json"] }
   resolvedresponse: |
     {
       "deleteMyFavouriteMovie": {

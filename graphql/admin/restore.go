@@ -24,11 +24,13 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/pkg/errors"
 )
 
 type restoreInput struct {
 	Location          string
 	BackupId          string
+	BackupNum         int
 	EncryptionKeyFile string
 	AccessKey         string
 	SecretKey         string
@@ -39,10 +41,10 @@ type restoreInput struct {
 	VaultSecretIDFile string
 	VaultPath         string
 	VaultField        string
+	VaultFormat       string
 }
 
 func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-
 	input, err := getRestoreInput(m)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
@@ -51,6 +53,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	req := pb.RestoreRequest{
 		Location:          input.Location,
 		BackupId:          input.BackupId,
+		BackupNum:         uint64(input.BackupNum),
 		EncryptionKeyFile: input.EncryptionKeyFile,
 		AccessKey:         input.AccessKey,
 		SecretKey:         input.SecretKey,
@@ -61,14 +64,24 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		VaultSecretidFile: input.VaultSecretIDFile,
 		VaultPath:         input.VaultPath,
 		VaultField:        input.VaultField,
+		VaultFormat:       input.VaultFormat,
 	}
 	err = worker.ProcessRestoreRequest(context.Background(), &req)
 	if err != nil {
-		return resolve.EmptyResult(m, err), false
+		return &resolve.Resolved{
+			Data: map[string]interface{}{m.Name(): map[string]interface{}{
+				"code": "Failure",
+			}},
+			Field: m,
+			Err:   schema.GQLWrapLocationf(err, m.Location(), "resolving %s failed", m.Name()),
+		}, false
 	}
 
 	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response("Success", "Restore completed.")},
+		Data: map[string]interface{}{m.Name(): map[string]interface{}{
+			"code":    "Success",
+			"message": "Restore operation started.",
+		}},
 		Field: m,
 	}, true
 }
@@ -81,6 +94,13 @@ func getRestoreInput(m schema.Mutation) (*restoreInput, error) {
 	}
 
 	var input restoreInput
-	err = json.Unmarshal(inputByts, &input)
-	return &input, schema.GQLWrapf(err, "couldn't get input argument")
+	if err := json.Unmarshal(inputByts, &input); err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't get input argument")
+	}
+
+	if input.BackupNum < 0 {
+		err := errors.Errorf("backupNum value should be equal or greater than zero")
+		return nil, schema.GQLWrapf(err, "couldn't get input argument")
+	}
+	return &input, nil
 }

@@ -17,126 +17,84 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
+	"context"
 	"io/ioutil"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/spf13/viper"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
+// TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
 func TestLoaderXidmap(t *testing.T) {
+	conf := viper.GetViper()
+	conf.Set("tls_cacert", "../../tlstest/mtls_internal/tls/live/ca.crt")
+	conf.Set("tls_internal_port_enabled", true)
+	conf.Set("tls_server_name", "alpha1")
+
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
+	require.NoError(t, err)
+	ctx := context.Background()
+	testutil.DropAll(t, dg)
 	tmpDir, err := ioutil.TempDir("", "loader_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
 	data, err := filepath.Abs("testdata/first.rdf.gz")
 	require.NoError(t, err)
-	liveCmd := exec.Command(testutil.DgraphBinaryPath(), "live",
+
+	tlsDir, err := filepath.Abs("../../tlstest/mtls_internal/tls/live")
+	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"-x", "x",
-	)
-	liveCmd.Dir = tmpDir
-	require.NoError(t, liveCmd.Run())
+		"--tls_cacert", tlsDir + "/ca.crt",
+		"--tls_internal_port_enabled=true",
+		"--tls_cert", tlsDir + "/client.liveclient.crt",
+		"--tls_key", tlsDir + "/client.liveclient.key",
+		"--tls_server_name", "alpha1",
+		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
+	require.NoError(t, err)
 
 	// Load another file, live should reuse the xidmap.
 	data, err = filepath.Abs("testdata/second.rdf.gz")
 	require.NoError(t, err)
-	liveCmd = exec.Command(testutil.DgraphBinaryPath(), "live",
+	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"-x", "x",
-	)
-	liveCmd.Dir = tmpDir
-	liveCmd.Stdout = os.Stdout
-	liveCmd.Stderr = os.Stdout
-	require.NoError(t, liveCmd.Run())
+		"--tls_cacert", tlsDir + "/ca.crt",
+		"--tls_internal_port_enabled=true",
+		"--tls_cert", tlsDir + "/client.liveclient.crt",
+		"--tls_key", tlsDir + "/client.liveclient.key",
+		"--tls_server_name", "alpha1",
+		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
+	require.NoError(t, err)
 
-	exportRequest := `mutation {
-		export(input: {format: "rdf"}) {
-			response {
-				code
-				message
+	op := api.Operation{Schema: "name: string @index(exact) ."}
+	x.Check(dg.Alter(ctx, &op))
+
+	query := `
+	{
+		q(func: eq(name, "Alice")) {
+			age
+			location
+			friend{
+				name
 			}
 		}
 	}`
+	expected := `{"q":[{"age":"13","location":"Wonderland","friend":[{"name":"Bob"}]}]}`
 
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
-	params := testutil.GraphQLParams{
-		Query:     exportRequest,
-		Variables: map[string]interface{}{"format": "json"},
-	}
-	b, err := json.Marshal(params)
+	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-	expected := `{
-		  "export": {
-			"response": {
-			  "code": "Success",
-			  "message": "Export completed."
-			}
-		  }
-		}`
-	res1 := &testutil.GraphQLResponse{}
-	err = json.Unmarshal(b, res1)
-	require.NoError(t, err)
-	require.JSONEq(t, expected, string(res1.Data))
+	testutil.CompareJSON(t, expected, string(resp.GetJson()))
 
-	require.NoError(t, copyExportFiles(tmpDir))
-
-	dataFile, err := findFile(filepath.Join(tmpDir, "export"), ".rdf.gz")
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf("gunzip -c %s | sort", dataFile)
-	out, err := exec.Command("sh", "-c", cmd).Output()
-	require.NoError(t, err)
-
-	expected = `<0x2712> <name> "Bob" .
-<0x2> <age> "13" .
-<0x2> <friend> <0x2712> .
-<0x2> <location> "Wonderland" .
-<0x2> <name> "Alice" .
-`
-	require.Equal(t, expected, string(out))
-}
-
-func copyExportFiles(tmpDir string) error {
-	exportPath := filepath.Join(tmpDir, "export")
-	if err := os.MkdirAll(exportPath, 0755); err != nil {
-		return err
-	}
-
-	srcPath := "alpha1:/data/alpha1/export"
-	dstPath := filepath.Join(tmpDir, "export")
-	return testutil.DockerCp(srcPath, dstPath)
-}
-
-func findFile(dir string, ext string) (string, error) {
-	var fp string
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if strings.HasSuffix(path, ext) {
-			fp = path
-			return nil
-		}
-		return nil
-	})
-	return fp, err
 }

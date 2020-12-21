@@ -48,6 +48,7 @@
         "myPost.tags": ["GraphQL", "Dgraph", "Database"],
         "test.dgraph.topic": "GraphQL",
         "myPost.numLikes": 100,
+        "myPost.numViews": 280000000000,
         "is_published": true,
         "myPost.postType": "Fact",
         "post.author": { "uid": "_:author1" }
@@ -60,6 +61,7 @@
         "myPost.tags": ["GraphQL", "Dgraph"],
         "test.dgraph.topic": "Learn",
         "myPost.numLikes": 87,
+        "myPost.numViews": 274877906944,
         "is_published": true,
         "myPost.postType": "Question",
         "post.author": { "uid": "_:author2" }
@@ -72,6 +74,7 @@
         "myPost.tags": ["GraphQL", "Dgraph"],
         "test.dgraph.topic": "Docs",
         "myPost.numLikes": 77,
+        "myPost.numViews": 2147483648,
         "is_published": true,
         "myPost.postType": "Opinion",
         "post.author": { "uid": "_:author1" }
@@ -83,7 +86,8 @@
         "text": "this post is not worth publishing",
         "myPost.tags": ["Random"],
         "test.dgraph.topic": "Random",
-        "myPost.numLikes": 0,
+        "myPost.numLikes": 1,
+        "myPost.numViews": 0,
         "is_published": false,
         "myPost.postType": "Fact",
         "post.author": { "uid": "_:author2" }
@@ -99,5 +103,60 @@
         "dgraph.type": "State",
         "State.name": "Nusa",
         "State.xcode": "nusa"
+    },
+    {
+        "uid": "_:mh",
+        "dgraph.type": "State",
+        "State.name": "Maharashtra",
+        "State.xcode": "mh",
+        "inCountry": {"uid":  "_:india"}
+    },
+    {
+        "uid": "_:gj",
+        "dgraph.type": "State",
+        "State.name": "Gujarat",
+        "State.xcode": "gj",
+        "inCountry": {"uid":  "_:india"}
+    },
+    {
+        "uid": "_:ka",
+        "dgraph.type": "State",
+        "State.name": "Karnataka",
+        "State.xcode": "ka",
+        "inCountry": {"uid":  "_:india"}
+    },
+    {
+        "uid": "_:india",
+        "dgraph.type": "Country",
+        "Country.name": "India",
+        "hasStates": [{ "uid": "_:mh" }, { "uid": "_:gj" }, { "uid":  "_:ka"}]
+    },
+    {
+        "uid": "_:book1",
+        "dgraph.type": "Book",
+        "Book.bookId": 1234567890,
+        "Book.name": "Dgraph and Graphql",
+        "Book.desc": "All love between dgraph and graphql"
+    },
+    {
+        "uid": "_:chapter1",
+        "dgraph.type": "Chapter",
+        "Chapter.bookId": 1234567890,
+        "Chapter.chapterId": 1,
+        "Chapter.name": "How Dgraph Works"
+    },
+    {
+        "uid": "_:section1",
+        "dgraph.type": "Section",
+        "Section.chapterId": 1,
+        "Section.sectionId": 1.1,
+        "Section.name": "How to define dgraph schema"
+    },
+    {
+        "uid": "_:section2",
+        "dgraph.type": "Section",
+        "Section.chapterId": 1,
+        "Section.sectionId": 1.2,
+        "Section.name": "Dgraph Data Types"
     }
 ]

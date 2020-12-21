@@ -1,25 +1,27 @@
 ![](/logo.png)
 
-**Fast, Transactional, Distributed Graph Database.**
+**The Only Native GraphQL Database With A Graph Backend.**
 
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://dgraph.io/docs/)
 [![Build Status](https://teamcity.dgraph.io/guestAuth/app/rest/builds/buildType:(id:Dgraph_Ci)/statusIcon.svg)](https://teamcity.dgraph.io/viewLog.html?buildTypeId=Dgraph_Ci&buildId=lastFinished&guest=1)
 [![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/dgraph?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 
-Dgraph is a horizontally scalable and distributed graph database, providing ACID transactions, consistent replication and linearizable reads. It's built from ground up to perform for
-a rich set of queries. Being a native graph database, it tightly controls how the
+Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides ACID transactions, consistent replication and linearizable reads. It's built from ground up to perform for
+a rich set of queries. Being a native GraphQL database, it tightly controls how the
 data is arranged on disk to optimize for query performance and throughput,
 reducing disk seeks and network calls in a cluster.
 
 
 Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
-Dgraph supports [GraphQL-like query syntax](https://dgraph.io/docs/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP.
+Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP.
+
+**Use [Discuss Issues](https://discuss.dgraph.io/c/issues/dgraph/38) for reporting issues about this repository.**
 
 ## Status
 
-Dgraph is [at version 1.1.x][rel] and is production ready. Apart from the vast open source community, it is being used in
+Dgraph is [at version 20.07.2][rel] and is production ready. Apart from the vast open source community, it is being used in
 production at multiple Fortune 500 companies, and by
 [Intuit Katlas](https://github.com/intuit/katlas) and [VMware Purser](https://github.com/vmware/purser).
 
@@ -45,11 +47,25 @@ docker pull dgraph/dgraph:latest
 
 If you want to install from source, install Go 1.13+ or later and the following dependencies:
 
-Ubuntu:
+### Ubuntu
+
 ```bash
 sudo apt-get update
 sudo apt-get install gcc make
 ```
+
+### macOS
+
+As a prerequisite, first install [XCode](https://apps.apple.com/us/app/xcode/id497799835?mt=12) (or the [XCode Command-line Tools](https://developer.apple.com/downloads/)) and [Homebrew](https://brew.sh/).
+
+Next, install the required dependencies:
+
+```bash
+brew update
+brew install jemalloc go
+```
+
+### Build and Install
 
 Then clone the Dgraph repository and use `make install` to install the Dgraph binary to `$GOPATH/bin`.
 
@@ -105,7 +121,7 @@ makes it easy to build applications with it.
   play.dgraph.io](http://play.dgraph.io/).
 - Please see [releases tab](https://github.com/dgraph-io/dgraph/releases) to
   find the latest release and corresponding release notes.
-- [See the Roadmap](https://github.com/dgraph-io/dgraph/issues/4724) for list of
+- [See the Roadmap](https://discuss.dgraph.io/t/product-roadmap-2020/8479) for list of
   working and planned features.
 - Read about the latest updates from Dgraph team [on our
   blog](https://open.dgraph.io/).
@@ -121,6 +137,5 @@ The Dgraph team maintain a number of [officially supported client libraries](htt
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
-- Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) for filing bugs or feature requests.
-- Join [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io).
+- Please use [discuss.dgraph.io](https://discuss.dgraph.io/c/issues/dgraph/38) for filing bugs or feature requests.
 - Follow us on Twitter [@dgraphlabs](https://twitter.com/dgraphlabs).

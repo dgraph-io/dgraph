@@ -2,7 +2,7 @@
 # Input Schema
 #######################
 
-type Todo @auth(query: {or:[{rule:"query($X_MyApp_User: String!) { \n    queryTodo { \n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"},{rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        sharedWith (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"},{rule:"query { \n    queryTodo(filter: { isPublic: true }) {\n        id\n    }\n}"}]}, add: {rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"}, update: {rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"}) {
+type Todo @secret(field: "pwd") @auth(password: {rule:"{$ROLE: { eq: \"Admin\" } }"}, query: {or:[{rule:"query($X_MyApp_User: String!) { \n    queryTodo { \n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"},{rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        sharedWith (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"},{rule:"query { \n    queryTodo(filter: { isPublic: true }) {\n        id\n    }\n}"}]}, add: {rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"}, update: {rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"}) {
 	id: ID!
 	title: String
 	text: String
@@ -11,21 +11,59 @@ type Todo @auth(query: {or:[{rule:"query($X_MyApp_User: String!) { \n    queryTo
 	sharedWith(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	owner(filter: UserFilter): User @hasInverse(field: "todos")
 	somethingPrivate: String
+	sharedWithAggregate(filter: UserFilter): UserAggregateResult
 }
 
 type User @auth(update: {rule:"query($X_MyApp_User: String!) { \n    queryUser(filter: { username: { eq: $X_MyApp_User }}) {\n        username\n    }\n}"}) {
 	username: String! @id
 	todos(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo] @hasInverse(field: owner)
+	todosAggregate(filter: TodoFilter): TodoAggregateResult
 }
 
 #######################
 # Extended Definitions
 #######################
 
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can represent values in range [-(2^63),(2^63 - 1)].
+"""
+scalar Int64
+
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
 scalar DateTime
+
+input IntRange{
+	min: Int!
+	max: Int!
+}
+
+input FloatRange{
+	min: Float!
+	max: Float!
+}
+
+input Int64Range{
+	min: Int64!
+	max: Int64!
+}
+
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
+}
+
+input StringRange{
+	min: String!
+	max: String!
+}
 
 enum DgraphIndex {
 	int
+	int64
 	float
 	bool
 	hash
@@ -38,6 +76,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -68,22 +107,109 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
+}
+
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
+}
+
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT
-directive @custom(http: CustomHTTP) on FIELD_DEFINITION
-directive @remote on OBJECT | INTERFACE
-directive @cascade on FIELD
+	delete: AuthRule) on OBJECT | INTERFACE
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -91,6 +217,16 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+	between: IntRange
+}
+
+input Int64Filter {
+	eq: Int64
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
@@ -99,6 +235,7 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
@@ -107,6 +244,7 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
@@ -125,14 +263,17 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
 	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 
 #######################
@@ -150,13 +291,27 @@ type AddUserPayload {
 }
 
 type DeleteTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
 	msg: String
 	numUids: Int
 }
 
 type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	msg: String
 	numUids: Int
+}
+
+type TodoAggregateResult {
+	count: Int
+	titleMin: String
+	titleMax: String
+	textMin: String
+	textMax: String
+	dateCompletedMin: String
+	dateCompletedMax: String
+	somethingPrivateMin: String
+	somethingPrivateMax: String
 }
 
 type UpdateTodoPayload {
@@ -169,15 +324,36 @@ type UpdateUserPayload {
 	numUids: Int
 }
 
+type UserAggregateResult {
+	count: Int
+	usernameMin: String
+	usernameMax: String
+}
+
 #######################
 # Generated Enums
 #######################
+
+enum TodoHasFilter {
+	title
+	text
+	isPublic
+	dateCompleted
+	sharedWith
+	owner
+	somethingPrivate
+}
 
 enum TodoOrderable {
 	title
 	text
 	dateCompleted
 	somethingPrivate
+}
+
+enum UserHasFilter {
+	username
+	todos
 }
 
 enum UserOrderable {
@@ -196,6 +372,7 @@ input AddTodoInput {
 	sharedWith: [UserRef]
 	owner: UserRef
 	somethingPrivate: String
+	pwd: String!
 }
 
 input AddUserInput {
@@ -207,8 +384,9 @@ input TodoFilter {
 	id: [ID!]
 	isPublic: Boolean
 	dateCompleted: StringTermFilter
-	and: TodoFilter
-	or: TodoFilter
+	has: TodoHasFilter
+	and: [TodoFilter]
+	or: [TodoFilter]
 	not: TodoFilter
 }
 
@@ -226,6 +404,7 @@ input TodoPatch {
 	sharedWith: [UserRef]
 	owner: UserRef
 	somethingPrivate: String
+	pwd: String
 }
 
 input TodoRef {
@@ -237,6 +416,7 @@ input TodoRef {
 	sharedWith: [UserRef]
 	owner: UserRef
 	somethingPrivate: String
+	pwd: String
 }
 
 input UpdateTodoInput {
@@ -253,8 +433,9 @@ input UpdateUserInput {
 
 input UserFilter {
 	username: StringHashFilter
-	and: UserFilter
-	or: UserFilter
+	has: UserHasFilter
+	and: [UserFilter]
+	or: [UserFilter]
 	not: UserFilter
 }
 
@@ -279,9 +460,12 @@ input UserRef {
 
 type Query {
 	getTodo(id: ID!): Todo
+	checkTodoPassword(id: ID!, pwd: String!): Todo
 	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	aggregateTodo(filter: TodoFilter): TodoAggregateResult
 	getUser(username: String!): User
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################
@@ -297,13 +481,3 @@ type Mutation {
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 
-#######################
-# Generated Subscriptions
-#######################
-
-type Subscription {
-	getTodo(id: ID!): Todo
-	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
-	getUser(username: String!): User
-	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-}

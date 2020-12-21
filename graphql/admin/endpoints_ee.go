@@ -70,6 +70,12 @@ const adminTypes = `
 		backupId: String
 
 		"""
+		Number of the backup within the backup series to be restored. Backups with a greater value
+		will be ignored. If the value is zero or missing, the entire series will be restored.
+		"""
+		backupNum: Int
+
+		"""
 		Path to the key file needed to decrypt the backup. This file should be accessible
 		by all alphas in the group. The backup will be written using the encryption key
 		with which the cluster was started, which might be different than this key.
@@ -78,7 +84,7 @@ const adminTypes = `
 
 		"""
 		Vault server address where the key is stored. This server must be accessible
-		by all alphas in the group.
+		by all alphas in the group. Default "http://localhost:8200".
 		"""
 		vaultAddr: String
 
@@ -93,14 +99,19 @@ const adminTypes = `
 		vaultSecretIDFile: String
 
 		"""
-		Vault kv store path where the key lives.
+		Vault kv store path where the key lives. Default "secret/data/dgraph".
 		"""
 		vaultPath: String
 
 		"""
-		Vault kv store field whose value is the key.
+		Vault kv store field whose value is the key. Default "enc_key".
 		"""
 		vaultField: String
+
+		"""
+		Vault kv store field's format. Must be "base64" or "raw". Default "base64".
+		"""
+		vaultFormat: String
 
 		"""
 		Access key credential for the destination.
@@ -109,22 +120,30 @@ const adminTypes = `
 
 		"""
 		Secret key credential for the destination.
-		"""		
+		"""
 		secretKey: String
 
 		"""
 		AWS session token, if required.
-		"""	
+		"""
 		sessionToken: String
 
 		"""
 		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
-		"""	
+		"""
 		anonymous: Boolean
 	}
 
 	type RestorePayload {
-		response: Response
+		"""
+		A short string indicating whether the restore operation was successfully scheduled.
+		"""
+		code: String
+
+		"""
+		Includes the error message if the operation failed.
+		"""
+		message: String
 	}
 
 	input ListBackupsInput {

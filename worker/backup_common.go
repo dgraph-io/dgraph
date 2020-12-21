@@ -22,6 +22,13 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
+const (
+	unknownStatus    = "UNKNOWN"
+	inProgressStatus = "IN_PROGRESS"
+	okStatus         = "OK"
+	errStatus        = "ERR"
+)
+
 // predicateSet is a map whose keys are predicates. It is meant to be used as a set.
 type predicateSet map[string]struct{}
 
@@ -52,6 +59,9 @@ type Manifest struct {
 	Path string `json:"-"`
 	// Encrypted indicates whether this backup was encrypted or not.
 	Encrypted bool `json:"encrypted"`
+	// DropOperations lists the various DROP operations that took place since the last backup.
+	// These are used during restore to redo those operations before applying the backup.
+	DropOperations []*pb.DropOperation `json:"drop_operations"`
 }
 
 func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
@@ -65,22 +75,6 @@ func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
 		predSet[pred] = struct{}{}
 	}
 	return predSet
-}
-
-// Credentials holds the credentials needed to perform a backup operation.
-// If these credentials are missing the default credentials will be used.
-type Credentials struct {
-	AccessKey    string
-	SecretKey    string
-	SessionToken string
-	Anonymous    bool
-}
-
-func (creds *Credentials) isAnonymous() bool {
-	if creds == nil {
-		return false
-	}
-	return creds.Anonymous
 }
 
 // GetCredentialsFromRequest extracts the credentials from a backup request.

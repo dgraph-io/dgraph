@@ -26,7 +26,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,50 +40,99 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	farm "github.com/dgryski/go-farm"
 )
-
-const partitionKeyShard = 10
 
 type mapper struct {
 	*state
 	shards []shardState // shard is based on predicate
-	mePool *sync.Pool
 }
 
 type shardState struct {
 	// Buffer up map entries until we have a sufficient amount, then sort and
 	// write them to file.
-	entries     []*pb.MapEntry
-	encodedSize uint64
-	mu          sync.Mutex // Allow only 1 write per shard at a time.
+	cbuf *z.Buffer
+	mu   sync.Mutex // Allow only 1 write per shard at a time.
+}
+
+func newMapperBuffer(opt *options) *z.Buffer {
+	sz := float64(opt.MapBufSize) * 1.1
+	buf, err := z.NewBufferWithDir(int(sz), 2*int(opt.MapBufSize), z.UseMmap,
+		filepath.Join(opt.TmpDir, bufferDir))
+	x.Check(err)
+	return buf
 }
 
 func newMapper(st *state) *mapper {
+	shards := make([]shardState, st.opt.MapShards)
+	for i := range shards {
+		shards[i].cbuf = newMapperBuffer(st.opt)
+	}
 	return &mapper{
 		state:  st,
-		shards: make([]shardState, st.opt.MapShards),
-		mePool: &sync.Pool{
-			New: func() interface{} {
-				return &pb.MapEntry{}
-			},
-		},
+		shards: shards,
 	}
 }
 
-func less(lhs, rhs *pb.MapEntry) bool {
-	if keyCmp := bytes.Compare(lhs.Key, rhs.Key); keyCmp != 0 {
+type MapEntry []byte
+
+// type mapEntry struct {
+// 	uid   uint64 // if plist is filled, then corresponds to plist's uid.
+// 	key   []byte
+// 	plist []byte
+// }
+
+func mapEntrySize(key []byte, p *pb.Posting) int {
+	return 8 + 4 + 4 + len(key) + p.Size()
+}
+
+func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
+	if p != nil {
+		uid = p.Uid
+	}
+	binary.BigEndian.PutUint64(dst[0:8], uid)
+	binary.BigEndian.PutUint32(dst[8:12], uint32(len(key)))
+
+	psz := p.Size()
+	binary.BigEndian.PutUint32(dst[12:16], uint32(psz))
+
+	n := copy(dst[16:], key)
+
+	if psz > 0 {
+		pbuf := dst[16+n:]
+		_, err := p.MarshalToSizedBuffer(pbuf[:psz])
+		x.Check(err)
+	}
+
+	x.AssertTrue(len(dst) == 16+n+psz)
+}
+
+func (me MapEntry) Size() int {
+	return len(me)
+}
+
+func (me MapEntry) Uid() uint64 {
+	return binary.BigEndian.Uint64(me[0:8])
+}
+
+func (me MapEntry) Key() []byte {
+	sz := binary.BigEndian.Uint32(me[8:12])
+	return me[16 : 16+sz]
+}
+
+func (me MapEntry) Plist() []byte {
+	ksz := binary.BigEndian.Uint32(me[8:12])
+	sz := binary.BigEndian.Uint32(me[12:16])
+	start := 16 + ksz
+	return me[start : start+sz]
+}
+
+func less(lhs, rhs MapEntry) bool {
+	if keyCmp := bytes.Compare(lhs.Key(), rhs.Key()); keyCmp != 0 {
 		return keyCmp < 0
 	}
-	lhsUID := lhs.Uid
-	rhsUID := rhs.Uid
-	if lhs.Posting != nil {
-		lhsUID = lhs.Posting.Uid
-	}
-	if rhs.Posting != nil {
-		rhsUID = rhs.Posting.Uid
-	}
-	return lhsUID < rhsUID
+	return lhs.Uid() < rhs.Uid()
 }
 
 func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
@@ -99,11 +147,16 @@ func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
 	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 }
 
-func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint64, shardIdx int) {
-	defer m.shards[shardIdx].mu.Unlock() // Locked by caller.
+func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
+	defer func() {
+		m.shards[shardIdx].mu.Unlock() // Locked by caller.
+		cbuf.Release()
+	}()
 
-	sort.Slice(entries, func(i, j int) bool {
-		return less(entries[i], entries[j])
+	cbuf.SortSlice(func(ls, rs []byte) bool {
+		lhs := MapEntry(ls)
+		rhs := MapEntry(rs)
+		return less(lhs, rhs)
 	})
 
 	f, err := m.openOutputFile(shardIdx)
@@ -115,7 +168,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	}()
 
 	gzWriter := gzip.NewWriter(f)
-	w := bufio.NewWriter(gzWriter)
+	w := bufio.NewWriterSize(gzWriter, 4<<20)
 	defer func() {
 		x.Check(w.Flush())
 		x.Check(gzWriter.Flush())
@@ -126,16 +179,24 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	header := &pb.MapHeader{
 		PartitionKeys: [][]byte{},
 	}
-	shardPartitionNo := len(entries) / partitionKeyShard
-	for i := range entries {
-		if shardPartitionNo == 0 {
-			// we have very few entries so no need for partition keys.
-			break
+
+	var bufSize int64
+	cbuf.SliceIterate(func(slice []byte) error {
+		me := MapEntry(slice)
+		bufSize += int64(4 + len(me))
+		if bufSize < m.opt.PartitionBufSize {
+			return nil
 		}
-		if (i+1)%shardPartitionNo == 0 {
-			header.PartitionKeys = append(header.PartitionKeys, entries[i].GetKey())
+		sz := len(header.PartitionKeys)
+		if sz > 0 && bytes.Equal(me.Key(), header.PartitionKeys[sz-1]) {
+			// We already have this key.
+			return nil
 		}
-	}
+		header.PartitionKeys = append(header.PartitionKeys, me.Key())
+		bufSize = 0
+		return nil
+	})
+
 	// Write the header to the map file.
 	headerBuf, err := header.Marshal()
 	x.Check(err)
@@ -146,17 +207,16 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	x.Check(err)
 
 	sizeBuf := make([]byte, binary.MaxVarintLen64)
-	for _, me := range entries {
-		n := binary.PutUvarint(sizeBuf, uint64(me.Size()))
+
+	err = cbuf.SliceIterate(func(slice []byte) error {
+		n := binary.PutUvarint(sizeBuf, uint64(len(slice)))
 		_, err := w.Write(sizeBuf[:n])
 		x.Check(err)
 
-		meBuf, err := me.Marshal()
-		x.Check(err)
-		_, err = w.Write(meBuf)
-		x.Check(err)
-		m.mePool.Put(me)
-	}
+		_, err = w.Write(slice)
+		return err
+	})
+	x.Check(err)
 }
 
 func (m *mapper) run(inputFormat chunker.InputFormat) {
@@ -189,22 +249,23 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 
 		for i := range m.shards {
 			sh := &m.shards[i]
-			if sh.encodedSize >= m.opt.MapBufSize {
+			if uint64(sh.cbuf.LenNoPadding()) >= m.opt.MapBufSize {
 				sh.mu.Lock() // One write at a time.
-				go m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
+				go m.writeMapEntriesToFile(sh.cbuf, i)
 				// Clear the entries and encodedSize for the next batch.
 				// Proactively allocate 32 slots to bootstrap the entries slice.
-				sh.entries = make([]*pb.MapEntry, 0, 32)
-				sh.encodedSize = 0
+				sh.cbuf = newMapperBuffer(m.opt)
 			}
 		}
 	}
 
 	for i := range m.shards {
 		sh := &m.shards[i]
-		if len(sh.entries) > 0 {
+		if sh.cbuf.LenNoPadding() > 0 {
 			sh.mu.Lock() // One write at a time.
-			m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
+			m.writeMapEntriesToFile(sh.cbuf, i)
+		} else {
+			sh.cbuf.Release()
 		}
 		m.shards[i].mu.Lock() // Ensure that the last file write finishes.
 	}
@@ -213,20 +274,19 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
-	me := m.mePool.Get().(*pb.MapEntry)
-	*me = pb.MapEntry{Key: key}
-
+	uid := p.Uid
 	if p.PostingType != pb.Posting_REF || len(p.Facets) > 0 {
-		me.Posting = p
+		// Keep p
 	} else {
-		me.Uid = p.Uid
+		// We only needed the UID.
+		p = nil
 	}
+
 	sh := &m.shards[shard]
 
-	var err error
-	sh.entries = append(sh.entries, me)
-	sh.encodedSize += uint64(me.Size())
-	x.Check(err)
+	sz := mapEntrySize(key, p)
+	dst := sh.cbuf.SliceAllocate(sz)
+	marshalMapEntry(dst, uid, key, p)
 }
 
 func (m *mapper) processNQuad(nq gql.NQuad) {
@@ -279,9 +339,13 @@ func (m *mapper) lookupUid(xid string) uint64 {
 	// xid is alive, the whole line is going to be alive and won't be GC'd.
 	// Also, checked that sb goes on the stack whereas sb.String() goes on
 	// heap. Note that the calls to the strings.Builder.* are inlined.
-	sb := strings.Builder{}
-	x.Check2(sb.WriteString(xid))
-	uid, isNew := m.xids.AssignUid(sb.String())
+
+	// With Trie, we no longer need to use strings.Builder, because Trie would use its own storage
+	// for the strings.
+	// sb := strings.Builder{}
+	// x.Check2(sb.WriteString(xid))
+	// uid, isNew := m.xids.AssignUid(sb.String())
+	uid, isNew := m.xids.AssignUid(xid)
 	if !m.opt.StoreXids || !isNew {
 		return uid
 	}

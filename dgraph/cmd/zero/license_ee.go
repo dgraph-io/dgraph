@@ -20,9 +20,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
@@ -61,7 +61,7 @@ func (s *Server) expireLicense() {
 // periodically checks the validity of the enterprise license and
 // 1. Sets license.Enabled to false in membership state if license has expired.
 // 2. Prints out warning once every day a week before the license is set to expire.
-func (n *node) updateEnterpriseState(closer *y.Closer) {
+func (n *node) updateEnterpriseState(closer *z.Closer) {
 	defer closer.Done()
 
 	interval := 5 * time.Second

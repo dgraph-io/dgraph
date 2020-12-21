@@ -240,10 +240,11 @@ func TestExportRdf(t *testing.T) {
 	readTs := timestamp()
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
-	err = export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "rdf"})
+	files, err := export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "rdf"})
 	require.NoError(t, err)
 
 	fileList, schemaFileList, gqlSchema := getExportFileList(t, bdir)
+	require.Equal(t, len(files), len(fileList)+len(schemaFileList)+len(gqlSchema))
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -337,10 +338,11 @@ func TestExportJson(t *testing.T) {
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
 	req := pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "json"}
-	err = export(context.Background(), &req)
+	files, err := export(context.Background(), &req)
 	require.NoError(t, err)
 
 	fileList, schemaFileList, gqlSchema := getExportFileList(t, bdir)
+	require.Equal(t, len(files), len(fileList)+len(schemaFileList)+len(gqlSchema))
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -364,7 +366,14 @@ func TestExportJson(t *testing.T) {
 `
 	gotJson, err := ioutil.ReadAll(r)
 	require.NoError(t, err)
-	require.JSONEq(t, wantJson, string(gotJson))
+	var expected interface{}
+	err = json.Unmarshal([]byte(wantJson), &expected)
+	require.NoError(t, err)
+
+	var actual interface{}
+	err = json.Unmarshal(gotJson, &actual)
+	require.NoError(t, err)
+	require.ElementsMatch(t, expected, actual)
 
 	checkExportSchema(t, schemaFileList)
 	checkExportGqlSchema(t, gqlSchema)
@@ -372,6 +381,7 @@ func TestExportJson(t *testing.T) {
 
 const exportRequest = `mutation export($format: String!) {
 	export(input: {format: $format}) {
+		exportedFiles
 		response {
 			code
 		}
@@ -384,6 +394,9 @@ func TestExportFormat(t *testing.T) {
 	defer os.RemoveAll(tmpdir)
 
 	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	err = testutil.CheckForGraphQLEndpointToReady(t)
+	require.NoError(t, err)
+
 	params := testutil.GraphQLParams{
 		Query:     exportRequest,
 		Variables: map[string]interface{}{"format": "json"},

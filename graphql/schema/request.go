@@ -18,12 +18,16 @@ package schema
 
 import (
 	"net/http"
+	"reflect"
+	"strconv"
+
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 
 	"github.com/pkg/errors"
 
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 )
 
 // A Request represents a GraphQL request.  It makes no guarantees that the
@@ -32,8 +36,18 @@ type Request struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
+	Extensions    RequestExtensions
+	Header        http.Header
+}
 
-	Header http.Header
+// RequestExtensions represents extensions recieved in requests
+type RequestExtensions struct {
+	PersistedQuery PersistedQuery
+}
+
+// PersistedQuery represents the query struct received from clients like Apollo
+type PersistedQuery struct {
+	Sha256Hash string
 }
 
 // Operation finds the operation in req, if it is a valid request for GraphQL
@@ -55,6 +69,12 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 		return nil, listErr
 	}
 
+	if len(doc.Operations) == 1 && doc.Operations[0].Operation == ast.Subscription &&
+		s.schema.Subscription == nil {
+		return nil, errors.Errorf("Not resolving subscription because schema doesn't have any " +
+			"fields defined for subscription operation.")
+	}
+
 	if len(doc.Operations) > 1 && req.OperationName == "" {
 		return nil, errors.Errorf("Operation name must by supplied when query has more " +
 			"than 1 operation.")
@@ -70,13 +90,18 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	if gqlErr != nil {
 		return nil, gqlErr
 	}
+	err := variableValidateInt(s.schema, op, req.Variables)
+	if err != nil {
+		return nil, err
+	}
 
 	operation := &operation{op: op,
-		vars:     vars,
-		query:    req.Query,
-		header:   req.Header,
-		doc:      doc,
-		inSchema: s,
+		vars:                    vars,
+		query:                   req.Query,
+		header:                  req.Header,
+		doc:                     doc,
+		inSchema:                s,
+		interfaceImplFragFields: map[*ast.Field]string{},
 	}
 
 	// recursively expand fragments in operation as selection set fields
@@ -85,6 +110,110 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	}
 
 	return operation, nil
+}
+
+// This function validates the value of variables for fields of type Int and Int64.
+// Ideally this should happen in the gqlparser library.
+// There is an issue created with this dgraph-io/gqlparser#134.
+// The code here is inspired by https://github.com/dgraph-io/gqlparser/blob/master/validator/vars.go#L76.
+func variableValidateInt(schema *ast.Schema, op *ast.OperationDefinition, variables map[string]interface{}) *gqlerror.Error {
+	path := ast.Path{ast.PathName("variable")}
+	for _, v := range op.VariableDefinitions {
+		path = append(path, ast.PathName(v.Variable))
+		val, hasValue := variables[v.Variable]
+		if !hasValue {
+			if v.DefaultValue != nil {
+				val, _ = v.DefaultValue.Value(nil)
+				hasValue = true
+			}
+		}
+		if hasValue {
+			rv := reflect.ValueOf(val)
+			if rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface {
+				rv = rv.Elem()
+			}
+			err := variableValidateIntRecursive(schema, v.Type, rv, path)
+			if err != nil {
+				return err
+			}
+		}
+		path = path[0 : len(path)-1]
+	}
+	return nil
+}
+
+func variableValidateIntRecursive(schema *ast.Schema, typ *ast.Type, val reflect.Value, path ast.Path) *gqlerror.Error {
+	currentPath := path
+	resetPath := func() {
+		path = currentPath
+	}
+	defer resetPath()
+	if typ.Elem != nil {
+		for i := 0; i < val.Len(); i++ {
+			resetPath()
+			path = append(path, ast.PathIndex(i))
+			field := val.Index(i)
+			if field.Kind() == reflect.Ptr || field.Kind() == reflect.Interface {
+				field = field.Elem()
+			}
+			err := variableValidateIntRecursive(schema, typ.Elem, field, path)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	def := schema.Types[typ.NamedType]
+	if !typ.NonNull && !val.IsValid() {
+		// If the type is not null and we got a invalid value namely null/nil, then it's valid
+		return nil
+	}
+	switch def.Kind {
+	case ast.Scalar:
+		switch typ.NamedType {
+		case "Int", "Int64":
+			var errIntCoerce error
+			if typ.NamedType == "Int" {
+				_, errIntCoerce = strconv.ParseInt(val.String(), 10, 32)
+			} else {
+				_, errIntCoerce = strconv.ParseInt(val.String(), 10, 64)
+			}
+			if errIntCoerce != nil {
+				if errors.Is(errIntCoerce, strconv.ErrRange) {
+					return gqlerror.ErrorPathf(path, "Out of range value '%s', for type `%s`", val.String(), typ.NamedType)
+
+				} else {
+					return gqlerror.ErrorPathf(path, "Type mismatched for Value `%s`, expected:`%s`", val.String(), typ.NamedType)
+				}
+			}
+		}
+
+	case ast.InputObject:
+		// check for unknown fields
+
+		for _, fieldDef := range def.Fields {
+			resetPath()
+			path = append(path, ast.PathName(fieldDef.Name))
+
+			field := val.MapIndex(reflect.ValueOf(fieldDef.Name))
+			if !field.IsValid() {
+				continue
+			}
+			if field.Kind() == reflect.Ptr || field.Kind() == reflect.Interface {
+				if !fieldDef.Type.NonNull && field.IsNil() {
+					continue
+				}
+				field = field.Elem()
+			}
+			err := variableValidateIntRecursive(schema, fieldDef.Type, field, path)
+			if err != nil {
+				return err
+			}
+		}
+	default:
+		return nil
+	}
+	return nil
 }
 
 // recursivelyExpandFragmentSelections puts a fragment's selection set directly inside this
@@ -144,23 +273,38 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	// this field always has to expand any fragment on its own type
 	// "" tackles the case for an inline fragment which doesn't specify type condition
 	satisfies := []string{typeName, ""}
-	var additionalTypes []*ast.Definition
+	var additionalTypes map[string]bool
 	switch typeKind {
-	case ast.Interface:
-		// expand fragments on types which implement this interface
-		additionalTypes = op.inSchema.schema.PossibleTypes[typeName]
-	case ast.Union:
-		// expand fragments on types of which it is a union
-		additionalTypes = op.inSchema.schema.PossibleTypes[typeName]
+	case ast.Interface, ast.Union:
+		// expand fragments on types which implement this interface (for interface case)
+		// expand fragments on member types of this union (for Union case)
+		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[typeName])
+		// also, expand fragments on interfaces which are implemented by the member types of this union
+		// And also on additional interfaces which also implement the same type
+		var interfaceFragsToExpand []*ast.Definition
+		for typ := range additionalTypes {
+			interfaceFragsToExpand = append(interfaceFragsToExpand,
+				op.inSchema.schema.Implements[typ]...)
+		}
+		additionalInterfaces := getTypeNamesAsMap(interfaceFragsToExpand)
+		// if there is any fragment in the selection set of this field, need to store a mapping from
+		// fields in that fragment to the fragment's type condition, to be used later in completion.
+		for interfaceName := range additionalInterfaces {
+			additionalTypes[interfaceName] = true
+			for _, f := range field.SelectionSet {
+				addSelectionToInterfaceImplFragFields(interfaceName, f,
+					getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[interfaceName]), op)
+			}
+		}
 	case ast.Object:
 		// expand fragments on interfaces which are implemented by this object
-		additionalTypes = op.inSchema.schema.Implements[typeName]
+		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.Implements[typeName])
 	default:
 		// return, as fragment can't be present on a field which is not Interface, Union or Object
 		return
 	}
-	for _, typ := range additionalTypes {
-		satisfies = append(satisfies, typ.Name)
+	for typName := range additionalTypes {
+		satisfies = append(satisfies, typName)
 	}
 
 	// collect all fields from any satisfying fragments into selectionSet
@@ -203,5 +347,68 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	// recursively run for this field's selectionSet
 	for _, f := range field.SelectionSet {
 		recursivelyExpandFragmentSelections(f.(*ast.Field), op)
+	}
+}
+
+// getTypeNamesAsMap returns a map containing the typeName of all the typeDefs as keys and true
+// as value
+func getTypeNamesAsMap(typesDefs []*ast.Definition) map[string]bool {
+	if typesDefs == nil {
+		return nil
+	}
+
+	typeNameMap := make(map[string]bool)
+	for _, typ := range typesDefs {
+		typeNameMap[typ.Name] = true
+	}
+	return typeNameMap
+}
+
+func addSelectionToInterfaceImplFragFields(interfaceTypeName string, field ast.Selection,
+	interfaceImplMap map[string]bool, op *operation) {
+	switch frag := field.(type) {
+	case *ast.InlineFragment:
+		addFragFieldsToInterfaceImplFields(interfaceTypeName, frag.TypeCondition,
+			frag.SelectionSet, interfaceImplMap, op)
+	case *ast.FragmentSpread:
+		addFragFieldsToInterfaceImplFields(interfaceTypeName, frag.Definition.TypeCondition,
+			frag.Definition.SelectionSet, interfaceImplMap, op)
+	}
+}
+
+func addFragFieldsToInterfaceImplFields(interfaceTypeName, typeCond string, selSet ast.SelectionSet,
+	interfaceImplMap map[string]bool, op *operation) {
+	if interfaceImplMap[typeCond] {
+		// if the type condition on fragment matches one of the types implementing the interface
+		// then we need to store mapping of the fields inside the fragment to the type condition.
+		for _, fragField := range selSet {
+			if f, ok := fragField.(*ast.Field); ok {
+				// we got a field on an implementation of a interface, so save the mapping of field
+				// to the implementing type name. This will later be used during completion to find
+				// out if the field should be reported back in the response or not.
+				op.interfaceImplFragFields[f] = typeCond
+			} else {
+				// we got a fragment inside fragment
+				// the type condition for this fragment will be same as its parent fragment
+				addSelectionToInterfaceImplFragFields(interfaceTypeName, fragField,
+					interfaceImplMap, op)
+			}
+		}
+	} else if typeCond == "" || typeCond == interfaceTypeName {
+		// otherwise, if the type condition is same as the type of the interface,
+		// then we still need to look if there are any more fragments inside this fragment
+		for _, fragField := range selSet {
+			if f, ok := fragField.(*ast.Field); !ok {
+				// we got a fragment inside fragment
+				// the type condition for this fragment may be different that its parent fragment
+				addSelectionToInterfaceImplFragFields(interfaceTypeName, fragField,
+					interfaceImplMap, op)
+			} else {
+				// we got a field on an interface, so save the mapping of field
+				// to the interface type name. This will later be used during completion to find
+				// out if the field should be reported back in the response or not.
+				op.interfaceImplFragFields[f] = interfaceTypeName
+			}
+		}
 	}
 }

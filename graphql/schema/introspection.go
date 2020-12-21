@@ -6,10 +6,10 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/99designs/gqlgen/graphql"
-	"github.com/99designs/gqlgen/graphql/introspection"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlgen/graphql"
+	"github.com/dgraph-io/gqlgen/graphql/introspection"
+	"github.com/dgraph-io/gqlparser/v2/ast"
 )
 
 // Introspection works by walking through the selection set which are part of ast.Operation
@@ -25,27 +25,27 @@ import (
 // Introspect performs an introspection query given a query that's expected to be either
 // __schema or __type.
 func Introspect(q Query) (json.RawMessage, error) {
-	if q.Name() != "__schema" && q.Name() != "__type" {
+	if q.Name() != "__schema" && q.Name() != "__type" && q.Name() != Typename {
 		return nil, errors.New("call to introspect for field that isn't an introspection query " +
-			"this indicates bug (Please let us know : https://github.com/dgraph-io/dgraph/issues)")
+			"this indicates bug. Please let us know by filing an issue.")
 	}
 
 	sch, ok := q.Operation().Schema().(*schema)
 	if !ok {
 		return nil, errors.New("couldn't convert schema to internal type " +
-			"this indicates bug (Please let us know : https://github.com/dgraph-io/dgraph/issues)")
+			"this indicates bug. Please let us know by filing an issue.")
 	}
 
 	op, ok := q.Operation().(*operation)
 	if !ok {
 		return nil, errors.New("couldn't convert operation to internal type " +
-			"this indicates bug (Please let us know : https://github.com/dgraph-io/dgraph/issues)")
+			"this indicates bug. Please let us know by filing an issue.")
 	}
 
 	qu, ok := q.(*query)
 	if !ok {
 		return nil, errors.New("couldn't convert query to internal type " +
-			"this indicates bug (Please let us know : https://github.com/dgraph-io/dgraph/issues)")
+			"this indicates bug. Please let us know by filing an issue.")
 	}
 
 	reqCtx := &requestContext{
@@ -164,7 +164,6 @@ func (ec *executionContext) handleQuery(sel ast.Selection) []byte {
 		}
 		ec.writeKey(field.Alias)
 		switch field.Name {
-		// TODO - Add tests for __typename.
 		case Typename:
 			x.Check2(ec.b.WriteString(`"Query"`))
 		case "__type":
@@ -327,7 +326,7 @@ func (ec *executionContext) handleType(sel ast.SelectionSet, obj *introspection.
 		ec.writeKey(field.Alias)
 		switch field.Name {
 		case Typename:
-			x.Check2(ec.b.WriteString(`"__Type`))
+			x.Check2(ec.b.WriteString(`"__Type"`))
 		case "kind":
 			ec.writeStringValue(obj.Kind())
 		case "name":

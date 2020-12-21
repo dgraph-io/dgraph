@@ -25,16 +25,17 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/pkg/errors"
 )
 
 const (
 	defaultDir      = "tls"
-	defaultDays     = 1826
+	defaultDays     = 365
 	defaultCADays   = 3651
 	defaultCACert   = "ca.crt"
 	defaultCAKey    = "ca.key"

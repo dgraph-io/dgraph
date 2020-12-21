@@ -17,7 +17,7 @@ func NewUpdateGroupRewriter() resolve.MutationRewriter {
 	return &updateGroupRewriter{}
 }
 
-// Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations
+// Rewrite rewrites set and remove update patches into dql upsert mutations
 // only for Group type. It ensures that if a rule already exists in db, it is updated;
 // otherwise, it is created. It also ensures that only the last rule out of all
 // duplicate rules in input is preserved. A rule is duplicate if it has same predicate
@@ -50,7 +50,7 @@ func (urw *updateGroupRewriter) Rewrite(
 		}
 		for _, ruleI := range rules {
 			rule := ruleI.(map[string]interface{})
-			variable := varGen.Next(ruleType, "", "")
+			variable := varGen.Next(ruleType, "", "", false)
 			predicate := rule["predicate"]
 			permission := rule["permission"]
 
@@ -96,7 +96,7 @@ func (urw *updateGroupRewriter) Rewrite(
 				continue
 			}
 
-			variable := varGen.Next(ruleType, "", "")
+			variable := varGen.Next(ruleType, "", "", false)
 			addAclRuleQuery(upsertQuery, predicate.(string), variable)
 
 			deleteJson := []byte(fmt.Sprintf(`[
@@ -127,7 +127,7 @@ func (urw *updateGroupRewriter) Rewrite(
 	}
 
 	return []*resolve.UpsertMutation{{
-		Query:     &gql.GraphQuery{Children: []*gql.GraphQuery{upsertQuery}},
+		Query:     upsertQuery,
 		Mutations: append(mutSet, mutDel...),
 	}}, schema.GQLWrapf(schema.AppendGQLErrs(errSet, errDel), "failed to rewrite mutation payload")
 }
@@ -137,15 +137,15 @@ func (urw *updateGroupRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
+	result map[string]interface{}) ([]*gql.GraphQuery, error) {
 
 	return ((*resolve.UpdateRewriter)(urw)).FromMutationResult(ctx, mutation, assigned, result)
 }
 
 // addAclRuleQuery adds a *gql.GraphQuery to upsertQuery.Children to query a rule inside a group
 // based on its predicate value.
-func addAclRuleQuery(upsertQuery *gql.GraphQuery, predicate, variable string) {
-	upsertQuery.Children = append(upsertQuery.Children, &gql.GraphQuery{
+func addAclRuleQuery(upsertQuery []*gql.GraphQuery, predicate, variable string) {
+	upsertQuery[0].Children = append(upsertQuery[0].Children, &gql.GraphQuery{
 		Attr:  "dgraph.acl.rule",
 		Alias: variable,
 		Var:   variable,

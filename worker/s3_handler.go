@@ -16,34 +16,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
 	minio "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
-	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/pkg/errors"
-)
-
-const (
-	// Shown in transfer logs
-	appName = "Dgraph"
-
-	// defaultEndpointS3 is used with s3 scheme when no host is provided
-	defaultEndpointS3 = "s3.amazonaws.com"
-
-	// s3AccelerateSubstr S3 acceleration is enabled if the S3 host is contains this substring.
-	// See http://docs.aws.amazon.com/AmazonS3/latest/dev/transfer-acceleration.html
-	s3AccelerateSubstr = "s3-accelerate"
 )
 
 // FillRestoreCredentials fills the empty values with the default credentials so that
@@ -80,103 +64,16 @@ type s3Handler struct {
 	uri                      *url.URL
 }
 
-func credentialsProvider(scheme string, requestCreds credentials.Value) credentials.Provider {
-	providers := []credentials.Provider{&credentials.Static{Value: requestCreds}}
-
-	switch scheme {
-	case "s3":
-		providers = append(providers, &credentials.EnvAWS{}, &credentials.IAM{Client: &http.Client{}})
-	default:
-		providers = append(providers, &credentials.EnvMinio{})
-	}
-
-	return &credentials.Chain{Providers: providers}
-}
-
-func (h *s3Handler) requestCreds() credentials.Value {
-	if h.creds == nil {
-		return credentials.Value{}
-	}
-
-	return credentials.Value{
-		AccessKeyID:     h.creds.AccessKey,
-		SecretAccessKey: h.creds.SecretKey,
-		SessionToken:    h.creds.SessionToken,
-	}
-}
-
-func (h *s3Handler) newMinioClient(uri *url.URL) (*minio.Client, error) {
-	secure := uri.Query().Get("secure") != "false" // secure by default
-
-	if h.creds.isAnonymous() {
-		return minio.New(uri.Host, "", "", secure)
-	}
-
-	credsProvider := credentials.New(credentialsProvider(uri.Scheme, h.requestCreds()))
-
-	return minio.NewWithCredentials(uri.Host, credsProvider, secure, "")
-}
-
 // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
 // setup also fills in values used by the handler in subsequent calls.
 // Returns a new S3 minio client, otherwise a nil client with an error.
 func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
-	if len(uri.Path) < 1 {
-		return nil, errors.Errorf("Invalid bucket: %q", uri.Path)
-	}
-
-	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
-
-	// Verify URI and set default S3 host if needed.
-	switch uri.Scheme {
-	case "s3":
-		// s3:///bucket/folder
-		if !strings.Contains(uri.Host, ".") {
-			uri.Host = defaultEndpointS3
-		}
-		if !s3utils.IsAmazonEndpoint(*uri) {
-			return nil, errors.Errorf("Invalid S3 endpoint %q", uri.Host)
-		}
-	default: // minio
-		if uri.Host == "" {
-			return nil, errors.Errorf("Minio handler requires a host")
-		}
-	}
-
-	mc, err := h.newMinioClient(uri)
+	mc, err := newMinioClient(uri, h.creds)
 	if err != nil {
 		return nil, err
 	}
 
-	// Set client app name "Dgraph/v1.0.x"
-	mc.SetAppInfo(appName, x.Version())
-
-	// S3 transfer acceleration support.
-	if uri.Scheme == "s3" && strings.Contains(uri.Host, s3AccelerateSubstr) {
-		mc.SetS3TransferAccelerate(uri.Host)
-	}
-
-	// enable HTTP tracing
-	if uri.Query().Get("trace") == "true" {
-		mc.TraceOn(os.Stderr)
-	}
-
-	// split path into bucketName and blobPrefix
-	parts := strings.Split(uri.Path[1:], "/")
-	h.bucketName = parts[0] // bucket
-
-	// verify the requested bucket exists.
-	found, err := mc.BucketExists(h.bucketName)
-	if err != nil {
-		return nil, errors.Wrapf(err, "while looking for bucket %s at host %s",
-			h.bucketName, uri.Host)
-	}
-	if !found {
-		return nil, errors.Errorf("Bucket was not found: %s", h.bucketName)
-	}
-	if len(parts) > 1 {
-		h.objectPrefix = filepath.Join(parts[1:]...)
-	}
+	h.bucketName, h.objectPrefix, err = validateBucket(mc, uri)
 
 	return mc, err
 }
@@ -269,7 +166,8 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 	return json.NewDecoder(reader).Decode(m)
 }
 
-func (h *s3Handler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, error) {
+func (h *s3Handler) GetManifests(uri *url.URL, backupId string,
+	backupNum uint64) ([]*Manifest, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
 		return nil, err
@@ -301,24 +199,15 @@ func (h *s3Handler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, er
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
-	manifests, err = filterManifests(manifests, backupId)
-	if err != nil {
-		return nil, err
-	}
 
-	// Sort manifests in the ascending order of their BackupNum so that the first
-	// manifest corresponds to the first full backup and so on.
-	sort.Slice(manifests, func(i, j int) bool {
-		return manifests[i].BackupNum < manifests[j].BackupNum
-	})
-	return manifests, nil
+	return getManifests(manifests, backupId, backupNum)
 }
 
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Since value on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
-	manifests, err := h.GetManifests(uri, backupId)
+func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
+	manifests, err := h.GetManifests(uri, backupId, backupNum)
 	if err != nil {
 		return LoadResult{0, 0, errors.Wrapf(err, "while retrieving manifests")}
 	}
@@ -362,7 +251,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, err := fn(reader, gid, predSet)
+			groupMaxUid, err := fn(reader, gid, predSet, manifest.DropOperations)
 			if err != nil {
 				return LoadResult{0, 0, err}
 			}
@@ -378,17 +267,12 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 
 // Verify performs basic checks to decide whether the specified backup can be restored
 // to a live cluster.
-func (h *s3Handler) Verify(uri *url.URL, backupId string, currentGroups []uint32) error {
-	manifests, err := h.GetManifests(uri, backupId)
+func (h *s3Handler) Verify(uri *url.URL, req *pb.RestoreRequest, currentGroups []uint32) error {
+	manifests, err := h.GetManifests(uri, req.GetBackupId(), req.GetBackupNum())
 	if err != nil {
 		return errors.Wrapf(err, "while retrieving manifests")
 	}
-
-	if len(manifests) == 0 {
-		return errors.Errorf("No backups with the specified backup ID %s", backupId)
-	}
-
-	return verifyGroupsInBackup(manifests, currentGroups)
+	return verifyRequest(req, manifests, currentGroups)
 }
 
 // ListManifests loads the manifests in the locations and returns them.
