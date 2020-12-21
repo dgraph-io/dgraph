@@ -30,7 +30,6 @@ In this mode, Dgraph doesn't wait for mutations to be applied. When a mutation c
 In Ludicrous mode, Dgraph does not sync writes to disk. If Dgraph crashes unexpectedly, there could be unapplied mutations which **will not** be picked up when Dgraph restarts.
 {{% /notice %}}
 
-
 ### What is the trade-off?
 
 As mentioned above, Ludicrous mode provides amazing speed at the cost of some guarantees.
@@ -40,6 +39,11 @@ It can be used to handle write-heavy operations when there is a time gap between
 {{% notice "note" %}}
 There are no transactions in Ludicrous mode. That is, you cannot open a transaction, apply a mutation, and then decide to cancel the transaction. Every mutation request is committed to Dgraph.
 {{% /notice %}}
+
+### How does it assign timestamps? 
+
+In normal mode, every transaction gets a `start timestamp`, and upon commit, it gets a `commit timestamp`. The transactions are flushed when they receive the `commit timestamp`.
+In ludicrous mode, we assign a `commit timestamp` equal to the `start timestamp` and execute them instantly, which is why you don't need to send a commit request for mutation. One of the trades of using ludicrous mode is that the timestamps are assigned when they're ready to be committed, instead of following the arrival's order.
 
 ### Can you use Ludicrous mode in a highly-available (HA) cluster?
 
