@@ -642,29 +642,74 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 		quad = &api.NQuad{}
 	}
 
-	geom := func() {
+	geop := func() error {
 		// verify that this is a geo object: should always have a "type" field
-		iter.Advance()
+		iter.AdvanceInto()
 		if t, _ := iter.String(); t != "type" {
-			return
+			return nil
 		}
-		iter.Advance()
+		iter.AdvanceInto()
 		geoType := ""
 		if geoType, _ = iter.String(); geoType != "Point" &&
 			geoType != "LineString" && geoType != "Polygon" && geoType != "MultiPoint" &&
 			geoType != "MultiLineString" && geoType != "MultiPolygon" && geoType != "GeometryCollection" {
-			return
+			return nil
 		}
+
+		coords := "["
+		coordsOpen := false
 
 		for tag := iter.AdvanceInto(); ; tag = iter.AdvanceInto() {
 			switch tag {
-			case simdjson.TagString:
-				fmt.Println(iter.String())
-			case simdjson.TagObjectEnd:
-				return
-			}
 
-			fmt.Println("geom: ", tag, open, deep)
+			case simdjson.TagString:
+				s, _ := iter.String()
+				if s == "coordinates" {
+					coordsOpen = true
+				}
+
+			case simdjson.TagInteger:
+				fallthrough
+			case simdjson.TagUint:
+				fallthrough
+			case simdjson.TagFloat:
+				if coordsOpen {
+					n, _ := iter.Float()
+					coords += fmt.Sprintf("%v,", n)
+				}
+
+			case simdjson.TagArrayEnd:
+				coordsOpen = false
+				coords = coords[:len(coords)-1]
+				coords = coords + "]"
+
+			case simdjson.TagObjectStart:
+				// TODO: this shouldn't happen, shouldn't be any nested objects
+				//       within a geo object (just a nested coordinates array)
+			case simdjson.TagObjectEnd:
+				c := json.RawMessage(coords)
+				g := &geojson.Geometry{
+					Type:        "Point",
+					Coordinates: &c,
+				}
+
+				o, err := g.Decode()
+				if err != nil {
+					return err
+				}
+
+				v, err := types.ObjectValue(types.GeoID, o)
+				if err != nil {
+					return err
+				}
+
+				quad.ObjectValue = v
+				buf.Push(quad)
+				open = false
+				quad = &api.NQuad{}
+
+				return nil
+			}
 		}
 	}
 
@@ -717,7 +762,9 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 		case simdjson.TagObjectStart:
 			deep = append(deep, tag)
 			if len(deep) > 1 {
-				geom()
+				if err := geop(); err != nil {
+					return err
+				}
 			}
 
 		case simdjson.TagObjectEnd:
