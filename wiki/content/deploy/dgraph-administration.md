@@ -45,13 +45,41 @@ There are a few exceptions to the general rule described above:
 ## Whitelisting Admin Operations
 
 By default, admin operations can only be initiated from the machine on which the Dgraph Alpha runs.
-You can use the `--whitelist` option to specify whitelisted IP addresses and ranges for hosts from which admin operations can be initiated.
 
+You can use the `--whitelist` option to specify a comma-separated whitelist of IP addresses, IP ranges, CIDR ranges, or hostnames for hosts from which admin operations can be initiated.
+
+**IP Address**
+
+```sh
+dgraph alpha --whitelist 127.0.0.1 ...
+```
+This would allow admin operations from hosts with IP 127.0.0.1 (i.e., localhost only).
+
+**IP Range**
 ```sh
 dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 ...
 ```
+
 This would allow admin operations from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
 the server which has IP address as `192.168.1.1`.
+
+**CIDR Range**
+
+```sh
+dgraph alpha --whitelist 172.17.0.0/16,172.18.0.0/15,172.20.0.0/32,192.168.1.1/32 ...
+```
+
+This would allow admin operations from hosts that matches the CIDR range `172.17.0.0/16`, `172.18.0.0/15`, `172.20.0.0/32`, or `192.168.1.1/32` (the same range as the IP Range example).
+
+You can set whitelist IP to `0.0.0.0/0` to whitelist all IPs.
+
+**Hostname**
+
+```sh
+dgraph alpha --whitelist admin-bastion,host.docker.internal ...
+```
+
+This would allow admin operations from hosts with hostnames `admin-bastion` and `host.docker.internal`.
 
 ## Restricting Mutation Operations
 
