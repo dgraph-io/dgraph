@@ -109,7 +109,7 @@ dgraph alpha --mutations strict
 Clients can use alter operations to apply schema updates and drop particular or all predicates from the database.
 By default, all clients are allowed to perform alter operations.
 You can configure Dgraph to only allow alter operations when the client provides a specific token.
-This can be used to prevent clients from making unintended or accidental schema updates or predicate drops.
+This "Simple ACL" token can be used to prevent clients from making unintended or accidental schema updates or predicate drops.
 
 You can specify the auth token with the `--auth_token` option for each Dgraph Alpha in the cluster.
 Clients must include the same auth token to make alter requests.
