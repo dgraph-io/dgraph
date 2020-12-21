@@ -75,15 +75,15 @@ func (e entry) Type() uint64       { return binary.BigEndian.Uint64(e[24:]) }
 func (e entry) SetTerm(term uint64)         { binary.BigEndian.PutUint64(e, term) }
 func (e entry) SetIndex(index uint64)       { binary.BigEndian.PutUint64(e[8:], index) }
 func (e entry) SetDataOffset(offset uint64) { binary.BigEndian.PutUint64(e[16:], offset) }
-func (e entry) SetType(type_ uint64)        { binary.BigEndian.PutUint64(e[24:], type_) }
+func (e entry) SetType(typ uint64)          { binary.BigEndian.PutUint64(e[24:], typ) }
 
 func marshalEntry(b []byte, term, index, do, typ uint64) {
 	x.AssertTrue(len(b) == entrySize)
-
-	binary.BigEndian.PutUint64(b, term)
-	binary.BigEndian.PutUint64(b[8:], index)
-	binary.BigEndian.PutUint64(b[16:], do)
-	binary.BigEndian.PutUint64(b[24:], typ)
+	e := entry(b)
+	e.SetTerm(term)
+	e.SetIndex(index)
+	e.SetDataOffset(do)
+	e.SetType(typ)
 }
 
 // logFile represents a single log file.
